@@ -275,7 +275,7 @@ class linAxis(object):
 		self.update()			
 
 	def update(self):
-		from FDK6.utils import linspread, geospread, ratfrac
+		from TypeRig.utils import linspread, geospread, ratfrac
 
 		minAxisStem, maxAxisStem = min(self.masters.values()), max(self.masters.values())
 		minAxisPos, maxAxisPos = min(self.masters.keys()), max(self.masters.keys())
@@ -299,7 +299,7 @@ class geoAxis(object):
         self.update()           
 
     def update(self):
-        from FDK6.utils import linspread, geospread, ratfrac
+        from TypeRig.utils import linspread, geospread, ratfrac
 
         minAxisStem, maxAxisStem = min(self.masters.values()), max(self.masters.values())
         minAxisPos, maxAxisPos = min(self.masters.keys()), max(self.masters.keys())

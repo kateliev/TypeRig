@@ -14,7 +14,7 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
-from FDK6.proxy import pGlyph
+from TypeRig.proxy import pGlyph
 
 # - Classes -------------------------------
 class eGlyph(pGlyph):
@@ -186,7 +186,7 @@ class eGlyph(pGlyph):
 
 	# - Interpolation  ---------------------------------------
 	def blendLayers(self, layerA, layerB, blendTimes, outputFL=True, blendMode=0, engine='fg'):
-		from FDK6.utils import linInterp
+		from TypeRig.utils import linInterp
 
 		if isinstance(blendTimes, tuple): blendTimes = pqt.QtCore.QPointF(*blendTimes)
 		if isinstance(blendTimes, int): blendTimes = pqt.QtCore.QPointF(float(blendTimes)/100, float(blendTimes)/100)

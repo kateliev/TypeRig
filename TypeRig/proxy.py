@@ -206,7 +206,7 @@ class pGlyph(object):
 			return fl6.flShape(tempBlend) if outputFL else tempBlend
 
 	def blendLayers(self, layerA, layerB, blendTimes, outputFL=True, blendMode=0, engine='fg'):
-		from FDK6.utils import linInterp
+		from TypeRig.utils import linInterp
 
 		if isinstance(blendTimes, tuple): blendTimes = pqt.QtCore.QPointF(*blendTimes)
 		if isinstance(blendTimes, int): blendTimes = pqt.QtCore.QPointF(float(blendTimes)/100, float(blendTimes)/100)

@@ -14,7 +14,7 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
-from FDK6.proxy import pFont
+from TypeRig.proxy import pFont
 
 # - Classes -------------------------------
 class eFont(pFont):
