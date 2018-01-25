@@ -156,11 +156,18 @@ class pGlyph(object):
 		return [pLayer.getContours()[item[0]].nodes()[item[1]].pointf for item in nodelist]
 
 	# - Outline -----------------------------------------------
-	def insert(self, insertionIndex, insert, layer=None):
-		pContour = self.nodes(layer)[insertionIndex].contour
-		pIndex = self.nodes(layer)[insertionIndex].index
-		pContour.insert(pIndex, insert)
-		self.update() # ?
+	def insertNodes(self, cID, nID, nodeList, layer=None):
+		self.contours(layer)[cID].insert(nID, nodeList)
+
+	def removeNodes(self, cID, nID, nodeList, layer=None):
+		for node in nodeList:
+			self.contours(layer)[cID].removeOne(node)
+
+	def insertNodeAt(self, cID, nID, layer=None):
+		self.contours(layer)[cID].insertNodeTo(nID)
+
+	def removeNodeAt(self, cID, nID, layer=None):
+		self.contours(layer)[cID].removeAt(nID)
 
 	def translate(self, dx, dy, layer=None):
 		pLayer = self.layer(layer)
