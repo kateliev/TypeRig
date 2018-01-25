@@ -1,4 +1,4 @@
-# MODULE: Fontlab 6 Proxy | TypeRig
+# MODULE: Fontlab 6 Proxy | Typerig
 # VER 	: 0.22
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
@@ -206,7 +206,7 @@ class pGlyph(object):
 			return fl6.flShape(tempBlend) if outputFL else tempBlend
 
 	def blendLayers(self, layerA, layerB, blendTimes, outputFL=True, blendMode=0, engine='fg'):
-		from TypeRig.utils import linInterp
+		from typerig.utils import linInterp
 
 		if isinstance(blendTimes, tuple): blendTimes = pqt.QtCore.QPointF(*blendTimes)
 		if isinstance(blendTimes, int): blendTimes = pqt.QtCore.QPointF(float(blendTimes)/100, float(blendTimes)/100)

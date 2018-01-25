@@ -1,4 +1,4 @@
-# MODULE: Fontlab 6 Custom Glyph Objects | TypeRig
+# MODULE: Fontlab 6 Custom Glyph Objects | Typerig
 # VER 	: 0.20
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
@@ -14,7 +14,7 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
-from TypeRig.proxy import pGlyph
+from typerig.proxy import pGlyph
 
 # - Classes -------------------------------
 class eGlyph(pGlyph):
@@ -186,7 +186,7 @@ class eGlyph(pGlyph):
 
 	# - Interpolation  ---------------------------------------
 	def blendLayers(self, layerA, layerB, blendTimes, outputFL=True, blendMode=0, engine='fg'):
-		from TypeRig.utils import linInterp
+		from typerig.utils import linInterp
 
 		if isinstance(blendTimes, tuple): blendTimes = pqt.QtCore.QPointF(*blendTimes)
 		if isinstance(blendTimes, int): blendTimes = pqt.QtCore.QPointF(float(blendTimes)/100, float(blendTimes)/100)

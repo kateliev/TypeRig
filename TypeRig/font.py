@@ -1,4 +1,4 @@
-# MODULE: Fontlab 6 Custom Font Objects | TypeRig
+# MODULE: Fontlab 6 Custom Font Objects | Typerig
 # VER 	: 0.01
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
@@ -14,7 +14,7 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
-from TypeRig.proxy import pFont
+from typerig.proxy import pFont
 
 # - Classes -------------------------------
 class eFont(pFont):

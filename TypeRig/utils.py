@@ -1,4 +1,4 @@
-# MODULE: Misc Utils | TypeRig
+# MODULE: Misc Utils | Typerig
 # VER   : 0.02
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
@@ -275,7 +275,7 @@ class linAxis(object):
 		self.update()			
 
 	def update(self):
-		from TypeRig.utils import linspread, geospread, ratfrac
+		from typerig.utils import linspread, geospread, ratfrac
 
 		minAxisStem, maxAxisStem = min(self.masters.values()), max(self.masters.values())
 		minAxisPos, maxAxisPos = min(self.masters.keys()), max(self.masters.keys())
@@ -299,7 +299,7 @@ class geoAxis(object):
         self.update()           
 
     def update(self):
-        from TypeRig.utils import linspread, geospread, ratfrac
+        from typerig.utils import linspread, geospread, ratfrac
 
         minAxisStem, maxAxisStem = min(self.masters.values()), max(self.masters.values())
         minAxisPos, maxAxisPos = min(self.masters.keys()), max(self.masters.keys())
