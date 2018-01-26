@@ -308,10 +308,3 @@ class geoAxis(object):
         self.data = { int(ratfrac(stem - minAxisPos, maxAxisStem - minAxisPos, max(self.masters.keys()))):stem for stem in self.stems}
         self.instances = sorted(self.data.keys())
 
-# - Procedures ------------------------------
-def outputHere():
-    ''' Dump stdout, stderr to log files in the current working path. Usable for FL6 nested widgets bug that breaks output. '''
-    import sys, os
-    dir = os.path.dirname(__file__)
-    sys.stdout = open(os.path.join(dir,'stdout.log'), 'w')
-    sys.stderr = open(os.path.join(dir,'stderr.log'), 'w')

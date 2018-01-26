@@ -122,22 +122,25 @@ class pGlyph(object):
 		fl6.flItems.notifyGlyphUpdated(self.package.id, self.id)
 
 	# - Glyph Selection -----------------------------------------------
-	def selected(self):
+	def selected(self, filterOn=False):
 		allNodes = self.nodes()
-		return [allNodes.index(node) for node in self.selectedNodes()]
+		return [allNodes.index(node) for node in self.selectedNodes(filterOn)]
 
-	def selectedNodes(self):	
+	def selectedNodes(self, filterOn=False):	
 		# - Return flGlyph's activeLayer selected nodes as [(contourID, nodeID)..()]
-		return [node for node in self.nodes() if node.selected]
+		if not filterOn:
+			return [node for node in self.nodes() if node.selected]
+		else:
+			return [node for node in self.nodes() if node.selected and node.isOn]
 
-	def selectedAtContours(self, index=True):	
+	def selectedAtContours(self, index=True, filterOn=False):	
 		# - Return flGlyph's activeLayer selected nodes as [(contourID, nodeID)..()]
 		allContours = self.contours()
 		
 		if index:
-			return [(allContours.index(node.contour), node.index) for node in self.selectedNodes()]
+			return [(allContours.index(node.contour), node.index) for node in self.selectedNodes(filterOn)]
 		else:
-			return [(node.contour, node) for node in self.selectedNodes()]
+			return [(node.contour, node) for node in self.selectedNodes(filterOn)]
 
 	def selectedAtShapes(self, index=True):
 		allContours = self.contours()
@@ -156,15 +159,44 @@ class pGlyph(object):
 		return [pLayer.getContours()[item[0]].nodes()[item[1]].pointf for item in nodelist]
 
 	# - Outline -----------------------------------------------
-	def insertNodes(self, cID, nID, nodeList, layer=None):
+	def _mapOn(self, layer=None):
+		'''Create map of onCurve Nodes for every contour in given layer
+		Returns:
+			dict: {contour_index : {True_Node_Index : on_Curve__Node_Index}...}
+		'''
+		contourMap = {}		
+		allContours = self.contours(layer)
+		
+		for contour in allContours:
+			nodeMap = {}
+			countOn = -1
+
+			for node in contour.nodes():
+				countOn += node.isOn # Hack-ish but working
+				nodeMap[node.index] = countOn
+				
+			contourMap[allContours.index(contour)] = nodeMap
+
+		return contourMap
+
+	def insertNodesAt(self, cID, nID, nodeList, layer=None):
 		self.contours(layer)[cID].insert(nID, nodeList)
 
-	def removeNodes(self, cID, nID, nodeList, layer=None):
+	def removeNodes(self, cID, nodeList, layer=None):
 		for node in nodeList:
 			self.contours(layer)[cID].removeOne(node)
 
-	def insertNodeAt(self, cID, nID, layer=None):
-		self.contours(layer)[cID].insertNodeTo(nID)
+	def insertNodeAt(self, cID, nID_time, layer=None):
+		''' Inserts node in contour at specified layer
+		Arg:
+			cID (int): Contour Id
+			nID_time (float): Node index + time
+			layer (int or str): Layer index or name
+
+		!NOTE: FL6 treats contour insertions (as well as nodes) as float times along contour,
+		so inserting a node at .5 t between nodes with indexes 3 and 4 will be 3 (index) + 0.5 (time) = 3.5
+		'''
+		self.contours(layer)[cID].insertNodeTo(nID_time)
 
 	def removeNodeAt(self, cID, nID, layer=None):
 		self.contours(layer)[cID].removeAt(nID)
