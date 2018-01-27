@@ -24,5 +24,5 @@ A fresh copy of the current master API could be obtained here (as a pydoc dump) 
 TypeRig FDK is developed by Vassil Kateliev (2017).
 
 For contact and inquiries: vassil(at)kateliev(dot)com
----
+
 www.typerig.com (TBI/TBA)
