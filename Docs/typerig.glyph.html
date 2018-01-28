@@ -1,0 +1,326 @@
+
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="heading">
+<tr bgcolor="#7799ee">
+<td valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial">&nbsp;<br><big><big><strong><a href="typerig.html"><font color="#ffffff">typerig</font></a>.glyph</strong></big></big></font></td
+><td align=right valign=bottom
+><font color="#ffffff" face="helvetica, arial"><a href=".">index</a><br><a href="file:///D:/5_remote/github/typerig/typerig-fdk/lib/typerig/glyph.py">d:\5_remote\github\typerig\typerig-fdk\lib\typerig\glyph.py</a></font></td></tr></table>
+    <p><tt>#&nbsp;MODULE:&nbsp;Fontlab&nbsp;6&nbsp;Custom&nbsp;Glyph&nbsp;Objects&nbsp;|&nbsp;Typerig<br>
+#&nbsp;VER&nbsp;&nbsp;&nbsp;:&nbsp;0.20<br>
+#&nbsp;----------------------------------------<br>
+#&nbsp;(C)&nbsp;Vassil&nbsp;Kateliev,&nbsp;2017&nbsp;(<a href="http://www.kateliev.com">http://www.kateliev.com</a>)<br>
+#&nbsp;(C)&nbsp;Karandash&nbsp;Type&nbsp;Foundry&nbsp;(<a href="http://www.karandash.eu">http://www.karandash.eu</a>)<br>
+#-----------------------------------------<br>
+#&nbsp;www.typerig.com</tt></p>
+<p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#aa55cc">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Modules</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#aa55cc"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><table width="100%" summary="list"><tr><td width="25%" valign=top><a href="fontgate.html">fontgate</a><br>
+</td><td width="25%" valign=top><a href="fontlab.html">fontlab</a><br>
+</td><td width="25%" valign=top><a href="PythonQt.html">PythonQt</a><br>
+</td><td width="25%" valign=top></td></tr></table></td></tr></table><p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ee77aa">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Classes</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#ee77aa"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><dl>
+<dt><font face="helvetica, arial"><a href="typerig.proxy.html#pGlyph">typerig.proxy.pGlyph</a>(<a href="__builtin__.html#object">__builtin__.object</a>)
+</font></dt><dd>
+<dl>
+<dt><font face="helvetica, arial"><a href="typerig.glyph.html#eGlyph">eGlyph</a>
+</font></dt></dl>
+</dd>
+</dl>
+ <p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ffc8d8">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#000000" face="helvetica, arial"><a name="eGlyph">class <strong>eGlyph</strong></a>(<a href="typerig.proxy.html#pGlyph">typerig.proxy.pGlyph</a>)</font></td></tr>
+    
+<tr bgcolor="#ffc8d8"><td rowspan=2><tt>&nbsp;&nbsp;&nbsp;</tt></td>
+<td colspan=2><tt>Extended&nbsp;representation&nbsp;of&nbsp;the&nbsp;Proxy&nbsp;Glyph,&nbsp;adding&nbsp;some&nbsp;advanced&nbsp;functionality<br>
+&nbsp;<br>
+Constructor:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="typerig.proxy.html#pGlyph">pGlyph</a>()&nbsp;-&nbsp;default&nbsp;represents&nbsp;the&nbsp;current&nbsp;glyph&nbsp;and&nbsp;current&nbsp;font<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="typerig.proxy.html#pGlyph">pGlyph</a>(fgFont,&nbsp;fgGlyph)<br>&nbsp;</tt></td></tr>
+<tr><td>&nbsp;</td>
+<td width="100%"><dl><dt>Method resolution order:</dt>
+<dd><a href="typerig.glyph.html#eGlyph">eGlyph</a></dd>
+<dd><a href="typerig.proxy.html#pGlyph">typerig.proxy.pGlyph</a></dd>
+<dd><a href="__builtin__.html#object">__builtin__.object</a></dd>
+</dl>
+<hr>
+Methods defined here:<br>
+<dl><dt><a name="eGlyph-blendLayers"><strong>blendLayers</strong></a>(self, layerA, layerB, blendTimes, outputFL<font color="#909090">=True</font>, blendMode<font color="#909090">=0</font>, engine<font color="#909090">='fg'</font>)</dt><dd><tt>Blend&nbsp;two&nbsp;layers&nbsp;at&nbsp;given&nbsp;times&nbsp;(anisotropic&nbsp;support).<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layerA&nbsp;(flLayer),&nbsp;layerB&nbsp;(flLayer):&nbsp;Shapes&nbsp;to&nbsp;be&nbsp;interpolated<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;blendTimes&nbsp;(int&nbsp;or&nbsp;float&nbsp;or&nbsp;tuple(float,&nbsp;float)):&nbsp;(int)&nbsp;for&nbsp;percent&nbsp;0%-100%&nbsp;or&nbsp;(float)&nbsp;time&nbsp;for&nbsp;both&nbsp;X,Y&nbsp;or&nbsp;tuple(float,float)&nbsp;times&nbsp;for&nbsp;anisotropic&nbsp;blending<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;outputFL&nbsp;(bool):&nbsp;Return&nbsp;blend&nbsp;native&nbsp;format&nbsp;or&nbsp;flShape&nbsp;(default)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;blendMode&nbsp;(int):&nbsp;?<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;engine&nbsp;(str):&nbsp;'fg'&nbsp;for&nbsp;FontGate&nbsp;(in-build).<br>
+&nbsp;<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-breakContour"><strong>breakContour</strong></a>(self, contourId, nodeId, layer<font color="#909090">=None</font>, expand<font color="#909090">=0</font>)</dt><dd><tt>Split&nbsp;Contour&nbsp;at&nbsp;given&nbsp;node&nbsp;and&nbsp;layer.&nbsp;Extrapolate&nbsp;line&nbsp;endings&nbsp;if&nbsp;needed.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contourId&nbsp;(int):&nbsp;Contour&nbsp;Index<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nodeId&nbsp;(int):&nbsp;Node&nbsp;Index<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str):&nbsp;Layer&nbsp;index&nbsp;or&nbsp;name,&nbsp;works&nbsp;with&nbsp;both<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;expand&nbsp;(float):&nbsp;Will&nbsp;extrapolate&nbsp;the&nbsp;line&nbsp;endings&nbsp;at&nbsp;that&nbsp;given&nbsp;value<br>
+&nbsp;<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;flContour</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-copyMetricsSB"><strong>copyMetricsSB</strong></a>(self, LSBGlyphName, RSBGlyphName, layer<font color="#909090">='all'</font>, srcFont<font color="#909090">=None</font>, order<font color="#909090">=(0, 1)</font>, adjustPercent<font color="#909090">=100</font>, adjustUnits<font color="#909090">=(0, 0)</font>)</dt><dd><tt>Copy&nbsp;Glyph&nbsp;Side-bearings&nbsp;(LSB,&nbsp;RSB)&nbsp;form&nbsp;another&nbsp;glyph(s)&nbsp;referenced&nbsp;by&nbsp;name.</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-dropAnchor"><strong>dropAnchor</strong></a>(self, yHeight, name, alignTop<font color="#909090">=True</font>, layer<font color="#909090">='all'</font>)</dt><dd><tt>Drop&nbsp;anchor&nbsp;at&nbsp;given&nbsp;layer</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-dropGuide"><strong>dropGuide</strong></a>(self, nodes<font color="#909090">=None</font>, layers<font color="#909090">=None</font>, name<font color="#909090">='*DropGuideline'</font>, color<font color="#909090">='darkMagenta'</font>, style<font color="#909090">='gsGlyphGuideline'</font>)</dt><dd><tt>Build&nbsp;guideline&nbsp;trough&nbsp;*any&nbsp;two*&nbsp;given&nbsp;points&nbsp;or&nbsp;the&nbsp;*first&nbsp;two&nbsp;of&nbsp;the&nbsp;current&nbsp;selection*.<br>
+&nbsp;<br>
+If&nbsp;*single&nbsp;point*&nbsp;is&nbsp;given&nbsp;will&nbsp;create&nbsp;a&nbsp;vertical&nbsp;guideline&nbsp;trough&nbsp;that&nbsp;point,<br>
+with&nbsp;guideline&nbsp;inclined&nbsp;according&nbsp;to&nbsp;the&nbsp;font's&nbsp;Italic&nbsp;Angle.<br>
+&nbsp;<br>
+if&nbsp;process&nbsp;layers&nbsp;(pLayers)&nbsp;is&nbsp;None&nbsp;guideline&nbsp;will&nbsp;be&nbsp;created&nbsp;in&nbsp;all&nbsp;compatible&nbsp;layers,<br>
+otherwise&nbsp;the&nbsp;bool&nbsp;control&nbsp;tuple&nbsp;(active_layer&nbsp;(True&nbsp;or&nbsp;False),&nbsp;masters&nbsp;(True&nbsp;or&nbsp;False),&nbsp;masks&nbsp;(True&nbsp;or&nbsp;False),&nbsp;services&nbsp;(True&nbsp;or&nbsp;False))&nbsp;is&nbsp;used.&nbsp;<br>
+If&nbsp;all&nbsp;are&nbsp;set&nbsp;to&nbsp;False&nbsp;only&nbsp;the&nbsp;active&nbsp;layer&nbsp;is&nbsp;used.<br>
+&nbsp;<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nodes&nbsp;(list(int)):&nbsp;List&nbsp;of&nbsp;node&nbsp;indexes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layers&nbsp;tuple(bool):&nbsp;Bool&nbsp;control&nbsp;tuple(active_layer,&nbsp;masters,&nbsp;masks,&nbsp;services).&nbsp;Note&nbsp;If&nbsp;all&nbsp;are&nbsp;set&nbsp;to&nbsp;False&nbsp;only&nbsp;the&nbsp;active&nbsp;layer&nbsp;is&nbsp;used.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;(str):&nbsp;Name&nbsp;of&nbsp;the&nbsp;guideline&nbsp;to&nbsp;be&nbsp;build<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color&nbsp;(str):&nbsp;Color&nbsp;of&nbsp;the&nbsp;guideline&nbsp;according&nbsp;to&nbsp;QtCore&nbsp;colors<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;style&nbsp;(str):&nbsp;Style&nbsp;of&nbsp;the&nbsp;guideline&nbsp;according&nbsp;to&nbsp;FontLab&nbsp;6<br>
+&nbsp;<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-getAttachmentCenters"><strong>getAttachmentCenters</strong></a>(self, layer, tolerance<font color="#909090">=5</font>)</dt><dd><tt>Return&nbsp;X&nbsp;center&nbsp;of&nbsp;lowest,&nbsp;highest&nbsp;Y&nbsp;of&nbsp;[glyph]&nbsp;for&nbsp;[layer]&nbsp;within&nbsp;given&nbsp;[tolerance]<br>
+Note:&nbsp;Determine&nbsp;diacritic&nbsp;to&nbsp;glyph&nbsp;attachment&nbsp;positions&nbsp;(for&nbsp;anchor&nbsp;placement)</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-splitContour"><strong>splitContour</strong></a>(self, scnPairs<font color="#909090">=None</font>, layers<font color="#909090">=None</font>, expand<font color="#909090">=0</font>, close<font color="#909090">=False</font>)</dt><dd><tt>Split&nbsp;Contour&nbsp;at&nbsp;given&nbsp;node&nbsp;and&nbsp;combinations&nbsp;of&nbsp;compatible&nbsp;layers.&nbsp;Extrapolate&nbsp;line&nbsp;endings&nbsp;and&nbsp;close&nbsp;contour&nbsp;if&nbsp;needed.<br>
+&nbsp;<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scnPairs&nbsp;(list(tuple)):&nbsp;Shape-contour-node&nbsp;pairs&nbsp;for&nbsp;the&nbsp;selected&nbsp;nodes&nbsp;[(Shape&nbsp;Index,&nbsp;Contour&nbsp;Index,&nbsp;Node&nbsp;Index)..()]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layers&nbsp;tuple(bool):&nbsp;Bool&nbsp;control&nbsp;tuple(active_layer,&nbsp;masters,&nbsp;masks,&nbsp;services).&nbsp;Note&nbsp;If&nbsp;all&nbsp;are&nbsp;set&nbsp;to&nbsp;False&nbsp;only&nbsp;the&nbsp;active&nbsp;layer&nbsp;is&nbsp;used.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;expand&nbsp;(float):&nbsp;Will&nbsp;extrapolate&nbsp;the&nbsp;line&nbsp;endings&nbsp;at&nbsp;that&nbsp;given&nbsp;value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;close&nbsp;(bool):&nbsp;True&nbsp;=&nbsp;Close&nbsp;contour&nbsp;<br>
+&nbsp;<br>
+Return:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None</tt></dd></dl>
+
+<hr>
+Methods inherited from <a href="typerig.proxy.html#pGlyph">typerig.proxy.pGlyph</a>:<br>
+<dl><dt><a name="eGlyph-__init__"><strong>__init__</strong></a>(self, font<font color="#909090">=None</font>, glyph<font color="#909090">=None</font>)</dt></dl>
+
+<dl><dt><a name="eGlyph-__repr__"><strong>__repr__</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="eGlyph-activeGuides"><strong>activeGuides</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="eGlyph-activeLayer"><strong>activeLayer</strong></a>(self)</dt><dd><tt>#&nbsp;-&nbsp;Basics&nbsp;-----------------------------------------------</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-addAnchor"><strong>addAnchor</strong></a>(self, coordTuple, name, layer<font color="#909090">=None</font>, isAnchor<font color="#909090">=True</font>)</dt><dd><tt>Adds&nbsp;named&nbsp;Anchor&nbsp;at&nbsp;given&nbsp;layer.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;coordTuple&nbsp;(tuple(float,float)):&nbsp;Anchor&nbsp;coordinates&nbsp;X,&nbsp;Y<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;(str):&nbsp;Anchor&nbsp;name<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str):&nbsp;Layer&nbsp;index&nbsp;or&nbsp;name.&nbsp;If&nbsp;None&nbsp;returns&nbsp;ActiveLayer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;isAnchor&nbsp;(bool):&nbsp;True&nbsp;creates&nbsp;a&nbsp;true&nbsp;flAnchor,&nbsp;False&nbsp;?&nbsp;(flPinPoint)<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-addGuideline"><strong>addGuideline</strong></a>(self, coordTuple, name<font color="#909090">=''</font>, angle<font color="#909090">=0</font>, layer<font color="#909090">=None</font>)</dt><dd><tt>Adds&nbsp;named&nbsp;Guideline&nbsp;at&nbsp;given&nbsp;layer<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;coordTuple&nbsp;(tuple(float,float)&nbsp;or&nbsp;tuple(float,float,float,float)):&nbsp;Guideline&nbsp;coordinates&nbsp;X,&nbsp;Y&nbsp;and&nbsp;given&nbsp;angle&nbsp;or&nbsp;two&nbsp;node&nbsp;reference&nbsp;x1,y1&nbsp;and&nbsp;x2,y2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;(str):&nbsp;Anchor&nbsp;name<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;angle&nbsp;(float):&nbsp;Incline&nbsp;of&nbsp;the&nbsp;guideline<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str):&nbsp;Layer&nbsp;index&nbsp;or&nbsp;name.&nbsp;If&nbsp;None&nbsp;returns&nbsp;ActiveLayer&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-addLayer"><strong>addLayer</strong></a>(self, layer, toBack<font color="#909090">=False</font>)</dt><dd><tt>Adds&nbsp;a&nbsp;layer&nbsp;to&nbsp;glyph.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str):&nbsp;Layer&nbsp;index&nbsp;or&nbsp;name.&nbsp;If&nbsp;None&nbsp;returns&nbsp;ActiveLayer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;toBack&nbsp;(bool):&nbsp;Send&nbsp;layer&nbsp;to&nbsp;back<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-anchors"><strong>anchors</strong></a>(self, layer<font color="#909090">=None</font>)</dt><dd><tt>Return&nbsp;list&nbsp;of&nbsp;anchors&nbsp;(list[flAnchor])&nbsp;at&nbsp;given&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str)</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-blendShapes"><strong>blendShapes</strong></a>(self, shapeA, shapeB, blendTimes, outputFL<font color="#909090">=True</font>, blendMode<font color="#909090">=0</font>, engine<font color="#909090">='fg'</font>)</dt><dd><tt>Blend&nbsp;two&nbsp;shapes&nbsp;at&nbsp;given&nbsp;times&nbsp;(anisotropic&nbsp;support).<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shapeA&nbsp;(flShape),&nbsp;shapeB&nbsp;(flShape):&nbsp;Shapes&nbsp;to&nbsp;be&nbsp;interpolated<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;blendTimes&nbsp;(int&nbsp;or&nbsp;float&nbsp;or&nbsp;tuple(float,&nbsp;float)):&nbsp;(int)&nbsp;for&nbsp;percent&nbsp;0%-100%&nbsp;or&nbsp;(float)&nbsp;time&nbsp;for&nbsp;both&nbsp;X,Y&nbsp;or&nbsp;tuple(float,float)&nbsp;times&nbsp;for&nbsp;anisotropic&nbsp;blending<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;outputFL&nbsp;(bool):&nbsp;Return&nbsp;blend&nbsp;native&nbsp;format&nbsp;or&nbsp;flShape&nbsp;(default)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;blendMode&nbsp;(int):&nbsp;?<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;engine&nbsp;(str):&nbsp;'fg'&nbsp;for&nbsp;FontGate&nbsp;(in-build).<br>
+&nbsp;<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Native&nbsp;(interpolation&nbsp;engine&nbsp;dependent)&nbsp;or&nbsp;flShape&nbsp;(default)</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-contours"><strong>contours</strong></a>(self, layer<font color="#909090">=None</font>)</dt><dd><tt>Return&nbsp;all&nbsp;contours&nbsp;at&nbsp;given&nbsp;layer.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str):&nbsp;Layer&nbsp;index&nbsp;or&nbsp;name.&nbsp;If&nbsp;None&nbsp;returns&nbsp;ActiveLayer<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list[flContours]</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-getAdvance"><strong>getAdvance</strong></a>(self, layer<font color="#909090">=None</font>)</dt><dd><tt>Get&nbsp;the&nbsp;Advance&nbsp;Width&nbsp;at&nbsp;given&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str)</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-getLSB"><strong>getLSB</strong></a>(self, layer<font color="#909090">=None</font>)</dt><dd><tt>Get&nbsp;the&nbsp;Left&nbsp;Side-bearing&nbsp;at&nbsp;given&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str)</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-getRSB"><strong>getRSB</strong></a>(self, layer<font color="#909090">=None</font>)</dt><dd><tt>Get&nbsp;the&nbsp;Right&nbsp;Side-bearing&nbsp;at&nbsp;given&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str)</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-guidelines"><strong>guidelines</strong></a>(self, layer<font color="#909090">=None</font>)</dt><dd><tt>Return&nbsp;list&nbsp;of&nbsp;guidelines&nbsp;(list[flGuideline])&nbsp;at&nbsp;given&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str)</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-insertNodeAt"><strong>insertNodeAt</strong></a>(self, cID, nID_time, layer<font color="#909090">=None</font>)</dt><dd><tt>Inserts&nbsp;node&nbsp;in&nbsp;contour&nbsp;at&nbsp;specified&nbsp;layer<br>
+Arg:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cID&nbsp;(int):&nbsp;Contour&nbsp;Index<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nID_time&nbsp;(float):&nbsp;Node&nbsp;index&nbsp;+&nbsp;float&nbsp;time<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str):&nbsp;Layer&nbsp;index&nbsp;or&nbsp;name.&nbsp;If&nbsp;None&nbsp;returns&nbsp;ActiveLayer<br>
+&nbsp;<br>
+!NOTE:&nbsp;FL6&nbsp;treats&nbsp;contour&nbsp;insertions&nbsp;(as&nbsp;well&nbsp;as&nbsp;nodes)&nbsp;as&nbsp;float&nbsp;times&nbsp;along&nbsp;contour,<br>
+so&nbsp;inserting&nbsp;a&nbsp;node&nbsp;at&nbsp;.5&nbsp;t&nbsp;between&nbsp;nodes&nbsp;with&nbsp;indexes&nbsp;3&nbsp;and&nbsp;4&nbsp;will&nbsp;be&nbsp;3&nbsp;(index)&nbsp;+&nbsp;0.5&nbsp;(time)&nbsp;=&nbsp;3.5</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-insertNodesAt"><strong>insertNodesAt</strong></a>(self, cID, nID, nodeList, layer<font color="#909090">=None</font>)</dt><dd><tt>Inserts&nbsp;a&nbsp;list&nbsp;of&nbsp;nodes&nbsp;to&nbsp;specified&nbsp;contour,&nbsp;starting&nbsp;at&nbsp;given&nbsp;index&nbsp;all&nbsp;on&nbsp;layer&nbsp;specified.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cID&nbsp;(int):&nbsp;Contour&nbsp;index<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nID&nbsp;(int):&nbsp;Node&nbsp;of&nbsp;insertion&nbsp;index<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nodeList&nbsp;(list):&nbsp;List&nbsp;of&nbsp;flNode&nbsp;objects<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str):&nbsp;Layer&nbsp;index&nbsp;or&nbsp;name.&nbsp;If&nbsp;None&nbsp;returns&nbsp;ActiveLayer<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-layer"><strong>layer</strong></a>(self, layer<font color="#909090">=None</font>)</dt><dd><tt>Returns&nbsp;layer&nbsp;no&nbsp;matter&nbsp;the&nbsp;reference.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str):&nbsp;Layer&nbsp;index&nbsp;or&nbsp;name.&nbsp;If&nbsp;None&nbsp;returns&nbsp;ActiveLayer<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;flLayer</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-layers"><strong>layers</strong></a>(self)</dt><dd><tt>Return&nbsp;all&nbsp;layers</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-mask"><strong>mask</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="eGlyph-masks"><strong>masks</strong></a>(self)</dt><dd><tt>Returns&nbsp;all&nbsp;mask&nbsp;layers.</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-masters"><strong>masters</strong></a>(self)</dt><dd><tt>Returns&nbsp;all&nbsp;master&nbsp;layers.</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-nodes"><strong>nodes</strong></a>(self, layer<font color="#909090">=None</font>)</dt><dd><tt>Return&nbsp;all&nbsp;nodes&nbsp;at&nbsp;given&nbsp;layer.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str):&nbsp;Layer&nbsp;index&nbsp;or&nbsp;name.&nbsp;If&nbsp;None&nbsp;returns&nbsp;ActiveLayer<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list[flNodes]</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-removeNodeAt"><strong>removeNodeAt</strong></a>(self, cID, nID, layer<font color="#909090">=None</font>)</dt><dd><tt>Removes&nbsp;a&nbsp;node&nbsp;from&nbsp;contour&nbsp;at&nbsp;layer&nbsp;specified.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cID&nbsp;(int):&nbsp;Contour&nbsp;index<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nID&nbsp;(int):&nbsp;Index&nbsp;of&nbsp;Node&nbsp;to&nbsp;be&nbsp;removed<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str):&nbsp;Layer&nbsp;index&nbsp;or&nbsp;name.&nbsp;If&nbsp;None&nbsp;returns&nbsp;ActiveLayer<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-removeNodes"><strong>removeNodes</strong></a>(self, cID, nodeList, layer<font color="#909090">=None</font>)</dt><dd><tt>Removes&nbsp;a&nbsp;list&nbsp;of&nbsp;nodes&nbsp;from&nbsp;contour&nbsp;at&nbsp;layer&nbsp;specified.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cID&nbsp;(int):&nbsp;Contour&nbsp;index<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nodeList&nbsp;(list):&nbsp;List&nbsp;of&nbsp;flNode&nbsp;objects<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str):&nbsp;Layer&nbsp;index&nbsp;or&nbsp;name.&nbsp;If&nbsp;None&nbsp;returns&nbsp;ActiveLayer<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-rotate"><strong>rotate</strong></a>(self, deg, layer<font color="#909090">=None</font>)</dt><dd><tt>Rotate&nbsp;outline&nbsp;at&nbsp;given&nbsp;layer.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;deg&nbsp;(float):&nbsp;degrees&nbsp;of&nbsp;slant<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str):&nbsp;Layer&nbsp;index&nbsp;or&nbsp;name.&nbsp;If&nbsp;None&nbsp;returns&nbsp;ActiveLayer<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-scale"><strong>scale</strong></a>(self, sx, sy, layer<font color="#909090">=None</font>)</dt><dd><tt>Scale&nbsp;outline&nbsp;at&nbsp;given&nbsp;layer.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sx&nbsp;(float),&nbsp;sy&nbsp;(float):&nbsp;delta&nbsp;(scaling)&nbsp;X,&nbsp;Y<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str):&nbsp;Layer&nbsp;index&nbsp;or&nbsp;name.&nbsp;If&nbsp;None&nbsp;returns&nbsp;ActiveLayer<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-selected"><strong>selected</strong></a>(self, filterOn<font color="#909090">=False</font>)</dt><dd><tt>Return&nbsp;all&nbsp;selected&nbsp;nodes&nbsp;indexes&nbsp;at&nbsp;current&nbsp;layer.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;filterOn&nbsp;(bool):&nbsp;Return&nbsp;only&nbsp;on-curve&nbsp;nodes<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list[int]</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-selectedAtContours"><strong>selectedAtContours</strong></a>(self, index<font color="#909090">=True</font>, filterOn<font color="#909090">=False</font>)</dt><dd><tt>Return&nbsp;all&nbsp;selected&nbsp;nodes&nbsp;and&nbsp;the&nbsp;contours&nbsp;they&nbsp;rest&nbsp;upon&nbsp;at&nbsp;current&nbsp;layer.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index&nbsp;(bool):&nbsp;If&nbsp;True&nbsp;returns&nbsp;only&nbsp;indexes,&nbsp;False&nbsp;returns&nbsp;flContour,&nbsp;flNode<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;filterOn&nbsp;(bool):&nbsp;Return&nbsp;only&nbsp;on-curve&nbsp;nodes<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list[tuple(int,&nbsp;int)]:&nbsp;[(contourID,&nbsp;nodeID)..()]&nbsp;or&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list[tuple(flContour,&nbsp;flNode)]</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-selectedAtShapes"><strong>selectedAtShapes</strong></a>(self, index<font color="#909090">=True</font>, filterOn<font color="#909090">=False</font>)</dt><dd><tt>Return&nbsp;all&nbsp;selected&nbsp;nodes&nbsp;and&nbsp;the&nbsp;shapes&nbsp;they&nbsp;belong&nbsp;at&nbsp;current&nbsp;layer.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index&nbsp;(bool):&nbsp;If&nbsp;True&nbsp;returns&nbsp;only&nbsp;indexes,&nbsp;False&nbsp;returns&nbsp;flShape,&nbsp;flNode<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;filterOn&nbsp;(bool):&nbsp;Return&nbsp;only&nbsp;on-curve&nbsp;nodes<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list[tuple(int,&nbsp;int)]:&nbsp;[(shapeID,&nbsp;nodeID)..()]&nbsp;or<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list[tuple(flShape,&nbsp;flNode)]</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-selectedCoords"><strong>selectedCoords</strong></a>(self, layer<font color="#909090">=None</font>, filterOn<font color="#909090">=False</font>)</dt><dd><tt>Return&nbsp;the&nbsp;coordinates&nbsp;of&nbsp;all&nbsp;selected&nbsp;nodes&nbsp;at&nbsp;the&nbsp;current&nbsp;layer&nbsp;or&nbsp;other.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str):&nbsp;Layer&nbsp;index&nbsp;or&nbsp;name.&nbsp;If&nbsp;None&nbsp;returns&nbsp;ActiveLayer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;filterOn&nbsp;(bool):&nbsp;Return&nbsp;only&nbsp;on-curve&nbsp;nodes<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list[QPointF]</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-selectedNodes"><strong>selectedNodes</strong></a>(self, filterOn<font color="#909090">=False</font>)</dt><dd><tt>Return&nbsp;all&nbsp;selected&nbsp;nodes&nbsp;at&nbsp;current&nbsp;layer.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;filterOn&nbsp;(bool):&nbsp;Return&nbsp;only&nbsp;on-curve&nbsp;nodes<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list[flNode]</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-services"><strong>services</strong></a>(self)</dt><dd><tt>Returns&nbsp;all&nbsp;service&nbsp;layers.</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-setAdvance"><strong>setAdvance</strong></a>(self, newAdvance, layer<font color="#909090">=None</font>)</dt><dd><tt>Set&nbsp;the&nbsp;Advance&nbsp;Width&nbsp;(int)&nbsp;at&nbsp;given&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str)</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-setLSB"><strong>setLSB</strong></a>(self, newLSB, layer<font color="#909090">=None</font>)</dt><dd><tt>Set&nbsp;the&nbsp;Left&nbsp;Side-bearing&nbsp;(int)&nbsp;at&nbsp;given&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str)</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-setRSB"><strong>setRSB</strong></a>(self, newRSB, layer<font color="#909090">=None</font>)</dt><dd><tt>Set&nbsp;the&nbsp;Right&nbsp;Side-bearing&nbsp;(int)&nbsp;at&nbsp;given&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str)</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-shape2fg"><strong>shape2fg</strong></a>(self, flShape)</dt><dd><tt>Convert&nbsp;flShape&nbsp;to&nbsp;fgShape</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-shapes"><strong>shapes</strong></a>(self, layer<font color="#909090">=None</font>)</dt><dd><tt>Return&nbsp;all&nbsp;shapes&nbsp;at&nbsp;given&nbsp;layer.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str):&nbsp;Layer&nbsp;index&nbsp;or&nbsp;name.&nbsp;If&nbsp;None&nbsp;returns&nbsp;ActiveLayer<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list[flShapes]</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-slant"><strong>slant</strong></a>(self, deg, layer<font color="#909090">=None</font>)</dt><dd><tt>Slant&nbsp;outline&nbsp;at&nbsp;given&nbsp;layer.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;deg&nbsp;(float):&nbsp;degrees&nbsp;of&nbsp;slant<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str):&nbsp;Layer&nbsp;index&nbsp;or&nbsp;name.&nbsp;If&nbsp;None&nbsp;returns&nbsp;ActiveLayer<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-translate"><strong>translate</strong></a>(self, dx, dy, layer<font color="#909090">=None</font>)</dt><dd><tt>Translate&nbsp;(shift)&nbsp;outline&nbsp;at&nbsp;given&nbsp;layer.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dx&nbsp;(float),&nbsp;dy&nbsp;(float):&nbsp;delta&nbsp;(shift)&nbsp;X,&nbsp;Y<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer&nbsp;(int&nbsp;or&nbsp;str):&nbsp;Layer&nbsp;index&nbsp;or&nbsp;name.&nbsp;If&nbsp;None&nbsp;returns&nbsp;ActiveLayer<br>
+Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None</tt></dd></dl>
+
+<dl><dt><a name="eGlyph-update"><strong>update</strong></a>(self, fl<font color="#909090">=True</font>, fg<font color="#909090">=False</font>)</dt><dd><tt>Updates&nbsp;the&nbsp;glyph&nbsp;and&nbsp;sends&nbsp;notification&nbsp;to&nbsp;the&nbsp;editor.<br>
+Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fl&nbsp;(bool):&nbsp;Update&nbsp;the&nbsp;flGlyph<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fg&nbsp;(bool):&nbsp;Update&nbsp;the&nbsp;fgGlyph</tt></dd></dl>
+
+<hr>
+Data descriptors inherited from <a href="typerig.proxy.html#pGlyph">typerig.proxy.pGlyph</a>:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><tt>dictionary&nbsp;for&nbsp;instance&nbsp;variables&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><tt>list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+</td></tr></table></td></tr></table>

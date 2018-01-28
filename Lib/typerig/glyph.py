@@ -152,9 +152,7 @@ class eGlyph(pGlyph):
 
 	# - Metrics -----------------------------------------
 	def copyMetricsSB(self, LSBGlyphName, RSBGlyphName, layer='all', srcFont=None, order=(0,1), adjustPercent=100, adjustUnits=(0,0)):
-		'''
-		Copy Glyph Side-bearings (LSB, RSB) form another glyph(s) referenced by name.
-		'''
+		'''Copy Glyph Side-bearings (LSB, RSB) form another glyph(s) referenced by name.'''
 		
 		# - Init
 		if srcFont is None:	srcFont = fl6.CurrentFont()
@@ -186,6 +184,17 @@ class eGlyph(pGlyph):
 
 	# - Interpolation  ---------------------------------------
 	def blendLayers(self, layerA, layerB, blendTimes, outputFL=True, blendMode=0, engine='fg'):
+		'''Blend two layers at given times (anisotropic support).
+		Args:
+			layerA (flLayer), layerB (flLayer): Shapes to be interpolated
+			blendTimes (int or float or tuple(float, float)): (int) for percent 0%-100% or (float) time for both X,Y or tuple(float,float) times for anisotropic blending
+			outputFL (bool): Return blend native format or flShape (default)
+			blendMode (int): ?
+			engine (str): 'fg' for FontGate (in-build).
+
+		Returns:
+			None
+		'''
 		from typerig.utils import linInterp
 
 		if isinstance(blendTimes, tuple): blendTimes = pqt.QtCore.QPointF(*blendTimes)
@@ -210,8 +219,7 @@ class eGlyph(pGlyph):
 
 	# - Anchors & Pins -----------------------------------------
 	def getAttachmentCenters(self, layer, tolerance=5):
-		'''
-		Return X center of lowest, highest Y of [glyph] for [layer] within given [tolerance]
+		'''Return X center of lowest, highest Y of [glyph] for [layer] within given [tolerance]
 		Note: Determine diacritic to glyph attachment positions (for anchor placement)
 		'''
 		from operator import itemgetter
@@ -231,7 +239,7 @@ class eGlyph(pGlyph):
 		return XminY, XmaxY
 
 	def dropAnchor(self, yHeight, name, alignTop=True, layer='all'):
-		
+		'''Drop anchor at given layer'''
 		# - Init
 		def __drop(yHeight, name, layer, alignTop):
 			XminY, XmaxY = self.getAttachmentCenters(layer)
