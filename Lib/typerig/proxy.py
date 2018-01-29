@@ -245,6 +245,9 @@ class pGlyph(object):
 
 		return contourMap
 
+	def getSegment(self, cID, nID, layer=None):
+		return self.contours(layer)[cID].segment(self._mapOn(layer)[cID][nID])
+
 	def insertNodesAt(self, cID, nID, nodeList, layer=None):
 		'''Inserts a list of nodes to specified contour, starting at given index all on layer specified.
 		Args:
