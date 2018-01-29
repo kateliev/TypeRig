@@ -195,7 +195,7 @@ class eGlyph(pGlyph):
 		Returns:
 			None
 		'''
-		from typerig.utils import linInterp
+		from typerig.brain import linInterp
 
 		if isinstance(blendTimes, tuple): blendTimes = pqt.QtCore.QPointF(*blendTimes)
 		if isinstance(blendTimes, int): blendTimes = pqt.QtCore.QPointF(float(blendTimes)/100, float(blendTimes)/100)
@@ -206,7 +206,7 @@ class eGlyph(pGlyph):
 			blendLayer = fl6.flLayer('B:%s %s, t:%s' %(layerA.name, layerB.name, str(blendTimes)))
 			
 			# - Set and interpolate metrics
-			blendLayer.advanceWidth = int(linInterp(layerA.advanceWidth, layerB.advanceWidth, blendTimes.x()))
+			blendLayer.advanceWidth = int(linInterp(min(layerA.advanceWidth, layerB.advanceWidth), max(layerA.advanceWidth, layerB.advanceWidth), blendTimes.x()))
 			
 			# - Interpolate shapes
 			for shapeA in layerA.shapes:

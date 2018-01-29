@@ -248,6 +248,10 @@ class pGlyph(object):
 	def getSegment(self, cID, nID, layer=None):
 		return self.contours(layer)[cID].segment(self._mapOn(layer)[cID][nID])
 
+	def selectedSegment(self, layer=None):
+		cID, nID = self.selectedAtContours()[0]
+		return self.contours(layer)[cID].segment(self._mapOn(layer)[cID][nID])
+
 	def insertNodesAt(self, cID, nID, nodeList, layer=None):
 		'''Inserts a list of nodes to specified contour, starting at given index all on layer specified.
 		Args:
@@ -348,13 +352,13 @@ class pGlyph(object):
 		pTransform.rotate(deg)
 		pLayer.applyTransform(pTransform)
 
-	def shape2fg(self, flShape):
+	# - Interpolation  -----------------------------------------------
+	def _shape2fg(self, flShape):
 		'''Convert flShape to fgShape'''
 		tempFgShape = fgt.fgShape()
 		flShape.convertToFgShape(tempFgShape)
 		return tempFgShape
 
-	# - Interpolation  -----------------------------------------------
 	def blendShapes(self, shapeA, shapeB, blendTimes, outputFL=True, blendMode=0, engine='fg'):
 		'''Blend two shapes at given times (anisotropic support).
 		Args:
@@ -369,8 +373,8 @@ class pGlyph(object):
 		'''
 
 		if engine.lower() == 'fg': # Use FontGate engine for blending/interpolation
-			if isinstance(shapeA, fl6.flShape): shapeA = self.shape2fg(shapeA)
-			if isinstance(shapeB, fl6.flShape):	shapeB = self.shape2fg(shapeB)
+			if isinstance(shapeA, fl6.flShape): shapeA = self._shape2fg(shapeA)
+			if isinstance(shapeB, fl6.flShape):	shapeB = self._shape2fg(shapeB)
 			
 			if isinstance(blendTimes, tuple): blendTimes = pqt.QtCore.QPointF(*blendTimes)
 			if isinstance(blendTimes, int): blendTimes = pqt.QtCore.QPointF(float(blendTimes)/100, float(blendTimes)/100)
@@ -379,42 +383,6 @@ class pGlyph(object):
 			tempBlend = fgt.fgShape(shapeA, shapeB, blendTimes.x(), blendTimes.y(), blendMode)
 			return fl6.flShape(tempBlend) if outputFL else tempBlend
 
-	def blendLayers(self, layerA, layerB, blendTimes, outputFL=True, blendMode=0, engine='fg'):
-		'''Blend two layers at given times (anisotropic support).
-		Args:
-			layerA (flLayer), layerB (flLayer): Shapes to be interpolated
-			blendTimes (int or float or tuple(float, float)): (int) for percent 0%-100% or (float) time for both X,Y or tuple(float,float) times for anisotropic blending
-			outputFL (bool): Return blend native format or flShape (default)
-			blendMode (int): ?
-			engine (str): 'fg' for FontGate (in-build).
-
-		Returns:
-			None
-		'''
-
-		from typerig.utils import linInterp
-
-		if isinstance(blendTimes, tuple): blendTimes = pqt.QtCore.QPointF(*blendTimes)
-		if isinstance(blendTimes, int): blendTimes = pqt.QtCore.QPointF(float(blendTimes)/100, float(blendTimes)/100)
-		if isinstance(blendTimes, float): blendTimes = pqt.QtCore.QPointF(blendTimes, blendTimes)
-
-		if layerA.isCompatible(layerB):
-			# - Init
-			blendLayer = fl6.flLayer('B:%s %s, t:%s' %(layerA.name, layerB.name, str(blendTimes)))
-			
-			# - Set and interpolate metrics
-			blendLayer.advanceWidth = int(linInterp(layerA.advanceWidth, layerB.advanceWidth, blendTimes.x()))
-			
-			# - Interpolate shapes
-			for shapeA in layerA.shapes:
-				for shapeB in layerB.shapes:
-					if shapeA.isCompatible(shapeB):
-						tempBlend = self.blendShapes(shapeA, shapeB, blendTimes, outputFL, blendMode, engine)
-						blendLayer.addShape(tempBlend)
-
-			return blendLayer
-
-			
 	# - Metrics -----------------------------------------------
 	def getLSB(self, layer=None):
 		'''Get the Left Side-bearing at given layer (int or str)'''
