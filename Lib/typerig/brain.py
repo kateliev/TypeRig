@@ -259,7 +259,7 @@ class _Point(object):
 			return self.__class__((self.x // other, self.y // other))
 		
 		elif isinstance(other, tuple):
-			return __Point((self.x // other[0], self.y // other[1]))
+			return self.__class__((self.x // other[0], self.y // other[1]))
 		
 		elif isinstance(other, list):
 			pass
@@ -301,6 +301,9 @@ class _Point(object):
 
 	def doSwap(self):
 		return self.__class__((self.y, self.x))
+
+	def asTuple(self, toInt=False):
+		return (self.x, self.y) if not toInt else (int(self.x), int(self.y))
 
 	def setAngle(self, angle):
 		self.angle = angle
@@ -366,8 +369,14 @@ class _Curve(object):
 	def __init__(self, data):
 		self.p0, self.p1, self.p2, self.p3 = data
 				
-	def toList(self):
+	def __repr__(self):
+		return '<Curve: %s,%s,%s,%s>' %(self.p0.asTuple(), self.p1.asTuple(), self.p2.asTuple(), self.p3.asTuple())
+
+	def asList(self):
 		return [self.p0, self.p1, self.p2, self.p3]
+
+	def doSwap(self):
+		return self.__class__((self.p3, self.p2, self.p1, self.p0))
 		
 	def getNode(self, time, resultInt = True):
 		'''Returns Base Node integer/float (x,y) coordinates at given [time]
@@ -600,12 +609,12 @@ class _Curve(object):
 		#- Calculate equal distance
 		eqDistance = (a + b + c) * proportion
 
-		#	new_p1 = getNewCoordinates(self.p1, self.p0, self.p2, eqDistance)
-		#	new_p2 = getNewCoordinates(self.p2, self.p3, self.p1, eqDistance)
+		new_p1 = getNewCoordinates(self.p1, self.p0, self.p2, eqDistance)
+		new_p2 = getNewCoordinates(self.p2, self.p3, self.p1, eqDistance)
 		#	self.p1.x, self.p1.y = new_p1[0], new_p1[1]
 		#	self.p2.x, self.p2.y = new_p2[0], new_p2[1]
 
-		return new_p1, new_p2
+		return self.__class__((self.p0.asTuple(), new_p1, new_p2, self.p3.asTuple()))
 
 	def eqHobbySpline(self, curvature=(.9,.9)):
 		'''Calculates and applies John Hobby's mock-curvature-smoothness by given curvature - tuple(float,float) or (float)
@@ -654,7 +663,7 @@ class _Curve(object):
 		#self.p1.x, self.p1.y = u.real, u.imag
 		#self.p2.x, self.p2.y = v.real, v.imag
 		
-		return (u.real, u.imag), (v.real, v.imag)
+		return self.__class__((self.p0.asTuple(), (u.real, u.imag), (v.real, v.imag), self.p3.asTuple()))		
 
 	def getHobbyCurvature(self):
 		'''Returns current curvature coefficients (complex(alpha), complex(beta)) for 
@@ -713,12 +722,9 @@ class _Curve(object):
 			# - Init
 			diffA = p1 - p0 						# p1.x - p0.x, p1.y - p0.y
 			prodA = p1 & Coord((p0.y,-p0.x)) 		# p1.x * p0.y - p0.x * p1.y
-
 			
 			diffB = p3 - p2 								
 			prodB = p3 & Coord((p2.y,-p2.x)) 
-
-			print type(p1), type(Coord((p0.y,-p0.x))), prodA, prodB
 
 			# - Get intersection
 			det = diffA & Coord((diffB.y, -diffB.x)) 	# diffA.x * diffB.y - diffB.x * diffA.y
@@ -759,10 +765,32 @@ class _Curve(object):
 			bcp2c = setProportion(self.p0, crossing, propMean)
 			bcp1b = setProportion(self.p3, crossing, propMean)
 
-			return (bcp2c.x, bcp2c.y), (bcp1b.x, bcp1b.y)
-		
+			return self.__class__((self.p0.asTuple(), (bcp2c.x, bcp2c.y), (bcp1b.x, bcp1b.y), self.p3.asTuple()))
 		else:
 			return None
+
+	def interpolateFirst(self, shift):
+		diffBase = self.p3 - self.p0
+		diffP1 = self.p3 - self.p1
+		diffP2 = self.p3 - self.p2
+
+		if diffBase.x != 0:
+			self.p1.x += (diffP1.x/diffBase.x)*shift.x
+			self.p2.x += (diffP2.x/diffBase.x)*shift.x
+
+		if diffBase.y != 0:
+			self.p1.y += (diffP1.y/diffBase.y)*shift.y
+			self.p2.y += (diffP2.y/diffBase.y)*shift.y
+
+		self.p0 += shift
+
+		return self.__class__((self.p0, self.p1, self.p2, self.p3))
+
+	def interpolateLast(self, shift):
+		newC = self.doSwap()
+		intC = newC.interpolateFirst(shift)
+		return intC.doSwap()
+
 
 # --- Real world ----------------------------------------------------------------------
 class Coord(_Point): # Dumb Name but avoids name collision with FL6/FL5 Point object
@@ -788,9 +816,6 @@ class Coord(_Point): # Dumb Name but avoids name collision with FL6/FL5 Point ob
 
 	def __repr__(self):
 		return '<Coord: %s,%s>' %(self.x, self.y)
-
-	def asTuple(self, toInt=False):
-		return (self.x, self.y) if not toInt else (int(self.x), int(self.y))
 
 	def asQPointF(self):
 		from PythonQt.QtCore import QPointF
@@ -857,7 +882,12 @@ class Curve(_Curve):
 			self.p3 = Coord(data.p1)
 		
 		elif isinstance(data, tuple) and len(data) == 4:
-			self.p0, self.p1, self.p2, self.p3 = [Coord(dI) for dI in data]
+			
+			if all(multiCheck(data, tuple)):
+				self.p0, self.p1, self.p2, self.p3 = [Coord(dI) for dI in data]
+			
+			elif all(multiCheck(data, Coord)):
+				self.p0, self.p1, self.p2, self.p3 = data
 
 		else:
 			raise ValueError('ERRO\t Unknown input data type! Cannot initiate <<Curve>> object!\ERRO\tInput data must be Qline/QlineF or tuple(tuple(x0,y0)|flNode|QPointF|QPoint, tuple(x1,y1)|flNode|QPointF|QPoint) or tuple(x0,y0,x1,y1)')

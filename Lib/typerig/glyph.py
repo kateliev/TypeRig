@@ -253,6 +253,26 @@ class eGlyph(pGlyph):
 		else:
 			__drop(yHeight, name, layer, alignTop)
 
+	def interpolateNode(self, cID, nID, shift_x, shift_y, layer=None):
+		from typerig.brain import Coord, Curve
+
+		# - Init 
+		shift = Coord((shift_x, shift_y))
+		currenTime = self.mapNodes2Times(layer)[cID][nID]
+		segmentNodeMap = self.nodes4segments(cID, layer)
+		
+		currentSegmet, currentSegmetNodes = segmentNodeMap[currenTime]
+		prevSegment, prevSegmentNodes = segmentNodeMap[currenTime - 1]
+
+		currCurve, prevCurve = Curve(currentSegmet), Curve(prevSegment)
+		new_currCurve, new_prevCurve = currCurve.interpolateFirst(shift), prevCurve.interpolateLast(shift)
+
+		for i in range(len(currentSegmetNodes)):
+			currentSegmetNodes[i].smartSetXY(new_currCurve.asList()[i].asQPointF())
+
+		for i in range(len(prevSegmentNodes)):
+			prevSegmentNodes[i].smartSetXY(new_prevCurve.asList()[i].asQPointF())
+
 		
 
 

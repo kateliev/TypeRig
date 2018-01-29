@@ -224,6 +224,9 @@ class pGlyph(object):
 			
 		return [pLayer.getContours()[item[0]].nodes()[item[1]].pointf for item in nodelist]
 
+	def selectedSegments(self, layer=None):
+		return [self.contours(layer)[cID].segment(self.mapNodes2Times(layer)[cID][nID]) for cID, nID in self.selectedAtContours()]
+
 	# - Outline -----------------------------------------------
 	def _mapOn(self, layer=None):
 		'''Create map of onCurve Nodes for every contour in given layer
@@ -245,12 +248,42 @@ class pGlyph(object):
 
 		return contourMap
 
+	def mapNodes2Times(self, layer=None):
+		return self._mapOn(layer)
+
+	def mapTimes2Nodes(self, layer=None):
+		n2tMap = self._mapOn(layer)
+		t2nMap = {}
+
+		for cID, nodeMap in n2tMap.iteritems():
+			tempMap = {}
+			
+			for nID, time in nodeMap.iteritems():
+				tempMap.setdefault(time, []).append(nID)
+
+			t2nMap[cID] = tempMap
+
+		return t2nMap
+
 	def getSegment(self, cID, nID, layer=None):
 		return self.contours(layer)[cID].segment(self._mapOn(layer)[cID][nID])
 
-	def selectedSegment(self, layer=None):
-		cID, nID = self.selectedAtContours()[0]
-		return self.contours(layer)[cID].segment(self._mapOn(layer)[cID][nID])
+	def segments(self, cID, layer=None):
+		return self.contours(layer)[cID].segments()
+
+	def nodes4segments(self, cID, layer=None):
+		segments = self.segments(cID, layer)
+		
+		nodes = self.nodes(layer)
+		nodes.append(nodes[0]) # Dirty Close contour
+
+		timeTable = self.mapTimes2Nodes(layer)[cID]
+		n4sMap = {}
+
+		for time, nodeIndexes in timeTable.iteritems():
+			n4sMap[time] = (segments[time], [nodes[nID] for nID in nodeIndexes] + [nodes[nodeIndexes[-1] + 1]]) # Should be closed otherwise fail
+
+		return n4sMap
 
 	def insertNodesAt(self, cID, nID, nodeList, layer=None):
 		'''Inserts a list of nodes to specified contour, starting at given index all on layer specified.
