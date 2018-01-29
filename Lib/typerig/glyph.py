@@ -257,7 +257,7 @@ class eGlyph(pGlyph):
 		from typerig.brain import Coord, Curve
 
 		# - Init 
-		shift = Coord((shift_x, shift_y))
+		shift = Coord(shift_x, shift_y)
 		currenTime = self.mapNodes2Times(layer)[cID][nID]
 		segmentNodeMap = self.nodes4segments(cID, layer)
 		

@@ -176,16 +176,16 @@ class _Point(object):
 
 	def __add__(self, other):
 		if isinstance(other, self.__class__):
-			return self.__class__((self.x + other.x, self.y + other.y))
+			return self.__class__(self.x + other.x, self.y + other.y)
 		
 		elif isinstance(other, int):
-			return self.__class__((self.x + other, self.y + other))
+			return self.__class__(self.x + other, self.y + other)
 
 		elif isinstance(other, float):
-			return self.__class__((self.x + other, self.y + other))
+			return self.__class__(self.x + other, self.y + other)
 		
 		elif isinstance(other, tuple):
-			return self.__class__((self.x + other[0], self.y + other[1]))
+			return self.__class__(self.x + other[0], self.y + other[1])
 		
 		elif isinstance(other, list):
 			pass
@@ -198,16 +198,16 @@ class _Point(object):
 
 	def __sub__(self, other):
 		if isinstance(other, self.__class__):
-			return self.__class__((self.x - other.x, self.y - other.y))
+			return self.__class__(self.x - other.x, self.y - other.y)
 		
 		elif isinstance(other, int):
-			return self.__class__((self.x - other, self.y - other))
+			return self.__class__(self.x - other, self.y - other)
 
 		elif isinstance(other, float):
-			return self.__class__((self.x - other, self.y - other))
+			return self.__class__(self.x - other, self.y - other)
 		
 		elif isinstance(other, tuple):
-			return self.__class__((self.x - other[0], self.y - other[1]))
+			return self.__class__(self.x - other[0], self.y - other[1])
 		
 		elif isinstance(other, list):
 			pass
@@ -223,16 +223,16 @@ class _Point(object):
 			a = complex(self.x , self.y)
 			b = complex(other.x, other.y)
 			product = a * b
-			return self.__class__((product.real, product.imag))
+			return self.__class__(product.real, product.imag)
 		
 		elif isinstance(other, int):
-			return self.__class__((self.x * other, self.y * other))
+			return self.__class__(self.x * other, self.y * other)
 
 		elif isinstance(other, float):
-			return self.__class__((self.x * other, self.y * other))
+			return self.__class__(self.x * other, self.y * other)
 		
 		elif isinstance(other, tuple):
-			return self.__class__((self.x * other[0], self.y * other[1]))
+			return self.__class__(self.x * other[0], self.y * other[1])
 		
 		elif isinstance(other, list):
 			pass
@@ -250,16 +250,16 @@ class _Point(object):
 			a = complex(self.x , self.y)
 			b = complex(other.x, other.y)
 			product = a / b
-			return self.__class__((product.real, product.imag))
+			return self.__class__(product.real, product.imag)
 		
 		elif isinstance(other, int):
-			return self.__class__((self.x / other, self.y / other))
+			return self.__class__(self.x / other, self.y / other)
 
 		elif isinstance(other, float):
-			return self.__class__((self.x // other, self.y // other))
+			return self.__class__(self.x // other, self.y // other)
 		
 		elif isinstance(other, tuple):
-			return self.__class__((self.x // other[0], self.y // other[1]))
+			return self.__class__(self.x // other[0], self.y // other[1])
 		
 		elif isinstance(other, list):
 			pass
@@ -300,7 +300,7 @@ class _Point(object):
 		return '<Point: %s,%s>' %(self.x, self.y)
 
 	def doSwap(self):
-		return self.__class__((self.y, self.x))
+		return self.__class__(self.y, self.x)
 
 	def asTuple(self, toInt=False):
 		return (self.x, self.y) if not toInt else (int(self.x), int(self.y))
@@ -326,9 +326,8 @@ class _Point(object):
 		return (float(y) - self.getYintercept()) / self.getSlope()
 
 class _Line(object):
-	def __init__(self, P0_Coord, P1_Coord):
-		self.p0 = P0_Coord
-		self.p1 = P1_Coord
+	def __init__(self, data):
+		self.p0, self.p1 = data
 		self.update()
 		
 	def __repr__(self):
@@ -376,21 +375,20 @@ class _Curve(object):
 		return [self.p0, self.p1, self.p2, self.p3]
 
 	def doSwap(self):
-		return self.__class__((self.p3, self.p2, self.p1, self.p0))
+		return self.__class__(self.p3, self.p2, self.p1, self.p0)
 		
-	def getNode(self, time, resultInt = True):
+	def getNode(self, time):
 		'''Returns Base Node integer/float (x,y) coordinates at given [time]
 		Output: tuple (x,y)
 		'''
+
+		from typerig.brain import Coord
 
 		rtime = 1 - time
 		x = (rtime**3)*self.p0.x + 3*(rtime**2)*time*self.p1.x + 3*rtime*(time**2)*self.p2.x + (time**3)*self.p3.x
 		y = (rtime**3)*self.p0.y + 3*(rtime**2)*time*self.p1.y + 3*rtime*(time**2)*self.p2.y + (time**3)*self.p3.y
 
-		if resultInt:
-			return (int(x), int(y))
-		else:
-			return (x, y)
+		return Coord(x, y)
 
 	def sliceNode(self, time, resultInt = True):
 		'''Returns integer/float coordinates of curve sliced at given [time]. 
@@ -614,7 +612,7 @@ class _Curve(object):
 		#	self.p1.x, self.p1.y = new_p1[0], new_p1[1]
 		#	self.p2.x, self.p2.y = new_p2[0], new_p2[1]
 
-		return self.__class__((self.p0.asTuple(), new_p1, new_p2, self.p3.asTuple()))
+		return self.__class__(self.p0.asTuple(), new_p1, new_p2, self.p3.asTuple())
 
 	def eqHobbySpline(self, curvature=(.9,.9)):
 		'''Calculates and applies John Hobby's mock-curvature-smoothness by given curvature - tuple(float,float) or (float)
@@ -663,7 +661,7 @@ class _Curve(object):
 		#self.p1.x, self.p1.y = u.real, u.imag
 		#self.p2.x, self.p2.y = v.real, v.imag
 		
-		return self.__class__((self.p0.asTuple(), (u.real, u.imag), (v.real, v.imag), self.p3.asTuple()))		
+		return self.__class__(self.p0.asTuple(), (u.real, u.imag), (v.real, v.imag), self.p3.asTuple())		
 
 	def getHobbyCurvature(self):
 		'''Returns current curvature coefficients (complex(alpha), complex(beta)) for 
@@ -715,24 +713,24 @@ class _Curve(object):
 		from math import hypot
 		from typerig.brain import Coord
 
-		practicalInfinity = Coord((100000, 100000)) # Infinite coordinate for FL5
+		practicalInfinity = Coord(100000, 100000) # Infinite coordinate for FL5
 
 		# - Helper functions
 		def getCrossing(p0, p1, p2, p3):
 			# - Init
 			diffA = p1 - p0 						# p1.x - p0.x, p1.y - p0.y
-			prodA = p1 & Coord((p0.y,-p0.x)) 		# p1.x * p0.y - p0.x * p1.y
+			prodA = p1 & Coord(p0.y,-p0.x) 		# p1.x * p0.y - p0.x * p1.y
 			
 			diffB = p3 - p2 								
-			prodB = p3 & Coord((p2.y,-p2.x)) 
+			prodB = p3 & Coord(p2.y,-p2.x) 
 
 			# - Get intersection
-			det = diffA & Coord((diffB.y, -diffB.x)) 	# diffA.x * diffB.y - diffB.x * diffA.y
+			det = diffA & Coord(diffB.y, -diffB.x) 	# diffA.x * diffB.y - diffB.x * diffA.y
 			x = diffB.x * prodA - diffA.x * prodB
 			y = diffB.y * prodA - diffA.y * prodB
 
 			try:
-				return Coord((x / det, y / det))
+				return Coord(x / det, y / det)
 
 			except ZeroDivisionError:
 				return practicalInfinity
@@ -745,7 +743,7 @@ class _Curve(object):
 			xEnd = pointA.x + xDiff * prop * sign(pointB.x - pointA.x)
 			yEnd = pointA.y + yDiff * prop * sign(pointB.y - pointA.y)
 
-			return Coord((xEnd, yEnd))
+			return Coord(xEnd, yEnd)
 
 		# - Run ------------------
 		# -- Init
@@ -765,7 +763,7 @@ class _Curve(object):
 			bcp2c = setProportion(self.p0, crossing, propMean)
 			bcp1b = setProportion(self.p3, crossing, propMean)
 
-			return self.__class__((self.p0.asTuple(), (bcp2c.x, bcp2c.y), (bcp1b.x, bcp1b.y), self.p3.asTuple()))
+			return self.__class__(self.p0.asTuple(), (bcp2c.x, bcp2c.y), (bcp1b.x, bcp1b.y), self.p3.asTuple())
 		else:
 			return None
 
@@ -784,7 +782,7 @@ class _Curve(object):
 
 		self.p0 += shift
 
-		return self.__class__((self.p0, self.p1, self.p2, self.p3))
+		return self.__class__(self.p0, self.p1, self.p2, self.p3)
 
 	def interpolateLast(self, shift):
 		newC = self.doSwap()
@@ -794,26 +792,26 @@ class _Curve(object):
 
 # --- Real world ----------------------------------------------------------------------
 class Coord(_Point): # Dumb Name but avoids name collision with FL6/FL5 Point object
-	def __init__(self, data):
+	def __init__(self, *argv):
 		from fontlab import flNode
 		from PythonQt.QtCore import QPointF, QPoint
 
 		self.angle = 0
-		self.parent = data
+		self.parent = argv
+		multiCheck = lambda t, type: all([isinstance(i, type) for i in t])
 
-		if isinstance(data, tuple):
-			self.x, self.y = data
-		else:
-			if isinstance(data, flNode):
-				self.x = data.x
-				self.y = data.y
-				
-			elif isinstance(data, QPointF) or isinstance(data, QPoint):
-				self.x = data.x()
-				self.y = data.y()
-			else:
-				raise ValueError('ERRO\t Unknown input data type! Cannot initiate <<Coord: object>>! Input data must be tuple(x,y), QPointF or QPoint')
-
+		if multiCheck(argv, float) or multiCheck(argv, int) :
+			self.x, self.y = argv
+		
+		if multiCheck(argv, flNode):
+			self.x, self.y = argv[0].x, argv[0].y
+						
+		if multiCheck(argv, QPointF) or multiCheck(argv, QPoint):
+			self.x, self.y = argv[0].x(), argv[0].y()
+		
+		if multiCheck(argv, tuple) or multiCheck(argv, list) :
+			self.x, self.y = argv[0]
+		
 	def __repr__(self):
 		return '<Coord: %s,%s>' %(self.x, self.y)
 
@@ -826,34 +824,30 @@ class Coord(_Point): # Dumb Name but avoids name collision with FL6/FL5 Point ob
 		return QPointF(int(self.x), int(self.y))
 
 class Line(_Line):
-	def __init__(self, data):
+	def __init__(self, *argv):
 		from fontlab import flNode
 		from PythonQt.QtCore import QPoint, QPointF, QLine, QLineF
 		from typerig.brain import Coord
 
-		multiCheck = lambda t, type: [isinstance(i, type) for i in t]
+		multiCheck = lambda t, type: all([isinstance(i, type) for i in t])
+		self.parent = argv
 
-		if isinstance(data, tuple):
-			if len(data) == 2:
+		if len(argv) == 4:
+			self.p0 = Coord(argv[:2])
+			self.p1 = Coord(argv[2:])
 
-				if all(multiCheck(data, QPoint)) or all(multiCheck(data, QPointF)) or all(multiCheck(data, tuple)):
-					self.p0 = Coord(data[0])
-					self.p1 = Coord(data[1])
-				else:
-					raise ValueError('ERRO\t Unknown input data type! Cannot initiate <<Line: object>>!\ERRO\tInput data must be Qline/QlineF or tuple(tuple(x0,y0)|flNode|QPointF|QPoint, tuple(x1,y1)|flNode|QPointF|QPoint) or tuple(x0,y0,x1,y1)')
-			
-			elif len(data) == 4:
-				self.p0 = Coord(data[:2])
-				self.p1 = Coord(data[2:])
+		if len(argv) == 2:
+			if multiCheck(argv, Coord):
+				self.p0, self.p1 = argv
 			else:
-				raise ValueError('ERRO\t Not enough data! Cannot initiate <<Line: object>>!\ERRO\tInput data must be Qline/QlineF or tuple(tuple(x0,y0)|flNode|QPointF|QPoint, tuple(x1,y1)|flNode|QPointF|QPoint) or tuple(x0,y0,x1,y1)')
+				self.p0 = Coord(argv[0])
+				self.p1 = Coord(argv[1])
 
-		elif isinstance(data, QLine) or isinstance(data, QLineF):
-			self.p0 = Coord(data.p1())
-			self.p1 = Coord(data.p2())
+		if multiCheck(argv, QLineF) or multiCheck(argv, QLine) and len(argv) == 1:
+			self.p0 = Coord(argv[0].p1())
+			self.p1 = Coord(argv[0].p2())
 
-		else:
-			raise ValueError('ERRO\t Unknown input data type! Cannot initiate <<Line: object>>!\ERRO\tInput data must be Qline/QlineF or tuple(tuple(x0,y0)|flNode|QPointF|QPoint, tuple(x1,y1)|flNode|QPointF|QPoint) or tuple(x0,y0,x1,y1)')
+		self.update()
 
 	def asTuple(self, toInt=False):
 		return (self.p0.x, self.p0.y, self.p1.x, self.p1.y) if not toInt else (int(self.p0.x), int(self.p0.y), int(self.p1.x), int(self.p1.y))
@@ -867,27 +861,22 @@ class Line(_Line):
 		return QPointF(*self.asTuple(True))
 
 class Curve(_Curve):
-	def __init__(self, data):
+	def __init__(self, *argv):
 		from fontlab import flNode, CurveEx
 		from PythonQt.QtCore import QPoint, QPointF
 		from typerig.brain import Coord
 
-		multiCheck = lambda t, type: [isinstance(i, type) for i in t]
-		self.parent = data
+		multiCheck = lambda t, type: all([isinstance(i, type) for i in t])
+		self.parent = argv
 
-		if isinstance(data, CurveEx):
-			self.p0 = Coord(data.p0)
-			self.p1 = Coord(data.bcp0)		
-			self.p2 = Coord(data.bcp1)
-			self.p3 = Coord(data.p1)
+		if len(argv) == 4:
+			if multiCheck(argv, Coord) or multiCheck(argv, flNode) or multiCheck(argv, tuple) or multiCheck(argv, list):
+				self.p0, self.p1, self.p2, self.p3 = [Coord(item) for item in argv]
+
+		if len(argv) == 1 and isinstance(argv[0], CurveEx):
+			self.p0 = Coord(argv[0].p0)
+			self.p1 = Coord(argv[0].bcp0)		
+			self.p2 = Coord(argv[0].bcp1)
+			self.p3 = Coord(argv[0].p1)
+
 		
-		elif isinstance(data, tuple) and len(data) == 4:
-			
-			if all(multiCheck(data, tuple)):
-				self.p0, self.p1, self.p2, self.p3 = [Coord(dI) for dI in data]
-			
-			elif all(multiCheck(data, Coord)):
-				self.p0, self.p1, self.p2, self.p3 = data
-
-		else:
-			raise ValueError('ERRO\t Unknown input data type! Cannot initiate <<Curve>> object!\ERRO\tInput data must be Qline/QlineF or tuple(tuple(x0,y0)|flNode|QPointF|QPoint, tuple(x1,y1)|flNode|QPointF|QPoint) or tuple(x0,y0,x1,y1)')
