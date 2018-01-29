@@ -169,24 +169,23 @@ class geoAxis(object):
 
 # -- Geometry classes --------------------------------------------------------------------
 # --- Abstractions -----------------------------------------------------------------------
-class __Point(object): 
-	def __init__(self, x, y, angle=0):
-		self.x = x
-		self.y = y
-		self.angle = angle
-	
+class _Point(object): 
+	def __init__(self, data):
+		self.x, self.y = data
+		self.angle = 0
+
 	def __add__(self, other):
-		if isinstance(other, Coord):
-			return Coord(self.x + other.x, self.y + other.y)
+		if isinstance(other, self.__class__):
+			return self.__class__((self.x + other.x, self.y + other.y))
 		
 		elif isinstance(other, int):
-			return Coord(self.x + other, self.y + other)
+			return self.__class__((self.x + other, self.y + other))
 
 		elif isinstance(other, float):
-			return Coord(self.x + other, self.y + other)
+			return self.__class__((self.x + other, self.y + other))
 		
 		elif isinstance(other, tuple):
-			return Coord(self.x + other[0], self.y + other[1])
+			return self.__class__((self.x + other[0], self.y + other[1]))
 		
 		elif isinstance(other, list):
 			pass
@@ -195,20 +194,20 @@ class __Point(object):
 			pass
 
 		else:
-			print 'ERRO\t Cannot evaluate Coordinate Object <<%s,%s>> ' %(self.x, self.y)
+			print 'ERRO\t Cannot evaluate Coordinate Object <<%s,%s>> with %s' %(self.x, self.y, type(other))
 
 	def __sub__(self, other):
-		if isinstance(other, Coord):
-			return Coord(self.x - other.x, self.y - other.y)
+		if isinstance(other, self.__class__):
+			return self.__class__((self.x - other.x, self.y - other.y))
 		
 		elif isinstance(other, int):
-			return Coord(self.x - other, self.y - other)
+			return self.__class__((self.x - other, self.y - other))
 
 		elif isinstance(other, float):
-			return Coord(self.x - other, self.y - other)
+			return self.__class__((self.x - other, self.y - other))
 		
 		elif isinstance(other, tuple):
-			return Coord(self.x - other[0], self.y - other[1])
+			return self.__class__((self.x - other[0], self.y - other[1]))
 		
 		elif isinstance(other, list):
 			pass
@@ -220,20 +219,20 @@ class __Point(object):
 			print 'ERRO\t Cannot evaluate Coordinate Object <<%s,%s>> with %s' %(self.x, self.y, type(other))
 
 	def __mul__(self, other):
-		if isinstance(other, Coord):
+		if isinstance(other, self.__class__):
 			a = complex(self.x , self.y)
 			b = complex(other.x, other.y)
 			product = a * b
-			return Coord(product.real, product.imag)
+			return self.__class__((product.real, product.imag))
 		
 		elif isinstance(other, int):
-			return Coord(self.x * other, self.y * other)
+			return self.__class__((self.x * other, self.y * other))
 
 		elif isinstance(other, float):
-			return Coord(self.x * other, self.y * other)
+			return self.__class__((self.x * other, self.y * other))
 		
 		elif isinstance(other, tuple):
-			return Coord(self.x * other[0], self.y * other[1])
+			return self.__class__((self.x * other[0], self.y * other[1]))
 		
 		elif isinstance(other, list):
 			pass
@@ -247,20 +246,20 @@ class __Point(object):
 	__rmul__ = __mul__
 
 	def __div__(self, other):
-		if isinstance(other, Coord):
+		if isinstance(other, self.__class__):
 			a = complex(self.x , self.y)
 			b = complex(other.x, other.y)
 			product = a / b
-			return Coord(product.real, product.imag)
+			return self.__class__((product.real, product.imag))
 		
 		elif isinstance(other, int):
-			return Coord(self.x / other, self.y / other)
+			return self.__class__((self.x / other, self.y / other))
 
 		elif isinstance(other, float):
-			return Coord(self.x // other, self.y // other)
+			return self.__class__((self.x // other, self.y // other))
 		
 		elif isinstance(other, tuple):
-			return Coord(self.x // other[0], self.y // other[1])
+			return __Point((self.x // other[0], self.y // other[1]))
 		
 		elif isinstance(other, list):
 			pass
@@ -273,15 +272,35 @@ class __Point(object):
 
 	__rdiv__ = __div__
 
+	def __and__(self, other):
+		'''self & other: Used as for Scalar product'''
+		if isinstance(other, self.__class__):
+			return self.x * other.x + self.y * other.y
+		
+		elif isinstance(other, int):
+			return self.x * other + self.y * other
+
+		elif isinstance(other, float):
+			return self.x * other + self.y * other
+		
+		elif isinstance(other, tuple):
+			return self.x * other[0] + self.y * other[1]
+		
+		elif isinstance(other, list):
+			pass
+
+		elif isinstance(other, str):
+			pass
+
 	def __abs__(self):
 		from math import sqrt
 		return sqrt(self.x**2 + self.y**2)
 
 	def __repr__(self):
-		return '<Coord: %s,%s>' %(self.x, self.y)
+		return '<Point: %s,%s>' %(self.x, self.y)
 
 	def doSwap(self):
-		return Coord(self.y, self.x)
+		return self.__class__((self.y, self.x))
 
 	def setAngle(self, angle):
 		self.angle = angle
@@ -303,7 +322,7 @@ class __Point(object):
 	def solveX(self, y):
 		return (float(y) - self.getYintercept()) / self.getSlope()
 
-class __Line(object):
+class _Line(object):
 	def __init__(self, P0_Coord, P1_Coord):
 		self.p0 = P0_Coord
 		self.p1 = P1_Coord
@@ -343,7 +362,7 @@ class __Line(object):
 		self.angle = self.getAngle()
 		self.slope = self.getSlope()
 
-class __Curve(object):
+class _Curve(object):
 	def __init__(self, data):
 		self.p0, self.p1, self.p2, self.p3 = data
 				
@@ -558,7 +577,7 @@ class __Curve(object):
 			else:
 				return None
 
-	def eqProportionalHandles(self, proportion=.3, apply=True):
+	def eqProportionalHandles(self, proportion=.3):
 		'''Equalizes handle length to given float(proportion)'''
 		from math import hypot, atan2, cos, sin
 
@@ -581,15 +600,14 @@ class __Curve(object):
 		#- Calculate equal distance
 		eqDistance = (a + b + c) * proportion
 
-		if apply:
-			new_p1 = getNewCoordinates(self.p1, self.p0, self.p2, eqDistance)
-			new_p2 = getNewCoordinates(self.p2, self.p3, self.p1, eqDistance)
-			self.p1.x, self.p1.y = new_p1[0], new_p1[1]
-			self.p2.x, self.p2.y = new_p2[0], new_p2[1]
+		#	new_p1 = getNewCoordinates(self.p1, self.p0, self.p2, eqDistance)
+		#	new_p2 = getNewCoordinates(self.p2, self.p3, self.p1, eqDistance)
+		#	self.p1.x, self.p1.y = new_p1[0], new_p1[1]
+		#	self.p2.x, self.p2.y = new_p2[0], new_p2[1]
 
 		return new_p1, new_p2
 
-	def eqHobbySpline(self, curvature=(.9,.9), apply=True):
+	def eqHobbySpline(self, curvature=(.9,.9)):
 		'''Calculates and applies John Hobby's mock-curvature-smoothness by given curvature - tuple(float,float) or (float)
 		Based on Metapolator's Hobby Spline by Juraj Sukop, Lasse Fister, Simon Egli
 		'''
@@ -633,9 +651,8 @@ class __Curve(object):
 			alpha, beta = curvature, curvature
 		u, v = controls(complex(self.p0.x, self.p0.y), w0, alpha, beta, w1, complex(self.p3.x, self.p3.y))
 		
-		if apply:
-			self.p1.x, self.p1.y = u.real, u.imag
-			self.p2.x, self.p2.y = v.real, v.imag
+		#self.p1.x, self.p1.y = u.real, u.imag
+		#self.p2.x, self.p2.y = v.real, v.imag
 		
 		return (u.real, u.imag), (v.real, v.imag)
 
@@ -676,7 +693,7 @@ class __Curve(object):
 		alpha, beta = getCurvature(complex(self.p0.x, self.p0.y), w0, u, v, w1, complex(self.p3.x, self.p3.y))
 		return alpha, beta
 
-	def eqTunni(self, apply=True):
+	def eqTunni(self):
 		'''		Make proportional handles keeping curvature and on-curve point positions 
 		Based on modified Andres Torresi implementation of Eduardo Tunni's method for control points
 
@@ -687,25 +704,29 @@ class __Curve(object):
 		'''
 		from FL import Point
 		from math import hypot
+		from typerig.brain import Coord
 
-		practicalInfinity = Point(100000, 100000) # Infinite coordinate for FL5
+		practicalInfinity = Coord((100000, 100000)) # Infinite coordinate for FL5
 
 		# - Helper functions
 		def getCrossing(p0, p1, p2, p3):
 			# - Init
 			diffA = p1 - p0 						# p1.x - p0.x, p1.y - p0.y
-			prodA = p1 * Point(p0.y,-p0.x) 			# p1.x * p0.y - p0.x * p1.y
+			prodA = p1 & Coord((p0.y,-p0.x)) 		# p1.x * p0.y - p0.x * p1.y
+
 			
 			diffB = p3 - p2 								
-			prodB = p3 * Point(p2.y,-p2.x) 
+			prodB = p3 & Coord((p2.y,-p2.x)) 
+
+			print type(p1), type(Coord((p0.y,-p0.x))), prodA, prodB
 
 			# - Get intersection
-			det = diffA * Point(diffB.y, -diffB.x) 	# diffA.x * diffB.y - diffB.x * diffA.y
+			det = diffA & Coord((diffB.y, -diffB.x)) 	# diffA.x * diffB.y - diffB.x * diffA.y
 			x = diffB.x * prodA - diffA.x * prodB
 			y = diffB.y * prodA - diffA.y * prodB
 
 			try:
-				return Point(x / det, y / det)
+				return Coord((x / det, y / det))
 
 			except ZeroDivisionError:
 				return practicalInfinity
@@ -718,7 +739,7 @@ class __Curve(object):
 			xEnd = pointA.x + xDiff * prop * sign(pointB.x - pointA.x)
 			yEnd = pointA.y + yDiff * prop * sign(pointB.y - pointA.y)
 
-			return Point(xEnd, yEnd)
+			return Coord((xEnd, yEnd))
 
 		# - Run ------------------
 		# -- Init
@@ -738,33 +759,23 @@ class __Curve(object):
 			bcp2c = setProportion(self.p0, crossing, propMean)
 			bcp1b = setProportion(self.p3, crossing, propMean)
 
-			# - Set equalized coordinates
-			if apply:	
-				self.p1.x, self.p1.y = bcp2c.x, bcp2c.y
-				self.p2.x, self.p2.y = bcp1b.x, bcp1b.y
-
 			return (bcp2c.x, bcp2c.y), (bcp1b.x, bcp1b.y)
 		
-		else: # Fall-back to other equalization
-			if apply:
-				self.eqProportionalHandles()
+		else:
+			return None
 
 # --- Real world ----------------------------------------------------------------------
-class Coord(__Point): # Dumb Name but avoids name collision with FL6/FL5 Point object
+class Coord(_Point): # Dumb Name but avoids name collision with FL6/FL5 Point object
 	def __init__(self, data):
 		from fontlab import flNode
 		from PythonQt.QtCore import QPointF, QPoint
 
-		if isinstance(data, tuple):
-			if len(data) < 3:
-				self.x, self.y = data
-				self.angle = 0
-			else:
-				self.x, self.y, self.angle = data
-		else:
-			self.angle = 0
-			self.parent = data
+		self.angle = 0
+		self.parent = data
 
+		if isinstance(data, tuple):
+			self.x, self.y = data
+		else:
 			if isinstance(data, flNode):
 				self.x = data.x
 				self.y = data.y
@@ -774,6 +785,9 @@ class Coord(__Point): # Dumb Name but avoids name collision with FL6/FL5 Point o
 				self.y = data.y()
 			else:
 				raise ValueError('ERRO\t Unknown input data type! Cannot initiate <<Coord: object>>! Input data must be tuple(x,y), QPointF or QPoint')
+
+	def __repr__(self):
+		return '<Coord: %s,%s>' %(self.x, self.y)
 
 	def asTuple(self, toInt=False):
 		return (self.x, self.y) if not toInt else (int(self.x), int(self.y))
@@ -786,7 +800,7 @@ class Coord(__Point): # Dumb Name but avoids name collision with FL6/FL5 Point o
 		from PythonQt.QtCore import QPoint
 		return QPointF(int(self.x), int(self.y))
 
-class Line(__Line):
+class Line(_Line):
 	def __init__(self, data):
 		from fontlab import flNode
 		from PythonQt.QtCore import QPoint, QPointF, QLine, QLineF
@@ -827,7 +841,7 @@ class Line(__Line):
 		from PythonQt.QtCore import QLine
 		return QPointF(*self.asTuple(True))
 
-class Curve(__Curve):
+class Curve(_Curve):
 	def __init__(self, data):
 		from fontlab import flNode, CurveEx
 		from PythonQt.QtCore import QPoint, QPointF
