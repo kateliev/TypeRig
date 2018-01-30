@@ -800,6 +800,9 @@ class Coord(_Point): # Dumb Name but avoids name collision with FL6/FL5 Point ob
 		self.parent = argv
 		multiCheck = lambda t, type: all([isinstance(i, type) for i in t])
 
+		if isinstance(argv[0], self.__class__):
+			self.x, self.y = argv[0].x, argv[0].y
+
 		if multiCheck(argv, float) or multiCheck(argv, int) :
 			self.x, self.y = argv
 		

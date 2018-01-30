@@ -15,6 +15,58 @@ import fontgate as fgt
 import PythonQt as pqt
 
 # - Classes -------------------------------
+class pNode(object):
+	def __init__(self, node):
+		self.fl = node
+		self.parent = self.contour = self.fl.contour
+		self.name = self.fl.name
+		self.index = self.fl.index
+		self.id = self.fl.id
+		self.isOn = self.fl.isOn
+		self.x, self.y = self.fl.x, self.fl.y
+		self.angle = self.fl.angle
+
+	def getTime(self):
+		return self.contour.getT(self.fl)
+
+	def getSegment(self, relativeTime=0):
+		return self.contour.segment(self.getTime() + relativeTime)
+
+	def interpMove(self, shift_x, shift_y):
+		if self.isOn:
+			from typerig.brain import Coord, Curve
+
+			# - Init 
+			shift = Coord(shift_x, shift_y)
+			currSegmet, prevSegment = self.getSegment(), self.getSegment(-1)
+			
+			if len(currSegmet) == 4:
+				currCurve = Curve(currSegmet)
+				new_currCurve = currCurve.interpolateFirst(shift)
+
+				currNode_bcpOut = self.fl.getNext()
+				nextNode_bcpIn = currNode_bcpOut.getNext()
+				nextNode = nextNode_bcpIn.getOn()
+
+				currSegmetNodes = [self.fl, currNode_bcpOut, nextNode_bcpIn, nextNode]
+				
+				for i in range(len(currSegmetNodes)):
+					currSegmetNodes[i].smartSetXY(new_currCurve.asList()[i].asQPointF())
+
+			if len(prevSegment) == 4:
+				prevCurve = Curve(prevSegment)
+				new_prevCurve = prevCurve.interpolateLast(shift)
+
+				currNode_bcpIn = self.fl.getPrev()
+				prevNode_bcpOut = currNode_bcpIn.getPrev()
+				prevNode = prevNode_bcpOut.getOn()
+
+				prevSegmentNodes = [prevNode, prevNode_bcpOut, currNode_bcpIn, self.fl]
+				
+				for i in range(len(currSegmetNodes)):
+					prevSegmentNodes[i].smartSetXY(new_prevCurve.asList()[i].asQPointF())
+
+
 class pGlyph(object):
 	'''
 	Proxy to flGlyph and fgGlyph combined into single entity.
