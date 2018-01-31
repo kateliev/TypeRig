@@ -16,6 +16,16 @@ import PythonQt as pqt
 
 # - Classes -------------------------------
 class pNode(object):
+	'''Proxy to flNode object
+
+	Constructor:
+		pNode(flNode)
+
+	Attributes:
+		.fl (flNode): Original flNode 
+		.parent (flContour): parent contour
+		.contour (flContour): parent contour
+	'''
 	def __init__(self, node):
 		self.fl = node
 		self.parent = self.contour = self.fl.contour
@@ -26,50 +36,33 @@ class pNode(object):
 		self.x, self.y = self.fl.x, self.fl.y
 		self.angle = self.fl.angle
 
+	# - Basics -----------------------------------------------
 	def getTime(self):
 		return self.contour.getT(self.fl)
 
+	def getNext(self):
+		return self.fl.getNext()
+
+	def getNextOn(self):
+		nextNode = self.fl.getNext()
+		return  nextNode if nextNode.isOn() else nextNode.getNext().getOn()
+
+	def getNextOn(self):
+		prevNode = self.fl.getPrev()
+		return  prevNode if prevNode.isOn() else prevNode.getPrev().getOn()
+
+	def getPrev(self):
+		return self.fl.getPrev()
+
+	def getOn(slef):
+		return self.fl.getOn()
+
 	def getSegment(self, relativeTime=0):
-		return self.contour.segment(self.getTime() + relativeTime)
-
-	def interpMove(self, shift_x, shift_y):
-		if self.isOn:
-			from typerig.brain import Coord, Curve
-
-			# - Init 
-			shift = Coord(shift_x, shift_y)
-			currSegmet, prevSegment = self.getSegment(), self.getSegment(-1)
-			
-			if len(currSegmet) == 4:
-				currCurve = Curve(currSegmet)
-				new_currCurve = currCurve.interpolateFirst(shift)
-
-				currNode_bcpOut = self.fl.getNext()
-				nextNode_bcpIn = currNode_bcpOut.getNext()
-				nextNode = nextNode_bcpIn.getOn()
-
-				currSegmetNodes = [self.fl, currNode_bcpOut, nextNode_bcpIn, nextNode]
-				
-				for i in range(len(currSegmetNodes)):
-					currSegmetNodes[i].smartSetXY(new_currCurve.asList()[i].asQPointF())
-
-			if len(prevSegment) == 4:
-				prevCurve = Curve(prevSegment)
-				new_prevCurve = prevCurve.interpolateLast(shift)
-
-				currNode_bcpIn = self.fl.getPrev()
-				prevNode_bcpOut = currNode_bcpIn.getPrev()
-				prevNode = prevNode_bcpOut.getOn()
-
-				prevSegmentNodes = [prevNode, prevNode_bcpOut, currNode_bcpIn, self.fl]
-				
-				for i in range(len(currSegmetNodes)):
-					prevSegmentNodes[i].smartSetXY(new_prevCurve.asList()[i].asQPointF())
+		return self.contour.segment(self.getTime() + relativeTime)	
 
 
 class pGlyph(object):
-	'''
-	Proxy to flGlyph and fgGlyph combined into single entity.
+	'''Proxy to flGlyph and fgGlyph combined into single entity.
 
 	Constructor:
 		pGlyph() - default represents the current glyph and current font
@@ -277,6 +270,12 @@ class pGlyph(object):
 		return [pLayer.getContours()[item[0]].nodes()[item[1]].pointf for item in nodelist]
 
 	def selectedSegments(self, layer=None):
+		'''Returns list of currently selected segments
+		Args:
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+		Returns:
+			list[CurveEx]
+		'''
 		return [self.contours(layer)[cID].segment(self.mapNodes2Times(layer)[cID][nID]) for cID, nID in self.selectedAtContours()]
 
 	# - Outline -----------------------------------------------
@@ -301,9 +300,17 @@ class pGlyph(object):
 		return contourMap
 
 	def mapNodes2Times(self, layer=None):
+		'''Create map of Nodes at contour times for every contour in given layer
+		Returns:
+			dict{Contour index (int) : dict{Contour Time (int): Node Index (int) }}
+		'''
 		return self._mapOn(layer)
 
 	def mapTimes2Nodes(self, layer=None):
+		'''Create map of Contour times at node indexes for every contour in given layer
+		Returns:
+			dict{Contour index (int) : dict{Node Index (int) : Contour Time (int) }}
+		'''
 		n2tMap = self._mapOn(layer)
 		t2nMap = {}
 
@@ -318,12 +325,35 @@ class pGlyph(object):
 		return t2nMap
 
 	def getSegment(self, cID, nID, layer=None):
+		'''Returns contour segment of the node specified at given layer
+		Args:
+			cID (int): Contour index
+			nID (int): Node of insertion index
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+		Returns:
+			CurveEx
+		'''
 		return self.contours(layer)[cID].segment(self._mapOn(layer)[cID][nID])
 
 	def segments(self, cID, layer=None):
+		'''Returns all contour segments at given layer
+		Args:
+			cID (int): Contour index
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+		Returns:
+			list[CurveEx]
+		'''
 		return self.contours(layer)[cID].segments()
 
 	def nodes4segments(self, cID, layer=None):
+		'''Returns all contour segments and their corresponding nodes at given layer
+		Args:
+			cID (int): Contour index
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+		Returns:
+			dict{time(int):(CurveEx, list[flNode]}
+		'''
+
 		segments = self.segments(cID, layer)
 		
 		nodes = self.nodes(layer)
