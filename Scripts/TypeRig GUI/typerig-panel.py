@@ -22,6 +22,8 @@ app_name = 'Typerig Panel'
 
 # - Style -------------------------
 ss_Toolbox_dflt = """
+                QDialog { background-color: Gainsboro; }
+
                 QCheckBox::indicator:unchecked {
                   border: 1px Solid Gray;
                  }
@@ -30,7 +32,15 @@ ss_Toolbox_dflt = """
                   background-color: dodgerblue;
                   border: 1px Solid dodgerblue;
                  }
-            """
+
+                QTabWidget::pane { background-color: Gainsboro;}
+                QTabWidget::tab-bar { background-color: Gainsboro; }
+                QTabBar::tab { background-color: LightGray; }
+                QTabBar::tab:hover { background-color: SkyBlue; }
+                QTabBar::tab:selected { background-color:#eeeeee; }
+                QTabWidget>QWidget>QWidget{ background: #eeeeee;  }
+
+                """
 ss_Toolbox_fl6 = """
                 QDialog { background-color: Gainsboro; }
 
@@ -119,7 +129,7 @@ class typerig_Panel(QtGui.QDialog):
   def __init__(self):
     super(typerig_Panel, self).__init__()
   
-    self.setStyleSheet(ss_Toolbox_fl6)
+    self.setStyleSheet(ss_Toolbox_dflt)
     
     # - Layers --------------------------
     self.chk_ActiveLayer = QtGui.QCheckBox('Active Layer')

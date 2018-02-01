@@ -31,8 +31,8 @@ class basicOps(QtGui.QGridLayout):
 		self.btn_insert = QtGui.QPushButton('&Insert')
 		self.btn_remove = QtGui.QPushButton('&Remove')
 		
-		self.btn_insert.setMinimumWidth(80)
-		self.btn_remove.setMinimumWidth(80)
+		#self.btn_insert.setMinimumWidth(80)
+		#self.btn_remove.setMinimumWidth(80)
 
 		self.btn_insert.setToolTip('Insert Node after Selection\nat given time T')
 		self.btn_remove.setToolTip('Remove Selected Nodes!\nFor proper curve node deletion\nalso select the associated handles!')
@@ -42,14 +42,14 @@ class basicOps(QtGui.QGridLayout):
 
 		# - Inserion time
 		self.edt_time = QtGui.QLineEdit('0.5')
-		self.edt_time.setMinimumWidth(30)
+		#self.edt_time.setMinimumWidth(30)
 		self.edt_time.setToolTip('Insertion Time')
 
 		# -- Build: Basic Ops
-		self.addWidget(self.btn_insert, 1, 0)
-		self.addWidget(QtGui.QLabel('T:'), 1, 1)
-		self.addWidget(self.edt_time, 1, 2)
-		self.addWidget(self.btn_remove, 1, 3)
+		self.addWidget(self.btn_insert, 0, 0, 1, 2)
+		self.addWidget(QtGui.QLabel('T:'), 0, 2, 1, 1)
+		self.addWidget(self.edt_time, 0, 3, 1, 1 )
+		self.addWidget(self.btn_remove, 0, 4, 1, 2)
 
 	def insertNode(self):
 		'''
@@ -95,23 +95,23 @@ class breakContour(QtGui.QGridLayout):
 		self.btn_splitContour.clicked.connect(self.splitContour)
 		self.btn_splitContourClose.clicked.connect(self.splitContourClose)
 		
-		self.btn_splitContour.setMinimumWidth(80)
-		self.btn_splitContourClose.setMinimumWidth(80)
+		#self.btn_splitContour.setMinimumWidth(80)
+		#self.btn_splitContourClose.setMinimumWidth(80)
 
 		self.btn_splitContour.setToolTip('Break contour at selected Node(s).')
 		self.btn_splitContourClose.setToolTip('Break contour and close open contours!\nUseful for cutting stems and etc.')
 
 		# -- Extrapolate value
 		self.edt_expand = QtGui.QLineEdit('0.0')
-		self.edt_expand.setMinimumWidth(30)
+		#self.edt_expand.setMinimumWidth(30)
 
 		self.edt_expand.setToolTip('Extrapolate endings.')
 								
 		# -- Build: Split/Break contour
-		self.addWidget(self.btn_splitContour, 1, 0)
-		self.addWidget(QtGui.QLabel('E:'), 1, 1)
-		self.addWidget(self.edt_expand, 1, 2)
-		self.addWidget(self.btn_splitContourClose, 1, 3)
+		self.addWidget(self.btn_splitContour, 0, 0, 1, 2)
+		self.addWidget(QtGui.QLabel('E:'), 0, 2, 1, 1)
+		self.addWidget(self.edt_expand, 0, 3, 1, 1)
+		self.addWidget(self.btn_splitContourClose, 0, 4, 1, 2)
 				
 	def splitContour(self):
 		glyph = eGlyph()
@@ -188,7 +188,7 @@ class advMovement(QtGui.QVBoxLayout):
 		self.btn_down = QtGui.QPushButton('Down')
 		self.btn_left = QtGui.QPushButton('Left')
 		self.btn_right = QtGui.QPushButton('Right')
-
+		
 		self.btn_up.clicked.connect(self.onUp)
 		self.btn_down.clicked.connect(self.onDown)
 		self.btn_left.clicked.connect(self.onLeft)
@@ -199,13 +199,16 @@ class advMovement(QtGui.QVBoxLayout):
 		self.edt_offX.setToolTip('X offset')
 		self.edt_offY.setToolTip('Y offset')
 
-		self.lay_btn.addWidget(self.edt_offX, 0, 0)
-		self.lay_btn.addWidget(self.btn_up, 0, 1)
-		self.lay_btn.addWidget(self.edt_offY, 0, 2)
-		self.lay_btn.addWidget(self.btn_left, 1, 0)
-		self.lay_btn.addWidget(self.btn_down, 1, 1)
-		self.lay_btn.addWidget(self.btn_right, 1, 2)
-		
+		self.lay_btn.addWidget(QtGui.QLabel('X:'), 0, 0, 1, 1)
+		self.lay_btn.addWidget(self.edt_offX, 0, 1, 1, 1)
+		self.lay_btn.addWidget(self.btn_up, 0, 2, 1, 2)
+		self.lay_btn.addWidget(QtGui.QLabel('Y:'), 0, 4, 1, 1)
+		self.lay_btn.addWidget(self.edt_offY, 0, 5, 1, 1)
+
+		self.lay_btn.addWidget(self.btn_left, 1, 0, 1, 2)
+		self.lay_btn.addWidget(self.btn_down, 1, 2, 1, 2)
+		self.lay_btn.addWidget(self.btn_right, 1, 4, 1, 2)
+
 		self.addLayout(self.lay_btn)
 
 		
