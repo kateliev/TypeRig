@@ -251,8 +251,7 @@ class tool_tab(QtGui.QWidget):
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
 		self.KeyboardOverride = False
-		self.modifier = 0
-
+		
 		# - Build		
 		layoutV.addWidget(QtGui.QLabel('Basic Operations'))
 		layoutV.addLayout(basicOps())
@@ -289,6 +288,8 @@ class tool_tab(QtGui.QWidget):
 		
 		#self.setFocus()
 		key = eventQKeyEvent.key()
+		modifier = int(eventQKeyEvent.modifiers())
+		addon = .0
 		
 		if key == QtCore.Qt.Key_Escape:
 			#self.close()
@@ -297,24 +298,36 @@ class tool_tab(QtGui.QWidget):
 			self.btn_capture.setChecked(False)
 			self.btn_capture.setText('Capture Keyboard')
 			
-		elif key == QtCore.Qt.AltModifier:
-			print 'foo'
+		# - Keyboard listener
+		# -- Modifier addon
+		if modifier == QtCore.Qt.ShiftModifier:
+			addon = 10.0
+		elif modifier == QtCore.Qt.ControlModifier:
+			addon = 100.0
+		else:
+			addon = .0
 		
-		elif key == QtCore.Qt.Key_Up:
-			self.advMovement.moveNodes(.0, float(self.advMovement.edt_offY.text) + self.modifier, method=str(self.advMovement.cmb_methodSelector.currentText))
+		# -- Standard movement keys				
+		if key == QtCore.Qt.Key_Up:
+			shiftXY = (.0, float(self.advMovement.edt_offY.text) + addon)
 		
 		elif key == QtCore.Qt.Key_Down:
-			self.advMovement.moveNodes(.0, -float(self.advMovement.edt_offY.text), method=str(self.advMovement.cmb_methodSelector.currentText))
+			shiftXY = (.0, -float(self.advMovement.edt_offY.text) - addon)
 		
 		elif key == QtCore.Qt.Key_Left:
-			self.advMovement.moveNodes(-float(self.advMovement.edt_offX.text), .0, method=str(self.advMovement.cmb_methodSelector.currentText))
+			shiftXY = (-float(self.advMovement.edt_offX.text) - addon, .0)
 		
 		elif key == QtCore.Qt.Key_Right:
-			self.advMovement.moveNodes(float(self.advMovement.edt_offX.text), .0, method=str(self.advMovement.cmb_methodSelector.currentText))
+			shiftXY = (float(self.advMovement.edt_offX.text) + addon, .0)
+
+		else:
+			key.ignore() 
+
+		# - Move
+		self.advMovement.moveNodes(*shiftXY, method=str(self.advMovement.cmb_methodSelector.currentText))
+
 
 	def captureKeyaboard(self):
-		
-
 		if not self.KeyboardOverride:
 			self.KeyboardOverride = True
 			self.btn_capture.setStyleSheet('''QPushButton: checked { background-color: red; }''')
