@@ -21,6 +21,7 @@ app_version = '0.25'
 app_name = 'Typerig Panel'
 
 # - Style -------------------------
+ss_Toolbox_none = """/* EMPTY STYLESHEET */ """
 ss_Toolbox_dflt = """
                 QDialog { background-color: Gainsboro; }
 
@@ -172,7 +173,7 @@ class typerig_Panel(QtGui.QDialog):
   def __init__(self):
     super(typerig_Panel, self).__init__()
   
-    self.setStyleSheet(ss_Toolbox_fl6)
+    self.setStyleSheet(ss_Toolbox_none)
     
     # - Layers --------------------------
     self.chk_ActiveLayer = QtGui.QCheckBox('Active Layer')
@@ -181,7 +182,7 @@ class typerig_Panel(QtGui.QDialog):
     self.chk_Service = QtGui.QCheckBox('Service Layers')
 
     self.chk_ActiveLayer.setCheckState(QtCore.Qt.Checked)
-    self.chk_ActiveLayer.setStyleSheet('QCheckBox::indicator:checked {background-color: limegreen; border: 1px Solid limegreen;}')
+    #self.chk_ActiveLayer.setStyleSheet('QCheckBox::indicator:checked {background-color: limegreen; border: 1px Solid limegreen;}')
       
     self.chk_ActiveLayer.stateChanged.connect(self.refreshLayers)
     self.chk_Masters.stateChanged.connect(self.refreshLayers)
