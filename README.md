@@ -15,17 +15,17 @@ Unpack files anywhere you want. Then:
 As implemented in the GUI. All of the listed work on on several layers simultaneously unless noted so.
 (Note: Module offers more that the included in the GUI)
 
-Node Panel
+#### Node Panel
 - Add/remove nodes 
 - Break and knot contours. Also serif and stem and etc. disconnection.
 - Hobby knots (experimental TBI) (Active Layer only)
 - Interpolated move aka Interpolated nudge (Active Layer only)
 - Slanted Grid move: Move nodes with the italic angle applied in the Y direction (Active Layer only)
 
-Guide panel
+#### Guide panel
 - Drop guideline: Drop guideline between any two selected nodes (on all layers) or a vertical guideline at a single node (with italic angle if present) 
 
-Layer panel
+#### Layer panel
 - Copy/Paste/Swap layer outline, metrics, anchors and guides (also usable as FontLab V swap with mask feature)
 - Interpolate current layer to any selected layer (more TBI)
 - Interpolate any two selected layers into the current active layer (more TBI)
