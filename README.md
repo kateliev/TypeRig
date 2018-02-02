@@ -2,7 +2,8 @@
 **TypeRig** (`.\Lib\`) is a Python library aimed at simplifying (to some extent) the current FontLab VI API while offering some additional functionality that is heavily biased towards a simultaneous multi-layered workflow.
 
 **TypeRig GUI** (`.\Scripts\TypeRig GUI`) is a collecton of GUI centered tools representing functionality found in the library. Currently there reside:
-- **TypeRig Panel** (`typerig-panel.py`) - a floating side panel with various tools (see below). *New tools will be added as plugin-basis by just dropping the updated or new tabs as .py files in `.\Scripts\TypeRig GUI\Panel` sub-folder.*
+- **TypeRig Panel** (`typerig-panel.py`) - a floating side panel with various tools (see below). 
+*New tools will be added on plugin-basis by just dropping the updated or new tabs as .py files in `.\Scripts\TypeRig GUI\Panel` sub-folder.*
 
 ### Installation
 Unpack files anywhere you want. Then:
