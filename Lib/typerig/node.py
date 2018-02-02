@@ -36,6 +36,9 @@ class eNode(pNode):
 			# - Init 
 			shift = Coord(shift_x, shift_y)
 			currSegmet, prevSegment = self.getSegment(), self.getSegment(-1)
+
+			if prevSegment == None:
+				prevSegment = self.contour.segments()[-1]
 			
 			# - Process segments
 			if len(currSegmet) == 4:

@@ -221,7 +221,7 @@ class typerig_Panel(QtGui.QDialog):
     self.setLayout(layoutV)
     self.setWindowTitle('%s %s' %(app_name, app_version))
     self.setGeometry(300, 300, 240, 440)
-    self.setFixedWidth(240) # Set fixed width - keep it compact or find a way to keep it...
+    #self.setFixedWidth(240) # Set fixed width - keep it compact or find a way to keep it...
     self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
     
     self.show()
