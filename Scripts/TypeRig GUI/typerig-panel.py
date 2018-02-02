@@ -17,7 +17,7 @@ from PythonQt import QtCore, QtGui
 import Panel 
 
 # - Init --------------------------
-app_version = '0.20'
+app_version = '0.25'
 app_name = 'Typerig Panel'
 
 # - Style -------------------------
@@ -46,40 +46,72 @@ ss_Toolbox_fl6 = """
 
                 QPushButton {
                   background-color: White;
-                  border-radius: 6px;
-                  padding: 6px;
+                  border-radius: 4px;
+                  padding: 5px;
                 }
                 
                 QPushButton::pressed {
                   background-color: dimgrey;
                   color: white;
+                  border-radius: 4px;
+                  padding: 5px;
+                }
+                
+                QPushButton::hover {
+                  background-color: #4dacff;
+                  color: white;
+                  border-radius: 4px;
+                  padding: 5px;
+                }
+                
+                QPushButton::toggled {
+                  background-color: red;
+                  color: white;
                   border-radius: 6px;
-                  padding: 6px;
+                  padding: 5px;
                 }
                                
-                QTabWidget::pane { background-color: Gainsboro;}
-                QTabWidget::tab-bar { background-color: Gainsboro; }
-                QTabBar::tab { background-color: LightGray; }
-                QTabBar::tab:hover { background-color: SkyBlue; }
-                QTabBar::tab:selected { background-color:#eeeeee; }
-                QTabWidget>QWidget>QWidget{ background: #eeeeee;  }
+                QTabWidget::pane { 
+                  background-color: Gainsboro;
+                }
+                
+                QTabWidget::tab-bar {
+                  background-color: Gainsboro;
+                }
+                
+                QTabBar::tab { 
+                  background-color: LightGray;
+                  color: black;
+                }
+                QTabBar::tab:hover { 
+                  background-color: #4dacff;
+                  color: white;
+                }
+                
+                QTabBar::tab:selected {
+                  background-color:#eeeeee;
+                  color: black;}
+                
+                QTabWidget>QWidget>QWidget{ 
+                  background: #eeeeee;
+                }
                 
                 QLineEdit { 
                   background-color: White;
                   border: 1px Solid White;
-                  padding: 4px;
+                  padding: 2px;
                 }
                 
                 QListWidget { 
                   background-color: White;
                   border: 0px;
                   alternate-background-color: WhiteSmoke;
-                  padding: 4px;
+                  padding: 2px;
                 }
                 
                 QLabel { 
-                  padding-top: 4px;
-                  padding-bottom: 4px;
+                  padding-top: 2px;
+                  padding-bottom: 2px;
                 }
                
                 QListWidget::Item::Hover { 
@@ -93,20 +125,31 @@ ss_Toolbox_fl6 = """
                 }
                
                 QComboBox { 
-                  /*background-color: White;*/
-                  /*border: 1px Solid White;*/
+                  background-color: White;
+                  border: 0px Solid White;
                   padding: 4px;
                 }
+                                
                 /*
                 QComboBox::drop-down {
                   background-color: white;
-                  border: 1px Solid lightgray;
-                  border-radius: 4px;
+                  border-left: 2px dotted lightgray;
+                  
                 }
+                */
                 
-                QComboBox::down-arrow {
-                  image: url(:/Res/down-arrow.png);
+                /*
+                QComboBox::drop-down::hover {
+                  background-color: #4dacff;
+                  border-left: 2px Solid #4dacff;
                 }
+                */
+             
+                /*
+                QComboBox::down-arrow {
+                  image: url(Res/arrow-down.png);
+                  
+                }                
                 */
                 
                 QCheckBox::indicator:unchecked {
@@ -116,8 +159,8 @@ ss_Toolbox_fl6 = """
                  }
                 
                 QCheckBox::indicator:checked {
-                  background-color: dodgerblue;
-                  border: 1px Solid dodgerblue;
+                  background-color: #4dacff;
+                  border: 1px Solid #4dacff;
                   border-radius: 6px;
                  }
                  
@@ -129,7 +172,7 @@ class typerig_Panel(QtGui.QDialog):
   def __init__(self):
     super(typerig_Panel, self).__init__()
   
-    self.setStyleSheet(ss_Toolbox_dflt)
+    self.setStyleSheet(ss_Toolbox_fl6)
     
     # - Layers --------------------------
     self.chk_ActiveLayer = QtGui.QCheckBox('Active Layer')
@@ -177,7 +220,8 @@ class typerig_Panel(QtGui.QDialog):
     # - Set Widget -------------------------------
     self.setLayout(layoutV)
     self.setWindowTitle('%s %s' %(app_name, app_version))
-    self.setGeometry(300, 300, 220, 440)
+    self.setGeometry(300, 300, 240, 440)
+    self.setFixedWidth(240) # Set fixed width - keep it compact or find a way to keep it...
     self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
     
     self.show()

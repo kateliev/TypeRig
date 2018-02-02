@@ -46,8 +46,8 @@ class tool_tab(QtGui.QWidget):
     self.btn_dropGuide.clicked.connect(self.dropGuideline)
     
     # - Build
-    layout.addRow('Name:', self.edt_guideName)
-    layout.addRow('Color:',self.cmb_colorSelector)
+    layout.addRow('N:', self.edt_guideName)
+    layout.addRow('C:',self.cmb_colorSelector)
     layout.addWidget(self.btn_dropGuide)
 
     self.setLayout(layout)

@@ -252,8 +252,8 @@ class QlayerBlend(QtGui.QVBoxLayout):
     self.lay_blend = QtGui.QHBoxLayout()
     self.btn_minus = QtGui.QPushButton(' - ')
     self.btn_plus = QtGui.QPushButton(' + ')
-    self.btn_minus.setMinimumWidth(80)
-    self.btn_plus.setMinimumWidth(80)
+    self.btn_minus.setMinimumWidth(65)
+    self.btn_plus.setMinimumWidth(65)
     self.btn_minus.clicked.connect(self.blendMinus)
     self.btn_plus.clicked.connect(self.blendPlus)
 
@@ -265,7 +265,7 @@ class QlayerBlend(QtGui.QVBoxLayout):
     self.edt_timeStep.setToolTip('Blend time (0.0 - 1.0) Step.')
     
     self.lay_blend.addWidget(self.btn_minus)
-    self.lay_blend.addWidget(QtGui.QLabel('t:'))
+    self.lay_blend.addWidget(QtGui.QLabel('T:'))
     self.lay_blend.addWidget(self.edt_timeStep)
     self.lay_blend.addWidget(self.btn_plus)
 

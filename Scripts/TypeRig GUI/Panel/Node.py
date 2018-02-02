@@ -31,8 +31,8 @@ class basicOps(QtGui.QGridLayout):
 		self.btn_insert = QtGui.QPushButton('&Insert')
 		self.btn_remove = QtGui.QPushButton('&Remove')
 		
-		#self.btn_insert.setMinimumWidth(80)
-		#self.btn_remove.setMinimumWidth(80)
+		self.btn_insert.setMinimumWidth(65)
+		self.btn_remove.setMinimumWidth(65)
 
 		self.btn_insert.setToolTip('Insert Node after Selection\nat given time T')
 		self.btn_remove.setToolTip('Remove Selected Nodes!\nFor proper curve node deletion\nalso select the associated handles!')
@@ -89,14 +89,14 @@ class breakContour(QtGui.QGridLayout):
 		super(breakContour, self).__init__()
 			 
 		# -- Split button
-		self.btn_splitContour = QtGui.QPushButton('&Break')
-		self.btn_splitContourClose = QtGui.QPushButton('Break && &Close')
+		self.btn_splitContour = QtGui.QPushButton('&Open')
+		self.btn_splitContourClose = QtGui.QPushButton('&Close')
 		
 		self.btn_splitContour.clicked.connect(self.splitContour)
 		self.btn_splitContourClose.clicked.connect(self.splitContourClose)
 		
-		#self.btn_splitContour.setMinimumWidth(80)
-		#self.btn_splitContourClose.setMinimumWidth(80)
+		self.btn_splitContour.setMinimumWidth(65)
+		self.btn_splitContourClose.setMinimumWidth(65)
 
 		self.btn_splitContour.setToolTip('Break contour at selected Node(s).')
 		self.btn_splitContourClose.setToolTip('Break contour and close open contours!\nUseful for cutting stems and etc.')
@@ -188,6 +188,11 @@ class advMovement(QtGui.QVBoxLayout):
 		self.btn_down = QtGui.QPushButton('Down')
 		self.btn_left = QtGui.QPushButton('Left')
 		self.btn_right = QtGui.QPushButton('Right')
+		
+		self.btn_up.setMinimumWidth(60)
+		self.btn_down.setMinimumWidth(60)
+		self.btn_left.setMinimumWidth(60)
+		self.btn_right.setMinimumWidth(60)
 		
 		self.btn_up.clicked.connect(self.onUp)
 		self.btn_down.clicked.connect(self.onDown)
