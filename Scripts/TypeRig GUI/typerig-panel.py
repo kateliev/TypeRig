@@ -64,8 +64,8 @@ ss_Toolbox_fl6 = """
                   padding: 5px;
                 }
                 
-                QPushButton::toggled {
-                  background-color: red;
+                QPushButton::checked {
+                  background-color: crimson;
                   color: white;
                   border-radius: 6px;
                   padding: 5px;

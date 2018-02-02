@@ -58,7 +58,16 @@ class pNode(object):
 		return self.fl.getOn()
 
 	def getSegment(self, relativeTime=0):
-		return self.contour.segment(self.getTime() + relativeTime)	
+		return self.contour.segment(self.getTime() + relativeTime)
+
+	def insertAfter(self, time):
+		self.contour.insertNodeTo(self.getTime() + time)
+
+	def remove(self):
+		self.contours.removeOne(self.fl)
+
+	def __repr__(self):
+		return '<%s index=%s time=%s on=%s>' % (self.__class__.__name__, self.index, self.getTime(), self.isOn)
 
 
 class pGlyph(object):
@@ -605,6 +614,8 @@ class pFont(object):
 			self.fg = fl6.CurrentFont()
 			self.fl = fl6.flPackage(fl6.CurrentFont())
 
+		# - Basics
+		self.italic_angle = self.getItalicAngle()
 		# - Special 
 		self.__altMarks = {'liga':'_', 'alt':'.', 'hide':'__'}
 		self.__diactiricalMarks = ['grave', 'dieresis', 'macron', 'acute', 'cedilla', 'uni02BC', 'circumflex', 'caron', 'breve', 'dotaccent', 'ring', 'ogonek', 'tilde', 'hungarumlaut', 'caroncomma', 'commaaccent', 'cyrbreve'] # 'dotlessi', 'dotlessj'
@@ -614,6 +625,9 @@ class pFont(object):
 		return '<%s name=%s glyphs=%s path=%s>' % (self.__class__.__name__, self.fg.info.familyName, len(self.fg), self.fg.path)
 
 	# - Font Basics -----------------------------------------------
+	def getItalicAngle(self):
+		return self.fl.italicAngle_value
+
 	def glyph(self, glyph):
 		'''Return TypeRig proxy glyph object (pGlyph) by index (int) or name (str).'''
 		if isinstance(glyph, int) or isinstance(glyph, basestring):

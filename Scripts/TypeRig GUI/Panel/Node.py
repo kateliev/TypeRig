@@ -18,6 +18,7 @@ import fontgate as fgt
 from PythonQt import QtCore, QtGui
 from typerig.glyph import eGlyph
 from typerig.node import eNode
+from typerig.proxy import pFont
 
 #from typerig.utils import outputHere # Remove later!
 
@@ -173,7 +174,7 @@ class advMovement(QtGui.QVBoxLayout):
 		super(advMovement, self).__init__()
 
 		# - Init
-		self.methodList = ['Move', 'Interpolated Nudge', 'Slanted Space']
+		self.methodList = ['Move', 'Interpolated Move', 'Slanted Grid Move']
 		
 		# - Methods
 		self.cmb_methodSelector = QtGui.QComboBox()
@@ -218,9 +219,16 @@ class advMovement(QtGui.QVBoxLayout):
 
 		
 	def moveNodes(self, offset_x, offset_y, method):
+		'''
+		import sys        
+		sys.stdout = open(r'd:\\stdout.log', 'w')
+		sys.stderr = open(r'd:\\stderr.log', 'w')
+		'''
 		# - Init
 		glyph = eGlyph()
+		font = pFont()
 		selectedNodes = glyph.selectedNodes()
+		italic_angle = font.getItalicAngle()
 
 		# - Process
 		if method == self.methodList[0]:
@@ -234,7 +242,15 @@ class advMovement(QtGui.QVBoxLayout):
 				wNode.interpMove(offset_x, offset_y)
 
 		elif method == self.methodList[2]:
-			pass
+			if italic_angle != 0:
+				for node in selectedNodes:
+					wNode = eNode(node)
+					print wNode
+					wNode.slantMove(offset_x, offset_y, italic_angle)
+			else:
+				for node in selectedNodes:
+					if node.isOn:
+						node.smartMove(QtCore.QPointF(offset_x, offset_y))
 
 		# - Finish it
 		glyph.update()
@@ -288,11 +304,7 @@ class tool_tab(QtGui.QWidget):
 
 
 	def keyPressEvent(self, eventQKeyEvent):
-		#'''
-		import sys        
-		sys.stdout = open(r'd:\\stdout.log', 'w')
-		sys.stderr = open(r'd:\\stderr.log', 'w')
-		#'''
+		
 		
 		#self.setFocus()
 		key = eventQKeyEvent.key()
@@ -334,11 +346,9 @@ class tool_tab(QtGui.QWidget):
 		# - Move
 		self.advMovement.moveNodes(*shiftXY, method=str(self.advMovement.cmb_methodSelector.currentText))
 
-
 	def captureKeyaboard(self):
 		if not self.KeyboardOverride:
 			self.KeyboardOverride = True
-			self.btn_capture.setStyleSheet('''QPushButton: checked { background-color: red; }''')
 			self.btn_capture.setChecked(True)
 			self.btn_capture.setText('Keyboard Capture Active. [ESC] Exit')
 			self.grabKeyboard()

@@ -25,6 +25,11 @@ class eNode(pNode):
 	'''
 	# - Movement ------------------------
 	def interpMove(self, shift_x, shift_y):
+		'''Interpolated move aka Interpolated Nudge.
+		
+		Arguments:
+			shift_x, shift_y (float)
+		'''
 		if self.isOn:
 			from typerig.brain import Coord, Curve
 
@@ -32,6 +37,7 @@ class eNode(pNode):
 			shift = Coord(shift_x, shift_y)
 			currSegmet, prevSegment = self.getSegment(), self.getSegment(-1)
 			
+			# - Process segments
 			if len(currSegmet) == 4:
 				currCurve = Curve(currSegmet)
 				new_currCurve = currCurve.interpolateFirst(shift)
@@ -42,6 +48,7 @@ class eNode(pNode):
 
 				currSegmetNodes = [self.fl, currNode_bcpOut, nextNode_bcpIn, nextNode]
 				
+				# - Set node positions
 				for i in range(len(currSegmetNodes)):
 					currSegmetNodes[i].smartSetXY(new_currCurve.asList()[i].asQPointF())
 
@@ -55,5 +62,28 @@ class eNode(pNode):
 
 				prevSegmentNodes = [prevNode, prevNode_bcpOut, currNode_bcpIn, self.fl]
 				
-				for i in range(len(currSegmetNodes)):
+				# - Set node positions
+				for i in range(len(prevSegmentNodes)):
 					prevSegmentNodes[i].smartSetXY(new_prevCurve.asList()[i].asQPointF())
+
+			if len(currSegmet) == 2 and len(prevSegment) == 2:
+				self.fl.smartSetXY((Coord(self.fl) + shift).asQPointF())
+
+	def slantMove(self, shift_x, shift_y, italic_angle):
+		'''Slanted move - move a node (in inclined space) according to Y coordinate slanted at given angle.
+		
+		Arguments:
+			shift_x, shift_y (float)
+			italic_angle (float): Angle in degrees
+		'''
+		if self.isOn:
+			from typerig.brain import Coord
+			from PythonQt.QtCore import QPointF
+			
+			# - Init
+			cNode = Coord((self.x + shift_x, self.y))
+			cNode.setAngle(italic_angle)
+			
+			# - Calculate & set
+			newX = cNode.getWidth(cNode.y + shift_y)
+			self.fl.smartSetXY(QPointF(newX, self.y + shift_y))
