@@ -9,8 +9,7 @@
 Unpack files anywhere you want. Then:
 - **TypeRig Module** - Run the provided install in shell using `python install.py`. It will create link/path to Python Site packages. Please note that if you change the location of the installation you should run the script again.
 
-- **TypeRig GUI** - Please refer to Fontlab VI manual about "Scripting Panel" section "Open the List of scripts" 
-[To Fontlab VI Help Page](http://help.fontlab.com/fontlab-vi/Scripting-panel/#open-the-list-of-scripts)
+- **TypeRig GUI** - Please refer to Fontlab VI manual about ["Scripting Panel" section "Open the List of scripts"](http://help.fontlab.com/fontlab-vi/Scripting-panel/#open-the-list-of-scripts)
 
 ### Current features
 Below listed featueres only implemented as TypeRig GUI. They affect **all compatible layers** simultaneously unless noted so.
