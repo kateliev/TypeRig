@@ -17,8 +17,8 @@ from PythonQt import QtCore, QtGui
 import Panel 
 
 # - Init --------------------------
-app_version = '0.25'
-app_name = 'Typerig Panel'
+app_version = '0.30'
+app_name = 'TypeRig Panel'
 
 # - Style -------------------------
 ss_Toolbox_none = """/* EMPTY STYLESHEET */ """

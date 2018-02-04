@@ -45,11 +45,11 @@ class pNode(object):
 
 	def getNextOn(self):
 		nextNode = self.fl.getNext()
-		return  nextNode if nextNode.isOn() else nextNode.getNext().getOn()
+		return nextNode if nextNode.isOn else nextNode.getNext().getOn()
 
-	def getNextOn(self):
+	def getPrevOn(self):
 		prevNode = self.fl.getPrev()
-		return  prevNode if prevNode.isOn() else prevNode.getPrev().getOn()
+		return prevNode if prevNode.isOn else prevNode.getPrev().getOn()
 
 	def getPrev(self):
 		return self.fl.getPrev()
@@ -59,6 +59,26 @@ class pNode(object):
 
 	def getSegment(self, relativeTime=0):
 		return self.contour.segment(self.getTime() + relativeTime)
+
+	def getSegmentNodes(self, relativeTime=0):
+		if len(self.getSegment(relativeTime)) == 4:
+			currNode = self.fl if self.fl.isOn else self.fl.getOn()
+			
+			if currNode != self.fl:
+				tempNode = self.__class__(currNode)
+
+				if tempNode.getTime() != self.getTime():
+					currNode = tempNode.getPrevOn()
+
+			currNode_bcpOut = currNode.getNext()
+			nextNode_bcpIn = currNode_bcpOut.getNext()
+			nextNode = nextNode_bcpIn.getOn()
+		
+			return [currNode, currNode_bcpOut, nextNode_bcpIn, nextNode]
+		
+		elif len(self.getSegment(relativeTime)) == 2:
+			return [self.fl, self.fl.getNext()]
+
 
 	def insertAfter(self, time):
 		self.contour.insertNodeTo(self.getTime() + time)
@@ -83,6 +103,7 @@ class pGlyph(object):
 		.parent (fgFont)
 		.fg (fgGlyph)
 		.fl (flGlyph)
+		...
 	'''
 
 	def __init__(self, font=None, glyph=None):

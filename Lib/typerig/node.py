@@ -20,7 +20,7 @@ class eNode(pNode):
 	'''Extended representation of the Proxy Node, adding some advanced functionality
 
 	Constructor:
-		pNode(flNode)
+		eNode(flNode)
 		
 	'''
 	# - Movement ------------------------
