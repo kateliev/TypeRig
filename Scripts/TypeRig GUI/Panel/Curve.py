@@ -43,12 +43,12 @@ class curveEq(QtGui.QGridLayout):
     self.edt_prop = QtGui.QLineEdit('0.30')
     
 
-    self.btn_tunni.clicked.connect(self.eqContour)
-    #self.btn_hobby.clicked.connect(self.eqHobby)
-    #self.btn_prop.clicked.connect(self.eqProp)
+    self.btn_tunni.clicked.connect(lambda: self.eqContour('tunni'))
+    self.btn_hobby.clicked.connect(lambda: self.eqContour('hobby'))
+    self.btn_prop.clicked.connect(lambda: self.eqContour('prop'))
 
     # -- Build: Curve optimization
-    self.addWidget(self.btn_tunni, 0, 0, 1, 7)
+    self.addWidget(self.btn_tunni, 0, 0, 1, 5)
     
     self.addWidget(self.btn_hobby, 1, 0, 1, 5 )
     self.addWidget(QtGui.QLabel('C:'), 1, 5, 1, 1)
@@ -64,12 +64,12 @@ class curveEq(QtGui.QGridLayout):
 
     self.setColumnMinimumWidth(0, 180)
 
-  def eqContour(self):
-    '''
+  def eqContour(self, method):
+    #'''
     import sys        
     sys.stdout = open(r'd:\\stdout.log', 'w')
     sys.stderr = open(r'd:\\stderr.log', 'w')
-    '''
+    #'''
 
     glyph = eGlyph()
     selection = glyph.selected(True)
@@ -84,7 +84,17 @@ class curveEq(QtGui.QGridLayout):
         if len(segment) == 4:
           wSegment = eCurveEx(segment)
           
-          t = wSegment.eqTunni()
+          if method is 'tunni':
+            wSegment.eqTunni()
+
+          elif method is 'hobby':
+            curvature = (float(self.edt_hobby.text), float(self.edt_hobby.text))
+            wSegment.eqHobbySpline(curvature)
+
+          elif method is 'prop':
+            proportion = float(self.edt_prop.text)
+            wSegment.eqProportionalHandles(proportion)
+
           glyph.update()
 
 
