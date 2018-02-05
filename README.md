@@ -14,6 +14,9 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 - Interpolated move aka Interpolated nudge (Active Layer only)
 - Slanted Grid move with the italic angle applied in the Y direction (Active Layer only)
 
+##### Contour Panel
+- Contour optimization: Tunni (Auto balance handles), Hobby (Adjust Curvature), Proportional (Handle length)
+
 ##### Guide panel
 - Drop guideline: Drop guideline between any two selected nodes (on all layers) or a vertical guideline at a single node (with italic angle if present) 
 
