@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.10'
+app_name, app_version = 'TypeRig | Nodes', '0.15'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -90,8 +90,8 @@ class breakContour(QtGui.QGridLayout):
 		super(breakContour, self).__init__()
 			 
 		# -- Split button
-		self.btn_splitContour = QtGui.QPushButton('&Open')
-		self.btn_splitContourClose = QtGui.QPushButton('&Close')
+		self.btn_splitContour = QtGui.QPushButton('&Break')
+		self.btn_splitContourClose = QtGui.QPushButton('&Break && Close')
 		
 		self.btn_splitContour.clicked.connect(self.splitContour)
 		self.btn_splitContourClose.clicked.connect(self.splitContourClose)
@@ -123,6 +123,28 @@ class breakContour(QtGui.QGridLayout):
 		glyph = eGlyph()
 		glyph.splitContour(layers=pLayers, expand=float(self.edt_expand.text), close=True)
 		glyph.update()        
+
+class basicContour(QtGui.QHBoxLayout):
+	# - Split/Break contour 
+	def __init__(self):
+		super(basicContour, self).__init__()
+		self.btn_close = QtGui.QPushButton('C&lose contour')
+		self.btn_close.setToolTip('Close selected contour')
+		self.btn_close.clicked.connect(self.closeContour)
+		self.addWidget(self.btn_close)
+
+	def closeContour(self):
+		glyph = eGlyph()
+		wLayers = glyph._prepareLayers(pLayers)
+		selection = glyph.selectedAtContours()
+
+		for layerName in wLayers:
+			contours = glyph.contours(layerName)
+
+			for cID, nID in reversed(selection):
+				if not contours[cID].closed: contours[cID].closed = True
+
+		glyph.update()
 
 class convertHobby(QtGui.QHBoxLayout):
 	# - Split/Break contour 
@@ -156,8 +178,7 @@ class convertHobby(QtGui.QHBoxLayout):
 
 		for layerName in wLayers:
 			pNodes = [glyph.nodes(layerName)[nID] for nID in selection]
-			print pNodes
-
+			
 			for node in pNodes:
 				if not node.hobby:
 					node.hobby = True
@@ -282,6 +303,9 @@ class tool_tab(QtGui.QWidget):
 
 		layoutV.addWidget(QtGui.QLabel('Break/Knot Contour'))
 		layoutV.addLayout(breakContour())
+
+		layoutV.addWidget(QtGui.QLabel('Basic Contour Operations'))
+		layoutV.addLayout(basicContour())
 
 		layoutV.addWidget(QtGui.QLabel('Convert to Hobby'))
 		layoutV.addLayout(convertHobby())    

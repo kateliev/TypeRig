@@ -65,11 +65,11 @@ class curveEq(QtGui.QGridLayout):
     self.setColumnMinimumWidth(0, 180)
 
   def eqContour(self, method):
-    #'''
+    '''
     import sys        
     sys.stdout = open(r'd:\\stdout.log', 'w')
     sys.stderr = open(r'd:\\stderr.log', 'w')
-    #'''
+    '''
 
     glyph = eGlyph()
     selection = glyph.selected(True)

@@ -84,7 +84,7 @@ class pNode(object):
 		self.contour.insertNodeTo(self.getTime() + time)
 
 	def remove(self):
-		self.contours.removeOne(self.fl)
+		self.contour.removeOne(self.fl)
 
 	def __repr__(self):
 		return '<%s index=%s time=%s on=%s>' % (self.__class__.__name__, self.index, self.getTime(), self.isOn)
