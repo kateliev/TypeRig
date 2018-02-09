@@ -32,8 +32,8 @@ class basicOps(QtGui.QGridLayout):
 		self.btn_insert = QtGui.QPushButton('&Insert')
 		self.btn_remove = QtGui.QPushButton('&Remove')
 		
-		self.btn_insert.setMinimumWidth(65)
-		self.btn_remove.setMinimumWidth(65)
+		self.btn_insert.setMinimumWidth(80)
+		self.btn_remove.setMinimumWidth(80)
 
 		self.btn_insert.setToolTip('Insert Node after Selection\nat given time T')
 		self.btn_remove.setToolTip('Remove Selected Nodes!\nFor proper curve node deletion\nalso select the associated handles!')
@@ -53,12 +53,6 @@ class basicOps(QtGui.QGridLayout):
 		self.addWidget(self.btn_remove, 0, 4, 1, 2)
 
 	def insertNode(self):
-		'''
-		import sys        
-		sys.stdout = open(r'd:\\stdout.log', 'w')
-		sys.stderr = open(r'd:\\stderr.log', 'w')
-		'''
-
 		glyph = eGlyph()
 		selection = glyph.selectedAtContours(True)
 		wLayers = glyph._prepareLayers(pLayers)
@@ -82,6 +76,7 @@ class basicOps(QtGui.QGridLayout):
 				glyph.removeNodeAt(cID, nID, layer)
 				#glyph.contours()[cID].clearNodes()
 
+		glyph.updateObject(glyph.fl, 'Delete Node @ %s' %'; '.join(wLayers))
 		glyph.update()
 
 
@@ -97,8 +92,8 @@ class breakContour(QtGui.QGridLayout):
 		self.btn_splitContour.clicked.connect(self.splitContour)
 		self.btn_splitContourClose.clicked.connect(self.splitContourClose)
 		
-		self.btn_splitContour.setMinimumWidth(65)
-		self.btn_splitContourClose.setMinimumWidth(65)
+		self.btn_splitContour.setMinimumWidth(80)
+		self.btn_splitContourClose.setMinimumWidth(80)
 
 		self.btn_splitContour.setToolTip('Break contour at selected Node(s).')
 		self.btn_splitContourClose.setToolTip('Break contour and close open contours!\nUseful for cutting stems and etc.')
@@ -118,11 +113,13 @@ class breakContour(QtGui.QGridLayout):
 	def splitContour(self):
 		glyph = eGlyph()
 		glyph.splitContour(layers=pLayers, expand=float(self.edt_expand.text), close=False)
+		glyph.updateObject(glyph.fl, 'Break Contour')
 		glyph.update()
 
 	def splitContourClose(self):
 		glyph = eGlyph()
 		glyph.splitContour(layers=pLayers, expand=float(self.edt_expand.text), close=True)
+		glyph.updateObject(glyph.fl, 'Break Contour & Close')
 		glyph.update()        
 
 class basicContour(QtGui.QHBoxLayout):
@@ -145,6 +142,7 @@ class basicContour(QtGui.QHBoxLayout):
 			for cID, nID in reversed(selection):
 				if not contours[cID].closed: contours[cID].closed = True
 
+		glyph.updateObject(glyph.fl, 'Close Contour @ %s' %'; '.join(wLayers))
 		glyph.update()
 
 class convertHobby(QtGui.QHBoxLayout):
@@ -187,6 +185,7 @@ class convertHobby(QtGui.QHBoxLayout):
 					node.hobby = False
 				node.update()
 
+		glyph.updateObject(glyph.fl, 'Convert to Hobby @ %s' %'; '.join(wLayers))
 		glyph.update()
 		
 		#fl6.Update(fl6.CurrentGlyph())
@@ -212,10 +211,10 @@ class advMovement(QtGui.QVBoxLayout):
 		self.btn_left = QtGui.QPushButton('Left')
 		self.btn_right = QtGui.QPushButton('Right')
 		
-		self.btn_up.setMinimumWidth(60)
-		self.btn_down.setMinimumWidth(60)
-		self.btn_left.setMinimumWidth(60)
-		self.btn_right.setMinimumWidth(60)
+		self.btn_up.setMinimumWidth(80)
+		self.btn_down.setMinimumWidth(80)
+		self.btn_left.setMinimumWidth(80)
+		self.btn_right.setMinimumWidth(80)
 		
 		self.btn_up.clicked.connect(self.onUp)
 		self.btn_down.clicked.connect(self.onDown)

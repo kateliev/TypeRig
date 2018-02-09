@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Guidelines', '0.22'
+app_name, app_version = 'TypeRig | Guidelines', '0.25'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -56,6 +56,7 @@ class tool_tab(QtGui.QWidget):
   def dropGuideline(self):
       glyph = eGlyph()
       glyph.dropGuide(layers=pLayers, name=self.edt_guideName.text, color=self.cmb_colorSelector.currentText)
+      glyph.updateObject(glyph.fl, 'Drop Guide')
       glyph.update()
       
       #fl6.Update(fl6.CurrentGlyph())

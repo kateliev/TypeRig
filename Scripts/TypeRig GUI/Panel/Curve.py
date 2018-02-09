@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Curves', '0.05'
+app_name, app_version = 'TypeRig | Curves', '0.10'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -95,6 +95,7 @@ class curveEq(QtGui.QGridLayout):
             proportion = float(self.edt_prop.text)
             wSegment.eqProportionalHandles(proportion)
 
+          glyph.updateObject(glyph.fl, 'Curve Eq. %s @ %s' %(method, '; '.join(wLayers)))
           glyph.update()
 
 

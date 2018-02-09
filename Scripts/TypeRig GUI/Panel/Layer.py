@@ -16,7 +16,7 @@ from typerig.glyph import eGlyph
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Layers', '0.15'
+app_name, app_version = 'TypeRig | Layers', '0.20'
 
 # - Sub widgets ------------------------
 class QlayerSelect(QtGui.QVBoxLayout):
@@ -193,6 +193,7 @@ class QlayerTools(QtGui.QVBoxLayout):
       exportMetric = self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'RSB')
       self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'RSB', exportMetric)
 
+    self.aux.glyph.updateObject(self.aux.glyph.fl, 'Swap Layers | %s <-> %s' %(self.aux.glyph.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
     self.aux.glyph.update()
 
   def copy(self):
@@ -215,6 +216,7 @@ class QlayerTools(QtGui.QVBoxLayout):
     if self.chk_rsb.isChecked():
       self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'RSB')
       
+    self.aux.glyph.updateObject(self.aux.glyph.fl, 'Copy Layer | %s <- %s' %(self.aux.glyph.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
     self.aux.glyph.update()
 
   def paste(self):
@@ -236,6 +238,7 @@ class QlayerTools(QtGui.QVBoxLayout):
     if self.chk_rsb.isChecked():
       self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.lst_layers.currentItem().text(), False, 'RSB')
       
+    self.aux.glyph.updateObject(self.aux.glyph.fl, 'Paste Layer | %s -> %s' %(self.aux.glyph.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
     self.aux.glyph.update()
 
 class QlayerBlend(QtGui.QVBoxLayout):
@@ -252,8 +255,8 @@ class QlayerBlend(QtGui.QVBoxLayout):
     self.lay_blend = QtGui.QHBoxLayout()
     self.btn_minus = QtGui.QPushButton(' - ')
     self.btn_plus = QtGui.QPushButton(' + ')
-    self.btn_minus.setMinimumWidth(65)
-    self.btn_plus.setMinimumWidth(65)
+    self.btn_minus.setMinimumWidth(75)
+    self.btn_plus.setMinimumWidth(75)
     self.btn_minus.clicked.connect(self.blendMinus)
     self.btn_plus.clicked.connect(self.blendPlus)
 
@@ -303,6 +306,7 @@ class QlayerBlend(QtGui.QVBoxLayout):
     if not self.chk_width.isChecked():
       self.aux.glyph.layer().advanceWidth = blend.advanceWidth 
     
+    self.aux.glyph.updateObject(self.aux.glyph.fl, 'Simple Blend @ %s' %self.aux.glyph.layer().name)
     self.aux.glyph.update()
 
   def blendMinus(self):
