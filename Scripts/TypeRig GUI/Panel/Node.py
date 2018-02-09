@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.20'
+app_name, app_version = 'TypeRig | Nodes', '0.25'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -366,9 +366,6 @@ class tool_tab(QtGui.QWidget):
 		
 		elif key == QtCore.Qt.Key_Right:
 			shiftXY = (float(self.advMovement.edt_offX.text) + addon, .0)
-
-		else:
-			key.ignore() 
 
 		# - Move
 		self.advMovement.moveNodes(*shiftXY, method=str(self.advMovement.cmb_methodSelector.currentText))

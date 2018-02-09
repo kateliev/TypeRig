@@ -193,7 +193,7 @@ class QlayerTools(QtGui.QVBoxLayout):
       exportMetric = self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'RSB')
       self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'RSB', exportMetric)
 
-    self.aux.glyph.updateObject(self.aux.glyph.fl, 'Swap Layers | %s <-> %s' %(self.aux.glyph.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
+    self.aux.glyph.updateObject(self.aux.glyph.fl, 'Swap Layers | %s <-> %s' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
     self.aux.glyph.update()
 
   def copy(self):
@@ -216,29 +216,29 @@ class QlayerTools(QtGui.QVBoxLayout):
     if self.chk_rsb.isChecked():
       self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'RSB')
       
-    self.aux.glyph.updateObject(self.aux.glyph.fl, 'Copy Layer | %s <- %s' %(self.aux.glyph.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
+    self.aux.glyph.updateObject(self.aux.glyph.fl, 'Copy Layer | %s <- %s' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
     self.aux.glyph.update()
 
   def paste(self):
     if self.chk_outline.isChecked():
-      self.Copy_Paste_Layer_Shapes(self.aux.glyph, self.lst_layers.currentItem().text(), False)
+      self.Copy_Paste_Layer_Shapes(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False)
       
     if self.chk_guides.isChecked():
-      self.Copy_Paste_Layer_Guides(self.aux.glyph, self.lst_layers.currentItem().text(), False)
+      self.Copy_Paste_Layer_Guides(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False)
 
     if self.chk_anchors.isChecked():
-      self.Copy_Paste_Layer_Anchors(self.aux.glyph, self.lst_layers.currentItem().text(), False)
+      self.Copy_Paste_Layer_Anchors(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False)
 
     if self.chk_lsb.isChecked():
-      self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.lst_layers.currentItem().text(), False, 'LSB')
+      self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'LSB')
       
     if self.chk_adv.isChecked():
-      self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.lst_layers.currentItem().text(), False, 'ADV')
+      self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'ADV')
       
     if self.chk_rsb.isChecked():
-      self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.lst_layers.currentItem().text(), False, 'RSB')
+      self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'RSB')
       
-    self.aux.glyph.updateObject(self.aux.glyph.fl, 'Paste Layer | %s -> %s' %(self.aux.glyph.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
+    self.aux.glyph.updateObject(self.aux.glyph.fl, 'Paste Layer | %s -> %s' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
     self.aux.glyph.update()
 
 class QlayerBlend(QtGui.QVBoxLayout):

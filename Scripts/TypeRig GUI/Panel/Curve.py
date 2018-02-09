@@ -95,8 +95,8 @@ class curveEq(QtGui.QGridLayout):
             proportion = float(self.edt_prop.text)
             wSegment.eqProportionalHandles(proportion)
 
-          glyph.updateObject(glyph.fl, 'Curve Eq. %s @ %s' %(method, '; '.join(wLayers)))
-          glyph.update()
+    glyph.updateObject(glyph.fl, 'Optimize %s @ %s' %(method, '; '.join(wLayers)))
+    glyph.update()
 
 
 # - Tabs -------------------------------

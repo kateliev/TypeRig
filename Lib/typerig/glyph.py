@@ -32,15 +32,16 @@ class eGlyph(pGlyph):
 		Returns:
 			list: List of layer names
 		'''
+		layerBanList = ['#', 'img'] #! Parts or names of layers that are banned for manipulation
 
 		if layers is None:
-			return [layer.name for layer in self.layers() if '#' not in layer.name]
+			return [layer.name for layer in self.layers() if all([item not in layer.name for item in layerBanList])]
 		
 		elif isinstance(layers, tuple):
 			bpass = lambda condition, value: value if condition else []
 			
 			tempLayers = [] + bpass(layers[0], [self.activeLayer()]) + bpass(layers[1], self.masters()) + bpass(layers[2], self.masks()) + bpass(layers[3], self.services())
-			return list(set([layer.name for layer in tempLayers if '#' not in layer.name]))
+			return list(set([layer.name for layer in tempLayers if all([item not in layer.name for item in layerBanList])]))
 		else:
 			print 'ERROR:\tIncorrect layer triple!'
 			
