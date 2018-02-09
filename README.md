@@ -35,10 +35,10 @@ Unpack files anywhere you want. Then:
 
 - **TypeRig GUI** - Please refer to Fontlab VI manual about ["Scripting Panel" section "Open the List of scripts"](http://help.fontlab.com/fontlab-vi/Scripting-panel/#open-the-list-of-scripts)
 
+*Note: It is possible that you could have two or more Python installations on one machine. Please note which one is set to work with your current Fontlab IV instalaltion. If it happens that your main Python installation differes from the one supplied with Fontlab, then you should manually copy the library provided as `/typerig/` folder residing in `./Lib/` to your `/FontLab IV/Resources/python/2.7/site-packages/` folder. To test it out, if the library is poperly installed please open your FL6 scripting panel, navigate to and open the console and type `import typerig`. If no error is returned, then the manual isntallation went just fine.
+
 ### Known Issues/Problems
 TypeRig GUI
-- **NO UNDO! Save your work!** Anything you do will be reverted to the last manipulation done by the editor. Currently the Fontlab VI undo/history system is beyond my understanding, will be implemented/fixed in the coming months.
-- NO Errors and output! Regretfully there is a bug in the current build of Fontlab (and API) that prevents nested widgets from sending infromation to the standart os.stderr os.stdout.
 - NO Integration! The current floating panel is floating above all applications, not just FL. It is part of it but is not integrated within the workspace. *This would happen when the FL6 team announces official plugin API.*
 
 ### Documenation
