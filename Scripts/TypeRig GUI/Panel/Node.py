@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.15'
+app_name, app_version = 'TypeRig | Nodes', '0.20'
 
 # - Dependencies -----------------
 import fontlab as fl6
