@@ -69,6 +69,7 @@ class basicOps(QtGui.QGridLayout):
 			for cID, nID in reversed(selection):
 				glyph.insertNodeAt(cID, nodeMap[cID][nID] + float(self.edt_time.text), layer)
 
+		glyph.updateObject(glyph.fl, 'Insert Node @ %s' %'; '.join(wLayers))
 		glyph.update()
 
 	def removeNode(self):
@@ -272,6 +273,9 @@ class advMovement(QtGui.QVBoxLayout):
 				for node in selectedNodes:
 					if node.isOn:
 						node.smartMove(QtCore.QPointF(offset_x, offset_y))
+
+		# - Set Undo
+		glyph.updateObject(glyph.activeLayer(), '%s @ %s' %(method, glyph.activeLayer().name))
 
 		# - Finish it
 		glyph.update()

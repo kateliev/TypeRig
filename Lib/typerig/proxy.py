@@ -229,6 +229,23 @@ class pGlyph(object):
 
 		fl6.flItems.notifyGlyphUpdated(self.package.id, self.id)
 
+	def updateObject(self, flObject, undoMessage='TypeRig'):
+		'''Updates a flObject sends notification to the editor as well as undo/history item.
+		Args:
+			flObject (flGlyph, flLayer, flShape, flNode, flContour): Object to be update and set undo state
+			undoMessage (string): Message to be added in undo/history list.
+		'''
+		fl6.flItems.notifyChangesApplied(undoMessage, flObject, True)
+		'''
+		# - Covers flGlyph, flLayer, flShape
+		if isinstance(flObject, fl6.flGlyph) or isinstance(flObject, fl6.flLayer) or isinstance(flObject, fl6.flShape):
+			fl6.flItems.notifyChangesApplied(undoMessage, flObject, True)
+		
+		# - Covers flNode, flContour, (flShape.shapeData)
+		elif isinstance(flObject, fl6.flContour) or isinstance(flObject, fl6.flNode):
+			fl6.flItems.notifyChangesApplied(undoMessage, flObject.shapeData)
+		'''
+
 	# - Glyph Selection -----------------------------------------------
 	def selected(self, filterOn=False):
 		'''Return all selected nodes indexes at current layer.
