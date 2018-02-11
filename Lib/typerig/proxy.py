@@ -206,7 +206,7 @@ class pGlyph(object):
 	def addLayer(self, layer, toBack=False):
 		'''Adds a layer to glyph.
 		Args:
-			layer (int or str): Layer index or name. If None returns ActiveLayer
+			layer (flLayer or fgLayer)
 			toBack (bool): Send layer to back
 		Returns:
 			None
@@ -216,6 +216,16 @@ class pGlyph(object):
 
 		elif isinstance(layer, fgt.fgLayer):
 			self.fg.layers.append(layer)
+
+	def removeLayer(self, layer):
+		'''Removes a layer from glyph.
+		Args:
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+		Returns:
+			None
+		'''
+		self.fl.removeLayer(self.layer(layer))
+
 
 	def update(self, fl=True, fg=False):
 		'''Updates the glyph and sends notification to the editor.
