@@ -63,11 +63,11 @@ class QlayerSelect(QtGui.QVBoxLayout):
 			currItem = self.lst_layers.item(index)
 
 			if self.glyph.layer(currItem.text()).isMasterLayer:
-				colorName = 'LightCoral'
+				colorName = 'LightGreen'
 			elif self.glyph.layer(currItem.text()).isMask:
 				colorName = 'LightSkyBlue'
 			elif self.glyph.layer(currItem.text()).isService:
-				colorName = 'LightGreen'
+				colorName = 'LightCoral'
 			else:
 				colorName = 'Gainsboro'
 
