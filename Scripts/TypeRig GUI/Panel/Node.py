@@ -366,6 +366,9 @@ class tool_tab(QtGui.QWidget):
 		
 		elif key == QtCore.Qt.Key_Right:
 			shiftXY = (float(self.advMovement.edt_offX.text) + addon, .0)
+		
+		else:
+			shiftXY = (.0,.0)
 
 		# - Move
 		self.advMovement.moveNodes(*shiftXY, method=str(self.advMovement.cmb_methodSelector.currentText))
