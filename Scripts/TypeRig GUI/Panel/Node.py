@@ -71,10 +71,34 @@ class basicOps(QtGui.QGridLayout):
 		selection = glyph.selectedAtContours()
 		wLayers = glyph._prepareLayers(pLayers)
 
+		'''
+		
+
 		for layer in wLayers:
 			for cID, nID in reversed(selection):
 				glyph.removeNodeAt(cID, nID, layer)
+				glyph.contours(layer)[cID].updateIndices()
+
 				#glyph.contours()[cID].clearNodes()
+		'''
+		# - Not Working Again!
+		from typerig.utils import groupConsecutives		
+		tempDict = {}
+
+		for cID, nID in selection:
+			tempDict.setdefault(cID, []).append(nID)
+
+		for layer in wLayers:
+			for cID, nIDlist in tempDict.iteritems():
+				nidList = groupConsecutives(nIDlist)
+
+				for pair in reversed(nidList):
+					
+					nodeA = eNode(glyph.contours(layer)[cID].nodes()[pair[-1] if len(pair) > 1 else pair[0]]).getNextOn()
+					nodeB = eNode(glyph.contours(layer)[cID].nodes()[pair[0]]).getPrevOn()
+
+					glyph.contours(layer)[cID].removeNodesBetween(nodeB, nodeA)
+									
 
 		glyph.updateObject(glyph.fl, 'Delete Node @ %s' %'; '.join(wLayers))
 		glyph.update()

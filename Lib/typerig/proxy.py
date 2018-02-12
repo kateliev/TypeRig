@@ -486,6 +486,9 @@ class pGlyph(object):
 		'''
 		for node in nodeList:
 			self.contours(layer)[cID].removeOne(node)
+			#self.contours(layer)[cID].updateIndices()
+
+
 
 	def insertNodeAt(self, cID, nID_time, layer=None):
 		''' Inserts node in contour at specified layer
