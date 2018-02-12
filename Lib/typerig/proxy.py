@@ -226,6 +226,45 @@ class pGlyph(object):
 		'''
 		self.fl.removeLayer(self.layer(layer))
 
+	def duplicateLayer(self, layer=None, newLayerName='New Layer', toBack=False):
+		'''Duplicates a layer with new name and adds it to glyph's layers.
+		Args:
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+			toBack(bool): send to back
+		Returns:
+			flLayer
+		Note:
+			This is redundant and false duplication until better solution is found.
+			Currently Guidelines are not duplicated due to crash.
+		'''
+		srcLayer = self.layer(layer)
+		dstLayer = fl6.flLayer()
+
+		dstLayer.name = newLayerName
+		dstLayer.advanceHeight = srcLayer.advanceHeight
+		dstLayer.advanceWidth = srcLayer.advanceWidth
+		#dstLayer.flags = srcLayer.flags
+		#dstLayer.data = srcLayer.data
+		dstLayer.wireframeColor = srcLayer.wireframeColor
+		dstLayer.mark = srcLayer.mark
+
+		dstLayer.metricsLeft = srcLayer.metricsLeft
+		dstLayer.metricsRight = srcLayer.metricsRight
+		dstLayer.metricsWidth = srcLayer.metricsWidth
+
+		dstLayer.assignStyle(srcLayer)
+		dstLayer.addShapes(srcLayer.shapes)
+		#dstLayer.appendGuidelines(srcLayer.guidelines)
+
+		for anchor in srcLayer.anchors:
+			dstLayer.addAnchor(anchor)
+
+		for comp in srcLayer.components:
+			dstLayer.addComponent(comp)
+
+		dstLayer.update()
+		self.addLayer(dstLayer, toBack)
+		return dstLayer
 
 	def update(self, fl=True, fg=False):
 		'''Updates the glyph and sends notification to the editor.

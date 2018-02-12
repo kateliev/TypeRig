@@ -23,7 +23,9 @@ class QlayerSelect(QtGui.QVBoxLayout):
 	# - Split/Break contour 
 	def __init__(self):
 		super(QlayerSelect, self).__init__()
-			 
+
+		# - Init
+
 		# -- Head
 		self.lay_head = QtGui.QHBoxLayout()
 		self.edt_glyphName = QtGui.QLineEdit()
@@ -45,11 +47,32 @@ class QlayerSelect(QtGui.QVBoxLayout):
 		self.refresh()
 
 	def refresh(self):
+		# - Init
+		layerBanList = ['#', 'img']
 		self.glyph = eGlyph()
+
+		# - Prepare
 		self.edt_glyphName.setText(eGlyph().name)
 		self.selection = self.glyph.layer().name
 		self.lst_layers.clear()
-		self.lst_layers.addItems(sorted([layer.name for layer in self.glyph.layers() if '#' not in layer.name]))
+					
+		# - Build List and style it
+		self.lst_layers.addItems(sorted([layer.name for layer in self.glyph.layers() if all([item not in layer.name for item in layerBanList])]))
+		
+		for index in range(self.lst_layers.count):
+			currItem = self.lst_layers.item(index)
+
+			if self.glyph.layer(currItem.text()).isMasterLayer:
+				colorName = 'LightCoral'
+			elif self.glyph.layer(currItem.text()).isMask:
+				colorName = 'LightSkyBlue'
+			elif self.glyph.layer(currItem.text()).isService:
+				colorName = 'LightGreen'
+			else:
+				colorName = 'Gainsboro'
+
+			currItem.setData(QtCore.Qt.DecorationRole, QtGui.QColor(colorName))
+
 
 class QlayerBasic(QtGui.QVBoxLayout):
 	def __init__(self, aux):
@@ -98,6 +121,7 @@ class QlayerBasic(QtGui.QVBoxLayout):
 			newLayer.name += '.%s' #%str(self.edt_name.text)
 			self.aux.glyph.addLayer(newLayer)
 		'''
+		''' # Fontgate solution - Not working either
 		newLayers = []
 		
 		for item in self.aux.lst_layers.selectedIndexes():
@@ -107,8 +131,11 @@ class QlayerBasic(QtGui.QVBoxLayout):
 			tempFlLayer.name += '.%s' #%str(self.edt_name.text)
 			tempFlLayer.update()
 			newLayers.append(tempFlLayer)
-
-		self.aux.glyph.fl.addLayers(newLayers)
+		'''
+		# Fake duplicate solution		
+		for item in self.aux.lst_layers.selectedItems():
+			self.aux.glyph.duplicateLayer(item.text() , '%s.%s' %(item.text(), self.edt_name.text), True)			
+		
 		self.aux.glyph.updateObject(self.aux.glyph.fl, 'Duplicate Layer(s)')
 		self.aux.glyph.update()
 		self.aux.refresh()
