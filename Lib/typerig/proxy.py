@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.22
+# VER 	: 0.30
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -33,6 +33,7 @@ class pNode(object):
 		self.index = self.fl.index
 		self.id = self.fl.id
 		self.isOn = self.fl.isOn
+		self.type = self.fl.nodeType
 		self.x, self.y = self.fl.x, self.fl.y
 		self.angle = self.fl.angle
 
@@ -296,6 +297,20 @@ class pGlyph(object):
 		'''
 
 	# - Glyph Selection -----------------------------------------------
+	def selectedNodeIndices(self, filterOn=False):
+		'''Return all indices of nodes selected at current layer.
+		Args:
+			filterOn (bool): Return only on-curve nodes
+		Returns:
+			list[int]
+		'''
+		allNodes = self.nodes()
+
+		if not filterOn:
+			return [allNodes.index(node) for node in self.nodes() if node.selected]
+		else:
+			return [allNodes.index(node) for node in self.nodes() if node.selected and node.isOn]
+	
 	def selected(self, filterOn=False):
 		'''Return all selected nodes indexes at current layer.
 		Args:
@@ -303,23 +318,18 @@ class pGlyph(object):
 		Returns:
 			list[int]
 		'''
-		allNodes = self.nodes()
-		return [allNodes.index(node) for node in self.selectedNodes(filterOn)]
+		return self.selectedNodeIndices(filterOn)
 
-	def selectedNodes(self, filterOn=False):
-		'''Return all selected nodes at current layer.
+	def selectedNodes(self, layer=None, filterOn=False):
+		'''Return all selected nodes at given layer.
 		Args:
 			filterOn (bool): Return only on-curve nodes
 		Returns:
 			list[flNode]
 		'''
-		
-		if not filterOn:
-			return [node for node in self.nodes() if node.selected]
-		else:
-			return [node for node in self.nodes() if node.selected and node.isOn]
-
-	def selectedAtContours(self, index=True, filterOn=False):	
+		return [self.nodes(layer)[nid] for nid in self.selectedNodeIndices(filterOn)]
+	
+	def selectedAtContours(self, index=True, layer=None, filterOn=False):	
 		'''Return all selected nodes and the contours they rest upon at current layer.
 		Args:
 			index (bool): If True returns only indexes, False returns flContour, flNode
@@ -328,12 +338,12 @@ class pGlyph(object):
 			list[tuple(int, int)]: [(contourID, nodeID)..()] or 
 			list[tuple(flContour, flNode)]
 		'''
-		allContours = self.contours()
+		allContours = self.contours(layer)
 		
 		if index:
-			return [(allContours.index(node.contour), node.index) for node in self.selectedNodes(filterOn)]
+			return [(allContours.index(node.contour), node.index) for node in self.selectedNodes(layer, filterOn)]
 		else:
-			return [(node.contour, node) for node in self.selectedNodes(filterOn)]
+			return [(node.contour, node) for node in self.selectedNodes(layer, filterOn)]
 
 	def selectedAtShapes(self, index=True, filterOn=False):
 		'''Return all selected nodes and the shapes they belong at current layer.
@@ -343,14 +353,16 @@ class pGlyph(object):
 		Returns:
 			list[tuple(int, int)]: [(shapeID, nodeID)..()] or
 			list[tuple(flShape, flNode)]
+
+		!TODO: Make it working with layers as selectedAtContours(). This is legacy mode so other scripts would work!
 		'''
 		allContours = self.contours()
 		allShapes = self.shapes()
 
 		if index:
-			return [(allShapes.index(shape), allContours.index(contour), node.index) for shape in allShapes for contour in shape.contours for node in contour.nodes() if node in self.selectedNodes(filterOn)]
+			return [(allShapes.index(shape), allContours.index(contour), node.index) for shape in allShapes for contour in shape.contours for node in contour.nodes() if node in self.selectedNodes(filterOn=filterOn)]
 		else:
-			return [(shape, contour, node) for shape in allShapes for contour in shape.contours for node in contour.nodes() if node in self.selectedNodes(filterOn)]
+			return [(shape, contour, node) for shape in allShapes for contour in shape.contours for node in contour.nodes() if node in self.selectedNodes(filterOn=filterOn)]
 
 	def selectedCoords(self, layer=None, filterOn=False):
 		'''Return the coordinates of all selected nodes at the current layer or other.

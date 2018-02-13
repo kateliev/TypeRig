@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.25'
+app_name, app_version = 'TypeRig | Nodes', '0.30'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -68,12 +68,10 @@ class basicOps(QtGui.QGridLayout):
 
 	def removeNode(self):
 		glyph = eGlyph()
-		selection = glyph.selectedAtContours()
 		wLayers = glyph._prepareLayers(pLayers)
 
 		'''
-		
-
+		selection = glyph.selectedAtContours()
 		for layer in wLayers:
 			for cID, nID in reversed(selection):
 				glyph.removeNodeAt(cID, nID, layer)
@@ -81,8 +79,27 @@ class basicOps(QtGui.QGridLayout):
 
 				#glyph.contours()[cID].clearNodes()
 		'''
+		
+		# Kind of working
+		for layer in wLayers:
+			selection = glyph.selectedAtContours(False, layer)
+
+			for contour, node in reversed(selection):
+				prevNode, nextNode = node.getPrev(), node.getNext()
+				
+				if not prevNode.isOn:
+					contour.removeOne(prevNode)
+			
+				if not nextNode.isOn:
+					contour.removeOne(nextNode)
+
+				contour.removeOne(node)	
+				contour.updateIndices()
+		
+		'''
 		# - Not Working Again!
 		from typerig.utils import groupConsecutives		
+		selection = glyph.selectedAtContours()
 		tempDict = {}
 
 		for cID, nID in selection:
@@ -99,7 +116,7 @@ class basicOps(QtGui.QGridLayout):
 
 					glyph.contours(layer)[cID].removeNodesBetween(nodeB, nodeA)
 									
-
+		'''
 		glyph.updateObject(glyph.fl, 'Delete Node @ %s' %'; '.join(wLayers))
 		glyph.update()
 
