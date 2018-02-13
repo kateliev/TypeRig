@@ -29,8 +29,8 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 ###### *Anchors panel (TBI)*
 ###### *Kern pair generator panel (TBI)*
 
-###### Known issues
-https://github.com/kateliev/TypeRig/issues#1
+##### Known issues
+#1
 
 ### Installation
 Unpack files anywhere you want. Then:
