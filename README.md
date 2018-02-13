@@ -29,6 +29,9 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 ###### *Anchors panel (TBI)*
 ###### *Kern pair generator panel (TBI)*
 
+###### Known issues
+https://github.com/kateliev/TypeRig/issues#1
+
 ### Installation
 Unpack files anywhere you want. Then:
 - **TypeRig Module** - Run the provided install in shell using `python install.py`. It will create link/path to Python Site packages. Please note that if you change the location of the installation you should run the script again.
