@@ -30,7 +30,7 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 ###### *Kern pair generator panel (TBI)*
 
 ##### Known issues
-#1
+TypeRig#1
 
 ### Installation
 Unpack files anywhere you want. Then:
