@@ -16,7 +16,7 @@ from typerig.glyph import eGlyph
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Layers', '0.20'
+app_name, app_version = 'TypeRig | Layers', '0.25'
 
 # - Sub widgets ------------------------
 class QlayerSelect(QtGui.QVBoxLayout):
@@ -61,17 +61,15 @@ class QlayerSelect(QtGui.QVBoxLayout):
 		
 		for index in range(self.lst_layers.count):
 			currItem = self.lst_layers.item(index)
+			currLayer = self.glyph.layer(currItem.text())
 
-			if self.glyph.layer(currItem.text()).isMasterLayer:
-				colorName = 'LightGreen'
-			elif self.glyph.layer(currItem.text()).isMask:
-				colorName = 'LightSkyBlue'
-			elif self.glyph.layer(currItem.text()).isService:
-				colorName = 'LightCoral'
-			else:
-				colorName = 'Gainsboro'
+			control = (currLayer.isService, currLayer.isMasterLayer, currLayer.isMaskLayer, currLayer.isWireframe)
+			controlColor = [int(item)*255 for item in control[:-1]] + [150-int(control[-1])*100]
+			text = 'Service Master Mask Wireframe'.split(' ')
+			controlText = ' | '.join([text[pos] for pos in range(len(text)) if control[pos]])
 
-			currItem.setData(QtCore.Qt.DecorationRole, QtGui.QColor(colorName))
+			currItem.setData(QtCore.Qt.DecorationRole, QtGui.QColor(*controlColor))
+			currItem.setData(QtCore.Qt.ToolTipRole, controlText)
 
 
 class QlayerBasic(QtGui.QVBoxLayout):
@@ -85,11 +83,15 @@ class QlayerBasic(QtGui.QVBoxLayout):
 		self.lay_buttons = QtGui.QGridLayout()
 		self.btn_add = QtGui.QPushButton('Add')
 		self.btn_dup = QtGui.QPushButton('Duplicate')
+		self.btn_setServ = QtGui.QPushButton('Service')
+		self.btn_setWire = QtGui.QPushButton('Wireframe')
 		self.btn_del = QtGui.QPushButton('Remove')
 				
 		self.btn_add.setToolTip('Add new layer with name')
 		self.btn_dup.setToolTip('Duplicate selected with suffix')
 		self.btn_del.setToolTip('Delete selected layers')
+		self.btn_setServ.setToolTip('Set selected layers as Service')
+		self.btn_setWire.setToolTip('Set selected layers as Wireframe')
 
 		self.edt_name = QtGui.QLineEdit('New')
 		self.edt_name.setToolTip('Name or suffix')
@@ -98,11 +100,16 @@ class QlayerBasic(QtGui.QVBoxLayout):
 		self.btn_dup.clicked.connect(self.duplicateLayers)
 		self.btn_del.clicked.connect(self.deleteLayers)
 
+		self.btn_setServ.clicked.connect(lambda: self.setLayer('serv'))
+		self.btn_setWire.clicked.connect(lambda: self.setLayer('wire'))
+
 		self.lay_buttons.addWidget(self.btn_add, 0, 0)
 		self.lay_buttons.addWidget(QtGui.QLabel('N:'), 0, 1)
 		self.lay_buttons.addWidget(self.edt_name, 0, 2)
 		self.lay_buttons.addWidget(self.btn_dup, 0, 3)
-		self.lay_buttons.addWidget(self.btn_del, 1, 0, 1, 4)
+		self.lay_buttons.addWidget(self.btn_setServ, 1, 0, 1, 2)
+		self.lay_buttons.addWidget(self.btn_setWire, 1, 2, 1, 1)
+		self.lay_buttons.addWidget(self.btn_del, 1, 3, 1, 1)
 	 
 		self.addLayout(self.lay_buttons)
 
@@ -147,6 +154,18 @@ class QlayerBasic(QtGui.QVBoxLayout):
 		self.aux.glyph.updateObject(self.aux.glyph.fl, 'Delete Layer(s)')
 		self.aux.glyph.update()
 		self.aux.refresh()
+
+	def setLayer(self, type):
+		for item in self.aux.lst_layers.selectedItems():
+			wLayer = self.aux.glyph.layer(item.text())
+
+			if type is 'serv': wLayer.isService = not wLayer.isService
+			if type is 'wire': wLayer.isWireframe = not wLayer.isWireframe
+
+		self.aux.glyph.updateObject(self.aux.glyph.fl, 'Set Layer(s) type')
+		self.aux.glyph.update()
+		self.aux.refresh()
+
 		
 
 class QlayerTools(QtGui.QVBoxLayout):
