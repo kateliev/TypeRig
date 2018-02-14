@@ -71,6 +71,15 @@ class QlayerSelect(QtGui.QVBoxLayout):
 			currItem.setData(QtCore.Qt.DecorationRole, QtGui.QColor(*controlColor))
 			currItem.setData(QtCore.Qt.ToolTipRole, controlText)
 
+	def doCheck(self):
+		if self.glyph.fl.id != fl6.CurrentGlyph() and self.glyph.fl.name != fl6.CurrentGlyph().name:
+			print 'ERRO:\tActive Glyph <%s> differs from currently processed glyph <%s> in Layers panel!' %(fl6.CurrentGlyph().name, self.glyph.fl.name)
+			print 'WARN:\tNo action taken - Forcing refresh!' 
+			self.refresh()
+			#raise Exception('Glyph mismatch')
+			return 0
+
+		return 1
 
 class QlayerBasic(QtGui.QVBoxLayout):
 	def __init__(self, aux):
@@ -114,57 +123,61 @@ class QlayerBasic(QtGui.QVBoxLayout):
 		self.addLayout(self.lay_buttons)
 
 	def addLayer(self):
-		newLayer = fl6.flLayer()
-		newLayer.name = str(self.edt_name.text)
-		self.aux.glyph.addLayer(newLayer)
-		self.aux.glyph.updateObject(self.aux.glyph.fl, 'Add Layer')
-		self.aux.glyph.update()
-		self.aux.refresh()
+		if self.aux.doCheck():
+			newLayer = fl6.flLayer()
+			newLayer.name = str(self.edt_name.text)
+			self.aux.glyph.addLayer(newLayer)
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Add Layer')
+			self.aux.glyph.update()
+			self.aux.refresh()
 
 	def duplicateLayers(self):	
-		''' # This should work but it does not
-		for item in self.aux.lst_layers.selectedItems():
-			newLayer = fl6.flLayer(self.aux.glyph.layer(item.text()))
-			newLayer.name += '.%s' #%str(self.edt_name.text)
-			self.aux.glyph.addLayer(newLayer)
-		'''
-		''' # Fontgate solution - Not working either
-		newLayers = []
-		
-		for item in self.aux.lst_layers.selectedIndexes():
-			tempFgLayer = fgt.fgLayer(self.aux.glyph.fg.layers[item.row()])
-			tempFlLayer = fl6.flLayer()
-			tempFlLayer.assignFgLayer(tempFgLayer, True, True, True, True)
-			tempFlLayer.name += '.%s' #%str(self.edt_name.text)
-			tempFlLayer.update()
-			newLayers.append(tempFlLayer)
-		'''
-		# Fake duplicate solution		
-		for item in self.aux.lst_layers.selectedItems():
-			self.aux.glyph.duplicateLayer(item.text() , '%s.%s' %(item.text(), self.edt_name.text), True)			
-		
-		self.aux.glyph.updateObject(self.aux.glyph.fl, 'Duplicate Layer(s)')
-		self.aux.glyph.update()
-		self.aux.refresh()
+		if self.aux.doCheck():	
+			''' # This should work but it does not
+			for item in self.aux.lst_layers.selectedItems():
+				newLayer = fl6.flLayer(self.aux.glyph.layer(item.text()))
+				newLayer.name += '.%s' #%str(self.edt_name.text)
+				self.aux.glyph.addLayer(newLayer)
+			'''
+			''' # Fontgate solution - Not working either
+			newLayers = []
+			
+			for item in self.aux.lst_layers.selectedIndexes():
+				tempFgLayer = fgt.fgLayer(self.aux.glyph.fg.layers[item.row()])
+				tempFlLayer = fl6.flLayer()
+				tempFlLayer.assignFgLayer(tempFgLayer, True, True, True, True)
+				tempFlLayer.name += '.%s' #%str(self.edt_name.text)
+				tempFlLayer.update()
+				newLayers.append(tempFlLayer)
+			'''
+			# Fake duplicate solution		
+			for item in self.aux.lst_layers.selectedItems():
+				self.aux.glyph.duplicateLayer(item.text() , '%s.%s' %(item.text(), self.edt_name.text), True)			
+			
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Duplicate Layer(s)')
+			self.aux.glyph.update()
+			self.aux.refresh()
 
 	def deleteLayers(self):				
-		for item in self.aux.lst_layers.selectedItems():
-			self.aux.glyph.removeLayer(item.text())
+		if self.aux.doCheck():	
+			for item in self.aux.lst_layers.selectedItems():
+				self.aux.glyph.removeLayer(item.text())
 
-		self.aux.glyph.updateObject(self.aux.glyph.fl, 'Delete Layer(s)')
-		self.aux.glyph.update()
-		self.aux.refresh()
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Delete Layer(s)')
+			self.aux.glyph.update()
+			self.aux.refresh()
 
 	def setLayer(self, type):
-		for item in self.aux.lst_layers.selectedItems():
-			wLayer = self.aux.glyph.layer(item.text())
+		if self.aux.doCheck():	
+			for item in self.aux.lst_layers.selectedItems():
+				wLayer = self.aux.glyph.layer(item.text())
 
-			if type is 'serv': wLayer.isService = not wLayer.isService
-			if type is 'wire': wLayer.isWireframe = not wLayer.isWireframe
+				if type is 'serv': wLayer.isService = not wLayer.isService
+				if type is 'wire': wLayer.isWireframe = not wLayer.isWireframe
 
-		self.aux.glyph.updateObject(self.aux.glyph.fl, 'Set Layer(s) type')
-		self.aux.glyph.update()
-		self.aux.refresh()
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Set Layer(s) type')
+			self.aux.glyph.update()
+			self.aux.refresh()
 
 		
 
@@ -288,76 +301,78 @@ class QlayerTools(QtGui.QVBoxLayout):
 
 	# - Button procedures ---------------------------------------------------
 	def swap(self):
-		if self.chk_outline.isChecked():
-			exportSRC = self.Copy_Paste_Layer_Shapes(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, True)
-			self.Copy_Paste_Layer_Shapes(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, True, exportSRC)
+		if self.aux.doCheck():	
+			if self.chk_outline.isChecked():
+				exportSRC = self.Copy_Paste_Layer_Shapes(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, True)
+				self.Copy_Paste_Layer_Shapes(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, True, exportSRC)
 
-		if self.chk_guides.isChecked():
-			pass
+			if self.chk_guides.isChecked():
+				pass
 
-		if self.chk_anchors.isChecked():
-			pass
+			if self.chk_anchors.isChecked():
+				pass
 
-		if self.chk_lsb.isChecked():
-			exportMetric = self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'LSB')
-			self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'LSB', exportMetric)
+			if self.chk_lsb.isChecked():
+				exportMetric = self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'LSB')
+				self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'LSB', exportMetric)
 
-		if self.chk_adv.isChecked():
-			exportMetric = self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'ADV')
-			self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'ADV', exportMetric)
+			if self.chk_adv.isChecked():
+				exportMetric = self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'ADV')
+				self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'ADV', exportMetric)
 
-		if self.chk_rsb.isChecked():
-			exportMetric = self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'RSB')
-			self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'RSB', exportMetric)
+			if self.chk_rsb.isChecked():
+				exportMetric = self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'RSB')
+				self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'RSB', exportMetric)
 
-		self.aux.glyph.updateObject(self.aux.glyph.fl, 'Swap Layers | %s <-> %s' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
-		self.aux.glyph.update()
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Swap Layers | %s <-> %s' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
+			self.aux.glyph.update()
 
 
 	def copy(self):
+		if self.aux.doCheck():
+			if self.chk_outline.isChecked():
+				self.Copy_Paste_Layer_Shapes(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True)
+				
+			if self.chk_guides.isChecked():
+				self.Copy_Paste_Layer_Guides(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True)
 
-		if self.chk_outline.isChecked():
-			self.Copy_Paste_Layer_Shapes(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True)
-			
-		if self.chk_guides.isChecked():
-			self.Copy_Paste_Layer_Guides(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True)
+			if self.chk_anchors.isChecked():
+				self.Copy_Paste_Layer_Anchors(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True)
 
-		if self.chk_anchors.isChecked():
-			self.Copy_Paste_Layer_Anchors(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True)
-
-		if self.chk_lsb.isChecked():
-			self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'LSB')
-			
-		if self.chk_adv.isChecked():
-			self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'ADV')
-			
-		if self.chk_rsb.isChecked():
-			self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'RSB')
-			
-		self.aux.glyph.updateObject(self.aux.glyph.fl, 'Copy Layer | %s <- %s' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
-		self.aux.glyph.update()
+			if self.chk_lsb.isChecked():
+				self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'LSB')
+				
+			if self.chk_adv.isChecked():
+				self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'ADV')
+				
+			if self.chk_rsb.isChecked():
+				self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'RSB')
+				
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Copy Layer | %s <- %s' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
+			self.aux.glyph.update()
 
 	def paste(self):
-		if self.chk_outline.isChecked():
-			self.Copy_Paste_Layer_Shapes(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False)
-			
-		if self.chk_guides.isChecked():
-			self.Copy_Paste_Layer_Guides(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False)
+		if self.aux.doCheck():	
+			if self.chk_outline.isChecked():
+				self.Copy_Paste_Layer_Shapes(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False)
+				
+			if self.chk_guides.isChecked():
+				self.Copy_Paste_Layer_Guides(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False)
 
-		if self.chk_anchors.isChecked():
-			self.Copy_Paste_Layer_Anchors(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False)
+			if self.chk_anchors.isChecked():
+				self.Copy_Paste_Layer_Anchors(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False)
 
-		if self.chk_lsb.isChecked():
-			self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'LSB')
-			
-		if self.chk_adv.isChecked():
-			self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'ADV')
-			
-		if self.chk_rsb.isChecked():
-			self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'RSB')
-			
-		self.aux.glyph.updateObject(self.aux.glyph.fl, 'Paste Layer | %s -> %s' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
-		self.aux.glyph.update()
+			if self.chk_lsb.isChecked():
+				self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'LSB')
+				
+			if self.chk_adv.isChecked():
+				self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'ADV')
+				
+			if self.chk_rsb.isChecked():
+				self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'RSB')
+				
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Paste Layer | %s -> %s' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
+			self.aux.glyph.update()
 
 class QlayerBlend(QtGui.QVBoxLayout):
 	def __init__(self, aux):
@@ -411,7 +426,6 @@ class QlayerBlend(QtGui.QVBoxLayout):
 		self.currentTime = (.0,.0) if isinstance(self.timeStep, tuple) else 0
 
 	def simpleBlend(self, timeStep, currentTime):
-		 
 		if self.chk_multi.isChecked():
 			self.currentTime = tuple(map(sum, zip(self.currentTime, timeStep))) if isinstance(timeStep, tuple) else self.currentTime + timeStep
 			blend = self.aux.glyph.blendLayers(self.aux.glyph.layer(self.aux.lst_layers.selectedItems()[0].text()), self.aux.glyph.layer(self.aux.lst_layers.selectedItems()[1].text()), self.currentTime)
@@ -428,14 +442,16 @@ class QlayerBlend(QtGui.QVBoxLayout):
 		self.aux.glyph.update()
 
 	def blendMinus(self):
-		temp_timeStep = self.edt_timeStep.text.replace(' ', '').split(',')
-		self.timeStep = -float(temp_timeStep[0]) if len(temp_timeStep) == 1 else tuple([-float(value) for value in temp_timeStep])
-		self.simpleBlend(self.timeStep, self.currentTime)
+		if self.aux.doCheck():	
+			temp_timeStep = self.edt_timeStep.text.replace(' ', '').split(',')
+			self.timeStep = -float(temp_timeStep[0]) if len(temp_timeStep) == 1 else tuple([-float(value) for value in temp_timeStep])
+			self.simpleBlend(self.timeStep, self.currentTime)
 
 	def blendPlus(self):
-		temp_timeStep = self.edt_timeStep.text.replace(' ', '').split(',')
-		self.timeStep = float(temp_timeStep[0]) if len(temp_timeStep) == 1 else tuple([float(value) for value in temp_timeStep])
-		self.simpleBlend(self.timeStep, self.currentTime)
+		if self.aux.doCheck():	
+			temp_timeStep = self.edt_timeStep.text.replace(' ', '').split(',')
+			self.timeStep = float(temp_timeStep[0]) if len(temp_timeStep) == 1 else tuple([float(value) for value in temp_timeStep])
+			self.simpleBlend(self.timeStep, self.currentTime)
 		
 
 # - Tabs -------------------------------
