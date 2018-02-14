@@ -72,7 +72,7 @@ class QlayerSelect(QtGui.QVBoxLayout):
 			currItem.setData(QtCore.Qt.ToolTipRole, controlText)
 
 	def doCheck(self):
-		if self.glyph.fl.id != fl6.CurrentGlyph() and self.glyph.fl.name != fl6.CurrentGlyph().name:
+		if self.glyph.fg.id != fl6.CurrentGlyph().id and self.glyph.fl.name != fl6.CurrentGlyph().name:
 			print '\nERRO:\tGlyph mismatch:\n\tCurrent active glyph: %s\n\tLayers panel glyph: %s' %(fl6.CurrentGlyph(), self.glyph.fg)
 			print 'WARN:\tNo action taken! Forcing refresh!' 
 			self.refresh()
