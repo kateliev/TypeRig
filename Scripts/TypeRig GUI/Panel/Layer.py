@@ -73,8 +73,8 @@ class QlayerSelect(QtGui.QVBoxLayout):
 
 	def doCheck(self):
 		if self.glyph.fl.id != fl6.CurrentGlyph() and self.glyph.fl.name != fl6.CurrentGlyph().name:
-			print 'ERRO:\tActive Glyph <%s> differs from currently processed glyph <%s> in Layers panel!' %(fl6.CurrentGlyph().name, self.glyph.fl.name)
-			print 'WARN:\tNo action taken - Forcing refresh!' 
+			print '\nERRO:\tGlyph mismatch:\n\tCurrent active glyph: %s\n\tLayers panel glyph: %s' %(fl6.CurrentGlyph(), self.glyph.fg)
+			print 'WARN:\tNo action taken! Forcing refresh!' 
 			self.refresh()
 			#raise Exception('Glyph mismatch')
 			return 0
