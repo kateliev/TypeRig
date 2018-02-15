@@ -40,16 +40,20 @@ def normalize2sum(values):
 	valSum = sum(values)
 	return sorted([float(item)/valSum for item in values])
 
-def renormalize(values, newRange):
+def renormalize(values, newRange, oldRange=None):
 	'''Normalize all values to the maximum value in a given list and remap them in a new given range. 
 	
 	Arguments: 
 		values (list(int of float)) : a list of values to be normalized
 		newRange (tuple(float,float)): a new range for remapping (20,250)
+		oldRange (tuple(float,float)) or None: the original range of values if None range is auto extracted from values given.
 	Returns:
 		list(float)
 	'''
-	return sorted([(max(newRange)-min(newRange))*item + min(newRange) for item in [float(item)/max(values) for item in values]])
+	if oldRange is not None:
+		return sorted([(max(newRange) - min(newRange))*item + min(newRange) for item in [float(item - min(oldRange))/(max(oldRange) - min(oldRange)) for item in values]])
+	else:
+		return sorted([(max(newRange) - min(newRange))*item + min(newRange) for item in [float(item - min(values))/(max(values) - min(values)) for item in values]])
 
 def isclose(a, b, abs_tol = 1, rel_tol = 0.0):
 	'''Tests approximate equality for values [a] and [b] within relative [rel_tol*] and/or absolute tolerance [abs_tol]
