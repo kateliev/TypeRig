@@ -17,8 +17,40 @@
 # - Dependancies -----------------
 import math
 
-# - Functions ------------------------------------------------------------------
+# - Functions -------------------------------------------------
 # -- Math -----------------------------------------------------
+def normalize2max(values):
+	'''Normalize all values to the maximum value in a given list. 
+	
+	Arguments:
+		values (list(int of float));
+	Returns: 
+		list(float)
+	'''
+	return sorted([float(item)/max(values) for item in values])
+
+def normalize2sum(values):
+	'''Normalize all values to the sum of given list so the resiting sum is always 1.0 or close as possible. 
+	
+	Arguments: 
+		values (list(int of float));
+	Returns: 
+		list(float)
+	'''
+	valSum = sum(values)
+	return sorted([float(item)/valSum for item in values])
+
+def renormalize(values, newRange):
+	'''Normalize all values to the maximum value in a given list and remap them in a new given range. 
+	
+	Arguments: 
+		values (list(int of float)) : a list of values to be normalized
+		newRange (tuple(float,float)): a new range for remapping (20,250)
+	Returns:
+		list(float)
+	'''
+	return sorted([(max(newRange)-min(newRange))*item + min(newRange) for item in [float(item)/max(values) for item in values]])
+
 def isclose(a, b, abs_tol = 1, rel_tol = 0.0):
 	'''Tests approximate equality for values [a] and [b] within relative [rel_tol*] and/or absolute tolerance [abs_tol]
 
@@ -72,7 +104,7 @@ def linInterp(t0, t1, t):
     #return (max(t0,t1)-min(t0,t1))*t + min(t0,t1)
     return (t1 - t0)*t + t0
 
-# -- Contour tests ------------------------
+# -- Contour tests ----------------------------------------------------------
 def ccw(A, B, C):
 	'''Tests whether the turn formed by A, B, and C is Counter clock wise (CCW)'''
 	return (B.x - A.x) * (C.y - A.y) > (B.y - A.y) * (C.x - A.x)
