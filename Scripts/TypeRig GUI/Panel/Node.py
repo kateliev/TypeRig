@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.30'
+app_name, app_version = 'TypeRig | Nodes', '0.35'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -131,8 +131,8 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_right = QtGui.QPushButton('Right')
 		self.btn_top = QtGui.QPushButton('Top')
 		self.btn_bottom = QtGui.QPushButton('Bottom')
-		self.btn_solveY = QtGui.QPushButton('Predict/Solve Y')
-		self.btn_solveX = QtGui.QPushButton('Predict/Solve X')
+		self.btn_solveY = QtGui.QPushButton('Lineup Min/Max Y')
+		self.btn_solveX = QtGui.QPushButton('Lineup Min/Max X')
 
 		self.btn_left.setMinimumWidth(40)
 		self.btn_right.setMinimumWidth(40)
