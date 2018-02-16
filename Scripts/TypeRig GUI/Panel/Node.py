@@ -47,10 +47,10 @@ class basicOps(QtGui.QGridLayout):
 		self.edt_time.setToolTip('Insertion Time')
 
 		# -- Build: Basic Ops
-		self.addWidget(self.btn_insert, 0, 0, 1, 2)
-		self.addWidget(QtGui.QLabel('T:'), 0, 2, 1, 1)
-		self.addWidget(self.edt_time, 0, 3, 1, 1 )
-		self.addWidget(self.btn_remove, 0, 4, 1, 2)
+		self.addWidget(self.btn_insert, 0, 0)
+		self.addWidget(QtGui.QLabel('T:'), 0, 1)
+		self.addWidget(self.edt_time, 0, 2)
+		self.addWidget(self.btn_remove, 0, 3)
 
 	def insertNode(self):
 		glyph = eGlyph()
@@ -121,6 +121,78 @@ class basicOps(QtGui.QGridLayout):
 		glyph.update()
 
 
+class alignNodes(QtGui.QGridLayout):
+	# - Basic Node operations
+	def __init__(self):
+		super(alignNodes, self).__init__()
+		
+		# - Buttons
+		self.btn_left = QtGui.QPushButton('Left')
+		self.btn_right = QtGui.QPushButton('Right')
+		self.btn_top = QtGui.QPushButton('Top')
+		self.btn_bottom = QtGui.QPushButton('Bottom')
+		self.btn_solveY = QtGui.QPushButton('Predict/Solve Y')
+		self.btn_solveX = QtGui.QPushButton('Predict/Solve X')
+
+		self.btn_left.setMinimumWidth(40)
+		self.btn_right.setMinimumWidth(40)
+		self.btn_top.setMinimumWidth(40)
+		self.btn_bottom.setMinimumWidth(40)
+		
+		self.btn_left.clicked.connect(lambda: self.alignNodes('L'))
+		self.btn_right.clicked.connect(lambda: self.alignNodes('R'))
+		self.btn_top.clicked.connect(lambda: self.alignNodes('T'))
+		self.btn_bottom.clicked.connect(lambda: self.alignNodes('B'))
+		self.btn_solveY.clicked.connect(lambda: self.alignNodes('Y'))
+		self.btn_solveX.clicked.connect(lambda: self.alignNodes('X'))
+				
+		self.addWidget(self.btn_left, 0,0)
+		self.addWidget(self.btn_right, 0,1)
+		self.addWidget(self.btn_top, 0,2)
+		self.addWidget(self.btn_bottom, 0,3)
+		self.addWidget(self.btn_solveY, 1,0,1,2)
+		self.addWidget(self.btn_solveX, 1,2,1,2)
+
+	def alignNodes(self, mode):
+		from typerig.brain import Line
+
+		glyph = eGlyph()
+		wLayers = glyph._prepareLayers(pLayers)
+		
+		for layer in wLayers:
+			selection = [eNode(node) for node in glyph.selectedNodes(layer)]
+			
+			if mode == 'L':
+				target = min(selection, key=lambda item: item.x)
+				control = (True, False)
+
+			elif mode == 'R':
+				target = max(selection, key=lambda item: item.x)
+				control = (True, False)
+			
+			elif mode == 'T':
+				target = max(selection, key=lambda item: item.y)
+				control = (False, True)
+			
+			elif mode == 'B':
+				target = min(selection, key=lambda item: item.y)
+				control = (False, True)
+			
+			elif mode == 'Y':
+				target = Line(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
+				control = (True, False)
+
+			elif mode == 'X':
+				target = Line(min(selection, key=lambda item: item.x).fl, max(selection, key=lambda item: item.x).fl)
+				control = (False, True)
+
+			for node in selection:
+				node.alignTo(target, control)
+
+		glyph.updateObject(glyph.fl, 'Align Nodes @ %s' %'; '.join(wLayers))
+		glyph.update()
+
+
 class breakContour(QtGui.QGridLayout):
 	# - Split/Break contour 
 	def __init__(self):
@@ -146,10 +218,10 @@ class breakContour(QtGui.QGridLayout):
 		self.edt_expand.setToolTip('Extrapolate endings.')
 								
 		# -- Build: Split/Break contour
-		self.addWidget(self.btn_splitContour, 0, 0, 1, 2)
-		self.addWidget(QtGui.QLabel('E:'), 0, 2, 1, 1)
-		self.addWidget(self.edt_expand, 0, 3, 1, 1)
-		self.addWidget(self.btn_splitContourClose, 0, 4, 1, 2)
+		self.addWidget(self.btn_splitContour, 0, 0)
+		self.addWidget(QtGui.QLabel('E:'), 0, 1)
+		self.addWidget(self.edt_expand, 0, 2)
+		self.addWidget(self.btn_splitContourClose, 0, 3)
 				
 	def splitContour(self):
 		glyph = eGlyph()
@@ -345,14 +417,17 @@ class tool_tab(QtGui.QWidget):
 		layoutV.addWidget(QtGui.QLabel('Basic Operations'))
 		layoutV.addLayout(basicOps())
 
+		layoutV.addWidget(QtGui.QLabel('Align nodes'))
+		layoutV.addLayout(alignNodes())
+
 		layoutV.addWidget(QtGui.QLabel('Break/Knot Contour'))
 		layoutV.addLayout(breakContour())
 
 		layoutV.addWidget(QtGui.QLabel('Basic Contour Operations'))
 		layoutV.addLayout(basicContour())
 
-		layoutV.addWidget(QtGui.QLabel('Convert to Hobby'))
-		layoutV.addLayout(convertHobby())    
+		#layoutV.addWidget(QtGui.QLabel('Convert to Hobby'))
+		#layoutV.addLayout(convertHobby())    
 
 		layoutV.addWidget(QtGui.QLabel('Movement'))
 		self.advMovement = advMovement()
