@@ -183,6 +183,94 @@ class eGlyph(pGlyph):
 		for layer, rsb in RSBmargins.iteritems():
 			self.setRSB(rsb, layer)
 
+
+	def copyLSBbyName(self, glyphName, layers=None, order=0, adjustPercent=100, adjustUnits=0):
+		'''Copy LSB from another glyph specified by Glyph Name.
+		
+		Args:
+			glyphName (str): Name of source glyph
+			layers tuple(bool): Bool control tuple(active_layer, masters, masks, services). Note If all are set to False only the active layer is used.
+			order (bool or int): Use source LSB (0 False) or RSB (1 True). Flips the metric copied.
+			adjustPercent (int): Adjust the copied metric by percent (100 default)
+			adjustUnits (int): Adjust the copied metric by units (0 default)
+
+		Return:
+			None
+		'''
+		srcGlyph = self.__class__(self.package.findName(glyphName))
+		srcLayers = srcGlyph._prepareLayers(layers)		
+		dstLayers = self._prepareLayers(layers)
+
+		safeLayers = list(set(srcLayers) & set(dstLayers))
+
+		for layer in safeLayers:
+			self.setLSB((srcGlyph.getLSB(layer), srcGlyph.getRSB(layer))[order]*adjustPercent/100 + adjustUnits, layer)
+
+	def copyRSBbyName(self, glyphName, layers=None, order=0, adjustPercent=100, adjustUnits=0):
+		'''Copy RSB from another glyph specified by Glyph Name.
+		
+		Args:
+			glyphName (str): Name of source glyph
+			layers tuple(bool): Bool control tuple(active_layer, masters, masks, services). Note If all are set to False only the active layer is used.
+			order (bool or int): Use source LSB (0 False) or RSB (1 True). Flips the metric copied.
+			adjustPercent (int): Adjust the copied metric by percent (100 default)
+			adjustUnits (int): Adjust the copied metric by units (0 default)
+
+		Return:
+			None
+		'''
+		
+		srcGlyph = self.__class__(self.package.findName(glyphName))
+		srcLayers = srcGlyph._prepareLayers(layers)		
+		dstLayers = self._prepareLayers(layers)
+
+		safeLayers = list(set(srcLayers) & set(dstLayers))
+
+		for layer in safeLayers:
+			self.setRSB((srcGlyph.getRSB(layer), srcGlyph.getLSB(layer))[order]*adjustPercent/100 + adjustUnits, layer)
+
+	def copyADVbyName(self, glyphName, layers=None, adjustPercent=100, adjustUnits=0):
+		'''Copy Advance width from another glyph specified by Glyph Name.
+		
+		Args:
+			glyphName (str): Name of source glyph
+			layers tuple(bool): Bool control tuple(active_layer, masters, masks, services). Note If all are set to False only the active layer is used.
+			adjustPercent (int): Adjust the copied metric by percent (100 default)
+			adjustUnits (int): Adjust the copied metric by units (0 default)
+
+		Return:
+			None
+		'''
+		
+		srcGlyph = self.__class__(self.package.findName(glyphName))
+		srcLayers = srcGlyph._prepareLayers(layers)		
+		dstLayers = self._prepareLayers(layers)
+
+		safeLayers = list(set(srcLayers) & set(dstLayers))
+
+		for layer in safeLayers:
+			self.setAdvance(srcGlyph.getAdvance(layer)*adjustPercent/100 + adjustUnits, layer)
+
+	def copyMetricsbyName(self, metricTriple=(None, None, None), layers=None, order=(0, 0, 0), adjustPercent=(100, 100, 100), adjustUnits=(0,0,0)):
+		'''Copy LSB, RSB and Advance width from glyphs specified by Glyph Name.
+		
+		Args:
+			metricTriple tuple(str): Names of source glyphs for (LSB, RSB, ADV)
+			layers tuple(bool): Bool control tuple(active_layer, masters, masks, services). Note If all are set to False only the active layer is used.
+			order tuple(bool): Use source LSB (0 False) or RSB (1 True). Flips the metric copied. (LSB, RSB, 0)
+			adjustPercent tuple(int): Adjust the copied metric by percent (100 default) - (LSB, RSB, ADV)
+			adjustUnits tuple(int): Adjust the copied metric by units (0 default) - (LSB, RSB, ADV)
+
+		Return:
+			None
+		'''
+
+		if metricTriple[0] is not None:	self.copyLSBbyName(metricTriple[0], layers, order[0], adjustPercent[0], adjustUnits[0])
+		if metricTriple[1] is not None:	self.copyRSBbyName(metricTriple[1], layers, order[1], adjustPercent[1], adjustUnits[1])
+		if metricTriple[2] is not None:	self.copyADVbyName(metricTriple[2], layers, adjustPercent[2], adjustUnits[2])
+		
+
+
 	# - Interpolation  ---------------------------------------
 	def blendLayers(self, layerA, layerB, blendTimes, outputFL=True, blendMode=0, engine='fg'):
 		'''Blend two layers at given times (anisotropic support).

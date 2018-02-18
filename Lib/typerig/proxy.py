@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.30
+# VER 	: 0.35
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -95,7 +95,8 @@ class pGlyph(object):
 	'''Proxy to flGlyph and fgGlyph combined into single entity.
 
 	Constructor:
-		pGlyph() - default represents the current glyph and current font
+		pGlyph() : default represents the current glyph and current font
+		pGlyph(flGlyph)
 		pGlyph(fgFont, fgGlyph)
 	
 	Methods:
@@ -107,26 +108,40 @@ class pGlyph(object):
 		...
 	'''
 
-	def __init__(self, font=None, glyph=None):
-
-		if font is not None and glyph is not None:
-			self.parent = font
-			self.fg = glyph
-			self.fl = fl6.flGlyph(glyph, font)
-			self.package = self.fl.package
-			
-		else:
+	def __init__(self, *argv):
+		
+		if len(argv) == 0:
 			self.parent = fl6.CurrentFont()
 			self.fg = fl6.CurrentGlyph()
 			self.fl = fl6.flGlyph(fl6.CurrentGlyph(), fl6.CurrentFont())
-			self.package = self.fl.package
+		
+		elif len(argv) == 1 and isinstance(argv[0], fl6.flGlyph):
+			'''
+			# - Kind of not working as the reslting glyph is detached (-1 orphan) from the fgFont
+			self.fl = argv[0]
+			self.fg = self.fl.fgGlyph
+			self.parent = self.fl.fgPackage
+			'''
 
+			# - Alternate way - will use that way
+			font, glyph = argv[0].fgPackage, argv[0].fgPackage[argv[0].name]
+			self.parent = font
+			self.fg = glyph
+			self.fl = fl6.flGlyph(glyph, font)
+
+		elif len(argv) == 2 and isinstance(argv[0], fgt.fgFont) and isinstance(argv[1], fgt.fgGlyph):
+			font, glyph = argv
+			self.parent = font
+			self.fg = glyph
+			self.fl = fl6.flGlyph(glyph, font)
+			
 		self.name = self.fg.name
 		self.index = self.fg.index
 		self.id = self.fl.id
 		self.mark = self.fl.mark
 		self.tags = self.fl.tags
 		self.unicode = self.fg.unicode
+		self.package = fl6.flPackage(self.fl.package)
 
 	def __repr__(self):
 		return '<%s name=%s index=%s unicode=%s>' % (self.__class__.__name__, self.name, self.index, self.unicode)
