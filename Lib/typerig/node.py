@@ -90,3 +90,26 @@ class eNode(pNode):
 			# - Calculate & set
 			newX = cNode.getWidth(cNode.y + shift_y)
 			self.fl.smartSetXY(QPointF(newX, self.y + shift_y))
+
+	def alignTo(self, entity, align=(True, True)):
+		'''Align current node to a node or line given.
+		Arguments:
+			entity (flNode, pNode, eNode or Line)
+			align (tuple(Align_X (bool), Align_Y (bool)) 
+		'''
+		from typerig.proxy import pNode
+		from typerig.brain import Line
+		from PythonQt.QtCore import QPointF
+
+		if any([isinstance(entity, item) for item in [fl6.flNode, pNode, self.__class__]]):
+			newX = entity.x if align[0] else self.fl.x
+			newY = entity.y if align[1] else self.fl.y
+				
+			self.fl.smartSetXY(QPointF(newX, newY))
+
+		elif isinstance(entity, Line):
+			newX = entity.solveX(self.fl.y) if align[0] else self.fl.x
+			newY = entity.solveY(self.fl.x) if align[1] else self.fl.y
+
+			self.fl.smartSetXY(QPointF(newX, newY))
+

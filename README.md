@@ -10,7 +10,9 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 
 ##### Node Panel
 - Add/remove nodes 
+- Align Nodes and predictive lineup
 - Break, cut and knot contours.
+- Close open contours
 - Interpolated move aka Interpolated nudge (Active Layer only)
 - Slanted Grid move with the italic angle applied in the Y direction (Active Layer only)
 
@@ -21,9 +23,13 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 - Drop guideline: Drop guideline between any two selected nodes (on all layers) or a vertical guideline at a single node (with italic angle if present) 
 
 ##### Layer panel
+- Set layer types'
+- Add and remove layers (+ duplicate im development)'
 - Copy/Paste/Swap active layer outline, metrics, anchors and guides to any selected layer (also usable as FontLab V's swap with mask feature)
 - Interpolate current layer to any selected layer... (more TBI)
 - Interpolate any two selected layers into the current active layer... (more TBI)
+
+*'affects multiple selected layers*
 
 ###### *Metrics panel (TBI)*
 ###### *Anchors panel (TBI)*

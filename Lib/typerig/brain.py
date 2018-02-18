@@ -371,7 +371,7 @@ class _Line(object):
 
 	def getSlope(self):
 		try:
-			return yDiff / float(xDiff)
+			return self.yDiff / float(self.xDiff)
 
 		except ZeroDivisionError:
 			return float('nan')
