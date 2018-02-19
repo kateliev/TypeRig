@@ -63,7 +63,7 @@ class basicOps(QtGui.QGridLayout):
 			for cID, nID in reversed(selection):
 				glyph.insertNodeAt(cID, nodeMap[cID][nID] + float(self.edt_time.text), layer)
 
-		glyph.updateObject(glyph.fl, 'Insert Node @ %s' %'; '.join(wLayers))
+		glyph.updateObject(glyph.fl, 'Insert Node @ %s.' %'; '.join(wLayers))
 		glyph.update()
 
 	def removeNode(self):
@@ -117,7 +117,7 @@ class basicOps(QtGui.QGridLayout):
 					glyph.contours(layer)[cID].removeNodesBetween(nodeB, nodeA)
 									
 		'''
-		glyph.updateObject(glyph.fl, 'Delete Node @ %s' %'; '.join(wLayers))
+		glyph.updateObject(glyph.fl, 'Delete Node @ %s.' %'; '.join(wLayers))
 		glyph.update()
 
 
@@ -133,6 +133,9 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_bottom = QtGui.QPushButton('Bottom')
 		self.btn_solveY = QtGui.QPushButton('Lineup Min/Max Y')
 		self.btn_solveX = QtGui.QPushButton('Lineup Min/Max X')
+
+		self.btn_solveY.setToolTip('Channel Process selected nodes according to Y values')
+		self.btn_solveX.setToolTip('Channel Process selected nodes according to X values')
 
 		self.btn_left.setMinimumWidth(40)
 		self.btn_right.setMinimumWidth(40)
@@ -189,7 +192,7 @@ class alignNodes(QtGui.QGridLayout):
 			for node in selection:
 				node.alignTo(target, control)
 
-		glyph.updateObject(glyph.fl, 'Align Nodes @ %s' %'; '.join(wLayers))
+		glyph.updateObject(glyph.fl, 'Align Nodes @ %s.' %'; '.join(wLayers))
 		glyph.update()
 
 
@@ -226,13 +229,13 @@ class breakContour(QtGui.QGridLayout):
 	def splitContour(self):
 		glyph = eGlyph()
 		glyph.splitContour(layers=pLayers, expand=float(self.edt_expand.text), close=False)
-		glyph.updateObject(glyph.fl, 'Break Contour')
+		glyph.updateObject(glyph.fl, 'Break Contour @ %s.' %'; '.join(glyph._prepareLayers(pLayers)))
 		glyph.update()
 
 	def splitContourClose(self):
 		glyph = eGlyph()
 		glyph.splitContour(layers=pLayers, expand=float(self.edt_expand.text), close=True)
-		glyph.updateObject(glyph.fl, 'Break Contour & Close')
+		glyph.updateObject(glyph.fl, 'Break Contour & Close @ %s.' %'; '.join(glyph._prepareLayers(pLayers)))
 		glyph.update()        
 
 class basicContour(QtGui.QHBoxLayout):
@@ -255,7 +258,7 @@ class basicContour(QtGui.QHBoxLayout):
 			for cID, nID in reversed(selection):
 				if not contours[cID].closed: contours[cID].closed = True
 
-		glyph.updateObject(glyph.fl, 'Close Contour @ %s' %'; '.join(wLayers))
+		glyph.updateObject(glyph.fl, 'Close Contour @ %s.' %'; '.join(wLayers))
 		glyph.update()
 
 class convertHobby(QtGui.QHBoxLayout):
@@ -298,7 +301,7 @@ class convertHobby(QtGui.QHBoxLayout):
 					node.hobby = False
 				node.update()
 
-		glyph.updateObject(glyph.fl, 'Convert to Hobby @ %s' %'; '.join(wLayers))
+		glyph.updateObject(glyph.fl, 'Convert to Hobby @ %s.' %'; '.join(wLayers))
 		glyph.update()
 		
 		#fl6.Update(fl6.CurrentGlyph())
@@ -387,7 +390,7 @@ class advMovement(QtGui.QVBoxLayout):
 						node.smartMove(QtCore.QPointF(offset_x, offset_y))
 
 		# - Set Undo
-		glyph.updateObject(glyph.activeLayer(), '%s @ %s' %(method, glyph.activeLayer().name))
+		glyph.updateObject(glyph.activeLayer(), '%s @ %s.' %(method, glyph.activeLayer().name), verbose=False)
 
 		# - Finish it
 		glyph.update()

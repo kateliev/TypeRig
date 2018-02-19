@@ -56,7 +56,7 @@ class tool_tab(QtGui.QWidget):
   def dropGuideline(self):
       glyph = eGlyph()
       glyph.dropGuide(layers=pLayers, name=self.edt_guideName.text, color=self.cmb_colorSelector.currentText)
-      glyph.updateObject(glyph.fl, 'Drop Guide')
+      glyph.updateObject(glyph.fl, 'Drop Guide <%s> @ %s.' %(self.edt_guideName.text, '; '.join(glyph._prepareLayers(pLayers))))
       glyph.update()
       
       #fl6.Update(fl6.CurrentGlyph())

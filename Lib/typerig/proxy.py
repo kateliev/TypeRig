@@ -294,13 +294,14 @@ class pGlyph(object):
 
 		fl6.flItems.notifyGlyphUpdated(self.package.id, self.id)
 
-	def updateObject(self, flObject, undoMessage='TypeRig'):
+	def updateObject(self, flObject, undoMessage='TypeRig', verbose=True):
 		'''Updates a flObject sends notification to the editor as well as undo/history item.
 		Args:
 			flObject (flGlyph, flLayer, flShape, flNode, flContour): Object to be update and set undo state
 			undoMessage (string): Message to be added in undo/history list.
 		'''
 		fl6.flItems.notifyChangesApplied(undoMessage, flObject, True)
+		if verbose: print 'DONE:\t %s' %undoMessage
 		'''
 		# - Covers flGlyph, flLayer, flShape
 		if isinstance(flObject, fl6.flGlyph) or isinstance(flObject, fl6.flLayer) or isinstance(flObject, fl6.flShape):
@@ -515,8 +516,6 @@ class pGlyph(object):
 			self.contours(layer)[cID].removeOne(node)
 			#self.contours(layer)[cID].updateIndices()
 
-
-
 	def insertNodeAt(self, cID, nID_time, layer=None):
 		''' Inserts node in contour at specified layer
 		Arg:
@@ -658,6 +657,18 @@ class pGlyph(object):
 		'''Set the Advance Width (int) at given layer (int or str)'''
 		pLayer = self.layer(layer)
 		pLayer.advanceWidth = newAdvance
+
+	def setLSBeq(self, equationStr, layer=None):
+		'''Set LSB metric equation on given layer'''
+		self.layer(layer).metricsLeft = equationStr
+
+	def setRSBeq(self, equationStr, layer=None):
+		'''Set RSB metric equation on given layer'''
+		self.layer(layer).metricsRight = equationStr
+
+	def setADVeq(self, equationStr, layer=None):
+		'''Set Advance width metric equation on given layer'''
+		self.layer(layer).metricsWidth = equationStr
 
 	# - Anchors and pins -----------------------------------------------
 	def anchors(self, layer=None):

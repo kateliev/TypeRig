@@ -109,8 +109,8 @@ class QlayerBasic(QtGui.QVBoxLayout):
 		self.btn_dup.clicked.connect(self.duplicateLayers)
 		self.btn_del.clicked.connect(self.deleteLayers)
 
-		self.btn_setServ.clicked.connect(lambda: self.setLayer('serv'))
-		self.btn_setWire.clicked.connect(lambda: self.setLayer('wire'))
+		self.btn_setServ.clicked.connect(lambda: self.setLayer('Service'))
+		self.btn_setWire.clicked.connect(lambda: self.setLayer('Wireframe'))
 
 		self.lay_buttons.addWidget(self.btn_add, 0, 0)
 		self.lay_buttons.addWidget(QtGui.QLabel('N:'), 0, 1)
@@ -127,7 +127,7 @@ class QlayerBasic(QtGui.QVBoxLayout):
 			newLayer = fl6.flLayer()
 			newLayer.name = str(self.edt_name.text)
 			self.aux.glyph.addLayer(newLayer)
-			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Add Layer')
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Add Layer: %s.' %newLayer.name)
 			self.aux.glyph.update()
 			self.aux.refresh()
 
@@ -154,7 +154,7 @@ class QlayerBasic(QtGui.QVBoxLayout):
 			for item in self.aux.lst_layers.selectedItems():
 				self.aux.glyph.duplicateLayer(item.text() , '%s.%s' %(item.text(), self.edt_name.text), True)			
 			
-			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Duplicate Layer(s)')
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Duplicate Layer: %s.' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
 			self.aux.glyph.update()
 			self.aux.refresh()
 
@@ -163,7 +163,7 @@ class QlayerBasic(QtGui.QVBoxLayout):
 			for item in self.aux.lst_layers.selectedItems():
 				self.aux.glyph.removeLayer(item.text())
 
-			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Delete Layer(s)')
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Delete Layer: %s.' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
 			self.aux.glyph.update()
 			self.aux.refresh()
 
@@ -172,10 +172,10 @@ class QlayerBasic(QtGui.QVBoxLayout):
 			for item in self.aux.lst_layers.selectedItems():
 				wLayer = self.aux.glyph.layer(item.text())
 
-				if type is 'serv': wLayer.isService = not wLayer.isService
-				if type is 'wire': wLayer.isWireframe = not wLayer.isWireframe
+				if type is 'Service': wLayer.isService = not wLayer.isService
+				if type is 'Wireframe': wLayer.isWireframe = not wLayer.isWireframe
 
-			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Set Layer(s) type')
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Set Layer as <%s>: %s.' %(type, '; '.join([item.text() for item in self.aux.lst_layers.selectedItems()])))
 			self.aux.glyph.update()
 			self.aux.refresh()
 
@@ -324,7 +324,7 @@ class QlayerTools(QtGui.QVBoxLayout):
 				exportMetric = self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'RSB')
 				self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'RSB', exportMetric)
 
-			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Swap Layers | %s <-> %s' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Swap Layers | %s <-> %s.' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
 			self.aux.glyph.update()
 
 
@@ -348,7 +348,7 @@ class QlayerTools(QtGui.QVBoxLayout):
 			if self.chk_rsb.isChecked():
 				self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, 'RSB')
 				
-			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Copy Layer | %s <- %s' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Copy Layer | %s <- %s.' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
 			self.aux.glyph.update()
 
 	def paste(self):
@@ -371,7 +371,7 @@ class QlayerTools(QtGui.QVBoxLayout):
 			if self.chk_rsb.isChecked():
 				self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'RSB')
 				
-			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Paste Layer | %s -> %s' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Paste Layer | %s -> %s.' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
 			self.aux.glyph.update()
 
 class QlayerBlend(QtGui.QVBoxLayout):
@@ -438,7 +438,7 @@ class QlayerBlend(QtGui.QVBoxLayout):
 		if not self.chk_width.isChecked():
 			self.aux.glyph.layer().advanceWidth = blend.advanceWidth 
 		
-		self.aux.glyph.updateObject(self.aux.glyph.fl, 'Simple Blend @ %s' %self.aux.glyph.layer().name)
+		self.aux.glyph.updateObject(self.aux.glyph.fl, 'Blend <t:%s> @ %s.' %(self.currentTime + timeStep, self.aux.glyph.layer().name))
 		self.aux.glyph.update()
 
 	def blendMinus(self):

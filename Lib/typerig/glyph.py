@@ -152,38 +152,6 @@ class eGlyph(pGlyph):
 			self.layer(layerName).appendGuidelines([newg])
 
 	# - Metrics -----------------------------------------
-	def copyMetricsSB(self, LSBGlyphName, RSBGlyphName, layer='all', srcFont=None, order=(0,1), adjustPercent=100, adjustUnits=(0,0)):
-		'''Copy Glyph Side-bearings (LSB, RSB) form another glyph(s) referenced by name.'''
-		
-		# - Init
-		if srcFont is None:	srcFont = fl6.CurrentFont()
-		pGlyphLSB = pGlyph(srcFont, srcFont[LSBGlyphName])
-		pGlyphRSB = pGlyph(srcFont, srcFont[RSBGlyphName])
-
-		# - Process
-		if layer == 'all':
-			layerNames = lambda g: [g.layer(lid).name for lid in range(len(g.layers()))]
-
-			glyphLayerNames = [self.layer(lid).name for lid in range(len(self.layers()))]
-
-			safeLSBlayers = list(set(glyphLayerNames) & set(layerNames(pGlyphLSB)))
-			safeRSBlayers = list(set(glyphLayerNames) & set(layerNames(pGlyphRSB)))
-
-			LSBmargins = {lname:((pGlyphLSB.getLSB(lname), pGlyphLSB.getRSB(lname))[order[0]]*adjustPercent)/100 + adjustUnits[0] for lname in safeLSBlayers}
-			RSBmargins = {lname:((pGlyphRSB.getLSB(lname), pGlyphRSB.getRSB(lname))[order[1]]*adjustPercent)/100 + adjustUnits[1] for lname in safeRSBlayers}
-
-		else:
-			LSBmargins = {pGlyphLSB.layer(layer).name:((pGlyphLSB.getLSB(layer), pGlyphLSB.getRSB(layer))[order[0]]*adjustPercent)/100 + adjustUnits[0]}
-			RSBmargins = {pGlyphRSB.layer(layer).name:((pGlyphRSB.getLSB(layer), pGlyphRSB.getRSB(layer))[order[1]]*adjustPercent)/100 + adjustUnits[1]}
-
-		# - Set
-		for layer, lsb in LSBmargins.iteritems():
-			self.setLSB(lsb, layer)
-
-		for layer, rsb in RSBmargins.iteritems():
-			self.setRSB(rsb, layer)
-
-
 	def copyLSBbyName(self, glyphName, layers=None, order=0, adjustPercent=100, adjustUnits=0):
 		'''Copy LSB from another glyph specified by Glyph Name.
 		
@@ -219,7 +187,6 @@ class eGlyph(pGlyph):
 		Return:
 			None
 		'''
-		
 		srcGlyph = self.__class__(self.package.findName(glyphName))
 		srcLayers = srcGlyph._prepareLayers(layers)		
 		dstLayers = self._prepareLayers(layers)
@@ -241,7 +208,6 @@ class eGlyph(pGlyph):
 		Return:
 			None
 		'''
-		
 		srcGlyph = self.__class__(self.package.findName(glyphName))
 		srcLayers = srcGlyph._prepareLayers(layers)		
 		dstLayers = self._prepareLayers(layers)
@@ -264,13 +230,10 @@ class eGlyph(pGlyph):
 		Return:
 			None
 		'''
-
 		if metricTriple[0] is not None:	self.copyLSBbyName(metricTriple[0], layers, order[0], adjustPercent[0], adjustUnits[0])
 		if metricTriple[1] is not None:	self.copyRSBbyName(metricTriple[1], layers, order[1], adjustPercent[1], adjustUnits[1])
 		if metricTriple[2] is not None:	self.copyADVbyName(metricTriple[2], layers, adjustPercent[2], adjustUnits[2])
 		
-
-
 	# - Interpolation  ---------------------------------------
 	def blendLayers(self, layerA, layerB, blendTimes, outputFL=True, blendMode=0, engine='fg'):
 		'''Blend two layers at given times (anisotropic support).
@@ -295,7 +258,7 @@ class eGlyph(pGlyph):
 			blendLayer = fl6.flLayer('B:%s %s, t:%s' %(layerA.name, layerB.name, str(blendTimes)))
 			
 			# - Set and interpolate metrics
-			blendLayer.advanceWidth = int(linInterp(min(layerA.advanceWidth, layerB.advanceWidth), max(layerA.advanceWidth, layerB.advanceWidth), blendTimes.x()))
+			blendLayer.advanceWidth = int(linInterp(layerA.advanceWidth, layerB.advanceWidth, blendTimes.x()))
 			
 			# - Interpolate shapes
 			for shapeA in layerA.shapes:
