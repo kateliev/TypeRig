@@ -31,9 +31,13 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 
 *'affects multiple selected layers*
 
-###### *Metrics panel (TBI)*
+##### Metrics panel
+- Copy metrics from glyph (with adjustments)
+- Set metric equations
+
 ###### *Anchors panel (TBI)*
 ###### *Kern pair generator panel (TBI)*
+###### *Hints panel (TBI)*
 
 #### Known issues
 Please refer to https://github.com/kateliev/TypeRig/issues
@@ -46,12 +50,8 @@ Unpack files anywhere you want. Then:
 
 *Note: It is possible that you could have two or more Python installations on one machine. Please note which one is set to work with your current Fontlab IV instalaltion. If it happens that your main Python installation differes from the one supplied with Fontlab, then you should manually copy the library provided as `/typerig/` folder residing in `./Lib/` to your `/FontLab IV/Resources/python/2.7/site-packages/` folder. To test it out, if the library is poperly installed please open your FL6 scripting panel, navigate to and open the console and type `import typerig`. If no error is returned, then the manual isntallation went just fine.*
 
-### Known Issues/Problems
-TypeRig GUI
-- NO Integration! The current floating panel is floating above all applications, not just FL. It is part of it but is not integrated within the workspace. *This would happen when the FL6 team announces official plugin API.*
-
 ### Documenation
-A fresh copy of the current master API could be obtained here (as a pydoc dump) as well as using python's help(...) function. (TBI)
+A non-fresh copy of the current master API could be obtained here (as a pydoc dump) as well as using python's help(...) function. (TBI)
 
 ### Developer
 TypeRig FDK is developed by Vassil Kateliev (2017).
