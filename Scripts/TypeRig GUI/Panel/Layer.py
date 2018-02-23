@@ -95,6 +95,7 @@ class QlayerBasic(QtGui.QVBoxLayout):
 		self.btn_setServ = QtGui.QPushButton('Service')
 		self.btn_setWire = QtGui.QPushButton('Wireframe')
 		self.btn_del = QtGui.QPushButton('Remove')
+		self.btn_dup.setEnabled(False)
 				
 		self.btn_add.setToolTip('Add new layer with name')
 		self.btn_dup.setToolTip('Duplicate selected with suffix')

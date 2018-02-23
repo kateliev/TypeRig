@@ -19,6 +19,9 @@ import math
 
 # - Functions -------------------------------------------------
 # -- Math -----------------------------------------------------
+def calcsb(counterWidth, step=5):
+	return [float(counterWidth*val)/100 for val in range(25, 50, step)]
+
 def normalize2max(values):
 	'''Normalize all values to the maximum value in a given list. 
 	
