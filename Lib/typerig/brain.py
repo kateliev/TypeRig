@@ -1,5 +1,5 @@
 # MODULE: Brain | Typerig
-# VER 	: 2.50
+# VER 	: 2.51
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018  (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -340,6 +340,9 @@ class _Point(object):
 
 	def doSwap(self):
 		return self.__class__(self.y, self.x)
+
+	def doFlip(self, sign=(True,True)):
+		return self.__class__(self.x * [1,-1][sign[0]], self.y * [1,-1][sign[1]])
 
 	def asTuple(self, toInt=False):
 		return (self.x, self.y) if not toInt else (int(self.x), int(self.y))
@@ -824,9 +827,21 @@ class _Curve(object):
 		return self.__class__(self.p0, self.p1, self.p2, self.p3)
 
 	def interpolateLast(self, shift):
-		newC = self.doSwap()
-		intC = newC.interpolateFirst(shift)
-		return intC.doSwap()
+		diffBase = self.p0 - self.p3
+		diffP1 = self.p0 - self.p1
+		diffP2 = self.p0 - self.p2
+
+		if diffBase.x != 0:
+			self.p1.x += (diffP1.x/diffBase.x)*shift.x
+			self.p2.x += (diffP2.x/diffBase.x)*shift.x
+			
+		if diffBase.y != 0:
+			self.p1.y += (diffP1.y/diffBase.y)*shift.y
+			self.p2.y += (diffP2.y/diffBase.y)*shift.y
+
+		self.p3 += shift
+
+		return self.__class__(self.p0, self.p1, self.p2, self.p3)
 
 
 # --- Real world ----------------------------------------------------------------------

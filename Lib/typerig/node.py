@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Node Objects | Typerig
-# VER 	: 0.02
+# VER 	: 0.05
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -44,7 +44,7 @@ class eNode(pNode):
 			if len(currSegmet) == 4:
 				currCurve = Curve(currSegmet)
 				new_currCurve = currCurve.interpolateFirst(shift)
-
+				
 				currNode_bcpOut = self.fl.getNext()
 				nextNode_bcpIn = currNode_bcpOut.getNext()
 				nextNode = nextNode_bcpIn.getOn()
@@ -66,7 +66,7 @@ class eNode(pNode):
 				prevSegmentNodes = [prevNode, prevNode_bcpOut, currNode_bcpIn, self.fl]
 				
 				# - Set node positions
-				for i in range(len(prevSegmentNodes)):
+				for i in range(len(prevSegmentNodes)-1,-1,-1):
 					prevSegmentNodes[i].smartSetXY(new_prevCurve.asList()[i].asQPointF())
 
 			if len(currSegmet) == 2 and len(prevSegment) == 2:
