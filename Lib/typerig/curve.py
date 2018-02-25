@@ -39,7 +39,7 @@ class eCurveEx(object):
 			self.n0, self.n1, self.n2, self.n3 = [eNode(node) for node in self.nodes]
 			self.contour = self.n0.contour
 
-		elif isinstance(argv[0], list) and multiCheck(argv[0], flNode):
+		elif (isinstance(argv[0], list) or isinstance(argv[0], tuple)) and multiCheck(argv[0], flNode):
 			self.nodes = argv[0]
 			self.n0, self.n1, self.n2, self.n3 = [eNode(node) for node in self.nodes]
 			self.fl = self.CurveEx = self.n0.getSegment()

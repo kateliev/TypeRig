@@ -75,10 +75,10 @@ class pNode(object):
 			nextNode_bcpIn = currNode_bcpOut.getNext()
 			nextNode = nextNode_bcpIn.getOn()
 		
-			return [currNode, currNode_bcpOut, nextNode_bcpIn, nextNode]
+			return (currNode, currNode_bcpOut, nextNode_bcpIn, nextNode)
 		
 		elif len(self.getSegment(relativeTime)) == 2:
-			return [self.fl, self.fl.getNext()]
+			return (self.fl, self.fl.getNext())
 
 
 	def insertAfter(self, time):
