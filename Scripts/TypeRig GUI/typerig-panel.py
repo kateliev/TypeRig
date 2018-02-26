@@ -175,11 +175,19 @@ class typerig_Panel(QtGui.QDialog):
   
     self.setStyleSheet(ss_Toolbox_none)
     
+    # - Fold Button ---------------------
+    self.btn_fold = QtGui.QPushButton('^')
+    self.btn_fold.setFixedHeight(20)
+    self.btn_fold.setFixedWidth(20)
+    self.btn_fold.setToolTip('Fold Panel')
+    self.btn_fold.clicked.connect(self.fold)
+    self.flag_fold = False
+    
     # - Layers --------------------------
-    self.chk_ActiveLayer = QtGui.QCheckBox('Active Layer')
-    self.chk_Masters = QtGui.QCheckBox('Master Layers')
-    self.chk_Masks = QtGui.QCheckBox('Mask Layers')
-    self.chk_Service = QtGui.QCheckBox('Service Layers')
+    self.chk_ActiveLayer = QtGui.QCheckBox('Active')
+    self.chk_Masters = QtGui.QCheckBox('Masters')
+    self.chk_Masks = QtGui.QCheckBox('Masks')
+    self.chk_Service = QtGui.QCheckBox('Services')
 
     self.chk_ActiveLayer.setCheckState(QtCore.Qt.Checked)
     #self.chk_ActiveLayer.setStyleSheet('QCheckBox::indicator:checked {background-color: limegreen; border: 1px Solid limegreen;}')
@@ -193,7 +201,6 @@ class typerig_Panel(QtGui.QDialog):
         
     # - Tabs --------------------------
     # -- Dynamically load all tabs
-
     self.tabs = QtGui.QTabWidget()
     self.tabs.setTabPosition(QtGui.QTabWidget.East)
 
@@ -206,24 +213,23 @@ class typerig_Panel(QtGui.QDialog):
     layoutV = QtGui.QVBoxLayout() 
     layoutV.setContentsMargins(0,0,0,0)
     
-    subH01 = QtGui.QGridLayout()
-    subH01.setContentsMargins(15,10,30,5)
+    self.lay_layers = QtGui.QGridLayout()
+    self.lay_layers.setContentsMargins(15,10,5,5)
         
     # -- Build layouts -------------------------------
-    subH01.addWidget(self.chk_ActiveLayer, 0, 0)
-    subH01.addWidget(self.chk_Masters, 0 ,1)
-    subH01.addWidget(self.chk_Masks, 1, 0)
-    subH01.addWidget(self.chk_Service, 1,1 )
-       
-    layoutV.addLayout(subH01)
+    self.lay_layers.addWidget(self.chk_ActiveLayer, 0, 0)
+    self.lay_layers.addWidget(self.chk_Masters, 0 , 1)
+    self.lay_layers.addWidget(self.chk_Masks, 0, 2)
+    self.lay_layers.addWidget(self.chk_Service, 0, 3)
+    self.lay_layers.addWidget(self.btn_fold, 0, 4)
+           
+    layoutV.addLayout(self.lay_layers)
     layoutV.addWidget(self.tabs)
 
     # - Set Widget -------------------------------
     self.setLayout(layoutV)
     self.setWindowTitle('%s %s' %(app_name, app_version))
     self.setGeometry(300, 300, 240, 440)
-    self.setMinimumHeight(5)
-    #self.setFixedWidth(240) # Set fixed width - keep it compact or find a way to keep it...
     self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
     
     self.show()
@@ -234,6 +240,18 @@ class typerig_Panel(QtGui.QDialog):
     
     for toolName in Panel.modules:
       exec('Panel.%s.pLayers = %s' %(toolName, pLayers))
+
+  def fold(self):
+    if not self.flag_fold:
+      self.tabs.hide()
+      self.setFixedHeight(35)
+      self.repaint()
+      self.flag_fold = True
+    else:
+      self.setFixedHeight(self.tabs.sizeHint.height())
+      self.tabs.show()
+      self.repaint()
+      self.flag_fold = False
   
 # - RUN ------------------------------
 dialog = typerig_Panel()
