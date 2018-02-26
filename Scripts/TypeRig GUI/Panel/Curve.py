@@ -71,10 +71,10 @@ class curveEq(QtGui.QGridLayout):
 
     for layer in wLayers:
       nodes = [eNode(glyph.nodes(layer)[nid]) for nid in selection]
-      conNodes =  [nodes[nid] for nid in range(len(nodes)-1) if nodes[nid].getNextOn() == nodes[nid+1].fl]
+      nodes.append(nodes[0]) #!!! Dirty fix
+      conNodes =  [nodes[nid] for nid in range(len(nodes)-1) if nodes[nid].getNextOn() == nodes[nid+1].fl or eNode(nodes[nid].getNextOn()).getTime() == 0]
       segmentNodes = [node.getSegmentNodes() for node in conNodes]
-      #segmentNodes = [node.getSegmentNodes() for node in nodes]
-
+     
       for segment in reversed(segmentNodes):
         if len(segment) == 4:
           wSegment = eCurveEx(segment)
