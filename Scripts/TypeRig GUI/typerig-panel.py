@@ -17,7 +17,7 @@ from PythonQt import QtCore, QtGui
 import Panel 
 
 # - Init --------------------------
-app_version = '0.36'
+app_version = '0.37'
 app_name = 'TypeRig Panel'
 
 # - Style -------------------------
@@ -175,14 +175,6 @@ class typerig_Panel(QtGui.QDialog):
   
     self.setStyleSheet(ss_Toolbox_none)
     
-    # - Fold Button ---------------------
-    self.btn_fold = QtGui.QPushButton('^')
-    self.btn_fold.setFixedHeight(20)
-    self.btn_fold.setFixedWidth(20)
-    self.btn_fold.setToolTip('Fold Panel')
-    self.btn_fold.clicked.connect(self.fold)
-    self.flag_fold = False
-    
     # - Layers --------------------------
     self.chk_ActiveLayer = QtGui.QCheckBox('Active')
     self.chk_Masters = QtGui.QCheckBox('Masters')
@@ -198,6 +190,14 @@ class typerig_Panel(QtGui.QDialog):
     self.chk_Service.stateChanged.connect(self.refreshLayers)
 
     self.refreshLayers()
+
+    # - Fold Button ---------------------
+    self.btn_fold = QtGui.QPushButton('^')
+    self.btn_fold.setFixedHeight(self.chk_ActiveLayer.sizeHint.height())
+    self.btn_fold.setFixedWidth(self.chk_ActiveLayer.sizeHint.height())
+    self.btn_fold.setToolTip('Fold Panel')
+    self.btn_fold.clicked.connect(self.fold)
+    self.flag_fold = False
         
     # - Tabs --------------------------
     # -- Dynamically load all tabs
@@ -244,7 +244,7 @@ class typerig_Panel(QtGui.QDialog):
   def fold(self):
     if not self.flag_fold:
       self.tabs.hide()
-      self.setFixedHeight(35)
+      self.setFixedHeight(self.chk_ActiveLayer.sizeHint.height() + 15)
       self.repaint()
       self.flag_fold = True
     else:
