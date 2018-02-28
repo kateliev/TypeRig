@@ -31,26 +31,41 @@ class basicOps(QtGui.QGridLayout):
 		# - Basic operations
 		self.btn_insert = QtGui.QPushButton('&Insert')
 		self.btn_remove = QtGui.QPushButton('&Remove')
+		self.btn_mitre = QtGui.QPushButton('&Mitre')
+		self.btn_round = QtGui.QPushButton('R&ound')
+		self.btn_round.setDisabled(True)
 		
 		self.btn_insert.setMinimumWidth(80)
 		self.btn_remove.setMinimumWidth(80)
+		self.btn_mitre.setMinimumWidth(80)
+		self.btn_round.setMinimumWidth(80)
 
-		self.btn_insert.setToolTip('Insert Node after Selection\nat given time T')
+		self.btn_insert.setToolTip('Insert Node after Selection\nat given time T.')
 		self.btn_remove.setToolTip('Remove Selected Nodes!\nFor proper curve node deletion\nalso select the associated handles!')
+		self.btn_mitre.setToolTip('Mitre corner using radius R.')
+		self.btn_round.setToolTip('Round corner using radius R.')
 		
 		self.btn_insert.clicked.connect(self.insertNode)
 		self.btn_remove.clicked.connect(self.removeNode)
+		self.btn_mitre.clicked.connect(self.cornerMitre)
 
-		# - Inserion time
+		# - Edit fields
 		self.edt_time = QtGui.QLineEdit('0.5')
-		#self.edt_time.setMinimumWidth(30)
-		self.edt_time.setToolTip('Insertion Time')
+		self.edt_radius = QtGui.QLineEdit('5')
+
+		self.edt_time.setToolTip('Insertion Time.')
+		self.edt_radius.setToolTip('Radius.')
 
 		# -- Build: Basic Ops
 		self.addWidget(self.btn_insert, 0, 0)
 		self.addWidget(QtGui.QLabel('T:'), 0, 1)
 		self.addWidget(self.edt_time, 0, 2)
 		self.addWidget(self.btn_remove, 0, 3)
+
+		self.addWidget(self.btn_mitre,1,0)
+		self.addWidget(QtGui.QLabel('R:'), 1, 1)
+		self.addWidget(self.edt_radius,1,2)
+		self.addWidget(self.btn_round,1,3)
 
 	def insertNode(self):
 		glyph = eGlyph()
@@ -118,6 +133,20 @@ class basicOps(QtGui.QGridLayout):
 									
 		'''
 		glyph.updateObject(glyph.fl, 'Delete Node @ %s.' %'; '.join(wLayers))
+		glyph.update()
+
+	def cornerMitre(self):
+		from typerig.node import eNode
+		glyph = eGlyph()
+		wLayers = glyph._prepareLayers(pLayers)
+		
+		for layer in wLayers:
+			selection = [eNode(node) for node in glyph.selectedNodes(layer)]
+			
+			for node in reversed(selection):
+				node.cornerMitre((float(self.edt_radius.text), float(self.edt_radius.text)))
+
+		glyph.updateObject(glyph.fl, 'Mitre Corner @ %s.' %'; '.join(wLayers))
 		glyph.update()
 
 

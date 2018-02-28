@@ -209,8 +209,19 @@ class geoAxis(object):
 # -- Geometry classes --------------------------------------------------------------------
 # --- Abstractions -----------------------------------------------------------------------
 class _Point(object): 
-	def __init__(self, data):
-		self.x, self.y = data
+	def __init__(self, *argv):
+
+		multiCheck = lambda t, type: all([isinstance(i, type) for i in t])
+
+		if isinstance(argv[0], self.__class__):
+			self.x, self.y = argv[0].x, argv[0].y
+
+		if multiCheck(argv, float) or multiCheck(argv, int) :
+			self.x, self.y = argv[0], argv[1]
+		
+		if multiCheck(argv, tuple) or multiCheck(argv, list) :
+			self.x, self.y = argv[0]
+
 		self.angle = 0
 
 	def __add__(self, other):
@@ -349,6 +360,15 @@ class _Point(object):
 
 	def setAngle(self, angle):
 		self.angle = angle
+
+	def getMagnitude(self):
+		from math import hypot
+		self.magnitude = hypot(self.x, self.y)
+		return self.magnitude 
+
+	def getUnit(self):
+		self.getMagnitude()
+		return self*(1.0/self.magnitude) if self.magnitude != 0 else self.__class__(0,0)
 
 	def getSlope(self):
 		from math import tan, radians

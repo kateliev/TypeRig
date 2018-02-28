@@ -34,8 +34,8 @@ class pNode(object):
 		self.id = self.fl.id
 		self.isOn = self.fl.isOn
 		self.type = self.fl.nodeType
-		self.x, self.y = self.fl.x, self.fl.y
-		self.angle = self.fl.angle
+		self.x, self.y = float(self.fl.x), float(self.fl.y)
+		self.angle = float(self.fl.angle)
 
 	# - Basics -----------------------------------------------
 	def getTime(self):

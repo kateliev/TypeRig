@@ -23,6 +23,35 @@ class eNode(pNode):
 		eNode(flNode)
 		
 	'''
+	# - Extension -----------------------
+	def asCoord(self):
+		'''Returns Coord object of the node.'''
+		from typerig.brain import Coord
+		return Coord(float(self.x), float(self.y))
+
+	# - Corner operations ---------------
+	def cornerMitre(self, mitreRadius=(1,1)):
+		from typerig.brain import Coord
+
+		# - Calculate unit vectors and shifts
+		nextNode = self.__class__(self.getNextOn())
+		prevNode = self.__class__(self.getPrevOn())
+
+		nextUnit = Coord(nextNode.asCoord() - self.asCoord()).getUnit()
+		prevUnit = Coord(prevNode.asCoord() - self.asCoord()).getUnit()
+		
+		nextShift = nextUnit * mitreRadius
+		prevShift = prevUnit * mitreRadius
+
+		#print (nextUnit, prevUnit), (nextShift, prevShift)
+		
+		# - Insert Node and process
+		self.insertAfter(0)
+		self.contour.updateIndices()
+
+		self.fl.smartMove(prevShift.asQPointF())
+		self.getNextOn().smartMove(nextShift.asQPointF())
+
 	# - Movement ------------------------
 	def interpMove(self, shift_x, shift_y):
 		'''Interpolated move aka Interpolated Nudge.
