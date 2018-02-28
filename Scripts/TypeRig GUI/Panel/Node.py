@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.35'
+app_name, app_version = 'TypeRig | Nodes', '0.36'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -42,8 +42,8 @@ class basicOps(QtGui.QGridLayout):
 
 		self.btn_insert.setToolTip('Insert Node after Selection\nat given time T.')
 		self.btn_remove.setToolTip('Remove Selected Nodes!\nFor proper curve node deletion\nalso select the associated handles!')
-		self.btn_mitre.setToolTip('Mitre corner using radius R.')
-		self.btn_round.setToolTip('Round corner using radius R.')
+		self.btn_mitre.setToolTip('Mitre corner using size X.')
+		self.btn_round.setToolTip('Round corner using radius X.')
 		
 		self.btn_insert.clicked.connect(self.insertNode)
 		self.btn_remove.clicked.connect(self.removeNode)
@@ -54,7 +54,7 @@ class basicOps(QtGui.QGridLayout):
 		self.edt_radius = QtGui.QLineEdit('5')
 
 		self.edt_time.setToolTip('Insertion Time.')
-		self.edt_radius.setToolTip('Radius.')
+		self.edt_radius.setToolTip('Mitre size/Radius.')
 
 		# -- Build: Basic Ops
 		self.addWidget(self.btn_insert, 0, 0)
@@ -63,7 +63,7 @@ class basicOps(QtGui.QGridLayout):
 		self.addWidget(self.btn_remove, 0, 3)
 
 		self.addWidget(self.btn_mitre,1,0)
-		self.addWidget(QtGui.QLabel('R:'), 1, 1)
+		self.addWidget(QtGui.QLabel('X:'), 1, 1)
 		self.addWidget(self.edt_radius,1,2)
 		self.addWidget(self.btn_round,1,3)
 
@@ -144,7 +144,7 @@ class basicOps(QtGui.QGridLayout):
 			selection = [eNode(node) for node in glyph.selectedNodes(layer)]
 			
 			for node in reversed(selection):
-				node.cornerMitre((float(self.edt_radius.text), float(self.edt_radius.text)))
+				node.cornerMitre(float(self.edt_radius.text))
 
 		glyph.updateObject(glyph.fl, 'Mitre Corner @ %s.' %'; '.join(wLayers))
 		glyph.update()

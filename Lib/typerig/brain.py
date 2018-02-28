@@ -1,5 +1,5 @@
 # MODULE: Brain | Typerig
-# VER 	: 2.51
+# VER 	: 2.53
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018  (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -322,6 +322,10 @@ class _Point(object):
 
 	__rdiv__ = __div__
 
+	# - Scalar product and cross product --------------------
+	# -- Usable in determing angle between unit vectors 
+	# -- example: atan2(nextUnit|prevUnit, nextUnit & prevUnit)
+
 	def __and__(self, other):
 		'''self & other: Used as for Scalar product'''
 		if isinstance(other, self.__class__):
@@ -335,6 +339,26 @@ class _Point(object):
 		
 		elif isinstance(other, tuple):
 			return self.x * other[0] + self.y * other[1]
+		
+		elif isinstance(other, list):
+			pass
+
+		elif isinstance(other, str):
+			pass
+
+	def __or__(self, other):
+		'''self | other: Used as for Cross product'''
+		if isinstance(other, self.__class__):
+			return self.x * other.y - self.y * other.x
+		
+		elif isinstance(other, int):
+			return self.x * other - self.y * other
+
+		elif isinstance(other, float):
+			return self.x * other - self.y * other
+		
+		elif isinstance(other, tuple):
+			return self.x * other[1] - self.y * other[0]
 		
 		elif isinstance(other, list):
 			pass

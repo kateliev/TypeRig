@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Node Objects | Typerig
-# VER 	: 0.05
+# VER 	: 0.06
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -30,8 +30,9 @@ class eNode(pNode):
 		return Coord(float(self.x), float(self.y))
 
 	# - Corner operations ---------------
-	def cornerMitre(self, mitreRadius=(1,1)):
+	def cornerMitre(self, mitreSize=5):
 		from typerig.brain import Coord
+		from math import atan2, sin
 
 		# - Calculate unit vectors and shifts
 		nextNode = self.__class__(self.getNextOn())
@@ -40,17 +41,22 @@ class eNode(pNode):
 		nextUnit = Coord(nextNode.asCoord() - self.asCoord()).getUnit()
 		prevUnit = Coord(prevNode.asCoord() - self.asCoord()).getUnit()
 		
-		nextShift = nextUnit * mitreRadius
-		prevShift = prevUnit * mitreRadius
+		angle = atan2(nextUnit | prevUnit, nextUnit & prevUnit)
+		radius = abs((float(mitreSize)/2)/sin(angle/2))
+
+		nextShift = nextUnit * radius
+		prevShift = prevUnit * radius
 
 		#print (nextUnit, prevUnit), (nextShift, prevShift)
 		
+		#'''
 		# - Insert Node and process
 		self.insertAfter(0)
 		self.contour.updateIndices()
 
 		self.fl.smartMove(prevShift.asQPointF())
 		self.getNextOn().smartMove(nextShift.asQPointF())
+		#'''
 
 	# - Movement ------------------------
 	def interpMove(self, shift_x, shift_y):
