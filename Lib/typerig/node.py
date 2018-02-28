@@ -30,9 +30,8 @@ class eNode(pNode):
 		return Coord(float(self.x), float(self.y))
 
 	# - Corner operations ---------------
-	def cornerMitre(self, mitreSize=5):
+	def cornerMitre(self, mitreSize=5, isRadius=False):
 		from typerig.brain import Coord
-		from math import atan2, sin
 
 		# - Calculate unit vectors and shifts
 		nextNode = self.__class__(self.getNextOn())
@@ -41,8 +40,12 @@ class eNode(pNode):
 		nextUnit = Coord(nextNode.asCoord() - self.asCoord()).getUnit()
 		prevUnit = Coord(prevNode.asCoord() - self.asCoord()).getUnit()
 		
-		angle = atan2(nextUnit | prevUnit, nextUnit & prevUnit)
-		radius = abs((float(mitreSize)/2)/sin(angle/2))
+		if not isRadius:
+			from math import atan2, sin
+			angle = atan2(nextUnit | prevUnit, nextUnit & prevUnit)
+			radius = abs((float(mitreSize)/2)/sin(angle/2))
+		else:
+			radius = mitreSize
 
 		nextShift = nextUnit * radius
 		prevShift = prevUnit * radius

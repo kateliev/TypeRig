@@ -9,4 +9,4 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-version = '0.16'
+version = '0.17'

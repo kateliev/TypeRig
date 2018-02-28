@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.36'
+app_name, app_version = 'TypeRig | Nodes', '0.37'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -32,29 +32,29 @@ class basicOps(QtGui.QGridLayout):
 		self.btn_insert = QtGui.QPushButton('&Insert')
 		self.btn_remove = QtGui.QPushButton('&Remove')
 		self.btn_mitre = QtGui.QPushButton('&Mitre')
-		self.btn_round = QtGui.QPushButton('R&ound')
-		self.btn_round.setDisabled(True)
-		
+		self.btn_knot = QtGui.QPushButton('&Overlap')
+				
 		self.btn_insert.setMinimumWidth(80)
 		self.btn_remove.setMinimumWidth(80)
 		self.btn_mitre.setMinimumWidth(80)
-		self.btn_round.setMinimumWidth(80)
+		self.btn_knot.setMinimumWidth(80)
 
 		self.btn_insert.setToolTip('Insert Node after Selection\nat given time T.')
 		self.btn_remove.setToolTip('Remove Selected Nodes!\nFor proper curve node deletion\nalso select the associated handles!')
 		self.btn_mitre.setToolTip('Mitre corner using size X.')
-		self.btn_round.setToolTip('Round corner using radius X.')
+		self.btn_knot.setToolTip('Overlap corner using radius -X.')
 		
 		self.btn_insert.clicked.connect(self.insertNode)
 		self.btn_remove.clicked.connect(self.removeNode)
-		self.btn_mitre.clicked.connect(self.cornerMitre)
+		self.btn_mitre.clicked.connect(lambda: self.cornerMitre(False))
+		self.btn_knot.clicked.connect(lambda: self.cornerMitre(True))
 
 		# - Edit fields
 		self.edt_time = QtGui.QLineEdit('0.5')
 		self.edt_radius = QtGui.QLineEdit('5')
 
 		self.edt_time.setToolTip('Insertion Time.')
-		self.edt_radius.setToolTip('Mitre size/Radius.')
+		self.edt_radius.setToolTip('Mitre size/Overlap or Round Radius.')
 
 		# -- Build: Basic Ops
 		self.addWidget(self.btn_insert, 0, 0)
@@ -65,7 +65,7 @@ class basicOps(QtGui.QGridLayout):
 		self.addWidget(self.btn_mitre,1,0)
 		self.addWidget(QtGui.QLabel('X:'), 1, 1)
 		self.addWidget(self.edt_radius,1,2)
-		self.addWidget(self.btn_round,1,3)
+		self.addWidget(self.btn_knot,1,3)
 
 	def insertNode(self):
 		glyph = eGlyph()
@@ -135,18 +135,23 @@ class basicOps(QtGui.QGridLayout):
 		glyph.updateObject(glyph.fl, 'Delete Node @ %s.' %'; '.join(wLayers))
 		glyph.update()
 
-	def cornerMitre(self):
+	def cornerMitre(self, doKnot=False):
 		from typerig.node import eNode
 		glyph = eGlyph()
 		wLayers = glyph._prepareLayers(pLayers)
 		
 		for layer in wLayers:
-			selection = [eNode(node) for node in glyph.selectedNodes(layer)]
+			selection = [eNode(node) for node in glyph.selectedNodes(layer, True)]
 			
 			for node in reversed(selection):
-				node.cornerMitre(float(self.edt_radius.text))
+				if not doKnot:
+					node.cornerMitre(float(self.edt_radius.text))
+				else:
+					node.cornerMitre(-float(self.edt_radius.text), True)
 
-		glyph.updateObject(glyph.fl, 'Mitre Corner @ %s.' %'; '.join(wLayers))
+
+		action = 'Mitre Corner' if not doKnot else 'Overlap Corner'
+		glyph.updateObject(glyph.fl, '%s @ %s.' %(action, '; '.join(wLayers)))
 		glyph.update()
 
 
@@ -267,14 +272,41 @@ class breakContour(QtGui.QGridLayout):
 		glyph.updateObject(glyph.fl, 'Break Contour & Close @ %s.' %'; '.join(glyph._prepareLayers(pLayers)))
 		glyph.update()        
 
-class basicContour(QtGui.QHBoxLayout):
+class basicContour(QtGui.QGridLayout):
 	# - Split/Break contour 
 	def __init__(self):
 		super(basicContour, self).__init__()
-		self.btn_close = QtGui.QPushButton('C&lose contour')
+		self.btn_BL = QtGui.QPushButton('B L')
+		self.btn_TL = QtGui.QPushButton('T L')
+		self.btn_BR = QtGui.QPushButton('B R')
+		self.btn_TR = QtGui.QPushButton('T R')
+		self.btn_close= QtGui.QPushButton('C&lose contour')
+
+		self.btn_BL.setMinimumWidth(40)
+		self.btn_TL.setMinimumWidth(40)
+		self.btn_BR.setMinimumWidth(40)
+		self.btn_TR.setMinimumWidth(40)
+
 		self.btn_close.setToolTip('Close selected contour')
+		self.btn_BL.setToolTip('Set start point:\nBottom Left Node') 
+		self.btn_TL.setToolTip('Set start point:\nTop Left Node') 
+		self.btn_BR.setToolTip('Set start point:\nBottom Right Node') 
+		self.btn_TR.setToolTip('Set start point:\nTop Right Node') 
+
+		
+		self.btn_BL.clicked.connect(lambda : self.setStart((0,0)))
+		self.btn_TL.clicked.connect(lambda : self.setStart((0,1)))
+		self.btn_BR.clicked.connect(lambda : self.setStart((1,0)))
+		self.btn_TR.clicked.connect(lambda : self.setStart((1,1)))
+
+
 		self.btn_close.clicked.connect(self.closeContour)
-		self.addWidget(self.btn_close)
+
+		self.addWidget(self.btn_BL, 0, 0, 1, 1)
+		self.addWidget(self.btn_TL, 0, 1, 1, 1)
+		self.addWidget(self.btn_BR, 0, 2, 1, 1)
+		self.addWidget(self.btn_TR, 0, 3, 1, 1)
+		self.addWidget(self.btn_close, 1, 0, 1, 4)
 
 	def closeContour(self):
 		glyph = eGlyph()
@@ -289,6 +321,23 @@ class basicContour(QtGui.QHBoxLayout):
 
 		glyph.updateObject(glyph.fl, 'Close Contour @ %s.' %'; '.join(wLayers))
 		glyph.update()
+
+	def setStart(self, control=(0,0)):
+		glyph = eGlyph()
+		wLayers = glyph._prepareLayers(pLayers)
+		
+		for layerName in wLayers:
+			contours = glyph.contours(layerName)
+
+			for contour in contours:
+				onNodes = [node for node in contour.nodes() if node.isOn]
+				newFirstNode = sorted(onNodes, key=lambda node: ([node.x, -node.x][control[0]], [node.y, -node.y][control[1]]))[0]
+				contour.setStartPoint(newFirstNode.index)
+
+		glyph.updateObject(glyph.fl, 'Set Start Points @ %s.' %'; '.join(wLayers))
+		glyph.update()
+
+
 
 class convertHobby(QtGui.QHBoxLayout):
 	# - Split/Break contour 
