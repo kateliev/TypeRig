@@ -404,11 +404,8 @@ class advMovement(QtGui.QVBoxLayout):
 		self.cmb_methodSelector = QtGui.QComboBox()
 		self.cmb_methodSelector.addItems(self.methodList)
 		self.cmb_methodSelector.setToolTip('Select movement method')
-		self.addWidget(self.cmb_methodSelector)
-
-		# - Arrow buttons
-		self.lay_btn = QtGui.QGridLayout()
 		
+		# - Arrow buttons
 		self.btn_up = QtGui.QPushButton('Up')
 		self.btn_down = QtGui.QPushButton('Down')
 		self.btn_left = QtGui.QPushButton('Left')
@@ -418,7 +415,7 @@ class advMovement(QtGui.QVBoxLayout):
 		self.btn_down.setMinimumWidth(80)
 		self.btn_left.setMinimumWidth(80)
 		self.btn_right.setMinimumWidth(80)
-		
+
 		self.btn_up.clicked.connect(self.onUp)
 		self.btn_down.clicked.connect(self.onDown)
 		self.btn_left.clicked.connect(self.onLeft)
@@ -429,15 +426,18 @@ class advMovement(QtGui.QVBoxLayout):
 		self.edt_offX.setToolTip('X offset')
 		self.edt_offY.setToolTip('Y offset')
 
-		self.lay_btn.addWidget(QtGui.QLabel('X:'), 0, 0, 1, 1)
-		self.lay_btn.addWidget(self.edt_offX, 0, 1, 1, 1)
-		self.lay_btn.addWidget(self.btn_up, 0, 2, 1, 2)
-		self.lay_btn.addWidget(QtGui.QLabel('Y:'), 0, 4, 1, 1)
-		self.lay_btn.addWidget(self.edt_offY, 0, 5, 1, 1)
+		# - Layout
+		self.lay_btn = QtGui.QGridLayout()
 
-		self.lay_btn.addWidget(self.btn_left, 1, 0, 1, 2)
-		self.lay_btn.addWidget(self.btn_down, 1, 2, 1, 2)
-		self.lay_btn.addWidget(self.btn_right, 1, 4, 1, 2)
+		self.lay_btn.addWidget(self.cmb_methodSelector, 0, 0, 1, 6)
+		self.lay_btn.addWidget(QtGui.QLabel('X:'), 		1, 0, 1, 1)
+		self.lay_btn.addWidget(self.edt_offX, 			1, 1, 1, 1)
+		self.lay_btn.addWidget(self.btn_up, 			1, 2, 1, 2)
+		self.lay_btn.addWidget(QtGui.QLabel('Y:'), 		1, 4, 1, 1)
+		self.lay_btn.addWidget(self.edt_offY, 			1, 5, 1, 1)
+		self.lay_btn.addWidget(self.btn_left, 			2, 0, 1, 2)
+		self.lay_btn.addWidget(self.btn_down, 			2, 2, 1, 2)
+		self.lay_btn.addWidget(self.btn_right, 			2, 4, 1, 2)
 
 		self.addLayout(self.lay_btn)
 
@@ -469,7 +469,6 @@ class advMovement(QtGui.QVBoxLayout):
 			if italic_angle != 0:
 				for node in selectedNodes:
 					wNode = eNode(node)
-					print wNode
 					wNode.slantMove(offset_x, offset_y, italic_angle)
 			else:
 				for node in selectedNodes:

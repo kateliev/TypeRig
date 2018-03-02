@@ -110,12 +110,12 @@ class eNode(pNode):
 			if len(currSegmet) == 2 and len(prevSegment) == 2:
 				self.fl.smartSetXY((Coord(self.fl) + shift).asQPointF())
 
-	def slantMove(self, shift_x, shift_y, italic_angle):
+	def slantMove(self, shift_x, shift_y, angle):
 		'''Slanted move - move a node (in inclined space) according to Y coordinate slanted at given angle.
 		
 		Arguments:
 			shift_x, shift_y (float)
-			italic_angle (float): Angle in degrees
+			angle (float): Angle in degrees
 		'''
 		if self.isOn:
 			from typerig.brain import Coord
@@ -123,7 +123,7 @@ class eNode(pNode):
 			
 			# - Init
 			cNode = Coord((self.x + shift_x, self.y))
-			cNode.setAngle(italic_angle)
+			cNode.setAngle(angle)
 			
 			# - Calculate & set
 			newX = cNode.getWidth(cNode.y + shift_y)
