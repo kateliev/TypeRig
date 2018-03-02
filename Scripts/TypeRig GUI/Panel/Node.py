@@ -325,13 +325,22 @@ class basicContour(QtGui.QGridLayout):
 	def setStart(self, control=(0,0)):
 		glyph = eGlyph()
 		wLayers = glyph._prepareLayers(pLayers)
+
+		if control == (0,0):
+			criteria = lambda node : (node.x, node.y)
+		elif control == (0,1):
+			criteria = lambda node : (-node.y, node.x)
+		elif control == (1,0):
+			criteria = lambda node : (-node.x, node.y)
+		elif control == (1,1):
+			criteria = lambda node : (-node.y, -node.x)
 		
 		for layerName in wLayers:
 			contours = glyph.contours(layerName)
 
 			for contour in contours:
 				onNodes = [node for node in contour.nodes() if node.isOn]
-				newFirstNode = sorted(onNodes, key=lambda node: ([node.x, -node.x][control[0]], [node.y, -node.y][control[1]]))[0]
+				newFirstNode = sorted(onNodes, key=criteria)[0]
 				contour.setStartPoint(newFirstNode.index)
 
 		glyph.updateObject(glyph.fl, 'Set Start Points @ %s.' %'; '.join(wLayers))
