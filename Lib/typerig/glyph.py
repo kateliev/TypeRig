@@ -44,21 +44,20 @@ class eGlyph(pGlyph):
 			return list(set([layer.name for layer in tempLayers if all([item not in layer.name for item in layerBanList])]))
 		else:
 			print 'ERROR:\tIncorrect layer triple!'
+
+	def _compatibleLayers(self, layerName=None):
+		return [layer.isCompatible(self.layer(layerName)) for layer in self.layers()]
 			
 	def _getCoordArray(self, layer=None):
 		from typerig.brain import coordArray
-		
 		coords = coordArray()
-
 		for node in self.nodes(layer):
 			coords.append((node.x, node.y))
 
 		return coords
-		
 
 	def _setCoordArray(self, coordArray, layer=None):
 		nodeArray = self.nodes(layer)
-
 		if len(coordArray) == len(nodeArray):
 			for nid in range(len(coordArray)):
 				nodeArray[nid].setXY(*coordArray[nid])

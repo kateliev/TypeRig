@@ -52,34 +52,48 @@ class mixer1d(QtGui.QGridLayout):
 	def __init__(self):
 		super(mixer1d, self).__init__()
 		
+		# - Init
 		self.cmb_0 = QtGui.QComboBox()
 		self.cmb_1 = QtGui.QComboBox()
 		self.edt_0 = QtGui.QLineEdit('0')
 		self.edt_1 = QtGui.QLineEdit('1000')
 		self.edt_step = QtGui.QLineEdit('10')
+		self.edt_time = QtGui.QLineEdit('0')
 
 		self.sld_axis = QtGui.QSlider(QtCore.Qt.Horizontal)
+		self.sld_axis.valueChanged.connect(self.sliderChange)
 		self.refreshSlider()
+		
+		self.edt_0.textChanged.connect(self.refreshSlider)
+		self.edt_1.textChanged.connect(self.refreshSlider)
+		self.edt_step.textChanged.connect(self.refreshSlider)
+		self.edt_time.textChanged.connect(self.refreshSlider)
 
-		self.addWidget(self.cmb_0, 			0, 0, 1, 3)
-		self.addWidget(self.cmb_1, 			0, 5, 1, 3)
-		self.addWidget(self.sld_axis, 		1, 0, 1, 8)
+		# - Layout
+		self.addWidget(self.cmb_0, 			0, 0, 1, 4)
+		self.addWidget(QtGui.QLabel('t:'),	0, 4, 1, 1)
+		self.addWidget(self.edt_time, 		0, 5, 1, 3)
+		self.addWidget(self.cmb_1, 			0, 8, 1, 4)
+		self.addWidget(self.sld_axis, 		1, 0, 1, 12)
 		self.addWidget(QtGui.QLabel('0:'),	2, 0, 1, 1)
-		self.addWidget(self.edt_0, 			2, 1, 1, 1)
-		self.addWidget(QtGui.QLabel('S:'), 	2, 2, 1, 1)
-		self.addWidget(self.edt_step, 		2, 3, 1, 2)
-		self.addWidget(QtGui.QLabel('1:'), 	2, 5, 1, 1)
-		self.addWidget(self.edt_1, 			2, 6, 1, 1)
+		self.addWidget(self.edt_0, 			2, 1, 1, 3)
+		self.addWidget(QtGui.QLabel('S:'), 	2, 4, 1, 1)
+		self.addWidget(self.edt_step, 		2, 5, 1, 3)
+		self.addWidget(QtGui.QLabel('1:'), 	2, 8, 1, 1)
+		self.addWidget(self.edt_1, 			2, 9, 1, 3)
 
 
 	def refreshSlider(self):
+		self.sld_axis.setValue(int(self.edt_time.text))
 		self.sld_axis.setMinimum(int(self.edt_0.text))
 		self.sld_axis.setMaximum(int(self.edt_1.text))
 		self.sld_axis.setSingleStep(int(self.edt_step.text))
 		self.sld_axis.setTickInterval(int(self.edt_step.text)*2)
-		
 
-	def eqContour(self, method):
+	def sliderChange(self):
+		self.edt_time.setText(self.sld_axis.value)
+
+	def interpolate(self):
 		pass
 		#glyph.updateObject(glyph.fl, 'Optimize %s @ %s.' %(method, '; '.join(wLayers)))
 		#glyph.update()
