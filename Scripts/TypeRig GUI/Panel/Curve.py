@@ -1,4 +1,4 @@
-#FLM: TAB Curve Tools 1.0
+#FLM: TAB Curve Tools
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
