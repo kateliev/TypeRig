@@ -45,6 +45,26 @@ class eGlyph(pGlyph):
 		else:
 			print 'ERROR:\tIncorrect layer triple!'
 			
+	def _getCoordArray(self, layer=None):
+		from typerig.brain import coordArray
+		
+		coords = coordArray()
+
+		for node in self.nodes(layer):
+			coords.append((node.x, node.y))
+
+		return coords
+		
+
+	def _setCoordArray(self, coordArray, layer=None):
+		nodeArray = self.nodes(layer)
+
+		if len(coordArray) == len(nodeArray):
+			for nid in range(len(coordArray)):
+				nodeArray[nid].setXY(*coordArray[nid])
+		else:
+			print 'ERROR:\t Incompatible coordinate array provided.'			
+
 	# - Nodes ----------------------------------------------
 	def breakContour(self, contourId, nodeId, layer=None, expand=0):
 		'''Split Contour at given node and layer. Extrapolate line endings if needed.

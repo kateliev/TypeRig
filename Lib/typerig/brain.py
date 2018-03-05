@@ -111,6 +111,38 @@ def linInterp(t0, t1, t):
     #return (max(t0,t1)-min(t0,t1))*t + min(t0,t1)
     return (t1 - t0)*t + t0
 
+def bilinInterp(x, y, points):
+    '''Bilinear Interpolate (x,y) from values associated with four points.
+
+    The four points are a list of four triplets:  (x, y, value).
+    The four points can be in any order.  They should form a rectangle.
+
+        >>> bilinear_interpolation(12, 5.5,
+        ...                        [(10, 4, 100),
+        ...                         (20, 4, 200),
+        ...                         (10, 6, 150),
+        ...                         (20, 6, 300)])
+        165.0
+
+    '''
+    # See formula at:  http://en.wikipedia.org/wiki/Bilinear_interpolation
+    # Copy from https://stackoverflow.com/questions/8661537/how-to-perform-bilinear-interpolation-in-python
+    # Note: ReAdapt!
+
+    points = sorted(points)               # order points by x, then by y
+    (x1, y1, q11), (_x1, y2, q12), (x2, _y1, q21), (_x2, _y2, q22) = points
+
+    if x1 != _x1 or x2 != _x2 or y1 != _y1 or y2 != _y2:
+        raise ValueError('points do not form a rectangle')
+    if not x1 <= x <= x2 or not y1 <= y <= y2:
+        raise ValueError('(x, y) not within the rectangle')
+
+    return (q11 * (x2 - x) * (y2 - y) +
+            q21 * (x - x1) * (y2 - y) +
+            q12 * (x2 - x) * (y - y1) +
+            q22 * (x - x1) * (y - y1)
+           ) / ((x2 - x1) * (y2 - y1) + 0.0)
+
 # -- Contour tests ----------------------------------------------------------
 def ccw(A, B, C):
 	'''Tests whether the turn formed by A, B, and C is Counter clock wise (CCW)'''
@@ -205,6 +237,84 @@ class geoAxis(object):
         self.stems = [int(round(item)) for item in list(geospread(self.masters[minAxisPos], self.masters[maxAxisPos], self.steps))]
         self.data = { int(ratfrac(stem - minAxisPos, maxAxisStem - minAxisPos, max(self.masters.keys()))):stem for stem in self.stems}
         self.instances = sorted(self.data.keys())
+
+# -- Custom Data types -------------------------------------------------------------------
+class coordArray(object):
+	def __init__(self, *argv):
+		multiCheck = lambda t, type: all([isinstance(i, type) for i in t])
+
+		if not len(argv):		
+			self.x, self.y = [[],[]]
+			self.combined = False
+
+		elif len(argv) > 1 and multiCheck(argv, list):
+			self.x, self.y = argv
+			self.combined = (isinstance(self.x[0], list) or isinstance(self.x[0], tuple)) and len(self.x[0]) > 1 if len(self.x) else None
+
+		elif len(argv) == 1 and len(argv[0]) % 2 == 0: # and isinstance(argv[0], list):
+			split = len(argv[0])/2
+			self.x = argv[0][0:split]
+			self.y = argv[0][split:]
+			self.combined = (isinstance(self.x[0], list) or isinstance(self.x[0], tuple)) and len(self.x[0]) > 1 if len(self.x) else None
+
+	def __getitem__(self, i):
+		return (self.x[i], self.y[i])
+
+	def __getslice__(i, j):
+		return self.__class__(self.x[i:j], self.y[i:j])
+
+	def __len__(self):
+		return len(self.x)
+
+	def __setitem__(self, i, coordTuple):
+		self.x[i], self.y[i] = coordTuple
+
+	def __str__(self):
+		return str(zip(self.x, self.y))
+
+	def __repr__(self):
+		return '<Coordinate Array: Lenght=%s; Combined=%s>' %(len(self.x), self.combined)
+
+	def append(self, coordTuple):
+		x, y = coordTuple
+		self.x.append(x)
+		self.y.append(y)
+
+	def extend(self, coordList):
+		if isinstance(coordList, self.__class__):
+			self.x.extend(coordList.x)
+			self.y.extend(coordList.y)
+
+		elif isinstance(coordList, list):
+			self.x.extend(coordList[0])
+			self.y.extend(coordList[1])
+
+	def insert(self, index, coordTuple):
+		x, y = coordTuple
+		self.x.insert(index, x)
+		self.y.insert(index, y)
+
+	def remove(self, coordTuple):
+		x, y = coordTuple
+		self.x.remove(x)
+		self.y.remove(y)
+
+	def pop(self, index=None):
+		return (self.x.pop(index), self.y.pop(index))
+
+	def reverse(self):
+		self.x.reverse()
+		self.y.reverse()
+
+	def asList(self):
+		return [zip(self.x, self.y)]
+
+	def asNumpy(self):
+		from numpy import asarray
+		return asarray(self.x), asarray(self.y)
+
+	def flatten(self):
+		return self.x + self.y
 
 # -- Geometry classes --------------------------------------------------------------------
 # --- Abstractions -----------------------------------------------------------------------
