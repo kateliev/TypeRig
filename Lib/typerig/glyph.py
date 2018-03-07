@@ -264,7 +264,7 @@ class eGlyph(pGlyph):
 			engine (str): 'fg' for FontGate (in-build).
 
 		Returns:
-			None
+			flLayer
 		'''
 		from typerig.brain import linInterp
 
@@ -287,6 +287,26 @@ class eGlyph(pGlyph):
 						blendLayer.addShape(tempBlend)
 
 			return blendLayer
+
+	def lerpLayerFg(self, l0_Name, l1_Name):
+		l0, l1 = self.layer(l0_Name), self.layer(l1_Name)
+
+		if l0.isCompatible(l1):
+			l0_fgShapes = [self._shape2fg(shape) for shape in l0.shapes]
+			l1_fgShapes = [self._shape2fg(shape) for shape in l1.shapes]
+
+			shapes = zip(l0_fgShapes, l1_fgShapes)
+
+			def fgInterpolator(tx, ty):
+				tempLayer = fl6.flLayer('B:%s %s, t:%s' %(l0.name, l1.name, (tx, ty)))
+				
+				for shapePair in shapes:
+					tempBlend = fl6.flShape(fgt.fgShape(shapePair[0], shapePair[1], tx, ty, 0))
+					tempLayer.addShape(tempBlend)
+
+				return tempLayer
+			
+			return fgInterpolator
 
 	# - Anchors & Pins -----------------------------------------
 	def getAttachmentCenters(self, layer, tolerance=5):

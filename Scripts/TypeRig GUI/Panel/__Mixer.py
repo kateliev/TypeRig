@@ -23,6 +23,7 @@ from typerig.glyph import eGlyph
 from typerig.node import eNode
 from typerig.brain import coordArray
 
+'''
 # - Check for SciPy and NumPy
 try:
     imp.find_module('scipy')
@@ -34,6 +35,9 @@ except ImportError:
 
 if sysOK:
 	from typerig.sci import lerp1d
+'''
+
+sysOK = True
 
 # - Init
 warnMessage = 'This Panel requires the modules <a href="https://www.scipy.org/">SciPy</a> and <a href="http://www.numpy.org/">NumPy</a>	to be installed on your system. For Windows systems please take a look at the following <a href="https://www.lfd.uci.edu/~gohlke/pythonlibs/">precompiled libraries</a>.'
@@ -118,6 +122,7 @@ class tool_tab(QtGui.QWidget):
 
 			# -- Axes
 			self.mixer_01 = mixer1d()
+
 			self.refresh()
 			#self.prepareInterp()
 			self.mixer_01.sld_axis.valueChanged.connect(self.interpolate)
@@ -141,21 +146,27 @@ class tool_tab(QtGui.QWidget):
 		self.edt_glyphName.setText(eGlyph().name)
 		
 		self.layers = sorted([layer.name for layer in self.glyph.layers() if all([item not in layer.name for item in layerBanList])])
+		
 		self.mixer_01.cmb_0.clear()
 		self.mixer_01.cmb_1.clear()
+		
 		self.mixer_01.cmb_0.addItems(self.layers)
 		self.mixer_01.cmb_1.addItems(self.layers)
 
 		self.mixer_01.cmb_0.currentIndexChanged.connect(self.prepareInterp)
 		self.mixer_01.cmb_1.currentIndexChanged.connect(self.prepareInterp)
-		self.interpDict = {}
 
-		self.mixer_01.cmb_0.setCurrentIndex(0)
-		self.mixer_01.cmb_1.setCurrentIndex(1)
+		
+		#self.interpDict = {}
 
+		#self.mixer_01.cmb_0.setCurrentIndex(0)
+		#self.mixer_01.cmb_1.setCurrentIndex(1)
+
+	'''
 	def prepareInterp(self):
 		self.interpDict = {int(self.mixer_01.edt_0.text):self.glyph._getCoordArray(self.mixer_01.cmb_0.currentText), int(self.mixer_01.edt_1.text):self.glyph._getCoordArray(self.mixer_01.cmb_1.currentText)}
 		self.fInterp = lerp1d(self.interpDict)
+
 
 	def interpolate(self):
 		self.glyph._setCoordArray(self.fInterp(self.mixer_01.sld_axis.value))
@@ -163,6 +174,20 @@ class tool_tab(QtGui.QWidget):
 		#self.glyph.updateObject(self.glyph.fl, 'Interpolate', False)
 		self.glyph.update()
 		Update(CurrentGlyph())
+	'''
+
+	def prepareInterp(self):
+		self.fInterp = self.glyph.lerpLayerFg(self.mixer_01.cmb_0.currentText, self.mixer_01.cmb_1.currentText)
+
+	def interpolate(self):
+		t = float(self.mixer_01.sld_axis.value)/(float(self.mixer_01.edt_1.text) - float(self.mixer_01.edt_0.text))
+		blend = self.fInterp(t,t)
+		self.glyph.layer().removeAllShapes()
+		self.glyph.layer().addShapes(blend.shapes)
+	
+		#self.glyph.updateObject(self.glyph.fl, 'Interpolate', False)
+		self.glyph.update()
+		#Update(CurrentGlyph())
 	
 # - Test ----------------------
 if __name__ == '__main__':
