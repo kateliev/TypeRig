@@ -779,6 +779,10 @@ class pFont(object):
 		'''Return list of TypeRig proxy Glyph objects glyph objects (list[pGlyph]).'''
 		return [self.glyph(glyph) for glyph in self.fg] if not processList else [self.glyph(glyph) for glyph in processList]
 
+	# - Axes and MM ----------------------------------------------------
+	def axes(self):
+		return self.fl.axes
+
 	# - Guides & Hinting Basics ----------------------------------------
 	def guidelines(self, hostInf=False, fontgate=False):
 		'''Return font guidelines

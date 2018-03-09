@@ -522,8 +522,8 @@ class _Point(object):
 		return (float(y) - self.getYintercept()) / self.getSlope()
 
 class _Line(object):
-	def __init__(self, data):
-		self.p0, self.p1 = data
+	def __init__(self, *argv):
+		self.p0, self.p1 = argv
 		self.update()
 		
 	def __repr__(self):

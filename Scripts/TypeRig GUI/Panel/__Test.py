@@ -1,4 +1,4 @@
-#FLM: TAB Mixer
+#FLM: TAB TEST
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Mixer', '0.01'
+app_name, app_version = 'TypeRig | Test', '0.01'
 
 # - Dependencies -----------------
 import imp
