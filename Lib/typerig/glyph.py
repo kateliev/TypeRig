@@ -52,7 +52,7 @@ class eGlyph(pGlyph):
 		from typerig.brain import coordArray
 		coords = coordArray()
 		for node in self.nodes(layer):
-			coords.append((node.x, node.y))
+			coords.append((float(node.x), float(node.y)))
 
 		return coords
 

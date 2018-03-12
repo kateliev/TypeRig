@@ -536,8 +536,7 @@ class tool_tab(QtGui.QWidget):
 
 
 	def keyPressEvent(self, eventQKeyEvent):
-		
-		
+
 		#self.setFocus()
 		key = eventQKeyEvent.key()
 		modifier = int(eventQKeyEvent.modifiers())

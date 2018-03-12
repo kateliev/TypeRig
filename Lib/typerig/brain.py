@@ -245,17 +245,14 @@ class coordArray(object):
 
 		if not len(argv):		
 			self.x, self.y = [[],[]]
-			self.combined = False
 
-		elif len(argv) > 1 and multiCheck(argv, list):
+		elif len(argv) == 2 and multiCheck(argv, list):
 			self.x, self.y = argv
-			self.combined = (isinstance(self.x[0], list) or isinstance(self.x[0], tuple)) and len(self.x[0]) > 1 if len(self.x) else None
 
 		elif len(argv) == 1 and len(argv[0]) % 2 == 0: # and isinstance(argv[0], list):
 			split = len(argv[0])/2
 			self.x = argv[0][0:split]
 			self.y = argv[0][split:]
-			self.combined = (isinstance(self.x[0], list) or isinstance(self.x[0], tuple)) and len(self.x[0]) > 1 if len(self.x) else None
 
 	def __getitem__(self, i):
 		return (self.x[i], self.y[i])
@@ -273,7 +270,7 @@ class coordArray(object):
 		return str(zip(self.x, self.y))
 
 	def __repr__(self):
-		return '<Coordinate Array: Lenght=%s; Combined=%s>' %(len(self.x), self.combined)
+		return '<Coordinate Array: Lenght=%s;>' %len(self.x)
 
 	def append(self, coordTuple):
 		x, y = coordTuple
@@ -308,10 +305,6 @@ class coordArray(object):
 
 	def asList(self):
 		return [zip(self.x, self.y)]
-
-	def asNumpy(self):
-		from numpy import asarray
-		return asarray(self.x), asarray(self.y)
 
 	def flatten(self):
 		return self.x + self.y
