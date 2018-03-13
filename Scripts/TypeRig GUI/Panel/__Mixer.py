@@ -13,10 +13,13 @@ pLayers = None
 app_name, app_version = 'TypeRig | Mixer', '0.05'
 
 # - Dependencies -----------------
+from math import radians
+
 import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore, QtGui
 
+from typerig.proxy import pFont
 from typerig.glyph import eGlyph
 from typerig.node import eNode
 from typerig.brain import coordArray
@@ -130,7 +133,7 @@ class tool_tab(QtGui.QWidget):
 			# --- Mixer
 			layoutV.addWidget(QtGui.QLabel('Single Axis Mixer'))
 			self.mixer = sliderCtrl('1', '1000', '0', 10)
-			self.mixer.sld_axis.valueChanged.connect(self.interpolate)		
+			self.mixer.sld_axis.valueChanged.connect(self.intelliScale)		
 			layoutV.addLayout(self.mixer)
 			layoutV.addSpacing(25)
 
@@ -164,6 +167,7 @@ class tool_tab(QtGui.QWidget):
 		layerBanList = ['#', 'img']
 		self.glyph = eGlyph()
 		self.head.edt_glyphName.setText(eGlyph().name)
+		self.italic_angle = pFont().getItalicAngle()
 		
 		self.layers = sorted([layer.name for layer in self.glyph.layers() if all([item not in layer.name for item in layerBanList])])
 		
@@ -185,32 +189,23 @@ class tool_tab(QtGui.QWidget):
 	def setAxis(self):
 		self.axis = [self.glyph._getCoordArray(self.head.cmb_0.currentText), self.glyph._getCoordArray(self.head.cmb_1.currentText)]
 	
-	def interpolate(self):
-		if len(self.axis):
-			t = float(self.mixer.sld_axis.value)/float(self.mixer.edt_1.text)
-			lerp = lambda time: catalyst.analysis.lerp1d(self.axis[0].flatten(), self.axis[1].flatten(), time)
-			
-			self.glyph._setCoordArray(coordArray(lerp(t)))
-		
-			#self.glyph.updateObject(self.glyph.fl, 'Interpolate', False)
-			self.glyph.update()
-			Update(CurrentGlyph())
-
 	def intelliScale(self):
 		if len(self.axis):
-			tx = 100./float(self.scalerX.edt_1.text) + float(self.scalerX.sld_axis.value)/float(self.scalerX.edt_1.text)
-			ty = 100./float(self.scalerY.edt_1.text) + float(self.scalerY.sld_axis.value)/float(self.scalerY.edt_1.text)
+			sx = 100./float(self.scalerX.edt_1.text) + float(self.scalerX.sld_axis.value)/float(self.scalerX.edt_1.text)
+			sy = 100./float(self.scalerY.edt_1.text) + float(self.scalerY.sld_axis.value)/float(self.scalerY.edt_1.text)
+			tx = float(self.mixer.sld_axis.value)/float(self.mixer.edt_1.text)
 			
 			a = self.axis[0]
 			b = self.axis[1]
 			
 			dx, dy = 0.0, 0.0
+			angle = radians(-float(self.italic_angle))
 			
 			scmp = 0.
 			sw0, sw1 = float(self.head.edt_stem0.text), float(self.head.edt_stem1.text)
 			
-			mms = lambda sx, sy : catalyst.geometry.comp_scale(a.x, a.y, b.x, b.y, sx, sy, dx, dy, scmp, sw0, sw1)
-			self.glyph._setCoordArray(mms(tx,ty))
+			mms = lambda sx, sy, t : catalyst.geometry.comp_scale(a.x, a.y, b.x, b.y, sx, sy, dx, dy, t, t, scmp, angle, sw0, sw1)
+			self.glyph._setCoordArray(mms(sx,sy, tx))
 
 			self.glyph.update()
 			Update(CurrentGlyph())	
