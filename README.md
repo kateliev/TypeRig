@@ -39,6 +39,7 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 - Set custom axis and interpolate between any two compatible layers
 - Change width and weight while keeping stem/stroke widths (works with italics also)
 ...more TBI
+
 *'In order to operate, Mixer panel requires percompiled binary library MathRig that is currently available to limited number of users on Windows platform only. MAC version is also on its way...*
 
 ###### *Anchors panel (TBI)*
