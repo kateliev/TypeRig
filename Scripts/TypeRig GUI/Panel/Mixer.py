@@ -24,16 +24,16 @@ from typerig.glyph import eGlyph
 from typerig.node import eNode
 from typerig.brain import coordArray
 
-# - Check for catalyst module
+# - Check for MathRig instalaltion!
 try:
-    import typerig.catalyst as catalyst
+    import mathrig.core as mathcore
     sysReady = True
 
 except ImportError:
     sysReady = False
 
 # - Init
-warnMessage = 'This Panel requires the precompiled typerig.catalyst module.'
+warnMessage = 'This Panel requires the precompiled MathRig modules.'
 
 # - Sub widgets ------------------------
 class message(QtGui.QVBoxLayout):
@@ -193,7 +193,8 @@ class tool_tab(QtGui.QWidget):
 		if len(self.axis):
 			sx = 100./float(self.scalerX.edt_1.text) + float(self.scalerX.sld_axis.value)/float(self.scalerX.edt_1.text)
 			sy = 100./float(self.scalerY.edt_1.text) + float(self.scalerY.sld_axis.value)/float(self.scalerY.edt_1.text)
-			tx = float(self.mixer.sld_axis.value)/float(self.mixer.edt_1.text)
+			tx = float(self.mixer.sld_axis.value - float(self.mixer.edt_0.text))/(float(self.mixer.edt_1.text) - float(self.mixer.edt_0.text))
+			print tx
 			
 			a = self.axis[0]
 			b = self.axis[1]
@@ -204,11 +205,11 @@ class tool_tab(QtGui.QWidget):
 			scmp = 0.
 			sw0, sw1 = float(self.head.edt_stem0.text), float(self.head.edt_stem1.text)
 			
-			mms = lambda sx, sy, t : catalyst.geometry.comp_scale(a.x, a.y, b.x, b.y, sx, sy, dx, dy, t, t, scmp, angle, sw0, sw1)
+			mms = lambda sx, sy, t : mathcore.geometry.comp_scale(a.x, a.y, b.x, b.y, sx, sy, dx, dy, t, t, scmp, angle, sw0, sw1)
 			self.glyph._setCoordArray(mms(sx,sy, tx))
 
 			self.glyph.update()
-			Update(CurrentGlyph())	
+			fl6.Update(fl6.CurrentGlyph())
 
 	
 # - Test ----------------------
