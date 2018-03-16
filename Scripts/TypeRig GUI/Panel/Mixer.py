@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Mixer', '0.05'
+app_name, app_version = 'TypeRig | Mixer', '0.06'
 
 # - Dependencies -----------------
 from math import radians
@@ -22,7 +22,7 @@ from PythonQt import QtCore, QtGui
 from typerig.proxy import pFont
 from typerig.glyph import eGlyph
 from typerig.node import eNode
-from typerig.brain import coordArray
+from typerig.brain import coordArray, linInterp
 
 # - Check for MathRig instalaltion!
 try:
@@ -87,10 +87,10 @@ class sliderCtrl(QtGui.QGridLayout):
 		self.sld_axis.valueChanged.connect(self.sliderChange)
 		self.refreshSlider()
 		
-		self.edt_0.textChanged.connect(self.refreshSlider)
-		self.edt_1.textChanged.connect(self.refreshSlider)
+		self.edt_0.editingFinished.connect(self.refreshSlider)
+		self.edt_1.editingFinished.connect(self.refreshSlider)
 		self.spb_step.valueChanged.connect(self.refreshSlider)
-		self.edt_pos.textChanged.connect(self.refreshSlider)
+		self.edt_pos.editingFinished.connect(self.refreshSlider)
 
 		# - Layout		
 		self.addWidget(self.sld_axis, 		0, 0, 1, 5)
@@ -120,8 +120,7 @@ class tool_tab(QtGui.QWidget):
 		layoutV = QtGui.QVBoxLayout()
 		
 		# - Build panel
-		if sysReady:
-			
+		if sysReady:			
 			self.head = mixerHead()
 			self.head.btn_refresh.clicked.connect(self.refresh)
 			self.head.btn_setaxis.clicked.connect(self.setAxis)
@@ -188,14 +187,14 @@ class tool_tab(QtGui.QWidget):
 
 	def setAxis(self):
 		self.axis = [self.glyph._getCoordArray(self.head.cmb_0.currentText), self.glyph._getCoordArray(self.head.cmb_1.currentText)]
+		self.glyph.updateObject(self.glyph.fl, 'Mixer Snapshot @ %s' %self.glyph.layer().name)
 	
 	def intelliScale(self):
 		if len(self.axis):
 			sx = 100./float(self.scalerX.edt_1.text) + float(self.scalerX.sld_axis.value)/float(self.scalerX.edt_1.text)
 			sy = 100./float(self.scalerY.edt_1.text) + float(self.scalerY.sld_axis.value)/float(self.scalerY.edt_1.text)
 			tx = float(self.mixer.sld_axis.value - float(self.mixer.edt_0.text))/(float(self.mixer.edt_1.text) - float(self.mixer.edt_0.text))
-			print tx
-			
+						
 			a = self.axis[0]
 			b = self.axis[1]
 			
@@ -207,6 +206,7 @@ class tool_tab(QtGui.QWidget):
 			
 			mms = lambda sx, sy, t : mathcore.geometry.comp_scale(a.x, a.y, b.x, b.y, sx, sy, dx, dy, t, t, scmp, angle, sw0, sw1)
 			self.glyph._setCoordArray(mms(sx,sy, tx))
+			#self.glyph.setAdvance(linInterp(self.glyph.getAdvance(self.head.cmb_0.currentText), self.glyph.getAdvance(self.head.cmb_1.currentText), tx))
 
 			self.glyph.update()
 			fl6.Update(fl6.CurrentGlyph())
