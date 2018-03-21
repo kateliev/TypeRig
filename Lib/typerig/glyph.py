@@ -120,7 +120,7 @@ class eGlyph(pGlyph):
 
 
 	# - Guidelines -----------------------------------------
-	def dropGuide(self, nodes=None, layers=None, name='*DropGuideline', color='darkMagenta', style='gsGlyphGuideline'):
+	def dropGuide(self, nodes=None, layers=None, name='*DropGuideline', color='darkMagenta', flip=(1,1), style='gsGlyphGuideline'):
 		'''Build guideline trough *any two* given points or the *first two of the current selection*.
 
 		If *single point* is given will create a vertical guideline trough that point,
@@ -144,6 +144,9 @@ class eGlyph(pGlyph):
 		#!!!NOTE: It seems that composite/element glyphs with different delta/transforamtion could affect the positioning!
 		#!!!NOTE: As elements are bidirectional now, try to check and adapt for the current QTransform!
 		
+		from PythonQt.QtCore import QLineF
+		from PythonQt.QtGui import QTransform
+
 		# - Init
 		italicAngle = fl6.flPackage(self.parent).italicAngle_value
 		origin = pqt.QtCore.QPointF(0,0)
@@ -160,10 +163,14 @@ class eGlyph(pGlyph):
 		for layerName, layerCoords in coordDict.iteritems():
 						
 			if not processSingle:
-				vector = pqt.QtCore.QLineF(layerCoords[0], layerCoords[1])
+				vector = QLineF(layerCoords[0], layerCoords[1])
 			else:
-				vector = pqt.QtCore.QLineF(layerCoords[0], origin)
-				vector.setAngle(90 - italicAngle)				
+				vector = QLineF(layerCoords[0], origin)
+				vector.setAngle(90 - italicAngle)
+
+			vTransform = QTransform()
+			vTransform.scale(float(flip[0]), float(flip[1]))
+			vector = vTransform.map(vector)
 
 			# - Build
 			newg = fl6.flGuideLine(vector)
