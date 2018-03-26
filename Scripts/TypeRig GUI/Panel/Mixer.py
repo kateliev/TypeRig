@@ -12,8 +12,8 @@ global pLayers
 pLayers = None
 app_name, app_version = 'TypeRig | Mixer', '0.06'
 
-useFortran = False
-warnMessage = 'This Panel requires the precompiled MathRig modules.'
+useFortran = True
+warnMessage = 'This Panel requires some precompiled FontRig | TypeRig modules.'
 
 # - Dependencies -----------------
 from math import radians
@@ -30,9 +30,9 @@ from typerig.brain import coordArray, linInterp
 # -- Check for MathRig instalaltion
 try:
     if useFortran:
-    	import mathrig.core as mathcore		# Fortran 95 code
+    	import fontrig.mathcore as mathcore		# Fortran 95 code
     else:
-    	import mathrig.npcore as mathcore 	# Numpy reimplementation of original Fortran 95 code.
+    	import fontrig.numpy.mathcore as mathcore 	# Numpy reimplementation of original Fortran 95 code.
     sysReady = True
 
 except ImportError:
@@ -209,7 +209,7 @@ class tool_tab(QtGui.QWidget):
 			sw0, sw1 = float(self.head.edt_stem0.text), float(self.head.edt_stem1.text)
 			
 			if useFortran: # Original Fortran 95 implementation
-				mms = lambda sx, sy, t : mathcore.geometry.comp_scale(a.x, a.y, b.x, b.y, sx, sy, dx, dy, t, t, scmp, angle, sw0, sw1)
+				mms = lambda sx, sy, t : mathcore.adaptive_scale([a.x, a.y], [b.x, b.y], [sw0, sw0], [sw1, sw1], [sx, sy], [dx, dy], [t, t], [scmp, scmp], angle)
 
 			else: # NumPy implementation
 				 mms = lambda sx, sy, t : mathcore.adaptive_scale([a.x, a.y], [b.x, b.y], sx, sy, dx, dy, t, t, scmp, scmp, angle, sw0, sw1)

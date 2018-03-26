@@ -53,6 +53,7 @@ class eGlyph(pGlyph):
 		coords = coordArray()
 		for node in self.nodes(layer):
 			coords.append((float(node.x), float(node.y)))
+			coords.type.append(node.nodeType)
 
 		return coords
 

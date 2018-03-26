@@ -254,6 +254,8 @@ class coordArray(object):
 			self.x = argv[0][0:split]
 			self.y = argv[0][split:]
 
+		self.type = []
+
 	def __getitem__(self, i):
 		return (self.x[i], self.y[i])
 

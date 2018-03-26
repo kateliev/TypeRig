@@ -39,8 +39,8 @@ class QDropGuide(QtGui.QGridLayout):
 
 		# -- Guide button
 		self.btn_dropGuide = QtGui.QPushButton('&Drop')
-		self.btn_dropFlipX = QtGui.QPushButton('&Drop flip X')
-		self.btn_dropFlipY = QtGui.QPushButton('&Drop flip Y')
+		self.btn_dropFlipX = QtGui.QPushButton('Drop flip &X')
+		self.btn_dropFlipY = QtGui.QPushButton('Drop flip &Y')
 		self.btn_dropGuide.setToolTip('Drop guideline between any two selected nodes.\nIf single node is selected a vertical guide is\ndropped (using the italic angle if present).')
 		self.btn_dropFlipX.setToolTip('Drop flipped guideline between any two selected nodes.')
 		self.btn_dropFlipY.setToolTip('Drop flipped guideline between any two selected nodes.')
