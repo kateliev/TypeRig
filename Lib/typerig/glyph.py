@@ -110,7 +110,7 @@ class eGlyph(pGlyph):
 				tempContour = self.breakContour(cID, nID - relID, layer=layerName, expand=expand)
 				relID = nID
 
-				if tempContour.isValid: # When contour is cut at two nodes it becomes "standalone" and Valid, thus should be reinserted into glyph
+				if tempContour is not None:
 					self.layer(layerName).shapes[sID].addContour(tempContour, True)
 
 			if close: # Close all opened contours
