@@ -305,8 +305,11 @@ class coordArray(object):
 		self.x.reverse()
 		self.y.reverse()
 
-	def asList(self):
+	def asPairs(self):
 		return [zip(self.x, self.y)]
+
+	def asList(self):
+		return [self.x, self.y]
 
 	def flatten(self):
 		return self.x + self.y
