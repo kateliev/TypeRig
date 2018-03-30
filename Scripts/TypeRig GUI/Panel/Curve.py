@@ -22,99 +22,128 @@ from typerig.curve import eCurveEx
 
 # - Sub widgets ------------------------
 class curveEq(QtGui.QGridLayout):
-  # - Curve optimization
-  def __init__(self):
-    super(curveEq, self).__init__()
-    
-    # - Basic operations
-    self.btn_tunni = QtGui.QPushButton('&Tunni (Auto)')
-    self.btn_hobby = QtGui.QPushButton('&Hobby (Curvature)')
-    self.btn_prop = QtGui.QPushButton('&Proportional (Handles)')
-    
-    self.btn_tunni.setMinimumWidth(85)
-    self.btn_hobby.setMinimumWidth(85)
-    self.btn_prop.setMinimumWidth(85)
+	# - Curve optimization
+	def __init__(self):
+		super(curveEq, self).__init__()
+		
+		# - Basic operations
+		self.btn_tunni = QtGui.QPushButton('&Tunni (Auto)')
+		self.btn_hobby = QtGui.QPushButton('Set &Curvature')
+		self.btn_hobby_get = QtGui.QPushButton('Get')
+		self.btn_hobby_swap = QtGui.QPushButton('Swap')
+		self.btn_prop = QtGui.QPushButton('Set &Handles')
+		
+		self.btn_tunni.setToolTip('Apply Tunni curve optimization')
+		self.btn_hobby.setToolTip('Set Hobby spline curvature')
+		self.btn_hobby_swap.setToolTip('Swap C0, C1 curvatures')
+		self.btn_hobby_get.setToolTip('Get curvature for current selected\nsegment at active layer.')
+		self.btn_prop.setToolTip('Set handle length in proportion to bezier node distance')
+		
+		self.spn_hobby0 = QtGui.QDoubleSpinBox()
+		self.spn_hobby1 = QtGui.QDoubleSpinBox()
+		self.spn_hobby0.setValue(0.95)
+		self.spn_hobby1.setValue(0.95)
+		self.spn_hobby0.setSingleStep(0.05)
+		self.spn_hobby1.setSingleStep(0.05)
 
-    self.btn_tunni.setToolTip('Apply Tunni curve optimization')
-    self.btn_hobby.setToolTip('Set Hobby spline curvature')
-    self.btn_prop.setToolTip('Set handle length in proportion to bezier node distance')
-    
-    self.edt_hobby = QtGui.QLineEdit('0.95')
-    self.edt_prop = QtGui.QLineEdit('0.30')
-    
+		self.spn_prop = QtGui.QDoubleSpinBox()
+		self.spn_prop.setValue(0.30)
+		self.spn_prop.setSingleStep(0.1)
 
-    self.btn_tunni.clicked.connect(lambda: self.eqContour('tunni'))
-    self.btn_hobby.clicked.connect(lambda: self.eqContour('hobby'))
-    self.btn_prop.clicked.connect(lambda: self.eqContour('prop'))
+		self.btn_tunni.clicked.connect(lambda: self.eqContour('tunni'))
+		self.btn_hobby_swap.clicked.connect(self.hobby_swap)
+		self.btn_hobby_get.clicked.connect(self.hobby_get)
+		self.btn_hobby.clicked.connect(lambda: self.eqContour('hobby'))
+		self.btn_prop.clicked.connect(lambda: self.eqContour('prop'))
 
-    # -- Build: Curve optimization
-    self.addWidget(self.btn_tunni, 0, 0, 1, 5)
-    
-    self.addWidget(self.btn_hobby, 1, 0, 1, 5 )
-    self.addWidget(QtGui.QLabel('C:'), 1, 5, 1, 1)
-    self.addWidget(self.edt_hobby, 1, 6, 1, 1)
-    
-    self.addWidget(self.btn_prop, 2, 0, 1, 5)
-    self.addWidget(QtGui.QLabel('P:'), 2, 5, 1, 1)
-    self.addWidget(self.edt_prop, 2, 6, 1, 1)
+		# -- Build: Curve optimization
+		self.addWidget(self.btn_tunni,						 0, 0, 1, 5)    
+		self.addWidget(QtGui.QLabel('Proportional handles'), 1, 0, 1, 5)
+		self.addWidget(self.btn_prop,						 2, 0, 1, 3)
+		self.addWidget(QtGui.QLabel('P:'),					 2, 3, 1, 1)
+		self.addWidget(self.spn_prop,						 2, 4, 1, 1)
+		self.addWidget(QtGui.QLabel('Hobby curvature'),		 3, 0, 1, 5)
+		self.addWidget(self.btn_hobby_swap,					 4, 0, 1, 1)
+		self.addWidget(QtGui.QLabel('C0'),					 4, 1, 1, 1)
+		self.addWidget(self.spn_hobby0,						 4, 2, 1, 1)    
+		self.addWidget(QtGui.QLabel('C1'),					 4, 3, 1, 1)
+		self.addWidget(self.spn_hobby1,						 4, 4, 1, 1)  
+		self.addWidget(self.btn_hobby_get,					 5, 0, 1, 1)  
+		self.addWidget(self.btn_hobby,						 5, 1, 1, 4)
 
-    self.setColumnStretch(0,1)
-    self.setColumnStretch(6,0)
-    self.setColumnStretch(7,0)
+		self.setColumnStretch(0,1)
+		self.setColumnStretch(4,0)
+		self.setColumnStretch(5,0)
+		self.setColumnStretch(6,0)
+		self.setColumnStretch(7,0)
 
-    self.setColumnMinimumWidth(0, 180)
+		#self.setColumnMinimumWidth(0, 40)
 
-  def eqContour(self, method):
-    glyph = eGlyph()
-    selection = glyph.selected(True)
-    wLayers = glyph._prepareLayers(pLayers)
 
-    for layer in wLayers:
-      nodes = [eNode(glyph.nodes(layer)[nid]) for nid in selection]
-      nodes.append(nodes[0]) #!!! Dirty fix
-      conNodes =  [nodes[nid] for nid in range(len(nodes)-1) if nodes[nid].getNextOn() == nodes[nid+1].fl or eNode(nodes[nid].getNextOn()).getTime() == 0]
-      segmentNodes = [node.getSegmentNodes() for node in conNodes]
-     
-      for segment in reversed(segmentNodes):
-        if len(segment) == 4:
-          wSegment = eCurveEx(segment)
-          
-          if method is 'tunni':
-            wSegment.eqTunni()
+	def hobby_swap(self):
+		temp = self.spn_hobby0.value
+		self.spn_hobby0.setValue(self.spn_hobby1.value)
+		self.spn_hobby1.setValue(temp)
 
-          elif method is 'hobby':
-            curvature = (float(self.edt_hobby.text), float(self.edt_hobby.text))
-            wSegment.eqHobbySpline(curvature)
+	def hobby_get(self):
+		glyph = eGlyph()
+		selSegment = eCurveEx(eNode(glyph.selectedNodes()[0]).getSegmentNodes())
+		c0, c1 = selSegment.curve.getHobbyCurvature()
 
-          elif method is 'prop':
-            proportion = float(self.edt_prop.text)
-            wSegment.eqProportionalHandles(proportion)
+		self.spn_hobby0.setValue(c0.real)
+		self.spn_hobby1.setValue(c1.real)
 
-    glyph.updateObject(glyph.fl, 'Optimize %s @ %s.' %(method, '; '.join(wLayers)))
-    glyph.update()
+	def eqContour(self, method):
+		glyph = eGlyph()
+		selection = glyph.selected(True)
+		wLayers = glyph._prepareLayers(pLayers)
+
+		for layer in wLayers:
+			nodes = [eNode(glyph.nodes(layer)[nid]) for nid in selection]
+			nodes.append(nodes[0]) #!!! Dirty fix
+			conNodes =  [nodes[nid] for nid in range(len(nodes)-1) if nodes[nid].getNextOn() == nodes[nid+1].fl or eNode(nodes[nid].getNextOn()).getTime() == 0]
+			segmentNodes = [node.getSegmentNodes() for node in conNodes]
+		 
+			for segment in reversed(segmentNodes):
+				if len(segment) == 4:
+					wSegment = eCurveEx(segment)
+					
+					if method is 'tunni':
+						wSegment.eqTunni()
+
+					elif method is 'hobby':
+						curvature = (float(self.spn_hobby0.value), float(self.spn_hobby1.value))
+						wSegment.eqHobbySpline(curvature)
+
+					elif method is 'prop':
+						proportion = float(self.spn_prop.value)
+						wSegment.eqProportionalHandles(proportion)
+
+		glyph.updateObject(glyph.fl, 'Optimize %s @ %s.' %(method, '; '.join(wLayers)))
+		glyph.update()
 
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
-  def __init__(self):
-    super(tool_tab, self).__init__()
+	def __init__(self):
+		super(tool_tab, self).__init__()
 
-    # - Init
-    layoutV = QtGui.QVBoxLayout()
-        
-    # - Build   
-    layoutV.addWidget(QtGui.QLabel('Curve optimization'))
-    layoutV.addLayout(curveEq())
+		# - Init
+		layoutV = QtGui.QVBoxLayout()
+				
+		# - Build   
+		layoutV.addWidget(QtGui.QLabel('Curve optimization'))
+		layoutV.addLayout(curveEq())
 
-     # - Build ---------------------------
-    layoutV.addStretch()
-    self.setLayout(layoutV)
+		 # - Build ---------------------------
+		layoutV.addStretch()
+		self.setLayout(layoutV)
 
 # - Test ----------------------
 if __name__ == '__main__':
-  test = tool_tab()
-  test.setWindowTitle('%s %s' %(app_name, app_version))
-  test.setGeometry(300, 300, 280, 400)
-  test.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
-  
-  test.show()
+	test = tool_tab()
+	test.setWindowTitle('%s %s' %(app_name, app_version))
+	test.setGeometry(300, 300, 280, 400)
+	test.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
+	
+	test.show()

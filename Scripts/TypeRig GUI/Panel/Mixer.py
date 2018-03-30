@@ -30,9 +30,9 @@ from typerig.brain import coordArray, linInterp
 # -- Check for MathRig instalaltion
 try:
     if useFortran:
-    	import fontrig.mathcore as mathcore		# Fortran 95 code
+    	import fontrig.transform as transform			# Fortran 95 code
     else:
-    	import fontrig.numpy.mathcore as mathcore 	# Numpy reimplementation of original Fortran 95 code.
+    	import fontrig.numpy.transform as transform 	# Numpy reimplementation of original Fortran 95 code.
     sysReady = True
 
 except ImportError:
@@ -209,10 +209,10 @@ class tool_tab(QtGui.QWidget):
 			sw0, sw1 = float(self.head.edt_stem0.text), float(self.head.edt_stem1.text)
 			
 			if useFortran: # Original Fortran 95 implementation
-				mms = lambda sx, sy, t : mathcore.adaptive_scale([a.x, a.y], [b.x, b.y], [sw0, sw0], [sw1, sw1], [sx, sy], [dx, dy], [t, t], [scmp, scmp], angle)
+				mms = lambda sx, sy, t : transform.adaptive_scale([a.x, a.y], [b.x, b.y], [sw0, sw0], [sw1, sw1], [sx, sy], [dx, dy], [t, t], [scmp, scmp], angle)
 
 			else: # NumPy implementation
-				 mms = lambda sx, sy, t : mathcore.adaptive_scale([a.x, a.y], [b.x, b.y], sx, sy, dx, dy, t, t, scmp, scmp, angle, sw0, sw1)
+				 mms = lambda sx, sy, t : transform.adaptive_scale([a.x, a.y], [b.x, b.y], sx, sy, dx, dy, t, t, scmp, scmp, angle, sw0, sw1)
 			
 			self.glyph._setCoordArray(mms(sx,sy, tx))
 			#self.glyph.setAdvance(linInterp(self.glyph.getAdvance(self.head.cmb_0.currentText), self.glyph.getAdvance(self.head.cmb_1.currentText), tx))
