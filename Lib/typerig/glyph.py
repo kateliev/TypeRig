@@ -53,7 +53,15 @@ class eGlyph(pGlyph):
 		coords = coordArray()
 		for node in self.nodes(layer):
 			coords.append((float(node.x), float(node.y)))
-			coords.type.append(node.nodeType)
+			
+			# - Followiong will work on Cubic beziers only! Think of better way!
+			nodeType = 0
+			if node.isOn and node.getNext().isOn:				
+				nodeType = 2
+			if node.isOn and not node.getNext().isOn:				
+				nodeType = 4
+
+			coords.type.append(nodeType)
 
 		return coords
 
@@ -146,7 +154,7 @@ class eGlyph(pGlyph):
 		#!!!NOTE: As elements are bidirectional now, try to check and adapt for the current QTransform!
 		
 		from PythonQt.QtCore import QLineF
-		from PythonQt.QtGui import QTransform
+		from PythonQt.QtGui import QTransform, QColor
 
 		# - Init
 		italicAngle = fl6.flPackage(self.parent).italicAngle_value
@@ -175,7 +183,7 @@ class eGlyph(pGlyph):
 
 			# - Build
 			newg = fl6.flGuideLine(vector)
-			newg.name, newg.color, newg.style = name, color, style
+			newg.name, newg.color, newg.style = name, QColor(color), style
 			self.layer(layerName).appendGuidelines([newg])
 
 	# - Metrics -----------------------------------------
