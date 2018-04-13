@@ -80,6 +80,8 @@ class sliderCtrl(QtGui.QGridLayout):
 		super(sliderCtrl, self).__init__()
 		
 		# - Init
+		self.initValues = (edt_0, edt_1, edt_pos, spb_step)
+
 		self.edt_0 = QtGui.QLineEdit(edt_0)
 		self.edt_1 = QtGui.QLineEdit(edt_1)
 		self.edt_pos = QtGui.QLineEdit(edt_pos)
@@ -106,12 +108,20 @@ class sliderCtrl(QtGui.QGridLayout):
 		self.addWidget(QtGui.QLabel('Step:'),1, 4, 1, 1)
 		self.addWidget(self.spb_step, 		1, 5, 1, 1)
 
+
 	def refreshSlider(self):
 		self.sld_axis.setValue(int(self.edt_pos.text))
 		self.sld_axis.setMinimum(int(self.edt_0.text))
 		self.sld_axis.setMaximum(int(self.edt_1.text))
 		self.sld_axis.setSingleStep(int(self.spb_step.value))
 		
+	def reset(self):
+		self.edt_0.setText(self.initValues[0])
+		self.edt_1.setText(self.initValues[1])
+		self.edt_pos.setText(self.initValues[2])
+		self.spb_step.setValue(self.initValues[3])
+		self.refreshSlider()
+
 	def sliderChange(self):
 		self.edt_pos.setText(self.sld_axis.value)
 
@@ -180,14 +190,23 @@ class tool_tab(QtGui.QWidget):
 		self.head.cmb_1.addItems(self.layers)
 		self.head.cmb_0.setCurrentIndex(0)
 		self.head.cmb_1.setCurrentIndex(0)
-
 		self.axis = []
+
+		self.mixer.reset()
+		self.scalerX.reset()
+		self.scalerY.reset()
 
 	def getStems(self):
 		stemNodes0 = self.glyph.selectedNodes(self.head.cmb_0.currentText, True)
 		stemNodes1 = self.glyph.selectedNodes(self.head.cmb_1.currentText, True)
-		self.head.edt_stem0.setText(abs(stemNodes0[0].x - stemNodes0[-1].x))
-		self.head.edt_stem1.setText(abs(stemNodes1[0].x - stemNodes1[-1].x))
+		wt_0 = abs(stemNodes0[0].x - stemNodes0[-1].x)
+		wt_1 = abs(stemNodes1[0].x - stemNodes1[-1].x)
+		self.head.edt_stem0.setText(wt_0)
+		self.head.edt_stem1.setText(wt_1)
+		self.mixer.edt_0.setText(min(wt_0, wt_1))
+		self.mixer.edt_1.setText(max(wt_0, wt_1))
+		self.mixer.edt_pos.setText(wt_0)
+		self.mixer.refreshSlider()
 
 	def setAxis(self):
 		self.axis = [self.glyph._getCoordArray(self.head.cmb_0.currentText), self.glyph._getCoordArray(self.head.cmb_1.currentText)]
@@ -195,28 +214,38 @@ class tool_tab(QtGui.QWidget):
 	
 	def intelliScale(self):
 		if len(self.axis):
-			sx = 100./float(self.scalerX.edt_1.text) + float(self.scalerX.sld_axis.value)/float(self.scalerX.edt_1.text)
-			sy = 100./float(self.scalerY.edt_1.text) + float(self.scalerY.sld_axis.value)/float(self.scalerY.edt_1.text)
-			tx = float(self.mixer.sld_axis.value - float(self.mixer.edt_0.text))/(float(self.mixer.edt_1.text) - float(self.mixer.edt_0.text))
-						
+			# - Axis
 			a = self.axis[0]
 			b = self.axis[1]
 			
-			dx, dy = 0.0, 0.0
+			# - Compensation
+			scmp = 0.
+			
+			# - Italic Angle
 			angle = radians(-float(self.italic_angle))
 			
-			scmp = 0.
-			sw0, sw1 = float(self.head.edt_stem0.text), float(self.head.edt_stem1.text)
+			# - Stems
+			sw = (float(self.head.edt_stem0.text), float(self.head.edt_stem1.text))
+			curr_sw = float(self.mixer.sld_axis.value)
+			sw0, sw1 = min(*sw), max(*sw)
 			
+			# - Interpolation
+			tx = ((curr_sw - sw0)/(sw1 - sw0))*(1,-1)[sw[0] > sw[1]] + (0,1)[sw[0] > sw[1]]
+
+			# - Scaling
+			sx = 100./float(self.scalerX.edt_1.text) + float(self.scalerX.sld_axis.value)/float(self.scalerX.edt_1.text)
+			sy = 100./float(self.scalerY.edt_1.text) + float(self.scalerY.sld_axis.value)/float(self.scalerY.edt_1.text)
+			dx, dy = 0.0, 0.0
+						
+			# - Build
 			if useFortran: # Original Fortran 95 implementation
-				mms = lambda sx, sy, t : transform.adaptive_scale([a.x, a.y], [b.x, b.y], [sw0, sw0], [sw1, sw1], [sx, sy], [dx, dy], [t, t], [scmp, scmp], angle)
+				mms = lambda sx, sy, t : transform.adaptive_scale([a.x, a.y], [b.x, b.y], [sw[0], sw[0]], [sw[1], sw[1]], [sx, sy], [dx, dy], [t, t], [scmp, scmp], angle)
 
 			else: # NumPy implementation
 				 mms = lambda sx, sy, t : transform.adaptive_scale([a.x, a.y], [b.x, b.y], sx, sy, dx, dy, t, t, scmp, scmp, angle, sw0, sw1)
 			
 			self.glyph._setCoordArray(mms(sx,sy, tx))
-			#self.glyph.setAdvance(linInterp(self.glyph.getAdvance(self.head.cmb_0.currentText), self.glyph.getAdvance(self.head.cmb_1.currentText), tx))
-
+			
 			self.glyph.update()
 			fl6.Update(fl6.CurrentGlyph())
 

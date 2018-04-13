@@ -19,6 +19,29 @@ from PythonQt import QtCore, QtGui
 from typerig.glyph import eGlyph
 
 # - Sub widgets ------------------------
+class MLineEdit(QtGui.QLineEdit):
+	# - Custom QLine Edit extending the contextual menu with FL6 metric expressions
+	def __init__(self, *args, **kwargs):
+		super(MLineEdit, self).__init__(*args, **kwargs)
+		self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+		self.customContextMenuRequested.connect(self.__contextMenu)
+
+	def __contextMenu(self):
+		self._normalMenu = self.createStandardContextMenu()
+		self._addCustomMenuItems(self._normalMenu)
+		self._normalMenu.exec_(QtGui.QCursor.pos())
+
+	def _addCustomMenuItems(self, menu):
+		menu.addSeparator()
+		menu.addAction(u'EQ', lambda: self.setText('=%s' %self.text))
+		menu.addAction(u'LSB', lambda: self.setText('=lsb("%s")' %self.text))
+		menu.addAction(u'RSB', lambda: self.setText('=rsb("%s")' %self.text))
+		menu.addAction(u'ADV', lambda: self.setText('=width("%s")' %self.text))
+		menu.addAction(u'L', lambda: self.setText('=l("%s")' %self.text))
+		menu.addAction(u'R', lambda: self.setText('=r("%s")' %self.text))
+		menu.addAction(u'W', lambda: self.setText('=w("%s")' %self.text))
+		menu.addAction(u'G', lambda: self.setText('=g("%s")' %self.text))	
+		
 class metrics_copy(QtGui.QGridLayout):
 	# - Copy Metric properties from other glyph
 	def __init__(self):
@@ -113,9 +136,9 @@ class metrics_expr(QtGui.QGridLayout):
 	def __init__(self):
 		super(metrics_expr, self).__init__()
 
-		self.edt_lsb =  QtGui.QLineEdit()
-		self.edt_adv = QtGui.QLineEdit()
-		self.edt_rsb =   QtGui.QLineEdit()
+		self.edt_lsb = MLineEdit()
+		self.edt_adv = MLineEdit()
+		self.edt_rsb = MLineEdit()
 
 		self.edt_lsb.setPlaceholderText('Metric expression')
 		self.edt_adv.setPlaceholderText('Metric expression')
