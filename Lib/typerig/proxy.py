@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.35
+# VER 	: 0.36
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -269,8 +269,8 @@ class pGlyph(object):
 		dstLayer.metricsWidth = srcLayer.metricsWidth
 
 		dstLayer.assignStyle(srcLayer)
-		dstLayer.addShapes(srcLayer.shapes)
-		#dstLayer.appendGuidelines(srcLayer.guidelines)
+		dstLayer.addShapes([shape.cloneTopLevel() for shape in srcLayer.shapes])
+		dstLayer.appendGuidelines(srcLayer.guidelines)
 
 		for anchor in srcLayer.anchors:
 			dstLayer.addAnchor(anchor)

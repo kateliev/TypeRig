@@ -16,7 +16,7 @@ from typerig.glyph import eGlyph
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Layers', '0.25'
+app_name, app_version = 'TypeRig | Layers', '0.26'
 
 # - Sub widgets ------------------------
 class QlayerSelect(QtGui.QVBoxLayout):
@@ -95,7 +95,7 @@ class QlayerBasic(QtGui.QVBoxLayout):
 		self.btn_setServ = QtGui.QPushButton('Service')
 		self.btn_setWire = QtGui.QPushButton('Wireframe')
 		self.btn_del = QtGui.QPushButton('Remove')
-		self.btn_dup.setEnabled(False)
+		#self.btn_dup.setEnabled(False)
 				
 		self.btn_add.setToolTip('Add new layer with name')
 		self.btn_dup.setToolTip('Duplicate selected with suffix')
@@ -140,18 +140,7 @@ class QlayerBasic(QtGui.QVBoxLayout):
 				newLayer.name += '.%s' #%str(self.edt_name.text)
 				self.aux.glyph.addLayer(newLayer)
 			'''
-			''' # Fontgate solution - Not working either
-			newLayers = []
-			
-			for item in self.aux.lst_layers.selectedIndexes():
-				tempFgLayer = fgt.fgLayer(self.aux.glyph.fg.layers[item.row()])
-				tempFlLayer = fl6.flLayer()
-				tempFlLayer.assignFgLayer(tempFgLayer, True, True, True, True)
-				tempFlLayer.name += '.%s' #%str(self.edt_name.text)
-				tempFlLayer.update()
-				newLayers.append(tempFlLayer)
-			'''
-			# Fake duplicate solution		
+			# - Duplicate by layer copy solution		
 			for item in self.aux.lst_layers.selectedItems():
 				self.aux.glyph.duplicateLayer(item.text() , '%s.%s' %(item.text(), self.edt_name.text), True)			
 			
