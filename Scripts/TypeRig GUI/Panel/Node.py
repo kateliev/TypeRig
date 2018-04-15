@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.37'
+app_name, app_version = 'TypeRig | Nodes', '0.38'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -160,6 +160,9 @@ class alignNodes(QtGui.QGridLayout):
 	def __init__(self):
 		super(alignNodes, self).__init__()
 		
+		# - Init
+		self.copyLine = {}
+
 		# - Buttons
 		self.btn_left = QtGui.QPushButton('Left')
 		self.btn_right = QtGui.QPushButton('Right')
@@ -167,28 +170,95 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_bottom = QtGui.QPushButton('Bottom')
 		self.btn_solveY = QtGui.QPushButton('Lineup Min/Max Y')
 		self.btn_solveX = QtGui.QPushButton('Lineup Min/Max X')
+		self.btn_copy = QtGui.QPushButton('Copy Slope')
+		#self.btn_pasteMinX = QtGui.QPushButton('Min X')
+		#self.btn_pasteMaxX = QtGui.QPushButton('Max X')
+		self.btn_pasteMinY = QtGui.QPushButton('Min Y')
+		self.btn_pasteMaxY = QtGui.QPushButton('Max Y')
+
+		self.btn_copy.setCheckable(True)
+		self.btn_copy.setChecked(False)
 
 		self.btn_solveY.setToolTip('Channel Process selected nodes according to Y values')
 		self.btn_solveX.setToolTip('Channel Process selected nodes according to X values')
+		self.btn_copy.setToolTip('Copy slope between selected nodes')
+		self.btn_pasteMinY.setToolTip('Apply slope to selected nodes according to MIN Y value')
+		self.btn_pasteMaxY.setToolTip('Apply slope to selected nodes according to MAX Y value')
 
 		self.btn_left.setMinimumWidth(40)
 		self.btn_right.setMinimumWidth(40)
 		self.btn_top.setMinimumWidth(40)
 		self.btn_bottom.setMinimumWidth(40)
-		
+		#self.btn_pasteMinX.setMinimumWidth(40)
+		#self.btn_pasteMaxX.setMinimumWidth(40)
+		self.btn_pasteMinY.setMinimumWidth(40)
+		self.btn_pasteMaxY.setMinimumWidth(40)
+				
+		self.btn_copy.clicked.connect(self.copySlope)
 		self.btn_left.clicked.connect(lambda: self.alignNodes('L'))
 		self.btn_right.clicked.connect(lambda: self.alignNodes('R'))
 		self.btn_top.clicked.connect(lambda: self.alignNodes('T'))
 		self.btn_bottom.clicked.connect(lambda: self.alignNodes('B'))
 		self.btn_solveY.clicked.connect(lambda: self.alignNodes('Y'))
 		self.btn_solveX.clicked.connect(lambda: self.alignNodes('X'))
+		self.btn_pasteMinY.clicked.connect(lambda: self.pasteSlope('MinY'))
+		self.btn_pasteMaxY.clicked.connect(lambda: self.pasteSlope('MaxY'))
 				
-		self.addWidget(self.btn_left, 0,0)
-		self.addWidget(self.btn_right, 0,1)
-		self.addWidget(self.btn_top, 0,2)
-		self.addWidget(self.btn_bottom, 0,3)
-		self.addWidget(self.btn_solveY, 1,0,1,2)
-		self.addWidget(self.btn_solveX, 1,2,1,2)
+		self.addWidget(self.btn_left, 		0,0)
+		self.addWidget(self.btn_right, 		0,1)
+		self.addWidget(self.btn_top, 		0,2)
+		self.addWidget(self.btn_bottom,	 	0,3)
+		self.addWidget(self.btn_solveY, 	1,0,1,2)
+		self.addWidget(self.btn_solveX, 	1,2,1,2)
+		self.addWidget(self.btn_copy,		2,0,1,2)
+		#self.addWidget(self.btn_pasteMinX,	3,0,1,1)
+		#self.addWidget(self.btn_pasteMaxX,	3,1,1,1)
+		self.addWidget(self.btn_pasteMinY,	2,2,1,1)
+		self.addWidget(self.btn_pasteMaxY,	2,3,1,1)
+
+	def copySlope(self):
+		from typerig.brain import Line
+
+		if self.btn_copy.isChecked():
+			self.btn_copy.setText('Reset Slope')
+
+			glyph = eGlyph()
+			wLayers = glyph._prepareLayers(pLayers)
+			
+			for layer in wLayers:
+				selection = glyph.selectedNodes(layer)
+				self.copyLine[layer] = Line(selection[0], selection[-1])
+		else:
+			self.btn_copy.setText('Copy Slope')
+
+	def pasteSlope(self, mode):
+		from typerig.brain import Line
+		
+		if self.btn_copy.isChecked():
+			glyph = eGlyph()
+			wLayers = glyph._prepareLayers(pLayers)
+			control = (True, False)
+			
+			for layer in wLayers:
+				selection = [eNode(node) for node in glyph.selectedNodes(layer)]
+				srcLine = self.copyLine[layer]
+
+				if mode == 'MinY':
+					dstLine = Line(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
+					dstLine.angle = srcLine.getAngle()
+					dstLine.slope = srcLine.getSlope()
+
+				elif mode == 'MaxY':
+					dstLine = Line(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
+					dstLine.angle = srcLine.getAngle()
+					dstLine.slope = srcLine.getSlope()
+				
+				for node in selection:
+					node.alignTo(dstLine, control)
+
+			glyph.updateObject(glyph.fl, 'Paste Slope @ %s.' %'; '.join(wLayers))
+			glyph.update()
+
 
 	def alignNodes(self, mode):
 		from typerig.brain import Line

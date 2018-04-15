@@ -1,5 +1,5 @@
 # MODULE: Brain | Typerig
-# VER 	: 2.53
+# VER 	: 2.55
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018  (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -524,6 +524,20 @@ class _Line(object):
 		self.p0, self.p1 = argv
 		self.update()
 		
+	def __add__(self, other):
+		return self.__class__(self.p0 + other, self.p1 + other)
+
+	def __sub__(self, other):
+		return self.__class__(self.p0 - other, self.p1 - other)
+
+	def __mul__(self, other):
+		return self.__class__(self.p0 * other, self.p1 * other)
+
+	__rmul__ = __mul__
+
+	def __div__(self, other):
+		return self.__class__(self.p0 / other, self.p1 / other)	
+
 	def __repr__(self):
 		return '<Line: (%s,%s),(%s,%s)>' %(self.p0.x, self.p0.y, self.p1.x, self.p1.y)
 
@@ -552,6 +566,15 @@ class _Line(object):
 		from math import isnan
 		return (float(y) - self.getYintercept()) / float(self.slope) if not isnan(self.slope) and self.slope != 0 else self.p0.x
 		
+	def shift(self, dx, dy):
+		'''Shift coordinates by dx,dy'''
+		self.p0.x += dx
+		self.p1.x += dx
+		self.p0.y += dy
+		self.p1.y += dy
+
+		self.update()
+
 	def update(self):
 		self.xDiff = self.p1.x - self.p0.x
 		self.yDiff = self.p1.y - self.p0.y
