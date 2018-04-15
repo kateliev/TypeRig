@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.38'
+app_name, app_version = 'TypeRig | Nodes', '0.39'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -171,26 +171,28 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_solveY = QtGui.QPushButton('Lineup Min/Max Y')
 		self.btn_solveX = QtGui.QPushButton('Lineup Min/Max X')
 		self.btn_copy = QtGui.QPushButton('Copy Slope')
-		#self.btn_pasteMinX = QtGui.QPushButton('Min X')
-		#self.btn_pasteMaxX = QtGui.QPushButton('Max X')
 		self.btn_pasteMinY = QtGui.QPushButton('Min Y')
 		self.btn_pasteMaxY = QtGui.QPushButton('Max Y')
+		self.btn_pasteFMinY = QtGui.QPushButton('Flip Min')
+		self.btn_pasteFMaxY = QtGui.QPushButton('Flip Max')
 
 		self.btn_copy.setCheckable(True)
 		self.btn_copy.setChecked(False)
 
 		self.btn_solveY.setToolTip('Channel Process selected nodes according to Y values')
 		self.btn_solveX.setToolTip('Channel Process selected nodes according to X values')
-		self.btn_copy.setToolTip('Copy slope between selected nodes')
-		self.btn_pasteMinY.setToolTip('Apply slope to selected nodes according to MIN Y value')
-		self.btn_pasteMaxY.setToolTip('Apply slope to selected nodes according to MAX Y value')
+		self.btn_copy.setToolTip('Copy slope between lowest and highest of selected nodes.')
+		self.btn_pasteMinY.setToolTip('Apply slope to selected nodes.\nReference at MIN Y value.')
+		self.btn_pasteMaxY.setToolTip('Apply slope to selected nodes.\nReference at MAX Y value.')
+		self.btn_pasteFMinY.setToolTip('Apply X flipped slope to selected nodes.\nReference at MIN Y value.')
+		self.btn_pasteFMaxY.setToolTip('Apply X flipped slope to selected nodes.\nReference at MAX Y value.')
 
 		self.btn_left.setMinimumWidth(40)
 		self.btn_right.setMinimumWidth(40)
 		self.btn_top.setMinimumWidth(40)
 		self.btn_bottom.setMinimumWidth(40)
-		#self.btn_pasteMinX.setMinimumWidth(40)
-		#self.btn_pasteMaxX.setMinimumWidth(40)
+		self.btn_pasteFMinY.setMinimumWidth(40)
+		self.btn_pasteFMaxY.setMinimumWidth(40)
 		self.btn_pasteMinY.setMinimumWidth(40)
 		self.btn_pasteMaxY.setMinimumWidth(40)
 				
@@ -203,6 +205,8 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_solveX.clicked.connect(lambda: self.alignNodes('X'))
 		self.btn_pasteMinY.clicked.connect(lambda: self.pasteSlope('MinY'))
 		self.btn_pasteMaxY.clicked.connect(lambda: self.pasteSlope('MaxY'))
+		self.btn_pasteFMinY.clicked.connect(lambda: self.pasteSlope('FLMinY'))
+		self.btn_pasteFMaxY.clicked.connect(lambda: self.pasteSlope('FLMaxY'))
 				
 		self.addWidget(self.btn_left, 		0,0)
 		self.addWidget(self.btn_right, 		0,1)
@@ -210,11 +214,11 @@ class alignNodes(QtGui.QGridLayout):
 		self.addWidget(self.btn_bottom,	 	0,3)
 		self.addWidget(self.btn_solveY, 	1,0,1,2)
 		self.addWidget(self.btn_solveX, 	1,2,1,2)
-		self.addWidget(self.btn_copy,		2,0,1,2)
-		#self.addWidget(self.btn_pasteMinX,	3,0,1,1)
-		#self.addWidget(self.btn_pasteMaxX,	3,1,1,1)
-		self.addWidget(self.btn_pasteMinY,	2,2,1,1)
-		self.addWidget(self.btn_pasteMaxY,	2,3,1,1)
+		self.addWidget(self.btn_copy,		2,0,1,4)
+		self.addWidget(self.btn_pasteMinY,	3,0,1,1)
+		self.addWidget(self.btn_pasteMaxY,	3,1,1,1)
+		self.addWidget(self.btn_pasteFMinY,3,2,1,1)
+		self.addWidget(self.btn_pasteFMaxY,3,3,1,1)
 
 	def copySlope(self):
 		from typerig.brain import Line
@@ -228,6 +232,7 @@ class alignNodes(QtGui.QGridLayout):
 			for layer in wLayers:
 				selection = glyph.selectedNodes(layer)
 				self.copyLine[layer] = Line(selection[0], selection[-1])
+				print self.copyLine[layer].getAngle(), self.copyLine[layer].getSlope()
 		else:
 			self.btn_copy.setText('Copy Slope')
 
@@ -245,13 +250,19 @@ class alignNodes(QtGui.QGridLayout):
 
 				if mode == 'MinY':
 					dstLine = Line(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
-					dstLine.angle = srcLine.getAngle()
 					dstLine.slope = srcLine.getSlope()
 
 				elif mode == 'MaxY':
 					dstLine = Line(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
-					dstLine.angle = srcLine.getAngle()
 					dstLine.slope = srcLine.getSlope()
+
+				elif mode == 'FLMinY':
+					dstLine = Line(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
+					dstLine.slope = -1.*srcLine.getSlope()
+
+				elif mode == 'FLMaxY':
+					dstLine = Line(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
+					dstLine.slope = -1.*srcLine.getSlope()
 				
 				for node in selection:
 					node.alignTo(dstLine, control)
