@@ -106,7 +106,7 @@ class typerig_Panel(QtGui.QDialog):
 			self.repaint()
 			self.flag_fold = True
 		else:
-			self.setFixedHeight(self.tabs.sizeHint.height())
+			self.setFixedHeight(self.tabs.sizeHint.height() + 40) #Fix this! + 40 Added because Nodes tab breaks
 			self.tabs.show()
 			self.repaint()
 			self.flag_fold = False
