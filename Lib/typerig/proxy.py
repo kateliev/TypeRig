@@ -688,8 +688,12 @@ class pGlyph(object):
 		newAnchor = fl6.flPinPoint(pqt.QtCore.QPointF(*coordTuple))
 		newAnchor.name = name
 		newAnchor.anchor = isAnchor
+		
+		self.layer(layer).addAnchor(newAnchor)
 
-		self.anchors(layer).append(newAnchor)
+	def clearAnchors(self, layer=None):
+		'''Remove all anchors at given layer (int or str)'''
+		return self.layer(layer).clearAnchors()
 
 	# - Guidelines -----------------------------------------------
 	def guidelines(self, layer=None):

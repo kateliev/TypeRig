@@ -345,18 +345,18 @@ class eGlyph(pGlyph):
 		# !TODO: Italic compensation - re-adapt FontBrain Module + Component tuner
 		return XminY, XmaxY
 
-	def dropAnchor(self, yHeight, name, alignTop=True, layer='all'):
+	def dropAnchor(self, yHeight, name, alignTop=True, layer='all', tolerance=5):
 		'''Drop anchor at given layer'''
 		# - Init
-		def __drop(yHeight, name, layer, alignTop):
-			XminY, XmaxY = self.getAttachmentCenters(layer)
+		def __drop(yHeight, name, layer, alignTop, tolerance):
+			XminY, XmaxY = self.getAttachmentCenters(layer, tolerance)
 			xWidth = XmaxY if alignTop else XminY
 			self.addAnchor((xWidth, yHeight), name, layer)
 
 		# - Process
 		if layer == 'all':
 			for layer in range(len(self.layers())):
-				__drop(yHeight, name, layer, alignTop)
+				__drop(yHeight, name, layer, alignTop, tolerance)
 		else:
-			__drop(yHeight, name, layer, alignTop)
+			__drop(yHeight, name, layer, alignTop, tolerance)
 
