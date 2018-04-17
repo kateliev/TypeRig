@@ -17,7 +17,7 @@ from PythonQt import QtCore, QtGui
 import Panel 
 
 # - Init --------------------------
-app_version = '0.39'
+app_version = '0.40'
 app_name = 'TypeRig Panel'
 ignorePanel = '__'
 

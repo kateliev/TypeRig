@@ -345,7 +345,7 @@ class eGlyph(pGlyph):
 		# !TODO: Italic compensation - re-adapt FontBrain Module + Component tuner
 		return XminY, XmaxY
 
-	def dropAnchor(self, name, layer, coordTuple, alignTuple=(None,None), tolerance=5):
+	def dropAnchor(self, name, layer, coordTuple, alignTuple=(None,None), tolerance=5, move=False):
 		'''Drop anchor at given layer
 		Args:
 			name (str): Anchor Name
@@ -374,11 +374,16 @@ class eGlyph(pGlyph):
 
 		elif alignX == 'L':	x = bbox.x() + x*[1,-1][bbox.x() < 0]
 		elif alignX == 'R':	x += bbox.width() + bbox.x()
-		elif alignX == 'C':	x += bbox.width()/2 + bbox.x()
+		elif alignX == 'C':	x += (bbox.width() + bbox.x())/2
 
 		if alignY == 'B':	y = bbox.y() + y*[1,-1][bbox.y() < 0]
 		elif alignY == 'T':	y += bbox.height() + bbox.y()
-		elif alignY == 'C':	y += bbox.height()/2 + bbox.y()
+		elif alignY == 'C':	y += (bbox.height() + bbox.y())/2
 
-		self.addAnchor((x, y), name, layer)
+		if not move:
+			self.addAnchor((x, y), name, layer)
+		else:
+			anchor = self.layer(layer).findAnchor(name)
+			anchor.point = pqt.QtCore.QPointF(x,y)
+
 

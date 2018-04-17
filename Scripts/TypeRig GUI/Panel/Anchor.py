@@ -16,7 +16,7 @@ from typerig.glyph import eGlyph
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Anchors', '0.06'
+app_name, app_version = 'TypeRig | Anchors', '0.07'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):
@@ -113,14 +113,19 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		# - Init
 		self.aux = aux
 		self.types = 'Anchor PinPoint'.split(' ')
-		self.posY = 'Above Baseline Below Center Coord'.split(' ')
-		self.posX = 'Left Right Center Outline Coord'.split(' ')
+		self.posY = 'Coord Above Below Center Baseline'.split(' ')
+		self.posX = 'Coord Left Right Center Highest Lowest'.split(' ')
+		posYvals = (None, 'T', 'B', 'C', None)
+		posXvals = (None ,'L', 'R', 'C', 'AT', 'A')
+		self.posYctrl = dict(zip(self.posY, posYvals))
+		self.posXctrl = dict(zip(self.posX, posXvals))
 
 		# -- Basic Tool buttons
 		self.lay_grid = QtGui.QGridLayout()
 		self.btn_clearSel = QtGui.QPushButton('Clear Selected')
 		self.btn_clearAll = QtGui.QPushButton('Clear All')
-		self.btn_autoAdd = QtGui.QPushButton('Add')
+		self.btn_anchorAdd = QtGui.QPushButton('Add')
+		self.btn_anchorMov = QtGui.QPushButton('Move')
 
 		# -- Edit fields
 		self.edt_anchorName = ALineEdit()
@@ -144,24 +149,24 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		self.cmb_type.setEnabled(False)
 
 		# -- Constrains
-		self.btn_clearSel.setMinimumWidth(100)
-		self.btn_clearAll.setMinimumWidth(100)
-		self.edt_anchorName.setMinimumWidth(90)
+		self.btn_clearSel.setMinimumWidth(90)
+		self.btn_clearAll.setMinimumWidth(90)
+		self.edt_anchorName.setMinimumWidth(50)
 		self.edt_simpleX.setMinimumWidth(30)
 		self.edt_simpleY.setMinimumWidth(30)
-		self.edt_autoT.setMaximumWidth(30)
 
 		# -- Link functions
 		self.btn_clearAll.clicked.connect(lambda: self.clearAnchors(True))
 		self.btn_clearSel.clicked.connect(lambda: self.clearAnchors(False))
-		self.btn_autoAdd.clicked.connect(self.addAnchors)
+		self.btn_anchorAdd.clicked.connect(lambda: self.addAnchors(False))
+		self.btn_anchorMov.clicked.connect(lambda: self.addAnchors(True))
 
 		# - Build layout
 		self.lay_grid.addWidget(QtGui.QLabel('Remove anchor:'), 0, 0, 1, 4)
 		self.lay_grid.addWidget(self.btn_clearSel, 				1, 0, 1, 4)
 		self.lay_grid.addWidget(self.btn_clearAll, 				1, 4, 1, 4)
 
-		self.lay_grid.addWidget(QtGui.QLabel('Add anchor:'), 	2, 0, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('Add/move anchor:'),2, 0, 1, 4)
 		self.lay_grid.addWidget(QtGui.QLabel('N:'),				3, 0, 1, 1)
 		self.lay_grid.addWidget(self.edt_anchorName, 			3, 1, 1, 3)
 		self.lay_grid.addWidget(self.cmb_type, 					3, 4, 1, 4)
@@ -169,14 +174,15 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		self.lay_grid.addWidget(QtGui.QLabel('X:'),				4, 0, 1, 1)
 		self.lay_grid.addWidget(self.cmb_posX, 					4, 1, 1, 2)
 		self.lay_grid.addWidget(self.edt_simpleX, 				4, 3, 1, 1)
+		self.lay_grid.addWidget(QtGui.QLabel('Tolerance:'),		4, 4, 1, 1)
+		self.lay_grid.addWidget(self.edt_autoT, 				4, 5, 1, 3)
 		
 		self.lay_grid.addWidget(QtGui.QLabel('Y:'),				5, 0, 1, 1)
 		self.lay_grid.addWidget(self.cmb_posY,					5, 1, 1, 2)
 		self.lay_grid.addWidget(self.edt_simpleY, 				5, 3, 1, 1)
-		self.lay_grid.addWidget(QtGui.QLabel('T:'),				5, 4, 1, 1)
-		self.lay_grid.addWidget(self.edt_autoT, 				5, 5, 1, 1)
 		
-		self.lay_grid.addWidget(self.btn_autoAdd, 				6, 0, 1, 8)
+		self.lay_grid.addWidget(self.btn_anchorAdd, 			6, 0, 1, 4)
+		self.lay_grid.addWidget(self.btn_anchorMov, 			6, 4, 1, 4)
 
 		# - Build
 		self.addLayout(self.lay_grid)
@@ -202,22 +208,33 @@ class QanchorBasic(QtGui.QVBoxLayout):
 			self.aux.glyph.update()
 			self.aux.refresh()
 
-	def addAnchors(self):
-		if self.aux.doCheck():
-			if len(self.edt_anchorName.text):
-				if self.cmb_posX.currentText == 'Coord' and self.cmb_posY.currentText == 'Coord':
-					for layer in self.aux.wLayers:
-						coords = (int(self.edt_simpleX.text), int(self.edt_simpleY.text))
-						self.aux.glyph.addAnchor(coords, self.edt_anchorName.text, layer)
-				else:
-					offsetX = int(self.edt_simpleX.text)
-					offsetY = int(self.edt_simpleY.text)
-					autoTolerance = int(self.edt_autoT.text)
+	def addAnchors(self, move=False):
+		if self.aux.doCheck():			
+			update = False
 
-					for layer in self.aux.wLayers:
-						self.aux.glyph.dropAnchor()
+			if self.cmb_posX.currentText == 'Coord' and self.cmb_posY.currentText == 'Coord' and len(self.edt_anchorName.text):
+				for layer in self.aux.wLayers:
+					coords = (int(self.edt_simpleX.text), int(self.edt_simpleY.text))
+					self.aux.glyph.addAnchor(coords, self.edt_anchorName.text, layer)
+				update = True
+			else:
+				offsetX = int(self.edt_simpleX.text)
+				offsetY = int(self.edt_simpleY.text)
+				autoTolerance = int(self.edt_autoT.text)
 
-				self.aux.glyph.updateObject(self.aux.glyph.fl, 'Add anchors: %s.' %'; '.join(self.aux.wLayers))
+				for layer in self.aux.wLayers:
+					if not move:
+						if len(self.edt_anchorName.text):
+							self.aux.glyph.dropAnchor(self.edt_anchorName.text, layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance)
+							update = True
+					else:
+						cmb_sel = self.aux.lst_anchors.selectedItems()
+						if len(cmb_sel):
+							self.aux.glyph.dropAnchor(cmb_sel[0].text(), layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, move)
+							update = True
+
+			if update:
+				self.aux.glyph.updateObject(self.aux.glyph.fl, '%s anchors: %s.' %('Add' if not move else 'Move', '; '.join(self.aux.wLayers)))
 				self.aux.glyph.update()
 				self.aux.refresh()
 		
