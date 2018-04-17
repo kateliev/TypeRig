@@ -31,6 +31,11 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 
 *'affects multiple selected layers*
 
+##### Anchors panel
+- Visually check if an anchor is present in all selected layers
+- Clear all or selected anchors on all of the chosen layers
+- Add or move an anchor to given coordinates or using various positioning algorithms (including feature detection)
+
 ##### Metrics panel
 - Copy metrics from glyph (with adjustments)
 - Set metric equations
@@ -42,7 +47,6 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 
 *'In order to operate, Mixer panel requires percompiled binary library MathRig that is currently available to limited number of users on Windows platform only. MAC version is also on its way...*
 
-###### *Anchors panel (TBI)*
 ###### *Kern pair generator panel (TBI)*
 ###### *Hints panel (TBI)*
 
