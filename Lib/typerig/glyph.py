@@ -345,18 +345,40 @@ class eGlyph(pGlyph):
 		# !TODO: Italic compensation - re-adapt FontBrain Module + Component tuner
 		return XminY, XmaxY
 
-	def dropAnchor(self, yHeight, name, alignTop=True, layer='all', tolerance=5):
-		'''Drop anchor at given layer'''
+	def dropAnchor(self, name, layer, coordTuple, alignTuple=(None,None), tolerance=5):
+		'''Drop anchor at given layer
+		Args:
+			name (str): Anchor Name
+			layer (int or str): Layer index or name, works with both
+			coordTuple (int, int): New anchor coordinates or auto aligment offsets*
+			alignTuple (str,str): New anchor aligment*
+			tolerance (int): Outline feature auto detection tolerance*
+
+		*Aligment rules: (width, height)
+			- (None,None) - Uses coordinates given
+			- width - (L) Left; (R) Right; (A) Auto Bottom with tolerance; (AT) Auto Top with tolerance; (C) Center;
+			- height - (T) Top; (B) Bottom; (C) Center;
+		Returns:
+			None
+			
+		'''
 		# - Init
-		def __drop(yHeight, name, layer, alignTop, tolerance):
-			XminY, XmaxY = self.getAttachmentCenters(layer, tolerance)
-			xWidth = XmaxY if alignTop else XminY
-			self.addAnchor((xWidth, yHeight), name, layer)
+		x, y = coordTuple
+		alignX, alignY = alignTuple
+		bbox = self.layer(layer).boundingBox
 
 		# - Process
-		if layer == 'all':
-			for layer in range(len(self.layers())):
-				__drop(yHeight, name, layer, alignTop, tolerance)
-		else:
-			__drop(yHeight, name, layer, alignTop, tolerance)
+		if 'A' in alignX :
+			XminY, XmaxY = self.getAttachmentCenters(layer, tolerance)
+			x += XmaxY if 'T' in alignX else XminY
+
+		elif alignX == 'L':	x = bbox.x() + x*[1,-1][bbox.x() < 0]
+		elif alignX == 'R':	x += bbox.width() + bbox.x()
+		elif alignX == 'C':	x += bbox.width()/2 + bbox.x()
+
+		if alignY == 'B':	y = bbox.y() + y*[1,-1][bbox.y() < 0]
+		elif alignY == 'T':	y += bbox.height() + bbox.y()
+		elif alignY == 'C':	y += bbox.height()/2 + bbox.y()
+
+		self.addAnchor((x, y), name, layer)
 

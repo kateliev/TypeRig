@@ -112,34 +112,34 @@ class QanchorBasic(QtGui.QVBoxLayout):
 
 		# - Init
 		self.aux = aux
-		self.positions = ['above', 'baseline', 'below']
-		self.types = ['anchor']
+		self.types = 'Anchor PinPoint'.split(' ')
+		self.posY = 'Above Baseline Below Center Coord'.split(' ')
+		self.posX = 'Left Right Center Outline Coord'.split(' ')
 
 		# -- Basic Tool buttons
-		self.lay_buttons = QtGui.QGridLayout()
+		self.lay_grid = QtGui.QGridLayout()
 		self.btn_clearSel = QtGui.QPushButton('Clear Selected')
 		self.btn_clearAll = QtGui.QPushButton('Clear All')
-		self.btn_simpleAdd = QtGui.QPushButton('Add (&Exact)')
-		self.btn_autoAdd = QtGui.QPushButton('Add (&Auto)')
+		self.btn_autoAdd = QtGui.QPushButton('Add')
 
 		# -- Edit fields
 		self.edt_anchorName = ALineEdit()
 		self.edt_simpleX = QtGui.QLineEdit()
 		self.edt_simpleY = QtGui.QLineEdit()
-		self.edt_autoY = QtGui.QLineEdit()
 		self.edt_autoT = QtGui.QLineEdit()
 
-		self.edt_anchorName.setPlaceholderText('Name')
+		self.edt_anchorName.setPlaceholderText('New Anchor')
 		self.edt_simpleX.setText('0')
 		self.edt_simpleY.setText('0')
-		self.edt_autoY.setText('0')
 		self.edt_autoT.setText('5')
 
 		# -- Combo box
-		self.cmb_pos = QtGui.QComboBox()
+		self.cmb_posX = QtGui.QComboBox()
+		self.cmb_posY = QtGui.QComboBox()
 		self.cmb_type = QtGui.QComboBox()
 
-		self.cmb_pos.addItems(self.positions)
+		self.cmb_posX.addItems(self.posX)
+		self.cmb_posY.addItems(self.posY)
 		self.cmb_type.addItems(self.types)
 		self.cmb_type.setEnabled(False)
 
@@ -149,46 +149,37 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		self.edt_anchorName.setMinimumWidth(90)
 		self.edt_simpleX.setMinimumWidth(30)
 		self.edt_simpleY.setMinimumWidth(30)
-		self.edt_autoY.setMinimumWidth(30)
 		self.edt_autoT.setMaximumWidth(30)
-		#self.btn_autoAdd.setMinimumWidth(80)
-
-		# -- Tooltips
-		self.cmb_pos.setToolTip('New Anchor vertical position according to glyph outline.')
-		self.edt_autoY.setToolTip('Vertical offset from selected position. ')
-		self.edt_autoT.setToolTip('Feature search tolerance.\nEverything above the given value is not considered "horizontal"')
-		self.btn_autoAdd.setToolTip('Add Anchor to all selected layers, by:\n- Detecting prominent horizontal based features - Stem/stem cap, Apex, Vertex, Extreme and etc.)\n- Filtering the features within given offset (drawing errors or stroke incline and etc.)\n- Vertical placing the anchor with given offset to feature selected, according to outline BBOX')
-		self.btn_simpleAdd.setToolTip('Add Anchor to all selected layers at given exact coordinates.')
 
 		# -- Link functions
 		self.btn_clearAll.clicked.connect(lambda: self.clearAnchors(True))
 		self.btn_clearSel.clicked.connect(lambda: self.clearAnchors(False))
-		self.btn_simpleAdd.clicked.connect(lambda: self.addAnchors(False))
-		self.btn_autoAdd.clicked.connect(lambda: self.addAnchors(True))
+		self.btn_autoAdd.clicked.connect(self.addAnchors)
 
 		# - Build layout
-		self.lay_buttons.addWidget(self.btn_clearSel, 		0, 0, 1, 4)
-		self.lay_buttons.addWidget(self.btn_clearAll, 		0, 4, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('Remove anchor:'), 0, 0, 1, 4)
+		self.lay_grid.addWidget(self.btn_clearSel, 				1, 0, 1, 4)
+		self.lay_grid.addWidget(self.btn_clearAll, 				1, 4, 1, 4)
 
-		self.lay_buttons.addWidget(QtGui.QLabel('New:'),	1, 0, 1, 1)
-		self.lay_buttons.addWidget(self.edt_anchorName, 	1, 1, 1, 3)
-		self.lay_buttons.addWidget(self.cmb_type, 			1, 4, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('Add anchor:'), 	2, 0, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('N:'),				3, 0, 1, 1)
+		self.lay_grid.addWidget(self.edt_anchorName, 			3, 1, 1, 3)
+		self.lay_grid.addWidget(self.cmb_type, 					3, 4, 1, 4)
 
-		self.lay_buttons.addWidget(QtGui.QLabel('At X:'),	2, 0, 1, 1)
-		self.lay_buttons.addWidget(self.edt_simpleX, 		2, 1, 1, 1)
-		self.lay_buttons.addWidget(QtGui.QLabel('Y:'),	2, 2, 1, 1)
-		self.lay_buttons.addWidget(self.edt_simpleY, 		2, 3, 1, 1)
-		self.lay_buttons.addWidget(self.btn_simpleAdd, 		2, 4, 1, 4)
-
-		self.lay_buttons.addWidget(QtGui.QLabel('At Y:'),		3, 0, 1, 1)
-		self.lay_buttons.addWidget(self.edt_autoY, 			3, 1, 1, 1)
-		self.lay_buttons.addWidget(self.cmb_pos,			3, 2, 1, 2)
-		#self.lay_buttons.addWidget(QtGui.QLabel('T:'),		3, 4, 1, 1)
-		self.lay_buttons.addWidget(self.edt_autoT, 			3, 4, 1, 1)
-		self.lay_buttons.addWidget(self.btn_autoAdd, 		3, 5, 1, 3)
+		self.lay_grid.addWidget(QtGui.QLabel('X:'),				4, 0, 1, 1)
+		self.lay_grid.addWidget(self.cmb_posX, 					4, 1, 1, 2)
+		self.lay_grid.addWidget(self.edt_simpleX, 				4, 3, 1, 1)
+		
+		self.lay_grid.addWidget(QtGui.QLabel('Y:'),				5, 0, 1, 1)
+		self.lay_grid.addWidget(self.cmb_posY,					5, 1, 1, 2)
+		self.lay_grid.addWidget(self.edt_simpleY, 				5, 3, 1, 1)
+		self.lay_grid.addWidget(QtGui.QLabel('T:'),				5, 4, 1, 1)
+		self.lay_grid.addWidget(self.edt_autoT, 				5, 5, 1, 1)
+		
+		self.lay_grid.addWidget(self.btn_autoAdd, 				6, 0, 1, 8)
 
 		# - Build
-		self.addLayout(self.lay_buttons)
+		self.addLayout(self.lay_grid)
 
 	def clearAnchors(self, clearAll=False):
 		if self.aux.doCheck():			
@@ -211,33 +202,20 @@ class QanchorBasic(QtGui.QVBoxLayout):
 			self.aux.glyph.update()
 			self.aux.refresh()
 
-	def addAnchors(self, auto=False):
+	def addAnchors(self):
 		if self.aux.doCheck():
 			if len(self.edt_anchorName.text):
-				if not auto:
+				if self.cmb_posX.currentText == 'Coord' and self.cmb_posY.currentText == 'Coord':
 					for layer in self.aux.wLayers:
 						coords = (int(self.edt_simpleX.text), int(self.edt_simpleY.text))
 						self.aux.glyph.addAnchor(coords, self.edt_anchorName.text, layer)
 				else:
-					offsetY = int(self.edt_autoY.text)
+					offsetX = int(self.edt_simpleX.text)
+					offsetY = int(self.edt_simpleY.text)
 					autoTolerance = int(self.edt_autoT.text)
 
 					for layer in self.aux.wLayers:
-						bbox = self.aux.glyph.layer(layer).boundingBox
-
-						if self.cmb_pos.currentText == self.positions[0]:
-							currPos = bbox.height() + bbox.y() + offsetY
-							alignTop = True
-
-						elif self.cmb_pos.currentText == self.positions[1]:
-							currPos = offsetY
-							alignTop = False
-
-						elif self.cmb_pos.currentText == self.positions[2]:
-							currPos = bbox.y() + offsetY*[1,-1][bbox.y() < 0]
-							alignTop = False
-
-						self.aux.glyph.dropAnchor(currPos, self.edt_anchorName.text, alignTop, layer, autoTolerance)
+						self.aux.glyph.dropAnchor()
 
 				self.aux.glyph.updateObject(self.aux.glyph.fl, 'Add anchors: %s.' %'; '.join(self.aux.wLayers))
 				self.aux.glyph.update()
