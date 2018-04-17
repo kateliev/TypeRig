@@ -205,6 +205,7 @@ class QanchorBasic(QtGui.QVBoxLayout):
 
 
 			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Clear anchors: %s.' %'; '.join(self.aux.wLayers))
+			#fl6.flItems.notifyAnchorsChanged()
 			self.aux.glyph.update()
 			self.aux.refresh()
 
