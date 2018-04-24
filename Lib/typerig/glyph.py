@@ -374,11 +374,11 @@ class eGlyph(pGlyph):
 
 		elif alignX == 'L':	x = bbox.x() + x*[1,-1][bbox.x() < 0]
 		elif alignX == 'R':	x += bbox.width() + bbox.x()
-		elif alignX == 'C':	x += (bbox.width() + bbox.x())/2
+		elif alignX == 'C':	x += bbox.width()/2 + bbox.x()
 
 		if alignY == 'B':	y = bbox.y() + y*[1,-1][bbox.y() < 0]
 		elif alignY == 'T':	y += bbox.height() + bbox.y()
-		elif alignY == 'C':	y += (bbox.height() + bbox.y())/2
+		elif alignY == 'C':	y += bbox.height()/2 + bbox.y()
 
 		if not move:
 			self.addAnchor((x, y), name, layer)
