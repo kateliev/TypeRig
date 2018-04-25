@@ -748,6 +748,12 @@ class pFont(object):
 
 		# - Basics
 		self.italic_angle = self.getItalicAngle()
+		self.info = self.fg.info
+		self.familyName = self.info.familyName
+		self.name = self.familyName # Change later
+		self.OTfullName = self.info.openTypeNameCompatibleFullName
+		self.PSfullName = self.info.postscriptFullName
+
 		# - Special 
 		self.__altMarks = {'liga':'_', 'alt':'.', 'hide':'__'}
 		self.__diactiricalMarks = ['grave', 'dieresis', 'macron', 'acute', 'cedilla', 'uni02BC', 'circumflex', 'caron', 'breve', 'dotaccent', 'ring', 'ogonek', 'tilde', 'hungarumlaut', 'caroncomma', 'commaaccent', 'cyrbreve'] # 'dotlessi', 'dotlessj'

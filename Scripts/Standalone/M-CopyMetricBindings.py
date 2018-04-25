@@ -1,4 +1,4 @@
-#FLM: TypeRig - Copy Metric Bindings
+#FLM: Copy Metric Expressions (TypeRig)
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -15,12 +15,10 @@ from PythonQt import QtCore, QtGui
 from typerig.proxy import pFont, pGlyph
 
 # - Init --------------------------------
-app_version = '0.01'
+app_version = '0.02'
 app_name = 'Copy Metric Bindings'
 mark = 'Green'
 fixedLayer = None
-
-srcGlyphBounds = {}
 
 # - Interface -----------------------------
 class dlg_copyMetricBinding(QtGui.QDialog):
@@ -28,55 +26,61 @@ class dlg_copyMetricBinding(QtGui.QDialog):
 		super(dlg_copyMetricBinding, self).__init__()
 	
 		# - Init
-		self.btn_copy = QtGui.QPushButton('&Copy Bindings')
-		self.btn_paste = QtGui.QPushButton('&Paste Bindings')
-		self.btn_export = QtGui.QPushButton('&Export Bindings')
-		self.btn_import = QtGui.QPushButton('&Import Bindings')
+		self.srcGlyphBounds = {}
+
+		# - Label
+		self.lbl_decription = QtGui.QLabel('Copy/Paste metric expressions from or to the active layer. Export/Import to JSON file format.')
+		self.lbl_decription.setWordWrap(True)
+
+		# - Buttons 
+		self.btn_copy = QtGui.QPushButton('&Copy Expressions')
+		self.btn_paste = QtGui.QPushButton('&Paste Expressions')
+		self.btn_export = QtGui.QPushButton('&Export to File')
+		self.btn_import = QtGui.QPushButton('&Import from File')
 		
-		self.btn_copy.clicked.connect(self.copy)
-		self.btn_paste.clicked.connect(self.paste)
+		self.btn_copy.clicked.connect(self.copyExpr)
+		self.btn_paste.clicked.connect(self.pasteExpr)
 		
 		self.btn_paste.setEnabled(False)
 		self.btn_export.setEnabled(False)
 		self.btn_import.setEnabled(False)
 				
-		# -- Build layouts -------------------------------
+		# - Build layouts 
 		layoutV = QtGui.QVBoxLayout() 
+		layoutV.addWidget(self.lbl_decription)
 		layoutV.addWidget(self.btn_copy)
 		layoutV.addWidget(self.btn_paste)
 		layoutV.addWidget(self.btn_export)
 		layoutV.addWidget(self.btn_import)
 
-		# - Set Widget -------------------------------
+		# - Set Widget
 		self.setLayout(layoutV)
 		self.setWindowTitle('%s %s' %(app_name, app_version))
-		self.setGeometry(300, 300, 200, 300)
+		self.setGeometry(300, 300, 220, 120)
+		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 		self.show()
 
-	def copy(self):
+	def copyExpr(self):
 		font = pFont()
-		srcGlyphBounds = {glyph.name:(glyph.layer(fixedLayer).metricsLeft, glyph.layer(fixedLayer).metricsRight, glyph.layer(fixedLayer).metricsWidth) for glyph in font.pGlyphs()}
-		print 'COPY:\t %s Glyph Metric Expressions copied.' %len(srcGlyphBounds.keys())
+		self.srcGlyphBounds = {glyph.name:(glyph.layer(fixedLayer).metricsLeft, glyph.layer(fixedLayer).metricsRight, glyph.layer(fixedLayer).metricsWidth) for glyph in font.pGlyphs()}
+		print 'COPY:\t Font:%s; Glyph Metric Expressions copied: %s.' %(font.name,len(self.srcGlyphBounds.keys()))
 		self.btn_paste.setEnabled(True)
 
-	def paste(self):
+	def pasteExpr(self):
 		font = pFont()
 		dstGlyphs = {glyph.name:glyph for glyph in font.pGlyphs()}
-
-		for glyphName, glyphMetrics in srcGlyphBounds.iteritems():
-			try:
+		
+		print 'WARN:\t Pasting Metric expressions to Font:%s;' %font.name
+		for glyphName, glyphMetrics in self.srcGlyphBounds.iteritems():
+			if glyphName in dstGlyphs:
 				wGlyph = dstGlyphs[glyphName]
 				wGlyph.setLSBeq(glyphMetrics[0], fixedLayer)
 				wGlyph.setRSBeq(glyphMetrics[1], fixedLayer)
 				wGlyph.setADVeq(glyphMetrics[2], fixedLayer)
 				wGlyph.update()
-				print 'PASTE:\t Glyph /%s metric equations set to %s.' %(glyphName, glyphMetrics)
-			
-			except KeyError:
-				pass
-
-
-	
+				print 'PASTE:\t Glyph: /%s;\tLayer: %s;\tExp(LSB, RSB, ADV): %s.' %(glyphName, wGlyph.layer().name, glyphMetrics)
+			else:
+				print 'SKIP:\t Glyph /%s not found.' %(glyphName, glyphMetrics)
 	
 # - RUN ------------------------------
 dialog = dlg_copyMetricBinding()
