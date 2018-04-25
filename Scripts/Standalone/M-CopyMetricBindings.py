@@ -9,6 +9,7 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
+import os, json
 import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore, QtGui
@@ -40,10 +41,12 @@ class dlg_copyMetricBinding(QtGui.QDialog):
 		
 		self.btn_copy.clicked.connect(self.copyExpr)
 		self.btn_paste.clicked.connect(self.pasteExpr)
+		self.btn_export.clicked.connect(self.exportExpr)
+		self.btn_import.clicked.connect(self.importExpr)
 		
 		self.btn_paste.setEnabled(False)
-		self.btn_export.setEnabled(False)
-		self.btn_import.setEnabled(False)
+		#self.btn_export.setEnabled(False)
+		#self.btn_import.setEnabled(False)
 				
 		# - Build layouts 
 		layoutV = QtGui.QVBoxLayout() 
@@ -81,6 +84,30 @@ class dlg_copyMetricBinding(QtGui.QDialog):
 				print 'PASTE:\t Glyph: /%s;\tLayer: %s;\tExp(LSB, RSB, ADV): %s.' %(glyphName, wGlyph.layer().name, glyphMetrics)
 			else:
 				print 'SKIP:\t Glyph /%s not found.' %(glyphName, glyphMetrics)
+
+	def exportExpr(self):
+		font = pFont()
+		fontPath = os.path.split(font.fg.path)[0]
+		fname = QtGui.QFileDialog.getSaveFileName(self, 'Save Metric Expressions to file', fontPath , '.json')
+		expGlyphBounds = {glyph.name:(glyph.layer(fixedLayer).metricsLeft, glyph.layer(fixedLayer).metricsRight, glyph.layer(fixedLayer).metricsWidth) for glyph in font.pGlyphs()}
+		
+		with open(fname, 'w') as exportFile:
+			json.dump(expGlyphBounds, exportFile)
+
+		print 'SAVE:\t Font:%s; %s Glyph Metric Expressions saved to %s.' %(font.name, len(expGlyphBounds.keys()), fname)
+
+	def importExpr(self):
+		font = pFont()
+		fontPath = os.path.split(font.fg.path)[0]
+
+		fname = QtGui.QFileDialog.getOpenFileName(self, 'Open Metric Expressions from file', fontPath)
+		
+		with open(fname, 'r') as importFile:
+			self.srcGlyphBounds = json.load(importFile)
+
+		print 'LOAD:\t Font:%s; %s Glyph Metric Expressions loaded from %s.' %(font.name, len(self.srcGlyphBounds.keys()), fname)
+		print 'NOTE:\t Use < Paste Expressions > to apply loaded data to Active layer!'
+		self.btn_paste.setEnabled(True)
 	
 # - RUN ------------------------------
 dialog = dlg_copyMetricBinding()
