@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Mixer', '0.06'
+app_name, app_version = 'TypeRig | Mixer', '0.08'
 
 useFortran = True
 warnMessage = 'This Panel requires some precompiled FontRig | TypeRig modules.'
@@ -53,27 +53,44 @@ class mixerHead(QtGui.QGridLayout):
 		super(mixerHead, self).__init__()
 
 		self.edt_glyphName = QtGui.QLineEdit()
-		self.edt_stem0 = QtGui.QLineEdit('1')
-		self.edt_stem1 = QtGui.QLineEdit('1')
+		self.edt_stemV0 = QtGui.QLineEdit('1')
+		self.edt_stemV1 = QtGui.QLineEdit('1')
+		self.edt_stemH0 = QtGui.QLineEdit('1')
+		self.edt_stemH1 = QtGui.QLineEdit('1')
 		
 		self.btn_refresh = QtGui.QPushButton('&Refresh')
 		self.btn_setaxis = QtGui.QPushButton('Set &Axis')
-		self.btn_getstem = QtGui.QPushButton('&Get Stem')
+		self.btn_getVstem = QtGui.QPushButton('Get &V Stems')
+		self.btn_getHstem = QtGui.QPushButton('Get &H Stems')
+
+		self.spb_compV = QtGui.QDoubleSpinBox()
+		self.spb_compH = QtGui.QDoubleSpinBox()
+		self.spb_compV.setValue(0.)
+		self.spb_compH.setValue(0.)
+		self.spb_compV.setSingleStep(.01)
+		self.spb_compH.setSingleStep(.01)
 
 		self.cmb_0 = QtGui.QComboBox()
 		self.cmb_1 = QtGui.QComboBox()
 
-		self.addWidget(QtGui.QLabel('Glyph:'),	0, 0, 1, 1)
-		self.addWidget(self.edt_glyphName,		0, 1, 1, 6)
-		self.addWidget(self.btn_refresh,		0, 7, 1, 1)
-		self.addWidget(QtGui.QLabel('Axis:'),	1, 0, 1, 1)
-		self.addWidget(self.cmb_0, 				1, 1, 1, 3)
-		self.addWidget(self.cmb_1, 				1, 4, 1, 3)
-		self.addWidget(self.btn_setaxis, 		1, 7, 1, 1)
-		self.addWidget(QtGui.QLabel('Stems:'),	2, 0, 1, 1)
-		self.addWidget(self.edt_stem0,			2, 1, 1, 3)
-		self.addWidget(self.edt_stem1,			2, 4, 1, 3)
-		self.addWidget(self.btn_getstem, 		2, 7, 1, 1)
+		self.addWidget(QtGui.QLabel('Glyph:'),		0, 0, 1, 1)
+		self.addWidget(self.edt_glyphName,			0, 1, 1, 6)
+		self.addWidget(self.btn_refresh,			0, 7, 1, 1)
+		self.addWidget(QtGui.QLabel('Axis:'),		1, 0, 1, 1)
+		self.addWidget(self.cmb_0, 					1, 1, 1, 3)
+		self.addWidget(self.cmb_1, 					1, 4, 1, 3)
+		self.addWidget(self.btn_setaxis, 			1, 7, 1, 1)
+		self.addWidget(QtGui.QLabel('V Stems:'),	2, 0, 1, 1)
+		self.addWidget(self.edt_stemV0,				2, 1, 1, 3)
+		self.addWidget(self.edt_stemV1,				2, 4, 1, 3)
+		self.addWidget(self.btn_getVstem, 			2, 7, 1, 1)
+		self.addWidget(QtGui.QLabel('H Stems:'),	3, 0, 1, 1)
+		self.addWidget(self.edt_stemH0,				3, 1, 1, 3)
+		self.addWidget(self.edt_stemH1,				3, 4, 1, 3)
+		self.addWidget(self.btn_getHstem, 			3, 7, 1, 1)
+		self.addWidget(QtGui.QLabel('Adj.V/H:'),	4, 0, 1, 1)
+		self.addWidget(self.spb_compV,				4, 1, 1, 3)
+		self.addWidget(self.spb_compH,				4, 4, 1, 3)
 
 class sliderCtrl(QtGui.QGridLayout):
 	def __init__(self, edt_0, edt_1, edt_pos, spb_step):
@@ -138,7 +155,8 @@ class tool_tab(QtGui.QWidget):
 			self.head = mixerHead()
 			self.head.btn_refresh.clicked.connect(self.refresh)
 			self.head.btn_setaxis.clicked.connect(self.setAxis)
-			self.head.btn_getstem.clicked.connect(self.getStems)
+			self.head.btn_getVstem.clicked.connect(self.getVStems)
+			self.head.btn_getHstem.clicked.connect(self.getHStems)
 			layoutV.addLayout(self.head)
 			layoutV.addSpacing(15)
 
@@ -196,17 +214,25 @@ class tool_tab(QtGui.QWidget):
 		self.scalerX.reset()
 		self.scalerY.reset()
 
-	def getStems(self):
+	def getVStems(self):
 		stemNodes0 = self.glyph.selectedNodes(self.head.cmb_0.currentText, True)
 		stemNodes1 = self.glyph.selectedNodes(self.head.cmb_1.currentText, True)
 		wt_0 = abs(stemNodes0[0].x - stemNodes0[-1].x)
 		wt_1 = abs(stemNodes1[0].x - stemNodes1[-1].x)
-		self.head.edt_stem0.setText(wt_0)
-		self.head.edt_stem1.setText(wt_1)
+		self.head.edt_stemV0.setText(wt_0)
+		self.head.edt_stemV1.setText(wt_1)
 		self.mixer.edt_0.setText(min(wt_0, wt_1))
 		self.mixer.edt_1.setText(max(wt_0, wt_1))
 		self.mixer.edt_pos.setText(wt_0)
 		self.mixer.refreshSlider()
+
+	def getHStems(self):
+		stemNodes0 = self.glyph.selectedNodes(self.head.cmb_0.currentText, True)
+		stemNodes1 = self.glyph.selectedNodes(self.head.cmb_1.currentText, True)
+		wt_0 = abs(stemNodes0[0].y - stemNodes0[-1].y)
+		wt_1 = abs(stemNodes1[0].y - stemNodes1[-1].y)
+		self.head.edt_stemH0.setText(wt_0)
+		self.head.edt_stemH1.setText(wt_1)		
 
 	def setAxis(self):
 		self.axis = [self.glyph._getCoordArray(self.head.cmb_0.currentText), self.glyph._getCoordArray(self.head.cmb_1.currentText)]
@@ -219,18 +245,20 @@ class tool_tab(QtGui.QWidget):
 			b = self.axis[1]
 			
 			# - Compensation
-			scmp = 0.
+			scmp = float(self.head.spb_compH.value), float(self.head.spb_compV.value)
 			
 			# - Italic Angle
 			angle = radians(-float(self.italic_angle))
 			
 			# - Stems
-			sw = (float(self.head.edt_stem0.text), float(self.head.edt_stem1.text))
-			curr_sw = float(self.mixer.sld_axis.value)
-			sw0, sw1 = min(*sw), max(*sw)
+			sw_V = (float(self.head.edt_stemV0.text), float(self.head.edt_stemV1.text))
+			sw_H = (float(self.head.edt_stemH0.text), float(self.head.edt_stemH1.text))
+
+			curr_sw_V = float(self.mixer.sld_axis.value)
+			sw_V0, sw_V1 = min(*sw_V), max(*sw_V)
 			
 			# - Interpolation
-			tx = ((curr_sw - sw0)/(sw1 - sw0))*(1,-1)[sw[0] > sw[1]] + (0,1)[sw[0] > sw[1]]
+			tx = ((curr_sw_V - sw_V0)/(sw_V1 - sw_V0))*(1,-1)[sw_V[0] > sw_V[1]] + (0,1)[sw_V[0] > sw_V[1]]
 
 			# - Scaling
 			sx = 100./float(self.scalerX.edt_1.text) + float(self.scalerX.sld_axis.value)/float(self.scalerX.edt_1.text)
@@ -239,10 +267,10 @@ class tool_tab(QtGui.QWidget):
 						
 			# - Build
 			if useFortran: # Original Fortran 95 implementation
-				mms = lambda sx, sy, t : transform.adaptive_scale([a.x, a.y], [b.x, b.y], [sw[0], sw[0]], [sw[1], sw[1]], [sx, sy], [dx, dy], [t, t], [scmp, scmp], angle)
+				mms = lambda sx, sy, t : transform.adaptive_scale([a.x, a.y], [b.x, b.y], [sw_V[0], sw_H[0]], [sw_V[1], sw_H[1]], [sx, sy], [dx, dy], [t, t], scmp, angle)
 
 			else: # NumPy implementation
-				 mms = lambda sx, sy, t : transform.adaptive_scale([a.x, a.y], [b.x, b.y], sx, sy, dx, dy, t, t, scmp, scmp, angle, sw0, sw1)
+				 mms = lambda sx, sy, t : transform.adaptive_scale([a.x, a.y], [b.x, b.y], sx, sy, dx, dy, t, t, scmp, scmp, angle, sw_V0, sw_V1)
 			
 			self.glyph._setCoordArray(mms(sx,sy, tx))
 			
