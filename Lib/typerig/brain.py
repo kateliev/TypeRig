@@ -639,7 +639,7 @@ class _Curve(object):
 		slices = [(x1,y1), (x12,y12), (x123,y123), (x1234,y1234), (x234,y234), (x34,y34), (x4,y4)] 
 		
 		if resultInt:
-			return map(lambda (x,y) : (int(x), int(y)), slices)
+			return map(lambda x, y : (int(x), int(y)), slices)
 		else:
 			return slices
 
