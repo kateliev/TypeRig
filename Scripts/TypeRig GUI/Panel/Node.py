@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.39'
+app_name, app_version = 'TypeRig | Nodes', '0.40'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -168,6 +168,8 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_right = QtGui.QPushButton('Right')
 		self.btn_top = QtGui.QPushButton('Top')
 		self.btn_bottom = QtGui.QPushButton('Bottom')
+		self.btn_bboxCenterX = QtGui.QPushButton('Outline Center X')
+		self.btn_bboxCenterY = QtGui.QPushButton('Outline Center Y')
 		self.btn_solveY = QtGui.QPushButton('Lineup Min/Max Y')
 		self.btn_solveX = QtGui.QPushButton('Lineup Min/Max X')
 		self.btn_copy = QtGui.QPushButton('Copy Slope')
@@ -207,18 +209,22 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_pasteMaxY.clicked.connect(lambda: self.pasteSlope('MaxY'))
 		self.btn_pasteFMinY.clicked.connect(lambda: self.pasteSlope('FLMinY'))
 		self.btn_pasteFMaxY.clicked.connect(lambda: self.pasteSlope('FLMaxY'))
+		self.btn_bboxCenterX.clicked.connect(lambda: self.alignNodes('BBoxCenterX'))
+		self.btn_bboxCenterY.clicked.connect(lambda: self.alignNodes('BBoxCenterY'))
 				
 		self.addWidget(self.btn_left, 		0,0)
 		self.addWidget(self.btn_right, 		0,1)
 		self.addWidget(self.btn_top, 		0,2)
 		self.addWidget(self.btn_bottom,	 	0,3)
-		self.addWidget(self.btn_solveY, 	1,0,1,2)
-		self.addWidget(self.btn_solveX, 	1,2,1,2)
-		self.addWidget(self.btn_copy,		2,0,1,4)
-		self.addWidget(self.btn_pasteMinY,	3,0,1,1)
-		self.addWidget(self.btn_pasteMaxY,	3,1,1,1)
-		self.addWidget(self.btn_pasteFMinY,3,2,1,1)
-		self.addWidget(self.btn_pasteFMaxY,3,3,1,1)
+		self.addWidget(self.btn_bboxCenterX,1,0,1,2)
+		self.addWidget(self.btn_bboxCenterY,1,2,1,2)
+		self.addWidget(self.btn_solveY, 	2,0,1,2)
+		self.addWidget(self.btn_solveX, 	2,2,1,2)
+		self.addWidget(self.btn_copy,		3,0,1,4)
+		self.addWidget(self.btn_pasteMinY,	4,0,1,1)
+		self.addWidget(self.btn_pasteMaxY,	4,1,1,1)
+		self.addWidget(self.btn_pasteFMinY,	4,2,1,1)
+		self.addWidget(self.btn_pasteFMaxY,	4,3,1,1)
 
 	def copySlope(self):
 		from typerig.brain import Line
@@ -302,6 +308,18 @@ class alignNodes(QtGui.QGridLayout):
 
 			elif mode == 'X':
 				target = Line(min(selection, key=lambda item: item.x).fl, max(selection, key=lambda item: item.x).fl)
+				control = (False, True)
+
+			elif mode == 'BBoxCenterX':
+				newX = glyph.layer(layer).boundingBox.x() + glyph.layer(layer).boundingBox.width()/2
+				newY = 0.
+				target = fl6.flNode(newX, newY)
+				control = (True, False)
+
+			elif mode == 'BBoxCenterY':
+				newX = 0.
+				newY = glyph.layer(layer).boundingBox.y() + glyph.layer(layer).boundingBox.height()/2
+				target = fl6.flNode(newX, newY)
 				control = (False, True)
 
 			for node in selection:
@@ -479,7 +497,7 @@ class advMovement(QtGui.QVBoxLayout):
 		super(advMovement, self).__init__()
 
 		# - Init
-		self.methodList = ['Move', 'Interpolated Move', 'Slanted Grid Move']
+		self.methodList = ['Move', 'Simple Move', 'Interpolated Move', 'Slanted Grid Move']
 		
 		# - Methods
 		self.cmb_methodSelector = QtGui.QComboBox()
@@ -543,10 +561,15 @@ class advMovement(QtGui.QVBoxLayout):
 
 		elif method == self.methodList[1]:
 			for node in selectedNodes:
+				if node.isOn:
+					node.move(QtCore.QPointF(offset_x, offset_y))
+
+		elif method == self.methodList[2]:
+			for node in selectedNodes:
 				wNode = eNode(node)
 				wNode.interpMove(offset_x, offset_y)
 
-		elif method == self.methodList[2]:
+		elif method == self.methodList[3]:
 			if italic_angle != 0:
 				for node in selectedNodes:
 					wNode = eNode(node)
@@ -639,7 +662,7 @@ class tool_tab(QtGui.QWidget):
 		else:
 			addon = .0
 		
-		# -- Standard movement keys				
+		# -- Standard movement keys	
 		if key == QtCore.Qt.Key_Up:
 			shiftXY = (.0, float(self.advMovement.edt_offY.text) + addon)
 		
@@ -654,7 +677,7 @@ class tool_tab(QtGui.QWidget):
 		
 		else:
 			shiftXY = (.0,.0)
-
+		
 		# - Move
 		self.advMovement.moveNodes(*shiftXY, method=str(self.advMovement.cmb_methodSelector.currentText))
 

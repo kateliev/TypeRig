@@ -113,7 +113,7 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		# - Init
 		self.aux = aux
 		self.types = 'Anchor PinPoint'.split(' ')
-		self.posY = 'Coord Above Below Center Baseline'.split(' ')
+		self.posY = 'Coord Above Below Center Baseline Copy'.split(' ')
 		self.posX = 'Coord Left Right Center Highest Lowest'.split(' ')
 		posYvals = (None, 'T', 'B', 'C', None)
 		posXvals = (None ,'L', 'R', 'C', 'AT', 'A')
