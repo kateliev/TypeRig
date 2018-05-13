@@ -16,7 +16,7 @@ from typerig.glyph import eGlyph
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Layers', '0.26'
+app_name, app_version = 'TypeRig | Layers', '0.27'
 
 # - Sub widgets ------------------------
 class QlayerSelect(QtGui.QVBoxLayout):
@@ -373,7 +373,7 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 		# -- Quick Tool buttons
 		self.lay_buttons = QtGui.QHBoxLayout()
 		self.btn_unfold = QtGui.QPushButton('Unfold Layers')
-		self.btn_restore = QtGui.QPushButton('Restore Metrics')
+		self.btn_restore = QtGui.QPushButton('Fold Layers')
 		self.btn_restore.setEnabled(False)
 		
 		self.btn_unfold.setToolTip('Reposition selected layers side by side. Selection order does matter!')
@@ -426,7 +426,7 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 
 			# - Reset
 			self.backup = {}
-			self.btn_restore.setEnabled(True)
+			self.btn_restore.setEnabled(False)
 
 			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Restore Layer metrics: %s.' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
 			self.aux.glyph.update()
