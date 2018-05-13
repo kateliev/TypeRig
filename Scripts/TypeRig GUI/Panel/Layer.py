@@ -169,8 +169,6 @@ class QlayerBasic(QtGui.QVBoxLayout):
 			self.aux.glyph.update()
 			self.aux.refresh()
 
-		
-
 class QlayerTools(QtGui.QVBoxLayout):
 	def __init__(self, aux):
 		super(QlayerTools, self).__init__()
@@ -364,6 +362,76 @@ class QlayerTools(QtGui.QVBoxLayout):
 			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Paste Layer | %s -> %s.' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
 			self.aux.glyph.update()
 
+class QlayerMultiEdit(QtGui.QVBoxLayout):
+	def __init__(self, aux):
+		super(QlayerMultiEdit, self).__init__()
+
+		# - Init
+		self.aux = aux
+		self.backup = {}
+
+		# -- Quick Tool buttons
+		self.lay_buttons = QtGui.QHBoxLayout()
+		self.btn_unfold = QtGui.QPushButton('Unfold Layers')
+		self.btn_restore = QtGui.QPushButton('Restore Metrics')
+		self.btn_restore.setEnabled(False)
+		
+		self.btn_unfold.setToolTip('Reposition selected layers side by side. Selection order does matter!')
+		self.btn_restore.setToolTip('Restore Layer Metrics.')
+
+		self.btn_unfold.clicked.connect(self.unfold)
+		self.btn_restore.clicked.connect(self.restore)
+				
+		self.lay_buttons.addWidget(self.btn_unfold)
+		self.lay_buttons.addWidget(self.btn_restore)
+		self.addLayout(self.lay_buttons)
+
+	# - Button procedures ---------------------------------------------------
+	def unfold(self):
+		if self.aux.doCheck() and len(self.aux.lst_layers.selectedItems()) > 1:
+			# - Init
+			wGlyph = self.aux.glyph
+
+			# - Prepare Backup
+			self.backup = {item.text():(wGlyph.getLSB(item.text()), wGlyph.getAdvance(item.text())) for item in self.aux.lst_layers.selectedItems()}
+			self.btn_restore.setEnabled(True)
+
+			# - Calculate metrics
+			newLSB = 0
+			nextLSB = 0
+			newAdvance = sum([sum(item) for item in self.backup.values()])
+			
+			for item in self.aux.lst_layers.selectedItems():
+				wLayer = item.text()
+				
+				newLSB += nextLSB + self.backup[wLayer][0]
+				nextLSB = self.backup[wLayer][1]
+				
+				wGlyph.setLSB(newLSB, wLayer)
+				wGlyph.setAdvance(newAdvance, wLayer)
+				wGlyph.layer(wLayer).isVisible = True
+
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Unfold Layers (Side By Side): %s.' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
+			self.aux.glyph.update()
+
+	def restore(self):
+		if self.aux.doCheck() and len(self.backup.keys()):
+			# - Resore metrics
+			wGlyph = self.aux.glyph
+
+			for layer, metrics in self.backup.iteritems():
+				wGlyph.setLSB(metrics[0], layer)
+				wGlyph.setAdvance(metrics[1], layer)
+				wGlyph.layer(layer).isVisible = False
+
+			# - Reset
+			self.backup = {}
+			self.btn_restore.setEnabled(True)
+
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Restore Layer metrics: %s.' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
+			self.aux.glyph.update()
+
+
 class QlayerBlend(QtGui.QVBoxLayout):
 	def __init__(self, aux):
 		super(QlayerBlend, self).__init__()
@@ -456,12 +524,15 @@ class tool_tab(QtGui.QWidget):
 		self.quickTools = QlayerTools(self.layerSelector)
 		self.blendTools = QlayerBlend(self.layerSelector)
 		self.basicTools = QlayerBasic(self.layerSelector)
+		self.unfoldLayers = QlayerMultiEdit(self.layerSelector)
 
 		layoutV.addLayout(self.layerSelector)
 		layoutV.addWidget(QtGui.QLabel('Basic Tools (Layers selected)'))
 		layoutV.addLayout(self.basicTools)
 		layoutV.addWidget(QtGui.QLabel('Content Tools (Active Layer to selection)'))
 		layoutV.addLayout(self.quickTools)
+		layoutV.addWidget(QtGui.QLabel('Layer Multi-editing'))
+		layoutV.addLayout(self.unfoldLayers)
 		layoutV.addWidget(QtGui.QLabel('Interpolate/Blend (Active Layer to selection)'))
 		layoutV.addLayout(self.blendTools)
 
