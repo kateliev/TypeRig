@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.40'
+app_name, app_version = 'TypeRig | Nodes', '0.41'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -170,6 +170,10 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_bottom = QtGui.QPushButton('Bottom')
 		self.btn_bboxCenterX = QtGui.QPushButton('Outline Center X')
 		self.btn_bboxCenterY = QtGui.QPushButton('Outline Center Y')
+		self.btn_toAscender = QtGui.QPushButton('Asc.')
+		self.btn_toCapsHeight = QtGui.QPushButton('Caps')
+		self.btn_toDescender = QtGui.QPushButton('Desc.')
+		self.btn_toXHeight = QtGui.QPushButton('X Hgt.')
 		self.btn_solveY = QtGui.QPushButton('Lineup Min/Max Y')
 		self.btn_solveX = QtGui.QPushButton('Lineup Min/Max X')
 		self.btn_copy = QtGui.QPushButton('Copy Slope')
@@ -188,6 +192,10 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_pasteMaxY.setToolTip('Apply slope to selected nodes.\nReference at MAX Y value.')
 		self.btn_pasteFMinY.setToolTip('Apply X flipped slope to selected nodes.\nReference at MIN Y value.')
 		self.btn_pasteFMaxY.setToolTip('Apply X flipped slope to selected nodes.\nReference at MAX Y value.')
+		self.btn_toAscender.setToolTip('Send selected nodes to Ascender height ')
+		self.btn_toCapsHeight.setToolTip('Send selected nodes to Caps Height')
+		self.btn_toDescender.setToolTip('Send selected nodes to Descender height')
+		self.btn_toXHeight.setToolTip('Send selected nodes to X Height')
 
 		self.btn_left.setMinimumWidth(40)
 		self.btn_right.setMinimumWidth(40)
@@ -197,6 +205,10 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_pasteFMaxY.setMinimumWidth(40)
 		self.btn_pasteMinY.setMinimumWidth(40)
 		self.btn_pasteMaxY.setMinimumWidth(40)
+		self.btn_toAscender.setMinimumWidth(40)
+		self.btn_toCapsHeight.setMinimumWidth(40)
+		self.btn_toDescender.setMinimumWidth(40)
+		self.btn_toXHeight.setMinimumWidth(40)
 				
 		self.btn_copy.clicked.connect(self.copySlope)
 		self.btn_left.clicked.connect(lambda: self.alignNodes('L'))
@@ -211,20 +223,28 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_pasteFMaxY.clicked.connect(lambda: self.pasteSlope('FLMaxY'))
 		self.btn_bboxCenterX.clicked.connect(lambda: self.alignNodes('BBoxCenterX'))
 		self.btn_bboxCenterY.clicked.connect(lambda: self.alignNodes('BBoxCenterY'))
+		self.btn_toAscender.clicked.connect(lambda: self.alignNodes('FontMetrics_0'))
+		self.btn_toCapsHeight.clicked.connect(lambda: self.alignNodes('FontMetrics_1'))
+		self.btn_toDescender.clicked.connect(lambda: self.alignNodes('FontMetrics_2'))
+		self.btn_toXHeight.clicked.connect(lambda: self.alignNodes('FontMetrics_3'))
 				
-		self.addWidget(self.btn_left, 		0,0)
-		self.addWidget(self.btn_right, 		0,1)
-		self.addWidget(self.btn_top, 		0,2)
-		self.addWidget(self.btn_bottom,	 	0,3)
-		self.addWidget(self.btn_bboxCenterX,1,0,1,2)
-		self.addWidget(self.btn_bboxCenterY,1,2,1,2)
-		self.addWidget(self.btn_solveY, 	2,0,1,2)
-		self.addWidget(self.btn_solveX, 	2,2,1,2)
-		self.addWidget(self.btn_copy,		3,0,1,4)
-		self.addWidget(self.btn_pasteMinY,	4,0,1,1)
-		self.addWidget(self.btn_pasteMaxY,	4,1,1,1)
-		self.addWidget(self.btn_pasteFMinY,	4,2,1,1)
-		self.addWidget(self.btn_pasteFMaxY,	4,3,1,1)
+		self.addWidget(self.btn_left, 			0,0)
+		self.addWidget(self.btn_right, 			0,1)
+		self.addWidget(self.btn_top, 			0,2)
+		self.addWidget(self.btn_bottom,	 		0,3)
+		self.addWidget(self.btn_bboxCenterX,	1,0,1,2)
+		self.addWidget(self.btn_bboxCenterY,	1,2,1,2)
+		self.addWidget(self.btn_toAscender,		2,0)
+		self.addWidget(self.btn_toCapsHeight,	2,1)
+		self.addWidget(self.btn_toDescender,	2,2)
+		self.addWidget(self.btn_toXHeight,		2,3)
+		self.addWidget(self.btn_solveY, 		3,0,1,2)
+		self.addWidget(self.btn_solveX, 		3,2,1,2)
+		self.addWidget(self.btn_copy,			4,0,1,4)
+		self.addWidget(self.btn_pasteMinY,		5,0,1,1)
+		self.addWidget(self.btn_pasteMaxY,		5,1,1,1)
+		self.addWidget(self.btn_pasteFMinY,		5,2,1,1)
+		self.addWidget(self.btn_pasteFMaxY,		5,3,1,1)
 
 	def copySlope(self):
 		from typerig.brain import Line
@@ -319,6 +339,22 @@ class alignNodes(QtGui.QGridLayout):
 			elif mode == 'BBoxCenterY':
 				newX = 0.
 				newY = glyph.layer(layer).boundingBox.y() + glyph.layer(layer).boundingBox.height()/2
+				target = fl6.flNode(newX, newY)
+				control = (False, True)
+
+			elif 'FontMetrics' in mode:
+				layerMetrics = glyph.fontMetrics(layer)
+
+				newX = 0.
+				if '0' in mode:
+					newY = layerMetrics.ascender
+				elif '1' in mode:
+					newY = layerMetrics.capsHeight
+				elif '2' in mode:
+					newY = layerMetrics.descender
+				elif '3' in mode:
+					newY = layerMetrics.xHeight
+				
 				target = fl6.flNode(newX, newY)
 				control = (False, True)
 

@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.36
+# VER 	: 0.38
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -670,6 +670,22 @@ class pGlyph(object):
 		'''Set Advance width metric equation on given layer'''
 		self.layer(layer).metricsWidth = equationStr
 
+	def fontMetrics(self, layer=None):
+		'''Returns Font(layer) metrics no matter the reference.
+		Args:
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+		Returns:
+			FontMetrics (object)
+		'''
+		if layer is None:
+			return fl6.FontMetrics(self.package, self.fl.activeLayer.name)
+		else:
+			if isinstance(layer, int):
+				return fl6.FontMetrics(self.package, self.fl.layers[layer].name) 
+
+			elif isinstance(layer, basestring):
+				return fl6.FontMetrics(self.package, layer)
+
 	# - Anchors and pins -----------------------------------------------
 	def anchors(self, layer=None):
 		'''Return list of anchors (list[flAnchor]) at given layer (int or str)'''
@@ -788,6 +804,19 @@ class pFont(object):
 	def pGlyphs(self, processList=None):
 		'''Return list of TypeRig proxy Glyph objects glyph objects (list[pGlyph]).'''
 		return [self.glyph(glyph) for glyph in self.fg] if not processList else [self.glyph(glyph) for glyph in processList]
+
+	def fontMetrics(self, layer):
+		'''Returns Font(layer) metrics no matter the reference.
+		Args:
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+		Returns:
+			FontMetrics (object)
+		'''
+		if isinstance(layer, int):
+			return fl6.FontMetrics(self.fl, self.fl.masters[layer]) 
+
+		elif isinstance(layer, basestring):
+			return fl6.FontMetrics(self.fl, layer)
 
 	# - Axes and MM ----------------------------------------------------
 	def axes(self):
