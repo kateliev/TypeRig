@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Metrics', '0.02'
+app_name, app_version = 'TypeRig | Metrics', '0.03'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -179,6 +179,76 @@ class metrics_expr(QtGui.QGridLayout):
 		glyph.update()
 		glyph.updateObject(glyph.fl, 'Set Metrics Equations @ %s.' %'; '.join(wLayers))
 
+class metrics_font(QtGui.QGridLayout):
+	# - Copy Metric properties from other glyph
+	def __init__(self):
+		super(metrics_font, self).__init__()
+
+		self.btn_setAscender = QtGui.QPushButton('Asc.')
+		self.btn_setCapsHeight = QtGui.QPushButton('Caps')
+		self.btn_setDescender = QtGui.QPushButton('Desc.')
+		self.btn_setXHeight = QtGui.QPushButton('X Hgt.')
+
+		self.btn_togSelection = QtGui.QPushButton('Selection')
+		self.btn_togBBOX = QtGui.QPushButton('Glyph BBOX')
+
+		self.btn_togSelection.setCheckable(True)
+		self.btn_togBBOX.setCheckable(True)
+		#self.btn_togBBOX.setEnabled(False)
+		
+		self.btn_setAscender.setToolTip('Set Ascender height ')
+		self.btn_setCapsHeight.setToolTip('Set Caps Height')
+		self.btn_setDescender.setToolTip('Set Descender height')
+		self.btn_setXHeight.setToolTip('Set X Height')
+
+		self.btn_togSelection.setToolTip('Set Font metrics using the selected node')
+		self.btn_togBBOX.setToolTip('Set Font metrics using the active glyph bounding box')
+
+		self.btn_setAscender.setMinimumWidth(40)
+		self.btn_setCapsHeight.setMinimumWidth(40)
+		self.btn_setDescender.setMinimumWidth(40)
+		self.btn_setXHeight.setMinimumWidth(40)
+
+		self.btn_setAscender.clicked.connect(lambda: self.setFontMetrics('ascender'))
+		self.btn_setCapsHeight.clicked.connect(lambda: self.setFontMetrics('capsHeight'))
+		self.btn_setDescender .clicked.connect(lambda: self.setFontMetrics('descender'))
+		self.btn_setXHeight.clicked.connect(lambda: self.setFontMetrics('xHeight'))
+
+		self.addWidget(self.btn_togSelection,	0,0,1,2)
+		self.addWidget(self.btn_togBBOX,		0,2,1,2)
+		self.addWidget(self.btn_setAscender,	1,0,1,1)
+		self.addWidget(self.btn_setCapsHeight,	1,1,1,1)
+		self.addWidget(self.btn_setDescender,	1,2,1,1)
+		self.addWidget(self.btn_setXHeight,		1,3,1,1)
+
+	def setFontMetrics(self, metricName):
+		glyph = eGlyph()
+		wLayers = glyph._prepareLayers(pLayers)
+
+		for layer in wLayers:
+			if self.btn_togSelection.isChecked():
+				selection = glyph.selectedNodes(layer)
+
+				if len(selection):
+					glyph.package.setMaster(layer)
+					exec('glyph.package.%s_value = selection[0].y' %metricName)
+
+			if self.btn_togBBOX.isChecked():
+				bbox_layer = glyph.layer(layer).boundingBox
+				glyph.package.setMaster(layer)
+								
+				if metricName is 'ascender' or 'capsHeight' or 'xHeight':
+					exec('glyph.package.%s_value = bbox_layer.y() + bbox_layer.height()' %metricName)
+
+				elif 'descender':
+					exec('glyph.package.%s_value = bbox_layer.y()' %metricName)
+		
+		self.btn_togSelection.setChecked(False)
+		self.btn_togBBOX.setChecked(False)
+
+		glyph.update()
+		glyph.updateObject(glyph.package, 'Set Font Metrics: %s @ %s.' %(metricName, '; '.join(wLayers)))
+
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
@@ -189,10 +259,12 @@ class tool_tab(QtGui.QWidget):
 		layoutV = QtGui.QVBoxLayout()
 			
 		# - Build   
-		layoutV.addWidget(QtGui.QLabel('Copy Metric data'))
+		layoutV.addWidget(QtGui.QLabel('Glyph: Copy Metric data'))
 		layoutV.addLayout(metrics_copy())
-		layoutV.addWidget(QtGui.QLabel('Set metric expressions'))
+		layoutV.addWidget(QtGui.QLabel('Glyph: Set metric expressions'))
 		layoutV.addLayout(metrics_expr())
+		layoutV.addWidget(QtGui.QLabel('\nFont: Set Font Metrics'))
+		layoutV.addLayout(metrics_font())
 
 		 # - Build ---------------------------
 		layoutV.addStretch()
