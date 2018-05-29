@@ -11,6 +11,8 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 ##### Node Panel
 - Add/remove nodes 
 - Align Nodes, chanel processing and more... 
+- Copy slope from one node pair to another
+- Align selected nodes to font metrics
 - Break, cut and knot contours.
 - Close open contours.
 - Interpolated move aka Interpolated nudge (Active Layer only).
@@ -28,6 +30,7 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 - Copy/Paste/Swap active layer outline, metrics, anchors and guides to any selected layer (also usable as FontLab V's swap with mask feature).
 - Interpolate current layer to any selected layer... (more TBI)
 - Interpolate any two selected layers into the current active layer... (more TBI)
+- Unfold/fold layers, allowing layer side-by-side editing
 
 *'affects multiple selected layers*
 
@@ -39,6 +42,7 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 ##### Metrics panel
 - Copy metrics from glyph (with adjustments)
 - Set metric equations
+- Set Font metrics (ascender, descender, cap height and x-height) acording to selected nodes Y coordinate or active glyph BBox
 
 ##### Mixer panel (closed beta')
 - Set custom axis and interpolate between any two compatible layers
