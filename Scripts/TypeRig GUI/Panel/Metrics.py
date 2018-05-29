@@ -234,14 +234,14 @@ class metrics_font(QtGui.QGridLayout):
 					exec('glyph.package.%s_value = selection[0].y' %metricName)
 
 			if self.btn_togBBOX.isChecked():
-				bbox_layer = glyph.layer(layer).boundingBox
 				glyph.package.setMaster(layer)
+				bbox_layer = glyph.layer(layer).boundingBox
 								
-				if metricName is 'ascender' or 'capsHeight' or 'xHeight':
-					exec('glyph.package.%s_value = bbox_layer.y() + bbox_layer.height()' %metricName)
+				if metricName in ['ascender', 'capsHeight', 'xHeight']:
+					exec('glyph.package.%s_value = int(bbox_layer.y() + bbox_layer.height())' %metricName)
 
-				elif 'descender':
-					exec('glyph.package.%s_value = bbox_layer.y()' %metricName)
+				elif metricName == 'descender':
+					glyph.package.descender_value = int(bbox_layer.y())
 		
 		self.btn_togSelection.setChecked(False)
 		self.btn_togBBOX.setChecked(False)
