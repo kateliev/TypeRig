@@ -670,7 +670,7 @@ class pGlyph(object):
 		'''Set Advance width metric equation on given layer'''
 		self.layer(layer).metricsWidth = equationStr
 
-	def fontMetrics(self, layer=None):
+	def fontMetricsInfo(self, layer=None):
 		'''Returns Font(layer) metrics no matter the reference.
 		Args:
 			layer (int or str): Layer index or name. If None returns ActiveLayer
@@ -742,6 +742,81 @@ class pGlyph(object):
 		self.layer(layer).appendGuidelines([newGuideline])
 
 
+class pFontMetrics(object):
+	'''
+	An Abstract Font Metrics getter/setter of a flPackage.
+
+	Constructor:
+		pFontMetrics() - default represents the current glyph and current font
+		pFontMetrics(flPackage)
+	
+	'''
+	def __init__(self, font):
+		self.fl = font
+
+	# - Getters
+	def getAscender (self, layer=None):
+		if layer is not None:
+			self.fl.setMaster(layer)
+		return self.fl.ascender_value
+
+	def getCapsHeight (self, layer=None):
+		if layer is not None:
+			self.fl.setMaster(layer)
+		return self.fl.capsHeight_value
+
+	def getDescender (self, layer=None):
+		if layer is not None:
+			self.fl.setMaster(layer)
+		return self.fl.descender_value
+
+	def getLineGap (self, layer=None):
+		if layer is not None:
+			self.fl.setMaster(layer)
+		return self.fl.lineGap_value
+
+	def getUpm (self, layer=None):
+		if layer is not None:
+			self.fl.setMaster(layer)
+		return self.fl.upm
+
+	def getXHeight (self, layer=None):
+		if layer is not None:
+			self.fl.setMaster(layer)
+		return self.fl.xHeight_value
+
+	# - Setters
+	def setAscender (self, value, layer=None):
+		if layer is not None:
+			self.fl.setMaster(layer)
+		self.fl.ascender_value = value
+
+	def setCapsHeight (self, value, layer=None):
+		if layer is not None:
+			self.fl.setMaster(layer)
+		self.fl.capsHeight_value = value
+
+	def setDescender (self, value, layer=None):
+		if layer is not None:
+			self.fl.setMaster(layer)
+		self.fl.descender_value = value
+
+	def setLineGap (self, value, layer=None):
+		if layer is not None:
+			self.fl.setMaster(layer)
+		self.fl.lineGap_value = value
+
+	def setUpm (self, value, layer=None):
+		if layer is not None:
+			self.fl.setMaster(layer)
+		self.fl.upm = value
+
+	def setXHeight (self, value, layer=None):
+		if layer is not None:
+			self.fl.setMaster(layer)
+		self.fl.xHeight_value = value
+
+
 class pFont(object):
 	'''
 	A Proxy Font representation of Fonlab fgFont and flPackage.
@@ -805,7 +880,7 @@ class pFont(object):
 		'''Return list of TypeRig proxy Glyph objects glyph objects (list[pGlyph]).'''
 		return [self.glyph(glyph) for glyph in self.fg] if not processList else [self.glyph(glyph) for glyph in processList]
 
-	def fontMetrics(self, layer):
+	def fontMetricsInfo(self, layer):
 		'''Returns Font(layer) metrics no matter the reference.
 		Args:
 			layer (int or str): Layer index or name. If None returns ActiveLayer
@@ -817,6 +892,11 @@ class pFont(object):
 
 		elif isinstance(layer, basestring):
 			return fl6.FontMetrics(self.fl, layer)
+
+	def fontMetrics(self):
+		'''Returns pFontMetrics Object with getter/setter functionality'''
+		from typerig.proxy import pFontMetrics
+		return pFontMetrics(self.fl)
 
 	# - Axes and MM ----------------------------------------------------
 	def axes(self):

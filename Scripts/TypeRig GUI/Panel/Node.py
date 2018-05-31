@@ -343,7 +343,7 @@ class alignNodes(QtGui.QGridLayout):
 				control = (False, True)
 
 			elif 'FontMetrics' in mode:
-				layerMetrics = glyph.fontMetrics(layer)
+				layerMetrics = glyph.fontMetricsInfo(layer)
 
 				newX = 0.
 				if '0' in mode:
