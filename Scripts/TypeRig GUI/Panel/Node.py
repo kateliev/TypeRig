@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.41'
+app_name, app_version = 'TypeRig | Nodes', '0.45'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -385,16 +385,17 @@ class alignNodes(QtGui.QGridLayout):
 					newY = layerMetrics.xHeight
 
 			for node in selection:
-				if italicAngle != 0:
-					tempTarget = Coord(node.fl)
-					tempTarget.setAngle(italicAngle)
+				if 'FontMetrics' in mode:
+					if italicAngle != 0:
+						tempTarget = Coord(node.fl)
+						tempTarget.setAngle(italicAngle)
 
-					target = fl6.flNode(tempTarget.getWidth(newY), newY)
-					control = (True, True)
-				
-				else:
-					target = fl6.flNode(newX, newY)
-					control = (False, True)
+						target = fl6.flNode(tempTarget.getWidth(newY), newY)
+						control = (True, True)
+					
+					else:
+						target = fl6.flNode(newX, newY)
+						control = (False, True)
 
 				node.alignTo(target, control)
 
