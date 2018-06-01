@@ -177,6 +177,7 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_solveY = QtGui.QPushButton('Lineup Min/Max Y')
 		self.btn_solveX = QtGui.QPushButton('Lineup Min/Max X')
 		self.btn_copy = QtGui.QPushButton('Copy Slope')
+		self.btn_italic = QtGui.QPushButton('Italic')
 		self.btn_pasteMinY = QtGui.QPushButton('Min Y')
 		self.btn_pasteMaxY = QtGui.QPushButton('Max Y')
 		self.btn_pasteFMinY = QtGui.QPushButton('Flip Min')
@@ -185,17 +186,21 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_copy.setCheckable(True)
 		self.btn_copy.setChecked(False)
 
+		self.btn_italic.setCheckable(True)
+		self.btn_italic.setChecked(False)
+
 		self.btn_solveY.setToolTip('Channel Process selected nodes according to Y values')
 		self.btn_solveX.setToolTip('Channel Process selected nodes according to X values')
 		self.btn_copy.setToolTip('Copy slope between lowest and highest of selected nodes.')
+		self.btn_italic.setToolTip('Use Italic Angle as slope.')
 		self.btn_pasteMinY.setToolTip('Apply slope to selected nodes.\nReference at MIN Y value.')
 		self.btn_pasteMaxY.setToolTip('Apply slope to selected nodes.\nReference at MAX Y value.')
 		self.btn_pasteFMinY.setToolTip('Apply X flipped slope to selected nodes.\nReference at MIN Y value.')
 		self.btn_pasteFMaxY.setToolTip('Apply X flipped slope to selected nodes.\nReference at MAX Y value.')
-		self.btn_toAscender.setToolTip('Send selected nodes to Ascender height ')
-		self.btn_toCapsHeight.setToolTip('Send selected nodes to Caps Height')
-		self.btn_toDescender.setToolTip('Send selected nodes to Descender height')
-		self.btn_toXHeight.setToolTip('Send selected nodes to X Height')
+		self.btn_toAscender.setToolTip('Send selected nodes to Ascender height.')
+		self.btn_toCapsHeight.setToolTip('Send selected nodes to Caps Height.')
+		self.btn_toDescender.setToolTip('Send selected nodes to Descender height.')
+		self.btn_toXHeight.setToolTip('Send selected nodes to X Height.')
 
 		self.btn_left.setMinimumWidth(40)
 		self.btn_right.setMinimumWidth(40)
@@ -228,29 +233,34 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toDescender.clicked.connect(lambda: self.alignNodes('FontMetrics_2'))
 		self.btn_toXHeight.clicked.connect(lambda: self.alignNodes('FontMetrics_3'))
 				
+		
 		self.addWidget(self.btn_left, 			0,0)
 		self.addWidget(self.btn_right, 			0,1)
 		self.addWidget(self.btn_top, 			0,2)
 		self.addWidget(self.btn_bottom,	 		0,3)
 		self.addWidget(self.btn_bboxCenterX,	1,0,1,2)
 		self.addWidget(self.btn_bboxCenterY,	1,2,1,2)
-		self.addWidget(self.btn_toAscender,		2,0)
-		self.addWidget(self.btn_toCapsHeight,	2,1)
-		self.addWidget(self.btn_toDescender,	2,2)
-		self.addWidget(self.btn_toXHeight,		2,3)
-		self.addWidget(self.btn_solveY, 		3,0,1,2)
-		self.addWidget(self.btn_solveX, 		3,2,1,2)
-		self.addWidget(self.btn_copy,			4,0,1,4)
-		self.addWidget(self.btn_pasteMinY,		5,0,1,1)
-		self.addWidget(self.btn_pasteMaxY,		5,1,1,1)
-		self.addWidget(self.btn_pasteFMinY,		5,2,1,1)
-		self.addWidget(self.btn_pasteFMaxY,		5,3,1,1)
+		self.addWidget(QtGui.QLabel('Align to Font metrics'), 2,0,1,4)
+		self.addWidget(self.btn_toAscender,		3,0)
+		self.addWidget(self.btn_toCapsHeight,	3,1)
+		self.addWidget(self.btn_toDescender,	3,2)
+		self.addWidget(self.btn_toXHeight,		3,3)
+		self.addWidget(QtGui.QLabel('Channel processing and slopes'), 4,0,1,4)
+		self.addWidget(self.btn_solveY, 		5,0,1,2)
+		self.addWidget(self.btn_solveX, 		5,2,1,2)
+		self.addWidget(self.btn_copy,			6,0,1,3)
+		self.addWidget(self.btn_italic,			6,3,1,1)
+		self.addWidget(self.btn_pasteMinY,		7,0,1,1)
+		self.addWidget(self.btn_pasteMaxY,		7,1,1,1)
+		self.addWidget(self.btn_pasteFMinY,		7,2,1,1)
+		self.addWidget(self.btn_pasteFMaxY,		7,3,1,1)
 
 	def copySlope(self):
 		from typerig.brain import Line
 
 		if self.btn_copy.isChecked():
 			self.btn_copy.setText('Reset Slope')
+			self.btn_italic.setChecked(False)
 
 			glyph = eGlyph()
 			wLayers = glyph._prepareLayers(pLayers)
@@ -261,34 +271,52 @@ class alignNodes(QtGui.QGridLayout):
 				print self.copyLine[layer].getAngle(), self.copyLine[layer].getSlope()
 		else:
 			self.btn_copy.setText('Copy Slope')
+			self.btn_italic.setChecked(False)
 
 	def pasteSlope(self, mode):
 		from typerig.brain import Line
 		
-		if self.btn_copy.isChecked():
+		if self.btn_copy.isChecked() or self.btn_italic.isChecked():
 			glyph = eGlyph()
 			wLayers = glyph._prepareLayers(pLayers)
+			italicAngle = glyph.package.italicAngle_value
 			control = (True, False)
 			
 			for layer in wLayers:
 				selection = [eNode(node) for node in glyph.selectedNodes(layer)]
-				srcLine = self.copyLine[layer]
+				srcLine = self.copyLine[layer] if not self.btn_italic.isChecked() else None
 
 				if mode == 'MinY':
 					dstLine = Line(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
-					dstLine.slope = srcLine.getSlope()
+					
+					if not self.btn_italic.isChecked():
+						dstLine.slope = srcLine.getSlope()
+					else:
+						dstLine.setAngle(-1*italicAngle)
 
 				elif mode == 'MaxY':
 					dstLine = Line(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
-					dstLine.slope = srcLine.getSlope()
+					
+					if not self.btn_italic.isChecked():
+						dstLine.slope = srcLine.getSlope()
+					else:
+						dstLine.setAngle(-1*italicAngle)
 
 				elif mode == 'FLMinY':
 					dstLine = Line(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
-					dstLine.slope = -1.*srcLine.getSlope()
+					
+					if not self.btn_italic.isChecked():
+						dstLine.slope = -1.*srcLine.getSlope()
+					else:
+						dstLine.setAngle(italicAngle)
 
 				elif mode == 'FLMaxY':
 					dstLine = Line(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
-					dstLine.slope = -1.*srcLine.getSlope()
+					
+					if not self.btn_italic.isChecked():
+						dstLine.slope = -1.*srcLine.getSlope()
+					else:
+						dstLine.setAngle(italicAngle)
 				
 				for node in selection:
 					node.alignTo(dstLine, control)
@@ -298,7 +326,7 @@ class alignNodes(QtGui.QGridLayout):
 
 
 	def alignNodes(self, mode):
-		from typerig.brain import Line
+		from typerig.brain import Coord, Line
 
 		glyph = eGlyph()
 		wLayers = glyph._prepareLayers(pLayers)
@@ -344,7 +372,8 @@ class alignNodes(QtGui.QGridLayout):
 
 			elif 'FontMetrics' in mode:
 				layerMetrics = glyph.fontMetricsInfo(layer)
-
+				italicAngle = glyph.package.italicAngle_value
+				
 				newX = 0.
 				if '0' in mode:
 					newY = layerMetrics.ascender
@@ -354,11 +383,19 @@ class alignNodes(QtGui.QGridLayout):
 					newY = layerMetrics.descender
 				elif '3' in mode:
 					newY = layerMetrics.xHeight
-				
-				target = fl6.flNode(newX, newY)
-				control = (False, True)
 
 			for node in selection:
+				if italicAngle != 0:
+					tempTarget = Coord(node.fl)
+					tempTarget.setAngle(italicAngle)
+
+					target = fl6.flNode(tempTarget.getWidth(newY), newY)
+					control = (True, True)
+				
+				else:
+					target = fl6.flNode(newX, newY)
+					control = (False, True)
+
 				node.alignTo(target, control)
 
 		glyph.updateObject(glyph.fl, 'Align Nodes @ %s.' %'; '.join(wLayers))

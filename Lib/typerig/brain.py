@@ -552,6 +552,12 @@ class _Line(object):
 		from math import degrees, atan2
 		return degrees(atan2(self.yDiff, self.xDiff))
 
+	def setAngle(self, angle):
+		'''Force Set Angle and change slope'''
+		from math import tan, radians
+		self.angle = angle
+		self.slope = float(tan(radians(90 - self.angle)))
+
 	def getYintercept(self):
 		'''Get the Y intercept of a line segment'''
 		return self.p0.y - self.slope * self.p0.x if not math.isnan(self.slope) and self.slope != 0 else self.p0.y
