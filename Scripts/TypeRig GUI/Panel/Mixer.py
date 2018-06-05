@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Mixer', '0.08'
+app_name, app_version = 'TypeRig | Mixer', '0.09'
 
 useFortran = True
 warnMessage = 'This Panel requires some precompiled FontRig | TypeRig modules.'
@@ -127,11 +127,11 @@ class sliderCtrl(QtGui.QGridLayout):
 
 
 	def refreshSlider(self):
-		self.sld_axis.setValue(int(self.edt_pos.text))
-		self.sld_axis.setMinimum(int(self.edt_0.text))
-		self.sld_axis.setMaximum(int(self.edt_1.text))
+		self.sld_axis.setMinimum(float(self.edt_0.text.strip()))
+		self.sld_axis.setMaximum(float(self.edt_1.text.strip()))
+		self.sld_axis.setValue(float(self.edt_pos.text.strip()))
 		self.sld_axis.setSingleStep(int(self.spb_step.value))
-		
+				
 	def reset(self):
 		self.edt_0.setText(self.initValues[0])
 		self.edt_1.setText(self.initValues[1])
@@ -209,6 +209,11 @@ class tool_tab(QtGui.QWidget):
 		self.head.cmb_0.setCurrentIndex(0)
 		self.head.cmb_1.setCurrentIndex(0)
 		self.axis = []
+
+		self.head.edt_stemV0.setText('1')
+		self.head.edt_stemV1.setText('1')
+		self.head.edt_stemH0.setText('1')
+		self.head.edt_stemH1.setText('1')
 
 		self.mixer.reset()
 		self.scalerX.reset()
