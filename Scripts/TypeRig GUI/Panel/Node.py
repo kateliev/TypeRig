@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.45'
+app_name, app_version = 'TypeRig | Nodes', '0.46'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -170,6 +170,8 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_bottom = QtGui.QPushButton('Bottom')
 		self.btn_bboxCenterX = QtGui.QPushButton('Outline Center X')
 		self.btn_bboxCenterY = QtGui.QPushButton('Outline Center Y')
+		self.btn_peerCenterX = QtGui.QPushButton('Neighbors Center X')
+		self.btn_peerCenterY = QtGui.QPushButton('Neighbors Center Y')
 		self.btn_toAscender = QtGui.QPushButton('Asc.')
 		self.btn_toCapsHeight = QtGui.QPushButton('Caps')
 		self.btn_toDescender = QtGui.QPushButton('Desc.')
@@ -228,6 +230,8 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_pasteFMaxY.clicked.connect(lambda: self.pasteSlope('FLMaxY'))
 		self.btn_bboxCenterX.clicked.connect(lambda: self.alignNodes('BBoxCenterX'))
 		self.btn_bboxCenterY.clicked.connect(lambda: self.alignNodes('BBoxCenterY'))
+		self.btn_peerCenterX.clicked.connect(lambda: self.alignNodes('peerCenterX'))
+		self.btn_peerCenterY.clicked.connect(lambda: self.alignNodes('peerCenterY'))
 		self.btn_toAscender.clicked.connect(lambda: self.alignNodes('FontMetrics_0'))
 		self.btn_toCapsHeight.clicked.connect(lambda: self.alignNodes('FontMetrics_1'))
 		self.btn_toDescender.clicked.connect(lambda: self.alignNodes('FontMetrics_2'))
@@ -240,20 +244,22 @@ class alignNodes(QtGui.QGridLayout):
 		self.addWidget(self.btn_bottom,	 		0,3)
 		self.addWidget(self.btn_bboxCenterX,	1,0,1,2)
 		self.addWidget(self.btn_bboxCenterY,	1,2,1,2)
-		self.addWidget(QtGui.QLabel('Align to Font metrics'), 2,0,1,4)
-		self.addWidget(self.btn_toAscender,		3,0)
-		self.addWidget(self.btn_toCapsHeight,	3,1)
-		self.addWidget(self.btn_toDescender,	3,2)
-		self.addWidget(self.btn_toXHeight,		3,3)
-		self.addWidget(QtGui.QLabel('Channel processing and slopes'), 4,0,1,4)
-		self.addWidget(self.btn_solveY, 		5,0,1,2)
-		self.addWidget(self.btn_solveX, 		5,2,1,2)
-		self.addWidget(self.btn_copy,			6,0,1,3)
-		self.addWidget(self.btn_italic,			6,3,1,1)
-		self.addWidget(self.btn_pasteMinY,		7,0,1,1)
-		self.addWidget(self.btn_pasteMaxY,		7,1,1,1)
-		self.addWidget(self.btn_pasteFMinY,		7,2,1,1)
-		self.addWidget(self.btn_pasteFMaxY,		7,3,1,1)
+		self.addWidget(self.btn_peerCenterX,	2,0,1,2)
+		self.addWidget(self.btn_peerCenterY,	2,2,1,2)
+		self.addWidget(QtGui.QLabel('Align to Font metrics'), 3,0,1,4)
+		self.addWidget(self.btn_toAscender,		4,0)
+		self.addWidget(self.btn_toCapsHeight,	4,1)
+		self.addWidget(self.btn_toDescender,	4,2)
+		self.addWidget(self.btn_toXHeight,		4,3)
+		self.addWidget(QtGui.QLabel('Channel processing and slopes'), 5,0,1,4)
+		self.addWidget(self.btn_solveY, 		6,0,1,2)
+		self.addWidget(self.btn_solveX, 		6,2,1,2)
+		self.addWidget(self.btn_copy,			7,0,1,3)
+		self.addWidget(self.btn_italic,			7,3,1,1)
+		self.addWidget(self.btn_pasteMinY,		8,0,1,1)
+		self.addWidget(self.btn_pasteMaxY,		8,1,1,1)
+		self.addWidget(self.btn_pasteFMinY,		8,2,1,1)
+		self.addWidget(self.btn_pasteFMaxY,		8,3,1,1)
 
 	def copySlope(self):
 		from typerig.brain import Line
@@ -397,6 +403,19 @@ class alignNodes(QtGui.QGridLayout):
 						target = fl6.flNode(newX, newY)
 						control = (False, True)
 
+				if mode == 'peerCenterX':
+					newX = node.x + (node.getPrevOn().x + node.getNextOn().x - 2*node.x)/2.
+					newY = node.y
+					target = fl6.flNode(newX, newY)
+					control = (True, False)
+
+				elif mode == 'peerCenterY':
+					newX = node.x
+					newY = node.y + (node.getPrevOn().y + node.getNextOn().y - 2*node.y)/2.
+					target = fl6.flNode(newX, newY)
+					control = (False, True)
+
+				# - Execute Align ----------
 				node.alignTo(target, control)
 
 		glyph.updateObject(glyph.fl, 'Align Nodes @ %s.' %'; '.join(wLayers))
