@@ -943,6 +943,34 @@ class pFont(object):
 		return self.fg.hinting
 
 	# - Charset -----------------------------------------------
+	# -- Return Names
+	def getGlyphNamesDict(self):
+		# -- Init
+		nameDict = {}
+
+		# --- Controls and basic latin: 0000 - 0080
+		nameDict['Latin_Upper'] = [self.fl.findUnicode(uni).name for uni in range(0x0000, 0x0080) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).isupper()]
+		nameDict['Latin_Lower'] = [self.fl.findUnicode(uni).name for uni in range(0x0000, 0x0080) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).islower()]
+
+		# --- Latin 1 Supplement: 0080 - 00FF
+		nameDict['Latin1_Upper'] = [self.fl.findUnicode(uni).name for uni in range(0x0080, 0x00FF) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).isupper()]
+		nameDict['Latin1_Lower'] = [self.fl.findUnicode(uni).name for uni in range(0x0080, 0x00FF) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).islower()]
+
+		# --- Latin A: unicode range 0100 - 017F
+		nameDict['LatinA_Upper'] = [self.fl.findUnicode(uni).name for uni in range(0x0100, 0x017F) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).isupper()]
+		nameDict['LatinA_Lower'] = [self.fl.findUnicode(uni).name for uni in range(0x0100, 0x017F) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).islower()]
+
+		# --- Latin B: unicode range 0180 - 024F
+		nameDict['LatinB_Upper'] = [self.fl.findUnicode(uni).name for uni in range(0x0180, 0x024F) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).isupper()]
+		nameDict['LatinB_Lower'] = [self.fl.findUnicode(uni).name for uni in range(0x0180, 0x024F) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).islower()]
+
+		# --- Cyrillic: unicode range 0400 - 04FF
+		nameDict['Cyrilic_Upper'] = [self.fl.findUnicode(uni).name for uni in range(0x0400, 0x04FF) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).isupper()]
+		nameDict['Cyrilic_Lower'] = [self.fl.findUnicode(uni).name for uni in range(0x0400, 0x04FF) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).islower()]
+		
+		return nameDict		
+	
+	# -- Return Glyphs
 	def uppercase(self):
 		'''Returns all uppercase characters (list[fgGlyph])'''
 		return [glyph for glyph in self.fg if glyph.unicode is not None and glyph.unicode < 10000 and unichr(glyph.unicode).isupper()] # Skip Private ranges - glyph.unicode < 10000
