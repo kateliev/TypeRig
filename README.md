@@ -51,7 +51,9 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 
 *'In order to operate, Mixer panel requires percompiled binary library MathRig that is currently available to limited number of users on Windows platform only. MAC version is also on its way...*
 
-###### *Kern pair generator panel (TBI)*
+##### String pair generator panel
+- A flexible string generator for metric and kerning pairs.
+
 ###### *Hints panel (TBI)*
 
 #### Known issues
