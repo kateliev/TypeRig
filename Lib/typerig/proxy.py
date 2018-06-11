@@ -15,6 +15,34 @@ import fontgate as fgt
 import PythonQt as pqt
 
 # - Classes -------------------------------
+class pWorkspace(object):
+	'''Proxy to flWorkspace object
+
+	Constructor:
+		pWorkspace()
+
+	Attributes:
+		.fl (flWorkspace): Current workspace
+		.main (QWidget): Main QWidget's window
+	'''
+
+	def __init__(self):
+		self.fl = fl6.flWorkspace.instance()
+		self.main = self.fl.mainWindow
+		self.name = self.fl.name
+
+	def getCanvas(self, atCursor=False):
+		return self.fl.getActiveCanvas() if not atCursor else self.fl.getCanvasUnderCursor()
+
+	def getCanvasList(self):
+		return self.fl.canvases()
+
+	def getTextBlockList(self, atCursor=False):
+		return self.getCanvas(atCursor).textBlocks()
+
+	def getTextBlockGlyphs(self, tbi=0):
+		return [info.glyph for info in self.getTextBlockList()[tbi].getAllGlyphs()]
+
 class pNode(object):
 	'''Proxy to flNode object
 
