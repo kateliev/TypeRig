@@ -8,7 +8,7 @@
 # that you use it at your own risk!
 
 # - Init
-app_name, app_version = 'TypeRig | String', '0.15'
+app_name, app_version = 'TypeRig | String', '0.20'
 glyphSep = '/'
 
 # - Dependencies -----------------
@@ -117,22 +117,31 @@ class QStringGen(QtGui.QGridLayout):
 		self.edt_fillerPattern.setText('FL A B A FR')
 
 	def refresh(self):
-		font = pFont()
-		self.glyphNames = font.getGlyphNamesDict()
+		self.font = pFont()
+		self.glyphNames = self.font.getGlyphNamesDict()
 
 		self.cmb_inputA.addItems(sorted(self.glyphNames.keys()))
-		self.cmb_inputB.addItems(sorted(self.glyphNames.keys()))		
+		self.cmb_inputB.addItems(sorted(self.glyphNames.keys()))	
+
+		print 'DONE:\t Active font glyph names loaded into generator.'	
 
 	def generate(self):
 		# - Get Values
 		if len(self.edt_inputA.text) > 0:
-			inputA = self.edt_inputA.text.split(' ')
-			#print [item.encode('raw_unicode_escape') for item in inputA]
+			try:
+				inputA = [self.font.fl.findUnicode(ord(item)).name for item in self.edt_inputA.text.split(' ')] 
+			except AttributeError:
+				print 'WARN:\t Unicode (Input A) to current font glyph names mapping is not activated! Please populate lists first.'
+				inputA = self.edt_inputA.text.split(' ')
 		else:
 			inputA = sorted(self.glyphNames[self.cmb_inputA.currentText])
 
 		if len(self.edt_inputB.text) > 0:
-			inputB = self.edt_inputB.text.split(' ')
+			try:
+				inputB = [self.font.fl.findUnicode(ord(item)).name for item in self.edt_inputB.text.split(' ')]  
+			except AttributeError:
+				print 'WARN:\t Unicode (Input B) to current font glyph names mapping is not activated! Please populate lists first.'
+				inputB = self.edt_inputB.text.split(' ')
 		else:
 			inputB = sorted(self.glyphNames[self.cmb_inputB.currentText])
 
@@ -153,7 +162,7 @@ class QStringGen(QtGui.QGridLayout):
 		# - Copy to cliboard
 		clipboard = QtGui.QApplication.clipboard()
 		clipboard.setText('\n'.join(generatedString))
-		print 'DONE:\t Generated string sent to cliboard!'
+		print 'DONE:\t Generated string sent to clipboard.'
 					
 class tool_tab(QtGui.QWidget):
 	def __init__(self):
