@@ -153,6 +153,8 @@ class pGlyph(object):
 
 	def activeGuides(self): return self.fl.activeLayer.guidelines
 
+	def object(self): return fl6.flObject(self.fl.id)
+
 	def nodes(self, layer=None):
 		'''Return all nodes at given layer.
 		Args:
