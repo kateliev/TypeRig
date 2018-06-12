@@ -1,4 +1,4 @@
-#FLM: Scaler (Multi Mixer)
+#FLM: Scaler (TypeRig)
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -38,7 +38,14 @@ except ImportError:
 # - Helper Classes ---------------------
 class tGlyph(eGlyph):
 	def addAxis(self, layerAname, layerBname):
-		self.axis = (self._getCoordArray(layerAname), self._getCoordArray(layerBname))
+		self.axis = ()
+		a = self._getCoordArray(layerAname)
+		b = self._getCoordArray(layerBname)
+		
+		if len(a) == len(b):
+			self.axis = (a, b)
+		else:
+			print 'WARN:\t Glyph /%s with non-compatible layers found!' %self.name
 
 # - Sub widgets ------------------------
 class message(QtGui.QVBoxLayout):
@@ -244,45 +251,46 @@ class tool_tab(QtGui.QWidget):
 		self.head.edt_stemH1.setText(wt_1)		
 
 	def setAxis(self):
-		#self.axis = [self.activeGlyph._getCoordArray(self.head.cmb_0.currentText), self.activeGlyph._getCoordArray(self.head.cmb_1.currentText)]
-		#self.activeGlyph.updateObject(self.activeGlyph.fl, 'Mixer Snapshot @ %s' %self.activeGlyph.layer().name)
 		for glyph in self.processGlyphs:
 			glyph.addAxis(self.head.cmb_0.currentText, self.head.cmb_1.currentText)
 			glyph.updateObject(glyph.fl, 'Mixer Snapshot @ %s' %glyph.name)
 	
 	def intelliScale(self):
-		
-		# - Compensation
-		scmp = float(self.head.spb_compH.value), float(self.head.spb_compV.value)
-		
-		# - Italic Angle
-		angle = radians(-float(self.italic_angle))
-		
-		# - Stems
-		sw_V = (float(self.head.edt_stemV0.text), float(self.head.edt_stemV1.text))
-		sw_H = (float(self.head.edt_stemH0.text), float(self.head.edt_stemH1.text))
+		try:
+			# - Compensation
+			scmp = float(self.head.spb_compH.value), float(self.head.spb_compV.value)
+			
+			# - Italic Angle
+			angle = radians(-float(self.italic_angle))
+			
+			# - Stems
+			sw_V = (float(self.head.edt_stemV0.text), float(self.head.edt_stemV1.text))
+			sw_H = (float(self.head.edt_stemH0.text), float(self.head.edt_stemH1.text))
 
-		curr_sw_V = float(self.mixer.sld_axis.value)
-		sw_V0, sw_V1 = min(*sw_V), max(*sw_V)
-		
-		# - Interpolation
-		tx = ((curr_sw_V - sw_V0)/(sw_V1 - sw_V0))*(1,-1)[sw_V[0] > sw_V[1]] + (0,1)[sw_V[0] > sw_V[1]]
+			curr_sw_V = float(self.mixer.sld_axis.value)
+			sw_V0, sw_V1 = min(*sw_V), max(*sw_V)
+			
+			# - Interpolation
+			tx = ((curr_sw_V - sw_V0)/(sw_V1 - sw_V0))*(1,-1)[sw_V[0] > sw_V[1]] + (0,1)[sw_V[0] > sw_V[1]]
 
-		# - Scaling
-		sx = 100./float(self.scalerX.edt_1.text) + float(self.scalerX.sld_axis.value)/float(self.scalerX.edt_1.text)
-		sy = 100./float(self.scalerY.edt_1.text) + float(self.scalerY.sld_axis.value)/float(self.scalerY.edt_1.text)
-		dx, dy = 0.0, 0.0
-						
-		# - Build
-		def scalerMM(glyph, sx, sy, t):
-			if len(glyph.axis):
-				mms = transform.adaptive_scale([glyph.axis[0].x, glyph.axis[0].y], [glyph.axis[1].x, glyph.axis[1].y], [sw_V[0], sw_H[0]], [sw_V[1], sw_H[1]], [sx, sy], [dx, dy], [t, t], scmp, angle)
-				glyph._setCoordArray(mms)			
-				glyph.update()
-				fl6.Update(glyph.fl)
+			# - Scaling
+			sx = 100./float(self.scalerX.edt_1.text) + float(self.scalerX.sld_axis.value)/float(self.scalerX.edt_1.text)
+			sy = 100./float(self.scalerY.edt_1.text) + float(self.scalerY.sld_axis.value)/float(self.scalerY.edt_1.text)
+			dx, dy = 0.0, 0.0
+							
+			# - Build
+			def scalerMM(glyph, sx, sy, t):
+				if len(glyph.axis):
+					mms = transform.adaptive_scale([glyph.axis[0].x, glyph.axis[0].y], [glyph.axis[1].x, glyph.axis[1].y], [sw_V[0], sw_H[0]], [sw_V[1], sw_H[1]], [sx, sy], [dx, dy], [t, t], scmp, angle)
+					glyph._setCoordArray(mms)			
+					glyph.update()
+					fl6.Update(fl6.CurrentGlyph())
+					
+			for glyph in self.processGlyphs:
+				scalerMM(glyph, sx, sy, tx)
 
-		for glyph in self.processGlyphs:
-			scalerMM(glyph, sx, sy, tx)
+		except ZeroDivisionError:
+			pass
 
 	
 # - Test ----------------------

@@ -280,7 +280,7 @@ class tool_tab(QtGui.QWidget):
 			self.glyph._setCoordArray(mms(sx,sy, tx))
 			
 			self.glyph.update()
-			fl6.Update(fl6.CurrentGlyph())
+			fl6.Update(fl6.CurrentFont())
 
 	
 # - Test ----------------------
