@@ -83,7 +83,7 @@ class dlg_copyMetricBinding(QtGui.QDialog):
 				wGlyph.update()
 				print 'PASTE:\t Glyph: /%s;\tLayer: %s;\tExp(LSB, RSB, ADV): %s.' %(glyphName, wGlyph.layer().name, glyphMetrics)
 			else:
-				print 'SKIP:\t Glyph /%s not found.' %(glyphName, glyphMetrics)
+				print 'SKIP:\t Glyph /%s not found.' %glyphName
 
 	def exportExpr(self):
 		font = pFont()
