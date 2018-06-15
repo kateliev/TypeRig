@@ -961,13 +961,16 @@ class pFont(object):
 		self.fl.guidelinesHost.clearGuidelines()
 		self.fl.guidelinesHost.guidelinesChanged()
 
-	def zones(self, fontgate=False):
-		'''Returns font alignment (blue) zones (list[flGuideline])'''
-		if not fontgate:
-			return (self.fl.zones(True), self.fl.zones(False)) # tuple(top, bottom) zones
-		else:
-			return self.fg.hinting.familyZones # Empty/non working currently (as well as .masters)
+	def getZones(self, layer=None, HintingDataType=0):
+		'''Returns font alignment (blue) zones (list[flGuideline]). Note: HintingDataType = {'HintingPS': 0, 'HintingTT': 1}'''
+		backMasterName = self.fl.master
+		if layer is not None: self.fl.setMaster(layer)
+		zoneQuery = (self.fl.zones(HintingDataType, True), self.fl.zones(HintingDataType, False)) # tuple(top, bottom) zones
+		if self.fl.master != backMasterName: self.fl.setMaster(backMasterName)	
+		return zoneQuery
+	
 
+		
 	def hinting(self):
 		'''Returns fonts hinting'''
 		return self.fg.hinting

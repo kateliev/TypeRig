@@ -18,8 +18,7 @@ from typerig.proxy import pFont, pGlyph
 # - Init --------------------------------
 app_version = '0.05'
 app_name = 'Copy Metric Bindings'
-mark = 'Green'
-fixedLayer = False
+fixedLayer = None
 
 # - Interface -----------------------------
 class dlg_copyMetricBinding(QtGui.QDialog):
@@ -29,13 +28,20 @@ class dlg_copyMetricBinding(QtGui.QDialog):
 		# - Init
 		self.srcGlyphBounds = {}
 
-		# - Label
-		if fixedLayer:
-			self.lbl_decription = QtGui.QLabel('Copy/Paste metric expressions from or to the ACTIVE layer. Export/Import to JSON file format.')
-		else:
-			self.lbl_decription = QtGui.QLabel('Copy/Paste metric expressions from or to ALL MASTER layers. Export/Import to JSON file format.')
-		
-		self.lbl_decription.setWordWrap(True)
+		# - Combos
+		# -- Mode of operation
+		self.cmb_mode = QtGui.QComboBox()
+		self.cmb_mode.addItems(['Active Layer', 'All Master Layers'])
+
+		# -- Flag color slector
+		self.cmb_flag = QtGui.QComboBox()
+		colorNames = QtGui.QColor.colorNames()
+
+		for i in range(len(colorNames)):
+			self.cmb_flag.addItem(colorNames[i])
+			self.cmb_flag.setItemData(i, QtGui.QColor(colorNames[i]), QtCore.Qt.DecorationRole)
+
+		self.cmb_flag.setCurrentIndex(colorNames.index('lime'))
 
 		# - Buttons 
 		self.btn_copy = QtGui.QPushButton('&Copy Expressions')
@@ -54,7 +60,10 @@ class dlg_copyMetricBinding(QtGui.QDialog):
 				
 		# - Build layouts 
 		layoutV = QtGui.QVBoxLayout() 
-		layoutV.addWidget(self.lbl_decription)
+		layoutV.addWidget(QtGui.QLabel('Copy/Paste metric expressions to/from:'))
+		layoutV.addWidget(self.cmb_mode)
+		#layoutV.addWidget(QtGui.QLabel('Mark modified glyphs with:'))
+		#layoutV.addWidget(self.cmb_flag)
 		layoutV.addWidget(self.btn_copy)
 		layoutV.addWidget(self.btn_paste)
 		layoutV.addWidget(self.btn_export)
@@ -70,7 +79,7 @@ class dlg_copyMetricBinding(QtGui.QDialog):
 	def copyExpr(self):
 		font = pFont()
 		
-		if not fixedLayer:
+		if self.cmb_mode.currentIndex == 1:
 			self.srcGlyphBounds = {glyph.name:{layer.name:(layer.metricsLeft, layer.metricsRight, layer.metricsWidth) for layer in glyph.masters()} for glyph in font.pGlyphs()}
 			print 'COPY MM:\t Font:%s; Glyph Metric Expressions copied: %s.' %(font.name,len(self.srcGlyphBounds.keys()))
 		else:
@@ -88,14 +97,14 @@ class dlg_copyMetricBinding(QtGui.QDialog):
 			if glyphName in dstGlyphs:
 				wGlyph = dstGlyphs[glyphName]
 
-				if not fixedLayer:
-					for layerName in wGlyph.masters():
-						if glyphMetrics.hasKey(layerName):
-							wGlyph.setLSBeq(glyphMetrics[layerName][0], layerName)
-							wGlyph.setRSBeq(glyphMetrics[layerName][1], layerName)
-							wGlyph.setADVeq(glyphMetrics[layerName][2], layerName)
+				if self.cmb_mode.currentIndex == 1:
+					for layer in wGlyph.masters():
+						if glyphMetrics.has_key(layer.name):
+							wGlyph.setLSBeq(glyphMetrics[layer.name][0], layer.name)
+							wGlyph.setRSBeq(glyphMetrics[layer.name][1], layer.name)
+							wGlyph.setADVeq(glyphMetrics[layer.name][2], layer.name)
 							wGlyph.update()
-							print 'PASTE MM:\t Glyph: /%s;\tLayer: %s;\tExp(LSB, RSB, ADV): %s.' %(glyphName, layerName, glyphMetrics)
+							print 'PASTE MM:\t Glyph: /%s;\tLayer: %s;\tExp(LSB, RSB, ADV): %s.' %(glyphName, layer.name, glyphMetrics)
 						else:
 							print 'WARN:\t Glyph /%s - Layer %s not found!' %glyphName, layerName
 				else:
@@ -107,17 +116,19 @@ class dlg_copyMetricBinding(QtGui.QDialog):
 			else:
 				print 'SKIP:\t Glyph /%s not found.' %glyphName
 
+		fl6.Update(CurrentFont())
+
 	def exportExpr(self):
 		font = pFont()
 		fontPath = os.path.split(font.fg.path)[0]
 		fname = QtGui.QFileDialog.getSaveFileName(self, 'Save Metric Expressions to file', fontPath , '.json')
 		
-		if not fixedLayer:
+		if self.cmb_mode.currentIndex == 1:
 			expGlyphBounds = {glyph.name:{layer.name:(layer.metricsLeft, layer.metricsRight, layer.metricsWidth) for layer in glyph.masters()} for glyph in font.pGlyphs()}
-			print 'COPY MM:\t Font:%s; Glyph Metric Expressions copied: %s.' %(font.name,len(self.srcGlyphBounds.keys()))
+			print 'EXPORT MM:\t Font:%s; Glyph Metric Expressions found: %s.' %(font.name, len(expGlyphBounds.keys()))
 		else:
 			expGlyphBounds = {glyph.name:(glyph.layer(fixedLayer).metricsLeft, glyph.layer(fixedLayer).metricsRight, glyph.layer(fixedLayer).metricsWidth) for glyph in font.pGlyphs()}
-			print 'COPY:\t Font:%s; Glyph Metric Expressions copied: %s.' %(font.name,len(self.srcGlyphBounds.keys()))
+			print 'EXPORT:\t Font:%s; Glyph Metric Expressions found: %s.' %(font.name, len(expGlyphBounds.keys()))
 		
 		with open(fname, 'w') as exportFile:
 			json.dump(expGlyphBounds, exportFile)
@@ -134,7 +145,7 @@ class dlg_copyMetricBinding(QtGui.QDialog):
 			self.srcGlyphBounds = json.load(importFile)
 
 		print 'LOAD:\t Font:%s; %s Glyph Metric Expressions loaded from %s.' %(font.name, len(self.srcGlyphBounds.keys()), fname)
-		print 'NOTE:\t Use < Paste Expressions > to apply loaded data to Active layer!'
+		print 'NOTE:\t Use < Paste Expressions > to apply loaded!'
 		self.btn_paste.setEnabled(True)
 	
 # - RUN ------------------------------
