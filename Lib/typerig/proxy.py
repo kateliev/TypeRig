@@ -783,7 +783,7 @@ class pFontMetrics(object):
 	'''
 	def __init__(self, font):
 		self.fl = font
-
+		
 	# - Getters
 	def getAscender (self, layer=None):
 		if layer is not None:
@@ -846,6 +846,11 @@ class pFontMetrics(object):
 			self.fl.setMaster(layer)
 		self.fl.xHeight_value = value
 
+	# - Export
+	def asDict(self, layer=None):
+		# - Genius!!!!
+		getterFunctions = [func for func in dir(self) if callable(getattr(self, func)) and not func.startswith("__") and 'get' in func]
+		return {getter.replace('get',''):getattr(self, getter)(layer) for getter in getterFunctions} 
 
 class pFont(object):
 	'''
@@ -968,8 +973,6 @@ class pFont(object):
 		zoneQuery = (self.fl.zones(HintingDataType, True), self.fl.zones(HintingDataType, False)) # tuple(top, bottom) zones
 		if self.fl.master != backMasterName: self.fl.setMaster(backMasterName)	
 		return zoneQuery
-	
-
 		
 	def hinting(self):
 		'''Returns fonts hinting'''

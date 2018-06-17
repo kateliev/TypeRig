@@ -154,3 +154,8 @@ def getUppercaseCodepoint(unicodeName):
             return unicodeName
 
 
+# - Funcions ---------------------------------------------------------
+def getFunctionName():
+    '''Return the name of current function (def)'''
+    from inspect import stack
+    return stack()[1][3]
