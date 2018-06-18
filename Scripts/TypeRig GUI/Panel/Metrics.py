@@ -145,18 +145,18 @@ class metrics_expr(QtGui.QGridLayout):
 		self.edt_rsb.setPlaceholderText('Metric expression')
 
 		self.btn_setMetrics = QtGui.QPushButton('&Set Metric expressions')
+		self.btn_getShapeParent = QtGui.QPushButton('&Get Element reference')
 		self.btn_setMetrics.clicked.connect(self.setMetricEquations)
+		self.btn_getShapeParent.clicked.connect(self.bindShapeParent)
 
-		self.addWidget(QtGui.QLabel('LSB:'), 0, 0, 1, 1)
-		self.addWidget(self.edt_lsb, 0, 1, 1, 3)
-		
-		self.addWidget(QtGui.QLabel('RSB:'), 1, 0, 1, 1)
-		self.addWidget(self.edt_rsb, 1, 1, 1, 3)
-		
-		self.addWidget(QtGui.QLabel('ADV:'), 2, 0, 1, 1)
-		self.addWidget(self.edt_adv, 2, 1, 1, 3)
-		
-		self.addWidget(self.btn_setMetrics, 3, 1, 1, 3)
+		self.addWidget(QtGui.QLabel('LSB:'), 	0, 0, 1, 1)
+		self.addWidget(self.edt_lsb, 			0, 1, 1, 3)
+		self.addWidget(QtGui.QLabel('RSB:'), 	1, 0, 1, 1)
+		self.addWidget(self.edt_rsb, 			1, 1, 1, 3)
+		self.addWidget(QtGui.QLabel('ADV:'), 	2, 0, 1, 1)
+		self.addWidget(self.edt_adv, 			2, 1, 1, 3)
+		self.addWidget(self.btn_setMetrics, 	3, 1, 1, 3)
+		self.addWidget(self.btn_getShapeParent, 4, 1, 1, 3)
 
 		self.setColumnStretch(0, 0)
 		self.setColumnStretch(1, 5)
@@ -165,6 +165,16 @@ class metrics_expr(QtGui.QGridLayout):
 		self.edt_lsb.clear()
 		self.edt_adv.clear()
 		self.edt_rsb.clear()
+
+	def bindShapeParent(self):
+		glyph = eGlyph()
+		shapeIndex = 0 	# Static! Make it smart, so it detects...
+		layer = None 	# Static! Make it smart, so it detects on all layers, dough unnecessary
+		parentName = [shape.shapeData.name for shape in glyph.shapes(layer) if len(shape.shapeData.name)]
+
+		if len(parentName):
+			self.edt_lsb.setText('=%s' %parentName[shapeIndex])
+			self.edt_rsb.setText('=%s' %parentName[shapeIndex])
 
 	def setMetricEquations(self):
 		glyph = eGlyph()
