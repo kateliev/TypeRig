@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Font Metrics', '0.05'
+app_name, app_version = 'TypeRig | Font Metrics', '0.06'
 
 # - Dependencies -----------------
 import os, json
@@ -53,6 +53,7 @@ class WTableView(QtGui.QTableWidget):
 
 		# - Set 
 		self.setTable(data)		
+		self.itemChanged.connect(self.markChange)
 
 		# - Styling
 		self.horizontalHeader().setStretchLastSection(True)
@@ -60,8 +61,9 @@ class WTableView(QtGui.QTableWidget):
 		#self.resizeColumnsToContents()
 		self.resizeRowsToContents()
 
-	def setTable(self, data):
+	def setTable(self, data, reset=False):
 		name_row, name_column = [], []
+		self.blockSignals(True)
 
 		# - Populate
 		for n, layer in enumerate(sorted(data.keys())):
@@ -70,10 +72,21 @@ class WTableView(QtGui.QTableWidget):
 			for m, key in enumerate(sorted(data[layer].keys())):
 				name_column.append(key)
 				newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
+				
+				if self.item(n, m) == None or reset:
+					markColor = QtGui.QColor("white")
+				else:
+					if self.item(n, m).text() == newitem.text():
+						markColor = QtGui.QColor("white")
+					else:
+						markColor = QtGui.QColor("aliceblue")
+
 				self.setItem(n, m, newitem)
+				self.item(n, m).setBackground(markColor)
 				
 		self.setHorizontalHeaderLabels(name_column)
 		self.setVerticalHeaderLabels(name_row)
+		self.blockSignals(False)
 
 	def getTable(self):
 		returnDict = {}
@@ -81,6 +94,9 @@ class WTableView(QtGui.QTableWidget):
 			returnDict[self.verticalHeaderItem(row).text()] = {self.horizontalHeaderItem(col).text():int(self.item(row, col).text()) for col in range(self.columnCount)}
 
 		return returnDict
+
+	def markChange(self, item):
+		print item.setBackground(QtGui.QColor("aliceblue"))
 
 
 class WFontMetrics(QtGui.QGridLayout):
@@ -124,7 +140,7 @@ class WFontMetrics(QtGui.QGridLayout):
 		self.activeFont.updateObject(self.activeFont.fl, 'Font:%s; Font Metrics Updated!.' %self.activeFont.name)
 
 	def resetChanges(self):
-		self.tab_fontMetrics.setTable(self.metricData)
+		self.tab_fontMetrics.setTable(self.metricData, True)
 		print 'DONE:\t Font:%s; Font Metrics realoaded.' %self.activeFont.name
 
 	def exportMetrics(self):
