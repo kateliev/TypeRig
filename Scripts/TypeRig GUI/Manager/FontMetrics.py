@@ -10,9 +10,10 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Font Metrics', '0.01'
+app_name, app_version = 'TypeRig | Font Metrics', '0.05'
 
 # - Dependencies -----------------
+import os, json
 import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore, QtGui
@@ -83,33 +84,71 @@ class WTableView(QtGui.QTableWidget):
 
 
 class WFontMetrics(QtGui.QGridLayout):
-	def __init__(self):
+	def __init__(self, parentWidget):
 		super(WFontMetrics, self).__init__()
 
 		# - Init
-		activeFont = pFont()
-		activeGlyph = pGlyph()
-		self.metricData = {layer.name:activeFont.fontMetrics().asDict(layer.name) for layer in activeGlyph.masters()}
+		self.upperWidget = parentWidget
+		self.activeFont = pFont()
+		self.activeGlyph = pGlyph()
+		self.metricData = {layer.name:self.activeFont.fontMetrics().asDict(layer.name) for layer in self.activeGlyph.masters()}
 
 		# - Interface
 		self.btn_apply = QtGui.QPushButton('Apply Changes')
 		self.btn_reset = QtGui.QPushButton('Reset')
+		self.btn_open = QtGui.QPushButton('Open')
+		self.btn_save = QtGui.QPushButton('Save')
 
 		self.btn_apply.clicked.connect(self.applyChanges)
 		self.btn_reset.clicked.connect(self.resetChanges)
+		self.btn_save.clicked.connect(self.exportMetrics)
+		self.btn_open.clicked.connect(self.importMetrics)
 
 		self.tab_fontMetrics = WTableView(self.metricData)
 
 		# - Build
 		self.addWidget(self.tab_fontMetrics,	0, 1, 5, 6)
+		self.addWidget(self.btn_save,			6, 3, 1, 1)
+		self.addWidget(self.btn_open,			6, 4, 1, 1)
 		self.addWidget(self.btn_reset,			6, 5, 1, 1)
 		self.addWidget(self.btn_apply,			6, 6, 1, 1)
 	
 	def applyChanges(self):
-		print self.tab_fontMetrics.getTable()
+		oldMetricData = self.activeFont.fontMetrics()
+		newMetricData = self.tab_fontMetrics.getTable()
+		
+		for layer, metrics in newMetricData.iteritems():
+			oldMetricData.fromDict(metrics, layer)
+
+		self.activeFont.fl.update()
+		self.activeFont.updateObject(self.activeFont.fl, 'Font:%s; Font Metrics Updated!.' %self.activeFont.name)
 
 	def resetChanges(self):
 		self.tab_fontMetrics.setTable(self.metricData)
+		print 'DONE:\t Font:%s; Font Metrics realoaded.' %self.activeFont.name
+
+	def exportMetrics(self):
+		fontPath = os.path.split(self.activeFont.fg.path)[0]
+		fname = QtGui.QFileDialog.getSaveFileName(self.upperWidget, 'Save Font Metrics to file', fontPath , '.json')
+		
+		if fname != None:
+			with open(fname, 'w') as exportFile:
+				json.dump(self.metricData, exportFile)
+
+			print 'SAVE:\t Font:%s; Font Metrics saved to %s.' %(self.activeFont.name, fname)
+
+	def importMetrics(self):
+		fontPath = os.path.split(self.activeFont.fg.path)[0]
+		fname = QtGui.QFileDialog.getOpenFileName(self.upperWidget, 'Open Metric Expressions from file', fontPath)
+		
+		if fname != None:
+			with open(fname, 'r') as importFile:
+				loadedData = json.load(importFile)
+
+			self.tab_fontMetrics.setTable(loadedData)
+
+			print 'LOAD:\t Font:%s; Font Metrics loaded from %s.' %(self.activeFont.name, fname)
+			print 'NOTE:\t Use < Apply > to apply loaded metrics to active Font!'
 
 
 # - Tabs -------------------------------
@@ -120,7 +159,7 @@ class tool_tab(QtGui.QWidget):
 		# - Build   
 		layoutV = QtGui.QVBoxLayout()
 		layoutV.addWidget(QtGui.QLabel('Font Metrics (All Masters)'))
-		layoutV.addLayout(WFontMetrics())		
+		layoutV.addLayout(WFontMetrics(self))		
 		
 		 # - Build ---------------------------
 		layoutV.addStretch()

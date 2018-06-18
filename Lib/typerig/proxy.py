@@ -805,15 +805,36 @@ class pFontMetrics(object):
 			self.fl.setMaster(layer)
 		return self.fl.lineGap_value
 
+	'''
 	def getUpm (self, layer=None):
 		if layer is not None:
 			self.fl.setMaster(layer)
 		return self.fl.upm
+	'''
 
 	def getXHeight (self, layer=None):
 		if layer is not None:
 			self.fl.setMaster(layer)
 		return self.fl.xHeight_value
+
+	def getItalicAngle (self, layer=None):
+		if layer is not None:
+			self.fl.setMaster(layer)
+		return self.fl.italicAngle_value
+
+	def getCaretOffset (self, layer=None):
+		if layer is not None:
+			self.fl.setMaster(layer)
+		return self.fl.caretOffset_value
+
+	'''
+	cornerTension_value
+	curveTension_value
+	inktrapLen_value
+	measurement_value
+	underlinePosition_value
+	underlineThickness_value
+	'''
 
 	# - Setters
 	def setAscender (self, value, layer=None):
@@ -836,21 +857,38 @@ class pFontMetrics(object):
 			self.fl.setMaster(layer)
 		self.fl.lineGap_value = value
 
+	'''
 	def setUpm (self, value, layer=None):
 		if layer is not None:
 			self.fl.setMaster(layer)
 		self.fl.upm = value
+	'''
 
 	def setXHeight (self, value, layer=None):
 		if layer is not None:
 			self.fl.setMaster(layer)
 		self.fl.xHeight_value = value
 
-	# - Export
+	def setItalicAngle (self, value, layer=None):
+		if layer is not None:
+			self.fl.setMaster(layer)
+		self.fl.italicAngle_value = value
+
+	def setCaretOffset (self, value, layer=None):
+		if layer is not None:
+			self.fl.setMaster(layer)
+		self.fl.caretOffset_value = value
+
+	# - Export & Import
 	def asDict(self, layer=None):
 		# - Genius!!!!
 		getterFunctions = [func for func in dir(self) if callable(getattr(self, func)) and not func.startswith("__") and 'get' in func]
 		return {getter.replace('get',''):getattr(self, getter)(layer) for getter in getterFunctions} 
+
+	def fromDict(self, metricDict, layer=None):
+		for func, value in metricDict.iteritems():
+			eval("self.set%s(%s, '%s')" %(func, value, layer))
+
 
 class pFont(object):
 	'''
@@ -932,6 +970,15 @@ class pFont(object):
 		'''Returns pFontMetrics Object with getter/setter functionality'''
 		from typerig.proxy import pFontMetrics
 		return pFontMetrics(self.fl)
+
+	def updateObject(self, flObject, undoMessage='TypeRig', verbose=True):
+		'''Updates a flObject sends notification to the editor as well as undo/history item.
+		Args:
+			flObject (flGlyph, flLayer, flShape, flNode, flContour): Object to be update and set undo state
+			undoMessage (string): Message to be added in undo/history list.
+		'''
+		fl6.flItems.notifyChangesApplied(undoMessage, flObject, True)
+		if verbose: print 'DONE:\t %s' %undoMessage
 
 	# - Axes and MM ----------------------------------------------------
 	def axes(self):
