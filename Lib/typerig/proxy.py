@@ -13,6 +13,7 @@
 import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
+import FL as legacy
 
 # - Classes -------------------------------
 class pWorkspace(object):
@@ -927,8 +928,17 @@ class pFont(object):
 		return '<%s name=%s glyphs=%s path=%s>' % (self.__class__.__name__, self.fg.info.familyName, len(self.fg), self.fg.path)
 
 	# - Font Basics -----------------------------------------------
-	def getItalicAngle(self):
-		return self.fl.italicAngle_value
+	def getSelectedIndices(self):
+		# WARN: Legacy syntax used, as of current 6722 build there is no way to get the selected glyphs in editor
+		return [index for index in range(len(legacy.fl.font)) if legacy.fl.Selected(index)]
+
+	def selected_pGlyphs(self):
+		'''Return TypeRig proxy glyph object for each selected glyph'''
+		return self.pGlyphs(self.selectedGlyphs())
+
+	def selectedGlyphs(self):
+		'''Return TypeRig proxy glyph object for each selected glyph'''
+		return self.glyphs(self.getSelectedIndices())
 
 	def glyph(self, glyph):
 		'''Return TypeRig proxy glyph object (pGlyph) by index (int) or name (str).'''
@@ -941,17 +951,20 @@ class pFont(object):
 		'''Return fgSymbol by glyph index (int)'''
 		return fl6.fgSymbol(gID, self.fg)
 
-	def glyphs(self):
+	def glyphs(self, indexList=[]):
 		'''Return list of FontGate glyph objects (list[fgGlyph]).'''
-		return self.fg.glyphs
+		return self.fg.glyphs if not len(indexList) else [self.fg.glyphs[index] for index in indexList]
 
 	def symbols(self):
 		'''Return list of FontGate symbol objects (list[fgSymbol]).'''
 		return [self.symbol(gID) for gID in range(len(self.fg.glyphs))]
 	
-	def pGlyphs(self, processList=None):
+	def pGlyphs(self, fgGlyphList=[]):
 		'''Return list of TypeRig proxy Glyph objects glyph objects (list[pGlyph]).'''
-		return [self.glyph(glyph) for glyph in self.fg] if not processList else [self.glyph(glyph) for glyph in processList]
+		return [self.glyph(glyph) for glyph in self.fg] if not len(fgGlyphList) else [self.glyph(glyph) for glyph in fgGlyphList]
+
+	def getItalicAngle(self):
+		return self.fl.italicAngle_value
 
 	def fontMetricsInfo(self, layer):
 		'''Returns Font(layer) metrics no matter the reference.
