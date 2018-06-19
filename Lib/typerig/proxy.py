@@ -997,6 +997,9 @@ class pFont(object):
 	def axes(self):
 		return self.fl.axes
 
+	def masters(self):
+		return self.fl.masters
+
 	# - Guides & Hinting Basics ----------------------------------------
 	def guidelines(self, hostInf=False, fontgate=False):
 		'''Return font guidelines
