@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Metrics', '0.03'
+app_name, app_version = 'TypeRig | Metrics', '0.10'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -149,14 +149,18 @@ class metrics_expr(QtGui.QGridLayout):
 		self.btn_setMetrics.clicked.connect(self.setMetricEquations)
 		self.btn_getShapeParent.clicked.connect(self.bindShapeParent)
 
+		self.spb_shapeIndex = QtGui.QSpinBox()
+
 		self.addWidget(QtGui.QLabel('LSB:'), 	0, 0, 1, 1)
-		self.addWidget(self.edt_lsb, 			0, 1, 1, 3)
+		self.addWidget(self.edt_lsb, 			0, 1, 1, 5)
 		self.addWidget(QtGui.QLabel('RSB:'), 	1, 0, 1, 1)
-		self.addWidget(self.edt_rsb, 			1, 1, 1, 3)
+		self.addWidget(self.edt_rsb, 			1, 1, 1, 5)
 		self.addWidget(QtGui.QLabel('ADV:'), 	2, 0, 1, 1)
-		self.addWidget(self.edt_adv, 			2, 1, 1, 3)
-		self.addWidget(self.btn_setMetrics, 	3, 1, 1, 3)
-		self.addWidget(self.btn_getShapeParent, 4, 1, 1, 3)
+		self.addWidget(self.edt_adv, 			2, 1, 1, 5)
+		self.addWidget(self.btn_setMetrics, 	3, 1, 1, 5)
+		self.addWidget(QtGui.QLabel('E:'), 		4, 0, 1, 1)
+		self.addWidget(self.btn_getShapeParent, 4, 1, 1, 4)
+		self.addWidget(self.spb_shapeIndex, 	4, 5, 1, 1)
 
 		self.setColumnStretch(0, 0)
 		self.setColumnStretch(1, 5)
@@ -168,13 +172,24 @@ class metrics_expr(QtGui.QGridLayout):
 
 	def bindShapeParent(self):
 		glyph = eGlyph()
-		shapeIndex = 0 	# Static! Make it smart, so it detects...
 		layer = None 	# Static! Make it smart, so it detects on all layers, dough unnecessary
-		parentName = [shape.shapeData.name for shape in glyph.shapes(layer) if len(shape.shapeData.name)]
+		shapeIndex = self.spb_shapeIndex.value 	# Static! Make it smart, so it detects...
+		namedShapes = [shape for shape in glyph.shapes() if len(shape.shapeData.name)]
+		
+		try:
+			wShape = namedShapes[shapeIndex]
+			transform = wShape.transform
+			
+			if len(wShape.shapeData.name):
+				if transform.m11() > 0:
+					self.edt_lsb.setText('=%s' %wShape.shapeData.name)
+					self.edt_rsb.setText('=%s' %wShape.shapeData.name)
+				else:
+					self.edt_lsb.setText('=rsb("%s")' %wShape.shapeData.name)
+					self.edt_rsb.setText('=lsb("%s")' %wShape.shapeData.name)
 
-		if len(parentName):
-			self.edt_lsb.setText('=%s' %parentName[shapeIndex])
-			self.edt_rsb.setText('=%s' %parentName[shapeIndex])
+		except IndexError:
+			print 'ERROR: Glyph /%s - No NAMED SHAPE with INDEX [%s] found!' %(glyph.name, shapeIndex)
 
 	def setMetricEquations(self):
 		glyph = eGlyph()
