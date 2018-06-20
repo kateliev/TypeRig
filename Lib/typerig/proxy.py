@@ -222,6 +222,9 @@ class pGlyph(object):
 			elif isinstance(layer, basestring):
 				return self.fl.getLayerByName(layer)
 
+	def hasLayer(self, layerName):
+		return True if self.fl.findLayer(layerName) is not None else False
+
 	def shapes(self, layer=None):
 		'''Return all shapes at given layer.
 		Args:
@@ -993,12 +996,18 @@ class pFont(object):
 		fl6.flItems.notifyChangesApplied(undoMessage, flObject, True)
 		if verbose: print 'DONE:\t %s' %undoMessage
 
+	def update(self):
+		self.updateObject(self.fl, verbose=False)
+
 	# - Axes and MM ----------------------------------------------------
 	def axes(self):
 		return self.fl.axes
 
 	def masters(self):
 		return self.fl.masters
+
+	def hasMaster(self, layerName):
+		return self.fl.hasMaster(layerName)
 
 	# - Guides & Hinting Basics ----------------------------------------
 	def guidelines(self, hostInf=False, fontgate=False):
@@ -1036,6 +1045,57 @@ class pFont(object):
 		zoneQuery = (self.fl.zones(HintingDataType, True), self.fl.zones(HintingDataType, False)) # tuple(top, bottom) zones
 		if self.fl.master != backMasterName: self.fl.setMaster(backMasterName)	
 		return zoneQuery
+
+	def setZones(self, fontZones, layer=None):
+		backMasterName = self.fl.master
+
+		if layer is not None: self.fl.setMaster(layer)
+		self.fl.convertZonesToGuidelines(*fontZones) # Dirty register zones	
+		if self.fl.master != backMasterName: self.fl.setMaster(backMasterName)
+
+		self.update()
+
+	def zonesToTuples(self, layer=None, HintingDataType=0):
+		fontZones = self.getZones(layer, HintingDataType)
+		return [(zone.position, zone.width, zone.name) for zone in fontZones[0]] + [(zone.position, -zone.width, zone.name) for zone in fontZones[1]]
+
+	def zonesFromTuples(self, zoneTupleList, layer=None, forceNames=False):
+		fontZones = ([], [])
+
+		for zoneData in zoneTupleList:
+			isTop = zoneData[1] >= 0
+			newZone = fl6.flZone(zoneData[0], abs(zoneData[1]))
+			
+			if forceNames and len(zoneData) > 2: newZone.name = zoneData[2]
+			newZone.guaranteeName(isTop)
+			
+			fontZones[not isTop].append(newZone)
+
+		if not len(fontZones[1]):
+			fontZones[1].append(fl6.flZone())
+
+		print fontZones
+
+		self.setZones(fontZones, layer)
+
+	def addZone(self, position, width, layer=None):
+		''' A very dirty way to add a new Zone to Font'''
+		isTop = width >= 0
+		backMasterName = self.fl.master
+		fontZones = self.getZones(layer)
+		
+		newZone, killZone = fl6.flZone(position, abs(width)), fl6.flZone()
+		newZone.guaranteeName(isTop)
+
+		fontZones[not isTop].append([newZone, killZone][not isTop])
+		fontZones[isTop].append([newZone, killZone][isTop])
+				
+		if layer is not None: self.fl.setMaster(layer)
+		self.fl.convertZonesToGuidelines(*fontZones)
+		if self.fl.master != backMasterName: self.fl.setMaster(backMasterName)	
+
+		self.update()
+		 
 		
 	def hinting(self):
 		'''Returns fonts hinting'''

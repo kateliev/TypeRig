@@ -184,30 +184,36 @@ class WFontAnchors(QtGui.QGridLayout):
 			print 'NOTE:\t Use < Apply > to apply loaded metrics to active Font!'
 	'''
 
-def buildGlyphAnchorData():
+def buildGlyphAnchorData(fullGlyphset=False, cathegorize=False):
 	# - Init
-	data = defaultdict(lambda: defaultdict(dict))
 	font = pFont()
+	data = defaultdict(lambda: defaultdict(dict))
 	banList = ['.notdef', '.NOTDEF', 'CR', 'space', 'NULL']
+	glyphList = font.pGlyphs() if fullGlyphset else font.selected_pGlyphs()
 
-	for glyph in font.pGlyphs():
+	for glyph in glyphList:
 		for master in font.masters():
 			if glyph.name not in banList:
-				
-				# - Set main type
-				glyphType = 'Unencoded'
+				if cathegorize:
+					# - Set main type
+					glyphType = 'Unencoded'
 
-				if glyph.unicode is not None and glyph.unicode < 10000:
-					if unichr(glyph.unicode).isupper():
-						glyphType = 'Uppercase'
-					elif unichr(glyph.unicode).islower():
-						glyphType = 'Lowercase'
-					elif unichr(glyph.unicode).isdigit():
-						glyphType = 'Figures'
-					elif unichr(glyph.unicode).isdigit() and not unichr(glyph.unicode).isalpha():
-						glyphType = 'Symbols'
+					if glyph.unicode is not None and glyph.unicode < 10000:
+						if unichr(glyph.unicode).isupper():
+							glyphType = 'Uppercase'
+						elif unichr(glyph.unicode).islower():
+							glyphType = 'Lowercase'
+						elif unichr(glyph.unicode).isdigit():
+							glyphType = 'Figures'
+						elif unichr(glyph.unicode).isdigit() and not unichr(glyph.unicode).isalpha():
+							glyphType = 'Symbols'
+				else:
+					glyphType = 'Selection'
 
-				data[glyphType][glyph.name][master] = {anchor.name:str(anchor.point) for anchor in glyph.anchors(master)}
+				if glyph.hasLayer(master):
+					data[glyphType][glyph.name][master] = {anchor.name:str(anchor.point) for anchor in glyph.anchors(master)}
+				else:
+					data[glyphType][glyph.name][master] = {}
 
 	return data
 

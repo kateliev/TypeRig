@@ -79,7 +79,7 @@ class WTableView(QtGui.QTableWidget):
 					if self.item(n, m).text() == newitem.text():
 						markColor = QtGui.QColor("white")
 					else:
-						markColor = QtGui.QColor("aliceblue")
+						markColor = QtGui.QColor("powderblue")
 
 				self.setItem(n, m, newitem)
 				self.item(n, m).setBackground(markColor)
@@ -96,8 +96,37 @@ class WTableView(QtGui.QTableWidget):
 		return returnDict
 
 	def markChange(self, item):
-		print item.setBackground(QtGui.QColor("aliceblue"))
+		item.setBackground(QtGui.QColor('powderblue'))
 
+class WTreeWidget(QtGui.QTreeWidget):
+	def __init__(self, data):
+		super(WTreeWidget, self).__init__()
+		
+		# - Init
+
+		# - Set 
+		self.setTree(data)	
+		self.itemChanged.connect(self.markChange)	
+
+		# - Styling
+		self.setAlternatingRowColors(True)
+
+	def setTree(self, data, reset=False):
+		header_row = ['Layer/Zone', 'Position', 'Width']
+		self.setHeaderLabels(header_row)
+				
+		for key, value in data.iteritems():
+			master = QtGui.QTreeWidgetItem(self, [key])
+
+			for zoneTuple in value:
+				zoneData = QtGui.QTreeWidgetItem(master, [('B: %s', 'T: %s')[zoneTuple[1] > 0] %zoneTuple[0], zoneTuple[0], zoneTuple[1]])
+				zoneData.setFlags(zoneData.flags() | QtCore.Qt.ItemIsEditable)
+
+	def markChange(self, item):
+		print item.setText(0, ('B: %s', 'T: %s')[int(item.text(2)) > 0] %item.text(1))
+		for col in range(item.columnCount()):
+			
+			item.setBackground(col, QtGui.QColor('powderblue'))
 
 class WFontMetrics(QtGui.QGridLayout):
 	def __init__(self, parentWidget):
@@ -176,9 +205,14 @@ class tool_tab(QtGui.QWidget):
 		layoutV = QtGui.QVBoxLayout()
 		layoutV.addWidget(QtGui.QLabel('Font Metrics (All Masters)'))
 		layoutV.addLayout(WFontMetrics(self))		
+		#layoutV.addWidget(QtGui.QSplitter())
+		layoutV.addWidget(QtGui.QLabel('Font Zones'))
+
+		font = pFont()
+		layoutV.addWidget(WTreeWidget({master:font.zonesToTuples() for master in font.masters()}))	
 		
 		 # - Build ---------------------------
-		layoutV.addStretch()
+		#layoutV.addStretch()
 		self.setLayout(layoutV)
 
 # - Test ----------------------
