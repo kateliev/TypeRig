@@ -56,7 +56,7 @@ class typerig_Manager(QtGui.QDialog):
 		# - Set Widget -------------------------------
 		self.setLayout(layoutV)
 		self.setWindowTitle('%s %s' %(app_name, app_version))
-		self.setGeometry(300, 300, 800, 440)
+		self.setGeometry(300, 300, 950, 440)
 		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 		#self.setMinimumWidth(300)
 		self.show()
