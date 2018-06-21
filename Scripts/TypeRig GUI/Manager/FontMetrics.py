@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Font Metrics', '0.08'
+app_name, app_version = 'TypeRig | Font Metrics', '0.010'
 
 # - Dependencies -----------------
 import os, json
@@ -20,10 +20,10 @@ from PythonQt import QtCore, QtGui
 from typerig.proxy import pGlyph, pFont
 
 # - Sub widgets ------------------------
-class MLineEdit(QtGui.QLineEdit):
+class ZLineEdit(QtGui.QLineEdit):
 	# - Custom QLine Edit extending the contextual menu with FL6 metric expressions
 	def __init__(self, *args, **kwargs):
-		super(MLineEdit, self).__init__(*args, **kwargs)
+		super(ZLineEdit, self).__init__(*args, **kwargs)
 		self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
 		self.customContextMenuRequested.connect(self.__contextMenu)
 
@@ -34,15 +34,12 @@ class MLineEdit(QtGui.QLineEdit):
 
 	def _addCustomMenuItems(self, menu):
 		menu.addSeparator()
-		menu.addAction(u'EQ', lambda: self.setText('=%s' %self.text))
-		menu.addAction(u'LSB', lambda: self.setText('=lsb("%s")' %self.text))
-		menu.addAction(u'RSB', lambda: self.setText('=rsb("%s")' %self.text))
-		menu.addAction(u'ADV', lambda: self.setText('=width("%s")' %self.text))
-		menu.addAction(u'L', lambda: self.setText('=l("%s")' %self.text))
-		menu.addAction(u'R', lambda: self.setText('=r("%s")' %self.text))
-		menu.addAction(u'W', lambda: self.setText('=w("%s")' %self.text))
-		menu.addAction(u'G', lambda: self.setText('=g("%s")' %self.text))	
-		
+		menu.addAction(u'Ascender', lambda: self.setText('=ascender'))
+		menu.addAction(u'Descender', lambda: self.setText('=descender'))
+		menu.addAction(u'Caps Height', lambda: self.setText('=capsHeight'))
+		menu.addAction(u'X Height', lambda: self.setText('=xHeight'))
+
+# - Font Metrics -------------------------------------------------------
 class WTableView(QtGui.QTableWidget):
 	def __init__(self, data):
 		super(WTableView, self).__init__()
@@ -58,6 +55,7 @@ class WTableView(QtGui.QTableWidget):
 		# - Styling
 		self.horizontalHeader().setStretchLastSection(True)
 		self.setAlternatingRowColors(True)
+		self.setShowGrid(False)
 		#self.resizeColumnsToContents()
 		self.resizeRowsToContents()
 
@@ -72,17 +70,7 @@ class WTableView(QtGui.QTableWidget):
 			for m, key in enumerate(sorted(data[layer].keys())):
 				name_column.append(key)
 				newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
-				
-				if self.item(n, m) == None or reset:
-					markColor = QtGui.QColor("white")
-				else:
-					if self.item(n, m).text() == newitem.text():
-						markColor = QtGui.QColor("white")
-					else:
-						markColor = QtGui.QColor("powderblue")
-
 				self.setItem(n, m, newitem)
-				self.item(n, m).setBackground(markColor)
 				
 		self.setHorizontalHeaderLabels(name_column)
 		self.setVerticalHeaderLabels(name_row)
@@ -98,44 +86,12 @@ class WTableView(QtGui.QTableWidget):
 	def markChange(self, item):
 		item.setBackground(QtGui.QColor('powderblue'))
 
-class WTreeWidget(QtGui.QTreeWidget):
-	def __init__(self, data):
-		super(WTreeWidget, self).__init__()
-		
-		# - Init
-		# - Set 
-		self.setTree(data)	
-		self.itemChanged.connect(self.markChange)	
-
-		# - Styling
-		self.setAlternatingRowColors(True)
-
-	def setTree(self, data, reset=False):
-		self.blockSignals(True)
-		self.clear()
-		header_row = ['Layer/Zone', 'Position', 'Width']
-		self.setHeaderLabels(header_row)
-
-		for key, value in data.iteritems():
-			master = QtGui.QTreeWidgetItem(self, [key])
-
-			for zoneTuple in value:
-				zoneData = QtGui.QTreeWidgetItem(master, [('B: %s', 'T: %s')[zoneTuple[1] > 0] %zoneTuple[0], zoneTuple[0], zoneTuple[1]])
-				zoneData.setFlags(zoneData.flags() | QtCore.Qt.ItemIsEditable)
-
-		self.blockSignals(False)
-
-	def markChange(self, item):
-		print item.setText(0, ('B: %s', 'T: %s')[int(item.text(2)) > 0] %item.text(1))
-		for col in range(item.columnCount()):
-			
-			item.setBackground(col, QtGui.QColor('powderblue'))
-
-class WFontMetrics(QtGui.QGridLayout):
+class WFontMetrics(QtGui.QWidget):
 	def __init__(self, parentWidget):
 		super(WFontMetrics, self).__init__()
 
 		# - Init
+		self.grid = QtGui.QGridLayout()
 		self.upperWidget = parentWidget
 		self.activeFont = pFont()
 		self.metricData = {layer:self.activeFont.fontMetrics().asDict(layer) for layer in self.activeFont.masters()}
@@ -154,12 +110,19 @@ class WFontMetrics(QtGui.QGridLayout):
 		self.tab_fontMetrics = WTableView(self.metricData)
 
 		# - Build
-		self.addWidget(QtGui.QLabel('Font Metrics (All Masters)'), 0, 1, 1, 6)
-		self.addWidget(self.tab_fontMetrics,	1, 1, 5, 5)
-		self.addWidget(self.btn_save,			1, 6, 1, 1)
-		self.addWidget(self.btn_open,			2, 6, 1, 1)
-		self.addWidget(self.btn_reset,			4, 6, 1, 1)
-		self.addWidget(self.btn_apply,			5, 6, 1, 1)
+		lbl_name = QtGui.QLabel('Font Metrics (All Masters)')
+		lbl_name.setMaximumHeight(20)
+		self.grid.addWidget(lbl_name,		 		0, 0, 1, 24)
+		self.grid.addWidget(self.tab_fontMetrics,	1, 0, 5, 21)
+		self.grid.addWidget(self.btn_save,			1, 21, 1, 3)
+		self.grid.addWidget(self.btn_open,			2, 21, 1, 3)
+		self.grid.addWidget(self.btn_reset,			4, 21, 1, 3)
+		self.grid.addWidget(self.btn_apply,			5, 21, 1, 3)
+
+		for i in range(1,6):
+			self.grid.setRowStretch(i,2)
+
+		self.setLayout(self.grid)
 	
 	def applyChanges(self):
 		oldMetricData = self.activeFont.fontMetrics()
@@ -198,22 +161,75 @@ class WFontMetrics(QtGui.QGridLayout):
 			print 'LOAD:\t Font:%s; Font Metrics loaded from %s.' %(self.activeFont.name, fname)
 			print 'NOTE:\t Use < Apply > to apply loaded metrics to active Font!'
 
-class WFontZones(QtGui.QGridLayout):
+# - Font Zones -------------------------------------------------------
+class WTreeWidget(QtGui.QTreeWidget):
+	def __init__(self, data):
+		super(WTreeWidget, self).__init__()
+		
+		# - Init
+		# - Set 
+		self.setTree(data)	
+		self.itemChanged.connect(self.markChange)	
+
+		# - Styling
+		self.setAlternatingRowColors(True)
+
+	def setTree(self, data, reset=False):
+		self.blockSignals(True)
+		self.clear()
+		header_row = ['Layer/Zone', 'Position', 'Width']
+		self.setHeaderLabels(header_row)
+
+		for key, value in data.iteritems():
+			master = QtGui.QTreeWidgetItem(self, [key])
+
+			for zoneTuple in value:
+				zoneData = QtGui.QTreeWidgetItem(master, [('B: %s', 'T: %s')[zoneTuple[1] > 0] %zoneTuple[0], zoneTuple[0], zoneTuple[1]])
+				zoneData.setFlags(zoneData.flags() | QtCore.Qt.ItemIsEditable)
+
+		self.blockSignals(False)
+
+	def getTree(self):
+		returnDict = {}
+		root = self.invisibleRootItem()
+		
+		for i in range(root.childCount()):
+			master = root.child(i)
+			returnDict[master.text(0)] = [(int(master.child(n).text(1)), int(master.child(n).text(2)), master.child(n).text(0)) for n in range(master.childCount()) ]
+		
+		return returnDict
+
+	def markChange(self, item):
+		print item.setText(0, ('B: %s', 'T: %s')[int(item.text(2)) > 0] %item.text(1))
+		for col in range(item.columnCount()):
+			
+			item.setBackground(col, QtGui.QColor('powderblue'))
+
+class WFontZones(QtGui.QWidget):
 	def __init__(self, parentWidget):
 		super(WFontZones, self).__init__()
 
 		# - Init
+		self.grid = QtGui.QGridLayout()
 		self.upperWidget = parentWidget
 		self.activeFont = pFont()
 		self.zoneData = {master:self.activeFont.zonesToTuples() for master in self.activeFont.masters()}
 
 		# - Interface
 		self.btn_apply = QtGui.QPushButton('Apply Changes')
-		self.btn_apply.setDisabled(True)
 		self.btn_reset = QtGui.QPushButton('Reset')
 		self.btn_open = QtGui.QPushButton('Open')
 		self.btn_save = QtGui.QPushButton('Save')
 		self.btn_new = QtGui.QPushButton('Add New')
+		self.btn_del = QtGui.QPushButton('Delete')
+
+		self.cmb_layer = QtGui.QComboBox()
+		self.cmb_layer.addItems(['All Layers'] + self.activeFont.masters())
+
+		self.edt_pos = ZLineEdit()
+		self.edt_width = QtGui.QLineEdit()
+		self.edt_pos.setPlaceholderText('Position')
+		self.edt_width.setPlaceholderText('Width')
 
 		self.btn_apply.clicked.connect(self.applyChanges)
 		self.btn_reset.clicked.connect(self.resetChanges)
@@ -223,17 +239,41 @@ class WFontZones(QtGui.QGridLayout):
 		self.tree_fontZones = WTreeWidget(self.zoneData)
 
 		# - Build
-		self.addWidget(QtGui.QLabel('Font Zones'), 0, 1, 1, 6)
-		self.addWidget(self.tree_fontZones,		1, 1, 6, 5)
-		self.addWidget(self.btn_save,			1, 6, 1, 1)
-		self.addWidget(self.btn_open,			2, 6, 1, 1)
-		self.addWidget(self.btn_new,			4, 6, 1, 1)
-		self.addWidget(self.btn_reset,			5, 6, 1, 1)
-		self.addWidget(self.btn_apply,			6, 6, 1, 1)
+		lbl_name = QtGui.QLabel('Font Zones (Local)')
+		lbl_name.setMaximumHeight(20)
+		self.grid.addWidget(lbl_name, 			0, 0, 	1, 24)
+		self.grid.addWidget(self.tree_fontZones,1, 0, 	6, 18)
+		
+		self.grid.addWidget(self.cmb_layer,		1, 18, 	1, 3)
+		self.grid.addWidget(self.edt_pos,		2, 18, 	1, 3)
+		self.grid.addWidget(self.edt_width,		3, 18, 	1, 3)
+		self.grid.addWidget(self.btn_new,		4, 18, 	1, 3)
+		self.grid.addWidget(self.btn_del,		5, 18, 	1, 3)
 
+		self.grid.addWidget(self.btn_save,		1, 21, 	1, 3)
+		self.grid.addWidget(self.btn_open,		2, 21, 	1, 3)
+		self.grid.addWidget(self.btn_reset,		4, 21, 	1, 3)
+		self.grid.addWidget(self.btn_apply,		5, 21, 	1, 3)
+		
+		'''
+		self.grid.setRowStretch(0,0)		
+		for i in range(1,6):
+			self.grid.setRowStretch(i,6)
+
+		self.grid.setColumnStretch(0,18)
+		self.grid.setColumnStretch(18,3)
+		self.grid.setColumnStretch(21,3)
+		'''
+
+		self.setLayout(self.grid)
 
 	def applyChanges(self):
-		pass
+		newZoneData = self.tree_fontZones.getTree()
+		
+		for layer, zones in newZoneData.iteritems():
+			self.activeFont.zonesFromTuples(zones, layer)
+
+		print 'DONE:\t Font:%s; Font Zone data Updated!.' %self.activeFont.name
 
 	def resetChanges(self):
 		self.tree_fontZones.setTree(self.zoneData, True)
@@ -275,11 +315,20 @@ class tool_tab(QtGui.QWidget):
 		scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
 		scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
 		scroll.setWidgetResizable(True)
-		#layoutV.addWidget(QtGui.QSplitter())
+		
 		'''
 		layoutV = QtGui.QVBoxLayout()
-		layoutV.addLayout(WFontMetrics(self))		
-		layoutV.addLayout(WFontZones(self))
+		splitter = QtGui.QSplitter(QtCore.Qt.Vertical)
+		#splitter.setHandleWidth(1)
+		
+		splitter.addWidget(WFontMetrics(self))
+		splitter.addWidget(WFontZones(self))
+
+		splitter.setStretchFactor(0,1)
+		splitter.setStretchFactor(1,2)
+
+		layoutV.addWidget(splitter)
+
 						
 		# - Build ---------------------------
 		#layoutV.addStretch()
@@ -291,7 +340,7 @@ class tool_tab(QtGui.QWidget):
 if __name__ == '__main__':
   test = tool_tab()
   test.setWindowTitle('%s %s' %(app_name, app_version))
-  test.setGeometry(300, 300, 950, 400)
+  test.setGeometry(300, 300, 900, 400)
   test.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
   
   test.show()

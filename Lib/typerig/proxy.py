@@ -1074,8 +1074,6 @@ class pFont(object):
 		if not len(fontZones[1]):
 			fontZones[1].append(fl6.flZone())
 
-		print fontZones
-
 		self.setZones(fontZones, layer)
 
 	def addZone(self, position, width, layer=None):
