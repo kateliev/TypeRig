@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Font Metrics', '0.010'
+app_name, app_version = 'TypeRig | Font Metrics', '0.11'
 
 # - Dependencies -----------------
 import os, json
@@ -34,10 +34,10 @@ class ZLineEdit(QtGui.QLineEdit):
 
 	def _addCustomMenuItems(self, menu):
 		menu.addSeparator()
-		menu.addAction(u'Ascender', lambda: self.setText('=ascender'))
-		menu.addAction(u'Descender', lambda: self.setText('=descender'))
-		menu.addAction(u'Caps Height', lambda: self.setText('=capsHeight'))
-		menu.addAction(u'X Height', lambda: self.setText('=xHeight'))
+		menu.addAction(u'Ascender', lambda: self.setText('=Ascender'))
+		menu.addAction(u'Descender', lambda: self.setText('=Descender'))
+		menu.addAction(u'Caps Height', lambda: self.setText('=CapsHeight'))
+		menu.addAction(u'X Height', lambda: self.setText('=XHeight'))
 
 # - Font Metrics -------------------------------------------------------
 class WTableView(QtGui.QTableWidget):
@@ -172,19 +172,20 @@ class WTreeWidget(QtGui.QTreeWidget):
 		self.itemChanged.connect(self.markChange)	
 
 		# - Styling
+		self.expandAll()
 		self.setAlternatingRowColors(True)
 
 	def setTree(self, data, reset=False):
 		self.blockSignals(True)
 		self.clear()
-		header_row = ['Layer/Zone', 'Position', 'Width']
+		header_row = ['Layer/Zone', 'Position', 'Width', 'Private Name']
 		self.setHeaderLabels(header_row)
 
 		for key, value in data.iteritems():
 			master = QtGui.QTreeWidgetItem(self, [key])
 
 			for zoneTuple in value:
-				zoneData = QtGui.QTreeWidgetItem(master, [('B: %s', 'T: %s')[zoneTuple[1] > 0] %zoneTuple[0], zoneTuple[0], zoneTuple[1]])
+				zoneData = QtGui.QTreeWidgetItem(master, [('B: %s', 'T: %s')[zoneTuple[1] > 0] %zoneTuple[0], zoneTuple[0], zoneTuple[1], zoneTuple[2]])
 				zoneData.setFlags(zoneData.flags() | QtCore.Qt.ItemIsEditable)
 
 		self.blockSignals(False)
@@ -235,6 +236,8 @@ class WFontZones(QtGui.QWidget):
 		self.btn_reset.clicked.connect(self.resetChanges)
 		self.btn_save.clicked.connect(self.exportZones)
 		self.btn_open.clicked.connect(self.importZones)
+		self.btn_new.clicked.connect(self.addZone)
+		self.btn_del.clicked.connect(self.delZone)
 
 		self.tree_fontZones = WTreeWidget(self.zoneData)
 
@@ -279,6 +282,35 @@ class WFontZones(QtGui.QWidget):
 		self.tree_fontZones.setTree(self.zoneData, True)
 		print 'DONE:\t Font:%s; Font Zone data realoaded.' %self.activeFont.name
 
+	def addZone(self):
+		import copy
+		fontMetrics = self.upperWidget.fontMetrics.tab_fontMetrics.getTable()
+		self.newZoneData = copy.deepcopy(self.zoneData)
+		
+		def dataAddZone(layer):
+			if '=' in self.edt_pos.text:
+				self.newZoneData[layer].append((int(fontMetrics[layer][self.edt_pos.text.strip('=')]), int(self.edt_width.text), self.edt_pos.text.strip('=')))
+			else:
+				self.newZoneData[layer].append((int(self.edt_pos.text), int(self.edt_width.text), 'New'))
+
+		if self.cmb_layer.currentText == 'All Layers':
+			for layer in self.activeFont.masters():
+				dataAddZone(layer)
+		else:
+			dataAddZone(self.cmb_layer.currentText)
+
+		self.tree_fontZones.setTree(self.newZoneData)
+		self.tree_fontZones.expandAll()
+		
+		print 'ADD:\t Font:%s;  New zone added for %s.' %(self.activeFont.name, self.cmb_layer.currentText)
+		print 'NOTE:\t Use < Apply > to apply modified zones to active Font!'
+
+	def delZone(self):
+		root = self.tree_fontZones.invisibleRootItem()
+		
+		for item in self.tree_fontZones.selectedItems():
+			(item.parent() or root).removeChild(item)
+
 	def exportZones(self):
 		fontPath = os.path.split(self.activeFont.fg.path)[0]
 		fname = QtGui.QFileDialog.getSaveFileName(self.upperWidget, 'Save Font Zones to file', fontPath , '.json')
@@ -298,6 +330,7 @@ class WFontZones(QtGui.QWidget):
 				loadedData = json.load(importFile)
 
 			self.tree_fontZones.setTree(loadedData)
+			self.tree_fontZones.expandAll()
 
 			print 'LOAD:\t Font:%s; Font Zones loaded from %s.' %(self.activeFont.name, fname)
 			print 'NOTE:\t Use < Apply > to apply loaded zones to active Font!'
@@ -321,8 +354,11 @@ class tool_tab(QtGui.QWidget):
 		splitter = QtGui.QSplitter(QtCore.Qt.Vertical)
 		#splitter.setHandleWidth(1)
 		
-		splitter.addWidget(WFontMetrics(self))
-		splitter.addWidget(WFontZones(self))
+		self.fontMetrics = WFontMetrics(self)
+		self.fontZones = WFontZones(self)
+
+		splitter.addWidget(self.fontMetrics)
+		splitter.addWidget(self.fontZones)
 
 		splitter.setStretchFactor(0,1)
 		splitter.setStretchFactor(1,2)
