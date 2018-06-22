@@ -140,7 +140,7 @@ class WFontMetrics(QtGui.QWidget):
 
 	def exportMetrics(self):
 		fontPath = os.path.split(self.activeFont.fg.path)[0]
-		fname = QtGui.QFileDialog.getSaveFileName(self.upperWidget, 'Save Font Metrics to file', fontPath , '.json')
+		fname = QtGui.QFileDialog.getSaveFileName(self.upperWidget, 'Save Font Metrics to file', fontPath , '*.json')
 		
 		if fname != None:
 			with open(fname, 'w') as exportFile:
@@ -201,7 +201,7 @@ class WTreeWidget(QtGui.QTreeWidget):
 		return returnDict
 
 	def markChange(self, item):
-		print item.setText(0, ('B: %s', 'T: %s')[int(item.text(2)) > 0] %item.text(1))
+		item.setText(0, ('B: %s', 'T: %s')[int(item.text(2)) > 0] %item.text(1))
 		for col in range(item.columnCount()):
 			
 			item.setBackground(col, QtGui.QColor('powderblue'))
@@ -214,7 +214,7 @@ class WFontZones(QtGui.QWidget):
 		self.grid = QtGui.QGridLayout()
 		self.upperWidget = parentWidget
 		self.activeFont = pFont()
-		self.zoneData = {master:self.activeFont.zonesToTuples() for master in self.activeFont.masters()}
+		self.zoneData = {master:self.activeFont.zonesToTuples(master) for master in self.activeFont.masters()}
 
 		# - Interface
 		self.btn_apply = QtGui.QPushButton('Apply Changes')
@@ -276,6 +276,7 @@ class WFontZones(QtGui.QWidget):
 		for layer, zones in newZoneData.iteritems():
 			self.activeFont.zonesFromTuples(zones, layer)
 
+		self.zoneData = {master:self.activeFont.zonesToTuples() for master in self.activeFont.masters()}
 		print 'DONE:\t Font:%s; Font Zone data Updated!.' %self.activeFont.name
 
 	def resetChanges(self):
@@ -313,7 +314,7 @@ class WFontZones(QtGui.QWidget):
 
 	def exportZones(self):
 		fontPath = os.path.split(self.activeFont.fg.path)[0]
-		fname = QtGui.QFileDialog.getSaveFileName(self.upperWidget, 'Save Font Zones to file', fontPath , '.json')
+		fname = QtGui.QFileDialog.getSaveFileName(self.upperWidget, 'Save Font Zones to file', fontPath, '*.json')
 		
 		if fname != None:
 			with open(fname, 'w') as exportFile:

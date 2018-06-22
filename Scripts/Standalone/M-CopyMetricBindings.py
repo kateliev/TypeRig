@@ -121,7 +121,7 @@ class dlg_copyMetricBinding(QtGui.QDialog):
 	def exportExpr(self):
 		font = pFont()
 		fontPath = os.path.split(font.fg.path)[0]
-		fname = QtGui.QFileDialog.getSaveFileName(self, 'Save Metric Expressions to file', fontPath , '.json')
+		fname = QtGui.QFileDialog.getSaveFileName(self, 'Save Metric Expressions to file', fontPath , '*.json')
 		
 		if self.cmb_mode.currentIndex == 1:
 			expGlyphBounds = {glyph.name:{layer.name:(layer.metricsLeft, layer.metricsRight, layer.metricsWidth) for layer in glyph.masters()} for glyph in font.pGlyphs()}
@@ -139,7 +139,7 @@ class dlg_copyMetricBinding(QtGui.QDialog):
 		font = pFont()
 		fontPath = os.path.split(font.fg.path)[0]
 
-		fname = QtGui.QFileDialog.getOpenFileName(self, 'Open Metric Expressions from file', fontPath)
+		fname = QtGui.QFileDialog.getOpenFileName(self, 'Open Metric Expressions from file', fontPath, '*.json')
 		
 		with open(fname, 'r') as importFile:
 			self.srcGlyphBounds = json.load(importFile)
