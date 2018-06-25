@@ -192,6 +192,7 @@ class pShape(object):
 		return [node for contour in self.contours() for node in contour.nodes()]
 
 	# - Transformation ----------------------------------------
+	'''
 	# -- NOTE: this should go to new eShape object as the proxy is not the palce for such extended functionality
 	def applyTransformation(self, transformMatrix, flEngine=False):
 		if not flEngine:
@@ -201,7 +202,7 @@ class pShape(object):
 			for node in self.nodes():
 				tNode = tMat.applyTransformation(node.x, node.y)
 				node.setXY(*tNode)
-
+	'''
 	def __repr__(self):
 		return '<%s name=%s references=%s contours=%s>' % (self.__class__.__name__, self.name, self.refs, len(self.contours()))
 

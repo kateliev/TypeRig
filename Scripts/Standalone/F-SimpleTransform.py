@@ -30,7 +30,7 @@ class dlg_transformFont(QtGui.QDialog):
 		super(dlg_transformFont, self).__init__()
 	
 		# - Init
-		self.activeFont = pFont()
+		
 
 		# - Widgets
 		self.cmb_layer = QtGui.QComboBox()
@@ -68,37 +68,61 @@ class dlg_transformFont(QtGui.QDialog):
 
 	def applyTransform(self):
 		# - Init
+		activeFont = pFont()
 		inp_x, inp_y  =  float(self.edt_x.text), float(self.edt_y.text)
 
 		def transformGlyph(glyph, layer, matrix):
-			for shape in glyph.listUnboundShapes(layer):
-				pShape(shape).applyTransformation(matrix)
-			
-			glyph.update()
-			glyph.updateObject(glyph.fl, 'DONE:\tTransform:\t Glyph /%s;\tLayer: %s' %(glyph.name, layer))
+			'''
+			if glyph.hasLayer(layer):
+				for shape in glyph.listUnboundShapes(layer):
+					tShape = pShape(shape)
+					
+					if not tShape.isChanged():
+						for node in tShape.nodes():
+							tNode = matrix.applyTransformation(node.x, node.y)
+							node.setXY(*tNode)
+
+						tShape.fl.update()
+				
+				glyph.update()
+				#glyph.updateObject(glyph.fl, 'DONE:\tTransform:\t Glyph /%s;\tLayer: %s' %(glyph.name, layer))
+				print 'DONE:\tTransform:\t Glyph /%s;\tLayer: %s' %(glyph.name, layer)
+
+			else:
+				print 'ERROR:\tNot found:\t Glyph /%s;\tLayer: %s' %(glyph.name, layer)
+			'''
+			if glyph.hasLayer(layer):
+				if not len(glyph.hasGlyphComponents()):
+					for node in glyph.nodes(layer):
+						tNode = matrix.applyTransformation(node.x, node.y)
+						node.setXY(*tNode)
+									
+				glyph.update()
+				glyph.updateObject(glyph.fl, 'DONE:\tTransform:\t Glyph /%s;\tLayer: %s' %(glyph.name, layer))
+			else:
+				print 'ERROR:\tNot found:\t Glyph /%s;\tLayer: %s' %(glyph.name, layer)
 
 		# - Set parameters
 		if self.cmb_glyphset.currentIndex == 0:
-			workSet = self.activeFont.pGlyphs()
+			workSet = activeFont.pGlyphs()
 		elif self.cmb_glyphset.currentIndex == 1:
-			workSet = self.activeFont.selected_pGlyphs()
+			workSet = activeFont.selected_pGlyphs()
 		else:
 			workSet = []
 
 		if self.cmb_layer.currentIndex == 0:
 			wLayer = None
 		else:
-			wLayer = self.activeFont.masters()
+			wLayer = activeFont.masters()
 
 		# - Set Transformation
-		workTrans = transform()
-
+		
 		if self.cmb_transform.currentIndex == 0:
-			workTrans = workTrans.skew(inp_x, inp_y)
+			workTrans = transform().skew(inp_x, inp_y)
 		elif self.cmb_transform.currentIndex == 2:
-			workTrans = workTrans.rotate(inp_x)
+			workTrans = transform().rotate(inp_x)
 		elif self.cmb_transform.currentIndex == 1:
-			workTrans = workTrans.scale(inp_x, inp_y)
+			workTrans = transform().scale(inp_x, inp_y)
 
 		for glyph in workSet:
 			if wLayer is not None:
@@ -107,7 +131,7 @@ class dlg_transformFont(QtGui.QDialog):
 			else:
 				transformGlyph(glyph, None, workTrans)
 
-		self.activeFont.update()
+		activeFont.update()
 		fl6.Update(CurrentFont())
 
 	
