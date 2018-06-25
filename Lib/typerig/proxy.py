@@ -119,6 +119,92 @@ class pNode(object):
 	def __repr__(self):
 		return '<%s index=%s time=%s on=%s>' % (self.__class__.__name__, self.index, self.getTime(), self.isOn)
 
+class pShape(object):
+	'''Proxy to flShape, flShapeData and flShapeInfo objects
+
+	Constructor:
+		pShape(flShape)
+
+	Attributes:
+		.fl (flNode): Original flNode 
+		.parent (flContour): parent contour
+		.contour (flContour): parent contour
+	'''
+	def __init__(self, shape, layer=None, glyph=None):
+		self.fl = shape
+		self.shapeData = self.data()
+		self.name = self.shapeData.name
+		self.currentName = self.fl.name
+		self.refs = self.shapeData.referenceCount
+
+		self.parent = glyph
+		self.layer = layer
+
+	# - Basics -----------------------------------------------
+	def data(self):
+		''' Return flShapeData Object'''
+		return self.fl.shapeData
+
+	def info(self):
+		''' Return flShapeInfo Object'''
+		pass
+
+	def tag(self, tagString):
+		self.data().tag(tagString)
+
+	def isChanged(self):
+		return self.data().hasChanges
+
+	# - Position, composition ---------------------------------
+	def decompose(self):
+		self.fl.decomposite()
+
+	def goUp(self):
+		return self.data().goUp()
+
+	def goDown(self):
+		return self.data().goDown()
+
+	def goFrontOf(self, flShape):
+		return self.data().sendToFront(flShape)
+
+	def goBackOf(self, flShape):
+		return self.data().sendToBack(flShape)
+
+	def goLayerBack(self):
+		if self.layer is not None:
+			return self.goBackOf(self.layer.shapes[0])
+		return False
+
+	def goLayerFront(self):
+		if self.layer is not None:
+			return self.goFrontOf(self.layer.shapes[-1])
+		return False
+
+	# - Contours, Segmets, Nodes ------------------------------
+	def segments(self):
+		return self.data().segments
+
+	def contours(self):
+		return self.data().contours
+
+	def nodes(self):
+		return [node for contour in self.contours() for node in contour.nodes()]
+
+	# - Transformation ----------------------------------------
+	# -- NOTE: this should go to new eShape object as the proxy is not the palce for such extended functionality
+	def applyTransformation(self, transformMatrix, flEngine=False):
+		if not flEngine:
+			from typerig.brain import transform
+			tMat = transform().transform(transformMatrix)
+
+			for node in self.nodes():
+				tNode = tMat.applyTransformation(node.x, node.y)
+				node.setXY(*tNode)
+
+	def __repr__(self):
+		return '<%s name=%s references=%s contours=%s>' % (self.__class__.__name__, self.name, self.refs, len(self.contours()))
+
 
 class pGlyph(object):
 	'''Proxy to flGlyph and fgGlyph combined into single entity.
@@ -241,6 +327,20 @@ class pGlyph(object):
 			elif isinstance(layer, basestring):
 				return self.fl.getLayerByName(layer).shapes
 
+	# - Composite glyph --------------------------------------------
+	def listGlyphComponents(self, layer=None, fullData=False):
+		'''Return all glyph components in glyph'''
+		return [item if fullData else item[0] for item in [self.package.isComponent(shape.shapeData) for shape in self.shapes(layer)] if item[0] is not None]
+
+	def listUnboundShapes(self, layer=None):
+		'''Return all glyph shapes that are not glyph references or those belonging to the original (master) glyph'''
+		return [shape for shape in self.shapes(layer) if self.package.isComponent(shape.shapeData)[0] is None or self.package.isComponent(shape.shapeData)[0] == self.fl]		
+
+	def hasGlyphComponents(self, layer=None):
+		'''Return all glyph components in besides glyph.'''
+		return [glyph for glyph in self.listGlyphComponents(layer) if glyph != self.fl]
+
+	# - Layers -----------------------------------------------------
 	def masters(self):
 		'''Returns all master layers.'''
 		return [layer for layer in self.layers() if layer.isMasterLayer]
@@ -966,6 +1066,7 @@ class pFont(object):
 		'''Return list of TypeRig proxy Glyph objects glyph objects (list[pGlyph]).'''
 		return [self.glyph(glyph) for glyph in self.fg] if not len(fgGlyphList) else [self.glyph(glyph) for glyph in fgGlyphList]
 
+	# - Font metrics -----------------------------------------------
 	def getItalicAngle(self):
 		return self.fl.italicAngle_value
 
@@ -1093,7 +1194,6 @@ class pFont(object):
 		if self.fl.master != backMasterName: self.fl.setMaster(backMasterName)	
 
 		self.update()
-		 
 		
 	def hinting(self):
 		'''Returns fonts hinting'''
