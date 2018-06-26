@@ -99,9 +99,10 @@ class curveEq(QtGui.QGridLayout):
 		wLayers = glyph._prepareLayers(pLayers)
 
 		for layer in wLayers:
-			nodes = [eNode(glyph.nodes(layer)[nid]) for nid in selection]
-			nodes.append(nodes[0]) #!!! Dirty fix
-			conNodes =  [nodes[nid] for nid in range(len(nodes)-1) if nodes[nid].getNextOn() == nodes[nid+1].fl or eNode(nodes[nid].getNextOn()).getTime() == 0]
+			# !!! Fixed the problem, but with too many loops - rethink
+			nodes_fl = [glyph.nodes(layer)[nid] for nid in selection]
+			nodes = [eNode(node) for node in nodes_fl]
+			conNodes = [node for node in nodes if node.getNextOn() in nodes_fl]
 			segmentNodes = [node.getSegmentNodes() for node in conNodes]
 		 
 			for segment in reversed(segmentNodes):
