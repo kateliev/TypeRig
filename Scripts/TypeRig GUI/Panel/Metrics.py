@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Metrics', '0.10'
+app_name, app_version = 'TypeRig | Metrics', '0.11'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -42,6 +42,55 @@ class MLineEdit(QtGui.QLineEdit):
 		menu.addAction(u'W', lambda: self.setText('=w("%s")' %self.text))
 		menu.addAction(u'G', lambda: self.setText('=g("%s")' %self.text))	
 		
+class metrics_adjust(QtGui.QGridLayout):
+	# - Copy Metric properties from other glyph
+	def __init__(self):
+		super(metrics_adjust, self).__init__()
+		self.edt_lsb_percent =  QtGui.QLineEdit('100')
+		self.edt_adv_percent = QtGui.QLineEdit('100')
+		self.edt_rsb_percent = QtGui.QLineEdit('100')
+		self.edt_lsb_units =  QtGui.QLineEdit('0')
+		self.edt_adv_units = QtGui.QLineEdit('0')
+		self.edt_rsb_units = QtGui.QLineEdit('0')
+
+		self.btn_adjMetrics = QtGui.QPushButton('&Adjust Metrics')
+		self.btn_adjMetrics.clicked.connect(self.adjMetrics)
+
+		self.addWidget(QtGui.QLabel('LSB:'), 	0, 0, 1, 1)
+		self.addWidget(self.edt_lsb_percent, 	0, 1, 1, 1)
+		self.addWidget(QtGui.QLabel('%'), 		0, 2, 1, 1)
+		self.addWidget(self.edt_lsb_units, 		0, 3, 1, 1)
+		self.addWidget(QtGui.QLabel('U'), 		0, 4, 1, 1)
+
+		self.addWidget(QtGui.QLabel('RSB:'), 	1, 0, 1, 1)
+		self.addWidget(self.edt_rsb_percent, 	1, 1, 1, 1)
+		self.addWidget(QtGui.QLabel('%'), 		1, 2, 1, 1)
+		self.addWidget(self.edt_rsb_units, 		1, 3, 1, 1)
+		self.addWidget(QtGui.QLabel('U'), 		1, 4, 1, 1)
+
+		self.addWidget(QtGui.QLabel('ADV:'), 	2, 0, 1, 1)
+		self.addWidget(self.edt_adv_percent, 	2, 1, 1, 1)
+		self.addWidget(QtGui.QLabel('%'), 		2, 2, 1, 1)
+		self.addWidget(self.edt_adv_units, 		2, 3, 1, 1)
+		self.addWidget(QtGui.QLabel('U'), 		2, 4, 1, 1)
+
+		self.addWidget(self.btn_adjMetrics, 	3, 1, 1, 4)
+
+	def adjMetrics(self):
+		# - Dumb but working - next time do better!
+		glyph = eGlyph()
+		
+		copyOrder = [False]*3
+		srcGlyphs = [glyph.name]*3
+				
+		adjPercents = (int(self.edt_lsb_percent.text), int(self.edt_rsb_percent.text), int(self.edt_adv_percent.text))
+		adjUnits = (int(self.edt_lsb_units.text), int(self.edt_rsb_units.text), int(self.edt_adv_units.text))
+		
+		glyph.copyMetricsbyName(srcGlyphs, pLayers, copyOrder, adjPercents, adjUnits)
+
+		glyph.updateObject(glyph.fl, 'Adjust Metrics | LSB: %s; RSB: %s; ADV:%s.' %adjUnits)
+		glyph.update()
+
 class metrics_copy(QtGui.QGridLayout):
 	# - Copy Metric properties from other glyph
 	def __init__(self):
@@ -129,7 +178,6 @@ class metrics_copy(QtGui.QGridLayout):
 		self.reset_fileds()
 		glyph.updateObject(glyph.fl, 'Copy Metrics | LSB: %s; RSB: %s; ADV:%s.' %(srcGlyphs[0], srcGlyphs[1], srcGlyphs[2]))
 		glyph.update()
-
 
 class metrics_expr(QtGui.QGridLayout):
 	# - Copy Metric properties from other glyph
@@ -283,7 +331,9 @@ class tool_tab(QtGui.QWidget):
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
 			
-		# - Build   
+		# - Build 
+		layoutV.addWidget(QtGui.QLabel('Glyph: Adjust Metric data'))
+		layoutV.addLayout(metrics_adjust())
 		layoutV.addWidget(QtGui.QLabel('Glyph: Copy Metric data'))
 		layoutV.addLayout(metrics_copy())
 		layoutV.addWidget(QtGui.QLabel('Glyph: Set metric expressions'))
