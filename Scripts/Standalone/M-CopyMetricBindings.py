@@ -48,11 +48,13 @@ class dlg_copyMetricBinding(QtGui.QDialog):
 		self.btn_paste = QtGui.QPushButton('&Paste Expressions')
 		self.btn_export = QtGui.QPushButton('&Export to File')
 		self.btn_import = QtGui.QPushButton('&Import from File')
+		self.btn_importFLC = QtGui.QPushButton('&Import from .FLC')
 		
 		self.btn_copy.clicked.connect(self.copyExpr)
 		self.btn_paste.clicked.connect(self.pasteExpr)
 		self.btn_export.clicked.connect(self.exportExpr)
 		self.btn_import.clicked.connect(self.importExpr)
+		self.btn_importFLC.clicked.connect(self.importExprFLC)
 		
 		self.btn_paste.setEnabled(False)
 		#self.btn_export.setEnabled(False)
@@ -68,6 +70,7 @@ class dlg_copyMetricBinding(QtGui.QDialog):
 		layoutV.addWidget(self.btn_paste)
 		layoutV.addWidget(self.btn_export)
 		layoutV.addWidget(self.btn_import)
+		layoutV.addWidget(self.btn_importFLC)
 
 		# - Set Widget
 		self.setLayout(layoutV)
@@ -147,6 +150,21 @@ class dlg_copyMetricBinding(QtGui.QDialog):
 		print 'LOAD:\t Font:%s; %s Glyph Metric Expressions loaded from %s.' %(font.name, len(self.srcGlyphBounds.keys()), fname)
 		print 'NOTE:\t Use < Paste Expressions > to apply loaded!'
 		self.btn_paste.setEnabled(True)
+
+	def importExprFLC(self):
+		from typerig.utils import fontClassesFromFile as importFLC
+		
+		font = pFont()
+		fontPath = os.path.split(font.fg.path)[0]
+
+		fname = QtGui.QFileDialog.getOpenFileName(self, 'Open Fontlab class file', fontPath, '*.flc')
+		
+		classesFLC = importFLC(fname)
+		print classesFLC.classPosition
+
+		#print 'LOAD:\t Font:%s; %s Glyph Metric Expressions loaded from %s.' %(font.name, len(self.srcGlyphBounds.keys()), fname)
+		#print 'NOTE:\t Use < Paste Expressions > to apply loaded!'
+		#self.btn_paste.setEnabled(True)
 	
 # - RUN ------------------------------
 dialog = dlg_copyMetricBinding()

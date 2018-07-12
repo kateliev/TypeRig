@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.46'
+app_name, app_version = 'TypeRig | Nodes', '0.47'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -596,6 +596,8 @@ class advMovement(QtGui.QVBoxLayout):
 		self.cmb_methodSelector = QtGui.QComboBox()
 		self.cmb_methodSelector.addItems(self.methodList)
 		self.cmb_methodSelector.setToolTip('Select movement method')
+		self.chk_percent = QtGui.QCheckBox('% of BBox')
+		self.chk_percent.setToolTip('Interpret new positional coordinates as if they were scaled by percent given in (X,Y)\nEquivalent to affine scaling of selected nodes in respect to the Layers BoundingBox')
 		
 		# - Arrow buttons
 		self.btn_up = QtGui.QPushButton('Up')
@@ -612,6 +614,7 @@ class advMovement(QtGui.QVBoxLayout):
 		self.btn_down.clicked.connect(self.onDown)
 		self.btn_left.clicked.connect(self.onLeft)
 		self.btn_right.clicked.connect(self.onRight)
+		self.chk_percent.clicked.connect(self.toggleInput)
 		
 		self.edt_offX = QtGui.QLineEdit('1.0')
 		self.edt_offY = QtGui.QLineEdit('1.0')
@@ -621,7 +624,8 @@ class advMovement(QtGui.QVBoxLayout):
 		# - Layout
 		self.lay_btn = QtGui.QGridLayout()
 
-		self.lay_btn.addWidget(self.cmb_methodSelector, 0, 0, 1, 6)
+		self.lay_btn.addWidget(self.cmb_methodSelector, 0, 0, 1, 5)
+		self.lay_btn.addWidget(self.chk_percent, 		0, 5, 1, 1)
 		self.lay_btn.addWidget(QtGui.QLabel('X:'), 		1, 0, 1, 1)
 		self.lay_btn.addWidget(self.edt_offX, 			1, 1, 1, 1)
 		self.lay_btn.addWidget(self.btn_up, 			1, 2, 1, 2)
@@ -634,43 +638,69 @@ class advMovement(QtGui.QVBoxLayout):
 		self.addLayout(self.lay_btn)
 
 		
-	def moveNodes(self, offset_x, offset_y, method):
-		'''
-		import sys        
-		sys.stdout = open(r'd:\\stdout.log', 'w')
-		sys.stderr = open(r'd:\\stderr.log', 'w')
-		'''
+	def toggleInput(self):
+		if self.chk_percent.isChecked():
+			self.edt_offX.setText(str(float(self.edt_offX.text)/100)) 
+			self.edt_offY.setText(str(float(self.edt_offY.text)/100))
+		else:
+			self.edt_offX.setText(str(float(self.edt_offX.text)*100)) 
+			self.edt_offY.setText(str(float(self.edt_offY.text)*100))
+
+	def moveNodes(self, offset_x, offset_y, method, inPercent):
 		# - Init
 		glyph = eGlyph()
 		font = pFont()
 		selectedNodes = glyph.selectedNodes()
 		italic_angle = font.getItalicAngle()
+		
+		# -- Scaling move - coordinates as percent of position
+		def scaleOffset(node, off_x, off_y):
+			return (-node.x + width*(float(node.x)/width + offset_x), -node.y + height*(float(node.y)/height + offset_y))
+
+		width = glyph.layer().boundingBox.width() # glyph.layer().advanceWidth
+		height = glyph.layer().boundingBox.height() # glyph.layer().advanceHeight
 
 		# - Process
 		if method == self.methodList[0]:
 			for node in selectedNodes:
 				if node.isOn:
-					node.smartMove(QtCore.QPointF(offset_x, offset_y))
+					if inPercent:						
+						node.smartMove(QtCore.QPointF(*scaleOffset(node, offset_x, offset_y)))
+					else:
+						node.smartMove(QtCore.QPointF(offset_x, offset_y))
 
 		elif method == self.methodList[1]:
 			for node in selectedNodes:
 				if node.isOn:
-					node.move(QtCore.QPointF(offset_x, offset_y))
+					if inPercent:						
+						node.move(QtCore.QPointF(*scaleOffset(node, offset_x, offset_y)))
+					else:
+						node.move(QtCore.QPointF(offset_x, offset_y))
 
 		elif method == self.methodList[2]:
 			for node in selectedNodes:
 				wNode = eNode(node)
-				wNode.interpMove(offset_x, offset_y)
+
+				if inPercent:						
+					wNode.interpMove(*scaleOffset(node, offset_x, offset_y))
+				else:
+					wNode.interpMove(offset_x, offset_y)
 
 		elif method == self.methodList[3]:
 			if italic_angle != 0:
 				for node in selectedNodes:
 					wNode = eNode(node)
-					wNode.slantMove(offset_x, offset_y, italic_angle)
+					if inPercent:						
+						wNode.slantMove(*scaleOffset(node, offset_x, offset_y))
+					else:
+						wNode.slantMove(offset_x, offset_y, italic_angle)
 			else:
 				for node in selectedNodes:
 					if node.isOn:
-						node.smartMove(QtCore.QPointF(offset_x, offset_y))
+						if inPercent:						
+							node.smartMove(*scaleOffset(node, offset_x, offset_y))
+						else:
+							node.smartMove(QtCore.QPointF(offset_x, offset_y))
 
 		# - Set Undo
 		glyph.updateObject(glyph.activeLayer(), '%s @ %s.' %(method, glyph.activeLayer().name), verbose=False)
@@ -679,16 +709,16 @@ class advMovement(QtGui.QVBoxLayout):
 		glyph.update()
 
 	def onUp(self):
-		self.moveNodes(.0, float(self.edt_offY.text), method=str(self.cmb_methodSelector.currentText))
+		self.moveNodes(.0, float(self.edt_offY.text), method=str(self.cmb_methodSelector.currentText), inPercent=self.chk_percent.isChecked())
 
 	def onDown(self):
-		self.moveNodes(.0, -float(self.edt_offY.text), method=str(self.cmb_methodSelector.currentText))
+		self.moveNodes(.0, -float(self.edt_offY.text), method=str(self.cmb_methodSelector.currentText), inPercent=self.chk_percent.isChecked())
 			
 	def onLeft(self):
-		self.moveNodes(-float(self.edt_offX.text), .0, method=str(self.cmb_methodSelector.currentText))
+		self.moveNodes(-float(self.edt_offX.text), .0, method=str(self.cmb_methodSelector.currentText), inPercent=self.chk_percent.isChecked())
 			
 	def onRight(self):
-		self.moveNodes(float(self.edt_offX.text), .0, method=str(self.cmb_methodSelector.currentText))
+		self.moveNodes(float(self.edt_offX.text), .0, method=str(self.cmb_methodSelector.currentText), inPercent=self.chk_percent.isChecked())
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
@@ -772,7 +802,7 @@ class tool_tab(QtGui.QWidget):
 			shiftXY = (.0,.0)
 		
 		# - Move
-		self.advMovement.moveNodes(*shiftXY, method=str(self.advMovement.cmb_methodSelector.currentText))
+		self.advMovement.moveNodes(*shiftXY, method=str(self.advMovement.cmb_methodSelector.currentText),  inPercent=self.advMovement.chk_percent.isChecked())
 
 	def captureKeyaboard(self):
 		if not self.KeyboardOverride:
