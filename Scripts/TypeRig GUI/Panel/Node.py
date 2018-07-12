@@ -779,9 +779,9 @@ class tool_tab(QtGui.QWidget):
 		# - Keyboard listener
 		# -- Modifier addon
 		if modifier == QtCore.Qt.ShiftModifier:
-			addon = 10.0
+			addon = 10.0 if not self.advMovement.chk_percent.isChecked() else 0.1
 		elif modifier == QtCore.Qt.ControlModifier:
-			addon = 100.0
+			addon = 100.0 if not self.advMovement.chk_percent.isChecked() else 1.0
 		else:
 			addon = .0
 		
