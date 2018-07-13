@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Metrics', '0.11'
+app_name, app_version = 'TypeRig | Metrics', '0.13'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -46,35 +46,61 @@ class metrics_adjust(QtGui.QGridLayout):
 	# - Copy Metric properties from other glyph
 	def __init__(self):
 		super(metrics_adjust, self).__init__()
-		self.edt_lsb_percent =  QtGui.QLineEdit('100')
-		self.edt_adv_percent = QtGui.QLineEdit('100')
-		self.edt_rsb_percent = QtGui.QLineEdit('100')
-		self.edt_lsb_units =  QtGui.QLineEdit('0')
-		self.edt_adv_units = QtGui.QLineEdit('0')
-		self.edt_rsb_units = QtGui.QLineEdit('0')
+		# - Spin Boxes
+		self.spb_lsb_percent =  QtGui.QSpinBox()
+		self.spb_adv_percent = QtGui.QSpinBox()
+		self.spb_rsb_percent = QtGui.QSpinBox()
+		self.spb_lsb_units =  QtGui.QSpinBox()
+		self.spb_adv_units = QtGui.QSpinBox()
+		self.spb_rsb_units = QtGui.QSpinBox()
 
+		self.spb_lsb_percent.setMaximum(200)
+		self.spb_adv_percent.setMaximum(200)
+		self.spb_rsb_percent.setMaximum(200)
+		self.spb_lsb_units.setMaximum(200)
+		self.spb_adv_units.setMaximum(200)
+		self.spb_rsb_units.setMaximum(200)
+		self.spb_lsb_units.setMinimum(-200)
+		self.spb_adv_units.setMinimum(-200)
+		self.spb_rsb_units.setMinimum(-200)
+
+		self.spb_lsb_percent.setSuffix('%')
+		self.spb_adv_percent.setSuffix('%')
+		self.spb_rsb_percent.setSuffix('%')
+		self.spb_lsb_units.setSuffix(' u')
+		self.spb_adv_units.setSuffix(' u')
+		self.spb_rsb_units.setSuffix(' u')
+
+		self.resetSpinBox()
+
+		# - Buttons
 		self.btn_adjMetrics = QtGui.QPushButton('&Adjust Metrics')
+		self.btn_resetSpinBox = QtGui.QPushButton('&Reset')
 		self.btn_adjMetrics.clicked.connect(self.adjMetrics)
+		self.btn_resetSpinBox.clicked.connect(self.resetSpinBox)
 
-		self.addWidget(QtGui.QLabel('LSB:'), 	0, 0, 1, 1)
-		self.addWidget(self.edt_lsb_percent, 	0, 1, 1, 1)
-		self.addWidget(QtGui.QLabel('%'), 		0, 2, 1, 1)
-		self.addWidget(self.edt_lsb_units, 		0, 3, 1, 1)
-		self.addWidget(QtGui.QLabel('U'), 		0, 4, 1, 1)
+		self.addWidget(QtGui.QLabel('LSB adjust:'), 	0, 0, 1, 1)
+		self.addWidget(QtGui.QLabel('RSB adjust:'), 	0, 1, 1, 1)
+		self.addWidget(QtGui.QLabel('ADV adjust:'), 	0, 2, 1, 1)
+		self.addWidget(self.spb_lsb_percent, 	1, 0, 1, 1)
+		self.addWidget(self.spb_rsb_percent, 	1, 1, 1, 1)
+		self.addWidget(self.spb_adv_percent, 	1, 2, 1, 1)
 
-		self.addWidget(QtGui.QLabel('RSB:'), 	1, 0, 1, 1)
-		self.addWidget(self.edt_rsb_percent, 	1, 1, 1, 1)
-		self.addWidget(QtGui.QLabel('%'), 		1, 2, 1, 1)
-		self.addWidget(self.edt_rsb_units, 		1, 3, 1, 1)
-		self.addWidget(QtGui.QLabel('U'), 		1, 4, 1, 1)
+		self.addWidget(self.spb_lsb_units, 		2, 0, 1, 1)
+		self.addWidget(self.spb_rsb_units, 		2, 1, 1, 1)
+		self.addWidget(self.spb_adv_units, 		2, 2, 1, 1)
 
-		self.addWidget(QtGui.QLabel('ADV:'), 	2, 0, 1, 1)
-		self.addWidget(self.edt_adv_percent, 	2, 1, 1, 1)
-		self.addWidget(QtGui.QLabel('%'), 		2, 2, 1, 1)
-		self.addWidget(self.edt_adv_units, 		2, 3, 1, 1)
-		self.addWidget(QtGui.QLabel('U'), 		2, 4, 1, 1)
+		self.addWidget(self.btn_resetSpinBox, 	3, 0, 1, 1)
+		self.addWidget(self.btn_adjMetrics, 	3, 1, 1, 2)
 
-		self.addWidget(self.btn_adjMetrics, 	3, 1, 1, 4)
+	def resetSpinBox(self):
+		# - Reset spin-box values
+		self.spb_lsb_percent.setValue(100)
+		self.spb_adv_percent.setValue(100)
+		self.spb_rsb_percent.setValue(100)
+		self.spb_lsb_units.setValue(0)
+		self.spb_adv_units.setValue(0)
+		self.spb_rsb_units.setValue(0)
 
 	def adjMetrics(self):
 		# - Dumb but working - next time do better!
@@ -83,8 +109,8 @@ class metrics_adjust(QtGui.QGridLayout):
 		copyOrder = [False]*3
 		srcGlyphs = [glyph.name]*3
 				
-		adjPercents = (int(self.edt_lsb_percent.text), int(self.edt_rsb_percent.text), int(self.edt_adv_percent.text))
-		adjUnits = (int(self.edt_lsb_units.text), int(self.edt_rsb_units.text), int(self.edt_adv_units.text))
+		adjPercents = (self.spb_lsb_percent.value, self.spb_rsb_percent.value, self.spb_adv_percent.value)
+		adjUnits = (self.spb_lsb_units.value, self.spb_rsb_units.value, self.spb_adv_units.value)
 		
 		glyph.copyMetricsbyName(srcGlyphs, pLayers, copyOrder, adjPercents, adjUnits)
 
@@ -96,6 +122,7 @@ class metrics_copy(QtGui.QGridLayout):
 	def __init__(self):
 		super(metrics_copy, self).__init__()
 
+		# - Edit Fields
 		self.edt_lsb =  QtGui.QLineEdit()
 		self.edt_adv = QtGui.QLineEdit()
 		self.edt_rsb =   QtGui.QLineEdit()
@@ -104,65 +131,82 @@ class metrics_copy(QtGui.QGridLayout):
 		self.edt_adv.setPlaceholderText('Glyph Name')
 		self.edt_rsb.setPlaceholderText('Glyph Name')
 
-		self.edt_lsb_percent =  QtGui.QLineEdit('100')
-		self.edt_adv_percent = QtGui.QLineEdit('100')
-		self.edt_rsb_percent = QtGui.QLineEdit('100')
-		self.edt_lsb_units =  QtGui.QLineEdit('0')
-		self.edt_adv_units = QtGui.QLineEdit('0')
-		self.edt_rsb_units = QtGui.QLineEdit('0')
+		# - Spin Box
+		self.spb_lsb_percent =  QtGui.QSpinBox()
+		self.spb_adv_percent = QtGui.QSpinBox()
+		self.spb_rsb_percent = QtGui.QSpinBox()
+		self.spb_lsb_units =  QtGui.QSpinBox()
+		self.spb_adv_units = QtGui.QSpinBox()
+		self.spb_rsb_units = QtGui.QSpinBox()
 
-		self.edt_lsb_percent.setMaximumWidth(30)
-		self.edt_adv_percent.setMaximumWidth(30)
-		self.edt_rsb_percent.setMaximumWidth(30)
-		self.edt_lsb_units.setMaximumWidth(30)
-		self.edt_adv_units.setMaximumWidth(30)
-		self.edt_rsb_units.setMaximumWidth(30)
+		self.spb_lsb_percent.setMaximum(200)
+		self.spb_adv_percent.setMaximum(200)
+		self.spb_rsb_percent.setMaximum(200)
+		self.spb_lsb_units.setMaximum(200)
+		self.spb_adv_units.setMaximum(200)
+		self.spb_rsb_units.setMaximum(200)
+		self.spb_lsb_units.setMinimum(-200)
+		self.spb_adv_units.setMinimum(-200)
+		self.spb_rsb_units.setMinimum(-200)
 
+		self.spb_lsb_percent.setSuffix('%')
+		self.spb_adv_percent.setSuffix('%')
+		self.spb_rsb_percent.setSuffix('%')
+		self.spb_lsb_units.setSuffix(' u')
+		self.spb_adv_units.setSuffix(' u')
+		self.spb_rsb_units.setSuffix(' u')
+
+		self.spb_lsb_percent.setMaximumWidth(50)
+		self.spb_adv_percent.setMaximumWidth(50)
+		self.spb_rsb_percent.setMaximumWidth(50)
+		self.spb_lsb_units.setMaximumWidth(50)
+		self.spb_adv_units.setMaximumWidth(50)
+		self.spb_rsb_units.setMaximumWidth(50)
+
+		self.reset_fileds()
+
+		# - Buttons
 		self.btn_copyMetrics = QtGui.QPushButton('&Copy Metrics')
 		self.btn_copyMetrics.clicked.connect(self.copyMetrics)
 
+		# - Build
+
 		self.addWidget(QtGui.QLabel('LSB:'), 0, 0, 1, 1)
 		self.addWidget(self.edt_lsb, 0, 1, 1, 3)
-		self.addWidget(QtGui.QLabel('Adjust:'), 0, 4, 1, 1)
-		self.addWidget(self.edt_lsb_percent, 0, 5, 1, 1)
-		self.addWidget(QtGui.QLabel('%'), 0, 6, 1, 1)
-		self.addWidget(self.edt_lsb_units, 0, 7, 1, 1)
-		self.addWidget(QtGui.QLabel('U'), 0, 8, 1, 1)
+		self.addWidget(QtGui.QLabel('@'), 0, 4, 1, 1)
+		self.addWidget(self.spb_lsb_percent, 0, 5, 1, 1)
+		self.addWidget(QtGui.QLabel('+'), 0, 6, 1, 1)
+		self.addWidget(self.spb_lsb_units, 0, 7, 1, 1)
 
 		self.addWidget(QtGui.QLabel('RSB:'), 1, 0, 1, 1)
 		self.addWidget(self.edt_rsb, 1, 1, 1, 3)
-		self.addWidget(QtGui.QLabel('Adjust:'), 1, 4, 1, 1)
-		self.addWidget(self.edt_rsb_percent, 1, 5, 1, 1)
-		self.addWidget(QtGui.QLabel('%'), 1, 6, 1, 1)
-		self.addWidget(self.edt_rsb_units, 1, 7, 1, 1)
-		self.addWidget(QtGui.QLabel('U'), 1, 8, 1, 1)
+		self.addWidget(QtGui.QLabel('@'), 1, 4, 1, 1)
+		self.addWidget(self.spb_rsb_percent, 1, 5, 1, 1)
+		self.addWidget(QtGui.QLabel('+'), 1, 6, 1, 1)
+		self.addWidget(self.spb_rsb_units, 1, 7, 1, 1)
 
 		self.addWidget(QtGui.QLabel('ADV:'), 2, 0, 1, 1)
 		self.addWidget(self.edt_adv, 2, 1, 1, 3)
-		self.addWidget(QtGui.QLabel('Adjust:'), 2, 4, 1, 1)
-		self.addWidget(self.edt_adv_percent, 2, 5, 1, 1)
-		self.addWidget(QtGui.QLabel('%'), 2, 6, 1, 1)
-		self.addWidget(self.edt_adv_units, 2, 7, 1, 1)
-		self.addWidget(QtGui.QLabel('U'), 2, 8, 1, 1)
+		self.addWidget(QtGui.QLabel('@'), 2, 4, 1, 1)
+		self.addWidget(self.spb_adv_percent, 2, 5, 1, 1)
+		self.addWidget(QtGui.QLabel('+'), 2, 6, 1, 1)
+		self.addWidget(self.spb_adv_units, 2, 7, 1, 1)
 
 		self.addWidget(self.btn_copyMetrics, 3, 1, 1, 8)
 
-		self.setColumnStretch(0, 0)
-		self.setColumnStretch(4, 0)
-		self.setColumnStretch(6, 0)
-		self.setColumnStretch(8, 0)
-		self.setColumnStretch(1, 5)
-
 	def reset_fileds(self):
+		# - Reset text fields
 		self.edt_lsb.setText('')
 		self.edt_adv.setText('')
 		self.edt_rsb.setText('')
-		self.edt_lsb_percent.setText('100')
-		self.edt_adv_percent.setText('100')
-		self.edt_rsb_percent.setText('100')
-		self.edt_lsb_units.setText('0')
-		self.edt_adv_units.setText('0')
-		self.edt_rsb_units.setText('0')
+		
+		# - Reset spin-box
+		self.spb_lsb_percent.setValue(100)
+		self.spb_adv_percent.setValue(100)
+		self.spb_rsb_percent.setValue(100)
+		self.spb_lsb_units.setValue(0)
+		self.spb_adv_units.setValue(0)
+		self.spb_rsb_units.setValue(0)
 
 	def copyMetrics(self):
 		glyph = eGlyph()
@@ -170,8 +214,8 @@ class metrics_copy(QtGui.QGridLayout):
 		copyOrder = ['--' in name for name in (self.edt_lsb.text, self.edt_rsb.text, self.edt_adv.text)]
 		srcGlyphs = [str(name).replace('--', '') if len(name) else None for name in (self.edt_lsb.text, self.edt_rsb.text, self.edt_adv.text)]
 		
-		adjPercents = (int(self.edt_lsb_percent.text), int(self.edt_rsb_percent.text), int(self.edt_adv_percent.text))
-		adjUnits = (int(self.edt_lsb_units.text), int(self.edt_rsb_units.text), int(self.edt_adv_units.text))
+		adjPercents = (self.spb_lsb_percent.value, self.spb_rsb_percent.value, self.spb_adv_percent.value)
+		adjUnits = (self.spb_lsb_units.value, self.spb_rsb_units.value, self.spb_adv_units.value)
 		
 		glyph.copyMetricsbyName(srcGlyphs, pLayers, copyOrder, adjPercents, adjUnits)
 
@@ -332,12 +376,15 @@ class tool_tab(QtGui.QWidget):
 		layoutV = QtGui.QVBoxLayout()
 			
 		# - Build 
-		layoutV.addWidget(QtGui.QLabel('Glyph: Adjust Metric data'))
+		#layoutV.addWidget(QtGui.QLabel('Glyph: Adjust Metric data'))
 		layoutV.addLayout(metrics_adjust())
+		layoutV.addSpacing(10)
 		layoutV.addWidget(QtGui.QLabel('Glyph: Copy Metric data'))
 		layoutV.addLayout(metrics_copy())
+		layoutV.addSpacing(10)
 		layoutV.addWidget(QtGui.QLabel('Glyph: Set metric expressions'))
 		layoutV.addLayout(metrics_expr())
+		layoutV.addSpacing(10)
 		layoutV.addWidget(QtGui.QLabel('\nFont: Set Font Metrics'))
 		layoutV.addLayout(metrics_font())
 
