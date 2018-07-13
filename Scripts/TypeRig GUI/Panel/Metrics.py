@@ -103,8 +103,8 @@ class metrics_adjust(QtGui.QGridLayout):
 		self.spb_rsb_units.setValue(0)
 
 	def adjMetrics(self):
-		# - Dumb but working - next time do better!
 		glyph = eGlyph()
+		wLayers = glyph._prepareLayers(pLayers)
 		
 		copyOrder = [False]*3
 		srcGlyphs = [glyph.name]*3
@@ -112,9 +112,12 @@ class metrics_adjust(QtGui.QGridLayout):
 		adjPercents = (self.spb_lsb_percent.value, self.spb_rsb_percent.value, self.spb_adv_percent.value)
 		adjUnits = (self.spb_lsb_units.value, self.spb_rsb_units.value, self.spb_adv_units.value)
 		
-		glyph.copyMetricsbyName(srcGlyphs, pLayers, copyOrder, adjPercents, adjUnits)
+		for layer in wLayers:
+			glyph.setLSB(glyph.getLSB(layer)*adjPercents[0]/100 + adjUnits[0], layer)
+			glyph.setRSB(glyph.getRSB(layer)*adjPercents[1]/100 + adjUnits[1], layer)
+			glyph.setAdvance(glyph.getAdvance(layer)*adjPercents[2]/100 + adjUnits[2], layer)
 
-		glyph.updateObject(glyph.fl, 'Adjust Metrics | LSB: %s; RSB: %s; ADV:%s.' %adjUnits)
+		glyph.updateObject(glyph.fl, 'Adjust Metrics @ %s | %s' %('; '.join(wLayers), zip(('LSB','RSB','ADV'), adjPercents, adjUnits)))
 		glyph.update()
 
 class metrics_copy(QtGui.QGridLayout):
