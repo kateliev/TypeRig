@@ -265,6 +265,8 @@ class pGlyph(object):
 	# - Basics -----------------------------------------------
 	def activeLayer(self): return self.fl.activeLayer
 
+	def fg_activeLayer(self): return self.fg.layer
+
 	def mask(self): return self.fl.activeLayer.getMaskLayer(True)
 
 	def activeGuides(self): return self.fl.activeLayer.guidelines
@@ -280,6 +282,15 @@ class pGlyph(object):
 		'''
 		return sum([contour.nodes() for contour in self.layer(layer).getContours()], [])
 
+	def fg_nodes(self, layer=None):
+		'''Return all FontGate nodes at given layer.
+		Args:
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+		Returns:
+			list[fgNodes]
+		'''
+		return sum([contour.nodes.asList() for contour in self.fg_contours(layer)], [])
+
 	def contours(self, layer=None):
 		'''Return all contours at given layer.
 		Args:
@@ -289,9 +300,22 @@ class pGlyph(object):
 		'''
 		return [contour for contour in self.layer(layer).getContours()]
 
+	def fg_contours(self, layer=None):
+		'''Return all FontGate contours at given layer.
+		Args:
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+		Returns:
+			list[fgContours]
+		'''
+		return sum([shape.contours.asList() for shape in self.fg_shapes(layer)],[])
+
 	def layers(self):
 		'''Return all layers'''
 		return self.fl.layers
+
+	def fg_layers(self, asDict=False):
+		'''Return all FotnGate layers'''
+		return self.fg.layers if not asDict else {layer.name:layer for layer in self.fg.layers}
 
 	def layer(self, layer=None):
 		'''Returns layer no matter the reference.
@@ -309,8 +333,30 @@ class pGlyph(object):
 			elif isinstance(layer, basestring):
 				return self.fl.getLayerByName(layer)
 
+	def fg_layer(self, layer=None):
+		'''Returns FontGate layer no matter the reference.
+		Args:
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+		Returns:
+			fgLayer
+		'''
+		if layer is None:
+			return self.fg.layer
+		else:
+			if isinstance(layer, int):
+				return self.fg.layers[layer]
+
+			elif isinstance(layer, basestring):
+				try:
+					return self.fg_layers(True)[layer]
+				except KeyError:
+					return None
+
 	def hasLayer(self, layerName):
 		return True if self.fl.findLayer(layerName) is not None else False
+
+	def fg_hasLayer(self, layerName):
+		return self.fg.fgData().findLayer(layer)
 
 	def shapes(self, layer=None):
 		'''Return all shapes at given layer.
@@ -327,6 +373,16 @@ class pGlyph(object):
 
 			elif isinstance(layer, basestring):
 				return self.fl.getLayerByName(layer).shapes
+
+	def fg_shapes(self, layer=None):
+		'''Return all FontGate shapes at given layer.
+		Args:
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+		Returns:
+			list[fgShapes]
+		'''
+		activeLayer = self.fg_layer(layer)
+		return [activeLayer[sid] for sid in range(activeLayer.countShapes())]
 
 	# - Composite glyph --------------------------------------------
 	def listGlyphComponents(self, layer=None, fullData=False):
