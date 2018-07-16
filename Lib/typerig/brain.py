@@ -151,101 +151,6 @@ def bilinInterp(x, y, points):
 			q12 * (x2 - x) * (y - y1) +
 			q22 * (x - x1) * (y - y1)
 		   ) / ((x2 - x1) * (y2 - y1) + 0.0)
-
-class transform(object):
-	'''	Affine transformations '''
-
-	def __init__(self, xx=1.0, xy=0.0, yx=0.0, yy=1.0, dx=0.0, dy=0.0):
-		self.__affine = map(float, (xx, xy, yx, yy, dx, dy))
-
-	def __normSinCos(self, v):
-		EPSILON = 1e-15
-		ONE_EPSILON = 1.0 - EPSILON
-		MINUS_ONE_EPSILON = -1.0 + EPSILON
-
-		if abs(v) < EPSILON:
-			v = 0.0
-		elif v > ONE_EPSILON:
-			v = 1.0
-		elif v < MINUS_ONE_EPSILON:
-			v = -1.0
-		return v
-
-	def applyTransformation(self, x, y):
-		x, y = float(x), float(y)
-		xx, xy, yx, yy, dx, dy = map(float, self.__affine)
-		return (xx * x + yx * y + dx, xy * x + yy * y + dy)
-
-	def translate(self, dx, dy):
-		return self.transform((1.0, 0.0, 0.0, 1.0, float(dx), float(dy)))
-
-	def scale(self, sx, sy):
-		return self.transform((float(sx), 0.0, 0.0, float(sy), 0.0, 0.0))
-
-	def rotate(self, angle):
-		from math import sin, cos, radians
-		c = self.__normSinCos(cos(radians(angle)))
-		s = self.__normSinCos(sin(radians(angle)))
-		return self.transform((c, s, -s, c, 0.0, 0.0))
-
-	def skew(self, ax, ay):
-		from math import tan, radians
-		return self.transform((1.0, tan(radians(ay)), tan(radians(ax)), 1.0, 0.0, 0.0))
-
-	def transform(self, other):
-		xx1, xy1, yx1, yy1, dx1, dy1 = map(float, other)
-		xx2, xy2, yx2, yy2, dx2, dy2 = map(float, self.__affine)
-		return self.__class__(
-				xx1 * xx2 + xy1 * yx2,
-				xx1 * xy2 + xy1 * yy2,
-				yx1 * xx2 + yy1 * yx2,
-				yx1 * xy2 + yy1 * yy2,
-				xx2 * dx1 + yx2 * dy1 + dx2,
-				xy2 * dx1 + yy2 * dy1 + dy2)
-
-	def reverseTransform(self, other):
-		xx1, xy1, yx1, yy1, dx1, dy1 = map(float, self.__affine)
-		xx2, xy2, yx2, yy2, dx2, dy2 = map(float, other)
-		return self.__class__(
-				xx1 * xx2 + xy1 * yx2,
-				xx1 * xy2 + xy1 * yy2,
-				yx1 * xx2 + yy1 * yx2,
-				yx1 * xy2 + yy1 * yy2,
-				xx2 * dx1 + yx2 * dy1 + dx2,
-				xy2 * dx1 + yy2 * dy1 + dy2)
-
-	def inverse(self):
-		if self.__affine == (1.0, 0.0, 0.0, 1.0, 0.0, 0.0):
-			return self
-
-		xx, xy, yx, yy, dx, dy = self.__affine
-		det = float(xx*yy - yx*xy)
-
-		xx, xy, yx, yy = yy / det, -xy / det, -yx / det, xx / det
-		dx, dy = -xx * dx - yx * dy, - xy * dx - yy * dy
-
-		return self.__class__(xx, xy, yx, yy, dx, dy)
-
-	def __len__(self):
-		return 6
-
-	def __getitem__(self, index):
-		return self.__affine[index]
-
-	def __getslice__(self, i, j):
-		return self.__affine[i:j]
-
-	def __cmp__(self, other):
-		xx1, xy1, yx1, yy1, dx1, dy1 = map(float(self.__affine))
-		xx2, xy2, yx2, yy2, dx2, dy2 = map(float(other))
-		return cmp((xx1, xy1, yx1, yy1, dx1, dy1), (xx2, xy2, yx2, yy2, dx2, dy2))
-
-	def __hash__(self):
-		return hash(self.__affine)
-
-	def __repr__(self):
-		return '<%s [%s %s %s %s %s %s]>' %((self.__class__.__name__,) + tuple(map(str, self.__affine)))
-
 # -- Contour tests ----------------------------------------------------------
 def ccw(A, B, C):
 	'''Tests whether the turn formed by A, B, and C is Counter clock wise (CCW)'''
@@ -418,23 +323,124 @@ class coordArray(object):
 		return self.x + self.y
 
 # -- Geometry classes --------------------------------------------------------------------
+# --- Transformations --------------------------------------------------------------------
+class transform(object):
+	'''	Affine transformations '''
+
+	def __init__(self, xx=1.0, xy=0.0, yx=0.0, yy=1.0, dx=0.0, dy=0.0):
+		self.__affine = map(float, (xx, xy, yx, yy, dx, dy))
+
+	def __normSinCos(self, v):
+		EPSILON = 1e-15
+		ONE_EPSILON = 1.0 - EPSILON
+		MINUS_ONE_EPSILON = -1.0 + EPSILON
+
+		if abs(v) < EPSILON:
+			v = 0.0
+		elif v > ONE_EPSILON:
+			v = 1.0
+		elif v < MINUS_ONE_EPSILON:
+			v = -1.0
+		return v
+
+	def applyTransformation(self, x, y):
+		x, y = float(x), float(y)
+		xx, xy, yx, yy, dx, dy = map(float, self.__affine)
+		return (xx * x + yx * y + dx, xy * x + yy * y + dy)
+
+	def translate(self, dx, dy):
+		return self.transform((1.0, 0.0, 0.0, 1.0, float(dx), float(dy)))
+
+	def scale(self, sx, sy):
+		return self.transform((float(sx), 0.0, 0.0, float(sy), 0.0, 0.0))
+
+	def rotate(self, angle):
+		from math import sin, cos, radians
+		c = self.__normSinCos(cos(radians(angle)))
+		s = self.__normSinCos(sin(radians(angle)))
+		return self.transform((c, s, -s, c, 0.0, 0.0))
+
+	def skew(self, ax, ay):
+		from math import tan, radians
+		return self.transform((1.0, tan(radians(ay)), tan(radians(ax)), 1.0, 0.0, 0.0))
+
+	def transform(self, other):
+		xx1, xy1, yx1, yy1, dx1, dy1 = map(float, other)
+		xx2, xy2, yx2, yy2, dx2, dy2 = map(float, self.__affine)
+		return self.__class__(
+				xx1 * xx2 + xy1 * yx2,
+				xx1 * xy2 + xy1 * yy2,
+				yx1 * xx2 + yy1 * yx2,
+				yx1 * xy2 + yy1 * yy2,
+				xx2 * dx1 + yx2 * dy1 + dx2,
+				xy2 * dx1 + yy2 * dy1 + dy2)
+
+	def reverseTransform(self, other):
+		xx1, xy1, yx1, yy1, dx1, dy1 = map(float, self.__affine)
+		xx2, xy2, yx2, yy2, dx2, dy2 = map(float, other)
+		return self.__class__(
+				xx1 * xx2 + xy1 * yx2,
+				xx1 * xy2 + xy1 * yy2,
+				yx1 * xx2 + yy1 * yx2,
+				yx1 * xy2 + yy1 * yy2,
+				xx2 * dx1 + yx2 * dy1 + dx2,
+				xy2 * dx1 + yy2 * dy1 + dy2)
+
+	def inverse(self):
+		if self.__affine == (1.0, 0.0, 0.0, 1.0, 0.0, 0.0):
+			return self
+
+		xx, xy, yx, yy, dx, dy = self.__affine
+		det = float(xx*yy - yx*xy)
+
+		xx, xy, yx, yy = yy / det, -xy / det, -yx / det, xx / det
+		dx, dy = -xx * dx - yx * dy, - xy * dx - yy * dy
+
+		return self.__class__(xx, xy, yx, yy, dx, dy)
+
+	def __len__(self):
+		return 6
+
+	def __getitem__(self, index):
+		return self.__affine[index]
+
+	def __getslice__(self, i, j):
+		return self.__affine[i:j]
+
+	def __cmp__(self, other):
+		xx1, xy1, yx1, yy1, dx1, dy1 = map(float(self.__affine))
+		xx2, xy2, yx2, yy2, dx2, dy2 = map(float(other))
+		return cmp((xx1, xy1, yx1, yy1, dx1, dy1), (xx2, xy2, yx2, yy2, dx2, dy2))
+
+	def __hash__(self):
+		return hash(self.__affine)
+
+	def __repr__(self):
+		return '<%s [%s %s %s %s %s %s]>' %((self.__class__.__name__,) + tuple(map(str, self.__affine)))
+
 # --- Abstractions -----------------------------------------------------------------------
 class _Point(object): 
 	def __init__(self, *argv):
+		from typerig.brain import transform
 
 		multiCheck = lambda t, type: all([isinstance(i, type) for i in t])
 
-		if isinstance(argv[0], self.__class__):
-			self.x, self.y = argv[0].x, argv[0].y
+		if len(argv):
+			if isinstance(argv[0], self.__class__):
+				self.x, self.y = argv[0].x, argv[0].y
 
-		if multiCheck(argv, float) or multiCheck(argv, int) :
-			self.x, self.y = argv[0], argv[1]
-		
-		if multiCheck(argv, tuple) or multiCheck(argv, list) :
-			self.x, self.y = argv[0]
+			if multiCheck(argv, float) or multiCheck(argv, int) :
+				self.x, self.y = argv[0], argv[1]
+			
+			if multiCheck(argv, tuple) or multiCheck(argv, list) :
+				self.x, self.y = argv[0]
+		else:
+			self.x, self.y = 0., 0.
 
-		self.angle = 0
+		self.setAngle(0)
+		self.setTransform()
 
+	# -- Operators
 	def __add__(self, other):
 		if isinstance(other, self.__class__):
 			return self.__class__(self.x + other.x, self.y + other.y)
@@ -584,18 +590,16 @@ class _Point(object):
 	def __repr__(self):
 		return '<Point: %s,%s>' %(self.x, self.y)
 
-	def doSwap(self):
-		return self.__class__(self.y, self.x)
-
-	def doFlip(self, sign=(True,True)):
-		return self.__class__(self.x * [1,-1][sign[0]], self.y * [1,-1][sign[1]])
-
-	def asTuple(self, toInt=False):
-		return (self.x, self.y) if not toInt else (int(self.x), int(self.y))
-
+	# -- Setters 
 	def setAngle(self, angle):
 		self.angle = angle
 
+	def setTransform(self, transformObject=None):
+		from typerig.brain import transform
+		
+		self.transform = transform() if transformObject is None else transformObject
+	
+	# -- Getters
 	def getMagnitude(self):
 		from math import hypot
 		self.magnitude = hypot(self.x, self.y)
@@ -621,6 +625,23 @@ class _Point(object):
 
 	def solveX(self, y):
 		return (float(y) - self.getYintercept()) / self.getSlope()
+
+	# -- Modifiers
+	def doSwap(self):
+		return self.__class__(self.y, self.x)
+
+	def doFlip(self, sign=(True,True)):
+		return self.__class__(self.x * [1,-1][sign[0]], self.y * [1,-1][sign[1]])
+
+	def doTransform(self, transform=None):
+		if transform is None:
+			transform = self.transform
+
+		self.x, self.y = transform.applyTransformation(self.x, self.y)
+
+	# -- Represent
+	def asTuple(self, toInt=False):
+		return (self.x, self.y) if not toInt else (int(self.x), int(self.y))
 
 class _Line(object):
 	def __init__(self, *argv):

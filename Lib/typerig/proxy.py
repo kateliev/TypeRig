@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.38
+# VER 	: 0.39
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -907,7 +907,7 @@ class pGlyph(object):
 		'''Return list of guidelines (list[flGuideline]) at given layer (int or str)'''
 		return self.layer(layer).guidelines
 
-	def addGuideline(self, coordTuple, name='', angle=0, layer=None):
+	def addGuideline(self, coordTuple, layer=None, angle=0, name='',  color='darkMagenta', style='gsGlyphGuideline'):
 		'''Adds named Guideline at given layer
 		Args:
 			coordTuple (tuple(float,float) or tuple(float,float,float,float)): Guideline coordinates X, Y and given angle or two node reference x1,y1 and x2,y2
@@ -928,8 +928,9 @@ class pGlyph(object):
 
 		newGuideline = fl6.flGuideLine(vector)
 		newGuideline.name =  name
-		newGuideline.style = 'gsGlyphGuideline'
-		
+		newGuideline.color = pqt.QtGui.QColor(color)
+		newGuideline.style = style
+			
 		self.layer(layer).appendGuidelines([newGuideline])
 
 
