@@ -1168,6 +1168,9 @@ class pFont(object):
 	def hasMaster(self, layerName):
 		return self.fl.hasMaster(layerName)
 
+	def instances(self):
+		return self.fl.instances
+
 	# - Guides & Hinting Basics ----------------------------------------
 	def guidelines(self, hostInf=False, fontgate=False):
 		'''Return font guidelines
