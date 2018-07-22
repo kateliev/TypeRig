@@ -13,7 +13,7 @@
 import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
-#import FL as legacy
+import FL as legacy
 
 # - Classes -------------------------------
 class pWorkspace(object):
@@ -30,7 +30,7 @@ class pWorkspace(object):
 	def __init__(self):
 		self.fl = fl6.flWorkspace.instance()
 		self.main = self.fl.mainWindow
-		#self.name = self.fl.name
+		self.name = self.fl.name
 
 	def getCanvas(self, atCursor=False):
 		return self.fl.getActiveCanvas() if not atCursor else self.fl.getCanvasUnderCursor()
@@ -253,7 +253,7 @@ class pGlyph(object):
 			
 		self.name = self.fg.name
 		self.index = self.fg.index
-		#self.id = self.fl.id
+		self.id = self.fl.id
 		self.mark = self.fl.mark
 		self.tags = self.fl.tags
 		self.unicode = self.fg.unicode
@@ -1091,8 +1091,7 @@ class pFont(object):
 	# - Font Basics -----------------------------------------------
 	def getSelectedIndices(self):
 		# WARN: Legacy syntax used, as of current 6722 build there is no way to get the selected glyphs in editor
-		#return [index for index in range(len(legacy.fl.font)) if legacy.fl.Selected(index)]
-		pass
+		return [index for index in range(len(legacy.fl.font)) if legacy.fl.Selected(index)]
 
 	def selected_pGlyphs(self):
 		'''Return TypeRig proxy glyph object for each selected glyph'''
