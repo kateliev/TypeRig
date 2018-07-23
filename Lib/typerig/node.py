@@ -57,8 +57,8 @@ class eNode(pNode):
 		self.insertAfter(0)
 		self.contour.updateIndices()
 
-		self.fl.smartMove(prevShift.asQPointF())
-		self.getNextOn().smartMove(nextShift.asQPointF())
+		self.smartShift(*prevShift.asTuple())
+		self.__class__(self.getNextOn()).smartShift(*nextShift.asTuple())
 		#'''
 
 	# - Movement ------------------------
@@ -127,7 +127,8 @@ class eNode(pNode):
 			
 			# - Calculate & set
 			newX = cNode.getWidth(cNode.y + shift_y)
-			self.fl.smartSetXY(QPointF(newX, self.y + shift_y))
+			#self.fl.smartSetXY(QPointF(newX, self.y + shift_y))
+			self.smartReloc(newX, self.y + shift_y)
 
 	def alignTo(self, entity, align=(True, True)):
 		'''Align current node to a node or line given.
@@ -143,11 +144,13 @@ class eNode(pNode):
 			newX = entity.x if align[0] else self.fl.x
 			newY = entity.y if align[1] else self.fl.y
 				
-			self.fl.smartSetXY(QPointF(newX, newY))
+			#self.fl.smartSetXY(QPointF(newX, newY))
+			self.smartReloc(newX, newY)
 
 		elif isinstance(entity, Line):
 			newX = entity.solveX(self.fl.y) if align[0] else self.fl.x
 			newY = entity.solveY(self.fl.x) if align[1] else self.fl.y
 
-			self.fl.smartSetXY(QPointF(newX, newY))
+			#self.fl.smartSetXY(QPointF(newX, newY))
+			self.smartReloc(newX, newY)
 

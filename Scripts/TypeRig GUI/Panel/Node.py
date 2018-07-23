@@ -132,8 +132,8 @@ class basicOps(QtGui.QGridLayout):
 					glyph.contours(layer)[cID].removeNodesBetween(nodeB, nodeA)
 									
 		'''
-		glyph.updateObject(glyph.fl, 'Delete Node @ %s.' %'; '.join(wLayers))
 		glyph.update()
+		glyph.updateObject(glyph.fl, 'Delete Node @ %s.' %'; '.join(wLayers))
 
 	def cornerMitre(self, doKnot=False):
 		from typerig.node import eNode
@@ -151,8 +151,8 @@ class basicOps(QtGui.QGridLayout):
 
 
 		action = 'Mitre Corner' if not doKnot else 'Overlap Corner'
-		glyph.updateObject(glyph.fl, '%s @ %s.' %(action, '; '.join(wLayers)))
 		glyph.update()
+		glyph.updateObject(glyph.fl, '%s @ %s.' %(action, '; '.join(wLayers)))
 
 
 class alignNodes(QtGui.QGridLayout):

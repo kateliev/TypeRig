@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Font Metrics', '0.11'
+app_name, app_version = 'TypeRig | Font Metrics', '0.12'
 
 # - Dependencies -----------------
 import os, json
@@ -79,7 +79,7 @@ class WTableView(QtGui.QTableWidget):
 	def getTable(self):
 		returnDict = {}
 		for row in range(self.rowCount):
-			returnDict[self.verticalHeaderItem(row).text()] = {self.horizontalHeaderItem(col).text():int(self.item(row, col).text()) for col in range(self.columnCount)}
+			returnDict[self.verticalHeaderItem(row).text()] = {self.horizontalHeaderItem(col).text():float(self.item(row, col).text()) for col in range(self.columnCount)}
 
 		return returnDict
 
@@ -196,12 +196,12 @@ class WTreeWidget(QtGui.QTreeWidget):
 		
 		for i in range(root.childCount()):
 			master = root.child(i)
-			returnDict[master.text(0)] = [(int(master.child(n).text(1)), int(master.child(n).text(2)), master.child(n).text(0)) for n in range(master.childCount()) ]
+			returnDict[master.text(0)] = [(float(master.child(n).text(1)), float(master.child(n).text(2)), master.child(n).text(0)) for n in range(master.childCount()) ]
 		
 		return returnDict
 
 	def markChange(self, item):
-		item.setText(0, ('B: %s', 'T: %s')[int(item.text(2)) > 0] %item.text(1))
+		item.setText(0, ('B: %s', 'T: %s')[float(item.text(2)) > 0] %item.text(1))
 		for col in range(item.columnCount()):
 			
 			item.setBackground(col, QtGui.QColor('powderblue'))
@@ -290,9 +290,9 @@ class WFontZones(QtGui.QWidget):
 		
 		def dataAddZone(layer):
 			if '=' in self.edt_pos.text:
-				self.newZoneData[layer].append((int(fontMetrics[layer][self.edt_pos.text.strip('=')]), int(self.edt_width.text), self.edt_pos.text.strip('=')))
+				self.newZoneData[layer].append((float(fontMetrics[layer][self.edt_pos.text.strip('=')]), float(self.edt_width.text), self.edt_pos.text.strip('=')))
 			else:
-				self.newZoneData[layer].append((int(self.edt_pos.text), int(self.edt_width.text), 'New'))
+				self.newZoneData[layer].append((float(self.edt_pos.text), float(self.edt_width.text), 'New'))
 
 		if self.cmb_layer.currentText == 'All Layers':
 			for layer in self.activeFont.masters():

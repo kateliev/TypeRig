@@ -16,7 +16,7 @@ from typerig.glyph import eGlyph
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Layers', '0.27'
+app_name, app_version = 'TypeRig | Layers', '0.28'
 
 # - Sub widgets ------------------------
 class QlayerSelect(QtGui.QVBoxLayout):
@@ -534,8 +534,8 @@ class tool_tab(QtGui.QWidget):
 		layoutV.addWidget(QtGui.QLabel('Layer Multi-editing'))
 		layoutV.addLayout(self.unfoldLayers)
 		layoutV.addWidget(QtGui.QLabel('Interpolate/Blend (Active Layer to selection)'))
-		layoutV.addWidget(QtGui.QLabel('\nWARN: Disabled due FL6 6722 Bug!'))
-		#layoutV.addLayout(self.blendTools)
+		#layoutV.addWidget(QtGui.QLabel('\nWARN: Disabled due FL6 6722 Bug!'))
+		layoutV.addLayout(self.blendTools)
 
 
 		# - Build ---------------------------

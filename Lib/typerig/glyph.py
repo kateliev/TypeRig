@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Glyph Objects | Typerig
-# VER 	: 0.20
+# VER 	: 0.21
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -46,7 +46,7 @@ class eGlyph(pGlyph):
 			print 'ERROR:\tIncorrect layer triple!'
 
 	def _compatibleLayers(self, layerName=None):
-		return [layer.isCompatible(self.layer(layerName)) for layer in self.layers()]
+		return [layer.isCompatible(self.layer(layerName), True) for layer in self.layers()]
 			
 	def _getCoordArray(self, layer=None):
 		from typerig.brain import coordArray
@@ -56,9 +56,9 @@ class eGlyph(pGlyph):
 			
 			# - Followiong will work on Cubic beziers only! Think of better way!
 			nodeType = 0
-			if node.isOn and node.getNext().isOn:				
+			if node.isOn() and node.nextNode().isOn():				
 				nodeType = 2
-			if node.isOn and not node.getNext().isOn:				
+			if node.isOn() and not node.nextNode().isOn():				
 				nodeType = 4
 
 			coords.type.append(nodeType)
@@ -69,7 +69,7 @@ class eGlyph(pGlyph):
 		nodeArray = self.nodes(layer)
 		if len(coordArray) == len(nodeArray):
 			for nid in range(len(coordArray)):
-				nodeArray[nid].setXY(*coordArray[nid])
+				nodeArray[nid].x, nodeArray[nid].y = coordArray[nid]
 		else:
 			print 'ERROR:\t Incompatible coordinate array provided.'			
 
@@ -288,7 +288,7 @@ class eGlyph(pGlyph):
 		if isinstance(blendTimes, int): blendTimes = pqt.QtCore.QPointF(float(blendTimes)/100, float(blendTimes)/100)
 		if isinstance(blendTimes, float): blendTimes = pqt.QtCore.QPointF(blendTimes, blendTimes)
 
-		if layerA.isCompatible(layerB):
+		if layerA.isCompatible(layerB, True):
 			# - Init
 			blendLayer = fl6.flLayer('B:%s %s, t:%s' %(layerA.name, layerB.name, str(blendTimes)))
 			
@@ -298,7 +298,7 @@ class eGlyph(pGlyph):
 			# - Interpolate shapes
 			for shapeA in layerA.shapes:
 				for shapeB in layerB.shapes:
-					if shapeA.isCompatible(shapeB):
+					if shapeA.isCompatible(shapeB, True):
 						tempBlend = self.blendShapes(shapeA, shapeB, blendTimes, outputFL, blendMode, engine)
 						blendLayer.addShape(tempBlend)
 
@@ -331,7 +331,7 @@ class eGlyph(pGlyph):
 		'''
 		from operator import itemgetter
 		
-		nodeCoords = [(node.pointf.x(), node.pointf.y()) for node in self.nodes(layer) if node.isOn]
+		nodeCoords = [(node.pointf.x(), node.pointf.y()) for node in self.nodes(layer) if node.isOn()]
 
 		minValY = min(nodeCoords, key=itemgetter(1))[1]
 		maxValY = max(nodeCoords, key=itemgetter(1))[1]

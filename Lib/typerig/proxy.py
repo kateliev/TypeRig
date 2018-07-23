@@ -61,28 +61,31 @@ class pNode(object):
 		self.name = self.fl.name
 		self.index = self.fl.index
 		self.id = self.fl.id
-		self.isOn = self.fl.isOn
-		self.type = self.fl.nodeType
+		self.isOn = self.fl.isOn()
+		self.type = self.fl.type
 		self.x, self.y = float(self.fl.x), float(self.fl.y)
-		self.angle = float(self.fl.angle)
+		#self.angle = float(self.fl.angle)
 
+	def __repr__(self):
+		return '<%s (%s, %s) index=%s time=%s on=%s>' % (self.__class__.__name__, self.x, self.y, self.index, self.getTime(), self.isOn)
+	
 	# - Basics -----------------------------------------------
 	def getTime(self):
 		return self.contour.getT(self.fl)
 
 	def getNext(self):
-		return self.fl.getNext()
+		return self.fl.nextNode()
 
 	def getNextOn(self):
-		nextNode = self.fl.getNext()
-		return nextNode if nextNode.isOn else nextNode.getNext().getOn()
+		nextNode = self.fl.nextNode()
+		return nextNode if nextNode.isOn() else nextNode.nextNode().getOn()
 
 	def getPrevOn(self):
-		prevNode = self.fl.getPrev()
-		return prevNode if prevNode.isOn else prevNode.getPrev().getOn()
+		prevNode = self.fl.prevNode()
+		return prevNode if prevNode.isOn() else prevNode.prevNode().getOn()
 
 	def getPrev(self):
-		return self.fl.getPrev()
+		return self.fl.prevNode()
 
 	def getOn(slef):
 		return self.fl.getOn()
@@ -92,7 +95,7 @@ class pNode(object):
 
 	def getSegmentNodes(self, relativeTime=0):
 		if len(self.getSegment(relativeTime)) == 4:
-			currNode = self.fl if self.fl.isOn else self.fl.getOn()
+			currNode = self.fl if self.fl.isOn() else self.fl.getOn()
 			
 			if currNode != self.fl:
 				tempNode = self.__class__(currNode)
@@ -100,15 +103,14 @@ class pNode(object):
 				if tempNode.getTime() != self.getTime():
 					currNode = tempNode.getPrevOn()
 
-			currNode_bcpOut = currNode.getNext()
-			nextNode_bcpIn = currNode_bcpOut.getNext()
+			currNode_bcpOut = currNode.nextNode()
+			nextNode_bcpIn = currNode_bcpOut.nextNode()
 			nextNode = nextNode_bcpIn.getOn()
 		
 			return (currNode, currNode_bcpOut, nextNode_bcpIn, nextNode)
 		
 		elif len(self.getSegment(relativeTime)) == 2:
-			return (self.fl, self.fl.getNext())
-
+			return (self.fl, self.fl.nextNode())
 
 	def insertAfter(self, time):
 		self.contour.insertNodeTo(self.getTime() + time)
@@ -116,8 +118,39 @@ class pNode(object):
 	def remove(self):
 		self.contour.removeOne(self.fl)
 
-	def __repr__(self):
-		return '<%s index=%s time=%s on=%s>' % (self.__class__.__name__, self.index, self.getTime(), self.isOn)
+	def update(self):
+		self.fl.update()
+
+	# - Transformation -----------------------------------------------
+	def reloc(self, newX, newY):
+		'''Relocate the node to new coordinates'''
+		self.fl.x, self.fl.y = newX, newY
+		self.x, self.y = newX, newY	
+		return True		
+	
+	def shift(self, deltaX, deltaY):
+		'''Shift the node by given amout'''
+		self.fl.x += deltaX
+		self.fl.y += deltaY
+		self.x, self.y = self.fl.x, self.fl.y 
+		return True
+
+	def smartReloc(self, newX, newY):
+		'''Relocate the node and adjacent BCPs to new coordinates'''
+		return self.smartShift(newX - self.fl.x, newY - self.fl.y)
+
+	def smartShift(self, deltaX, deltaY):
+		'''Shift the node and adjacent BCPs by given amout'''
+		if self.isOn:	
+			nextNode = self.__class__(self.getNext())
+			prevNode = self.__class__(self.getPrev())
+
+			for node, mode in [(prevNode, not prevNode.isOn), (self, self.isOn), (nextNode, not nextNode.isOn)]:
+				if mode: node.shift(deltaX, deltaY)
+		else:
+			self.shift(deltaX, deltaY)
+
+		return True
 
 class pShape(object):
 	'''Proxy to flShape, flShapeData and flShapeInfo objects
@@ -273,14 +306,19 @@ class pGlyph(object):
 
 	def object(self): return fl6.flObject(self.fl.id)
 
-	def nodes(self, layer=None):
+	def nodes(self, layer=None, extend=None):
 		'''Return all nodes at given layer.
 		Args:
-			layer (int or str): Layer index or name. If None returns ActiveLayer
+			layer (int or str): Layer index or name. If None returns ActiveLayer.
+			extend (class): A class construct with extended functionality to be applied on every node.
 		Returns:
 			list[flNodes]
 		'''
-		return sum([contour.nodes() for contour in self.layer(layer).getContours()], [])
+		#return sum([contour.nodes() for contour in self.layer(layer).getContours()], [])
+		if extend is None:
+			return [node for contour in self.layer(layer).getContours() for node in contour.nodes()]
+		else:
+			return [extend(node) for contour in self.layer(layer).getContours() for node in contour.nodes()]
 
 	def fg_nodes(self, layer=None):
 		'''Return all FontGate nodes at given layer.
@@ -516,7 +554,7 @@ class pGlyph(object):
 		if not filterOn:
 			return [allNodes.index(node) for node in self.nodes() if node.selected]
 		else:
-			return [allNodes.index(node) for node in self.nodes() if node.selected and node.isOn]
+			return [allNodes.index(node) for node in self.nodes() if node.selected and node.isOn()]
 	
 	def selected(self, filterOn=False):
 		'''Return all selected nodes indexes at current layer.
@@ -527,14 +565,15 @@ class pGlyph(object):
 		'''
 		return self.selectedNodeIndices(filterOn)
 
-	def selectedNodes(self, layer=None, filterOn=False):
+	def selectedNodes(self, layer=None, filterOn=False, extend=None):
 		'''Return all selected nodes at given layer.
 		Args:
 			filterOn (bool): Return only on-curve nodes
+			extend (class): A class construct with extended functionality to be applied on every node.
 		Returns:
 			list[flNode]
 		'''
-		return [self.nodes(layer)[nid] for nid in self.selectedNodeIndices(filterOn)]
+		return [self.nodes(layer, extend)[nid] for nid in self.selectedNodeIndices(filterOn)]
 	
 	def selectedAtContours(self, index=True, layer=None, filterOn=False):	
 		'''Return all selected nodes and the contours they rest upon at current layer.
@@ -582,7 +621,7 @@ class pGlyph(object):
 		nodelist = self.selectedAtContours(filterOn=filterOn)
 		pLayer = self.layer(layer)
 			
-		return [pLayer.getContours()[item[0]].nodes()[item[1]].pointf for item in nodelist]
+		return [pLayer.getContours()[item[0]].nodes()[item[1]].position for item in nodelist]
 
 	def selectedSegments(self, layer=None):
 		'''Returns list of currently selected segments
@@ -607,7 +646,7 @@ class pGlyph(object):
 			countOn = -1
 
 			for node in contour.nodes():
-				countOn += node.isOn # Hack-ish but working
+				countOn += node.isOn() # Hack-ish but working
 				nodeMap[node.index] = countOn
 				
 			contourMap[allContours.index(contour)] = nodeMap

@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Curve Objects | Typerig
-# VER 	: 0.01
+# VER 	: 0.02
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -68,8 +68,8 @@ class eCurveEx(object):
 		return '<%s Nodes=%s>' % (self.__class__.__name__, self.nodes)
 
 	def updateNodes(self):
-		for i in range(len(self.nodes)):
-			self.nodes[i].smartSetXY(self.curve.asList()[i].asQPointF())
+		for node, newLoc in zip(self.nodes, self.curve.asList()):
+			node.x, node.y = newLoc.asTuple()
 
 	def updateCurve(self):
 		self.CurveEx = self.n0.getSegment()
