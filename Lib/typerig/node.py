@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Node Objects | Typerig
-# VER 	: 0.06
+# VER 	: 0.07
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -34,8 +34,8 @@ class eNode(pNode):
 		from typerig.brain import Coord
 
 		# - Calculate unit vectors and shifts
-		nextNode = self.__class__(self.getNextOn())
-		prevNode = self.__class__(self.getPrevOn())
+		nextNode = self.getNextOn(False)
+		prevNode = self.getPrevOn(False)
 
 		nextUnit = Coord(nextNode.asCoord() - self.asCoord()).getUnit()
 		prevUnit = Coord(prevNode.asCoord() - self.asCoord()).getUnit()
@@ -58,11 +58,11 @@ class eNode(pNode):
 		self.contour.updateIndices()
 
 		self.smartShift(*prevShift.asTuple())
-		self.__class__(self.getNextOn()).smartShift(*nextShift.asTuple())
+		self.getNextOn(False).smartShift(*nextShift.asTuple())
 		#'''
 
 	# - Movement ------------------------
-	def interpMove(self, shift_x, shift_y):
+	def interpShift(self, shift_x, shift_y):
 		'''Interpolated move aka Interpolated Nudge.
 		
 		Arguments:
@@ -83,34 +83,34 @@ class eNode(pNode):
 				currCurve = Curve(currSegmet)
 				new_currCurve = currCurve.interpolateFirst(shift)
 				
-				currNode_bcpOut = self.fl.getNext()
-				nextNode_bcpIn = currNode_bcpOut.getNext()
-				nextNode = nextNode_bcpIn.getOn()
+				currNode_bcpOut = self.getNext(False)
+				nextNode_bcpIn = currNode_bcpOut.getNext(False)
+				nextNode = nextNode_bcpIn.getOn(False)
 
-				currSegmetNodes = [self.fl, currNode_bcpOut, nextNode_bcpIn, nextNode]
+				currSegmetNodes = [self, currNode_bcpOut, nextNode_bcpIn, nextNode]
 				
 				# - Set node positions
 				for i in range(len(currSegmetNodes)):
-					currSegmetNodes[i].smartSetXY(new_currCurve.asList()[i].asQPointF())
+					currSegmetNodes[i].smartReloc(*new_currCurve.asList()[i].asTuple())
 
 			if len(prevSegment) == 4:
 				prevCurve = Curve(prevSegment)
 				new_prevCurve = prevCurve.interpolateLast(shift)
 
-				currNode_bcpIn = self.fl.getPrev()
-				prevNode_bcpOut = currNode_bcpIn.getPrev()
-				prevNode = prevNode_bcpOut.getOn()
+				currNode_bcpIn = self.getPrev(False)
+				prevNode_bcpOut = currNode_bcpIn.getPrev(False)
+				prevNode = prevNode_bcpOut.getOn(False)
 
-				prevSegmentNodes = [prevNode, prevNode_bcpOut, currNode_bcpIn, self.fl]
+				prevSegmentNodes = [prevNode, prevNode_bcpOut, currNode_bcpIn, self]
 				
 				# - Set node positions
 				for i in range(len(prevSegmentNodes)-1,-1,-1):
-					prevSegmentNodes[i].smartSetXY(new_prevCurve.asList()[i].asQPointF())
+					prevSegmentNodes[i].smartReloc(*new_prevCurve.asList()[i].asTuple())
 
 			if len(currSegmet) == 2 and len(prevSegment) == 2:
-				self.fl.smartSetXY((Coord(self.fl) + shift).asQPointF())
+				self.smartShift(*shift.asTuple())
 
-	def slantMove(self, shift_x, shift_y, angle):
+	def slantShift(self, shift_x, shift_y, angle):
 		'''Slanted move - move a node (in inclined space) according to Y coordinate slanted at given angle.
 		
 		Arguments:

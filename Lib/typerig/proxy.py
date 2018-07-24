@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.39
+# VER 	: 0.40
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -73,22 +73,24 @@ class pNode(object):
 	def getTime(self):
 		return self.contour.getT(self.fl)
 
-	def getNext(self):
-		return self.fl.nextNode()
+	def getNext(self, naked=True):
+		return self.fl.nextNode() if naked else self.__class__(self.fl.nextNode())
 
-	def getNextOn(self):
+	def getNextOn(self, naked=True):
 		nextNode = self.fl.nextNode()
-		return nextNode if nextNode.isOn() else nextNode.nextNode().getOn()
+		nextNodeOn = nextNode if nextNode.isOn() else nextNode.nextNode().getOn()
+		return nextNodeOn if naked else self.__class__(nextNodeOn)
 
-	def getPrevOn(self):
+	def getPrevOn(self, naked=True):
 		prevNode = self.fl.prevNode()
-		return prevNode if prevNode.isOn() else prevNode.prevNode().getOn()
+		prevNodeOn = prevNode if prevNode.isOn() else prevNode.prevNode().getOn()
+		return prevNodeOn if naked else self.__class__(prevNodeOn)
 
-	def getPrev(self):
-		return self.fl.prevNode()
+	def getPrev(self, naked=True):
+		return self.fl.prevNode() if naked else self.__class__(self.fl.prevNode())
 
-	def getOn(slef):
-		return self.fl.getOn()
+	def getOn(self, naked=True):
+		return self.fl.getOn() if naked else self.__class__(self.fl.getOn())
 
 	def getSegment(self, relativeTime=0):
 		return self.contour.segment(self.getTime() + relativeTime)
@@ -120,37 +122,36 @@ class pNode(object):
 
 	def update(self):
 		self.fl.update()
+		self.x, self.y = float(self.fl.x), float(self.fl.y)
 
 	# - Transformation -----------------------------------------------
 	def reloc(self, newX, newY):
 		'''Relocate the node to new coordinates'''
 		self.fl.x, self.fl.y = newX, newY
 		self.x, self.y = newX, newY	
-		return True		
+		#self.update()
 	
 	def shift(self, deltaX, deltaY):
 		'''Shift the node by given amout'''
 		self.fl.x += deltaX
 		self.fl.y += deltaY
 		self.x, self.y = self.fl.x, self.fl.y 
-		return True
+		#self.update()
 
 	def smartReloc(self, newX, newY):
 		'''Relocate the node and adjacent BCPs to new coordinates'''
-		return self.smartShift(newX - self.fl.x, newY - self.fl.y)
+		self.smartShift(newX - self.fl.x, newY - self.fl.y)
 
 	def smartShift(self, deltaX, deltaY):
 		'''Shift the node and adjacent BCPs by given amout'''
 		if self.isOn:	
-			nextNode = self.__class__(self.getNext())
-			prevNode = self.__class__(self.getPrev())
+			nextNode = self.getNext(False)
+			prevNode = self.getPrev(False)
 
 			for node, mode in [(prevNode, not prevNode.isOn), (self, self.isOn), (nextNode, not nextNode.isOn)]:
 				if mode: node.shift(deltaX, deltaY)
 		else:
 			self.shift(deltaX, deltaY)
-
-		return True
 
 class pShape(object):
 	'''Proxy to flShape, flShapeData and flShapeInfo objects

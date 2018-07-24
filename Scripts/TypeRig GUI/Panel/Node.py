@@ -650,7 +650,7 @@ class advMovement(QtGui.QVBoxLayout):
 		# - Init
 		glyph = eGlyph()
 		font = pFont()
-		selectedNodes = glyph.selectedNodes()
+		selectedNodes = glyph.selectedNodes(extend=eNode)
 		italic_angle = font.getItalicAngle()
 		
 		# -- Scaling move - coordinates as percent of position
@@ -665,42 +665,39 @@ class advMovement(QtGui.QVBoxLayout):
 			for node in selectedNodes:
 				if node.isOn:
 					if inPercent:						
-						node.smartMove(QtCore.QPointF(*scaleOffset(node, offset_x, offset_y)))
+						node.smartShift(*scaleOffset(node, offset_x, offset_y))
 					else:
-						node.smartMove(QtCore.QPointF(offset_x, offset_y))
+						node.smartShift(offset_x, offset_y)
 
 		elif method == self.methodList[1]:
 			for node in selectedNodes:
 				if node.isOn:
 					if inPercent:						
-						node.move(QtCore.QPointF(*scaleOffset(node, offset_x, offset_y)))
+						node.shift(*scaleOffset(node, offset_x, offset_y))
 					else:
-						node.move(QtCore.QPointF(offset_x, offset_y))
+						node.shift(offset_x, offset_y)
 
 		elif method == self.methodList[2]:
 			for node in selectedNodes:
-				wNode = eNode(node)
-
 				if inPercent:						
-					wNode.interpMove(*scaleOffset(node, offset_x, offset_y))
+					node.interpShift(*scaleOffset(node, offset_x, offset_y))
 				else:
-					wNode.interpMove(offset_x, offset_y)
+					node.interpShift(offset_x, offset_y)
 
 		elif method == self.methodList[3]:
 			if italic_angle != 0:
 				for node in selectedNodes:
-					wNode = eNode(node)
 					if inPercent:						
-						wNode.slantMove(*scaleOffset(node, offset_x, offset_y))
+						node.slantShift(*scaleOffset(node, offset_x, offset_y))
 					else:
-						wNode.slantMove(offset_x, offset_y, italic_angle)
+						node.slantShift(offset_x, offset_y, italic_angle)
 			else:
 				for node in selectedNodes:
 					if node.isOn:
 						if inPercent:						
-							node.smartMove(*scaleOffset(node, offset_x, offset_y))
+							node.smartShift(*scaleOffset(node, offset_x, offset_y))
 						else:
-							node.smartMove(QtCore.QPointF(offset_x, offset_y))
+							node.smartShift(offset_x, offset_y)
 
 		# - Set Undo
 		glyph.updateObject(glyph.activeLayer(), '%s @ %s.' %(method, glyph.activeLayer().name), verbose=False)
