@@ -413,6 +413,15 @@ class pGlyph(object):
 			elif isinstance(layer, basestring):
 				return self.fl.getLayerByName(layer).shapes
 
+	def shapes_data(self, layer=None):
+		'''Return all flShapeData objects at given layer.
+		Args:
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+		Returns:
+			list[flShapeData]
+		'''
+		return [shape.shapeData for shape in self.shapes(layer)]
+
 	def fg_shapes(self, layer=None):
 		'''Return all FontGate shapes at given layer.
 		Args:
@@ -528,16 +537,18 @@ class pGlyph(object):
 		'''Updates a flObject sends notification to the editor as well as undo/history item.
 		Args:
 			flObject (flGlyph, flLayer, flShape, flNode, flContour): Object to be update and set undo state
-			undoMessage (string): Message to be added in undo/history list.
-		'''
+			undoMessage (string): Message to be added in undo/history list.'''
+		
+		# - General way ---- pre 6774 worked fine!
 		fl6.flItems.notifyChangesApplied(undoMessage, flObject, True)
 		if verbose: print 'DONE:\t %s' %undoMessage
-		'''
-		# - Covers flGlyph, flLayer, flShape
+		
+		'''# - Type specific way (revived)
+		# -- Covers flGlyph, flLayer, flShape
 		if isinstance(flObject, fl6.flGlyph) or isinstance(flObject, fl6.flLayer) or isinstance(flObject, fl6.flShape):
 			fl6.flItems.notifyChangesApplied(undoMessage, flObject, True)
 		
-		# - Covers flNode, flContour, (flShape.shapeData)
+		# -- Covers flNode, flContour, (flShape.shapeData)
 		elif isinstance(flObject, fl6.flContour) or isinstance(flObject, fl6.flNode):
 			fl6.flItems.notifyChangesApplied(undoMessage, flObject.shapeData)
 		'''
