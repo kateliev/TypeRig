@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.40
+# VER 	: 0.41
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -380,7 +380,7 @@ class pGlyph(object):
 			fgLayer
 		'''
 		if layer is None:
-			return self.fg.layer
+			return self.fg.activeLayer
 		else:
 			if isinstance(layer, int):
 				return self.fg.layers[layer]
@@ -543,7 +543,14 @@ class pGlyph(object):
 		fl6.flItems.notifyChangesApplied(undoMessage, flObject, True)
 		if verbose: print 'DONE:\t %s' %undoMessage
 		
-		'''# - Type specific way (revived)
+		# - New from 6774 on
+		for contour in self.contours():
+			contour.changed()
+		
+		fl6.flItems.notifyPackageContentUpdated(self.fl.fgPackage.id)
+		#fl6.Update()
+		
+		'''# - Type specific way 
 		# -- Covers flGlyph, flLayer, flShape
 		if isinstance(flObject, fl6.flGlyph) or isinstance(flObject, fl6.flLayer) or isinstance(flObject, fl6.flShape):
 			fl6.flItems.notifyChangesApplied(undoMessage, flObject, True)
