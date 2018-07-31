@@ -729,14 +729,15 @@ class pGlyph(object):
 
 		segments = self.segments(cID, layer)
 		
-		nodes = self.nodes(layer)
+		#nodes = self.nodes(layer)
+		nodes = self.contours(layer)[cID].nodes()
 		nodes.append(nodes[0]) # Dirty Close contour
 
 		timeTable = self.mapTimes2Nodes(layer)[cID]
 		n4sMap = {}
 
 		for time, nodeIndexes in timeTable.iteritems():
-			n4sMap[time] = (segments[time], [nodes[nID] for nID in nodeIndexes] + [nodes[nodeIndexes[-1] + 1]]) # Should be closed otherwise fail
+			n4sMap[time] = (segments[time], [nodes[nID] for nID in nodeIndexes] + [nodes[nodeIndexes[-1] + 1]]) # Should be closed otherwise fail			
 
 		return n4sMap
 

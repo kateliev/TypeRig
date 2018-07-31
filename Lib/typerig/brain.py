@@ -1187,7 +1187,7 @@ class Coord(_Point): # Dumb Name but avoids name collision with FL6/FL5 Point ob
 
 class Line(_Line):
 	def __init__(self, *argv):
-		from fontlab import flNode
+		from fontlab import flNode, CurveEx
 		from PythonQt.QtCore import QPoint, QPointF, QLine, QLineF
 		from typerig.brain import Coord
 
@@ -1204,6 +1204,10 @@ class Line(_Line):
 			else:
 				self.p0 = Coord(argv[0])
 				self.p1 = Coord(argv[1])
+
+		if len(argv) == 1 and isinstance(argv[0], CurveEx):
+			self.p0 = Coord(argv[0].p0)
+			self.p1 = Coord(argv[0].p1)			
 
 		if multiCheck(argv, QLineF) or multiCheck(argv, QLine) and len(argv) == 1:
 			self.p0 = Coord(argv[0].p1())
