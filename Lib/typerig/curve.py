@@ -38,16 +38,20 @@ class eCurveEx(object):
 			
 		elif (isinstance(argv[0], list) or isinstance(argv[0], tuple)) and multiCheck(argv[0], flNode):
 			self.nodes = argv[0]
-			self.fl = self.CurveEx = self.n0.getSegment()
-	
+			self.fl = None
+				
+		
 		if len(self.nodes) == 4:
 			self.n0, self.n1, self.n2, self.n3 = [eNode(node) for node in self.nodes]
+			if self.fl is None: self.fl = self.CurveEx = self.n0.getSegment()
+
 			self.curve = Curve(self.CurveEx)
 			self.line = None
 			self.isCurve = True
 
 		elif len(self.nodes) == 2:
 			self.n0, self.n1 = [eNode(node) for node in self.nodes]
+			if self.fl is None: self.fl = self.CurveEx = self.n0.getSegment()
 			self.curve = None
 			self.line = Line(self.CurveEx)
 			self.isCurve = False
@@ -75,7 +79,7 @@ class eCurveEx(object):
 
 	# - Curve optimization ----------------------------
 	def eqTunni(self, apply=True):
-		if isCurve:
+		if self.isCurve:
 			self.curve = self.curve.eqTunni()
 			if apply: self.updateNodes()
 			return self.curve
@@ -83,7 +87,7 @@ class eCurveEx(object):
 			return self.__riseCurveWaring()			
 
 	def eqProportionalHandles(self, proportion=.3, apply=True):
-		if isCurve:	
+		if self.isCurve:	
 			self.curve = self.curve.eqProportionalHandles(proportion)
 			if apply: self.updateNodes()
 			return self.curve
@@ -91,7 +95,7 @@ class eCurveEx(object):
 			return self.__riseCurveWaring()
 
 	def	eqHobbySpline(self, curvature=(.9,.9), apply=True):
-		if isCurve:
+		if self.isCurve:
 			self.curve = self.curve.eqHobbySpline(curvature)
 			if apply: self.updateNodes()
 			return self.curve
