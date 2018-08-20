@@ -74,7 +74,7 @@ class dlg_sInstance(QtGui.QDialog):
 		self.show()
 
 	def calculateInstances(self):
-		newFamily = fontFamilly(wt0 = int(self.edt_wt0.text), wt1 = int(self.edt_wt1.text) , wt_steps = self.spb_weights.value, wd_steps = self.spb_widths.value)
+		newFamily = fontFamilly(wt0 = int(self.edt_wt0.text), wt1 = int(self.edt_wt1.text) , wt_steps=self.spb_weights.value, wd_steps=self.spb_widths.value)
 		self.edt_result.setText('\n'.join(map(str, newFamily.instances)))
 
 	
