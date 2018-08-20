@@ -15,14 +15,66 @@ from PythonQt import QtCore, QtGui
 
 #from typerig.proxy import pFont, pGlyph, pShape
 from typerig.brain import fontFamilly, linAxis, geoAxis, linspread, geospread
+from itertools import product
 
 # - Init --------------------------------
-app_version = '0.01'
+app_version = '0.02'
 app_name = 'Simple Instance Calc'
 
 # -- Strings
 text_prog = ['Geometric']
 
+# -- Widgets
+class WTableView(QtGui.QTableWidget):
+	def __init__(self, data):
+		super(WTableView, self).__init__()
+		
+		# - Init
+		self.setColumnCount(max(map(len, data.values())))
+		self.setRowCount(len(data.keys()))
+
+		# - Set 
+		self.setTable(data)		
+		self.itemChanged.connect(self.markChange)
+
+		# - Styling
+		self.horizontalHeader().setStretchLastSection(True)
+		self.setAlternatingRowColors(True)
+		self.setShowGrid(False)
+		#self.resizeColumnsToContents()
+		self.resizeRowsToContents()
+
+	def setTable(self, data, reset=False):
+		name_row, name_column = [], []
+		self.blockSignals(True)
+
+		self.setColumnCount(max(map(len, data.values())))
+		self.setRowCount(len(data.keys()))
+
+		# - Populate
+		for n, layer in enumerate(sorted(data.keys())):
+			name_row.append(layer)
+
+			for m, key in enumerate(sorted(data[layer].keys())):
+				name_column.append(key)
+				newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
+				self.setItem(n, m, newitem)
+				
+		self.setHorizontalHeaderLabels(name_column)
+		self.setVerticalHeaderLabels(name_row)
+		self.blockSignals(False)
+
+	def getTable(self):
+		returnDict = {}
+		for row in range(self.rowCount):
+			returnDict[self.verticalHeaderItem(row).text()] = {self.horizontalHeaderItem(col).text():float(self.item(row, col).text()) for col in range(self.columnCount)}
+
+		return returnDict
+
+	def markChange(self, item):
+		item.setBackground(QtGui.QColor('powderblue'))
+
+# -- Dialogs
 class dlg_sInstance(QtGui.QDialog):
 	def __init__(self):
 		super(dlg_sInstance, self).__init__()
@@ -37,15 +89,14 @@ class dlg_sInstance(QtGui.QDialog):
 		self.edt_wt1 = QtGui.QLineEdit()
 		self.spb_weights = QtGui.QSpinBox()
 		self.spb_widths = QtGui.QSpinBox()
-		self.edt_result = QtGui.QTextEdit()
+		self.edt_result = WTableView({1:{'Stem':None, 'Weight':None, 'Width':None}})
 		
 		self.spb_weights.setValue(2)
 		self.spb_widths.setValue(1)
 
 		self.edt_wt0.setPlaceholderText('Stem width')
 		self.edt_wt1.setPlaceholderText('Stem width')
-		self.edt_result.setPlaceholderText('Output instance locations')
-		
+				
 		self.btn_calc = QtGui.QPushButton('Calculate instances')
 		self.btn_calc.clicked.connect(self.calculateInstances)
 		
@@ -69,13 +120,15 @@ class dlg_sInstance(QtGui.QDialog):
 		# - Set Widget
 		self.setLayout(layoutV)
 		self.setWindowTitle('%s %s' %(app_name, app_version))
-		self.setGeometry(300, 300, 220, 420)
+		self.setGeometry(300, 300, 330, 460)
 		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 		self.show()
 
 	def calculateInstances(self):
 		newFamily = fontFamilly(wt0 = int(self.edt_wt0.text), wt1 = int(self.edt_wt1.text) , wt_steps=self.spb_weights.value, wd_steps=self.spb_widths.value)
-		self.edt_result.setText('\n'.join(map(str, newFamily.instances)))
+		if self.spb_widths.value < 2: newFamily.wd_instances = [0] # Self Hack :)
+		instances = [(item[0][0], item[0][1], item[1]) for item in product(zip(newFamily.wt_stems, newFamily.wt_instances), newFamily.wd_instances)]
+		self.edt_result.setTable({n:{'Stem':inst[0], 'Weight':inst[1], 'Width':inst[2]} for n, inst in enumerate(instances)})
 
 	
 
