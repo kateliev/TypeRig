@@ -194,7 +194,7 @@ class fontFamilly():
 		self.wt_instances = [int(ratfrac(item - self.wt0, self.wt1 - self.wt0, 1000)) for item in self.wt_stems]
 		self.wd_instances = [int(item) for item in list(linspread(0,1000, self.wd_steps))]
 
-		if len(self.wd_instances) > 2:
+		if len(self.wd_instances) >= 2:
 			from itertools import product
 			self.instances = list(product(self.wt_instances, self.wd_instances))
 		else:
