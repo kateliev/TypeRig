@@ -64,7 +64,7 @@ class pNode(object):
 		self.isOn = self.fl.isOn()
 		self.type = self.fl.type
 		self.x, self.y = float(self.fl.x), float(self.fl.y)
-		#self.angle = float(self.fl.angle)
+		self.angle = float(self.fl.angle)
 
 	def __repr__(self):
 		return '<%s (%s, %s) index=%s time=%s on=%s>' % (self.__class__.__name__, self.x, self.y, self.index, self.getTime(), self.isOn)
