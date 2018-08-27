@@ -16,7 +16,7 @@ from typerig.glyph import eGlyph
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Layers', '0.28'
+app_name, app_version = 'TypeRig | Layers', '0.29'
 
 # - Sub widgets ------------------------
 class QlayerSelect(QtGui.QVBoxLayout):
