@@ -162,10 +162,11 @@ class eGlyph(pGlyph):
 		pLayers = self._prepareLayers(layers)
 
 		if nodes is None:
-			coordDict = {name:self.selectedCoords(name) for name in pLayers } # Removed due to 6722 Bug !!! if self.layer(name).isCompatible(self.activeLayer())}
+			coordDict = {name:self.selectedCoords(name, applyTransform=True) for name in pLayers if self.layer(name).isCompatible(self.activeLayer(), True)}
 			processSingle = len(self.selected()) < 2
 		else:
-			coordDict = {name:[self.nodes(name)[nid].pointf for nid in nodes] for name in pLayers } # Removed due to 6722 Bug !!! if self.layer(name).isCompatible(self.activeLayer())}
+			# TODO: Make it qTransform aware! as the one above!
+			coordDict = {name:[self.nodes(name)[nid].pointf for nid in nodes] for name in pLayers if self.layer(name).isCompatible(self.activeLayer(), True)}
 			processSingle = len(nodes) < 2
 
 		# - Process

@@ -114,6 +114,9 @@ class pNode(object):
 		elif len(self.getSegment(relativeTime)) == 2:
 			return (self.fl, self.fl.nextNode())
 
+	def getContour(self):
+		return self.fl.contour
+
 	def insertAfter(self, time):
 		self.contour.insertNodeTo(self.getTime() + time)
 
@@ -629,18 +632,24 @@ class pGlyph(object):
 		else:
 			return [(shape, contour, node) for shape in allShapes for contour in shape.contours for node in contour.nodes() if node in self.selectedNodes(filterOn=filterOn)]
 
-	def selectedCoords(self, layer=None, filterOn=False):
+	def selectedCoords(self, layer=None, filterOn=False, applyTransform=False):
 		'''Return the coordinates of all selected nodes at the current layer or other.
 		Args:
 			layer (int or str): Layer index or name. If None returns ActiveLayer
 			filterOn (bool): Return only on-curve nodes
+			applyTransform (bool) : Gets local shape transformation matrix and applies it to the node coordinates
 		Returns:
 			list[QPointF]
 		'''
-		nodelist = self.selectedAtContours(filterOn=filterOn)
 		pLayer = self.layer(layer)
-			
-		return [pLayer.getContours()[item[0]].nodes()[item[1]].position for item in nodelist]
+		
+		if not applyTransform:
+			nodelist = self.selectedAtContours(filterOn=filterOn)
+			return [pLayer.getContours()[item[0]].nodes()[item[1]].position for item in nodelist]
+
+		else:
+			nodelist = self.selectedAtShapes(filterOn=filterOn)
+			return [pLayer.getShapes(1)[item[0]].transform.map(pLayer.getContours()[item[1]].nodes()[item[2]].position) for item in nodelist]
 
 	def selectedSegments(self, layer=None):
 		'''Returns list of currently selected segments
