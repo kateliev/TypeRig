@@ -112,6 +112,10 @@ class typerig_Panel(QtGui.QDialog):
 			self.repaint()
 			self.flag_fold = False
 	
+# - STYLE OVERRIDE -------------------
+# -- Following (uncommented) will override the default OS styling for Qt Widgets
+#QtGui.QApplication.setStyle(QtGui.QStyleFactory.create('Fusion')) # Options: Windows, WindowsXP, WindowsVista, Fusion
+
 # - RUN ------------------------------
 dialog = typerig_Panel()
 
