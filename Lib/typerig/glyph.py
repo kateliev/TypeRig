@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Glyph Objects | Typerig
-# VER 	: 0.21
+# VER 	: 0.22
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
