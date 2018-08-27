@@ -91,10 +91,11 @@ class QlayerBasic(QtGui.QVBoxLayout):
 		# -- Basic Tool buttons
 		self.lay_buttons = QtGui.QGridLayout()
 		self.btn_add = QtGui.QPushButton('Add')
+		self.btn_del = QtGui.QPushButton('Remove')
 		self.btn_dup = QtGui.QPushButton('Duplicate')
 		self.btn_setServ = QtGui.QPushButton('Service')
+		self.btn_setMask = QtGui.QPushButton('Mask')
 		self.btn_setWire = QtGui.QPushButton('Wireframe')
-		self.btn_del = QtGui.QPushButton('Remove')
 		#self.btn_dup.setEnabled(False)
 				
 		self.btn_add.setToolTip('Add new layer with name')
@@ -109,17 +110,19 @@ class QlayerBasic(QtGui.QVBoxLayout):
 		self.btn_add.clicked.connect(self.addLayer)
 		self.btn_dup.clicked.connect(self.duplicateLayers)
 		self.btn_del.clicked.connect(self.deleteLayers)
+		self.btn_setMask.clicked.connect(self.addMaskLayers)
 
 		self.btn_setServ.clicked.connect(lambda: self.setLayer('Service'))
 		self.btn_setWire.clicked.connect(lambda: self.setLayer('Wireframe'))
 
-		self.lay_buttons.addWidget(self.btn_add, 0, 0)
-		self.lay_buttons.addWidget(QtGui.QLabel('N:'), 0, 1)
-		self.lay_buttons.addWidget(self.edt_name, 0, 2)
-		self.lay_buttons.addWidget(self.btn_dup, 0, 3)
-		self.lay_buttons.addWidget(self.btn_setServ, 1, 0, 1, 2)
-		self.lay_buttons.addWidget(self.btn_setWire, 1, 2, 1, 1)
-		self.lay_buttons.addWidget(self.btn_del, 1, 3, 1, 1)
+		self.lay_buttons.addWidget(QtGui.QLabel('Suffix/Name:'),	0, 0, 1, 1)
+		self.lay_buttons.addWidget(self.edt_name, 					0, 1, 1, 2)
+		self.lay_buttons.addWidget(self.btn_add, 					1, 0, 1, 1)
+		self.lay_buttons.addWidget(self.btn_del, 					1, 1, 1, 1)
+		self.lay_buttons.addWidget(self.btn_dup, 					1, 2, 1, 1)
+		self.lay_buttons.addWidget(self.btn_setServ, 				2, 0, 1, 1)
+		self.lay_buttons.addWidget(self.btn_setMask, 				2, 1, 1, 1)
+		self.lay_buttons.addWidget(self.btn_setWire, 				2, 2, 1, 1)
 	 
 		self.addLayout(self.lay_buttons)
 
@@ -145,6 +148,21 @@ class QlayerBasic(QtGui.QVBoxLayout):
 				self.aux.glyph.duplicateLayer(item.text() , '%s.%s' %(item.text(), self.edt_name.text), True)			
 			
 			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Duplicate Layer: %s.' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
+			self.aux.glyph.update()
+			self.aux.refresh()
+
+	def addMaskLayers(self):	
+		if self.aux.doCheck():	
+			for item in self.aux.lst_layers.selectedItems():
+				# - Build mask layer
+				srcShapes = self.aux.glyph.shapes(item.text())
+				newMaskLayer = self.aux.glyph.layer(item.text()).getMaskLayer(True)			
+
+				# - Copy shapes to mask layer
+				for shape in srcShapes:
+					newMaskLayer.addShape(shape.cloneTopLevel()) # Clone so that the shapes are NOT referenced, but actually copied!
+			
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'New Mask Layer: %s.' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
 			self.aux.glyph.update()
 			self.aux.refresh()
 
