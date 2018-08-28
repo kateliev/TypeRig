@@ -17,7 +17,7 @@ from PythonQt import QtCore, QtGui
 import Panel 
 
 # - Init --------------------------
-app_version = '0.40'
+app_version = '0.41'
 app_name = 'TypeRig Panel'
 ignorePanel = '__'
 
@@ -113,8 +113,10 @@ class typerig_Panel(QtGui.QDialog):
 			self.flag_fold = False
 	
 # - STYLE OVERRIDE -------------------
-# -- Following (uncommented) will override the default OS styling for Qt Widgets
-#QtGui.QApplication.setStyle(QtGui.QStyleFactory.create('Fusion')) # Options: Windows, WindowsXP, WindowsVista, Fusion
+# -- Following (uncommented) will override the default OS styling for Qt Widgets on Mac OS.
+from platform import system
+if system() == 'Darwin':
+	QtGui.QApplication.setStyle(QtGui.QStyleFactory.create('Fusion')) # Options: Windows, WindowsXP, WindowsVista, Fusion
 
 # - RUN ------------------------------
 dialog = typerig_Panel()

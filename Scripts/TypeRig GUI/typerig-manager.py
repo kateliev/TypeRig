@@ -17,7 +17,7 @@ from PythonQt import QtCore, QtGui
 import Manager
 
 # - Init --------------------------
-app_version = '0.10'
+app_version = '0.11'
 app_name = 'TypeRig Managers'
 ignorePanel = '__'
 
@@ -61,6 +61,12 @@ class typerig_Manager(QtGui.QDialog):
 		#self.setMinimumWidth(300)
 		self.show()
 	
+# - STYLE OVERRIDE -------------------
+# -- Following (uncommented) will override the default OS styling for Qt Widgets on Mac OS.
+from platform import system
+if system() == 'Darwin':
+	QtGui.QApplication.setStyle(QtGui.QStyleFactory.create('Fusion')) # Options: Windows, WindowsXP, WindowsVista, Fusion
+
 # - RUN ------------------------------
 dialog = typerig_Manager()
 
