@@ -16,7 +16,7 @@ from typerig.glyph import eGlyph
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Layers', '0.29'
+app_name, app_version = 'TypeRig | Layers', '0.30'
 
 # - Sub widgets ------------------------
 class QlayerSelect(QtGui.QVBoxLayout):
@@ -209,31 +209,47 @@ class QlayerTools(QtGui.QVBoxLayout):
 	
 		# -- Build
 		self.lay_checks.addWidget(self.chk_outline, 0, 0)
-		self.lay_checks.addWidget(self.chk_guides, 0, 1)
+		self.lay_checks.addWidget(self.chk_guides, 	0, 1)
 		self.lay_checks.addWidget(self.chk_anchors, 0, 2)
-		self.lay_checks.addWidget(self.chk_lsb, 1, 0)
-		self.lay_checks.addWidget(self.chk_adv, 1, 1)
-		self.lay_checks.addWidget(self.chk_rsb, 1, 2)
+		self.lay_checks.addWidget(self.chk_lsb, 	1, 0)
+		self.lay_checks.addWidget(self.chk_adv, 	1, 1)
+		self.lay_checks.addWidget(self.chk_rsb, 	1, 2)
 		
 		self.addLayout(self.lay_checks)
 
 		# -- Quick Tool buttons
-		self.lay_buttons = QtGui.QHBoxLayout()
+		self.lay_buttons = QtGui.QGridLayout()
 		self.btn_swap = QtGui.QPushButton('Swap')
 		self.btn_copy = QtGui.QPushButton('Copy')
 		self.btn_paste = QtGui.QPushButton('Paste')
+		self.btn_clean = QtGui.QPushButton('Remove')
+		self.btn_unlink = QtGui.QPushButton('Unlink')
+		self.btn_expand = QtGui.QPushButton('Expand')
+
+		self.btn_unlink.setEnabled(False)
+		self.btn_expand.setEnabled(False)
 		
 		self.btn_swap.setToolTip('Swap Selected Layer with Active Layer')
 		self.btn_copy.setToolTip('Copy Active Layer to Selected Layer')
 		self.btn_paste.setToolTip('Paste Selected Layer to Active Layer')
+		self.btn_clean.setToolTip('Remove contents from selected layers')
+		self.btn_unlink.setToolTip('Unlink element references for selected layers')
+		self.btn_expand.setToolTip('Expand transformations for selected layers')
 
 		self.btn_swap.clicked.connect(self.swap)
 		self.btn_copy.clicked.connect(self.copy)
 		self.btn_paste.clicked.connect(self.paste)
+		self.btn_clean.clicked.connect(self.clean)
+		#self.btn_unlink.clicked.connect(self.unlink)
+		#self.btn_expand.clicked.connect(self.expand)
 				
-		self.lay_buttons.addWidget(self.btn_swap)
-		self.lay_buttons.addWidget(self.btn_copy)
-		self.lay_buttons.addWidget(self.btn_paste)
+		self.lay_buttons.addWidget(self.btn_swap,	0, 0, 1, 1)
+		self.lay_buttons.addWidget(self.btn_copy,	0, 1, 1, 1)
+		self.lay_buttons.addWidget(self.btn_paste,	0, 2, 1, 1)
+		self.lay_buttons.addWidget(self.btn_clean,	1, 0, 1, 1)
+		self.lay_buttons.addWidget(self.btn_unlink,	1, 1, 1, 1)
+		self.lay_buttons.addWidget(self.btn_expand,	1, 2, 1, 1)
+
 		self.addLayout(self.lay_buttons)
 					
 	# - Helper Procedures ----------------------------------------------
@@ -378,6 +394,21 @@ class QlayerTools(QtGui.QVBoxLayout):
 				self.Copy_Paste_Layer_Metrics(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False, 'RSB')
 				
 			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Paste Layer | %s -> %s.' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
+			self.aux.glyph.update()
+
+	def clean(self):
+		if self.aux.doCheck():	
+			if self.chk_outline.isChecked():
+				for item in self.aux.lst_layers.selectedItems():
+					self.aux.glyph.layer(item.text()).removeAllShapes()
+
+			if self.chk_guides.isChecked():
+				pass # TODO!!!!!
+
+			if self.chk_anchors.isChecked():
+				pass # TODO!!!!!
+			
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Clean Layer(s) | %s' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
 			self.aux.glyph.update()
 
 class QlayerMultiEdit(QtGui.QVBoxLayout):
