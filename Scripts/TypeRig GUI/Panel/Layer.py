@@ -12,11 +12,12 @@ import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore, QtGui
 from typerig.glyph import eGlyph
+from itertools import groupby
 
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Layers', '0.30'
+app_name, app_version = 'TypeRig | Layers', '0.31'
 
 # - Sub widgets ------------------------
 class QlayerSelect(QtGui.QVBoxLayout):
@@ -418,21 +419,32 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 		# - Init
 		self.aux = aux
 		self.backup = {}
+		self.contourClipboard = {}
 
 		# -- Quick Tool buttons
-		self.lay_buttons = QtGui.QHBoxLayout()
+		self.lay_buttons = QtGui.QGridLayout()
 		self.btn_unfold = QtGui.QPushButton('Unfold Layers')
 		self.btn_restore = QtGui.QPushButton('Fold Layers')
+		self.btn_copy = QtGui.QPushButton('Copy Outline')
+		self.btn_paste = QtGui.QPushButton('Paste Outline')
+
 		self.btn_restore.setEnabled(False)
+		self.btn_paste.setEnabled(False)
 		
 		self.btn_unfold.setToolTip('Reposition selected layers side by side. Selection order does matter!')
 		self.btn_restore.setToolTip('Restore Layer Metrics.')
+		self.btn_copy.setToolTip('Copy selected outline to cliboard for each of selected layers.')
+		self.btn_paste.setToolTip('Paste outline from cliboard layer by layer (by name). Non existing layers are discarded! New Element is created upon Paste!')
 
 		self.btn_unfold.clicked.connect(self.unfold)
 		self.btn_restore.clicked.connect(self.restore)
+		self.btn_copy.clicked.connect(self.copy)
+		self.btn_paste.clicked.connect(self.paste)
 				
-		self.lay_buttons.addWidget(self.btn_unfold)
-		self.lay_buttons.addWidget(self.btn_restore)
+		self.lay_buttons.addWidget(self.btn_unfold,		0, 0, 1, 1)
+		self.lay_buttons.addWidget(self.btn_restore,	0, 1, 1, 1)
+		self.lay_buttons.addWidget(self.btn_copy,		1, 0, 1, 1)
+		self.lay_buttons.addWidget(self.btn_paste,		1, 1, 1, 1)
 		self.addLayout(self.lay_buttons)
 
 	# - Button procedures ---------------------------------------------------
@@ -478,6 +490,48 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 			self.btn_restore.setEnabled(False)
 
 			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Restore Layer metrics: %s.' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
+			self.aux.glyph.update()
+
+	def copy(self):
+		# - Init
+		wGlyph = self.aux.glyph
+		wContours = wGlyph.contours()
+		self.contourClipboard = {}
+		
+		# - Build initial contour information
+		selectionTuples = wGlyph.selectedAtContours()
+		selection = {key:[item[1] for item in value] if not wContours[key].isAllNodesSelected() else [] for key, value in groupby(selectionTuples, lambda x:x[0])}
+
+		
+		if len(selection.keys()):
+			self.btn_paste.setEnabled(True)
+						
+			for item in self.aux.lst_layers.selectedItems():
+				wLayer = item.text()
+				self.contourClipboard[wLayer] = []
+
+				for cid, nList in selection.iteritems():
+					if len(nList):
+						 self.contourClipboard[wLayer].append(fl6.flContour([wGlyph.nodes(wLayer)[nid].clone() for nid in nList]))
+					else:
+						self.contourClipboard[wLayer].append(wGlyph.contours(wLayer)[cid].clone())
+
+
+			print 'DONE:\t Copy outline; Glyph: %s; Layers: %s.' %(self.aux.glyph.fl.name, '; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
+		
+	def paste(self):
+		wGlyph = self.aux.glyph
+
+		if len(self.contourClipboard.keys()):
+			for layerName, contours in self.contourClipboard.iteritems():
+				wLayer = wGlyph.layer(layerName)
+
+				if wLayer is not None:
+					newShape = fl6.flShape()
+					newShape.addContours(contours, True)
+					wLayer.addShape(newShape)			
+			
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Paste outline; Glyph: %s; Layers: %s' %(self.aux.glyph.fl.name, '; '.join([item.text() for item in self.aux.lst_layers.selectedItems()])))
 			self.aux.glyph.update()
 
 
