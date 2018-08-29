@@ -22,15 +22,17 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 - Contour optimization: Tunni (Auto balance handles), Hobby (Adjust Curvature), Proportional (Handle length)
 
 ##### Guide panel
-- Drop guideline: Drop guideline between any two selected nodes (on all layers) or a vertical guideline at a single node (with italic angle if present) 
+- Drop guideline: Drop guideline between any two selected nodes (on all layers) or a vertical guideline at a single node (with italic angle if present)
+- Drop guidelines according to specific glyph metrics (ex. 80% of the width/height of Glyph's BBox)
 
 ##### Layer panel
 - Set layer types'
-- Add, remove and duplicate layers.
-- Copy/Paste/Swap active layer outline, metrics, anchors and guides to any selected layer (also usable as FontLab V's swap with mask feature).
+- Add, remove and duplicate layers'.
+- Copy/Paste/Swap/Remove active layer outline, metrics, anchors and guides to any selected layer (also usable as FontLab V's swap with mask feature).
 - Interpolate current layer to any selected layer... (more TBI)
 - Interpolate any two selected layers into the current active layer... (more TBI)
 - Unfold/fold layers, allowing layer side-by-side editing
+- Copy/Paste outline from/to multiple layers'
 
 *'affects multiple selected layers*
 
