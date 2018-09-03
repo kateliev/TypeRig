@@ -332,7 +332,7 @@ class eGlyph(pGlyph):
 		'''
 		from operator import itemgetter
 		
-		nodeCoords = [(node.pointf.x(), node.pointf.y()) for node in self.nodes(layer) if node.isOn()]
+		nodeCoords = [(node.position.x(), node.position.y()) for node in self.nodes(layer) if node.isOn()]
 
 		minValY = min(nodeCoords, key=itemgetter(1))[1]
 		maxValY = max(nodeCoords, key=itemgetter(1))[1]
