@@ -16,7 +16,7 @@ from typerig.glyph import eGlyph
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Anchors', '0.07'
+app_name, app_version = 'TypeRig | Anchors', '0.08'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):
@@ -113,8 +113,8 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		# - Init
 		self.aux = aux
 		self.types = 'Anchor PinPoint'.split(' ')
-		self.posY = 'Coord Above Below Center Baseline Copy'.split(' ')
-		self.posX = 'Coord Left Right Center Highest Lowest'.split(' ')
+		self.posY = 'Coord,Above,Below,Center,Baseline,Copy'.split(',')
+		self.posX = 'Coord,Left,Right,Center,Highest,Lowest'.split(',')
 		posYvals = (None, 'T', 'B', 'C', None)
 		posXvals = (None ,'L', 'R', 'C', 'AT', 'A')
 		self.posYctrl = dict(zip(self.posY, posYvals))
@@ -126,6 +126,7 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		self.btn_clearAll = QtGui.QPushButton('Clear All')
 		self.btn_anchorAdd = QtGui.QPushButton('Add')
 		self.btn_anchorMov = QtGui.QPushButton('Move')
+		self.chk_italic = QtGui.QCheckBox('Use Italic Angle')
 
 		# -- Edit fields
 		self.edt_anchorName = ALineEdit()
@@ -180,6 +181,8 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		self.lay_grid.addWidget(QtGui.QLabel('Y:'),				5, 0, 1, 1)
 		self.lay_grid.addWidget(self.cmb_posY,					5, 1, 1, 2)
 		self.lay_grid.addWidget(self.edt_simpleY, 				5, 3, 1, 1)
+		self.lay_grid.addWidget(self.chk_italic,				5, 4, 1, 4)
+		
 		
 		self.lay_grid.addWidget(self.btn_anchorAdd, 			6, 0, 1, 4)
 		self.lay_grid.addWidget(self.btn_anchorMov, 			6, 4, 1, 4)
@@ -226,12 +229,12 @@ class QanchorBasic(QtGui.QVBoxLayout):
 				for layer in self.aux.wLayers:
 					if not move:
 						if len(self.edt_anchorName.text):
-							self.aux.glyph.dropAnchor(self.edt_anchorName.text, layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance)
+							self.aux.glyph.dropAnchor(self.edt_anchorName.text, layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, False, self.chk_italic.isChecked())
 							update = True
 					else:
 						cmb_sel = self.aux.lst_anchors.selectedItems()
 						if len(cmb_sel):
-							self.aux.glyph.dropAnchor(cmb_sel[0].text(), layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, move)
+							self.aux.glyph.dropAnchor(cmb_sel[0].text(), layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, True, self.chk_italic.isChecked())
 							update = True
 
 			if update:

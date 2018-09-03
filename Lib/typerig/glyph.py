@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Glyph Objects | Typerig
-# VER 	: 0.22
+# VER 	: 0.23
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -326,13 +326,21 @@ class eGlyph(pGlyph):
 			return fgInterpolator
 
 	# - Anchors & Pins -----------------------------------------
-	def getAttachmentCenters(self, layer, tolerance=5):
+	def getAttachmentCenters(self, layer, tolerance=5, applyTransform=False):
 		'''Return X center of lowest, highest Y of [glyph] for [layer] within given [tolerance]
 		Note: Determine diacritic to glyph attachment positions (for anchor placement)
 		'''
 		from operator import itemgetter
 		
-		nodeCoords = [(node.position.x(), node.position.y()) for node in self.nodes(layer) if node.isOn()]
+		if not applyTransform:
+			nodeCoords = [(node.position.x(), node.position.y()) for node in self.nodes(layer) if node.isOn()]
+		else:
+			nodeCoords = []
+			for shape in self.shapes(layer):
+				for contour in shape.getContours():
+					for node in contour.nodes():
+						transCoords = shape.transform.map(node.position)
+						nodeCoords.append((transCoords.x(), transCoords.y()))
 
 		minValY = min(nodeCoords, key=itemgetter(1))[1]
 		maxValY = max(nodeCoords, key=itemgetter(1))[1]
@@ -346,7 +354,7 @@ class eGlyph(pGlyph):
 		# !TODO: Italic compensation - re-adapt FontBrain Module + Component tuner
 		return XminY, XmaxY
 
-	def dropAnchor(self, name, layer, coordTuple, alignTuple=(None,None), tolerance=5, move=False):
+	def dropAnchor(self, name, layer, coordTuple, alignTuple=(None,None), tolerance=5, move=False, italic=False):
 		'''Drop anchor at given layer
 		Args:
 			name (str): Anchor Name
@@ -369,8 +377,8 @@ class eGlyph(pGlyph):
 		bbox = self.layer(layer).boundingBox
 
 		# - Process
-		if 'A' in alignX :
-			XminY, XmaxY = self.getAttachmentCenters(layer, tolerance)
+		if alignX is not None and 'A' in alignX :
+			XminY, XmaxY = self.getAttachmentCenters(layer, tolerance, True)
 			x += XmaxY if 'T' in alignX else XminY
 
 		elif alignX == 'L':	x = bbox.x() + x*[1,-1][bbox.x() < 0]
@@ -380,6 +388,14 @@ class eGlyph(pGlyph):
 		if alignY == 'B':	y = bbox.y() + y*[1,-1][bbox.y() < 0]
 		elif alignY == 'T':	y += bbox.height() + bbox.y()
 		elif alignY == 'C':	y += bbox.height()/2 + bbox.y()
+
+		if italic:
+			from typerig.brain import _Point
+			print x, y
+			bPoint = _Point(x,y)
+			bPoint.setAngle(fl6.flPackage(self.parent).italicAngle_value)
+			x = bPoint.getWidth(y)
+			print x, y
 
 		if not move:
 			self.addAnchor((x, y), name, layer)
