@@ -157,7 +157,7 @@ class eGlyph(pGlyph):
 		from PythonQt.QtGui import QTransform, QColor
 
 		# - Init
-		italicAngle = fl6.flPackage(self.parent).italicAngle_value
+		italicAngle = self.italicAngle()
 		origin = pqt.QtCore.QPointF(0,0)
 		pLayers = self._prepareLayers(layers)
 
@@ -351,7 +351,6 @@ class eGlyph(pGlyph):
 		XminY = (min(coordsAtMinY, key=itemgetter(0))[0] + max(coordsAtMinY, key=itemgetter(0))[0])/2
 		XmaxY = (min(coordsAtMaxY, key=itemgetter(0))[0] + max(coordsAtMaxY, key=itemgetter(0))[0])/2
 
-		# !TODO: Italic compensation - re-adapt FontBrain Module + Component tuner
 		return XminY, XmaxY
 
 	def dropAnchor(self, name, layer, coordTuple, alignTuple=(None,None), tolerance=5, move=False, italic=False):
@@ -392,7 +391,7 @@ class eGlyph(pGlyph):
 		if italic:
 			from typerig.brain import _Point
 			bPoint = _Point(x,y)
-			bPoint.setAngle(-fl6.flPackage(self.parent).italicAngle_value)
+			bPoint.setAngle(-self.italicAngle())
 			x = bPoint.getWidth()
 
 		if not move:

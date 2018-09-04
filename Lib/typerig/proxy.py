@@ -310,6 +310,8 @@ class pGlyph(object):
 
 	def object(self): return fl6.flObject(self.fl.id)
 
+	def italicAngle(self): return self.package.italicAngle_value
+
 	def nodes(self, layer=None, extend=None):
 		'''Return all nodes at given layer.
 		Args:
