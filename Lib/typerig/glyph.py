@@ -391,11 +391,9 @@ class eGlyph(pGlyph):
 
 		if italic:
 			from typerig.brain import _Point
-			print x, y
 			bPoint = _Point(x,y)
-			bPoint.setAngle(fl6.flPackage(self.parent).italicAngle_value)
-			x = bPoint.getWidth(y)
-			print x, y
+			bPoint.setAngle(-fl6.flPackage(self.parent).italicAngle_value)
+			x = bPoint.getWidth()
 
 		if not move:
 			self.addAnchor((x, y), name, layer)

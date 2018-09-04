@@ -16,7 +16,7 @@ from typerig.glyph import eGlyph
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Anchors', '0.08'
+app_name, app_version = 'TypeRig | Anchors', '0.09'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):
