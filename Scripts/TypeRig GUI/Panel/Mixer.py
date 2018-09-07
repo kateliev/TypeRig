@@ -65,6 +65,8 @@ class mixerHead(QtGui.QGridLayout):
 		self.cmb_0 = QtGui.QComboBox()
 		self.cmb_1 = QtGui.QComboBox()
 
+		self.chk_italic = QtGui.QCheckBox('Italic')
+
 		self.addWidget(QtGui.QLabel('Glyph:'),		0, 0, 1, 1)
 		self.addWidget(self.edt_glyphName,			0, 1, 1, 6)
 		self.addWidget(self.btn_refresh,			0, 7, 1, 1)
@@ -83,6 +85,8 @@ class mixerHead(QtGui.QGridLayout):
 		self.addWidget(QtGui.QLabel('Adj.V/H:'),	4, 0, 1, 1)
 		self.addWidget(self.spb_compV,				4, 1, 1, 3)
 		self.addWidget(self.spb_compH,				4, 4, 1, 3)
+		self.addWidget(self.chk_italic,				4, 7, 1, 1)
+
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
@@ -195,7 +199,10 @@ class tool_tab(QtGui.QWidget):
 			scmp = float(self.head.spb_compH.value), float(self.head.spb_compV.value)
 			
 			# - Italic Angle
-			angle = radians(-float(self.italic_angle))
+			if self.head.chk_italic.isChecked():
+				angle = radians(-float(self.italic_angle))
+			else:
+				angle = 0
 			
 			# - Stems
 			sw_V = (float(self.head.edt_stemV0.text), float(self.head.edt_stemV1.text))
