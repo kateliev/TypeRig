@@ -26,6 +26,7 @@ from typerig.proxy import pFont
 from typerig.glyph import eGlyph
 from typerig.node import eNode
 from typerig.brain import coordArray, linInterp
+from typerig.gui import trSliderCtrl, trMsgSimple
 
 # -- Check for MathRig instalaltion
 try:
@@ -38,16 +39,7 @@ try:
 except ImportError:
     sysReady = False
 
-
 # - Sub widgets ------------------------
-class message(QtGui.QVBoxLayout):
-	def __init__(self, msg):
-		super(message, self).__init__()
-		self.warnMessage = QtGui.QLabel(msg)
-		self.warnMessage.setOpenExternalLinks(True)
-		self.warnMessage.setWordWrap(True)
-		self.addWidget(self.warnMessage)
-
 class mixerHead(QtGui.QGridLayout):
 	def __init__(self):
 		super(mixerHead, self).__init__()
@@ -92,56 +84,6 @@ class mixerHead(QtGui.QGridLayout):
 		self.addWidget(self.spb_compV,				4, 1, 1, 3)
 		self.addWidget(self.spb_compH,				4, 4, 1, 3)
 
-class sliderCtrl(QtGui.QGridLayout):
-	def __init__(self, edt_0, edt_1, edt_pos, spb_step):
-		super(sliderCtrl, self).__init__()
-		
-		# - Init
-		self.initValues = (edt_0, edt_1, edt_pos, spb_step)
-
-		self.edt_0 = QtGui.QLineEdit(edt_0)
-		self.edt_1 = QtGui.QLineEdit(edt_1)
-		self.edt_pos = QtGui.QLineEdit(edt_pos)
-
-		self.spb_step = QtGui.QSpinBox()
-		self.spb_step.setValue(spb_step)
-
-		self.sld_axis = QtGui.QSlider(QtCore.Qt.Horizontal)
-		self.sld_axis.valueChanged.connect(self.sliderChange)
-		self.refreshSlider()
-		
-		self.edt_0.editingFinished.connect(self.refreshSlider)
-		self.edt_1.editingFinished.connect(self.refreshSlider)
-		self.spb_step.valueChanged.connect(self.refreshSlider)
-		self.edt_pos.editingFinished.connect(self.refreshSlider)
-
-		# - Layout		
-		self.addWidget(self.sld_axis, 		0, 0, 1, 5)
-		self.addWidget(self.edt_pos, 		0, 5, 1, 1)		
-		self.addWidget(QtGui.QLabel('Min:'),	1, 0, 1, 1)
-		self.addWidget(self.edt_0, 			1, 1, 1, 1)
-		self.addWidget(QtGui.QLabel('Max:'), 1, 2, 1, 1)
-		self.addWidget(self.edt_1, 			1, 3, 1, 1)
-		self.addWidget(QtGui.QLabel('Step:'),1, 4, 1, 1)
-		self.addWidget(self.spb_step, 		1, 5, 1, 1)
-
-
-	def refreshSlider(self):
-		self.sld_axis.setMinimum(float(self.edt_0.text.strip()))
-		self.sld_axis.setMaximum(float(self.edt_1.text.strip()))
-		self.sld_axis.setValue(float(self.edt_pos.text.strip()))
-		self.sld_axis.setSingleStep(int(self.spb_step.value))
-				
-	def reset(self):
-		self.edt_0.setText(self.initValues[0])
-		self.edt_1.setText(self.initValues[1])
-		self.edt_pos.setText(self.initValues[2])
-		self.spb_step.setValue(self.initValues[3])
-		self.refreshSlider()
-
-	def sliderChange(self):
-		self.edt_pos.setText(self.sld_axis.value)
-
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
 	def __init__(self):
@@ -163,20 +105,20 @@ class tool_tab(QtGui.QWidget):
 			# -- Set Sliders
 			# --- Mixer
 			layoutV.addWidget(QtGui.QLabel('Single Axis Mixer'))
-			self.mixer = sliderCtrl('1', '1000', '0', 10)
+			self.mixer = trSliderCtrl('1', '1000', '0', 10)
 			self.mixer.sld_axis.valueChanged.connect(self.intelliScale)		
 			layoutV.addLayout(self.mixer)
 			layoutV.addSpacing(25)
 
 			# --- Scaler
 			layoutV.addWidget(QtGui.QLabel('Compensative scaler: Width'))
-			self.scalerX = sliderCtrl('1', '200', '100', 10)
+			self.scalerX = trSliderCtrl('1', '200', '100', 10)
 			self.scalerX.sld_axis.valueChanged.connect(self.intelliScale)		
 			layoutV.addLayout(self.scalerX)
 			layoutV.addSpacing(15)
 
 			layoutV.addWidget(QtGui.QLabel('Compensative scaler: Height'))
-			self.scalerY = sliderCtrl('1', '200', '100', 10)
+			self.scalerY = trSliderCtrl('1', '200', '100', 10)
 			self.scalerY.sld_axis.valueChanged.connect(self.intelliScale)		
 			layoutV.addLayout(self.scalerY)
 		
@@ -188,7 +130,7 @@ class tool_tab(QtGui.QWidget):
 
 		else:
 			# - Throw an error
-			layoutV.addLayout(message(warnMessage))
+			layoutV.addLayout(trMsgSimple(warnMessage))
 
 		# - Set panel
 		self.setLayout(layoutV)

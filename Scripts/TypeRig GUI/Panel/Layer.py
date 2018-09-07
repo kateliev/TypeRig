@@ -12,6 +12,7 @@ import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore, QtGui
 from typerig.glyph import eGlyph
+from typerig.gui import trSliderCtrl
 from itertools import groupby
 
 # - Init
@@ -634,7 +635,7 @@ class tool_tab(QtGui.QWidget):
 		layoutV.addLayout(self.basicTools)
 		layoutV.addWidget(QtGui.QLabel('Content Tools (Active Layer to selection)'))
 		layoutV.addLayout(self.quickTools)
-		layoutV.addWidget(QtGui.QLabel('Layer Multi-editing'))
+		layoutV.addWidget(QtGui.QLabel('Layer Multi-editing (Layers selected)'))
 		layoutV.addLayout(self.unfoldLayers)
 		layoutV.addWidget(QtGui.QLabel('Interpolate/Blend (Active Layer to selection)'))
 		#layoutV.addWidget(QtGui.QLabel('\nWARN: Disabled due FL6 6722 Bug!'))
