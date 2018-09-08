@@ -17,7 +17,7 @@ from PythonQt import QtCore, QtGui
 # -- Messages -----------------------------
 class trMsgSimple(QtGui.QVBoxLayout):
 	def __init__(self, msg):
-		super(message, self).__init__()
+		super(trMsgSimple, self).__init__()
 		self.warnMessage = QtGui.QLabel(msg)
 		self.warnMessage.setOpenExternalLinks(True)
 		self.warnMessage.setWordWrap(True)
