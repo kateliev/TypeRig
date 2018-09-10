@@ -73,3 +73,52 @@ class trSliderCtrl(QtGui.QGridLayout):
 
 	def sliderChange(self):
 		self.edt_pos.setText(self.sld_axis.value)
+
+# -- Tables ------------------------------------------------------
+class trTableView(QtGui.QTableWidget):
+	def __init__(self, data):
+		super(trTableView, self).__init__()
+		
+		# - Init
+		self.flag_valueChanged = QtGui.QColor('powderblue')
+
+		# - Set 
+		self.setTable(data)		
+		self.itemChanged.connect(self.markChange)
+
+		# - Styling
+		self.horizontalHeader().setStretchLastSection(True)
+		self.setAlternatingRowColors(True)
+		self.setShowGrid(False)
+		#self.resizeColumnsToContents()
+		self.resizeRowsToContents()
+
+	def setTable(self, data, reset=False):
+		name_row, name_column = [], []
+		self.blockSignals(True)
+
+		self.setColumnCount(max(map(len, data.values())))
+		self.setRowCount(len(data.keys()))
+
+		# - Populate
+		for n, layer in enumerate(sorted(data.keys())):
+			name_row.append(layer)
+
+			for m, key in enumerate(sorted(data[layer].keys())):
+				name_column.append(key)
+				newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
+				self.setItem(n, m, newitem)
+				
+		self.setHorizontalHeaderLabels(name_column)
+		self.setVerticalHeaderLabels(name_row)
+		self.blockSignals(False)
+
+	def getTable(self):
+		returnDict = {}
+		for row in range(self.rowCount):
+			returnDict[self.verticalHeaderItem(row).text()] = {self.horizontalHeaderItem(col).text():float(self.item(row, col).text()) for col in range(self.columnCount)}
+
+		return returnDict
+
+	def markChange(self, item):
+		item.setBackground(self.flag_valueChanged)

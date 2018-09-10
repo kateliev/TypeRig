@@ -18,6 +18,7 @@ import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore, QtGui
 from typerig.proxy import pGlyph, pFont
+from typerig.gui import trTableView
 
 # - Sub widgets ------------------------
 class ZLineEdit(QtGui.QLineEdit):
@@ -40,52 +41,6 @@ class ZLineEdit(QtGui.QLineEdit):
 		menu.addAction(u'X Height', lambda: self.setText('=XHeight'))
 
 # - Font Metrics -------------------------------------------------------
-class WTableView(QtGui.QTableWidget):
-	def __init__(self, data):
-		super(WTableView, self).__init__()
-		
-		# - Init
-		self.setColumnCount(max(map(len, data.values())))
-		self.setRowCount(len(data.keys()))
-
-		# - Set 
-		self.setTable(data)		
-		self.itemChanged.connect(self.markChange)
-
-		# - Styling
-		self.horizontalHeader().setStretchLastSection(True)
-		self.setAlternatingRowColors(True)
-		self.setShowGrid(False)
-		#self.resizeColumnsToContents()
-		self.resizeRowsToContents()
-
-	def setTable(self, data, reset=False):
-		name_row, name_column = [], []
-		self.blockSignals(True)
-
-		# - Populate
-		for n, layer in enumerate(sorted(data.keys())):
-			name_row.append(layer)
-
-			for m, key in enumerate(sorted(data[layer].keys())):
-				name_column.append(key)
-				newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
-				self.setItem(n, m, newitem)
-				
-		self.setHorizontalHeaderLabels(name_column)
-		self.setVerticalHeaderLabels(name_row)
-		self.blockSignals(False)
-
-	def getTable(self):
-		returnDict = {}
-		for row in range(self.rowCount):
-			returnDict[self.verticalHeaderItem(row).text()] = {self.horizontalHeaderItem(col).text():float(self.item(row, col).text()) for col in range(self.columnCount)}
-
-		return returnDict
-
-	def markChange(self, item):
-		item.setBackground(QtGui.QColor('powderblue'))
-
 class WFontMetrics(QtGui.QWidget):
 	def __init__(self, parentWidget):
 		super(WFontMetrics, self).__init__()
@@ -107,7 +62,7 @@ class WFontMetrics(QtGui.QWidget):
 		self.btn_save.clicked.connect(self.exportMetrics)
 		self.btn_open.clicked.connect(self.importMetrics)
 
-		self.tab_fontMetrics = WTableView(self.metricData)
+		self.tab_fontMetrics = trTableView(self.metricData)
 
 		# - Build
 		lbl_name = QtGui.QLabel('Font Metrics (All Masters)')
@@ -167,6 +122,7 @@ class WTreeWidget(QtGui.QTreeWidget):
 		super(WTreeWidget, self).__init__()
 		
 		# - Init
+
 		# - Set 
 		self.setTree(data)	
 		self.itemChanged.connect(self.markChange)	
@@ -202,8 +158,7 @@ class WTreeWidget(QtGui.QTreeWidget):
 
 	def markChange(self, item):
 		item.setText(0, ('B: %s', 'T: %s')[float(item.text(2)) > 0] %item.text(1))
-		for col in range(item.columnCount()):
-			
+		for col in range(item.columnCount()):			
 			item.setBackground(col, QtGui.QColor('powderblue'))
 
 class WFontZones(QtGui.QWidget):
