@@ -301,7 +301,7 @@ class QlayerTools(QtGui.QVBoxLayout):
 		if cleanDST:
 			pass
 
-		self.glyph.layer(dstLayerName).appendGuidelines(self.glyph.guidelines(srcLayerName))
+		glyph.layer(dstLayerName).appendGuidelines(glyph.guidelines(srcLayerName))
 
 	def Copy_Paste_Layer_Anchors(self, glyph, layerName, copy=True, cleanDST=False, impSRC=[]):
 		srcLayerName = layerName if copy else None # Note: None refers to activeLayer
@@ -315,11 +315,11 @@ class QlayerTools(QtGui.QVBoxLayout):
 		if cleanDST:
 			exportDSTAnchors = glyph.anchors(dstLayerName)
 
-			for anchor in self.glyph.anchors(dstLayerName):
-					self.glyph.layer(dstLayerName).removeAnchor(anchor)
+			for anchor in glyph.anchors(dstLayerName):
+					glyph.layer(dstLayerName).removeAnchor(anchor)
 
 		for anchor in srcAnchors:
-				self.glyph.anchors(dstLayerName).append(anchor)
+				glyph.anchors(dstLayerName).append(anchor)
 
 		return exportDSTAnchors
 
