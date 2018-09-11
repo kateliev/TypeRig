@@ -101,12 +101,12 @@ class trTableView(QtGui.QTableWidget):
 		self.setRowCount(len(data.keys()))
 
 		# - Populate
-		for n, layer in enumerate(sorted(data.keys())):
-			name_row.append(layer)
-
-			for m, key in enumerate(sorted(data[layer].keys())):
+		for n, value in enumerate(sorted(data.keys())):
+			name_row.append(value)
+			
+			for m, key in enumerate(sorted(data[value].keys())):
 				name_column.append(key)
-				newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
+				newitem = QtGui.QTableWidgetItem(str(data[value][key]))
 				self.setItem(n, m, newitem)
 				
 		self.setHorizontalHeaderLabels(name_column)

@@ -1,4 +1,4 @@
-#FLM: TAB Contour Nodes
+#FLM: TAB Outline
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -17,7 +17,7 @@ from typerig.gui import trTableView
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Contours', '0.01'
+app_name, app_version = 'TypeRig | Outline', '0.01'
 
 # - Sub widgets ------------------------
 class QContourSelect(QtGui.QVBoxLayout):
@@ -25,54 +25,59 @@ class QContourSelect(QtGui.QVBoxLayout):
 	def __init__(self):
 		super(QContourSelect, self).__init__()
 
-		# - Init
-		empyTable = {0:{item:None for item in 'Shape,Contour,X,Y,Type'.split(',')}}
+		# -- Init
+		self.table_dict = {0:{0:None}} # Empty table
+		self.table_columns = 'Shape,Contour,X,Y,Type'.split(',')
 
-		# -- Head
+		# -- Widgets
 		self.lay_head = QtGui.QHBoxLayout()
+		
 		self.edt_glyphName = QtGui.QLineEdit()
+		
 		self.btn_refresh = QtGui.QPushButton('&Refresh')
 		self.btn_refresh.clicked.connect(self.refresh)
 
+		# -- Build Layout
 		self.lay_head.addWidget(QtGui.QLabel('G:'))
 		self.lay_head.addWidget(self.edt_glyphName)
 		self.lay_head.addWidget(self.btn_refresh)
 		self.addLayout(self.lay_head)
 
-		# -- Node List
-		self.tab_nodes = trTableView(empyTable)
+		# -- Node List Table
+		self.tab_nodes = trTableView(self.table_dict)
 		
 		self.addWidget(self.tab_nodes)
-		self.refresh()
+		self.refresh() # Build Table
 
-		self.tab_nodes.resizeColumnsToContents()
+		# -- Table Styling
 		self.tab_nodes.horizontalHeader().setStretchLastSection(False)
+		self.tab_nodes.resizeColumnsToContents()
 
 	def refresh(self):
 		# - Init
 		self.glyph = eGlyph()
 		self.edt_glyphName.setText(eGlyph().name)
-		
-		nodeTable = {}
+				
+		self.table_dict = {}
 		node_count = 0
 
 		# - Populate
 		for sID, shape in enumerate(self.glyph.shapes()):
 			for cID, contour in enumerate(shape.contours):
 				for nID, node in enumerate(contour.nodes()):
-					nodeTable[node_count] = dict(zip('Shape,Contour,X,Y,Type'.split(','), [sID, cID, round(node.x, 2), round(node.y,2), node.type]))
+					
+					table_values = [sID, cID, round(node.x, 2), round(node.y, 2), node.type]
+					
+					self.table_dict[node_count] = dict(zip(self.table_columns, table_values))
 					node_count += 1
 		
-		self.tab_nodes.setTable(nodeTable)
+		self.tab_nodes.setTable(self.table_dict)
 		
-			
-
 	def doCheck(self):
 		if self.glyph.fg.id != fl6.CurrentGlyph().id and self.glyph.fl.name != fl6.CurrentGlyph().name:
 			print '\nERRO:\tGlyph mismatch:\n\tCurrent active glyph: %s\n\tLayers panel glyph: %s' %(fl6.CurrentGlyph(), self.glyph.fg)
 			print 'WARN:\tNo action taken! Forcing refresh!' 
 			self.refresh()
-			#raise Exception('Glyph mismatch')
 			return 0
 		return 1
 
