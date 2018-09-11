@@ -78,7 +78,7 @@ class trSliderCtrl(QtGui.QGridLayout):
 class trTableView(QtGui.QTableWidget):
 	def __init__(self, data):
 		super(trTableView, self).__init__()
-		
+				
 		# - Init
 		self.flag_valueChanged = QtGui.QColor('powderblue')
 
@@ -90,10 +90,11 @@ class trTableView(QtGui.QTableWidget):
 		self.horizontalHeader().setStretchLastSection(True)
 		self.setAlternatingRowColors(True)
 		self.setShowGrid(False)
+		self.setSortingEnabled(False)
 		#self.resizeColumnsToContents()
 		self.resizeRowsToContents()
 
-	def setTable(self, data, reset=False):
+	def setTable(self, data, sortData=(True,True)):
 		name_row, name_column = [], []
 		self.blockSignals(True)
 
@@ -101,14 +102,21 @@ class trTableView(QtGui.QTableWidget):
 		self.setRowCount(len(data.keys()))
 
 		# - Populate
-		for n, value in enumerate(sorted(data.keys())):
+		for n, value in enumerate(sorted(data.keys()) if sortData[0] else data.keys() ):
 			name_row.append(value)
 			
-			for m, key in enumerate(sorted(data[value].keys())):
+			for m, key in enumerate(sorted(data[value].keys()) if sortData[1] else data[value].keys()):
 				name_column.append(key)
-				newitem = QtGui.QTableWidgetItem(str(data[value][key]))
-				self.setItem(n, m, newitem)
+				rowData = data[value][key]
 				
+				if isinstance(rowData, basestring):
+					newitem = QtGui.QTableWidgetItem(str(rowData))
+				else:
+					newitem = QtGui.QTableWidgetItem()
+					newitem.setData(QtCore.Qt.EditRole, rowData)
+									
+				self.setItem(n, m, newitem)
+
 		self.setHorizontalHeaderLabels(name_column)
 		self.setVerticalHeaderLabels(name_row)
 		self.blockSignals(False)
