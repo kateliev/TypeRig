@@ -12,13 +12,14 @@ import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore, QtGui
 from typerig.glyph import eGlyph
+from typerig.node import eNode
 from typerig.gui import trTableView
 from collections import OrderedDict
 
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Outline', '0.01'
+app_name, app_version = 'TypeRig | Outline', '0.02'
 
 # - Sub widgets ------------------------
 class QContourSelect(QtGui.QVBoxLayout):
@@ -29,7 +30,8 @@ class QContourSelect(QtGui.QVBoxLayout):
 		# -- Init
 		self.table_dict = {0:{0:None}} # Empty table
 		self.layer_names = [] # Empty layer list
-		self.table_columns = 'N,Shape,Contour,X,Y,Type'.split(',')
+		#self.table_columns = 'N,Shape,Contour,X,Y,Type,Relative'.split(',')
+		self.table_columns = 'N,Sh,Cn,X,Y,Type,Rel'.split(',')
 
 		# -- Widgets
 		self.lay_head = QtGui.QGridLayout()
@@ -65,6 +67,7 @@ class QContourSelect(QtGui.QVBoxLayout):
 		self.tab_nodes.verticalHeader().hide()
 		self.tab_nodes.resizeColumnsToContents()
 		self.tab_nodes.selectionModel().selectionChanged.connect(self.selectionChanged)
+		self.tab_nodes.itemChanged.connect(self.valueChanged)
 
 	def refresh(self, layer=None):
 		# - Init
@@ -87,7 +90,7 @@ class QContourSelect(QtGui.QVBoxLayout):
 				for cID, contour in enumerate(shape.contours):
 					for nID, node in enumerate(contour.nodes()):
 						
-						table_values = [node_count,sID, cID, round(node.x, 2), round(node.y, 2), node.type]
+						table_values = [node_count, sID, cID, round(node.x, 2), round(node.y, 2), node.type, round(eNode(node).distanceToPrev(),2)]
 						
 						self.table_dict[node_count] = OrderedDict(zip(self.table_columns, table_values))
 						node_count += 1
@@ -111,8 +114,40 @@ class QContourSelect(QtGui.QVBoxLayout):
 			self.refresh(self.cmb_layer.currentText)
 
 	def selectionChanged(self):
+		# - Prepare
+		self.glyph.fl.unselectAllNodes()
+
+		# - Process
 		for cel_coords in self.tab_nodes.selectionModel().selectedIndexes:
-			print self.tab_nodes.item(cel_coords.row(), cel_coords.column()).text()
+			#print self.tab_nodes.item(cel_coords.row(), cel_coords.column()).text()
+			selected_nid = int(self.tab_nodes.item(cel_coords.row(), 0).text())
+			self.glyph.nodes(self.cmb_layer.currentText)[selected_nid].selected = True
+		
+		# - Finish
+		self.glyph.updateObject(self.glyph.fl, verbose=False)
+
+	def valueChanged(self, item):
+		#print item.text(), item.row()
+
+		# - Init
+		x_col, y_col = self.table_columns.index('X'), self.table_columns.index('Y')
+		active_nid = int(self.tab_nodes.item(item.row(), 0).text())
+
+		# - Process
+		if item.column() == x_col or item.column() == y_col:
+			new_x = float(self.tab_nodes.item(item.row(), x_col).text())
+			new_y = float(self.tab_nodes.item(item.row(), y_col).text())
+
+			active_node = eNode(self.glyph.nodes(self.cmb_layer.currentText)[active_nid])
+			active_node.reloc(new_x, new_y)
+
+			# -- Finish
+			self.glyph.update()
+			self.glyph.updateObject(self.glyph.fl, verbose=False)
+
+			
+		
+
 
 		
 # - Tabs -------------------------------

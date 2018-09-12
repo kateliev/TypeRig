@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.41
+# VER 	: 0.42
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -116,6 +116,18 @@ class pNode(object):
 
 	def getContour(self):
 		return self.fl.contour
+
+	def distanceTo(self, node):
+		if isinstance(node, self.__class__):
+			return self.fl.distanceTo(node.fl.position)
+		else:
+			return self.fl.distanceTo(node.position)
+
+	def distanceToNext(self):
+		return self.fl.distanceTo(self.getNext().position)
+
+	def distanceToPrev(self):
+		return self.fl.distanceTo(self.getPrev().position)
 
 	def insertAfter(self, time):
 		self.contour.insertNodeTo(self.getTime() + time)
