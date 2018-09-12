@@ -36,12 +36,9 @@ class QContourSelect(QtGui.QVBoxLayout):
 		
 		self.edt_glyphName = QtGui.QLineEdit()
 		self.cmb_layer = QtGui.QComboBox()
-		self.cmb_layer.currentIndexChanged.connect(self.changeLayer)
-
-		
+			
 		self.btn_refresh = QtGui.QPushButton('&Refresh')
 		self.btn_apply = QtGui.QPushButton('&Apply')
-		self.btn_refresh.clicked.connect(self.refresh)
 
 		# -- Build Layout
 		self.lay_head.addWidget(QtGui.QLabel('G:'),	0,0,1,1)
@@ -50,7 +47,6 @@ class QContourSelect(QtGui.QVBoxLayout):
 		self.lay_head.addWidget(QtGui.QLabel('L:'),	1,0,1,1)
 		self.lay_head.addWidget(self.cmb_layer,		1,1,1,5)
 		self.lay_head.addWidget(self.btn_apply,		1,6,1,2)
-
 		self.addLayout(self.lay_head)
 
 		# -- Node List Table
@@ -59,12 +55,16 @@ class QContourSelect(QtGui.QVBoxLayout):
 		self.addWidget(self.tab_nodes)
 		self.refresh() # Build Table
 
+		self.btn_refresh.clicked.connect(lambda: self.refresh())
+		self.cmb_layer.currentIndexChanged.connect(lambda: self.changeLayer())
+
 		# -- Table Styling
 		self.tab_nodes.horizontalHeader().setStretchLastSection(False)
 		self.tab_nodes.setSortingEnabled(True)
 		self.tab_nodes.horizontalHeader().sortIndicatorChanged.connect(lambda: self.tab_nodes.resizeColumnsToContents())
 		self.tab_nodes.verticalHeader().hide()
 		self.tab_nodes.resizeColumnsToContents()
+		self.tab_nodes.selectionModel().selectionChanged.connect(self.selectionChanged)
 
 	def refresh(self, layer=None):
 		# - Init
@@ -76,25 +76,27 @@ class QContourSelect(QtGui.QVBoxLayout):
 
 		# - Populate layers
 		if layer is None:
-			self.layer_names = [item.name for item in self.glyph.layers()]
+			self.layer_names = [item.name for item in self.glyph.layers() if '#' not in item.name]
 			self.cmb_layer.clear()
 			self.cmb_layer.addItems(self.layer_names)
-
-		if len(self.layer_names):
-			self.cmb_layer.setCurrentIndex(self.layer_names.index(self.glyph.activeLayer().name))
-
+			self.cmb_layer.setCurrentIndex(self.layer_names.index(self.glyph.activeLayer().name))			
+			
 		# - Populate table
-		for sID, shape in enumerate(self.glyph.shapes(layer)):
-			for cID, contour in enumerate(shape.contours):
-				for nID, node in enumerate(contour.nodes()):
-					
-					table_values = [node_count,sID, cID, round(node.x, 2), round(node.y, 2), node.type]
-					
-					self.table_dict[node_count] = OrderedDict(zip(self.table_columns, table_values))
-					node_count += 1
+		try: # Dirty Quick Fix - Solve later
+			for sID, shape in enumerate(self.glyph.shapes(layer)):
+				for cID, contour in enumerate(shape.contours):
+					for nID, node in enumerate(contour.nodes()):
+						
+						table_values = [node_count,sID, cID, round(node.x, 2), round(node.y, 2), node.type]
+						
+						self.table_dict[node_count] = OrderedDict(zip(self.table_columns, table_values))
+						node_count += 1
+			
+			self.tab_nodes.setTable(self.table_dict, (False, False))
+			self.tab_nodes.resizeColumnsToContents()
 		
-		self.tab_nodes.setTable(self.table_dict, (False, False))
-		self.tab_nodes.resizeColumnsToContents()
+		except AttributeError: 
+			pass
 		
 	def doCheck(self):
 		if self.glyph.fg.id != fl6.CurrentGlyph().id and self.glyph.fl.name != fl6.CurrentGlyph().name:
@@ -108,6 +110,9 @@ class QContourSelect(QtGui.QVBoxLayout):
 		if self.doCheck():
 			self.refresh(self.cmb_layer.currentText)
 
+	def selectionChanged(self):
+		for cel_coords in self.tab_nodes.selectionModel().selectedIndexes:
+			print self.tab_nodes.item(cel_coords.row(), cel_coords.column()).text()
 
 		
 # - Tabs -------------------------------
@@ -133,7 +138,7 @@ class tool_tab(QtGui.QWidget):
 if __name__ == '__main__':
 	test = tool_tab()
 	test.setWindowTitle('%s %s' %(app_name, app_version))
-	test.setGeometry(300, 300, 200, 400)
+	test.setGeometry(300, 300, 300, 600)
 	test.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 	
 	test.show()
