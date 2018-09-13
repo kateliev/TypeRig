@@ -101,13 +101,19 @@ class typerig_Panel(QtGui.QDialog):
 			exec('Panel.%s.pLayers = %s' %(toolName, pLayers))
 
 	def fold(self):
+		# - Init
+		width_all = self.chk_ActiveLayer.sizeHint.width()
+		height_folded = self.chk_ActiveLayer.sizeHint.height() + 15
+		height_expanded = self.tabs.sizeHint.height() + 40 #Fix this! + 40 Added because Nodes tab breaks
+		#self.resize(QtCore,Qsize(width_all, height_folded))
+		
+		# - Do
 		if not self.flag_fold:
 			self.tabs.hide()
-			self.setFixedHeight(self.chk_ActiveLayer.sizeHint.height() + 15)
-			self.repaint()
+			self.setFixedHeight(height_folded)
 			self.flag_fold = True
 		else:
-			self.setFixedHeight(self.tabs.sizeHint.height() + 40) #Fix this! + 40 Added because Nodes tab breaks
+			self.setFixedHeight(height_expanded) 
 			self.tabs.show()
 			self.repaint()
 			self.flag_fold = False
