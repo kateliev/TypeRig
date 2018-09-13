@@ -41,6 +41,7 @@ class QContourSelect(QtGui.QVBoxLayout):
 			
 		self.btn_refresh = QtGui.QPushButton('&Refresh')
 		self.btn_apply = QtGui.QPushButton('&Apply')
+		self.btn_apply.setEnabled(False)
 
 		# -- Build Layout
 		self.lay_head.addWidget(QtGui.QLabel('G:'),	0,0,1,1)
@@ -114,17 +115,19 @@ class QContourSelect(QtGui.QVBoxLayout):
 			self.refresh(self.cmb_layer.currentText)
 
 	def selectionChanged(self):
-		# - Prepare
-		self.glyph.fl.unselectAllNodes()
+		if self.doCheck():	
+			if self.cmb_layer.currentText == self.glyph.activeLayer().name:
+				# - Prepare
+				self.glyph.fl.unselectAllNodes()
 
-		# - Process
-		for cel_coords in self.tab_nodes.selectionModel().selectedIndexes:
-			#print self.tab_nodes.item(cel_coords.row(), cel_coords.column()).text()
-			selected_nid = int(self.tab_nodes.item(cel_coords.row(), 0).text())
-			self.glyph.nodes(self.cmb_layer.currentText)[selected_nid].selected = True
-		
-		# - Finish
-		self.glyph.updateObject(self.glyph.fl, verbose=False)
+				# - Process
+				for cel_coords in self.tab_nodes.selectionModel().selectedIndexes:
+					#print self.tab_nodes.item(cel_coords.row(), cel_coords.column()).text()
+					selected_nid = int(self.tab_nodes.item(cel_coords.row(), 0).text())
+					self.glyph.nodes(self.cmb_layer.currentText)[selected_nid].selected = True
+				
+				# - Finish
+				self.glyph.updateObject(self.glyph.fl, verbose=False)
 
 	def valueChanged(self, item):
 		if self.doCheck():
