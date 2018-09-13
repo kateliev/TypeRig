@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.47'
+app_name, app_version = 'TypeRig | Nodes', '0.48'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -176,6 +176,8 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toCapsHeight = QtGui.QPushButton('Caps')
 		self.btn_toDescender = QtGui.QPushButton('Desc.')
 		self.btn_toXHeight = QtGui.QPushButton('X Hgt.')
+		self.btn_toBaseline = QtGui.QPushButton('Base')
+		self.btn_toGuide = QtGui.QPushButton('Guide')
 		self.btn_solveY = QtGui.QPushButton('Lineup Min/Max Y')
 		self.btn_solveX = QtGui.QPushButton('Lineup Min/Max X')
 		self.btn_copy = QtGui.QPushButton('Copy Slope')
@@ -191,6 +193,8 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_italic.setCheckable(True)
 		self.btn_italic.setChecked(False)
 
+		self.btn_toGuide.setEnabled(False)
+
 		self.btn_solveY.setToolTip('Channel Process selected nodes according to Y values')
 		self.btn_solveX.setToolTip('Channel Process selected nodes according to X values')
 		self.btn_copy.setToolTip('Copy slope between lowest and highest of selected nodes.')
@@ -203,6 +207,8 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toCapsHeight.setToolTip('Send selected nodes to Caps Height.')
 		self.btn_toDescender.setToolTip('Send selected nodes to Descender height.')
 		self.btn_toXHeight.setToolTip('Send selected nodes to X Height.')
+		self.btn_toBaseline.setToolTip('Send selected nodes to Baseline.')
+		self.btn_toGuide.setToolTip('Send selected nodes to Tagged Guideline.')
 
 		self.btn_left.setMinimumWidth(40)
 		self.btn_right.setMinimumWidth(40)
@@ -236,8 +242,14 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toCapsHeight.clicked.connect(lambda: self.alignNodes('FontMetrics_1'))
 		self.btn_toDescender.clicked.connect(lambda: self.alignNodes('FontMetrics_2'))
 		self.btn_toXHeight.clicked.connect(lambda: self.alignNodes('FontMetrics_3'))
+		self.btn_toBaseline.clicked.connect(lambda: self.alignNodes('FontMetrics_4'))
+
+		# - Line Edit
+		self.edt_toGuide = QtGui.QLineEdit()
+		self.edt_toGuide.setPlaceholderText('Guideline Tag')
+		self.edt_toGuide.setEnabled(False)
 				
-		
+		# - Build Layout
 		self.addWidget(self.btn_left, 			0,0)
 		self.addWidget(self.btn_right, 			0,1)
 		self.addWidget(self.btn_top, 			0,2)
@@ -251,15 +263,18 @@ class alignNodes(QtGui.QGridLayout):
 		self.addWidget(self.btn_toCapsHeight,	4,1)
 		self.addWidget(self.btn_toDescender,	4,2)
 		self.addWidget(self.btn_toXHeight,		4,3)
-		self.addWidget(QtGui.QLabel('Channel processing and slopes'), 5,0,1,4)
-		self.addWidget(self.btn_solveY, 		6,0,1,2)
-		self.addWidget(self.btn_solveX, 		6,2,1,2)
-		self.addWidget(self.btn_copy,			7,0,1,3)
-		self.addWidget(self.btn_italic,			7,3,1,1)
-		self.addWidget(self.btn_pasteMinY,		8,0,1,1)
-		self.addWidget(self.btn_pasteMaxY,		8,1,1,1)
-		self.addWidget(self.btn_pasteFMinY,		8,2,1,1)
-		self.addWidget(self.btn_pasteFMaxY,		8,3,1,1)
+		self.addWidget(self.btn_toBaseline,		5,0)
+		self.addWidget(self.edt_toGuide,		5,1,1,2)
+		self.addWidget(self.btn_toGuide,		5,3)
+		self.addWidget(QtGui.QLabel('Channel processing and slopes'), 6,0,1,4)
+		self.addWidget(self.btn_solveY, 		7,0,1,2)
+		self.addWidget(self.btn_solveX, 		7,2,1,2)
+		self.addWidget(self.btn_copy,			8,0,1,3)
+		self.addWidget(self.btn_italic,			8,3,1,1)
+		self.addWidget(self.btn_pasteMinY,		9,0,1,1)
+		self.addWidget(self.btn_pasteMaxY,		9,1,1,1)
+		self.addWidget(self.btn_pasteFMinY,		9,2,1,1)
+		self.addWidget(self.btn_pasteFMaxY,		9,3,1,1)
 
 	def copySlope(self):
 		from typerig.brain import Line
@@ -389,6 +404,8 @@ class alignNodes(QtGui.QGridLayout):
 					newY = layerMetrics.descender
 				elif '3' in mode:
 					newY = layerMetrics.xHeight
+				elif '4' in mode:
+					newY = 0
 
 			for node in selection:
 				if 'FontMetrics' in mode:
