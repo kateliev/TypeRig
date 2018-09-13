@@ -129,22 +129,25 @@ class QContourSelect(QtGui.QVBoxLayout):
 	def valueChanged(self, item):
 		if self.doCheck():
 			#print item.text(), item.row()
+			try: # Dirty Quick Fix - Solve later
+				# - Init
+				x_col, y_col = self.table_columns.index('X'), self.table_columns.index('Y')
+				active_nid = int(self.tab_nodes.item(item.row(), 0).text())
 
-			# - Init
-			x_col, y_col = self.table_columns.index('X'), self.table_columns.index('Y')
-			active_nid = int(self.tab_nodes.item(item.row(), 0).text())
+				# - Process
+				if item.column() == x_col or item.column() == y_col:
+					new_x = float(self.tab_nodes.item(item.row(), x_col).text())
+					new_y = float(self.tab_nodes.item(item.row(), y_col).text())
 
-			# - Process
-			if item.column() == x_col or item.column() == y_col:
-				new_x = float(self.tab_nodes.item(item.row(), x_col).text())
-				new_y = float(self.tab_nodes.item(item.row(), y_col).text())
+					active_node = eNode(self.glyph.nodes(self.cmb_layer.currentText)[active_nid])
+					active_node.reloc(new_x, new_y)
 
-				active_node = eNode(self.glyph.nodes(self.cmb_layer.currentText)[active_nid])
-				active_node.reloc(new_x, new_y)
-
-				# -- Finish
-				self.glyph.update()
-				self.glyph.updateObject(self.glyph.fl, verbose=False)
+					# -- Finish
+					self.glyph.update()
+					self.glyph.updateObject(self.glyph.fl, verbose=False)
+			
+			except AttributeError:
+				pass
 
 			
 		
