@@ -19,7 +19,7 @@ from collections import OrderedDict
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Outline', '0.02'
+app_name, app_version = 'TypeRig | Outline', '0.03'
 
 # - Sub widgets ------------------------
 class QContourSelect(QtGui.QVBoxLayout):
@@ -127,23 +127,24 @@ class QContourSelect(QtGui.QVBoxLayout):
 		self.glyph.updateObject(self.glyph.fl, verbose=False)
 
 	def valueChanged(self, item):
-		#print item.text(), item.row()
+		if self.doCheck():
+			#print item.text(), item.row()
 
-		# - Init
-		x_col, y_col = self.table_columns.index('X'), self.table_columns.index('Y')
-		active_nid = int(self.tab_nodes.item(item.row(), 0).text())
+			# - Init
+			x_col, y_col = self.table_columns.index('X'), self.table_columns.index('Y')
+			active_nid = int(self.tab_nodes.item(item.row(), 0).text())
 
-		# - Process
-		if item.column() == x_col or item.column() == y_col:
-			new_x = float(self.tab_nodes.item(item.row(), x_col).text())
-			new_y = float(self.tab_nodes.item(item.row(), y_col).text())
+			# - Process
+			if item.column() == x_col or item.column() == y_col:
+				new_x = float(self.tab_nodes.item(item.row(), x_col).text())
+				new_y = float(self.tab_nodes.item(item.row(), y_col).text())
 
-			active_node = eNode(self.glyph.nodes(self.cmb_layer.currentText)[active_nid])
-			active_node.reloc(new_x, new_y)
+				active_node = eNode(self.glyph.nodes(self.cmb_layer.currentText)[active_nid])
+				active_node.reloc(new_x, new_y)
 
-			# -- Finish
-			self.glyph.update()
-			self.glyph.updateObject(self.glyph.fl, verbose=False)
+				# -- Finish
+				self.glyph.update()
+				self.glyph.updateObject(self.glyph.fl, verbose=False)
 
 			
 		
