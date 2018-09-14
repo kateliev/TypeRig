@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.42
+# VER 	: 0.43
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -43,6 +43,88 @@ class pWorkspace(object):
 
 	def getTextBlockGlyphs(self, tbi=0):
 		return [info.glyph for info in self.getTextBlockList()[tbi].getAllGlyphs()]
+
+class pTextBlock(object):
+	'''Proxy to flTextBlock object
+
+	Constructor:
+		pTextBlock(flTextBlock)
+
+	Attributes:
+		.fl (flTextBlock): flTextBlock Parent		
+	'''
+
+	def __init__(self, textBlock):
+		self.fl = textBlock
+		self.fontSize = self.getFontSize()
+		self.textFrame = self.getFrameSize()
+		self.textWarp = self.getWrapState()
+		
+		# - Page Sizes: in Pixels 72 DPI (EQ to points) and  *.96 DPI
+		self.pageSizes = { 
+							'Letter':(612, 792),
+							'Tabloid':(792, 1224), 
+							'Ledger':(1224, 792), 
+							'Legal':(612, 1008), 
+							'Statement':(396, 612), 
+							'Executive':(540, 720), 
+							'A0':(2384, 3371), 
+							'A1':(1685, 2384), 
+							'A2':(1190, 1684), 
+							'A3':(842, 1190), 
+							'A4':(595, 842), 
+							'A5':(420, 595), 
+							'B4':(729, 1032), 
+							'B5':(516, 729), 
+							'Folio':(612, 936), 
+							'Quarto':(610, 780),
+							'A0.96':(3179, 4494),
+							'A1.96':(2245, 3179),
+							'A2.96':(1587, 2245),
+							'A3.96':(1123, 1587),
+							'A4.96':(794, 1123),
+							'A5.96':(559, 794),
+							'A6.96':(397, 559),
+							'A7.96':(280, 397),
+							'A8.96':(197, 280),
+							'A9.96':(140, 197)
+						}
+
+	def getFontSize(self):
+		return self.fl.fontSize
+
+	def setFontSize(self, fontSize):
+		self.fl.fontSize = fontSize
+		return self.update()
+
+	def getFrameSize(self):
+		return self.fl.frameRect
+
+	def setFrameSize(self, width, height):
+		self.fl.setFrameSize(pqt.QtCore.QSizeF(width, height))
+
+	def setPageSize(self, sizeName, fixedHeight=(True, True)):
+		self.setFrameSize(*self.pageSizes[sizeName])
+		self.setWrapState(True)
+		self.fl.setFixedHeight(*fixedHeight)
+		return self.update()
+
+	def setFrameWidth(self, width):
+		self.fl.setFrameWidth(width)
+
+	def setTextWrap(self, width):
+		self.setFrameWidth(width)
+		self.setWrapState(True)
+		return self.update()
+
+	def getWrapState(self):
+		return self.fl.formatMode
+
+	def setWrapState(self, wrapText=True):
+		self.fl.formatMode = wrapText 
+
+	def update(self):
+		return self.fl.update()
 
 class pNode(object):
 	'''Proxy to flNode object
