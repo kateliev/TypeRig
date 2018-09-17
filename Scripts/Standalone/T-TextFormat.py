@@ -16,7 +16,7 @@ from PythonQt import QtCore, QtGui
 from typerig.proxy import pWorkspace, pTextBlock
 
 # - Init --------------------------------
-app_version = '0.01'
+app_version = '0.02'
 app_name = 'Text Block Control'
 text_align = 'Left Right Center'.split(' ')
 
@@ -39,6 +39,10 @@ class dlg_textFormat(QtGui.QDialog):
 		self.cmb_pageSizes.addItems(sorted(self.active_textBlock.pageSizes.keys()))
 		self.cmb_text_align.addItems(text_align)
 
+		self.cmb_textBox.currentIndexChanged.connect(self.box_changed)
+		self.cmb_pageSizes.currentTextChanged.connect(self.page_changed)
+		self.cmb_text_align.currentTextChanged.connect(self.algn_changed)
+
 		self.spb_font_size = QtGui.QSpinBox()
 		self.spb_font_size.setSuffix(' pt')
 		self.spb_font_size.setValue(12)
@@ -46,9 +50,7 @@ class dlg_textFormat(QtGui.QDialog):
 		self.spb_size_w = QtGui.QSpinBox()
 		self.spb_size_h = QtGui.QSpinBox()
 		self.spb_size_w.setMaximum(9999)
-		#self.spb_size_w.setSuffix(' px')
 		self.spb_size_h.setMaximum(9999)
-		#self.spb_size_h.setSuffix(' px')
 		self.spb_size_w.setValue(self.active_textBlock.pageSizes[self.cmb_pageSizes.currentText][0])
 		self.spb_size_h.setValue(self.active_textBlock.pageSizes[self.cmb_pageSizes.currentText][1])
 
@@ -57,7 +59,9 @@ class dlg_textFormat(QtGui.QDialog):
 
 		self.btn_refresh = QtGui.QPushButton('Refresh')
 		self.btn_apply = QtGui.QPushButton('Set Text Box')
-		#self.btn_apply.clicked.connect(self.applyTransform)
+		
+		self.btn_apply.clicked.connect(self.box_apply)
+		self.btn_refresh.clicked.connect(self.box_refresh)
 		
 		# - Build layouts 
 		layoutV = QtGui.QGridLayout() 
@@ -82,6 +86,32 @@ class dlg_textFormat(QtGui.QDialog):
 		self.setGeometry(300, 300, 220, 120)
 		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 		self.show()
+
+	def box_changed(self, value):
+		self.active_textBlock = pTextBlock(self.active_workspace.getTextBlockList()[value])
+
+	def page_changed(self):
+		self.spb_size_w.setValue(self.active_textBlock.pageSizes[self.cmb_pageSizes.currentText][0])
+		self.spb_size_h.setValue(self.active_textBlock.pageSizes[self.cmb_pageSizes.currentText][1])
+
+	def algn_changed(self,value):
+		pass
+
+	def box_refresh(self):
+		self.cmb_textBox.clear()
+		self.cmb_textBox.addItems([tb.id for tb in self.active_workspace.getTextBlockList()])
+
+	def box_apply(self):
+		self.active_textBlock.setFrameSize(self.spb_size_w.value, self.spb_size_h.value)
+		self.active_textBlock.setWrapState()
+		self.active_textBlock.fl.setFixedHeight(True, True)
+		self.active_textBlock.setFontSize(self.spb_font_size.value)
+		self.active_textBlock.update()
+
+
+
+
+
 
 	
 
