@@ -124,8 +124,8 @@ class pTextBlock(object):
 		self.fl.formatMode = wrapText 
 
 	def update(self):
-		self.fl.reformat()
-		self.fl.formatChanged()
+		#self.fl.reformat()
+		#self.fl.formatChanged()
 		return self.fl.update()
 
 	def clone(self):
@@ -156,15 +156,16 @@ class pTextBlock(object):
 		return self.fl.frameRect.height()
 
 	def reloc(self, x, y):
-		'''
 		oldTM = self.fl.transform
 		newTM = pqt.QtGui.QTransform(oldTM.m11(), oldTM.m12(), oldTM.m13(), oldTM.m21(), oldTM.m22(), oldTM.m23(), float(x), float(y), oldTM.m33())
 		self.setTransform(newTM)
+		
 		'''
 		frame = self.getFrameSize()
 		frame.setX(x)
 		frame.setY(y)
 		self.fl.frameRect = frame
+		'''
 		self.update()
 
 	def __repr__(self):

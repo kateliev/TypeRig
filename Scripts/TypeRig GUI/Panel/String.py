@@ -10,6 +10,7 @@
 # - Init
 app_name, app_version = 'TypeRig | String', '0.20'
 glyphSep = '/'
+joinOpt = {'Empty':'', 'Newline':'\n'}
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -34,6 +35,7 @@ class QStringGen(QtGui.QGridLayout):
 		self.edt_fillerRight = QtGui.QLineEdit()
 		self.edt_fillerPattern = QtGui.QLineEdit()
 		self.edt_output = QtGui.QTextEdit()
+		self.edt_sep = QtGui.QLineEdit()
 
 		self.edt_inputA.setToolTip('Manual Glyph names input. [SPACE] delimited.\nNOTE: This field overrides the input combo box!')
 		self.edt_inputB.setToolTip('Manual Glyph names input. [SPACE] delimited.\nNOTE: This field overrides the input combo box!')
@@ -44,6 +46,7 @@ class QStringGen(QtGui.QGridLayout):
 		self.edt_fillerPattern.setToolTip('Generator pattern expression.\n<< Filed names >> in any order, [SPACE] separated.')
 		
 		self.edt_fillerPattern.setText('FL A B A FR')
+		self.edt_sep.setText('/')
 
 		#self.edt_inputA.setEnabled(False)
 		#self.edt_inputB.setEnabled(False)
@@ -54,11 +57,16 @@ class QStringGen(QtGui.QGridLayout):
 		self.cmb_inputB = QtGui.QComboBox()
 		self.cmb_fillerLeft = QtGui.QComboBox()
 		self.cmb_fillerRight = QtGui.QComboBox()
+		self.cmb_join = QtGui.QComboBox()
+
+		self.cmb_join.addItems(joinOpt.keys())
 
 		self.cmb_inputA.setToolTip('Glyph names list.')
 		self.cmb_inputB.setToolTip('Glyph names list.')
 		self.cmb_fillerLeft.setToolTip('Left Filler String.')
 		self.cmb_fillerRight.setToolTip('Right Filler String.')
+		self.cmb_join.setToolTip('Joining method for generated string pairs.')
+		self.edt_sep.setToolTip('Glyph Separator.')
 
 		self.cmb_fillerLeft.addItems(val_fillerLeft)
 		self.cmb_fillerRight.addItems(val_fillerRight)
@@ -94,11 +102,16 @@ class QStringGen(QtGui.QGridLayout):
 		self.addWidget(self.edt_fillerRight, 	5, 6, 1, 3)
 		self.addWidget(QtGui.QLabel('E:'), 		6, 0, 1, 1)
 		self.addWidget(self.edt_fillerPattern, 	6, 1, 1, 8)
-		self.addWidget(self.btn_refresh, 		7, 1, 1, 5)
-		self.addWidget(self.btn_clear, 			7, 6, 1, 3)
-		self.addWidget(self.btn_genCopy, 		8, 1, 1, 8)
-		self.addWidget(QtGui.QLabel('OUT:'), 	9, 0, 1, 1)
-		self.addWidget(self.edt_output, 		9, 1, 4, 8)
+		self.addWidget(QtGui.QLabel('Join:'), 	7, 0, 1, 1)
+		self.addWidget(self.cmb_join, 			7, 1, 1, 5)
+		self.addWidget(QtGui.QLabel('Sep.:'), 	7, 6, 1, 1)
+		self.addWidget(self.edt_sep, 			7, 7, 1, 2)
+		self.addWidget(QtGui.QLabel(''), 		8, 0, 1, 1)
+		self.addWidget(self.btn_refresh, 		9, 1, 1, 5)
+		self.addWidget(self.btn_clear, 			9, 6, 1, 3)
+		self.addWidget(self.btn_genCopy, 		10, 1, 1, 8)
+		self.addWidget(QtGui.QLabel('OUT:'), 	11, 0, 1, 1)
+		self.addWidget(self.edt_output, 		11, 1, 4, 8)
 
 		self.setColumnStretch(0, 0)
 		self.setColumnStretch(1, 2)
@@ -115,6 +128,9 @@ class QStringGen(QtGui.QGridLayout):
 		self.edt_fillerRight.clear()
 		self.edt_output.clear()
 		self.edt_fillerPattern.setText('FL A B A FR')
+		self.edt_sep.setText('/')
+		self.cmb_join.clear()
+		self.cmb_join.addItems(joinOpt.keys())
 
 	def refresh(self):
 		self.font = pFont()
@@ -156,12 +172,12 @@ class QStringGen(QtGui.QGridLayout):
 			fillerRight = self.cmb_fillerRight.currentText
 
 		# - Generate
-		generatedString = stringGen(inputA, inputB, (fillerLeft, fillerRight), self.edt_fillerPattern.text, (self.edt_suffixA.text, self.edt_suffixB.text), glyphSep)
-		self.edt_output.setText('\n'.join(generatedString))
+		generatedString = stringGen(inputA, inputB, (fillerLeft, fillerRight), self.edt_fillerPattern.text, (self.edt_suffixA.text, self.edt_suffixB.text), self.edt_sep.text)
+		self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
 		
 		# - Copy to cliboard
 		clipboard = QtGui.QApplication.clipboard()
-		clipboard.setText('\n'.join(generatedString))
+		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
 		print 'DONE:\t Generated string sent to clipboard.'
 					
 class tool_tab(QtGui.QWidget):

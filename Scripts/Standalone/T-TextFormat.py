@@ -66,6 +66,11 @@ class dlg_textFormat(QtGui.QDialog):
 		self.btn_apply.clicked.connect(self.block_apply)
 		self.btn_refresh.clicked.connect(self.block_refresh)
 		self.btn_waterfall.clicked.connect(self.block_waterfall)
+
+		# - Disable for now
+		self.edt_font_waterfall.setEnabled(False)
+		self.btn_waterfall.setEnabled(False)
+		self.cmb_text_align.setEnabled(False)
 		
 		# - Build layouts 
 		layoutV = QtGui.QGridLayout() 
