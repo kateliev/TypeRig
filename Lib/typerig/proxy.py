@@ -123,6 +123,9 @@ class pTextBlock(object):
 	def setWrapState(self, wrapText=True):
 		self.fl.formatMode = wrapText 
 
+	def getString(self):
+		self.fl.symbolList().string(True)
+
 	def update(self):
 		#self.fl.reformat()
 		#self.fl.formatChanged()
