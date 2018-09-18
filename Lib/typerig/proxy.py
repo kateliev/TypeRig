@@ -124,7 +124,51 @@ class pTextBlock(object):
 		self.fl.formatMode = wrapText 
 
 	def update(self):
+		self.fl.reformat()
+		self.fl.formatChanged()
 		return self.fl.update()
+
+	def clone(self):
+		return self.fl.clone()
+
+	def getTransform(self):
+		return self.fl.transform
+		
+	def setTransform(self, newTransform):
+		self.fl.transform = newTransform
+		self.update()
+
+	def resetTransform(self):
+		oldTransform = self.fl.transform
+		oldTransform.reset()
+		self.setTransform(oldTransform)	
+
+	def x(self):
+		return self.fl.transform.m31()
+
+	def y(self):
+		return self.fl.transform.m32()
+
+	def width(self):
+		return self.fl.frameRect.width()
+
+	def height(self):
+		return self.fl.frameRect.height()
+
+	def reloc(self, x, y):
+		'''
+		oldTM = self.fl.transform
+		newTM = pqt.QtGui.QTransform(oldTM.m11(), oldTM.m12(), oldTM.m13(), oldTM.m21(), oldTM.m22(), oldTM.m23(), float(x), float(y), oldTM.m33())
+		self.setTransform(newTM)
+		'''
+		frame = self.getFrameSize()
+		frame.setX(x)
+		frame.setY(y)
+		self.fl.frameRect = frame
+		self.update()
+
+	def __repr__(self):
+		return '<%s (%s, %s, %s, %s) fontSize=%s glyphs=%s>' % (self.__class__.__name__, self.x(), self.y(), self.width(), self.height(), self.fl.fontSize, self.fl.glyphsCount())	
 
 class pNode(object):
 	'''Proxy to flNode object
