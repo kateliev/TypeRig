@@ -15,7 +15,7 @@ from PythonQt import QtCore, QtGui
 from typerig.proxy import pWorkspace, pTextBlock
 
 # - Init --------------------------------
-app_version = '0.03'
+app_version = '0.04'
 app_name = 'Text Block Control'
 
 text_align = 'Left Right Center'.split(' ')
@@ -89,6 +89,23 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 		self.aux = aux
 
 		# - Widgets
+		self.active_workspace = pWorkspace()
+		self.active_canvas = self.active_workspace.getCanvas() 
+		self.active_textBlock = pTextBlock(self.active_workspace.getTextBlockList()[0])
+
+		# - Widgets
+		self.chk_page = QtGui.QCheckBox('Page size:')
+		self.chk_size = QtGui.QCheckBox('Width/Height:')
+		self.chk_pos = QtGui.QCheckBox('Position X/Y:')
+		self.chk_align = QtGui.QCheckBox('Text alignment:')
+		self.chk_kegel = QtGui.QCheckBox('Font Size:')
+		
+		self.chk_page.setCheckState(QtCore.Qt.Checked)
+		self.chk_size.setCheckState(QtCore.Qt.Checked) 
+		#self.chk_pos.setCheckState(QtCore.Qt.Checked) 
+		#self.chk_align.setCheckState(QtCore.Qt.Checked) 
+		self.chk_kegel.setCheckState(QtCore.Qt.Checked) 
+		
 		self.cmb_pageSizes = QtGui.QComboBox()
 		self.cmb_text_align = QtGui.QComboBox()
 		
@@ -104,33 +121,63 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 
 		self.spb_size_w = QtGui.QSpinBox()
 		self.spb_size_h = QtGui.QSpinBox()
+		self.spb_pos_x = QtGui.QSpinBox()
+		self.spb_pos_y = QtGui.QSpinBox()
+
 		self.spb_size_w.setMaximum(9999)
 		self.spb_size_h.setMaximum(9999)
+		self.spb_pos_x.setMaximum(9999)
+		self.spb_pos_y.setMaximum(9999)
+		self.spb_pos_x.setMinimum(-9999)
+		self.spb_pos_y.setMinimum(-9999)
+
 		self.spb_size_w.setValue(page_sizes[self.cmb_pageSizes.currentText][0])
 		self.spb_size_h.setValue(page_sizes[self.cmb_pageSizes.currentText][1])
 
-		self.spb_y = QtGui.QSpinBox()
-
 		self.btn_apply = QtGui.QPushButton('Set Text Block(s)')
-		
-		self.btn_apply.clicked.connect(self.block_apply)
+		self.btn_clone = QtGui.QPushButton('Clone')
+		self.btn_lock = QtGui.QPushButton('Lock')
+		self.btn_reformat = QtGui.QPushButton('Reformat')
+		self.btn_remove = QtGui.QPushButton('Remove')
+		self.btn_stack_v = QtGui.QPushButton('Stack Vertically')
+		self.btn_stack_h = QtGui.QPushButton('Stack Horizontally')
+
+		self.btn_apply.clicked.connect(lambda: self.block_action('format'))
+		self.btn_clone.clicked.connect(lambda: self.block_action('clone'))
+		self.btn_remove.clicked.connect(lambda: self.block_action('remove'))
+		self.btn_lock.clicked.connect(lambda: self.block_action('lock'))
+		self.btn_reformat.clicked.connect(lambda: self.block_action('reformat'))
+		self.btn_stack_v.clicked.connect(lambda: self.block_action('stack_v'))
+		self.btn_stack_h.clicked.connect(lambda: self.block_action('stack_h'))
 
 		# - Disable for now
 		self.cmb_text_align.setEnabled(False)
+		self.chk_align.setEnabled(False)
 		
 		# - Build layouts 
 		layoutV = QtGui.QGridLayout() 
 		layoutV.addWidget(QtGui.QLabel('Block Formatting'),		0, 0, 1, 4)
-		layoutV.addWidget(QtGui.QLabel('Page Size:'),			1, 0, 1, 2)
-		layoutV.addWidget(self.cmb_pageSizes, 					1, 2, 1, 2)
-		layoutV.addWidget(QtGui.QLabel('Width/Height:'),		2, 0, 1, 2)
-		layoutV.addWidget(self.spb_size_w, 						2, 2, 1, 1)
-		layoutV.addWidget(self.spb_size_h, 						2, 3, 1, 1)
-		layoutV.addWidget(QtGui.QLabel('Text alignment:'),		3, 0, 1, 2)
-		layoutV.addWidget(self.cmb_text_align, 					3, 2, 1, 2)
-		layoutV.addWidget(QtGui.QLabel('Font Size:'),			4, 0, 1, 2)
-		layoutV.addWidget(self.spb_font_size,					4, 2, 1, 2)
-		layoutV.addWidget(self.btn_apply, 						5, 0, 1, 4)
+		layoutV.addWidget(self.chk_page,			1, 0, 1, 2)
+		layoutV.addWidget(self.cmb_pageSizes, 		1, 2, 1, 2)
+		layoutV.addWidget(self.chk_size,			2, 0, 1, 2)
+		layoutV.addWidget(self.spb_size_w, 			2, 2, 1, 1)
+		layoutV.addWidget(self.spb_size_h, 			2, 3, 1, 1)
+		layoutV.addWidget(self.chk_pos,				3, 0, 1, 2)
+		layoutV.addWidget(self.spb_pos_x, 			3, 2, 1, 1)
+		layoutV.addWidget(self.spb_pos_y, 			3, 3, 1, 1)
+		layoutV.addWidget(self.chk_align,			4, 0, 1, 2)
+		layoutV.addWidget(self.cmb_text_align, 		4, 2, 1, 2)
+		layoutV.addWidget(self.chk_kegel,			5, 0, 1, 2)
+		layoutV.addWidget(self.spb_font_size,		5, 2, 1, 2)
+		layoutV.addWidget(self.btn_apply, 			6, 0, 1, 4)
+		layoutV.addWidget(QtGui.QLabel('Block Tools'),		7, 0, 1, 4)
+		layoutV.addWidget(self.btn_clone, 			8, 0, 1, 2)
+		layoutV.addWidget(self.btn_remove, 			8, 2, 1, 2)
+		layoutV.addWidget(self.btn_lock, 			9, 0, 1, 2)
+		layoutV.addWidget(self.btn_reformat, 		9, 2, 1, 2)
+		layoutV.addWidget(self.btn_stack_h, 		10, 0, 1, 2)
+		layoutV.addWidget(self.btn_stack_v, 		10, 2, 1, 2)
+
 
 		# - Set Widget
 		self.addLayout(layoutV)
@@ -142,15 +189,40 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 	def algn_changed(self,value):
 		pass
 
-	def block_apply(self):
+	def block_action(self, mode):
 		for selectedItem in self.aux.lst_textBlocks.selectedIndexes():
-			processBlock = pTextBlock(self.aux.active_textBlockList[selectedItem.row()])
-			processBlock.setFrameSize(self.spb_size_w.value, self.spb_size_h.value)
-			processBlock.setWrapState()
-			processBlock.fl.setFixedHeight(True, True)
-			processBlock.setFontSize(self.spb_font_size.value)
-			processBlock.update()
+			processBlock = self.aux.active_textBlockList[selectedItem.row()]
 
+			if mode == 'format':
+				processBlockAdv = pTextBlock(self.aux.active_textBlockList[selectedItem.row()])
+				
+				if self.chk_size.isChecked(): 
+					processBlockAdv.setFrameSize(self.spb_size_w.value, self.spb_size_h.value)
+					processBlockAdv.setWrapState()
+					processBlockAdv.fl.setFixedHeight(True, True)
+				
+				if self.chk_pos.isChecked(): processBlockAdv.reloc(self.spb_pos_x.value, self.spb_pos_y.value)
+				if self.chk_kegel.isChecked(): processBlockAdv.setFontSize(self.spb_font_size.value)
+				
+				processBlockAdv.update()
+
+			elif mode == 'clone':
+				clonedBlock = processBlock.clone()
+				print processBlock == clonedBlock
+				self.aux.active_canvas.addTextBlock(clonedBlock)
+
+			elif mode == 'remove':
+				self.aux.active_canvas.removeTextBlock(processBlock)
+
+			elif mode == 'lock':
+				processBlock.locked = not processBlock.locked
+				processBlock.update()
+
+			elif mode == 'reformat':
+				processBlock.reformat()
+				processBlock.update()
+
+		self.aux.active_canvas.update()
 		self.aux.refresh()
 		
 # - Tabs -------------------------------

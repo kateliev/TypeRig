@@ -26,11 +26,6 @@ class dlg_textFormat(QtGui.QDialog):
 		super(dlg_textFormat, self).__init__()
 	
 		# - Init
-		self.active_workspace = pWorkspace()
-		self.active_canvas = self.active_workspace.getCanvas() 
-		self.active_textBlock = pTextBlock(self.active_workspace.getTextBlockList()[0])
-
-		# - Widgets
 		self.cmb_textBox = QtGui.QComboBox()
 		self.cmb_pageSizes = QtGui.QComboBox()
 		self.cmb_text_align = QtGui.QComboBox()
