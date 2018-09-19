@@ -8,7 +8,7 @@
 # that you use it at your own risk!
 
 # - Init
-app_name, app_version = 'TypeRig | String', '0.20'
+app_name, app_version = 'TypeRig | String', '0.21'
 glyphSep = '/'
 joinOpt = {'Empty':'', 'Newline':'\n'}
 

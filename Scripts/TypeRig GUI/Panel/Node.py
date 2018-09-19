@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.48'
+app_name, app_version = 'TypeRig | Nodes', '0.49'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -289,7 +289,7 @@ class alignNodes(QtGui.QGridLayout):
 			for layer in wLayers:
 				selection = glyph.selectedNodes(layer)
 				self.copyLine[layer] = Line(selection[0], selection[-1])
-				print self.copyLine[layer].getAngle(), self.copyLine[layer].getSlope()
+				#print self.copyLine[layer].getAngle(), self.copyLine[layer].getSlope()
 		else:
 			self.btn_copy.setText('Copy Slope')
 			self.btn_italic.setChecked(False)
@@ -603,11 +603,12 @@ class convertHobby(QtGui.QHBoxLayout):
 		#fl6.Update(fl6.CurrentGlyph())
 
 class advMovement(QtGui.QVBoxLayout):
-	def __init__(self):
+	def __init__(self, aux):
 		super(advMovement, self).__init__()
 
 		# - Init
-		self.methodList = ['Move', 'Simple Move', 'Interpolated Move', 'Slanted Grid Move']
+		self.aux = aux
+		self.methodList = ['Move', 'Simple Move', 'Interpolated Move', 'Slanted Grid Move', 'Slope walker']
 		
 		# - Methods
 		self.cmb_methodSelector = QtGui.QComboBox()
@@ -716,6 +717,15 @@ class advMovement(QtGui.QVBoxLayout):
 						else:
 							node.smartShift(offset_x, offset_y)
 
+		elif method == self.methodList[4]:			
+			current_layer = glyph.activeLayer().name
+
+			if len(self.aux.copyLine) and current_layer in self.aux.copyLine:
+				for node in selectedNodes:
+					node.slantShift(offset_x, offset_y, -90 + self.aux.copyLine[current_layer].getAngle())				
+			else:
+				print 'ERROR:\tNo slope information for Active layer found!\nNOTE:\tPlease <<Copy Slope>> first using TypeRig Node align toolbox.'
+
 		# - Set Undo
 		glyph.updateObject(glyph.activeLayer(), '%s @ %s.' %(method, glyph.activeLayer().name), verbose=False)
 
@@ -748,7 +758,8 @@ class tool_tab(QtGui.QWidget):
 		layoutV.addLayout(basicOps())
 
 		layoutV.addWidget(QtGui.QLabel('Align nodes'))
-		layoutV.addLayout(alignNodes())
+		self.alignNodes = alignNodes()
+		layoutV.addLayout(self.alignNodes)
 
 		layoutV.addWidget(QtGui.QLabel('Break/Knot Contour'))
 		layoutV.addLayout(breakContour())
@@ -760,7 +771,7 @@ class tool_tab(QtGui.QWidget):
 		#layoutV.addLayout(convertHobby())    
 
 		layoutV.addWidget(QtGui.QLabel('Movement'))
-		self.advMovement = advMovement()
+		self.advMovement = advMovement(self.alignNodes)
 		layoutV.addLayout(self.advMovement)  
 
 		# - Capture Kyaboard

@@ -15,7 +15,7 @@ from PythonQt import QtCore, QtGui
 from typerig.proxy import pWorkspace, pTextBlock
 
 # - Init --------------------------------
-app_version = '0.02'
+app_version = '0.03'
 app_name = 'Text Block Control'
 
 text_align = 'Left Right Center'.split(' ')
