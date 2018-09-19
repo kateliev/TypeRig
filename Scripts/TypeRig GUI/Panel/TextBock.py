@@ -17,14 +17,41 @@ from typerig.proxy import pWorkspace, pTextBlock
 # - Init --------------------------------
 app_version = '0.02'
 app_name = 'Text Block Control'
+
 text_align = 'Left Right Center'.split(' ')
+page_sizes = { 
+			'Letter':(612, 792),
+			'Tabloid':(792, 1224), 
+			'Ledger':(1224, 792), 
+			'Legal':(612, 1008), 
+			'Statement':(396, 612), 
+			'Executive':(540, 720), 
+			'A0':(2384, 3371), 
+			'A1':(1685, 2384), 
+			'A2':(1190, 1684), 
+			'A3':(842, 1190), 
+			'A4':(595, 842), 
+			'A5':(420, 595), 
+			'B4':(729, 1032), 
+			'B5':(516, 729), 
+			'Folio':(612, 936), 
+			'Quarto':(610, 780),
+			'A0.96':(3179, 4494),
+			'A1.96':(2245, 3179),
+			'A2.96':(1587, 2245),
+			'A3.96':(1123, 1587),
+			'A4.96':(794, 1123),
+			'A5.96':(559, 794),
+			'A6.96':(397, 559),
+			'A7.96':(280, 397),
+			'A8.96':(197, 280),
+			'A9.96':(140, 197)
+			}
 
 class QTextBlockSelect(QtGui.QVBoxLayout):
 	# - Split/Break contour 
 	def __init__(self):
 		super(QTextBlockSelect, self).__init__()
-
-		# - Init
 
 		# -- Head
 		self.lay_head = QtGui.QHBoxLayout()
@@ -40,7 +67,6 @@ class QTextBlockSelect(QtGui.QVBoxLayout):
 		self.lst_textBlocks.setMinimumHeight(100)
 		self.lst_textBlocks.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
 		self.addWidget(self.lst_textBlocks)
-		self.refresh()
 
 	def refresh(self):
 		# - Init
@@ -50,8 +76,7 @@ class QTextBlockSelect(QtGui.QVBoxLayout):
 
 		# - Build List and style it
 		self.lst_textBlocks.clear()
-		self.lst_textBlocks.addItems(['T: %s...\tG: %s'%(item.symbolList().string(True)[:10], item.glyphsCount()) for item in self.active_textBlockList])		
-				
+		self.lst_textBlocks.addItems(['T: %s...\tG: %s\tS: %s pt\t F: %s'.expandtabs(12) %(item.symbolList().string(True)[:10], item.glyphsCount(), item.fontSize, item.frameRect) for item in self.active_textBlockList])		
 
 	def doCheck(self):
 		pass
@@ -62,20 +87,16 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 
 		# - Init
 		self.aux = aux
-		self.active_textBlock = pTextBlock(self.aux.active_textBlockList[0])
 
 		# - Widgets
 		self.cmb_pageSizes = QtGui.QComboBox()
 		self.cmb_text_align = QtGui.QComboBox()
 		
-		self.cmb_pageSizes.addItems(sorted(self.active_textBlock.pageSizes.keys()))
+		self.cmb_pageSizes.addItems(sorted(page_sizes.keys()))
 		self.cmb_text_align.addItems(text_align)
 
 		self.cmb_pageSizes.currentTextChanged.connect(self.page_changed)
 		self.cmb_text_align.currentTextChanged.connect(self.algn_changed)
-
-		self.edt_font_waterfall = QtGui.QLineEdit()
-		self.edt_font_waterfall.setPlaceholderText('Waterfall point sizes')
 
 		self.spb_font_size = QtGui.QSpinBox()
 		self.spb_font_size.setSuffix(' pt')
@@ -85,20 +106,16 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 		self.spb_size_h = QtGui.QSpinBox()
 		self.spb_size_w.setMaximum(9999)
 		self.spb_size_h.setMaximum(9999)
-		self.spb_size_w.setValue(self.active_textBlock.pageSizes[self.cmb_pageSizes.currentText][0])
-		self.spb_size_h.setValue(self.active_textBlock.pageSizes[self.cmb_pageSizes.currentText][1])
+		self.spb_size_w.setValue(page_sizes[self.cmb_pageSizes.currentText][0])
+		self.spb_size_h.setValue(page_sizes[self.cmb_pageSizes.currentText][1])
 
 		self.spb_y = QtGui.QSpinBox()
 
 		self.btn_apply = QtGui.QPushButton('Set Text Block(s)')
-		self.btn_waterfall = QtGui.QPushButton('Build Waterfall')
 		
 		self.btn_apply.clicked.connect(self.block_apply)
-		self.btn_waterfall.clicked.connect(self.block_waterfall)
 
 		# - Disable for now
-		self.edt_font_waterfall.setEnabled(False)
-		self.btn_waterfall.setEnabled(False)
 		self.cmb_text_align.setEnabled(False)
 		
 		# - Build layouts 
@@ -114,16 +131,13 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 		layoutV.addWidget(QtGui.QLabel('Font Size:'),			4, 0, 1, 2)
 		layoutV.addWidget(self.spb_font_size,					4, 2, 1, 2)
 		layoutV.addWidget(self.btn_apply, 						5, 0, 1, 4)
-		layoutV.addWidget(QtGui.QLabel('Text Waterfall'),		6, 0, 1, 4)
-		layoutV.addWidget(self.edt_font_waterfall,				7, 0, 1, 4)
-		layoutV.addWidget(self.btn_waterfall,					8, 0, 1, 4)
 
 		# - Set Widget
 		self.addLayout(layoutV)
 
 	def page_changed(self):
-		self.spb_size_w.setValue(self.active_textBlock.pageSizes[self.cmb_pageSizes.currentText][0])
-		self.spb_size_h.setValue(self.active_textBlock.pageSizes[self.cmb_pageSizes.currentText][1])
+		self.spb_size_w.setValue(page_sizes[self.cmb_pageSizes.currentText][0])
+		self.spb_size_h.setValue(page_sizes[self.cmb_pageSizes.currentText][1])
 
 	def algn_changed(self,value):
 		pass
@@ -137,50 +151,7 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 			processBlock.setFontSize(self.spb_font_size.value)
 			processBlock.update()
 
-	def block_waterfall(self):
-		pointList = [int(item) for item in self.edt_font_waterfall.text.replace(' ', '').split(',')]
-
-		# - Process: original block first
-		self.active_textBlock.resetTransform()
-		self.active_textBlock.setFontSize(pointList.pop(0))
-		self.active_textBlock.fl.setFixedHeight(True, True)
-		self.active_textBlock.setFrameWidth(float(self.spb_size_w.value))
-		self.active_textBlock.setWrapState()
-		self.active_textBlock.update()
-
-		# - Process: Build additional blocks
-		currentY = self.active_textBlock.y() + self.active_textBlock.height()
-		
-		for ptSize in pointList:
-			# - Init new clone
-			clonedBlock = self.active_textBlock.clone()
-			self.active_canvas.addTextBlock(clonedBlock)
-			print clonedBlock.frameRect
-			clonedBlock.setFrameWidth(float(self.spb_size_w.value))
-			#clonedBlock.formatMode = True
-			#clonedBlock.setFixedHeight(True,True)
-			#clonedBlock.locked = True
-			clonedBlock.fontSize = ptSize
-			clonedBlock.reformat()
-			clonedBlock.formatChanged()
-			
-			# - Reposition
-			oldRect = clonedBlock.frameRect
-			oldRect.setX(self.active_textBlock.x())
-			oldRect.setY(currentY)
-			clonedBlock.frameRect = oldRect
-			clonedBlock.update()
-			print clonedBlock.frameRect
-
-			currentY += clonedBlock.frameRect.x() + clonedBlock.frameRect.height()
-
-			
-			#clonedBlock.reloc(self.active_textBlock.x(), currentY)
-			#clonedBlock.setFontSize(ptSize)
-			#currentY += clonedBlock.height()
-			
-		
-		self.active_canvas.update()
+		self.aux.refresh()
 		
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
