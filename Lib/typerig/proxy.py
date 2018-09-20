@@ -112,6 +112,9 @@ class pTextBlock(object):
 	def setFrameWidth(self, width):
 		self.fl.setFrameWidth(width)
 
+	def getGlyphBounds(self):
+		return self.fl.glyphsBoundsOnCanvas('emEditText')
+
 	def setTextWrap(self, width):
 		self.setFrameWidth(width)
 		self.setWrapState(True)
@@ -159,14 +162,14 @@ class pTextBlock(object):
 		return self.fl.frameRect.height()
 
 	def reloc(self, x, y):
+		#'''
 		oldTM = self.fl.transform
 		newTM = pqt.QtGui.QTransform(oldTM.m11(), oldTM.m12(), oldTM.m13(), oldTM.m21(), oldTM.m22(), oldTM.m23(), float(x), float(y), oldTM.m33())
 		self.setTransform(newTM)
-		
+		#'''
 		'''
-		frame = self.getFrameSize()
-		frame.setX(x)
-		frame.setY(y)
+		frame = self.fl.frameRect
+		frame.setX(x); frame.setY(y)
 		self.fl.frameRect = frame
 		'''
 		self.update()

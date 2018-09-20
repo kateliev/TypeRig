@@ -1,4 +1,4 @@
-#FLM: TAB TextBlock Tools
+#FLM: TAB TextBlock
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -87,11 +87,11 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 
 		# - Init
 		self.aux = aux
-
-		# - Widgets
+		'''
 		self.active_workspace = pWorkspace()
 		self.active_canvas = self.active_workspace.getCanvas() 
 		self.active_textBlock = pTextBlock(self.active_workspace.getTextBlockList()[0])
+		'''
 
 		# - Widgets
 		self.chk_page = QtGui.QCheckBox('Page size:')
@@ -156,7 +156,7 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 		
 		# - Build layouts 
 		layoutV = QtGui.QGridLayout() 
-		layoutV.addWidget(QtGui.QLabel('Block Formatting'),		0, 0, 1, 4)
+		layoutV.addWidget(QtGui.QLabel('Text Block: Formatting'),		0, 0, 1, 4)
 		layoutV.addWidget(self.chk_page,			1, 0, 1, 2)
 		layoutV.addWidget(self.cmb_pageSizes, 		1, 2, 1, 2)
 		layoutV.addWidget(self.chk_size,			2, 0, 1, 2)
@@ -170,13 +170,14 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 		layoutV.addWidget(self.chk_kegel,			5, 0, 1, 2)
 		layoutV.addWidget(self.spb_font_size,		5, 2, 1, 2)
 		layoutV.addWidget(self.btn_apply, 			6, 0, 1, 4)
-		layoutV.addWidget(QtGui.QLabel('Block Tools'),		7, 0, 1, 4)
+		layoutV.addWidget(QtGui.QLabel('Text Block: Tools'),		7, 0, 1, 4)
 		layoutV.addWidget(self.btn_clone, 			8, 0, 1, 2)
 		layoutV.addWidget(self.btn_remove, 			8, 2, 1, 2)
 		layoutV.addWidget(self.btn_lock, 			9, 0, 1, 2)
 		layoutV.addWidget(self.btn_reformat, 		9, 2, 1, 2)
-		layoutV.addWidget(self.btn_stack_h, 		10, 0, 1, 2)
-		layoutV.addWidget(self.btn_stack_v, 		10, 2, 1, 2)
+		layoutV.addWidget(QtGui.QLabel('Text Block: Alignment'),		10, 0, 1, 4)
+		layoutV.addWidget(self.btn_stack_h, 		11, 0, 1, 2)
+		layoutV.addWidget(self.btn_stack_v, 		11, 2, 1, 2)
 
 
 		# - Set Widget
@@ -190,11 +191,17 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 		pass
 
 	def block_action(self, mode):
+		# - Init
+		accumulator = 0.
+		leader = 0.
+		first_run = True
+
+		# - Process
 		for selectedItem in self.aux.lst_textBlocks.selectedIndexes():
 			processBlock = self.aux.active_textBlockList[selectedItem.row()]
 
 			if mode == 'format':
-				processBlockAdv = pTextBlock(self.aux.active_textBlockList[selectedItem.row()])
+				processBlockAdv = pTextBlock(processBlock)
 				
 				if self.chk_size.isChecked(): 
 					processBlockAdv.setFrameSize(self.spb_size_w.value, self.spb_size_h.value)
@@ -221,6 +228,19 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 			elif mode == 'reformat':
 				processBlock.reformat()
 				processBlock.update()
+
+			elif mode == 'stack_v':
+				processBlockAdv = pTextBlock(processBlock)
+				#if first_run: leader = processBlockAdv.y(); first_run = False
+				processBlockAdv.reloc(leader, accumulator)
+				accumulator += processBlockAdv.x() + processBlockAdv.height()
+
+			elif mode == 'stack_h':
+				processBlockAdv = pTextBlock(processBlock)
+				#if first_run: leader = processBlockAdv.x(); first_run = False
+				processBlockAdv.reloc(accumulator, leader)
+				accumulator += processBlockAdv.y() + processBlockAdv.width()
+				
 
 		self.aux.active_canvas.update()
 		self.aux.refresh()

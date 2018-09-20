@@ -1,4 +1,4 @@
-#FLM: TAB Node Tools
+#FLM: TAB Node
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)

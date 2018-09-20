@@ -1,4 +1,4 @@
-#FLM: TAB Layer Tools
+#FLM: TAB Layer
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
