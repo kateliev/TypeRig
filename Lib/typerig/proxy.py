@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.44
+# VER 	: 0.45
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -43,6 +43,13 @@ class pWorkspace(object):
 
 	def getTextBlockGlyphs(self, tbi=0):
 		return [info.glyph for info in self.getTextBlockList()[tbi].getAllGlyphs()]
+
+	def createFrame(self, string, x, y):
+		active_canvas = self.getCanvas()
+		fg_text = fl6.fgSymbolList(string)
+		active_canvas.createFrame([fg_text], pqt.QtCore.QPointF(float(x),float(y)))
+		active_canvas.update()
+
 
 class pTextBlock(object):
 	'''Proxy to flTextBlock object
@@ -1044,6 +1051,10 @@ class pGlyph(object):
 		'''Get the Right Side-bearing at given layer (int or str)'''
 		pLayer = self.layer(layer)
 		return int(pLayer.advanceWidth - (pLayer.boundingBox.x() + pLayer.boundingBox.width()))
+
+	def getBounds(self, layer=None):
+		'''Get Glyph's Boundig Box at given layer (int or str). Returns QRectF.'''
+		return self.layer(layer).boundingBox
 
 	def setLSB(self, newLSB, layer=None):
 		'''Set the Left Side-bearing (int) at given layer (int or str)'''

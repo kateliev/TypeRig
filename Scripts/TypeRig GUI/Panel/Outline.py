@@ -152,11 +152,6 @@ class QContourSelect(QtGui.QVBoxLayout):
 			except AttributeError:
 				pass
 
-			
-		
-
-
-		
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
 	def __init__(self):

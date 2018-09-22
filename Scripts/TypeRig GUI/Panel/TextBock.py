@@ -88,8 +88,9 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 
 		# - Init
 		self.aux = aux
-		self.activeFont = pFont()
+		#self.activeFont = pFont()
 		self.upperWidget = upperWidget
+		
 		'''
 		self.active_workspace = pWorkspace()
 		self.active_canvas = self.active_workspace.getCanvas() 
@@ -144,8 +145,8 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 		self.btn_remove = QtGui.QPushButton('Remove')
 		self.btn_stack_v = QtGui.QPushButton('Stack Vertically')
 		self.btn_stack_h = QtGui.QPushButton('Stack Horizontally')
-		self.btn_save = QtGui.QPushButton('Save Layout')
-		self.btn_load = QtGui.QPushButton('Load Layout')
+		#self.btn_save = QtGui.QPushButton('Save Layout')
+		#self.btn_load = QtGui.QPushButton('Load Layout')
 
 		self.btn_apply.clicked.connect(lambda: self.block_action('format'))
 		self.btn_clone.clicked.connect(lambda: self.block_action('clone'))
@@ -154,14 +155,12 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 		self.btn_reformat.clicked.connect(lambda: self.block_action('reformat'))
 		self.btn_stack_v.clicked.connect(lambda: self.block_action('stack_v'))
 		self.btn_stack_h.clicked.connect(lambda: self.block_action('stack_h'))
-		self.btn_save.clicked.connect(self.save) 
-		self.btn_load.clicked.connect(self.load) 
+		#self.btn_save.clicked.connect(self.save) 
+		#self.btn_load.clicked.connect(self.load) 
 
 		# - Disable for now
 		self.cmb_text_align.setEnabled(False)
 		self.chk_align.setEnabled(False)
-		self.btn_save.setEnabled(False)
-		self.btn_load.setEnabled(False)
 		
 		# - Build layouts 
 		layoutV = QtGui.QGridLayout() 
@@ -187,9 +186,11 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 		layoutV.addWidget(QtGui.QLabel('Text Block: Alignment'),		10, 0, 1, 4)
 		layoutV.addWidget(self.btn_stack_h, 		11, 0, 1, 2)
 		layoutV.addWidget(self.btn_stack_v, 		11, 2, 1, 2)
+		'''
 		layoutV.addWidget(QtGui.QLabel('Text Block: Layout'),		12, 0, 1, 4)
 		layoutV.addWidget(self.btn_save, 		13, 0, 1, 2)
 		layoutV.addWidget(self.btn_load, 		13, 2, 1, 2)
+		'''
 
 		# - Set Widget
 		self.addLayout(layoutV)
@@ -256,6 +257,8 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 		self.aux.active_canvas.update()
 		self.aux.refresh()
 
+	'''
+	# !!! FL Objects cannot be pickled. To Do Later!
 	def save(self):
 		fontPath = os.path.split(self.activeFont.fg.path)[0]
 		fname = QtGui.QFileDialog.getSaveFileName(self.upperWidget, 'Save Text Block layout', fontPath , '*.cp')
@@ -278,6 +281,7 @@ class QTextBlockBasic(QtGui.QVBoxLayout):
 				print item
 
 			print 'LOAD:\t Font:%s; Layout loaded from %s.' %(self.activeFont.name, fname)
+	'''
 		
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
