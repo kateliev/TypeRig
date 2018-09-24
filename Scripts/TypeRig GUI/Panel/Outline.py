@@ -159,15 +159,10 @@ class tool_tab(QtGui.QWidget):
 
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
-
-		self.anchorSelector = QContourSelect()
-		#self.basicTools = QanchorBasic(self.anchorSelector)
+		self.outline = QContourSelect()
+		layoutV.addLayout(self.outline)
 		
-		layoutV.addLayout(self.anchorSelector)
-		#layoutV.addWidget(QtGui.QLabel('Basic Tools:'))
-		#layoutV.addLayout(self.basicTools)
-		
-		# - Build ---------------------------
+		# - Build
 		#layoutV.addStretch()
 		self.setLayout(layoutV)
 
