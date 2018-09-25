@@ -92,27 +92,27 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 		self.tab_stats.selectionModel().selectionChanged.connect(self.change_selection)
 
 	def populate(self):
-		self.font = pFont()
-		self.glyphNames = self.font.getGlyphNamesDict()
+		font = pFont()
+		self.glyphNames = font.getGlyphNamesDict()
 		self.cmb_charset.addItems(sorted(self.glyphNames.keys()))
 		
 	def refresh(self, layer=None):
 		# - Init
-		self.font = pFont()
-		self.glyph = eGlyph()
+		font = pFont()
+		glyph = eGlyph()
+		wLayers = glyph._prepareLayers((True, True, False, False))
+
 		self.edt_glyphName.setText(eGlyph().name)
-		wLayers = self.glyph._prepareLayers((True, True, False, False))
 				
 		self.table_data = {}
 		self.table_proc = {}
-		node_count = 0
 
 		# - Populate table
-		self.table_data[self.glyph.name] = {layer:self.glyph.getBounds(layer).width() for layer in wLayers}
+		self.table_data[glyph.name] = {layer:glyph.getBounds(layer).width() for layer in wLayers}
 		
 		if len(self.edt_glyphsSeq.text):
 			for glyph_name in self.edt_glyphsSeq.text.split(' '):
-				wGlyph = self.font.glyph(glyph_name)
+				wGlyph = font.glyph(glyph_name)
 				self.table_data[glyph_name] = {layer:wGlyph.getBounds(layer).width() for layer in wLayers}
 			
 		self.tab_stats.setTable(self.table_data)
