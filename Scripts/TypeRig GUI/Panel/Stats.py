@@ -81,9 +81,9 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 		self.addWidget(note_msg)
 
 		# -- Addons
-		self.btn_refresh.clicked.connect(lambda: self.refresh())
-		self.btn_populate.clicked.connect(lambda: self.populate())
-		self.cmb_query.currentIndexChanged.connect(lambda: self.change_query())
+		self.btn_refresh.clicked.connect(self.refresh)
+		self.btn_populate.clicked.connect(self.populate)
+		#self.cmb_query.currentIndexChanged.connect(self.change_query)
 
 		# -- Table Styling
 		self.tab_stats.horizontalHeader().setStretchLastSection(False)
