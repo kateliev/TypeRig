@@ -1,4 +1,4 @@
-#FLM: TAB String
+#FLM: Text: String Generator
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)

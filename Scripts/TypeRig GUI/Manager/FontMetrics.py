@@ -1,4 +1,4 @@
-#FLM: MAN Font Metrics
+#FLM: Font: Metrics
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)

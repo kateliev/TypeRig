@@ -1,4 +1,4 @@
-#FLM: TAB Layer
+#FLM: Glyph: Layers
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
