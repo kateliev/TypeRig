@@ -18,7 +18,7 @@ from typerig.brain import ratfrac
 #from collections import OrderedDict
 
 # - Init
-app_name, app_version = 'TypeRig | Glyph Statistics', '0.05'
+app_name, app_version = 'TypeRig | Glyph Statistics', '0.08'
 
 # - Sub widgets ------------------------
 class QGlyphInfo(QtGui.QVBoxLayout):
@@ -58,10 +58,15 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 		self.btn_refresh = QtGui.QPushButton('&Refresh')
 		self.btn_populate = QtGui.QPushButton('&Populate')
 		self.btn_get = QtGui.QPushButton('&Window')
+		self.btn_probe = QtGui.QPushButton('Glyph')
 
 		self.btn_refresh.setToolTip('Refresh active glyph and table.')
 		self.btn_populate.setToolTip('Populate character set selector from current font.')
 		self.btn_get.setToolTip('Get current string from active Glyph Window.')
+		self.btn_probe.setToolTip('Toggle between Row (Glyph) or Column (Layer) based comparison.')
+
+		self.btn_probe.setCheckable(True)
+		self.btn_probe.setChecked(False)
 		
 		# !!! Disable for now
 		self.cmb_charset.setEnabled(False)
@@ -78,7 +83,8 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 		self.lay_head.addWidget(self.edt_glyphsSeq,	2,1,1,5)
 		self.lay_head.addWidget(self.btn_get,		2,6,1,2)
 		self.lay_head.addWidget(QtGui.QLabel('Q:'),	3,0,1,1)
-		self.lay_head.addWidget(self.cmb_query,		3,1,1,7)
+		self.lay_head.addWidget(self.cmb_query,		3,1,1,5)
+		self.lay_head.addWidget(self.btn_probe,		3,6,1,2)
 		self.addLayout(self.lay_head)
 
 		# -- Table
@@ -98,6 +104,7 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 		self.btn_refresh.clicked.connect(self.refresh)
 		self.btn_populate.clicked.connect(self.populate)
 		self.btn_get.clicked.connect(self.get_string)
+		self.btn_probe.clicked.connect(self.toggle_query)
 		self.cmb_query.currentIndexChanged.connect(self.refresh)
 
 		# -- Table Styling
@@ -113,7 +120,7 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 
 	def get_string(self):
 		workspace = pWorkspace()
-		glyphsSeq = ' '.join([glyph.name for glyph in workspace.getTextBlockGlyphs()]) 
+		glyphsSeq = ' '.join(sorted(list(set([glyph.name for glyph in workspace.getTextBlockGlyphs()]))))
 		self.edt_glyphsSeq.setText(glyphsSeq)
 		
 	def refresh(self, layer=None):
@@ -139,16 +146,31 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 		self.tab_stats.resizeColumnsToContents()		
 		
 	def change_selection(self):
-		base_index = self.tab_stats.selectionModel().selectedIndexes[0].row()
-		base_name = self.tab_stats.verticalHeaderItem(base_index).text()
-		
-		#print selection_name, self.table_data[selection_name]
+		# - Helper for avoiding ZeroDivision error
+		def noZero(value):
+			return value if value != 0 else 1
 
+		# - Init
+		base_index = self.tab_stats.selectionModel().selectedIndexes[0]
+		base_name = self.tab_stats.verticalHeaderItem(base_index.row()).text()
+		base_layer = self.tab_stats.horizontalHeaderItem(base_index.column()).text()
+				
 		for glyph_name, glyph_layers in self.table_data.iteritems():
-			self.table_proc[glyph_name] = {layer_name:'%s %%' %round(ratfrac(layer_value, self.table_data[base_name][layer_name]),2)  for layer_name, layer_value in glyph_layers.iteritems()}
+			if not self.btn_probe.isChecked():
+				self.table_proc[glyph_name] = {layer_name:'%s %%' %round(ratfrac(noZero(layer_value), noZero(self.table_data[base_name][layer_name])),2)  for layer_name, layer_value in glyph_layers.iteritems()}
+			else:
+				self.table_proc[glyph_name] = {layer_name:'%s %%' %round(ratfrac(noZero(layer_value), noZero(self.table_data[glyph_name][base_layer])),2)  for layer_name, layer_value in glyph_layers.iteritems()}
 
 		self.tab_stats.setTable(self.table_proc)
 		self.tab_stats.resizeColumnsToContents()
+
+	def toggle_query(self):
+		if self.btn_probe.isChecked():
+			self.btn_probe.setText('Layer')
+			self.tab_stats.setSelectionBehavior(QtGui.QAbstractItemView.SelectColumns)
+		else:
+			self.btn_probe.setText('Glyph')
+			self.tab_stats.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
 
 	def process_query(self, glyph, layer, query):
 		if 'bbox' in query.lower() and 'width' in query.lower(): return glyph.getBounds(layer).width()
