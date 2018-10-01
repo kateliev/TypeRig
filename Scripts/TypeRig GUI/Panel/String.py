@@ -8,7 +8,7 @@
 # that you use it at your own risk!
 
 # - Init
-app_name, app_version = 'TypeRig | String', '0.21'
+app_name, app_version = 'TypeRig | String', '0.22'
 glyphSep = '/'
 joinOpt = {'Empty':'', 'Newline':'\n'}
 
@@ -23,8 +23,10 @@ from typerig.string import stringGen, strRepDict, fillerList
 class QStringGen(QtGui.QGridLayout):
 	def __init__(self):
 		super(QStringGen, self).__init__()
+		
 		# - Init data
 		val_fillerLeft, val_fillerRight = zip(*fillerList)
+		self.defEncoding = 'utf-8'
 		
 		# -- Init Interface 
 		self.edt_inputA = QtGui.QLineEdit()
@@ -71,17 +73,20 @@ class QStringGen(QtGui.QGridLayout):
 		self.cmb_fillerLeft.addItems(val_fillerLeft)
 		self.cmb_fillerRight.addItems(val_fillerRight)
 				
-		self.btn_genCopy = QtGui.QPushButton('Generate and send to &Clipboard')
+		self.btn_genCopy = QtGui.QPushButton('Generate')
+		self.btn_genUni = QtGui.QPushButton('Unicode Str.')
 		self.btn_refresh = QtGui.QPushButton('&Populate lists')
 		self.btn_clear = QtGui.QPushButton('&Rest fields')
 
-		self.btn_genCopy.setToolTip('Generate the pair string and sent it to the cliboard.')
+		self.btn_genCopy.setToolTip('Generate the pair string using Glyph Names and send it to the clipboard.')
+		self.btn_genUni.setToolTip('Generate the pair string using Unicode Characters and send it to the clipboard.')
 		self.btn_refresh.setToolTip('Populate name lists with existing glyph names in active font.')
 		self.btn_clear.setToolTip('Clear all manual input fields.')
 
 		self.btn_clear.clicked.connect(self.clear)
 		self.btn_refresh.clicked.connect(self.refresh)
 		self.btn_genCopy.clicked.connect(self.generate)
+		self.btn_genUni.clicked.connect(self.generateUni)
 		
 		# - Build
 		self.addWidget(QtGui.QLabel('A:'), 		0, 0, 1, 1)
@@ -109,7 +114,8 @@ class QStringGen(QtGui.QGridLayout):
 		self.addWidget(QtGui.QLabel(''), 		8, 0, 1, 1)
 		self.addWidget(self.btn_refresh, 		9, 1, 1, 5)
 		self.addWidget(self.btn_clear, 			9, 6, 1, 3)
-		self.addWidget(self.btn_genCopy, 		10, 1, 1, 8)
+		self.addWidget(self.btn_genCopy, 		10, 1, 1, 5)
+		self.addWidget(self.btn_genUni, 		10, 6, 1, 3)
 		self.addWidget(QtGui.QLabel('OUT:'), 	11, 0, 1, 1)
 		self.addWidget(self.edt_output, 		11, 1, 4, 8)
 
@@ -134,8 +140,8 @@ class QStringGen(QtGui.QGridLayout):
 
 	def refresh(self):
 		self.font = pFont()
-		self.glyphNames = self.font.getGlyphNamesDict()
-
+		self.glyphNames = self.font.getGlyphNameDict()
+		self.glyphUnicodes = self.font.getGlyphUnicodeDict(self.defEncoding)
 		self.cmb_inputA.addItems(sorted(self.glyphNames.keys()))
 		self.cmb_inputB.addItems(sorted(self.glyphNames.keys()))	
 
@@ -178,6 +184,37 @@ class QStringGen(QtGui.QGridLayout):
 		# - Copy to cliboard
 		clipboard = QtGui.QApplication.clipboard()
 		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
+		print 'DONE:\t Generated string sent to clipboard.'
+
+	def generateUni(self):
+		# - Get Values
+		if len(self.edt_inputA.text) > 0:
+			inputA = self.edt_inputA.text.split(' ')
+		else:
+			inputA = sorted(self.glyphUnicodes[self.cmb_inputA.currentText])
+
+		if len(self.edt_inputB.text) > 0:
+			inputB = self.edt_inputB.text.split(' ')
+		else:
+			inputB = sorted(self.glyphUnicodes[self.cmb_inputB.currentText])
+
+		if len(self.edt_fillerLeft.text) > 0:
+			fillerLeft = self.edt_fillerLeft.text.encode(self.defEncoding)
+		else:
+			fillerLeft = self.cmb_fillerLeft.currentText.encode(self.defEncoding)
+
+		if len(self.edt_fillerRight.text) > 0:
+			fillerRight = self.edt_fillerRight.text.encode(self.defEncoding)
+		else:
+			fillerRight = self.cmb_fillerRight.currentText.encode(self.defEncoding)
+
+		# - Generate
+		generatedString = stringGen(inputA, inputB, (fillerLeft, fillerRight), self.edt_fillerPattern.text, (self.edt_suffixA.text.encode(self.defEncoding), self.edt_suffixB.text.encode(self.defEncoding)), '')
+		self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString).decode(self.defEncoding))
+
+		# - Copy to cliboard
+		clipboard = QtGui.QApplication.clipboard()
+		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString).decode(self.defEncoding))
 		print 'DONE:\t Generated string sent to clipboard.'
 					
 class tool_tab(QtGui.QWidget):
