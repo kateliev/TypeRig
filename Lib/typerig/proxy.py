@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.45
+# VER 	: 0.46
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -1158,6 +1158,19 @@ class pGlyph(object):
 		newGuideline.style = style
 			
 		self.layer(layer).appendGuidelines([newGuideline])
+
+	def getTags(self):
+		return self.fl.tags
+
+	def setTags(self, tagList, append=True):
+		if append:
+			old_tags = self.getTags()
+			self.fl.tags = sorted(old_tags + tagList)
+		else:
+			self.fl.tags = tagList
+
+	def tag(self, newTag):
+		self.setTags([newTag], True)
 
 
 class pFontMetrics(object):

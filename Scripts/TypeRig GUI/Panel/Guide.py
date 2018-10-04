@@ -10,14 +10,14 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Guidelines', '0.31'
+app_name, app_version = 'TypeRig | Guidelines', '0.32'
 
 # - Dependencies -----------------
 import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore, QtGui
 from typerig.glyph import eGlyph
-from typerig.proxy import pFontMetrics
+from typerig.proxy import pFontMetrics, pFont, pGlyph, pWorkspace
 
 # - Tabs -------------------------------
 class QDropGuide(QtGui.QGridLayout):
@@ -169,6 +169,63 @@ class QDropGuide(QtGui.QGridLayout):
 		glyph.updateObject(glyph.fl, 'Drop Guide <%s> @ %s.' %(self.edt_guideName.text, '; '.join(glyph._prepareLayers(pLayers))))
 		glyph.update()
 
+class QGlyphTag(QtGui.QGridLayout):
+	def __init__(self):
+		super(QGlyphTag, self).__init__()
+
+		# - Widget & Layout 
+		self.edt_tagString = QtGui.QLineEdit()
+		self.edt_tagString.setPlaceholderText('Glyph tags')
+		self.edt_tagString.setToolTip('A comma separated list of tags.')
+
+		self.btn_tagGlyph = QtGui.QPushButton('Glyph')
+		self.btn_tagWindow = QtGui.QPushButton('Window')
+		self.btn_tagSelection = QtGui.QPushButton('Selection')
+
+		self.btn_tagGlyph.clicked.connect(lambda: self.tag_glyphs('G'))
+		self.btn_tagWindow .clicked.connect(lambda: self.tag_glyphs('W'))
+		self.btn_tagSelection .clicked.connect(lambda: self.tag_glyphs('S'))
+
+		self.btn_tagGlyph.setToolTip('Add tags to current glyph.')
+		self.btn_tagWindow.setToolTip('Add tags to all glyphs in current Glyph window.')
+		self.btn_tagSelection.setToolTip('Add tags to current selection in Font window.')
+		
+		# - Build
+		self.addWidget(QtGui.QLabel('Glyph tagging:'),			1, 0, 1, 9)
+		self.addWidget(self.edt_tagString, 						2, 0, 1, 9)
+		self.addWidget(self.btn_tagGlyph, 						3, 0, 1, 3)
+		self.addWidget(self.btn_tagWindow, 						3, 3, 1, 3)
+		self.addWidget(self.btn_tagSelection, 					3, 6, 1, 3)	
+
+	# - Procedures
+	def tag_glyphs(self, mode):
+		# - Init
+		new_tags = self.edt_tagString.text.replace(' ', '').split(',')
+
+		# - Helper
+		def tag(glyph, tagList):
+			glyph.setTags(tagList)
+			glyph.updateObject(glyph.fl, 'Glyph: %s; Add tags: %s ' %(glyph.name, tagList))
+			glyph.update()
+
+		# - Process
+		if mode == 'G':
+			glyph = eGlyph()
+			tag(glyph, new_tags)
+			
+		else:
+			process_glyphs = []
+			
+			if mode == 'W':
+				process_glyphs = [pGlyph(glyph) for glyph in pWorkspace().getTextBlockGlyphs()]
+
+			elif mode == 'S':
+				process_glyphs = pFont().selected_pGlyphs()
+			
+			for glyph in process_glyphs:
+				tag(glyph, new_tags)
+
+		self.edt_tagString.clear()
 			
 class tool_tab(QtGui.QWidget):
 	def __init__(self):
@@ -177,9 +234,11 @@ class tool_tab(QtGui.QWidget):
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
 		self.dropGuide = QDropGuide()
+		self.glyphTags = QGlyphTag()
 
 		# - Build ---------------------------
 		layoutV.addLayout(self.dropGuide)
+		layoutV.addLayout(self.glyphTags)
 
 		layoutV.addStretch()
 		self.setLayout(layoutV)
