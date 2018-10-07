@@ -232,6 +232,24 @@ class pNode(object):
 	def getOn(self, naked=True):
 		return self.fl.getOn() if naked else self.__class__(self.fl.getOn())
 
+	def getMaxY(self, naked=True):
+		next_node = self.getNextOn()
+		prev_node = self.getPrevOn()
+
+		if next_node.position.y() > prev_node.position.y():
+			return next_node if naked else self.__class__(next_node)
+
+		return prev_node if naked else self.__class__(prev_node)
+
+	def getMinY(self, naked=True):
+		next_node = self.getNextOn()
+		prev_node = self.getPrevOn()
+
+		if next_node.position.y() < prev_node.position.y():
+			return next_node if naked else self.__class__(next_node)
+
+		return prev_node if naked else self.__class__(prev_node)
+
 	def getSegment(self, relativeTime=0):
 		return self.contour.segment(self.getTime() + relativeTime)
 

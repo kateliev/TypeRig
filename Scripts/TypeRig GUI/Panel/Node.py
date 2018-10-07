@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.49'
+app_name, app_version = 'TypeRig | Nodes', '0.50'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -19,8 +19,6 @@ from PythonQt import QtCore, QtGui
 from typerig.glyph import eGlyph
 from typerig.node import eNode
 from typerig.proxy import pFont
-
-#from typerig.utils import outputHere # Remove later!
 
 # - Sub widgets ------------------------
 class basicOps(QtGui.QGridLayout):
@@ -248,6 +246,10 @@ class alignNodes(QtGui.QGridLayout):
 		self.edt_toGuide = QtGui.QLineEdit()
 		self.edt_toGuide.setPlaceholderText('Guideline Tag')
 		self.edt_toGuide.setEnabled(False)
+
+		# - Check box
+		self.chk_slope = QtGui.QCheckBox('Slope Interception')
+		self.chk_slope.setToolTip('EXPERIMENTAL:\nFind intersections of selected font metric\nwith slopes on which selected nodes resign.')
 				
 		# - Build Layout
 		self.addWidget(self.btn_left, 			0,0)
@@ -258,23 +260,25 @@ class alignNodes(QtGui.QGridLayout):
 		self.addWidget(self.btn_bboxCenterY,	1,2,1,2)
 		self.addWidget(self.btn_peerCenterX,	2,0,1,2)
 		self.addWidget(self.btn_peerCenterY,	2,2,1,2)
-		self.addWidget(QtGui.QLabel('Align to Font metrics'), 3,0,1,4)
+		self.addWidget(QtGui.QLabel('Align to Font metrics'), 3,0,1,2)
 		self.addWidget(self.btn_toAscender,		4,0)
 		self.addWidget(self.btn_toCapsHeight,	4,1)
 		self.addWidget(self.btn_toDescender,	4,2)
 		self.addWidget(self.btn_toXHeight,		4,3)
 		self.addWidget(self.btn_toBaseline,		5,0)
-		self.addWidget(self.edt_toGuide,		5,1,1,2)
+		#self.addWidget(self.edt_toGuide,		5,1,1,2)
+		self.addWidget(self.chk_slope, 			5,1,1,2)
 		self.addWidget(self.btn_toGuide,		5,3)
-		self.addWidget(QtGui.QLabel('Channel processing and slopes'), 6,0,1,4)
-		self.addWidget(self.btn_solveY, 		7,0,1,2)
-		self.addWidget(self.btn_solveX, 		7,2,1,2)
-		self.addWidget(self.btn_copy,			8,0,1,3)
-		self.addWidget(self.btn_italic,			8,3,1,1)
-		self.addWidget(self.btn_pasteMinY,		9,0,1,1)
-		self.addWidget(self.btn_pasteMaxY,		9,1,1,1)
-		self.addWidget(self.btn_pasteFMinY,		9,2,1,1)
-		self.addWidget(self.btn_pasteFMaxY,		9,3,1,1)
+		#self.addWidget(self.chk_slope, 			6,2,1,2)
+		self.addWidget(QtGui.QLabel('Channel processing and slopes'), 7,0,1,4)
+		self.addWidget(self.btn_solveY, 		8,0,1,2)
+		self.addWidget(self.btn_solveX, 		8,2,1,2)
+		self.addWidget(self.btn_copy,			9,0,1,3)
+		self.addWidget(self.btn_italic,			9,3,1,1)
+		self.addWidget(self.btn_pasteMinY,		10,0,1,1)
+		self.addWidget(self.btn_pasteMaxY,		10,1,1,1)
+		self.addWidget(self.btn_pasteFMinY,		10,2,1,1)
+		self.addWidget(self.btn_pasteFMaxY,		10,3,1,1)
 
 	def copySlope(self):
 		from typerig.brain import Line
@@ -396,26 +400,43 @@ class alignNodes(QtGui.QGridLayout):
 				italicAngle = glyph.package.italicAngle_value
 				
 				newX = 0.
+				toMaxY = True
+
 				if '0' in mode:
 					newY = layerMetrics.ascender
+					toMaxY = False
 				elif '1' in mode:
 					newY = layerMetrics.capsHeight
+					toMaxY = False
 				elif '2' in mode:
 					newY = layerMetrics.descender
+					toMaxY = True
 				elif '3' in mode:
 					newY = layerMetrics.xHeight
+					toMaxY = False
 				elif '4' in mode:
 					newY = 0
+					toMaxY = True
 
 			for node in selection:
 				if 'FontMetrics' in mode:
-					if italicAngle != 0:
+					if italicAngle != 0 and not self.chk_slope.isChecked():
 						tempTarget = Coord(node.fl)
 						tempTarget.setAngle(italicAngle)
 
 						target = fl6.flNode(tempTarget.getWidth(newY), newY)
 						control = (True, True)
 					
+					elif self.chk_slope.isChecked():
+						pairUp = node.getMaxY().position
+						pairDown = node.getMinY().position
+						pairPos = pairUp if toMaxY else pairDown
+						newLine = Line(node.fl.position, pairPos)
+						newX = newLine.solveX(newY)
+
+						target = fl6.flNode(newX, newY)
+						control = (True, True)
+
 					else:
 						target = fl6.flNode(newX, newY)
 						control = (False, True)
