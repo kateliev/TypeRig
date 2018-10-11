@@ -129,7 +129,7 @@ class eGlyph(pGlyph):
 
 
 	# - Guidelines -----------------------------------------
-	def dropGuide(self, nodes=None, layers=None, name='*DropGuideline', color='darkMagenta', flip=(1,1), style='gsGlyphGuideline'):
+	def dropGuide(self, nodes=None, layers=None, name='*DropGuideline', tag='', color='darkMagenta', flip=(1,1), style='gsGlyphGuideline'):
 		'''Build guideline trough *any two* given points or the *first two of the current selection*.
 
 		If *single point* is given will create a vertical guideline trough that point,
@@ -185,6 +185,7 @@ class eGlyph(pGlyph):
 			# - Build
 			newg = fl6.flGuideLine(vector)
 			newg.name, newg.color, newg.style = name, QColor(color), style
+			newg.tag(tag.replace(' ', '').split(','))
 			self.layer(layerName).appendGuidelines([newg])
 
 	# - Metrics -----------------------------------------

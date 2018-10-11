@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.50'
+app_name, app_version = 'TypeRig | Nodes', '0.51'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -98,7 +98,7 @@ class basicOps(QtGui.QGridLayout):
 			selection = glyph.selectedAtContours(False, layer)
 
 			for contour, node in reversed(selection):
-				prevNode, nextNode = node.getPrev(), node.getNext()
+				prevNode, nextNode = node.prevNode(), node.nextNode()
 				
 				if not prevNode.isOn:
 					contour.removeOne(prevNode)
@@ -702,19 +702,17 @@ class advMovement(QtGui.QVBoxLayout):
 		# - Process
 		if method == self.methodList[0]:
 			for node in selectedNodes:
-				if node.isOn:
-					if inPercent:						
-						node.smartShift(*scaleOffset(node, offset_x, offset_y))
-					else:
-						node.smartShift(offset_x, offset_y)
+				if inPercent:						
+					node.smartShift(*scaleOffset(node, offset_x, offset_y))
+				else:
+					node.smartShift(offset_x, offset_y)
 
 		elif method == self.methodList[1]:
 			for node in selectedNodes:
-				if node.isOn:
-					if inPercent:						
-						node.shift(*scaleOffset(node, offset_x, offset_y))
-					else:
-						node.shift(offset_x, offset_y)
+				if inPercent:						
+					node.shift(*scaleOffset(node, offset_x, offset_y))
+				else:
+					node.shift(offset_x, offset_y)
 
 		elif method == self.methodList[2]:
 			for node in selectedNodes:
@@ -732,11 +730,10 @@ class advMovement(QtGui.QVBoxLayout):
 						node.slantShift(offset_x, offset_y, italic_angle)
 			else:
 				for node in selectedNodes:
-					if node.isOn:
-						if inPercent:						
-							node.smartShift(*scaleOffset(node, offset_x, offset_y))
-						else:
-							node.smartShift(offset_x, offset_y)
+					if inPercent:						
+						node.smartShift(*scaleOffset(node, offset_x, offset_y))
+					else:
+						node.smartShift(offset_x, offset_y)
 
 		elif method == self.methodList[4]:			
 			current_layer = glyph.activeLayer().name

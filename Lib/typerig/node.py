@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Node Objects | Typerig
-# VER 	: 0.07
+# VER 	: 0.08
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -117,18 +117,17 @@ class eNode(pNode):
 			shift_x, shift_y (float)
 			angle (float): Angle in degrees
 		'''
-		if self.isOn:
-			from typerig.brain import Coord
-			from PythonQt.QtCore import QPointF
-			
-			# - Init
-			cNode = Coord((self.x + shift_x, self.y))
-			cNode.setAngle(angle)
-			
-			# - Calculate & set
-			newX = cNode.getWidth(cNode.y + shift_y)
-			#self.fl.smartSetXY(QPointF(newX, self.y + shift_y))
-			self.smartReloc(newX, self.y + shift_y)
+		from typerig.brain import Coord
+		from PythonQt.QtCore import QPointF
+		
+		# - Init
+		cNode = Coord((self.x + shift_x, self.y))
+		cNode.setAngle(angle)
+		
+		# - Calculate & set
+		newX = cNode.getWidth(cNode.y + shift_y)
+		#self.fl.smartSetXY(QPointF(newX, self.y + shift_y))
+		self.smartReloc(newX, self.y + shift_y)
 
 	def alignTo(self, entity, align=(True, True)):
 		'''Align current node to a node or line given.

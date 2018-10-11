@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Guidelines', '0.32'
+app_name, app_version = 'TypeRig | Guidelines', '0.33'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -19,6 +19,35 @@ from PythonQt import QtCore, QtGui
 from typerig.glyph import eGlyph
 from typerig.proxy import pFontMetrics, pFont, pGlyph, pWorkspace
 
+# - Sub widgets ------------------------
+class GLineEdit(QtGui.QLineEdit):
+	# - Custom QLine Edit extending the contextual menu with FL6 metric expressions
+	def __init__(self, *args, **kwargs):
+		
+		super(GLineEdit, self).__init__(*args, **kwargs)
+		self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+		self.customContextMenuRequested.connect(self.__contextMenu)
+
+	def __contextMenu(self):
+		self._normalMenu = self.createStandardContextMenu()
+		self._addCustomMenuItems(self._normalMenu)
+		self._normalMenu.exec_(QtGui.QCursor.pos())
+
+	def _addCustomMenuItems(self, menu):
+		menu.addSeparator()
+		menu.addAction('lower_case', lambda: self.setText('lower_case'))
+		menu.addAction('upper_case', lambda: self.setText('upper_case'))
+		menu.addAction('small_caps', lambda: self.setText('small_caps'))
+		menu.addAction('figure', lambda: self.setText('figure'))
+		menu.addAction('symbol', lambda: self.setText('symbol'))
+		menu.addAction('LC', lambda: self.setText('LC'))
+		menu.addAction('UC', lambda: self.setText('UC'))
+		menu.addAction('SC', lambda: self.setText('SC'))
+		menu.addAction('FIG', lambda: self.setText('FIG'))
+		menu.addAction('SYM', lambda: self.setText('SYM'))
+		menu.addAction('LAT', lambda: self.setText('LAT'))
+		menu.addAction('CYR', lambda: self.setText('CYR'))
+		
 # - Tabs -------------------------------
 class QDropGuide(QtGui.QGridLayout):
 	def __init__(self):
@@ -27,6 +56,9 @@ class QDropGuide(QtGui.QGridLayout):
 		# -- Editi fileds
 		self.edt_guideName = QtGui.QLineEdit()
 		self.edt_guideName.setPlaceholderText('New Guideline')
+
+		self.edt_guideTag = GLineEdit()
+		self.edt_guideTag.setPlaceholderText('Tag')
 
 		# -- Combo box
 		self.cmb_select_V = QtGui.QComboBox()
@@ -42,6 +74,10 @@ class QDropGuide(QtGui.QGridLayout):
 			self.cmb_select_color.setItemData(i, QtGui.QColor(colorNames[i]), QtCore.Qt.DecorationRole)
 
 		self.cmb_select_color.setCurrentIndex(colorNames.index('red'))
+
+		self.cmb_select_color.setMinimumWidth(40)
+		self.edt_guideName.setMinimumWidth(40)
+		self.edt_guideTag.setMinimumWidth(40)
 
 		# -- SpinBox
 		self.spb_prc_V =  QtGui.QSpinBox()
@@ -84,10 +120,12 @@ class QDropGuide(QtGui.QGridLayout):
 		self.btn_dropLayer_H.clicked.connect(self.drop_guide_H)
 		
 		# - Build
-		self.addWidget(QtGui.QLabel('Name:'), 					1, 0, 1, 6)
-		self.addWidget(QtGui.QLabel('Color:'), 					1, 6, 1, 6)
-		self.addWidget(self.edt_guideName, 						2, 0, 1, 6)
-		self.addWidget(self.cmb_select_color  , 				2, 6, 1, 6)
+		self.addWidget(QtGui.QLabel('Name:'), 					1, 0, 1, 4)
+		self.addWidget(QtGui.QLabel('Tag:'), 					1, 4, 1, 4)
+		self.addWidget(QtGui.QLabel('Color:'), 					1, 8, 1, 4)
+		self.addWidget(self.edt_guideName, 						2, 0, 1, 4)
+		self.addWidget(self.cmb_select_color, 					2, 8, 1, 4)
+		self.addWidget(self.edt_guideTag, 						2, 4, 1, 4)
 		self.addWidget(QtGui.QLabel('Selected Nodes:'), 		3, 0, 1, 9)
 		self.addWidget(self.btn_dropGuide, 						4, 0, 1, 4)
 		self.addWidget(self.btn_dropFlipX, 						4, 4, 1, 4)
@@ -105,7 +143,7 @@ class QDropGuide(QtGui.QGridLayout):
 	# - Procedures
 	def drop_guide_nodes(self, flip):
 		glyph = eGlyph()
-		glyph.dropGuide(layers=pLayers, name=self.edt_guideName.text, color=self.cmb_select_color.currentText, flip=flip)
+		glyph.dropGuide(layers=pLayers, name=self.edt_guideName.text, tag=self.edt_guideTag.text, color=self.cmb_select_color.currentText, flip=flip)
 		glyph.updateObject(glyph.fl, 'Drop Guide <%s> @ %s.' %(self.edt_guideName.text, '; '.join(glyph._prepareLayers(pLayers))))
 		glyph.update()
 
@@ -126,7 +164,7 @@ class QDropGuide(QtGui.QGridLayout):
 			#print width, origin , width + origin, float(width)*self.spb_prc_V.value/100 + origin
 
 			guidePos = (float(width)*self.spb_prc_V.value/100 + origin + self.spb_unit_V.value, 0)
-			glyph.addGuideline(guidePos, layer=layerName, angle=italicAngle, name=self.edt_guideName.text, color=self.cmb_select_color.currentText)
+			glyph.addGuideline(guidePos, layer=layerName, angle=italicAngle, name=self.edt_guideName.text, tag=self.edt_guideTag.text, color=self.cmb_select_color.currentText)
 			
 		glyph.updateObject(glyph.fl, 'Drop Guide <%s> @ %s.' %(self.edt_guideName.text, '; '.join(glyph._prepareLayers(pLayers))))
 		glyph.update()
@@ -164,7 +202,7 @@ class QDropGuide(QtGui.QGridLayout):
 				origin = 0.		
 
 			guidePos = (0, float(height)*self.spb_prc_H.value/100 + origin + self.spb_unit_H.value)
-			glyph.addGuideline(guidePos, layer=layerName, angle=90, name=self.edt_guideName.text, color=self.cmb_select_color.currentText)
+			glyph.addGuideline(guidePos, layer=layerName, angle=90, name=self.edt_guideName.text, tag=self.edt_guideTag.text, color=self.cmb_select_color.currentText)
 			
 		glyph.updateObject(glyph.fl, 'Drop Guide <%s> @ %s.' %(self.edt_guideName.text, '; '.join(glyph._prepareLayers(pLayers))))
 		glyph.update()
@@ -174,7 +212,7 @@ class QGlyphTag(QtGui.QGridLayout):
 		super(QGlyphTag, self).__init__()
 
 		# - Widget & Layout 
-		self.edt_tagString = QtGui.QLineEdit()
+		self.edt_tagString = GLineEdit()
 		self.edt_tagString.setPlaceholderText('Glyph tags')
 		self.edt_tagString.setToolTip('A comma separated list of tags.')
 

@@ -1151,7 +1151,7 @@ class pGlyph(object):
 		'''Return list of guidelines (list[flGuideline]) at given layer (int or str)'''
 		return self.layer(layer).guidelines
 
-	def addGuideline(self, coordTuple, layer=None, angle=0, name='',  color='darkMagenta', style='gsGlyphGuideline'):
+	def addGuideline(self, coordTuple, layer=None, angle=0, name='', tag='', color='darkMagenta', style='gsGlyphGuideline'):
 		'''Adds named Guideline at given layer
 		Args:
 			coordTuple (tuple(float,float) or tuple(float,float,float,float)): Guideline coordinates X, Y and given angle or two node reference x1,y1 and x2,y2
@@ -1174,6 +1174,7 @@ class pGlyph(object):
 		newGuideline.name =  name
 		newGuideline.color = pqt.QtGui.QColor(color)
 		newGuideline.style = style
+		newGuideline.tag(tag.replace(' ', '').split(','))
 			
 		self.layer(layer).appendGuidelines([newGuideline])
 
