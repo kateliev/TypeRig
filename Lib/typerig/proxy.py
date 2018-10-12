@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.46
+# VER 	: 0.47
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -1341,6 +1341,7 @@ class pFont(object):
 		# - Special 
 		self.__altMarks = {'liga':'_', 'alt':'.', 'hide':'__'}
 		self.__diactiricalMarks = ['grave', 'dieresis', 'macron', 'acute', 'cedilla', 'uni02BC', 'circumflex', 'caron', 'breve', 'dotaccent', 'ring', 'ogonek', 'tilde', 'hungarumlaut', 'caroncomma', 'commaaccent', 'cyrbreve'] # 'dotlessi', 'dotlessj'
+		self.__specialGlyphs = ['.notdef', 'CR', 'NULL', 'space', '.NOTDEF']
 
 	
 	def __repr__(self):
@@ -1452,6 +1453,15 @@ class pFont(object):
 		'''Removes a guideline (flGuide) from font guidelines'''
 		self.fl.guidelinesHost.removeGuideline(flGuide)
 		self.fl.guidelinesHost.guidelinesChanged()
+
+	def addGlyph(self, glyph):
+		'''Adds a Glyph (fgGlyph or flGlyph) to font'''
+		self.fl.addGlyph(glyph)
+
+	def addGlyphList(self, glyphList):
+		'''Adds a List of Glyphs [fgGlyph or flGlyph] to font'''
+		for glyph in glyphList:
+			self.fl.addGlyph(glyph)
 
 	def clearGuidelines(self):
 		'''Removes all font guidelines'''
@@ -1591,11 +1601,11 @@ class pFont(object):
 
 	def ligatures(self):
 		'''Returns all ligature characters (list[fgGlyph])'''
-		return [glyph for glyph in self.fg if self.__altMarks['liga'] in glyph.name and not self.__altMarks['hide'] in glyph.name]
+		return [glyph for glyph in self.fg if self.__altMarks['liga'] in glyph.name and not self.__altMarks['hide'] in glyph.name and glyph.name not in self.__specialGlyphs]
 
 	def alternates(self):
 		'''Returns all alternate characters (list[fgGlyph])'''
-		return [glyph for glyph in self.fg if self.__altMarks['alt'] in glyph.name and not self.__altMarks['hide'] in glyph.name]
+		return [glyph for glyph in self.fg if self.__altMarks['alt'] in glyph.name and not self.__altMarks['hide'] in glyph.name and glyph.name not in self.__specialGlyphs]
 
 	# - Information -----------------------------------------------
 	def info(self):
