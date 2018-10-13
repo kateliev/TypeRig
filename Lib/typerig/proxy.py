@@ -1456,12 +1456,15 @@ class pFont(object):
 
 	def addGlyph(self, glyph):
 		'''Adds a Glyph (fgGlyph or flGlyph) to font'''
+		if isinstance(glyph, fgt.fgGlyph):
+			glyph = fl6.flGlyph(glyph)
+		
 		self.fl.addGlyph(glyph)
 
 	def addGlyphList(self, glyphList):
 		'''Adds a List of Glyphs [fgGlyph or flGlyph] to font'''
 		for glyph in glyphList:
-			self.fl.addGlyph(glyph)
+			self.addGlyph(glyph)
 
 	def clearGuidelines(self):
 		'''Removes all font guidelines'''
