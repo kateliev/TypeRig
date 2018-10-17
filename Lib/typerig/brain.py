@@ -1,5 +1,5 @@
 # MODULE: Brain | Typerig
-# VER 	: 2.55
+# VER 	: 2.56
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018  (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -284,10 +284,11 @@ class coordArray(object):
 	def __repr__(self):
 		return '<Coordinate Array: Lenght=%s;>' %len(self.x)
 
-	def append(self, coordTuple):
+	def append(self, coordTuple, nodeType=-1):
 		x, y = coordTuple
 		self.x.append(x)
 		self.y.append(y)
+		self.type.append(nodeType)
 
 	def extend(self, coordList):
 		if isinstance(coordList, self.__class__):
@@ -323,6 +324,13 @@ class coordArray(object):
 
 	def flatten(self):
 		return self.x + self.y
+
+	def bounds(self):
+		return (min(self.x), min(self.y), max(self.x), max(self.y))
+
+	def items(self):
+		return zip(self.x, self.y, self.type)
+
 
 # -- Geometry classes --------------------------------------------------------------------
 # --- Transformations --------------------------------------------------------------------

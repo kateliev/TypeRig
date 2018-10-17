@@ -52,7 +52,6 @@ class eGlyph(pGlyph):
 		from typerig.brain import coordArray
 		coords = coordArray()
 		for node in self.nodes(layer):
-			coords.append((float(node.x), float(node.y)))
 			
 			# - Followiong will work on Cubic beziers only! Think of better way!
 			nodeType = 0
@@ -61,7 +60,7 @@ class eGlyph(pGlyph):
 			if node.isOn() and not node.nextNode().isOn():				
 				nodeType = 4
 
-			coords.type.append(nodeType)
+			coords.append((float(node.x), float(node.y)), nodeType)
 
 		return coords
 
