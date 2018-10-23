@@ -1454,18 +1454,6 @@ class pFont(object):
 		self.fl.guidelinesHost.removeGuideline(flGuide)
 		self.fl.guidelinesHost.guidelinesChanged()
 
-	def addGlyph(self, glyph):
-		'''Adds a Glyph (fgGlyph or flGlyph) to font'''
-		if isinstance(glyph, fgt.fgGlyph):
-			glyph = fl6.flGlyph(glyph)
-		
-		self.fl.addGlyph(glyph)
-
-	def addGlyphList(self, glyphList):
-		'''Adds a List of Glyphs [fgGlyph or flGlyph] to font'''
-		for glyph in glyphList:
-			self.addGlyph(glyph)
-
 	def clearGuidelines(self):
 		'''Removes all font guidelines'''
 		self.fl.guidelinesHost.clearGuidelines()
@@ -1609,6 +1597,45 @@ class pFont(object):
 	def alternates(self):
 		'''Returns all alternate characters (list[fgGlyph])'''
 		return [glyph for glyph in self.fg if self.__altMarks['alt'] in glyph.name and not self.__altMarks['hide'] in glyph.name and glyph.name not in self.__specialGlyphs]
+
+	# - Glyph generation ------------------------------------------
+	def addGlyph(self, glyph):
+		'''Adds a Glyph (fgGlyph or flGlyph) to font'''
+		if isinstance(glyph, fgt.fgGlyph):
+			glyph = fl6.flGlyph(glyph)
+		
+		self.fl.addGlyph(glyph)
+
+	def addGlyphList(self, glyphList):
+		'''Adds a List of Glyphs [fgGlyph or flGlyph] to font'''
+		for glyph in glyphList:
+			self.addGlyph(glyph)
+
+	def generateGlyph(self, newGlyphName, strRecipe, layerName, rtl=False):
+		''' Generate new glyph (newGlyphName) using String Recipe (strRecipe) on given Layer (int/str layerName)'''		
+		
+		# - Init
+		advanceWidth = 0 #!!! Figure it out later
+
+		if isinstance(layerName, int):
+			fontMetrics = fl6.FontMetrics(self.fl, self.fl.masters[layerName]) 
+			layerName = self.fl.masters[layerName]
+
+		elif isinstance(layerName, basestring):
+			fontMetrics = fl6.FontMetrics(self.fl, layerName)
+		
+		# - Build
+		# -- Glyph
+		new_glyph = fl6.flGlyph()
+		new_glyph.name = newGlyphName
+
+		# -- Layer
+		new_layer = fl6.flLayer(layerName)
+		gen_component = self.fl.generateGlyph(strRecipe, layerName, fontMetrics, rtl)
+		new_layer.setGlyphComponents(gen_component, advanceWidth, self.fl, True)
+		
+		new_glyph.addLayer(new_layer)
+		return new_glyph
 
 	# - Information -----------------------------------------------
 	def info(self):
