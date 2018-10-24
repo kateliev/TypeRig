@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.48
+# VER 	: 0.49
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -1664,3 +1664,31 @@ class pFont(object):
 	# - Information -----------------------------------------------
 	def info(self):
 		return self.info
+
+	# - OpenType and features -------------------------------------
+	def getFeatures(self):
+		return self.fg.features
+
+	def clearFeatures(self):
+		return self.fg.features.clear()
+
+	def getFeatureTags(self):
+		return self.fg.features.keys()
+
+	def getFeaPrefix(self):
+		return self.fg.features.get_prefix()
+
+	def setFeaPrefix(self, feaString):
+		return self.fg.features.get_prefix(feaString)
+
+	def hasFeature(self, tag):
+		return self.fg.features.has_key(tag)
+
+	def getFeature(self, tag):
+		return self.fg.features.get_feature(tag)
+
+	def setFeature(self, tag, feaString):
+		return self.fg.features.set_feature(tag, feaString)
+
+	def delFeature(self, tag):
+		return self.fg.features.remove(tag)
