@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Glyph Objects | Typerig
-# VER 	: 0.23
+# VER 	: 0.24
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -270,6 +270,26 @@ class eGlyph(pGlyph):
 		if metricTriple[1] is not None:	self.copyRSBbyName(metricTriple[1], layers, order[1], adjustPercent[1], adjustUnits[1])
 		if metricTriple[2] is not None:	self.copyADVbyName(metricTriple[2], layers, adjustPercent[2], adjustUnits[2])
 		
+	def bindCompMetrics(self, layer=None, bindIndex=None):
+		'''Auto bind metrics to the base composite glyph or to specified shape index'''
+		from typerig.string import diactiricalMarks
+
+		base_shapes = [shape for shape in self.shapes(layer) if len(shape.shapeData.name) and shape.shapeData.name not in diactiricalMarks]
+		
+		if len(base_shapes):
+			wShape = base_shapes[bindIndex] if bindIndex is not None else base_shapes[0]
+			transform = wShape.transform
+				
+			if len(wShape.shapeData.name):
+				if transform.m11() > 0:
+					self.setLSBeq('=%s' %wShape.shapeData.name, layer)
+					self.setRSBeq('=%s' %wShape.shapeData.name, layer)
+				else:
+					self.setLSBeq('=rsb("%s")' %wShape.shapeData.name, layer)
+					self.setRSBeq('=lsb("%s")' %wShape.shapeData.name, layer)
+
+				return True		
+
 	# - Interpolation  ---------------------------------------
 	def blendLayers(self, layerA, layerB, blendTimes, outputFL=True, blendMode=0, engine='fg'):
 		'''Blend two layers at given times (anisotropic support).
