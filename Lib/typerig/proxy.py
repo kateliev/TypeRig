@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.47
+# VER 	: 0.48
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -457,6 +457,12 @@ class pGlyph(object):
 			self.parent = font
 			self.fg = glyph
 			self.fl = fl6.flGlyph(glyph, font)
+
+		elif len(argv) == 2 and isinstance(argv[1], fgt.fgFont) and isinstance(argv[0], fgt.fgGlyph):
+			glyph, font = argv
+			self.parent = font
+			self.fg = glyph
+			self.fl = fl6.flGlyph(glyph, font)
 			
 		self.name = self.fg.name
 		self.index = self.fg.index
@@ -619,6 +625,17 @@ class pGlyph(object):
 	def hasGlyphComponents(self, layer=None):
 		'''Return all glyph components in besides glyph.'''
 		return [glyph for glyph in self.listGlyphComponents(layer) if glyph != self.fl]
+
+	def getCompositionString(self, layer=None, legacy=True):
+		'''Return glyph composition string for Generate Glyph command.'''
+		comp_names = self.getCompositionNames(layer)
+
+		if legacy:
+			return '%s=%s' %('+'.join(comp_names[1:]), comp_names[0])
+
+	def getCompositionNames(self, layer=None):
+		'''Return name of glyph and the parts it is made of.'''
+		return [self.name] + [glyph.name for glyph in self.listGlyphComponents(layer)]
 
 	# - Layers -----------------------------------------------------
 	def masters(self):
@@ -1178,6 +1195,7 @@ class pGlyph(object):
 			
 		self.layer(layer).appendGuidelines([newGuideline])
 
+	# - Tags ------------------------------------------------------
 	def getTags(self):
 		return self.fl.tags
 
@@ -1356,9 +1374,9 @@ class pFont(object):
 		'''Return TypeRig proxy glyph object for each selected glyph'''
 		return self.pGlyphs(self.selectedGlyphs())
 
-	def selectedGlyphs(self):
+	def selectedGlyphs(self, extend=None):
 		'''Return TypeRig proxy glyph object for each selected glyph'''
-		return self.glyphs(self.getSelectedIndices())
+		return self.glyphs(self.getSelectedIndices(), extend)
 
 	def glyph(self, glyph):
 		'''Return TypeRig proxy glyph object (pGlyph) by index (int) or name (str).'''
@@ -1371,9 +1389,15 @@ class pFont(object):
 		'''Return fgSymbol by glyph index (int)'''
 		return fl6.fgSymbol(gID, self.fg)
 
-	def glyphs(self, indexList=[]):
+	def glyphs(self, indexList=[], extend=None):
 		'''Return list of FontGate glyph objects (list[fgGlyph]).'''
-		return self.fg.glyphs if not len(indexList) else [self.fg.glyphs[index] for index in indexList]
+		if extend is None:
+			return self.fg.glyphs if not len(indexList) else [self.fg.glyphs[index] for index in indexList]
+		else:
+			if not len(indexList):
+				return [extend(glyph, self.fg) for glyph in self.fg.glyphs]
+			else:
+				return [extend(glyph, self.fg) for glyph in [self.fg.glyphs[index] for index in indexList]]
 
 	def symbols(self):
 		'''Return list of FontGate symbol objects (list[fgSymbol]).'''
