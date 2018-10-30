@@ -25,6 +25,10 @@ uppercaseCYR = ['uni0410', 'uni0411', 'uni0412', 'uni0413', 'uni0414', 'uni0415'
 lowercaseCYR = ['uni0430', 'uni0431', 'uni0432', 'uni0433', 'uni0434', 'uni0435', 'uni0436', 'uni0437', 'uni0438', 'uni0439', 'uni043A', 'uni043B', 'uni043C', 'uni043D', 'uni043E', 'uni043F', 'uni0440', 'uni0441', 'uni0442', 'uni0443', 'uni0444', 'uni0445', 'uni0446', 'uni0447', 'uni0448', 'uni0449', 'uni044A', 'uni044B', 'uni044C', 'uni044D', 'uni044E', 'uni044F']
 figureNames = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
 
+baseGlyphsetKeys = ('Latin_Upper', 'Latin_Lower', 'Cyrillic_Upper', 'Cyrillic_Lower', 'Figures')
+baseGlyphsetNames = (uppercaseLAT, lowercaseLAT, uppercaseCYR, lowercaseCYR, figureNames)
+baseGlyphset = dict(zip(baseGlyphsetKeys, baseGlyphsetNames))
+
 diactiricalMarks = ['grave', 'dieresis', 'macron', 'acute', 'cedilla', 'uni02BC', 'circumflex', 'caron', 'breve', 'dotaccent', 'ring', 'ogonek', 'tilde', 'hungarumlaut', 'caroncomma', 'commaaccent', 'cyrbreve'] # 'dotlessi', 'dotlessj'
 
 fillerList = [('nn','nn'), ('HH','HH'), ('HOII', 'IIOH'), ('ll','ll'), ('dll','llb'), ('hoii', 'iioh')]

@@ -75,16 +75,16 @@ class QStringGen(QtGui.QGridLayout):
 				
 		self.btn_genCopy = QtGui.QPushButton('Generate')
 		self.btn_genUni = QtGui.QPushButton('Unicode Str.')
-		self.btn_refresh = QtGui.QPushButton('&Populate lists')
+		self.btn_populate = QtGui.QPushButton('&Populate lists')
 		self.btn_clear = QtGui.QPushButton('&Rest fields')
 
 		self.btn_genCopy.setToolTip('Generate the pair string using Glyph Names and send it to the clipboard.')
 		self.btn_genUni.setToolTip('Generate the pair string using Unicode Characters and send it to the clipboard.')
-		self.btn_refresh.setToolTip('Populate name lists with existing glyph names in active font.')
+		self.btn_populate.setToolTip('Populate name lists with existing glyph names in active font.')
 		self.btn_clear.setToolTip('Clear all manual input fields.')
 
 		self.btn_clear.clicked.connect(self.clear)
-		self.btn_refresh.clicked.connect(self.refresh)
+		self.btn_populate.clicked.connect(self.populate)
 		self.btn_genCopy.clicked.connect(self.generate)
 		self.btn_genUni.clicked.connect(self.generateUni)
 		
@@ -112,7 +112,7 @@ class QStringGen(QtGui.QGridLayout):
 		self.addWidget(QtGui.QLabel('Sep.:'), 	7, 6, 1, 1)
 		self.addWidget(self.edt_sep, 			7, 7, 1, 2)
 		self.addWidget(QtGui.QLabel(''), 		8, 0, 1, 1)
-		self.addWidget(self.btn_refresh, 		9, 1, 1, 5)
+		self.addWidget(self.btn_populate, 		9, 1, 1, 5)
 		self.addWidget(self.btn_clear, 			9, 6, 1, 3)
 		self.addWidget(self.btn_genCopy, 		10, 1, 1, 5)
 		self.addWidget(self.btn_genUni, 		10, 6, 1, 3)
@@ -138,7 +138,7 @@ class QStringGen(QtGui.QGridLayout):
 		self.cmb_join.clear()
 		self.cmb_join.addItems(joinOpt.keys())
 
-	def refresh(self):
+	def populate(self):
 		self.font = pFont()
 		self.glyphNames = self.font.getGlyphNameDict()
 		self.glyphUnicodes = self.font.getGlyphUnicodeDict(self.defEncoding)

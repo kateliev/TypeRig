@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.51'
+app_name, app_version = 'TypeRig | Nodes', '0.52'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -175,7 +175,7 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toDescender = QtGui.QPushButton('Desc.')
 		self.btn_toXHeight = QtGui.QPushButton('X Hgt.')
 		self.btn_toBaseline = QtGui.QPushButton('Base')
-		self.btn_toGuide = QtGui.QPushButton('Guide')
+		self.btn_toYpos = QtGui.QPushButton('Y Pos')
 		self.btn_solveY = QtGui.QPushButton('Lineup Min/Max Y')
 		self.btn_solveX = QtGui.QPushButton('Lineup Min/Max X')
 		self.btn_copy = QtGui.QPushButton('Copy Slope')
@@ -191,8 +191,6 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_italic.setCheckable(True)
 		self.btn_italic.setChecked(False)
 
-		self.btn_toGuide.setEnabled(False)
-
 		self.btn_solveY.setToolTip('Channel Process selected nodes according to Y values')
 		self.btn_solveX.setToolTip('Channel Process selected nodes according to X values')
 		self.btn_copy.setToolTip('Copy slope between lowest and highest of selected nodes.')
@@ -206,8 +204,15 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toDescender.setToolTip('Send selected nodes to Descender height.')
 		self.btn_toXHeight.setToolTip('Send selected nodes to X Height.')
 		self.btn_toBaseline.setToolTip('Send selected nodes to Baseline.')
-		self.btn_toGuide.setToolTip('Send selected nodes to Tagged Guideline.')
+		self.btn_toYpos.setToolTip('Send selected nodes to Tagged Guideline.')
 
+		# - Edit
+		self.edt_toYpos = QtGui.QSpinBox()
+		self.edt_toYpos.setToolTip('Destination Y Coordinate')
+		self.edt_toYpos.setMaximum(1500)
+		self.edt_toYpos.setMinimum(-1500)
+
+		# - Properties
 		self.btn_left.setMinimumWidth(40)
 		self.btn_right.setMinimumWidth(40)
 		self.btn_top.setMinimumWidth(40)
@@ -220,6 +225,8 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toCapsHeight.setMinimumWidth(40)
 		self.btn_toDescender.setMinimumWidth(40)
 		self.btn_toXHeight.setMinimumWidth(40)
+		self.btn_toYpos.setMinimumWidth(40)
+		self.edt_toYpos.setMinimumWidth(20)
 				
 		self.btn_copy.clicked.connect(self.copySlope)
 		self.btn_left.clicked.connect(lambda: self.alignNodes('L'))
@@ -241,15 +248,12 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toDescender.clicked.connect(lambda: self.alignNodes('FontMetrics_2'))
 		self.btn_toXHeight.clicked.connect(lambda: self.alignNodes('FontMetrics_3'))
 		self.btn_toBaseline.clicked.connect(lambda: self.alignNodes('FontMetrics_4'))
-
-		# - Line Edit
-		self.edt_toGuide = QtGui.QLineEdit()
-		self.edt_toGuide.setPlaceholderText('Guideline Tag')
-		self.edt_toGuide.setEnabled(False)
+		self.btn_toYpos.clicked.connect(lambda: self.alignNodes('FontMetrics_5'))
 
 		# - Check box
-		self.chk_slope = QtGui.QCheckBox('Slope Interception')
-		self.chk_slope.setToolTip('EXPERIMENTAL:\nFind intersections of selected font metric\nwith slopes on which selected nodes resign.')
+		self.chk_slope = QtGui.QPushButton('Intercept')
+		self.chk_slope.setCheckable(True)
+		self.chk_slope.setToolTip('Find intersections of selected font metric\nwith slopes on which selected nodes resign.')
 				
 		# - Build Layout
 		self.addWidget(self.btn_left, 			0,0)
@@ -266,10 +270,9 @@ class alignNodes(QtGui.QGridLayout):
 		self.addWidget(self.btn_toDescender,	4,2)
 		self.addWidget(self.btn_toXHeight,		4,3)
 		self.addWidget(self.btn_toBaseline,		5,0)
-		#self.addWidget(self.edt_toGuide,		5,1,1,2)
-		self.addWidget(self.chk_slope, 			5,1,1,2)
-		self.addWidget(self.btn_toGuide,		5,3)
-		#self.addWidget(self.chk_slope, 			6,2,1,2)
+		self.addWidget(self.edt_toYpos,			5,1)
+		self.addWidget(self.btn_toYpos,			5,2)
+		self.addWidget(self.chk_slope, 			5,3)
 		self.addWidget(QtGui.QLabel('Channel processing and slopes'), 7,0,1,4)
 		self.addWidget(self.btn_solveY, 		8,0,1,2)
 		self.addWidget(self.btn_solveX, 		8,2,1,2)
@@ -417,6 +420,9 @@ class alignNodes(QtGui.QGridLayout):
 				elif '4' in mode:
 					newY = 0
 					toMaxY = True
+				elif '5' in mode:
+					newY = self.edt_toYpos.value
+					toMaxY = True #self.edt_toYpos.value >= 0
 
 			for node in selection:
 				if 'FontMetrics' in mode:
