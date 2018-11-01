@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Node Objects | Typerig
-# VER 	: 0.08
+# VER 	: 0.09
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -54,8 +54,9 @@ class eNode(pNode):
 		
 		#'''
 		# - Insert Node and process
-		self.insertAfter(0)
+		self.insertAfter(.01) # Was 0?, something went wrong in 6871
 		self.contour.updateIndices()
+		self.getNextOn(False).smartReloc(self.x, self.y) # Go back because something went wrong in 6871
 
 		self.smartShift(*prevShift.asTuple())
 		self.getNextOn(False).smartShift(*nextShift.asTuple())
