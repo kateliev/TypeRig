@@ -59,14 +59,18 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 		self.btn_populate = QtGui.QPushButton('&Populate')
 		self.btn_get = QtGui.QPushButton('&Window')
 		self.btn_probe = QtGui.QPushButton('Glyph')
+		self.btn_units = QtGui.QPushButton('Percent')
 
 		self.btn_refresh.setToolTip('Refresh active glyph and table.')
 		self.btn_populate.setToolTip('Populate character set selector from current font.')
 		self.btn_get.setToolTip('Get current string from active Glyph Window.')
 		self.btn_probe.setToolTip('Toggle between Row (Glyph) or Column (Layer) based comparison.')
+		self.btn_units.setToolTip('Toggle the results beeing shown as (Units) or (Percent).')
 
 		self.btn_probe.setCheckable(True)
+		self.btn_units.setCheckable(True)
 		self.btn_probe.setChecked(False)
+		self.btn_units.setChecked(False)
 		
 		# !!! Disable for now
 		self.cmb_charset.setEnabled(False)
@@ -76,9 +80,9 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 		self.lay_head.addWidget(QtGui.QLabel('G:'),	0,0,1,1)
 		self.lay_head.addWidget(self.edt_glyphName,	0,1,1,5)
 		self.lay_head.addWidget(self.btn_refresh,	0,6,1,2)
-		self.lay_head.addWidget(QtGui.QLabel('C:'),	1,0,1,1)
-		self.lay_head.addWidget(self.cmb_charset,	1,1,1,5)
-		self.lay_head.addWidget(self.btn_populate,	1,6,1,2)
+		#self.lay_head.addWidget(QtGui.QLabel('C:'),	1,0,1,1)
+		#self.lay_head.addWidget(self.cmb_charset,	1,1,1,5)
+		#self.lay_head.addWidget(self.btn_populate,	1,6,1,2)
 		self.lay_head.addWidget(QtGui.QLabel('C:'),	2,0,1,1)
 		self.lay_head.addWidget(self.edt_glyphsSeq,	2,1,1,5)
 		self.lay_head.addWidget(self.btn_get,		2,6,1,2)
@@ -93,18 +97,14 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 		
 		# -- Note/Descriotion
 		self.addWidget(self.tab_stats)
-		
-		note_msg = QtGui.QLabel('Note: Data is processed according to currently selected table row, serving as base for comparison (100%).')
-		note_msg.setOpenExternalLinks(True)
-		note_msg.setWordWrap(True)
-
-		self.addWidget(note_msg)
+		self.addWidget(self.btn_units)
 
 		# -- Addons
 		self.btn_refresh.clicked.connect(self.refresh)
 		self.btn_populate.clicked.connect(self.populate)
 		self.btn_get.clicked.connect(self.get_string)
 		self.btn_probe.clicked.connect(self.toggle_query)
+		self.btn_units.clicked.connect(self.toggle_units)
 		self.cmb_query.currentIndexChanged.connect(self.refresh)
 
 		# -- Table Styling
@@ -171,6 +171,12 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 		else:
 			self.btn_probe.setText('Glyph')
 			self.tab_stats.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
+
+	def toggle_units(self):
+		if self.btn_units.isChecked():
+			self.btn_units.setText('Units')
+		else:
+			self.btn_units.setText('Percent')
 
 	def process_query(self, glyph, layer, query):
 		if 'bbox' in query.lower() and 'width' in query.lower(): return glyph.getBounds(layer).width()
