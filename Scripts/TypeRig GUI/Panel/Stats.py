@@ -158,12 +158,12 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 		for glyph_name, glyph_layers in self.table_data.iteritems():
 			if not self.btn_probe.isChecked():
 				if self.btn_units.isChecked():
-					self.table_proc[glyph_name] = {layer_name: round(self.table_data[base_name][layer_name] - layer_value, 2)  for layer_name, layer_value in glyph_layers.iteritems()}
+					self.table_proc[glyph_name] = {layer_name: -round(self.table_data[base_name][layer_name] - layer_value, 2)  for layer_name, layer_value in glyph_layers.iteritems()}
 				else:
 					self.table_proc[glyph_name] = {layer_name:'%s %%' %round(ratfrac(noZero(layer_value), noZero(self.table_data[base_name][layer_name])),2)  for layer_name, layer_value in glyph_layers.iteritems()}
 			else:
 				if self.btn_units.isChecked():
-					self.table_proc[glyph_name] = {layer_name:round(self.table_data[glyph_name][base_layer] - layer_value, 2)  for layer_name, layer_value in glyph_layers.iteritems()}
+					self.table_proc[glyph_name] = {layer_name: -round(self.table_data[glyph_name][base_layer] - layer_value, 2)  for layer_name, layer_value in glyph_layers.iteritems()}
 				else:
 					self.table_proc[glyph_name] = {layer_name:'%s %%' %round(ratfrac(noZero(layer_value), noZero(self.table_data[glyph_name][base_layer])),2)  for layer_name, layer_value in glyph_layers.iteritems()}
 
