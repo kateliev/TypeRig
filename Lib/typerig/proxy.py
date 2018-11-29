@@ -622,8 +622,8 @@ class pGlyph(object):
 		'''Return all glyph shapes that are not glyph references or those belonging to the original (master) glyph'''
 		return [shape for shape in self.shapes(layer) if self.package.isComponent(shape.shapeData)[0] is None or self.package.isComponent(shape.shapeData)[0] == self.fl]		
 
-	def hasGlyphComponents(self, layer=None):
-		'''Return all glyph components in besides glyph.'''
+	def components(self, layer=None):
+		'''Return all glyph components besides glyph.'''
 		return [glyph for glyph in self.listGlyphComponents(layer) if glyph != self.fl]
 
 	def getCompositionString(self, layer=None, legacy=True):
