@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Metrics', '0.13'
+app_name, app_version = 'TypeRig | Metrics', '0.14'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -240,7 +240,7 @@ class metrics_expr(QtGui.QGridLayout):
 		self.edt_rsb.setPlaceholderText('Metric expression')
 
 		self.btn_setMetrics = QtGui.QPushButton('&Set Metric expressions')
-		self.btn_getShapeParent = QtGui.QPushButton('&Get Element reference')
+		self.btn_getShapeParent = QtGui.QPushButton('&Get composite reference')
 		self.btn_setMetrics.clicked.connect(self.setMetricEquations)
 		self.btn_getShapeParent.clicked.connect(self.bindShapeParent)
 
@@ -269,7 +269,7 @@ class metrics_expr(QtGui.QGridLayout):
 		glyph = eGlyph()
 		layer = None 	# Static! Make it smart, so it detects on all layers, dough unnecessary
 		shapeIndex = self.spb_shapeIndex.value 	# Static! Make it smart, so it detects...
-		namedShapes = [shape for shape in glyph.shapes() if len(shape.shapeData.name)]
+		namedShapes = [shape for shape in glyph.shapes() if len(shape.shapeData.name)] + glyph.components()
 		
 		try:
 			wShape = namedShapes[shapeIndex]

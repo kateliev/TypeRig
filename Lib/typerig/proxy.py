@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.49
+# VER 	: 0.50
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -614,9 +614,14 @@ class pGlyph(object):
 		return [activeLayer[sid] for sid in range(activeLayer.countShapes())]
 
 	# - Composite glyph --------------------------------------------
-	def listGlyphComponents(self, layer=None, fullData=False):
+	# ! Deactivated not working as expected
+	#def listGlyphComponents(self, layer=None, fullData=False):
+	#	'''Return all glyph components in glyph'''
+	#	return [item if fullData else item[0] for item in [self.package.isComponent(shape.shapeData) for shape in self.shapes(layer)] if item[0] is not None]
+	
+	def listGlyphComponents(self, layer=None):
 		'''Return all glyph components in glyph'''
-		return [item if fullData else item[0] for item in [self.package.isComponent(shape.shapeData) for shape in self.shapes(layer)] if item[0] is not None]
+		return [(shape, shape.includesList) for shape in self.shapes(layer) if len(shape.includesList)]
 
 	def listUnboundShapes(self, layer=None):
 		'''Return all glyph shapes that are not glyph references or those belonging to the original (master) glyph'''
@@ -624,7 +629,7 @@ class pGlyph(object):
 
 	def components(self, layer=None):
 		'''Return all glyph components besides glyph.'''
-		return [glyph for glyph in self.listGlyphComponents(layer) if glyph != self.fl]
+		return [comp for pair in self.listGlyphComponents(layer) for comp in pair[1]]
 
 	def getCompositionString(self, layer=None, legacy=True):
 		'''Return glyph composition string for Generate Glyph command.'''
