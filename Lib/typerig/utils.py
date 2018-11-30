@@ -1,5 +1,5 @@
 # MODULE: Misc Utils | Typerig
-# VER   : 0.02
+# VER   : 0.03
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -12,6 +12,19 @@
 # Note: Revisit as most of these are redundant as they were needed for FDK5, some are even from Python 2.4 times
 
 # - Functions ----------------------------------------------
+# -- Units -------------------------------------------------
+def point2pixel(points):
+	return points*1.333333
+
+def pixel2point(pixels):
+	return pixels*0.75
+
+def inch2point(inches):
+	return inches*71.999999999999
+
+def point2inch(points):
+	return points*0.013888888888889
+
 # -- Workign with Strings ----------------------------------
 def strNormSpace(string):
 	'''
