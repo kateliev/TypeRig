@@ -17,7 +17,7 @@ from PythonQt import QtCore, QtGui
 import Panel 
 
 # - Init --------------------------
-app_version = '0.41'
+app_version = '0.45'
 app_name = 'TypeRig Panel'
 ignorePanel = '__'
 
@@ -48,12 +48,37 @@ class typerig_Panel(QtGui.QDialog):
 
 		self.refreshLayers()
 
+		# - Glyphs --------------------------
+		self.rad_glyph = QtGui.QRadioButton('Glyph')
+		self.rad_window = QtGui.QRadioButton('Window')
+		self.rad_selection = QtGui.QRadioButton('Selection')
+		self.rad_font = QtGui.QRadioButton('Font')
+		
+		self.rad_glyph.setChecked(True)
+
+		self.rad_glyph.setEnabled(True)
+		self.rad_window.setEnabled(False)
+		self.rad_selection.setEnabled(False)
+		self.rad_font.setEnabled(False)
+
+		self.rad_glyph.setToolTip('Affect current glyph')
+		self.rad_window.setToolTip('Affect glyphs in active window')
+		self.rad_selection.setToolTip('Affect selected glyphs')
+		self.rad_font.setToolTip('Affect the entire font')
+
 		# - Fold Button ---------------------
 		self.btn_fold = QtGui.QPushButton('^')
-		self.btn_fold.setFixedHeight(self.chk_ActiveLayer.sizeHint.height())
+		self.btn_unfold = QtGui.QPushButton('Restore Panel')
+		
+		self.btn_fold.setFixedHeight(self.chk_ActiveLayer.sizeHint.height()*2.5)
 		self.btn_fold.setFixedWidth(self.chk_ActiveLayer.sizeHint.height())
+		self.btn_unfold.setFixedHeight(self.chk_ActiveLayer.sizeHint.height() + 5)
+
 		self.btn_fold.setToolTip('Fold Panel')
+		self.btn_unfold.setToolTip('Unfold Panel')
+
 		self.btn_fold.clicked.connect(self.fold)
+		self.btn_unfold.clicked.connect(self.fold)
 		self.flag_fold = False
 				
 		# - Tabs --------------------------
@@ -71,18 +96,28 @@ class typerig_Panel(QtGui.QDialog):
 		layoutV = QtGui.QVBoxLayout() 
 		layoutV.setContentsMargins(0,0,0,0)
 		
-		self.lay_layers = QtGui.QGridLayout()
-		self.lay_layers.setContentsMargins(15,10,5,5)
+		self.lay_controller = QtGui.QGridLayout()
+		self.fr_controller = QtGui.QFrame()
+		self.lay_controller.setContentsMargins(15,10,5,5)
 				
 		# -- Build layouts -------------------------------
-		self.lay_layers.addWidget(self.chk_ActiveLayer, 0, 0)
-		self.lay_layers.addWidget(self.chk_Masters, 0 , 1)
-		self.lay_layers.addWidget(self.chk_Masks, 0, 2)
-		self.lay_layers.addWidget(self.chk_Service, 0, 3)
-		self.lay_layers.addWidget(self.btn_fold, 0, 4)
+		self.lay_controller.addWidget(self.chk_ActiveLayer,	0, 0, 1, 1)
+		self.lay_controller.addWidget(self.chk_Masters, 	0, 1, 1, 1)
+		self.lay_controller.addWidget(self.chk_Masks, 		0, 2, 1, 1)
+		self.lay_controller.addWidget(self.chk_Service, 	0, 3, 1, 1)
+		self.lay_controller.addWidget(self.btn_fold, 		0, 4, 2, 1)
+		self.lay_controller.addWidget(self.rad_glyph, 		1, 0, 1, 1)
+		self.lay_controller.addWidget(self.rad_window, 		1, 1, 1, 1)
+		self.lay_controller.addWidget(self.rad_selection, 	1, 2, 1, 1)
+		self.lay_controller.addWidget(self.rad_font, 		1, 3, 1, 1)
 					 
-		layoutV.addLayout(self.lay_layers)
+		layoutV.addWidget(self.btn_unfold)
+		self.fr_controller.setLayout(self.lay_controller)
+		
+		layoutV.addWidget(self.fr_controller)
 		layoutV.addWidget(self.tabs)
+
+		self.btn_unfold.hide()
 
 		# - Set Widget -------------------------------
 		self.setLayout(layoutV)
@@ -103,18 +138,23 @@ class typerig_Panel(QtGui.QDialog):
 	def fold(self):
 		# - Init
 		width_all = self.chk_ActiveLayer.sizeHint.width()
-		height_folded = self.chk_ActiveLayer.sizeHint.height() + 15
+		height_folded = self.btn_unfold.sizeHint.height()
 		height_expanded = self.tabs.sizeHint.height() + 40 #Fix this! + 40 Added because Nodes tab breaks
 		#self.resize(QtCore,Qsize(width_all, height_folded))
 		
 		# - Do
 		if not self.flag_fold:
 			self.tabs.hide()
+			self.fr_controller.hide()
+			self.btn_unfold.show()
+			self.repaint()
 			self.setFixedHeight(height_folded)
 			self.flag_fold = True
 		else:
 			self.setFixedHeight(height_expanded) 
 			self.tabs.show()
+			self.fr_controller.show()
+			self.btn_unfold.hide()
 			self.repaint()
 			self.flag_fold = False
 	
