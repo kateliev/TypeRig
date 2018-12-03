@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Glyph Objects | Typerig
-# VER 	: 0.24
+# VER 	: 0.25
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -359,8 +359,9 @@ class eGlyph(pGlyph):
 			for shape in self.shapes(layer):
 				for contour in shape.getContours():
 					for node in contour.nodes():
-						transCoords = shape.transform.map(node.position)
-						nodeCoords.append((transCoords.x(), transCoords.y()))
+						if node.isOn():
+							transCoords = shape.transform.map(node.position)
+							nodeCoords.append((transCoords.x(), transCoords.y()))
 
 		minValY = min(nodeCoords, key=itemgetter(1))[1]
 		maxValY = max(nodeCoords, key=itemgetter(1))[1]
