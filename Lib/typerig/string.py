@@ -1,5 +1,5 @@
 # MODULE: String | Typerig
-# VER 	: 0.15
+# VER 	: 0.16
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -175,3 +175,17 @@ def stringGen(inputA, inputB, filler=('HH','HH'), genPattern = 'FL A B A FR', su
 	fillerLeft = sep.join([char for char in filler[0]])
 	fillerRight = sep.join([char for char in filler[1]])
 	return [genPattern.format(**{'FL':fillerLeft, 'FR': fillerRight, 'A':pair[0] + suffix[0], 'B':pair[1] + suffix[1]}) for pair in product(inputA, inputB)]
+
+class OTGen(object):
+	''' Generate OpenType features '''
+	def __init__(self):
+		# - Templates
+		self.simple_fea = 'feature {tag} {{ # {com}\n{body}\n}} {tag};'
+		self.simple_sub = '\tsub {glyph_in} by {glyph_out};'
+		self.simple_liga = '\tsub {glyph_in} by {glyph_out};'
+
+		self.sub_suffix = '\tsub {glyph} by {glyph}.{suffix};'
+		self.sub_multiple = '\tsub {glyph} from [{glyph_list}];'
+		
+		self.lookup_fea = 'lookup {tag} {{\n{body}\n}} {tag};'
+		self.lookup_use = 'lookup {tag};'
