@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.50
+# VER 	: 0.53
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -200,6 +200,7 @@ class pNode(object):
 		self.parent = self.contour = self.fl.contour
 		self.name = self.fl.name
 		self.index = self.fl.index
+		self.selected = self.fl.selected
 		self.id = self.fl.id
 		self.isOn = self.fl.isOn()
 		self.type = self.fl.type
@@ -488,7 +489,7 @@ class pGlyph(object):
 
 	def italicAngle(self): return self.package.italicAngle_value
 
-	def nodes(self, layer=None, extend=None):
+	def nodes(self, layer=None, extend=None, deep=True):
 		'''Return all nodes at given layer.
 		Args:
 			layer (int or str): Layer index or name. If None returns ActiveLayer.
@@ -496,11 +497,13 @@ class pGlyph(object):
 		Returns:
 			list[flNodes]
 		'''
-		#return sum([contour.nodes() for contour in self.layer(layer).getContours()], [])
+		# - Default
+		layer_contours = self.contours(layer, deep=deep)
+
 		if extend is None:
-			return [node for contour in self.layer(layer).getContours() for node in contour.nodes()]
+			return [node for contour in layer_contours for node in contour.nodes()]
 		else:
-			return [extend(node) for contour in self.layer(layer).getContours() for node in contour.nodes()]
+			return [extend(node) for contour in layer_contours for node in contour.nodes()]
 
 	def fg_nodes(self, layer=None):
 		'''Return all FontGate nodes at given layer.
@@ -511,14 +514,23 @@ class pGlyph(object):
 		'''
 		return sum([contour.nodes.asList() for contour in self.fg_contours(layer)], [])
 
-	def contours(self, layer=None):
+	def contours(self, layer=None, deep=True):
 		'''Return all contours at given layer.
 		Args:
 			layer (int or str): Layer index or name. If None returns ActiveLayer
 		Returns:
 			list[flContours]
 		'''
-		return [contour for contour in self.layer(layer).getContours()]
+		layer_contours = self.layer(layer).getContours()
+		
+		# - Dig deeper in grouped components and shapebuilders (filters)
+		if deep:
+			glyph_components = self.components(layer)
+
+			if len(glyph_components):
+				layer_contours = [contour for component in glyph_components for contour in component.contours]
+
+		return layer_contours
 
 	def fg_contours(self, layer=None):
 		'''Return all FontGate contours at given layer.
@@ -758,30 +770,30 @@ class pGlyph(object):
 		'''
 
 	# - Glyph Selection -----------------------------------------------
-	def selectedNodeIndices(self, filterOn=False):
+	def selectedNodeIndices(self, filterOn=False, deep=True):
 		'''Return all indices of nodes selected at current layer.
 		Args:
 			filterOn (bool): Return only on-curve nodes
 		Returns:
 			list[int]
 		'''
-		allNodes = self.nodes()
+		allNodes = self.nodes(deep=deep)
 
 		if not filterOn:
-			return [allNodes.index(node) for node in self.nodes() if node.selected]
+			return [allNodes.index(node) for node in allNodes if node.selected]
 		else:
-			return [allNodes.index(node) for node in self.nodes() if node.selected and node.isOn()]
+			return [allNodes.index(node) for node in allNodes if node.selected and node.isOn()]
 	
-	def selected(self, filterOn=False):
+	def selected(self, filterOn=False, deep=True):
 		'''Return all selected nodes indexes at current layer.
 		Args:
 			filterOn (bool): Return only on-curve nodes
 		Returns:
 			list[int]
 		'''
-		return self.selectedNodeIndices(filterOn)
+		return self.selectedNodeIndices(filterOn, deep)
 
-	def selectedNodes(self, layer=None, filterOn=False, extend=None):
+	def selectedNodes(self, layer=None, filterOn=False, extend=None, deep=True):
 		'''Return all selected nodes at given layer.
 		Args:
 			filterOn (bool): Return only on-curve nodes
@@ -789,7 +801,8 @@ class pGlyph(object):
 		Returns:
 			list[flNode]
 		'''
-		return [self.nodes(layer, extend)[nid] for nid in self.selectedNodeIndices(filterOn)]
+		return [self.nodes(layer, extend, deep)[nid] for nid in self.selectedNodeIndices(filterOn, deep)]
+		#return [node for node in self.nodes(layer, extend, deep) if node.selected]
 	
 	def selectedAtContours(self, index=True, layer=None, filterOn=False):	
 		'''Return all selected nodes and the contours they rest upon at current layer.
@@ -807,7 +820,7 @@ class pGlyph(object):
 		else:
 			return [(node.contour, node) for node in self.selectedNodes(layer, filterOn)]
 
-	def selectedAtShapes(self, index=True, filterOn=False):
+	def selectedAtShapes(self, index=True, filterOn=False, layer=None, deep=True):
 		'''Return all selected nodes and the shapes they belong at current layer.
 		Args:
 			index (bool): If True returns only indexes, False returns flShape, flNode
@@ -818,8 +831,8 @@ class pGlyph(object):
 
 		!TODO: Make it working with layers as selectedAtContours(). This is legacy mode so other scripts would work!
 		'''
-		allContours = self.contours()
-		allShapes = self.shapes()
+		allContours = self.contours(layer=layer, deep=deep)
+		allShapes = self.shapes(layer) if not deep else self.components(layer)
 
 		if index:
 			return [(allShapes.index(shape), allContours.index(contour), node.index) for shape in allShapes for contour in shape.contours for node in contour.nodes() if node in self.selectedNodes(filterOn=filterOn)]
@@ -839,11 +852,13 @@ class pGlyph(object):
 		
 		if not applyTransform:
 			nodelist = self.selectedAtContours(filterOn=filterOn)
-			return [pLayer.getContours()[item[0]].nodes()[item[1]].position for item in nodelist]
+			#return [pLayer.getContours()[item[0]].nodes()[item[1]].position for item in nodelist]
+			return [self.contours(layer)[cid].nodes()[nid].position for cid, nid in nodelist]
 
 		else:
 			nodelist = self.selectedAtShapes(filterOn=filterOn)
-			return [pLayer.getShapes(1)[item[0]].transform.map(pLayer.getContours()[item[1]].nodes()[item[2]].position) for item in nodelist]
+			#return [pLayer.getShapes(1)[item[0]].transform.map(pLayer.getContours()[item[1]].nodes()[item[2]].position) for item in nodelist]
+			return [self.shapes(layer)[sid].transform.map(self.contours(layer)[cid].nodes()[nid].position) for sid, cid, nid in nodelist]
 
 	def selectedSegments(self, layer=None):
 		'''Returns list of currently selected segments

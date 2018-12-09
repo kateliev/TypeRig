@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.52'
+app_name, app_version = 'TypeRig | Nodes', '0.53'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -139,7 +139,7 @@ class basicOps(QtGui.QGridLayout):
 		wLayers = glyph._prepareLayers(pLayers)
 		
 		for layer in wLayers:
-			selection = [eNode(node) for node in glyph.selectedNodes(layer, True)]
+			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode, deep=True)
 			
 			for node in reversed(selection):
 				if not doKnot:
@@ -360,8 +360,8 @@ class alignNodes(QtGui.QGridLayout):
 		wLayers = glyph._prepareLayers(pLayers)
 		
 		for layer in wLayers:
-			selection = [eNode(node) for node in glyph.selectedNodes(layer)]
-			
+			selection = glyph.selectedNodes(layer, extend=eNode, deep=True)
+
 			if mode == 'L':
 				target = min(selection, key=lambda item: item.x)
 				control = (True, False)
