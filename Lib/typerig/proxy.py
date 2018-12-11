@@ -650,9 +650,10 @@ class pGlyph(object):
 		if legacy:
 			return '%s=%s' %('+'.join(comp_names[1:]), comp_names[0])
 
+	# TODO: List glyph elements?!
 	def getCompositionNames(self, layer=None):
 		'''Return name of glyph and the parts it is made of.'''
-		return [self.name] + [glyph.name for glyph in self.listGlyphComponents(layer)]
+		return [self.name] + [shape.shapeData.name for shape in self.components(layer)]
 
 	# - Layers -----------------------------------------------------
 	def masters(self):
