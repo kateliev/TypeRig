@@ -1376,6 +1376,7 @@ class pFont(object):
 		self.name = self.familyName # Change later
 		self.OTfullName = self.info.openTypeNameCompatibleFullName
 		self.PSfullName = self.info.postscriptFullName
+		self.path = self.fg.path
 
 		# - Special 
 		self.__altMarks = {'liga':'_', 'alt':'.', 'hide':'__'}

@@ -269,7 +269,7 @@ class metrics_expr(QtGui.QGridLayout):
 		glyph = eGlyph()
 		layer = None 	# Static! Make it smart, so it detects on all layers, dough unnecessary
 		shapeIndex = self.spb_shapeIndex.value 	# Static! Make it smart, so it detects...
-		namedShapes = [shape for shape in glyph.shapes() if len(shape.shapeData.name)] + glyph.components()
+		namedShapes = [shape for shape in glyph.shapes() + glyph.components() if len(shape.shapeData.name)] 
 		
 		try:
 			wShape = namedShapes[shapeIndex]

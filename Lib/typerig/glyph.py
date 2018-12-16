@@ -274,7 +274,7 @@ class eGlyph(pGlyph):
 		'''Auto bind metrics to the base composite glyph or to specified shape index'''
 		from typerig.string import diactiricalMarks
 
-		base_shapes = [shape for shape in self.shapes(layer) if len(shape.shapeData.name) and shape.shapeData.name not in diactiricalMarks]
+		base_shapes = [shape for shape in self.shapes(layer) + self.components(layer) if len(shape.shapeData.name) and shape.shapeData.name not in diactiricalMarks]
 		
 		if len(base_shapes):
 			wShape = base_shapes[bindIndex] if bindIndex is not None else base_shapes[0]
