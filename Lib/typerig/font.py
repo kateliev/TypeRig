@@ -12,12 +12,12 @@
 # - Dependencies -------------------------
 import json
 import json.scanner
-from collections import defaultdict
 
 import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
+from typerig.utils import jsontree, vfj_encoder, vfj_decoder
 from typerig.proxy import pFont
 
 
@@ -39,71 +39,21 @@ class eFont(pFont):
 
 		pass # TODO!
 		
-# -- VFJ Font: Fontlab 6 JSON File format -------------------------
-# --- VFJ Font helper classes
-class jsontree(defaultdict):
-	'''
-	Default dictionary where keys can be accessed as attributes
-	----
-	Adapted from JsonTree by Doug Napoleone: https://github.com/dougn/jsontree
-	'''
-	def __init__(self, *args, **kwdargs):
-		super(jsontree, self).__init__(jsontree, *args, **kwdargs)
-		
-	def __getattribute__(self, name):
-		try:
-			return object.__getattribute__(self, name)
-		except AttributeError:
-			return self[name]
-	
-	def __setattr__(self, name, value):
-		self[name] = value
-		return value
-	
-	def __repr__(self):
-	  return str(self.keys())
 
-
-class vfj_decoder(json.JSONDecoder):
-	'''
-	VFJ (JSON) decoder class for deserializing to a jsontree object structure.
-	----
-	Parts adapted from JsonTree by Doug Napoleone: https://github.com/dougn/jsontree
-	'''
-	def __init__(self, *args, **kwdargs):
-		super(vfj_decoder, self).__init__(*args, **kwdargs)
-		self.__parse_object = self.parse_object
-		self.parse_object = self._parse_object
-		self.scan_once = json.scanner.py_make_scanner(self)
-		self.__jsontreecls = jsontree
-	
-	def _parse_object(self, *args, **kwdargs):
-		result = self.__parse_object(*args, **kwdargs)
-		return self.__jsontreecls(result[0]), result[1]
-
-
-class vfj_encoder(json.JSONEncoder):
-	'''
-	VFJ (JSON) encoder class that serializes out jsontree object structures.
-	----
-	Parts adapted from JsonTree by Doug Napoleone: https://github.com/dougn/jsontree
-	'''
-	def __init__(self, *args, **kwdargs):
-		super(vfj_encoder, self).__init__(*args, **kwdargs)
-	
-	def default(self, obj):
-		return super(vfj_encoder, self).default(obj)
-
-# --- VFJ Font Object
 class jFont(object):
 	'''
-	Proxy VFJ Font
+	Proxy VFJ Font (Fontlab JSON Font format)
 
 	Constructor:
-		jFont()
-		jFont(vfj_file_path)
-		jFont(pFont)
-		
+		jFont(): Construct an empty jFont
+		jFont(vfj_file_path): Load VFJ form vfj_file_path (STR)
+		jFont(pFont): Load VFJ from pFont.path. VFJ Font has to be in the same path as the VFC
+
+	Methods:
+		.data(): Access to VFJ font
+		.load(file_path): Load VFJ font from path
+		.save_as(file_path): Save VFJ font to path
+		.save(): Save VFJ (overwrite)
 	'''
 
 	def __init__(self, source=None):
