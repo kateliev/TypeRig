@@ -1143,6 +1143,10 @@ class pGlyph(object):
 		'''Set Advance width metric equation on given layer'''
 		self.layer(layer).metricsWidth = equationStr
 
+	def getSBeq(self, layer=None):
+		'''GET LSB, RSB metric equations on given layer'''
+		return self.layer(layer).metricsLeft, self.layer(layer).metricsRight
+
 	def fontMetricsInfo(self, layer=None):
 		'''Returns Font(layer) metrics no matter the reference.
 		Args:
