@@ -94,7 +94,7 @@ class trTableView(QtGui.QTableWidget):
 		#self.resizeColumnsToContents()
 		self.resizeRowsToContents()
 
-	def setTable(self, data, sortData=(True,True)):
+	def setTable(self, data, sortData=(True, True), indexColCheckable=None):
 		name_row, name_column = [], []
 		self.blockSignals(True)
 
@@ -102,10 +102,10 @@ class trTableView(QtGui.QTableWidget):
 		self.setRowCount(len(data.keys()))
 
 		# - Populate
-		for n, value in enumerate(sorted(data.keys()) if sortData[0] else data.keys() ):
+		for row, value in enumerate(sorted(data.keys()) if sortData[0] else data.keys() ):
 			name_row.append(value)
 			
-			for m, key in enumerate(sorted(data[value].keys()) if sortData[1] else data[value].keys()):
+			for col, key in enumerate(sorted(data[value].keys()) if sortData[1] else data[value].keys()):
 				name_column.append(key)
 				rowData = data[value][key]
 				
@@ -115,7 +115,12 @@ class trTableView(QtGui.QTableWidget):
 					newitem = QtGui.QTableWidgetItem()
 					newitem.setData(QtCore.Qt.EditRole, rowData)
 									
-				self.setItem(n, m, newitem)
+				# - Make the columnt checkable
+				if indexColCheckable is not None and col in indexColCheckable:
+					newitem.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled)
+					newitem.setCheckState(QtCore.Qt.Unchecked) 
+
+				self.setItem(row, col, newitem)
 
 		self.setHorizontalHeaderLabels(name_column)
 		self.setVerticalHeaderLabels(name_row)
