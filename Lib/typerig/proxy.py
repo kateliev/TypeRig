@@ -1736,6 +1736,22 @@ class pFont(object):
 		'''Return the fonts kerning groups object (fgKerningGroups) no matter the reference.'''
 		return self.kerning(layer).groups
 
+	def kerning_groups_to_dict(self, layer=None):
+		# - Semi working fixup of Build 6927 Bug
+		kerning_groups = self.kerning_groups(layer)
+		return {key: (list(set(kerning_groups[key][0])), kerning_groups[key][1]) for key in kerning_groups.keys()}
+
+	def dict_to_kerning_groups (self, groupDict, layer=None):
+		# - Build Group kerning from dictionary
+		kerning_groups = self.kerning_groups(layer)
+		
+		for key, value in groupDict.iteritems():
+			kerning_groups[key] = value
+
+	def reset_kerning_groups(self, layer=None):
+		# - Delete all group kerning at given layer
+		self.kerning_groups(layer).clear()		
+
 	def add_kerning_group(self, key, glyphNameList, type, layer=None):
 		'''Adds a new group to fonts kerning groups.
 		Args:
