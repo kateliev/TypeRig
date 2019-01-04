@@ -1,4 +1,4 @@
-#FLM: Font: Kern Groups
+#FLM: Font: Kern Classes
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kern Groups', '0.8'
+app_name, app_version = 'TypeRig | Kern Classes', '0.9'
 
 # - Dependencies -----------------
 import os, json
@@ -36,7 +36,7 @@ class GroupTableView(QtGui.QTableWidget):
 		self.horizontalHeader().setStretchLastSection(True)
 		self.setAlternatingRowColors(True)
 		self.setShowGrid(False)
-		self.resizeRowsToContents()
+		#self.resizeRowsToContents()
 		self.setSortingEnabled(True)
 
 	def setTable(self, data, indexColCheckable=None):
@@ -97,7 +97,7 @@ class GroupTableView(QtGui.QTableWidget):
 	def getTable(self):
 		returnDict = {}
 		for row in range(self.rowCount):
-			returnDict[self.item(row, 0).text()] = (self.item(row, 2).text().split(), self.item(row,1).text())
+			returnDict[str(self.item(row, 0).text())] = (self.item(row, 2).text().split(), str(self.item(row,1).text()))
 
 		return returnDict
 
@@ -116,15 +116,17 @@ class WKernGroups(QtGui.QWidget):
 		self.kern_group_data = {} #self.active_font.kerning_groups_to_dict()
 
 		# - Interface
-		lbl_name = QtGui.QLabel('Group kerning classes (active layer)')
+		lbl_name = QtGui.QLabel('Kerning classes (active layer)')
+		lbl_act = QtGui.QLabel('Actions (selected items):')
 		lbl_name.setMaximumHeight(20)
+		lbl_act.setMaximumHeight(20)
 
-		self.btn_apply = QtGui.QPushButton('Apply Changes')
-		self.btn_reset = QtGui.QPushButton('Reset Classes')
+		self.btn_apply = QtGui.QPushButton('Write changes')
+		self.btn_reset = QtGui.QPushButton('Clear font classes')
 		self.btn_import = QtGui.QPushButton('Import')
 		self.btn_export = QtGui.QPushButton('Export')
-		self.btn_fromFont = QtGui.QPushButton('Populate (from Font)')
-		self.btn_fromComp = QtGui.QPushButton('Build (from References)')
+		self.btn_fromFont = QtGui.QPushButton('Populate from Font')
+		self.btn_fromComp = QtGui.QPushButton('Build from References')
 
 		self.btn_apply.clicked.connect(self.apply_changes)
 		self.btn_reset.clicked.connect(self.reset_classes)
@@ -132,9 +134,70 @@ class WKernGroups(QtGui.QWidget):
 		self.btn_import.clicked.connect(self.import_groups)
 		self.btn_fromComp.clicked.connect(self.from_composites)
 
-		self.tab_groupKern = GroupTableView()		
+		self.tab_groupKern = GroupTableView()
 
-		# - Build		
+		# - Menus & Actions
+		# -- Main Class actions
+		self.menu_class = QtGui.QMenu('Class Management', self)
+		act_class_copy = QtGui.QAction('Duplicate', self)
+		act_class_merge = QtGui.QAction('Merge to new', self)
+		act_class_mdel = QtGui.QAction('Merge and remove', self)
+		act_class_del = QtGui.QAction('Remove', self)
+
+		self.menu_class.addAction(act_class_copy)
+		self.menu_class.addAction(act_class_merge)
+		self.menu_class.addAction(act_class_mdel)
+		self.menu_class.addAction(act_class_del)
+		
+		# -- Change class type
+		self.menu_type = QtGui.QMenu('Class Type', self)
+		act_type_Left = QtGui.QAction('Set KernLeft (1st)', self)
+		act_type_Right = QtGui.QAction('Set KernRight (2nd)', self)
+		act_type_Both = QtGui.QAction('Set KernBothSide (1st and 2nd)', self)
+		
+		act_type_Left.triggered.connect(lambda: self.set_type('KernLeft'))
+		act_type_Right.triggered.connect(lambda: self.set_type('KernRight'))
+		act_type_Both.triggered.connect(lambda: self.set_type('KernBothSide'))
+
+		self.menu_type.addAction(act_type_Left)
+		self.menu_type.addAction(act_type_Right)
+		self.menu_type.addAction(act_type_Both)
+
+		# -- Modify Members
+		self.menu_memb = QtGui.QMenu('Class Members', self)
+		act_memb_sel = QtGui.QAction('Select', self)
+		act_memb_clean = QtGui.QAction('Cleanup', self)
+		act_memb_upper = QtGui.QAction('Members to uppercase', self)
+		act_memb_lower = QtGui.QAction('Members to lowercase', self)
+		act_memb_strip = QtGui.QAction('Strip member suffixes', self)
+		act_memb_suff = QtGui.QAction('Add suffix to members', self)
+
+		act_memb_clean.triggered.connect(lambda: self.memb_cleanup())
+
+		self.menu_memb.addAction(act_memb_sel)
+		self.menu_memb.addAction(act_memb_clean)
+		self.menu_memb.addAction(act_memb_upper)
+		self.menu_memb.addAction(act_memb_lower)
+		self.menu_memb.addAction(act_memb_strip)
+		self.menu_memb.addAction(act_memb_suff)		
+		
+		# - Toolbar
+		# Note: Disabled for now
+		'''
+		self.tbar_actions = QtGui.QToolBar('Class Actions', self)
+		self.tbar_actions.setOrientation(QtCore.Qt.Vertical)
+
+		for action in self.menu_class.actions() + self.menu_type.actions() + self.menu_memb.actions():
+			self.tbar_actions.addAction(action)
+
+		for i in range(self.tbar_actions.layout().count()):
+			self.tbar_actions.layout().itemAt(i).setAlignment(QtCore.Qt.AlignLeft)
+
+		for i in [self.menu_type.actions()[0], self.menu_memb.actions()[0]]:
+			self.tbar_actions.insertSeparator(i)\
+		'''
+
+		# - Build 	
 		self.lay_grid = QtGui.QGridLayout()
 		self.lay_grid.addWidget(lbl_name,		 		0, 0, 1, 48)
 		self.lay_grid.addWidget(self.tab_groupKern,		1, 0, 8, 42)
@@ -142,6 +205,8 @@ class WKernGroups(QtGui.QWidget):
 		self.lay_grid.addWidget(self.btn_import,		1, 45, 1, 3)
 		self.lay_grid.addWidget(self.btn_fromFont,		2, 42, 1, 6)
 		self.lay_grid.addWidget(self.btn_fromComp,		3, 42, 1, 6)
+		#self.lay_grid.addWidget(lbl_act,				4, 42, 1, 6)
+		#self.lay_grid.addWidget(self.tbar_actions,		5, 42, 1, 6)
 		self.lay_grid.addWidget(self.btn_reset,			7, 42, 1, 6)
 		self.lay_grid.addWidget(self.btn_apply,			8, 42, 1, 6)
 
@@ -155,59 +220,13 @@ class WKernGroups(QtGui.QWidget):
 		# - Init
 		self.tab_groupKern.menu = QtGui.QMenu(self)
 		self.tab_groupKern.menu.setTitle('Class Actions:')
-
-		# - Actions
-		menu_class = QtGui.QMenu('Class Management', self)
-		act_class_copy = QtGui.QAction('Duplicate', self)
-		act_class_merge = QtGui.QAction('Merge to new', self)
-		act_class_mdel = QtGui.QAction('Merge and remove', self)
-		act_class_del = QtGui.QAction('Remove', self)
-
-		menu_class.addAction(act_class_copy)
-		menu_class.addAction(act_class_merge)
-		menu_class.addAction(act_class_mdel)
-		menu_class.addAction(act_class_del)
-		
-		# -- Change class type
-		menu_type = QtGui.QMenu('Class Type', self)
-		act_type_Left = QtGui.QAction('Set KernLeft (1st)', self)
-		act_type_Right = QtGui.QAction('Set KernRight (2nd)', self)
-		act_type_Both = QtGui.QAction('Set KernBothSide (1st and 2nd)', self)
-		
-		act_type_Left.triggered.connect(lambda: self.set_type('KernLeft'))
-		act_type_Right.triggered.connect(lambda: self.set_type('KernRight'))
-		act_type_Both.triggered.connect(lambda: self.set_type('KernBothSide'))
-
-		menu_type.addAction(act_type_Left)
-		menu_type.addAction(act_type_Right)
-		menu_type.addAction(act_type_Both)
-
-		# -- Modify Members
-		menu_memb = QtGui.QMenu('Class Members', self)
-		act_memb_sel = QtGui.QAction('Select', self)
-		act_memb_clean = QtGui.QAction('Cleanup', self)
-		act_memb_upper = QtGui.QAction('Members to uppercase', self)
-		act_memb_lower = QtGui.QAction('Members to lowercase', self)
-		act_memb_strip = QtGui.QAction('Strip member suffixes', self)
-		act_memb_suff = QtGui.QAction('Add suffix to members', self)
-
-		act_memb_clean.triggered.connect(lambda: self.memb_cleanup())
-
-		menu_memb.addAction(act_memb_sel)
-		menu_memb.addAction(act_memb_clean)
-		menu_memb.addAction(act_memb_upper)
-		menu_memb.addAction(act_memb_lower)
-		menu_memb.addAction(act_memb_strip)
-		menu_memb.addAction(act_memb_suff)
-		
-		# - Set Triggers
 		
 		# - Build menus
-		self.tab_groupKern.menu.addMenu(menu_class)
+		self.tab_groupKern.menu.addMenu(self.menu_class)
 		self.tab_groupKern.menu.addSeparator()	
-		self.tab_groupKern.menu.addMenu(menu_type)
+		self.tab_groupKern.menu.addMenu(self.menu_type)
 		self.tab_groupKern.menu.addSeparator()
-		self.tab_groupKern.menu.addMenu(menu_memb)
+		self.tab_groupKern.menu.addMenu(self.menu_memb)
 
 		self.tab_groupKern.menu.popup(QtGui.QCursor.pos())				
 
@@ -224,18 +243,20 @@ class WKernGroups(QtGui.QWidget):
 			self.tab_groupKern.item(row, 2).setText(new_data)
 			print 'DONE:\t Class: %s; Members cleanup.' %self.tab_groupKern.item(row, 0).text()
 
-
-
 	# - Main Procedures --------------------------------------------
 	def apply_changes(self):
-		pass
+		self.kern_group_data = self.tab_groupKern.getTable()
+		self.active_font.dict_to_kerning_groups(self.kern_group_data)
+		
+		print 'DONE:\t Font: %s - Kerning classes updated.' %self.active_font.name
 
 	def reset_classes(self):
-		pass
+		self.active_font.reset_kerning_groups()
+		print 'DONE:\t Font: %s - Kerning classes removed.' %self.active_font.name
 
 	def export_groups(self):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
-		fname = QtGui.QFileDialog.getSaveFileName(self.upper_widget, 'Save Group Kerning classes to file', fontPath , '*.json')
+		fname = QtGui.QFileDialog.getSaveFileName(self.upper_widget, 'Save kerning classes to file', fontPath , '*.json')
 		
 		if fname != None:
 			with open(fname, 'w') as exportFile:
@@ -245,13 +266,13 @@ class WKernGroups(QtGui.QWidget):
 
 	def import_groups(self):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
-		fname = QtGui.QFileDialog.getOpenFileName(self.upper_widget, 'Open Group Kerning classes from file', fontPath)
+		fname = QtGui.QFileDialog.getOpenFileName(self.upper_widget, 'Load kerning classes from file', fontPath)
 		
 		if fname != None:
 			with open(fname, 'r') as importFile:
-				loadedData = json.load(importFile)
+				self.kern_group_data = json.load(importFile)
 
-			self.tab_groupKern.setTable(loadedData)
+			self.tab_groupKern.setTable(self.kern_group_data)
 
 			print 'LOAD:\t Font:%s; Group Kerning classes loaded from: %s.' %(self.active_font.name, fname)
 
