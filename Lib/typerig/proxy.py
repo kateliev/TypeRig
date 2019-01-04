@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.53
+# VER 	: 0.54
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -1386,6 +1386,7 @@ class pFont(object):
 		self.__altMarks = {'liga':'_', 'alt':'.', 'hide':'__'}
 		self.__diactiricalMarks = ['grave', 'dieresis', 'macron', 'acute', 'cedilla', 'uni02BC', 'circumflex', 'caron', 'breve', 'dotaccent', 'ring', 'ogonek', 'tilde', 'hungarumlaut', 'caroncomma', 'commaaccent', 'cyrbreve'] # 'dotlessi', 'dotlessj'
 		self.__specialGlyphs = ['.notdef', 'CR', 'NULL', 'space', '.NOTDEF']
+		self.__kern_group_type = {'L':'KernLeft', 'R':'KernRight', 'B': 'KernBothSide'}
 
 	
 	def __repr__(self):
@@ -1718,3 +1719,42 @@ class pFont(object):
 
 	def delFeature(self, tag):
 		return self.fg.features.remove(tag)
+
+	# - Kerning and Groups -------------------------------------
+	def kerning(self, layer=None):
+		'''Return the fonts kerning object (fgKerning) no matter the reference.'''
+		if layer is None:
+			return self.fl.kerning()
+		else:
+			if isinstance(layer, int):
+				return self.fl.kerning(self.masters[layer])
+
+			elif isinstance(layer, basestring):
+				return self.fl.kerning(layer)
+
+	def kerning_groups(self, layer=None):
+		'''Return the fonts kerning groups object (fgKerningGroups) no matter the reference.'''
+		return self.kerning(layer).groups
+
+	def add_kerning_group(self, key, glyphNameList, type, layer=None):
+		'''Adds a new group to fonts kerning groups.
+		Args:
+			key (string): Group name
+			glyphNameList (list(string)): List of glyph names
+			type (string): Kern group types: L - Left group (1st), R - Right group (2nd), B - Both (1st and 2nd)
+			layer (None, Int, String)
+		
+		Returns:
+			None
+		'''
+		self.kerning_groups(layer)[key] = (glyphNameList, self.__kern_group_type[type.upper()])
+
+	def remove_kerning_group(self, key, layer=None):
+		'''Remove a group from fonts kerning groups at given layer.'''
+		del self.kerning_groups(layer)[key]
+
+	def rename_kerning_group(self, oldkey, newkey, layer=None):
+		'''Rename a group in fonts kerning groups at given layer.'''
+		self.kerning_groups(layer).rename(oldkey, newkey)
+
+
