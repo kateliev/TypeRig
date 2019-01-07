@@ -1745,6 +1745,17 @@ class pFont(object):
 			elif isinstance(layer, basestring):
 				return self.fl.kerning(layer)
 
+	def kerning_to_list(self, layer=None):
+		# Structure:
+		# 	fgKerning{fgKernigPair(fgKerningObject(glyph A, mode), fgKerningObject(glyph B, mode)) : kern value, ...}
+		layer_kernig = self.kerning(layer)
+		kern_list = []
+
+		for key, value in layer_kernig.asDict().iteritems():
+			kern_list.append([[item.asTuple() for item in key.asTuple()], value])
+
+		return kern_list
+
 	def kerning_groups(self, layer=None):
 		'''Return the fonts kerning groups object (fgKerningGroups) no matter the reference.'''
 		return self.kerning(layer).groups
