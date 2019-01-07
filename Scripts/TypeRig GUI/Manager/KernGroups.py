@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kern Classes', '1.4'
+app_name, app_version = 'TypeRig | Kern Classes', '1.6'
 alt_mark = '.'
 
 # - Dependencies -----------------
@@ -41,9 +41,9 @@ class GroupTableView(QtGui.QTableWidget):
 		#self.resizeRowsToContents()
 		self.setSortingEnabled(True)
 
-	def setTable(self, data):
+	def setTable(self, data, setNotes=False):
 		# - Init
-		name_column = ['Class Name', 'Class Type', 'Class Members']
+		name_column = ['Class Name', 'Class Type', 'Class Members', 'Note']
 		
 		self.blockSignals(True)
 		self.setColumnCount(len(name_column))
@@ -56,10 +56,17 @@ class GroupTableView(QtGui.QTableWidget):
 			item_groupName = QtGui.QTableWidgetItem(str(key))
 			item_groupPos = QtGui.QTableWidgetItem(str(data[key][1]))
 			item_groupMem = QtGui.QTableWidgetItem(' '.join(data[key][0]))
-
+		
 			self.setItem(row, 0, item_groupName)
 			self.setItem(row, 1, item_groupPos)
 			self.setItem(row, 2, item_groupMem)
+
+			if setNotes:
+				try:
+					item_groupNote = QtGui.QTableWidgetItem(data[key][2])
+					self.setItem(row, 3, item_groupNote)
+				except IndexError:
+					pass
 
 		self.setHorizontalHeaderLabels(name_column)
 		self.blockSignals(False)
@@ -68,10 +75,13 @@ class GroupTableView(QtGui.QTableWidget):
 	def getSelection(self):
 		return [(i.row(), i.column()) for i in self.selectionModel().selection.indexes()]	
 
-	def getTable(self):
+	def getTable(self, getNotes=False):
 		returnDict = {}
 		for row in range(self.rowCount):
-			returnDict[str(self.item(row, 0).text())] = (self.item(row, 2).text().split(), str(self.item(row,1).text()))
+			if getNotes and self.item(row,3) is not None:
+				returnDict[str(self.item(row, 0).text())] = (self.item(row, 2).text().split(), str(self.item(row,1).text()), str(self.item(row,3).text()))
+			else:	
+				returnDict[str(self.item(row, 0).text())] = (self.item(row, 2).text().split(), str(self.item(row,1).text()))
 
 		return returnDict
 
@@ -113,18 +123,21 @@ class WKernGroups(QtGui.QWidget):
 		# - Menus & Actions
 		# -- Main Class actions
 		self.menu_class = QtGui.QMenu('Class Management', self)
+		act_class_add = QtGui.QAction('Add new class', self)
 		act_class_find = QtGui.QAction('Find and replace class names', self)
 		act_class_copy = QtGui.QAction('Duplicate classes', self)
 		act_class_merge = QtGui.QAction('Merge classes to new', self)
 		act_class_mdel = QtGui.QAction('Merge and remove classes', self)
 		act_class_del = QtGui.QAction('Remove classes', self)
 
+		self.menu_class.addAction(act_class_add)
 		self.menu_class.addAction(act_class_find)
 		self.menu_class.addAction(act_class_copy)
 		self.menu_class.addAction(act_class_merge)
 		self.menu_class.addAction(act_class_mdel)
 		self.menu_class.addAction(act_class_del)
 
+		act_class_add.triggered.connect(lambda: self.class_add_new())
 		act_class_find.triggered.connect(lambda: self.class_find_replace())
 		act_class_copy.triggered.connect(lambda: self.class_copy())
 		act_class_merge.triggered.connect(lambda: self.class_merge(False))
@@ -154,6 +167,7 @@ class WKernGroups(QtGui.QWidget):
 		act_memb_strip = QtGui.QAction('Strip member suffixes', self)
 		act_memb_suff = QtGui.QAction('Add suffix to members', self)
 
+		act_memb_sel.triggered.connect(lambda: self.memb_select())
 		act_memb_clean.triggered.connect(lambda: self.memb_cleanup())
 		act_memb_upper.triggered.connect(lambda: self.memb_change_case(True))
 		act_memb_lower.triggered.connect(lambda: self.memb_change_case(False))
@@ -166,6 +180,11 @@ class WKernGroups(QtGui.QWidget):
 		self.menu_memb.addAction(act_memb_lower)
 		self.menu_memb.addAction(act_memb_strip)
 		self.menu_memb.addAction(act_memb_suff)		
+
+
+		# - Table auto preview selection
+		self.chk_preview = QtGui.QCheckBox('Auto select/preview class.')
+		self.tab_groupKern.selectionModel().selectionChanged.connect(lambda: self.auto_preview())
 		
 		# - Build 	
 		self.lay_grid = QtGui.QGridLayout()
@@ -175,8 +194,10 @@ class WKernGroups(QtGui.QWidget):
 		self.lay_grid.addWidget(self.btn_import,		1, 45, 1, 3)
 		self.lay_grid.addWidget(self.btn_fromFont,		2, 42, 1, 6)
 		self.lay_grid.addWidget(self.btn_fromComp,		3, 42, 1, 6)
+		self.lay_grid.addWidget(self.chk_preview,		4, 42, 1, 6)
 		self.lay_grid.addWidget(self.btn_reset,			7, 42, 1, 6)
 		self.lay_grid.addWidget(self.btn_apply,			8, 42, 1, 6)
+
 
 		for i in range(1,8):
 			self.lay_grid.setRowStretch(i,2)
@@ -199,6 +220,21 @@ class WKernGroups(QtGui.QWidget):
 		self.tab_groupKern.menu.popup(QtGui.QCursor.pos())				
 
 	# -- Actions
+	def auto_preview(self):
+		if self.chk_preview.isChecked():
+			self.memb_select()
+
+	def class_add_new(self):
+		self.tab_groupKern.insertRow(0)
+		
+		item_groupName = QtGui.QTableWidgetItem('Class_%s' %self.tab_groupKern.rowCount)
+		item_groupPos = QtGui.QTableWidgetItem('KernLeft')
+		item_groupMem = QtGui.QTableWidgetItem('')
+
+		self.tab_groupKern.setItem(0, 0, item_groupName)
+		self.tab_groupKern.setItem(0, 1, item_groupPos)
+		self.tab_groupKern.setItem(0, 2, item_groupMem)
+
 	def class_find_replace(self):
 		search = QtGui.QInputDialog.getText(self, 'Find and replace class names', 'Please enter SPACE separated pair:\n(SEARCH_string) (REPLACE_string).', QtGui.QLineEdit.Normal, 'Find Replace')
 		mod_keys = [self.tab_groupKern.item(row, 0).text() for row, col in self.tab_groupKern.getSelection()]
@@ -263,6 +299,11 @@ class WKernGroups(QtGui.QWidget):
 
 		self.update_data(self.tab_groupKern.getTable(), False)
 
+	def memb_select(self):
+		for row, col in self.tab_groupKern.getSelection():
+			self.active_font.unselectAll()
+			self.active_font.selectGlyphs(self.tab_groupKern.item(row, 2).text().split())			
+
 	def memb_cleanup(self):
 		for row, col in self.tab_groupKern.getSelection():
 			old_data = self.tab_groupKern.item(row, 2).text()
@@ -321,23 +362,25 @@ class WKernGroups(QtGui.QWidget):
 		print 'DONE:\t Class: %s; Members change case.' %self.tab_groupKern.item(row, 0).text()
 
 	# - Main Procedures --------------------------------------------
-	def update_data(self, source, updateTable=True):
+	def update_data(self, source, updateTable=True, setNotes=False):
 		self.kern_group_data = source
 		
 		if updateTable:	
 			self.tab_groupKern.clear()
 			while self.tab_groupKern.rowCount > 0: self.tab_groupKern.removeRow(0)
-			self.tab_groupKern.setTable(source)
+			self.tab_groupKern.setTable(source, setNotes)
 
 	def apply_changes(self):
 		self.kern_group_data = self.tab_groupKern.getTable()
 		self.active_font.dict_to_kerning_groups(self.kern_group_data)
 		
 		print 'DONE:\t Font: %s - Kerning classes updated.' %self.active_font.name
+		print '\nPlease add a new empty class in FL6 Classes panel to preview changes!'
 
 	def reset_classes(self):
 		self.active_font.reset_kerning_groups()
 		print 'DONE:\t Font: %s - Kerning classes removed.' %self.active_font.name
+		print '\nPlease add a new empty class in FL6 Classes panel to preview changes!'
 
 	def export_groups(self):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
@@ -345,7 +388,7 @@ class WKernGroups(QtGui.QWidget):
 		
 		if fname != None:
 			with open(fname, 'w') as exportFile:
-				json.dump(self.tab_groupKern.getTable(), exportFile)
+				json.dump(self.tab_groupKern.getTable(getNotes=True), exportFile)
 
 			print 'SAVE:\t Font:%s; Group Kerning classes saved to: %s.' %(self.active_font.name, fname)
 
@@ -355,7 +398,7 @@ class WKernGroups(QtGui.QWidget):
 		
 		if fname != None:
 			with open(fname, 'r') as importFile:
-				self.update_data(json.load(importFile))			
+				self.update_data(json.load(importFile), setNotes=True)			
 
 			print 'LOAD:\t Font:%s; Group Kerning classes loaded from: %s.' %(self.active_font.name, fname)
 

@@ -1397,6 +1397,19 @@ class pFont(object):
 		# WARN: Legacy syntax used, as of current 6722 build there is no way to get the selected glyphs in editor
 		return [index for index in range(len(legacy.fl.font)) if legacy.fl.Selected(index)]
 
+	def setSelectedIndices(self, indList):
+		# WARN: Legacy syntax used, as of current 6722 build there is no way to get the selected glyphs in editor
+		for index in indList:
+			legacy.fl.Select(index)
+
+	def selectGlyphs(self, glyphNameList):
+		for glyphName in glyphNameList:
+			if self.fg.has_key(glyphName):
+				legacy.fl.Select(self.fg[glyphName].index)
+
+	def unselectAll(self):
+		legacy.fl.Unselect()
+
 	def selected_pGlyphs(self):
 		'''Return TypeRig proxy glyph object for each selected glyph'''
 		return self.pGlyphs(self.selectedGlyphs())
