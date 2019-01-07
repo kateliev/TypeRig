@@ -300,8 +300,8 @@ class WKernGroups(QtGui.QWidget):
 		self.update_data(self.tab_groupKern.getTable(), False)
 
 	def memb_select(self):
+		self.active_font.unselectAll()
 		for row, col in self.tab_groupKern.getSelection():
-			self.active_font.unselectAll()
 			self.active_font.selectGlyphs(self.tab_groupKern.item(row, 2).text().split())			
 
 	def memb_cleanup(self):
