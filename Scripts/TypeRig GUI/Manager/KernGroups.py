@@ -404,13 +404,13 @@ class WKernGroups(QtGui.QWidget):
 			print 'LOAD:\t Font:%s; Group Kerning classes loaded from: %s.' %(self.active_font.name, fname)
 
 	def from_font(self):
-		'''
-		fl_kern_group_dict = self.active_font.fl_kerning_groups_to_dict()
-		fg_kern_group_object = self.active_font.kerning_groups()
-		temp_dict = {key: (value, fg_kern_group_object[key][1]) for key,value in fl_kern_group_dict.iteritems()}
-		self.update_data(temp_dict)
-		'''
-		pass
+		msg = QtGui.QMessageBox(QtGui.QMessageBox.Warning, 'TypeRig: Warning', 'Due to fatal class kerning bug in FontLab VI (build 6927) the classes cannot be loaded reliably from font.\n\nPress OK to continue loading class information from font without predefined mode (1st, 2nd and etc.)', QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel, self)
+				
+		if msg.exec_() == 1024:
+			fl_kern_group_dict = self.active_font.fl_kerning_groups_to_dict()
+			temp_dict = {key: (value, 'UNKNOWN') for key,value in fl_kern_group_dict.iteritems()}
+			self.update_data(temp_dict)
+		
 
 	def from_composites(self):
 		# - Init

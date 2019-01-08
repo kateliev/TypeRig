@@ -1788,7 +1788,8 @@ class pFont(object):
 		return list(filter(lambda x: x[0], self.fl.getAllGroups()))
 
 	def fl_kerning_groups_to_dict(self, layer=None):
-		return {item[1]: item[-1] for item in self.fl_kerning_groups(layer)}
+		from typerig.brain import extBiDict
+		return extBiDict({item[1]: item[-1] for item in self.fl_kerning_groups(layer)})
 
 	def kerning_groups_to_dict(self, layer=None):
 		# - Semi working fixup of Build 6927 Bug
