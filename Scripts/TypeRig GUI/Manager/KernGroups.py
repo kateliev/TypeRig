@@ -117,6 +117,7 @@ class WKernGroups(QtGui.QWidget):
 		self.btn_export.clicked.connect(self.export_groups)
 		self.btn_import.clicked.connect(self.import_groups)
 		self.btn_fromComp.clicked.connect(self.from_composites)
+		self.btn_fromFont.clicked.connect(self.from_font)
 
 		self.tab_groupKern = GroupTableView()
 
@@ -401,6 +402,15 @@ class WKernGroups(QtGui.QWidget):
 				self.update_data(json.load(importFile), setNotes=True)			
 
 			print 'LOAD:\t Font:%s; Group Kerning classes loaded from: %s.' %(self.active_font.name, fname)
+
+	def from_font(self):
+		'''
+		fl_kern_group_dict = self.active_font.fl_kerning_groups_to_dict()
+		fg_kern_group_object = self.active_font.kerning_groups()
+		temp_dict = {key: (value, fg_kern_group_object[key][1]) for key,value in fl_kern_group_dict.iteritems()}
+		self.update_data(temp_dict)
+		'''
+		pass
 
 	def from_composites(self):
 		# - Init

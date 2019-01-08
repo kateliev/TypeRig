@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.54
+# VER 	: 0.55
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -43,6 +43,29 @@ class pWorkspace(object):
 
 	def getTextBlockGlyphs(self, tbi=0):
 		return [info.glyph for info in self.getTextBlockList()[tbi].getAllGlyphs()]
+
+	def getActiveGlyphInfo(self, tbi=0):
+		return self.getTextBlockList()[tbi].getActiveGlyph()
+
+	def getActiveGlyph(self, tbi=0):
+		return self.getActiveGlyphInfo(tbi).glyph
+
+	def getPrevGlyphInfo(self, tbi=0):
+		tb = self.getTextBlockList()[tbi]
+		return tb.getPrevGlyphInLine(self.getActiveIndex(tbi))
+
+	def getNextGlyphInfo(self, tbi=0):
+		tb = self.getTextBlockList()[tbi]
+		return tb.getNextGlyphInLine(self.getActiveIndex(tbi))
+
+	def getActiveKernPair(self, tbi=0):
+		return (self.getPrevGlyphInfo(tbi).glyph.name, self.getActiveGlyphInfo(tbi).glyph.name)
+
+	def getActiveIndex(self, tbi=0):
+		return self.getActiveLine(tbi).index(self.getActiveGlyphInfo(tbi))		
+
+	def getActiveLine(self, tbi=0):
+		return self.getTextBlockList()[tbi].getGlyphsInLine(self.getActiveGlyphInfo(tbi))
 
 	def createFrame(self, string, x, y):
 		active_canvas = self.getCanvas()
@@ -1387,6 +1410,7 @@ class pFont(object):
 		self.__diactiricalMarks = ['grave', 'dieresis', 'macron', 'acute', 'cedilla', 'uni02BC', 'circumflex', 'caron', 'breve', 'dotaccent', 'ring', 'ogonek', 'tilde', 'hungarumlaut', 'caroncomma', 'commaaccent', 'cyrbreve'] # 'dotlessi', 'dotlessj'
 		self.__specialGlyphs = ['.notdef', 'CR', 'NULL', 'space', '.NOTDEF']
 		self.__kern_group_type = {'L':'KernLeft', 'R':'KernRight', 'B': 'KernBothSide'}
+		self.__kern_pair_mode = ('glyphMode', 'groupMode')
 
 	
 	def __repr__(self):
@@ -1760,6 +1784,12 @@ class pFont(object):
 		'''Return the fonts kerning groups object (fgKerningGroups) no matter the reference.'''
 		return self.kerning(layer).groups
 
+	def fl_kerning_groups(self, layer=None):
+		return list(filter(lambda x: x[0], self.fl.getAllGroups()))
+
+	def fl_kerning_groups_to_dict(self, layer=None):
+		return {item[1]: item[-1] for item in self.fl_kerning_groups(layer)}
+
 	def kerning_groups_to_dict(self, layer=None):
 		# - Semi working fixup of Build 6927 Bug
 		kerning_groups = self.kerning_groups(layer)
@@ -1796,5 +1826,10 @@ class pFont(object):
 	def rename_kerning_group(self, oldkey, newkey, layer=None):
 		'''Rename a group in fonts kerning groups at given layer.'''
 		self.kerning_groups(layer).rename(oldkey, newkey)
+
+	def newKernPair(self, glyphLeft, glyphRight, modeLeft, modeRight):
+		if not isinstance(modeLeft, str): modeLeft = self.__kern_pair_mode[modeLeft]
+		if not isinstance(modeRight, str): modeRight = self.__kern_pair_mode[modeRight]
+		return fgt.fgKerningObjectPair(glyphLeft, glyphRight, modeLeft, modeRight)
 
 
