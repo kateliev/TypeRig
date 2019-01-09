@@ -18,10 +18,8 @@ from typerig.proxy import pFont
 from typerig.brain import extBiDict
 
 # - Init --------------------------------
-app_version = '0.5'
+app_version = '0.6'
 app_name = 'Copy Kernig'
-
-# -- Strings
 
 # - Dialogs --------------------------------
 class dlg_copyKerning(QtGui.QDialog):
@@ -42,13 +40,15 @@ class dlg_copyKerning(QtGui.QDialog):
 		self.btn_loadExpr = QtGui.QPushButton('Load')
 		self.btn_exec = QtGui.QPushButton('Execute')
 
-		self.btn_loadFont.setEnabled(False)		
+		self.btn_loadFont.setEnabled(False)
+		self.btn_loadFile.setEnabled(False)
 		
 		self.btn_loadFile.clicked.connect(self.classes_fromFile)
 		self.btn_exec.clicked.connect(self.process)
-		
+		self.btn_saveExpr.clicked.connect(self.expr_toFile)
+		self.btn_loadExpr.clicked.connect(self.expr_fromFile)
+
 		self.txt_editor = QtGui.QPlainTextEdit()
-		#self.txt_editor.setFontPointSize(10)
 		
 		# - Build layouts 
 		layoutV = QtGui.QGridLayout() 
@@ -66,7 +66,7 @@ class dlg_copyKerning(QtGui.QDialog):
 		# - Set Widget
 		self.setLayout(layoutV)
 		self.setWindowTitle('%s %s' %(app_name, app_version))
-		self.setGeometry(300, 300, 300, 500)
+		self.setGeometry(300, 300, 250, 500)
 		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 		self.show()
 
@@ -77,6 +77,26 @@ class dlg_copyKerning(QtGui.QDialog):
 			temp_data.setdefault(value[1], {}).update({key : value[0]})
 
 		self.class_data = {key:extBiDict(value) for key, value in temp_data.iteritems()}
+
+	def expr_fromFile(self):
+		fontPath = os.path.split(self.active_font.fg.path)[0]
+		fname = QtGui.QFileDialog.getOpenFileName(self, 'Load kerning expressions from file', fontPath)
+		
+		if fname != None:
+			with open(fname, 'r') as importFile:
+				self.txt_editor.setPlainText(importFile.read())			
+
+			print 'LOAD:\t Font:%s; Group Kerning expressions loaded from: %s.' %(self.active_font.name, fname)
+
+	def expr_toFile(self):
+		fontPath = os.path.split(self.active_font.fg.path)[0]
+		fname = QtGui.QFileDialog.getSaveFileName(self, 'Save kerning expressions from file', fontPath, '*.txt')
+		
+		if fname != None:
+			with open(fname, 'w') as importFile:
+				importFile.writelines(self.txt_editor.toPlainText())
+
+			print 'LOAD:\t Font:%s; Group Kerning expressions loaded from: %s.' %(self.active_font.name, fname)
 
 	def classes_fromFile(self):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
@@ -90,9 +110,9 @@ class dlg_copyKerning(QtGui.QDialog):
 
 	def process(self):
 		# - Init
-		getUniGlyph = lambda c: self.active_font.fl.findUnicode(ord(c)).name
 		dst_pairs, src_pairs = [], []
-		process_layers = [self.cmb_layer.currentText]
+		getUniGlyph = lambda c: self.active_font.fl.findUnicode(ord(c)).name
+		process_layers = [self.cmb_layer.currentText] if self.cmb_layer.currentText != 'All masters' else self.active_font.masters()
 
 		# - Process
 		for line in self.txt_editor.toPlainText().splitlines():
@@ -109,6 +129,8 @@ class dlg_copyKerning(QtGui.QDialog):
 				dst_names = [(getUniGlyph(pair[0]), getUniGlyph(pair[1])) for pair in dst_names]
 				src_names = [(getUniGlyph(pair[0]), getUniGlyph(pair[1])) for pair in src_names]
 
+				''' 
+				# !!! Curretntly not implemented into FL6 yet !!!
 				# - Build pairs
 				for pair in dst_names:
 					left, right = pair
@@ -138,8 +160,19 @@ class dlg_copyKerning(QtGui.QDialog):
 					layer_kerning = self.active_font.kerning(layer)
 
 					for pair in dst_pairs:
-						#.setPlainPairs([(('A','V'),-30)])
+						# !!! Adding group kerning to fgKernObject is not yet working !!!
 						layer_kerning[pair] = layer_kerning.get(src_names[0])
+				''' 
+				
+				# !!! Add only as plain pairs supported - No class kerning trough python
+				# !!! Syntax fgKerning.setPlainPairs([(('A','V'),-30)])
+				for layer in process_layers:
+					layer_kerning = self.active_font.kerning(layer)
+					src_value = layer_kerning.get(src_names[0])
+
+					if src_value is not None:
+						layer_kerning.setPlainPairs([(pair, src_value) for pair in dst_names])
+						print 'ADD:\t Kern pairs: %s; Value: %s; Layer: %s.' %(dst_names, src_value, layer)
 
 
 
