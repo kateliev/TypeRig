@@ -150,14 +150,17 @@ class WKernGroups(QtGui.QWidget):
 		act_type_Left = QtGui.QAction('Set KernLeft (1st)', self)
 		act_type_Right = QtGui.QAction('Set KernRight (2nd)', self)
 		act_type_Both = QtGui.QAction('Set KernBothSide (1st and 2nd)', self)
+		act_type_toggle = QtGui.QAction('Toggle class type', self)
 		
 		act_type_Left.triggered.connect(lambda: self.set_type('KernLeft'))
 		act_type_Right.triggered.connect(lambda: self.set_type('KernRight'))
 		act_type_Both.triggered.connect(lambda: self.set_type('KernBothSide'))
+		act_type_toggle.triggered.connect(lambda: self.toggle_type())
 
 		self.menu_type.addAction(act_type_Left)
 		self.menu_type.addAction(act_type_Right)
 		self.menu_type.addAction(act_type_Both)
+		self.menu_type.addAction(act_type_toggle)
 
 		# -- Modify Members
 		self.menu_memb = QtGui.QMenu('Class Members', self)
@@ -292,11 +295,21 @@ class WKernGroups(QtGui.QWidget):
 
 				self.update_data(temp_data)
 		
-
 	def set_type(self, typeStr):
 		for row, col in self.tab_groupKern.getSelection():
 			self.tab_groupKern.item(row, 1).setText(typeStr)
 			print 'DONE:\t Class: %s; Type set to: %s.' %(self.tab_groupKern.item(row, 0).text(), typeStr)
+
+		self.update_data(self.tab_groupKern.getTable(), False)
+
+	def toggle_type(self):
+		replace_dict = {'KernLeft':'KernRight', 'KernRight':'KernLeft'}
+
+		for row, col in self.tab_groupKern.getSelection():
+			
+			if self.tab_groupKern.item(row, 1).text() in replace_dict.keys():
+				self.tab_groupKern.item(row, 1).setText(replace_dict[self.tab_groupKern.item(row, 1).text()])
+				print 'DONE:\t Class: %s; Type set to: %s.' %(self.tab_groupKern.item(row, 0).text(), replace_dict[self.tab_groupKern.item(row, 1).text()])
 
 		self.update_data(self.tab_groupKern.getTable(), False)
 
