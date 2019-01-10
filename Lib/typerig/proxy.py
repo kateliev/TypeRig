@@ -1662,29 +1662,29 @@ class pFont(object):
 		return nameDict	
 	
 	# -- Return Glyphs
-	def uppercase(self):
+	def uppercase(self, namesOnly=False):
 		'''Returns all uppercase characters (list[fgGlyph])'''
-		return [glyph for glyph in self.fg if glyph.unicode is not None and glyph.unicode < 10000 and unichr(glyph.unicode).isupper()] # Skip Private ranges - glyph.unicode < 10000
+		return [glyph if not namesOnly else glyph.name for glyph in self.fg if glyph.unicode is not None and glyph.unicode < 10000 and unichr(glyph.unicode).isupper()] # Skip Private ranges - glyph.unicode < 10000
 
-	def lowercase(self):
+	def lowercase(self, namesOnly=False):
 		'''Returns all uppercase characters (list[fgGlyph])'''
-		return [glyph for glyph in self.fg if glyph.unicode is not None and glyph.unicode < 10000 and unichr(glyph.unicode).islower()]		
+		return [glyph if not namesOnly else glyph.name for glyph in self.fg if glyph.unicode is not None and glyph.unicode < 10000 and unichr(glyph.unicode).islower()]		
 
-	def figures(self):
+	def figures(self, namesOnly=False):
 		'''Returns all uppercase characters (list[fgGlyph])'''
-		return [glyph for glyph in self.fg if glyph.unicode is not None and glyph.unicode < 10000 and unichr(glyph.unicode).isdigit()]	
+		return [glyph if not namesOnly else glyph.name for glyph in self.fg if glyph.unicode is not None and glyph.unicode < 10000 and unichr(glyph.unicode).isdigit()]	
 
-	def symbols(self):
+	def symbols(self, namesOnly=False):
 		'''Returns all uppercase characters (list[fgGlyph])'''
-		return [glyph for glyph in self.fg if glyph.unicode is not None and glyph.unicode < 10000 and not unichr(glyph.unicode).isdigit() and not unichr(glyph.unicode).isalpha()]
+		return [glyph if not namesOnly else glyph.name for glyph in self.fg if glyph.unicode is not None and glyph.unicode < 10000 and not unichr(glyph.unicode).isdigit() and not unichr(glyph.unicode).isalpha()]
 
-	def ligatures(self):
+	def ligatures(self, namesOnly=False):
 		'''Returns all ligature characters (list[fgGlyph])'''
-		return [glyph for glyph in self.fg if self.__altMarks['liga'] in glyph.name and not self.__altMarks['hide'] in glyph.name and glyph.name not in self.__specialGlyphs]
+		return [glyph if not namesOnly else glyph.name for glyph in self.fg if self.__altMarks['liga'] in glyph.name and not self.__altMarks['hide'] in glyph.name and glyph.name not in self.__specialGlyphs]
 
-	def alternates(self):
+	def alternates(self, namesOnly=False):
 		'''Returns all alternate characters (list[fgGlyph])'''
-		return [glyph for glyph in self.fg if self.__altMarks['alt'] in glyph.name and not self.__altMarks['hide'] in glyph.name and glyph.name not in self.__specialGlyphs]
+		return [glyph if not namesOnly else glyph.name for glyph in self.fg if self.__altMarks['alt'] in glyph.name and not self.__altMarks['hide'] in glyph.name and glyph.name not in self.__specialGlyphs]
 
 	# - Glyph generation ------------------------------------------
 	def addGlyph(self, glyph):
