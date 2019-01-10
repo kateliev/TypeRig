@@ -1,4 +1,4 @@
-#FLM: Font: Copy Kerning (TypeRig)
+#FLM: Kerning: Copy Kerning (TypeRig)
 # ----------------------------------------
 # (C) Vassil Kateliev, 2019 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -84,7 +84,7 @@ class dlg_copyKerning(QtGui.QDialog):
 		
 		if fname != None:
 			with open(fname, 'r') as importFile:
-				self.txt_editor.setPlainText(importFile.read())			
+				self.txt_editor.setPlainText(importFile.read().decode('utf8'))			
 
 			print 'LOAD:\t Font:%s; Group Kerning expressions loaded from: %s.' %(self.active_font.name, fname)
 
@@ -94,7 +94,7 @@ class dlg_copyKerning(QtGui.QDialog):
 		
 		if fname != None:
 			with open(fname, 'w') as importFile:
-				importFile.writelines(self.txt_editor.toPlainText())
+				importFile.writelines(self.txt_editor.toPlainText().encode('utf-8'))
 
 			print 'SAVE:\t Font:%s; Group Kerning expressions saved to: %s.' %(self.active_font.name, fname)
 

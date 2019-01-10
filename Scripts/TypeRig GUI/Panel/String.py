@@ -236,7 +236,7 @@ class tool_tab(QtGui.QWidget):
 if __name__ == '__main__':
 	test = tool_tab()
 	test.setWindowTitle('%s %s' %(app_name, app_version))
-	test.setGeometry(300, 300, 200, 400)
+	test.setGeometry(300, 300, 250, 500)
 	test.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 	
 	test.show()
