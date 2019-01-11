@@ -18,8 +18,11 @@ from typerig.proxy import pFont
 from typerig.brain import extBiDict
 
 # - Init --------------------------------
-app_version = '0.9'
+app_version = '0.95'
 app_name = 'Copy Kernig'
+
+# -- Strings 
+str_help = '\nExpressions:\n - Only one source pair (colon) separated;\n - Source adjustment is (bar) separated; \n - Multiple destination pairs (space) separated;\n - Each pair is (colon) separated;\n - Group/class kerning is detected on the fly.\n\nExample: Y:A A:Y A:V = V:A'
 
 # - Dialogs --------------------------------
 class dlg_copyKerning(QtGui.QDialog):
@@ -57,7 +60,7 @@ class dlg_copyKerning(QtGui.QDialog):
 		layoutV.addWidget(self.btn_loadFile, 		1, 2, 1, 2)
 		layoutV.addWidget(QtGui.QLabel('Process font master:'),	2, 0, 1, 2)
 		layoutV.addWidget(self.cmb_layer,			2, 2, 1, 2)
-		layoutV.addWidget(QtGui.QLabel('\nExpressions:\n - Only one source pair (colon) separated;\n - Multiple destination pairs (space) separated;\n - Each pair is (colon) separated;\n - Group/class kerning is detected on the fly.\n\nExample: Y:A A:Y A:V = V:A'),		3, 0, 1, 4)
+		layoutV.addWidget(QtGui.QLabel(str_help),	3, 0, 1, 4)
 		layoutV.addWidget(self.txt_editor,			4, 0, 20, 4)
 		layoutV.addWidget(self.btn_saveExpr, 		24, 0, 1, 2)
 		layoutV.addWidget(self.btn_loadExpr, 		24, 2, 1, 2)
@@ -120,12 +123,14 @@ class dlg_copyKerning(QtGui.QDialog):
 				dst_names, src_names = line.split('=')
 				
 				dst_names = [item.split(':') for item in dst_names.strip().split(' ')]
-				src_names = [src_names.strip().split(':')]
+				#src_names = [src_names.strip().split(':')]
+				src_raw = [item.split(':') for item in src_names.strip().split('|')]
 
 				if '@' not in line:
 					# - Build Destination names from actual glyph names in the font
 					dst_names = [(getUniGlyph(pair[0]), getUniGlyph(pair[1])) for pair in dst_names]
-					src_names = [(getUniGlyph(pair[0]), getUniGlyph(pair[1])) for pair in src_names]
+					#src_names = [(getUniGlyph(pair[0]), getUniGlyph(pair[1])) for pair in src_names]
+					src_names = [(getUniGlyph(src_raw[0][0]), getUniGlyph(src_raw[0][1]))]
 
 					# - Build Destination pairs
 					for pair in dst_names:
@@ -152,7 +157,7 @@ class dlg_copyKerning(QtGui.QDialog):
 						dst_pairs.append(self.active_font.newKernPair(left[0], right[0], modeLeft, modeRight))
 
 					# - Build Source pairs
-					for pair in src_names:
+					for pair in src_names: # Ugly boilerplate... but may be useful in future
 						left, right = pair
 						modeLeft, modeRight = 0, 0
 						
@@ -180,12 +185,15 @@ class dlg_copyKerning(QtGui.QDialog):
 					# !!! Syntax fgKerning.setPlainPairs([(('A','V'),-30)])
 					for layer in process_layers:
 						layer_kerning = self.active_font.kerning(layer)
-						src_value = layer_kerning.get(src_names[0]) # use only single source for now
+						src_value = layer_kerning.get(src_names[0])
 
 						if src_pairs[0] in layer_kerning.keys():
 							src_value = layer_kerning.values()[layer_kerning.keys().index(src_pairs[0])]
 
 						if src_value is not None:
+							if len(src_raw) > 1 and len(src_raw[1]):
+								src_value = int(eval(str(src_value) + str(src_raw[1][0])))
+
 							for wID in range(len(dst_pairs)):
 								work_pair = dst_pairs[wID]
 								work_name = dst_names[wID]
@@ -201,7 +209,7 @@ class dlg_copyKerning(QtGui.QDialog):
 									print 'ADD:\t Plain Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer)
 				else:
 					# Special symbol @ found
-					# !!! Works with whole sets but only in plain part mode. No group kering heuristic found!
+					# !!! Works with whole sets but only in plain part mode. No group kerning heuristic found!
 					# - Init
 					glyph_names = {'UC':self.active_font.uppercase(True), 'LC':self.active_font.lowercase(True), 'FIG':self.active_font.figures(True), 'LIGA':self.active_font.ligatures(True), 'ALT':self.active_font.alternates(True), 'SYM':self.active_font.symbols(True)}
 					src_names_expand = []
