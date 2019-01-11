@@ -192,8 +192,9 @@ class dlg_copyKerning(QtGui.QDialog):
 								
 								# - Check if class already exists and change value
 								if work_pair in layer_kerning.keys():
-									layer_kerning[layer_kerning.keys().index(work_pair)] = src_value
-									print 'CHANGE:\t Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer)
+									if layer_kerning[layer_kerning.keys().index(work_pair)] != src_value:
+										layer_kerning[layer_kerning.keys().index(work_pair)] = src_value
+										print 'CHANGE:\t Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer)
 
 								else: # Class does not exist, add as plain pair due to FL6 limitation 
 									layer_kerning.setPlainPairs([(work_name, src_value)])
