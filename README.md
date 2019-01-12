@@ -4,6 +4,7 @@
 **TypeRig GUI** (`.\Scripts\TypeRig GUI`) is a collecton of GUI centered tools representing functionality found in the library. Currently there reside:
 - **TypeRig Panel** (`typerig-panel.py`) - a floating side panel combining the following tools listed below. 
 *New tools will be added on plugin-basis by just dropping the updated or new tabs as .py files in `.\Scripts\TypeRig GUI\Panel` sub-folder.*
+- **Typerig Manager** (`typerig-manager.py`) - A conviniet set of tools for global font manipulation.
 
 #### Current features
 Below listed featueres are implemented as TypeRig GUI. They affect **all compatible layers** simultaneously unless noted so.
@@ -68,8 +69,6 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 - A toolset for basic specimen layout design within the Sketchboard.
 
 ###### *Hints panel (TBI)*
-
-**Typerig Manager** (`typerig-manager.py`) - A conviniet set of tools for global font manipulation.
 
 ##### Font metrics manager
 - Set/save'/load' global font metrics in table mode
