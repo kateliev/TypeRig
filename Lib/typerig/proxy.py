@@ -875,12 +875,12 @@ class pGlyph(object):
 		pLayer = self.layer(layer)
 		
 		if not applyTransform:
-			nodelist = self.selectedAtContours(filterOn=filterOn)
+			nodelist = self.selectedAtContours(filterOn=filterOn, deep=False)
 			#return [pLayer.getContours()[item[0]].nodes()[item[1]].position for item in nodelist]
 			return [self.contours(layer)[cid].nodes()[nid].position for cid, nid in nodelist]
 
 		else:
-			nodelist = self.selectedAtShapes(filterOn=filterOn)
+			nodelist = self.selectedAtShapes(filterOn=filterOn, deep=False)
 			#return [pLayer.getShapes(1)[item[0]].transform.map(pLayer.getContours()[item[1]].nodes()[item[2]].position) for item in nodelist]
 			return [self.shapes(layer)[sid].transform.map(self.contours(layer)[cid].nodes()[nid].position) for sid, cid, nid in nodelist]
 
