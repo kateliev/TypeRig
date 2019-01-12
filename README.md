@@ -17,6 +17,7 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 - Close open contours.
 - Interpolated move aka Interpolated nudge (Active Layer only).
 - Slanted Grid move with the italic angle applied in the Y direction (Active Layer only).
+- "Slope walker" movement along inclined contour lines.
 
 ##### Contour Panel
 - Contour optimization: Tunni (Auto balance handles), Hobby (Adjust Curvature), Proportional (Handle length)
@@ -42,6 +43,7 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 - Add or move an anchor to given coordinates or using various positioning algorithms (including feature detection)
 
 ##### Metrics panel
+- Advanced metric adjustments
 - Copy metrics from glyph (with adjustments)
 - Set metric equations
 - Set Font metrics (ascender, descender, cap height and x-height) acording to selected nodes Y coordinate or active glyph BBox
@@ -53,10 +55,44 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 
 *'In order to operate, Mixer panel requires percompiled binary library MathRig that is currently available to limited number of users on Windows platform only. MAC version is also on its way...*
 
+##### Outline panel
+- Simple modifications of the glyph contours in table mode, similar to those found in DTL Foundry Master.
+
+##### Statistics panel
+- Simple statistical comparison between handpicked glyph parameters: LSB, RSB, Advance, BBox and etc. Comparison between various glyphs and layer is possible.
+
 ##### String pair generator panel
 - A flexible string generator for metric and kerning pairs.
 
+##### Text Block panel
+- A toolset for basic specimen layout design within the Sketchboard.
+
 ###### *Hints panel (TBI)*
+
+**Typerig Manager** (`typerig-manager.py`) - A conviniet set of tools for global font manipulation.
+
+##### Font metrics manager
+- Set/save'/load' global font metrics in table mode
+- Set/save'/load' global font zones (blues) in table mode
+
+*'User modifiable JSON format*
+
+##### Font group/class kerning manager
+- Auto build kerning groups from fonts composite characters.
+- Set/save'/load'/modify multiple classes
+- Duplicate and/or merge classes
+- Find/replace multiple class names
+- Change multiple class types
+- Strip or append suffixes to all class members
+
+*'User modifiable JSON format*
+
+**Standalone scripts**
+- Save/load font metrics bindings to/from external file'
+- Kopy kerning data between kern pairs using kern-equations.
+- Apply transformations to multiple glyphs
+
+*'User modifiable JSON format*
 
 #### Known issues
 Please refer to https://github.com/kateliev/TypeRig/issues
