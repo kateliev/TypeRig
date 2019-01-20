@@ -613,22 +613,42 @@ class pGlyph(object):
 	def fg_hasLayer(self, layerName):
 		return self.fg.fgData().findLayer(layer)
 
-	def shapes(self, layer=None):
+	def shapes(self, layer=None, extend=None):
 		'''Return all shapes at given layer.
 		Args:
 			layer (int or str): Layer index or name. If None returns ActiveLayer
 		Returns:
 			list[flShapes]
 		'''
-		if layer is None:
-			return self.fl.activeLayer.shapes
+		if extend is None:
+			return self.layer(layer).shapes
 		else:
-			if isinstance(layer, int):
-				return self.fl.layers[layer].shapes
+			return [extend(shape) for shape in self.layer(layer).shapes]
 
-			elif isinstance(layer, basestring):
-				return self.fl.getLayerByName(layer).shapes
+	def addShape(self, shape, layer=None, clone=False):
+		'''Add a new shape at given layer.
+		Args:
+			shape (flShape): Shape to be added
+		Returns:
+			flShape
+		'''
+		if clone:
+			return self.layer(layer).addShape(shape.cloneTopLevel())
+		else:
+			return self.layer(layer).addShape(shape)		
 
+	def findShape(self, shapeName, layer=None):
+		'''Finds shape by name on given layer
+		Args:
+			shapeName (str): Shape name
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+		Returns:
+			flShape or None
+		'''
+		for shape in self.shapes(layer):
+			if shapeName == shape.shapeData.name:
+				return shape
+				
 	def shapes_data(self, layer=None):
 		'''Return all flShapeData objects at given layer.
 		Args:
@@ -828,7 +848,7 @@ class pGlyph(object):
 		return [self.nodes(layer, extend, deep)[nid] for nid in self.selectedNodeIndices(filterOn, deep)]
 		#return [node for node in self.nodes(layer, extend, deep) if node.selected]
 	
-	def selectedAtContours(self, index=True, layer=None, filterOn=False):	
+	def selectedAtContours(self, index=True, layer=None, filterOn=False, deep=False):	
 		'''Return all selected nodes and the contours they rest upon at current layer.
 		Args:
 			index (bool): If True returns only indexes, False returns flContour, flNode
@@ -840,9 +860,9 @@ class pGlyph(object):
 		allContours = self.contours(layer)
 		
 		if index:
-			return [(allContours.index(node.contour), node.index) for node in self.selectedNodes(layer, filterOn)]
+			return [(allContours.index(node.contour), node.index) for node in self.selectedNodes(layer, filterOn, deep=deep)]
 		else:
-			return [(node.contour, node) for node in self.selectedNodes(layer, filterOn)]
+			return [(node.contour, node) for node in self.selectedNodes(layer, filterOn, deep=deep)]
 
 	def selectedAtShapes(self, index=True, filterOn=False, layer=None, deep=True):
 		'''Return all selected nodes and the shapes they belong at current layer.
@@ -892,6 +912,15 @@ class pGlyph(object):
 			list[CurveEx]
 		'''
 		return [self.contours(layer)[cID].segment(self.mapNodes2Times(layer)[cID][nID]) for cID, nID in self.selectedAtContours()]
+
+	def findNode(self, nodeName, layer=None):
+		'''Find node by name/tag'''
+		return self.layer(layer).findNode(nodeName)
+
+	def findNodeCoords(self, nodeName, layer=None):
+		'''Find node coordinates by name/tag'''
+		temp = self.findNode(nodeName, layer)
+		if temp is not None: return temp[1]
 
 	# - Outline -----------------------------------------------
 	def _mapOn(self, layer=None):
@@ -1207,9 +1236,27 @@ class pGlyph(object):
 		
 		self.layer(layer).addAnchor(newAnchor)
 
+	def newAnchor(self, coordTuple, name, anchorType=1):
+		'''	
+		Not working
+		'''
+		newAnchor = fl6.flPinPoint(pqt.QtCore.QPointF(*coordTuple), anchorType)
+		newAnchor.name = name
+		
+		return newAnchor
+
 	def clearAnchors(self, layer=None):
 		'''Remove all anchors at given layer (int or str)'''
 		return self.layer(layer).clearAnchors()
+
+	def findAnchor(self, anchorName, layer=None):
+		'''Find anchor by name/tag'''
+		return self.layer(layer).findAnchor(anchorName)
+
+	def findAnchorCoords(self, anchorName, layer=None):
+		'''Find anchor coordinates by name/tag '''
+		temp = self.findAnchor(anchorName, layer=None)
+		if temp is not None: return temp.point
 
 	# - Guidelines -----------------------------------------------
 	def guidelines(self, layer=None):
@@ -1470,6 +1517,13 @@ class pFont(object):
 	def pGlyphs(self, fgGlyphList=[]):
 		'''Return list of TypeRig proxy Glyph objects glyph objects (list[pGlyph]).'''
 		return [self.glyph(glyph) for glyph in self.fg] if not len(fgGlyphList) else [self.glyph(glyph) for glyph in fgGlyphList]
+
+	def findShape(self, shapeName, master=None):
+		'''Search for element (flShape) in font and return it'''
+		for glyph in self.pGlyphs():
+			foundShape = glyph.findShape(shapeName, master)
+			if foundShape is not None:
+				return foundShape
 
 	# - Font metrics -----------------------------------------------
 	def getItalicAngle(self):
@@ -1834,3 +1888,72 @@ class pFont(object):
 		return fgt.fgKerningObjectPair(glyphLeft, glyphRight, modeLeft, modeRight)
 
 
+class pKerning(object):
+	'''Proxy to fgKerning object
+
+	Constructor:
+		pKerning(fgKerning)
+
+	Attributes:
+		.fg (fgKerning): Original Fontgate Kerning object 
+		.groups (fgKerningGroups): Fontgate Group kerning object
+	'''
+	def __init__(self, fgKerningObject):
+		self.fg =  self.kerning = fgKerningObject
+		self.groups = self.groups()
+
+		self.__kern_group_type = {'L':'KernLeft', 'R':'KernRight', 'B': 'KernBothSide'}
+		self.__kern_pair_mode = ('glyphMode', 'groupMode')
+		
+	def __repr__(self):
+		return '<%s pairs=%s groups=%s>' % (self.__class__.__name__, len(self.kerning), len(self.groups.keys()))
+
+	# - Basic functions -------------------------------------
+	def groups(self):
+		return self.fg.groups
+
+	def reset(self):
+		# - Delete all group kerning at given layer
+		self.groups().clear()	
+
+	def asList(self):
+		# Structure:
+		# 	fgKerning{fgKernigPair(fgKerningObject(glyph A, mode), fgKerningObject(glyph B, mode)) : kern value, ...}
+		return [[[item.asTuple() for item in key.asTuple()], value] for key, value in self.kerning.asDict().iteritems()]
+
+	def groupsAsDict(self):
+		# - Semi working fixup of Build 6927 Bug
+		return {key: (list(set(self.groups()[key][0])), self.groups()[key][1]) for key in self.groups().keys()}
+
+	def groupsFromDict(self, groupDict):
+		# - Build Group kerning from dictionary
+		kerning_groups = self.groups()
+		
+		for key, value in groupDict.iteritems():
+			kerning_groups[key] = value
+
+	def removeGroup(self, key):
+		'''Remove a group from fonts kerning groups at given layer.'''
+		del self.groups()[key]
+
+	def renameGroup(self, oldkey, newkey):
+		'''Rename a group in fonts kerning groups at given layer.'''
+		self.groups().rename(oldkey, newkey)
+
+	def addGroup(self, key, glyphNameList, type):
+		'''Adds a new group to fonts kerning groups.
+		Args:
+			key (string): Group name
+			glyphNameList (list(string)): List of glyph names
+			type (string): Kern group types: L - Left group (1st), R - Right group (2nd), B - Both (1st and 2nd)
+			layer (None, Int, String)
+		
+		Returns:
+			None
+		'''
+		self.groups()[key] = (glyphNameList, self.__kern_group_type[type.upper()])
+
+	def newPair(self, glyphLeft, glyphRight, modeLeft, modeRight):
+		if not isinstance(modeLeft, str): modeLeft = self.__kern_pair_mode[modeLeft]
+		if not isinstance(modeRight, str): modeRight = self.__kern_pair_mode[modeRight]
+		return fgt.fgKerningObjectPair(glyphLeft, glyphRight, modeLeft, modeRight)
