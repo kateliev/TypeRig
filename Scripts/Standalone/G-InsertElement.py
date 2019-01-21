@@ -304,9 +304,16 @@ class dlg_glyphComposer(QtGui.QDialog):
 									insert_coord = Coord(insert_position) + insert_correction
 																	
 								# - Insert and reposition
+								# !!! A quirky way of adding shapes follows
+								# !!! This is so very wrong - adding the shape twice and removing the first,
+								# !!! forces FL to make a proper clone of the shape!?
+								temp_shape = w_glyph.addShape(w_shape, layer) # A dummy that helps ??!
 								new_shape = w_glyph.addShape(w_shape, layer)
+								w_glyph.layer(layer).removeShape(temp_shape)
+
 								new_position = insert_coord - insert_origin
 								new_transform = QtGui.QTransform(1, 0, 0, 0, 1, 0, new_position.x, new_position.y, 1)
+								new_shape.prepareTransformationData()
 								new_shape.transform = new_transform
 								w_glyph.update()
 								#print 'New: %s; Insert: %s; Origin: %s' %(new_position, insert_coord, insert_origin)
