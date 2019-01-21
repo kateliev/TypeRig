@@ -78,6 +78,43 @@ layer2 - > e1!BL@!foo e2!TL@!baz^-50,0 -> H N
 Inserts elements e1, e2, into every glyph (/H, /N) at specified node tags with correction different for every layer set explicitly.
 '''
 
+# - Classes --------------------------------
+class TrPlainTextEdit(QtGui.QPlainTextEdit):
+	# - Custom QLine Edit extending the contextual menu with FL6 metric expressions
+	def __init__(self, *args, **kwargs):
+		super(TrPlainTextEdit, self).__init__(*args, **kwargs)
+		self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+		self.customContextMenuRequested.connect(self.__contextMenu)
+
+	def __contextMenu(self):
+		self._normalMenu = self.createStandardContextMenu()
+		self._addCustomMenuItems(self._normalMenu)
+		self._normalMenu.exec_(QtGui.QCursor.pos())
+
+	def _addCustomMenuItems(self, menu):
+		menu.addSeparator()
+		menu.addAction('Symbol: Insert', lambda: self.insertPlainText(syn_insert))
+		menu.addAction('Symbol: Attachment', lambda: self.insertPlainText(syn_pos))
+		menu.addAction('Symbol: Node Label', lambda: self.insertPlainText(syn_label))
+		menu.addAction('Symbol: Anchor Label', lambda: self.insertPlainText(syn_anchor))
+		menu.addAction('Symbol: Transform', lambda: self.insertPlainText(syn_transform))
+		menu.addAction('Symbol: Comment', lambda: self.insertPlainText(syn_comment))
+		menu.addSeparator()
+		menu.addAction('Tag: Current Glyph', lambda: self.insertPlainText(syn_currglyph))
+		menu.addAction('Tag: Current Node', lambda: self.insertPlainText(syn_currnode))
+		menu.addSeparator()
+		menu.addAction('Tag: BBoX Bottom Left', lambda: self.insertPlainText(syn_bboxBL))
+		menu.addAction('Tag: BBoX Bottom Right', lambda: self.insertPlainText(syn_bboxBR))
+		menu.addAction('Tag: BBoX Top Left', lambda: self.insertPlainText(syn_bboxTL))
+		menu.addAction('Tag: BBoX Top Right', lambda: self.insertPlainText(syn_bboxTR))
+		menu.addSeparator()
+		menu.addAction('Action: Insert selected glyph names', lambda: self.__add_names())
+
+	def __add_names(self):
+		temp_font = pFont()
+		selection = [g.name for g in temp_font.selectedGlyphs()]
+		self.insertPlainText(' '.join(selection))
+
 # - Dialogs --------------------------------
 class dlg_glyphComposer(QtGui.QDialog):
 	def __init__(self):
@@ -99,7 +136,7 @@ class dlg_glyphComposer(QtGui.QDialog):
 		self.btn_saveExpr.clicked.connect(self.expr_toFile)
 		self.btn_loadExpr.clicked.connect(self.expr_fromFile)
 
-		self.txt_editor = QtGui.QPlainTextEdit()
+		self.txt_editor = TrPlainTextEdit()
 		#self.lbl_help = QtGui.QLabel(str_help)
 		self.lbl_help = QtGui.QLabel('Help: TODO!')
 		self.lbl_help.setWordWrap(True)
@@ -143,8 +180,9 @@ class dlg_glyphComposer(QtGui.QDialog):
 
 	def process(self):
 		# - Init
+		self.active_font = pFont()
 		current_glyph = pGlyph()
-		getUniGlyph = lambda c: self.active_font.fl.findUnicode(ord(c)).name
+		getUniGlyph = lambda c: self.active_font.fl.findUnicode(ord(c)).name if all(['uni' not in c, '.' not in c, '_' not in c]) else c
 		process_layers = [self.cmb_layer.currentText] if self.cmb_layer.currentText != 'All masters' else self.active_font.masters()	
 		
 		# - Parse input ------------------------------------------------------------
@@ -169,7 +207,8 @@ class dlg_glyphComposer(QtGui.QDialog):
 					continue
 
 				# - Set basics
-				dst_store = [getUniGlyph(name) if syn_currglyph not in name else current_glyph.name for name in rigth.split()]
+				#dst_store = [getUniGlyph(name) if syn_currglyph not in name else current_glyph.name for name in rigth.split()]
+				dst_store = [name if syn_currglyph not in name else current_glyph.name for name in rigth.split()]
 				src_temp = [item.strip().split(syn_pos) for item in left.split()]
 				src_temp = [[item[0], item[1].split(syn_transform)] if len(item) > 1 else item for item in src_temp]
 				

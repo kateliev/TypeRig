@@ -216,24 +216,43 @@ class QGlyphTag(QtGui.QGridLayout):
 		self.edt_tagString.setPlaceholderText('Glyph tags')
 		self.edt_tagString.setToolTip('A comma separated list of tags.')
 
+		self.edt_tagStringNode = QtGui.QLineEdit()
+		self.edt_tagStringNode.setPlaceholderText('Node name')
+		self.edt_tagStringNode.setToolTip('A single node name.')
+
 		self.btn_tagGlyph = QtGui.QPushButton('Glyph')
 		self.btn_tagWindow = QtGui.QPushButton('Window')
 		self.btn_tagSelection = QtGui.QPushButton('Selection')
 
+		self.btn_tagNodes = QtGui.QPushButton('Glyph')
+		self.btn_tagWindowNodes = QtGui.QPushButton('Window')
+		self.btn_tagNodesClear = QtGui.QPushButton('Clear')
+
 		self.btn_tagGlyph.clicked.connect(lambda: self.tag_glyphs('G'))
 		self.btn_tagWindow .clicked.connect(lambda: self.tag_glyphs('W'))
 		self.btn_tagSelection .clicked.connect(lambda: self.tag_glyphs('S'))
+		self.btn_tagNodes.clicked.connect(lambda: self.tag_nodes('G'))
+		self.btn_tagWindowNodes.clicked.connect(lambda: self.tag_nodes('W'))
+		self.btn_tagNodesClear.clicked.connect(lambda: self.edt_tagStringNode.clear())
 
 		self.btn_tagGlyph.setToolTip('Add tags to current glyph.')
 		self.btn_tagWindow.setToolTip('Add tags to all glyphs in current Glyph window.')
 		self.btn_tagSelection.setToolTip('Add tags to current selection in Font window.')
+		self.btn_tagNodes.setToolTip('Add name selected nodes at current glyph.')
+		self.btn_tagWindowNodes.setToolTip('Add name to selected nodes at all glyphs in current Glyph window.')
+		self.btn_tagNodesClear.setToolTip('Clear/Reset input filed.')
 		
 		# - Build
 		self.addWidget(QtGui.QLabel('Glyph tagging:'),			1, 0, 1, 9)
 		self.addWidget(self.edt_tagString, 						2, 0, 1, 9)
 		self.addWidget(self.btn_tagGlyph, 						3, 0, 1, 3)
 		self.addWidget(self.btn_tagWindow, 						3, 3, 1, 3)
-		self.addWidget(self.btn_tagSelection, 					3, 6, 1, 3)	
+		self.addWidget(self.btn_tagSelection, 					3, 6, 1, 3)
+		self.addWidget(QtGui.QLabel('Node naming:'),			4, 0, 1, 9)
+		self.addWidget(self.edt_tagStringNode, 					5, 0, 1, 9)
+		self.addWidget(self.btn_tagNodes, 						6, 0, 1, 3)
+		self.addWidget(self.btn_tagWindowNodes, 				6, 3, 1, 3)
+		self.addWidget(self.btn_tagNodesClear, 					6, 6, 1, 3)
 
 	# - Procedures
 	def tag_glyphs(self, mode):
@@ -264,6 +283,33 @@ class QGlyphTag(QtGui.QGridLayout):
 				tag(glyph, new_tags)
 
 		self.edt_tagString.clear()
+
+	def tag_nodes(self, mode):
+		# - Init
+		new_name = self.edt_tagStringNode.text.strip()
+
+		# - Helper
+		def tag(glyph, newName):
+			wLayers = glyph._prepareLayers(pLayers)
+
+			for layer in wLayers:
+				for node in glyph.selectedNodes(layer):
+					node.name = newName
+			
+			glyph.updateObject(glyph.fl, 'Glyph: %s; Nodes named: %s ' %(glyph.name, new_name))
+			glyph.update()
+
+		# - Process
+		if mode == 'G':
+			glyph = eGlyph()
+			tag(glyph, new_name)
+			
+		elif mode == 'W':
+			process_glyphs = []
+			process_glyphs = [eGlyph(glyph) for glyph in pWorkspace().getTextBlockGlyphs()]
+					
+			for glyph in process_glyphs:
+				tag(glyph, new_name)
 			
 class tool_tab(QtGui.QWidget):
 	def __init__(self):
