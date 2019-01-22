@@ -311,7 +311,7 @@ class dlg_glyphComposer(QtGui.QDialog):
 								new_shape = w_glyph.addShape(w_shape, layer)
 								w_glyph.layer(layer).removeShape(temp_shape)
 
-								#new_shape.assignStyle(w_shape) # The only way to copy the 'non-spacing' property for now
+								new_shape.assignStyle(w_shape) # The only way to copy the 'non-spacing' property for now
 
 								new_position = insert_coord - insert_origin
 								new_transform = QtGui.QTransform(1, 0, 0, 0, 1, 0, new_position.x, new_position.y, 1)
