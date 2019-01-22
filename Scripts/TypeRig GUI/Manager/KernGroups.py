@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kern Classes', '1.6'
+app_name, app_version = 'TypeRig | Kern Classes', '1.7'
 alt_mark = '.'
 
 # - Dependencies -----------------
@@ -170,6 +170,7 @@ class WKernGroups(QtGui.QWidget):
 		act_memb_lower = QtGui.QAction('Members to lowercase', self)
 		act_memb_strip = QtGui.QAction('Strip member suffixes', self)
 		act_memb_suff = QtGui.QAction('Add suffix to members', self)
+		act_memb_addglyphs = QtGui.QAction('Selected glyphs to members', self)
 
 		act_memb_sel.triggered.connect(lambda: self.memb_select())
 		act_memb_clean.triggered.connect(lambda: self.memb_cleanup())
@@ -177,6 +178,7 @@ class WKernGroups(QtGui.QWidget):
 		act_memb_lower.triggered.connect(lambda: self.memb_change_case(False))
 		act_memb_strip.triggered.connect(lambda: self.memb_stripSuffix())
 		act_memb_suff.triggered.connect(lambda: self.memb_addSuffix())
+		act_memb_addglyphs.triggered.connect(lambda: self.memb_addGlyphs())
 
 		self.menu_memb.addAction(act_memb_sel)
 		self.menu_memb.addAction(act_memb_clean)
@@ -184,6 +186,7 @@ class WKernGroups(QtGui.QWidget):
 		self.menu_memb.addAction(act_memb_lower)
 		self.menu_memb.addAction(act_memb_strip)
 		self.menu_memb.addAction(act_memb_suff)		
+		self.menu_memb.addAction(act_memb_addglyphs)	
 
 
 		# - Table auto preview selection
@@ -347,6 +350,17 @@ class WKernGroups(QtGui.QWidget):
 				print 'DONE:\t Class: %s; New suffix (%s) added to members.' %(self.tab_groupKern.item(row, 0).text(), suffix)
 
 			self.update_data(self.tab_groupKern.getTable(), False)
+
+	def memb_addGlyphs(self):
+		selection = [glyph.name for glyph in self.active_font.selectedGlyphs()]
+
+		for row, col in self.tab_groupKern.getSelection():
+			old_data = self.tab_groupKern.item(row, 2).text()
+			new_data = old_data + ' ' + ' '.join(selection)
+			self.tab_groupKern.item(row, 2).setText(new_data)
+			print 'DONE:\t Class: %s; Added members: %s' %(self.tab_groupKern.item(row, 0).text(), ' '.join(selection))
+
+		self.update_data(self.tab_groupKern.getTable(), False)
 
 	def memb_change_case(self, toUpper=False):
 		for row, col in self.tab_groupKern.getSelection():
