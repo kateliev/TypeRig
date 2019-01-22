@@ -323,7 +323,7 @@ class dlg_glyphComposer(QtGui.QDialog):
 						# - Finish
 						w_glyph.updateObject(w_glyph.fl, 'Shapes inserted to glyph: %s' %w_glyph.name, verbose=False)
 
-			print 'DONE:\t Glyphs processed: %s' %dst_store
+			print 'DONE:\t Glyphs processed: %s' %' '.join(dst_store)
 				
 		print 'Done.'
 
