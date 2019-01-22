@@ -18,7 +18,7 @@ from typerig.proxy import pFont, pGlyph
 from typerig.brain import Coord
 
 # - Init --------------------------------
-app_version = '1.0'
+app_version = '1.1'
 app_name = 'Insert elements'
 
 # -- Syntax
@@ -311,15 +311,19 @@ class dlg_glyphComposer(QtGui.QDialog):
 								new_shape = w_glyph.addShape(w_shape, layer)
 								w_glyph.layer(layer).removeShape(temp_shape)
 
+								new_shape.assignStyle(w_shape) # The only way to copy the 'non-spacing' property for now
+
 								new_position = insert_coord - insert_origin
 								new_transform = QtGui.QTransform(1, 0, 0, 0, 1, 0, new_position.x, new_position.y, 1)
-								new_shape.prepareTransformationData()
 								new_shape.transform = new_transform
+								
 								w_glyph.update()
 								#print 'New: %s; Insert: %s; Origin: %s' %(new_position, insert_coord, insert_origin)
 
 						# - Finish
-						w_glyph.updateObject(w_glyph.fl, 'Shapes inserted to glyph: %s' %w_glyph.name)
+						w_glyph.updateObject(w_glyph.fl, 'Shapes inserted to glyph: %s' %w_glyph.name, verbose=False)
+
+			print 'DONE:\t Glyphs processed: %s' %dst_store
 				
 		print 'Done.'
 
