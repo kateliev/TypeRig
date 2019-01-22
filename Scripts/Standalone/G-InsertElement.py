@@ -267,7 +267,7 @@ class dlg_glyphComposer(QtGui.QDialog):
 										w_bbox = w_glyph.getBounds(layer)
 
 										if syn_currnode == insert[1][0]: # Position: Destination Glyphs Currently selected node
-											position = w_glyph.selectedCoords(layer)
+											position = w_glyph.selectedCoords(layer, applyTransform=True)
 											insert_position = position[0] if len(position) else None
 
 										elif syn_bboxBL == insert[1][0]: # Position: Destination Glyphs BBox Bottom Left
@@ -311,7 +311,7 @@ class dlg_glyphComposer(QtGui.QDialog):
 								new_shape = w_glyph.addShape(w_shape, layer)
 								w_glyph.layer(layer).removeShape(temp_shape)
 
-								new_shape.assignStyle(w_shape) # The only way to copy the 'non-spacing' property for now
+								#new_shape.assignStyle(w_shape) # The only way to copy the 'non-spacing' property for now
 
 								new_position = insert_coord - insert_origin
 								new_transform = QtGui.QTransform(1, 0, 0, 0, 1, 0, new_position.x, new_position.y, 1)
