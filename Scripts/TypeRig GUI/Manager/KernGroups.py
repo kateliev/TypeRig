@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kern Classes', '1.7'
+app_name, app_version = 'TypeRig | Kern Classes', '1.9'
 alt_mark = '.'
 
 # - Dependencies -----------------
@@ -18,8 +18,31 @@ import os, json
 import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore, QtGui
-from typerig.proxy import pFont
+from typerig.proxy import pFont, pGlyph
 from typerig.utils import getUppercaseCodepoint, getLowercaseCodepoint
+
+# - Strings ------------------------------------------------------------------
+fileFormats = ['TypeRig JSON Raw Classes (*.json)', 'FontLab VI JSON Classes (*.json)']
+
+# - Functions ----------------------------------------------------------------
+def json_class_dumb_decoder(jsonData):
+	retund_dict = {}
+	pos_dict = {(True, False):'KernLeft', (False, True):'KernRight', (True, True):'KernBothSide'}
+	getPos = lambda d: (d['1st'] if d.has_key('1st') else False , d['2nd'] if d.has_key('2nd') else False)
+
+	if len(jsonData.keys()):
+		if jsonData.has_key('masters') and len(jsonData['masters']):
+			for master in jsonData['masters']:
+				if len(master.keys()):
+					if master.has_key('kerningClasses') and len(master['kerningClasses']):
+						temp_dict = {}
+
+						for group in master['kerningClasses']:
+							if group.has_key('names'):
+								temp_dict[group['name']] = (group['names'], pos_dict[getPos(group)])
+
+						retund_dict[master['name']] = temp_dict
+	return retund_dict
 
 # - Custom classes -----------------------------------------------------------
 class GroupTableView(QtGui.QTableWidget):
@@ -108,6 +131,7 @@ class WKernGroups(QtGui.QWidget):
 		self.btn_apply = QtGui.QPushButton('Write changes')
 		self.btn_reset = QtGui.QPushButton('Clear font classes')
 		self.btn_import = QtGui.QPushButton('Open')
+		self.btn_import_fl = QtGui.QPushButton('Import FontLab Classes')
 		self.btn_export = QtGui.QPushButton('Save')
 		self.btn_fromFont = QtGui.QPushButton('Get from Font')
 		self.btn_fromComp = QtGui.QPushButton('Build from References')
@@ -115,7 +139,8 @@ class WKernGroups(QtGui.QWidget):
 		self.btn_apply.clicked.connect(self.apply_changes)
 		self.btn_reset.clicked.connect(self.reset_classes)
 		self.btn_export.clicked.connect(self.export_groups)
-		self.btn_import.clicked.connect(self.import_groups)
+		self.btn_import.clicked.connect(lambda: self.import_groups(True))
+		self.btn_import_fl.clicked.connect(lambda: self.import_groups(False))
 		self.btn_fromComp.clicked.connect(self.from_composites)
 		self.btn_fromFont.clicked.connect(self.from_font)
 
@@ -199,9 +224,10 @@ class WKernGroups(QtGui.QWidget):
 		self.lay_grid.addWidget(self.tab_groupKern,		1, 0, 8, 42)
 		self.lay_grid.addWidget(self.btn_export,		1, 42, 1, 3)
 		self.lay_grid.addWidget(self.btn_import,		1, 45, 1, 3)
-		self.lay_grid.addWidget(self.btn_fromFont,		2, 42, 1, 6)
-		self.lay_grid.addWidget(self.btn_fromComp,		3, 42, 1, 6)
-		self.lay_grid.addWidget(self.chk_preview,		4, 42, 1, 6)
+		self.lay_grid.addWidget(self.btn_import_fl,		2, 42, 1, 6)
+		self.lay_grid.addWidget(self.btn_fromFont,		3, 42, 1, 6)
+		self.lay_grid.addWidget(self.btn_fromComp,		4, 42, 1, 6)
+		self.lay_grid.addWidget(self.chk_preview,		5, 42, 1, 6)
 		self.lay_grid.addWidget(self.btn_reset,			7, 42, 1, 6)
 		self.lay_grid.addWidget(self.btn_apply,			8, 42, 1, 6)
 
@@ -420,13 +446,19 @@ class WKernGroups(QtGui.QWidget):
 
 			print 'SAVE:\t Font:%s; Group Kerning classes saved to: %s.' %(self.active_font.name, fname)
 
-	def import_groups(self):
+	def import_groups(self, importRaw=True):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
 		fname = QtGui.QFileDialog.getOpenFileName(self.upper_widget, 'Load kerning classes from file', fontPath)
 		
 		if fname != None:
 			with open(fname, 'r') as importFile:
-				self.update_data(json.load(importFile), setNotes=True)			
+				if importRaw:
+					self.update_data(json.load(importFile), setNotes=True)
+				else:
+					temp_glyph = pGlyph()
+					active_layer = temp_glyph.activeLayer().name
+					imported_data = json_class_dumb_decoder(json.load(importFile))
+					self.update_data(imported_data[active_layer], setNotes=False)
 
 			print 'LOAD:\t Font:%s; Group Kerning classes loaded from: %s.' %(self.active_font.name, fname)
 
