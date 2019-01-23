@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kern Classes', '1.9'
+app_name, app_version = 'TypeRig | Kern Classes', '2.1'
 alt_mark = '.'
 
 # - Dependencies -----------------
@@ -123,12 +123,17 @@ class WKernGroups(QtGui.QWidget):
 		self.kern_group_data = {} #self.active_font.kerning_groups_to_dict()
 
 		# - Interface
-		lbl_name = QtGui.QLabel('Kerning classes (active layer)')
+		lbl_name = QtGui.QLabel('Kerning classes')
 		lbl_act = QtGui.QLabel('Actions (selected items):')
 		lbl_name.setMaximumHeight(20)
 		lbl_act.setMaximumHeight(20)
 
-		self.btn_apply = QtGui.QPushButton('Write changes')
+		self.cmb_layer = QtGui.QComboBox()
+		self.cmb_layer.addItems(self.active_font.masters())
+		self.cmb_layer.currentIndexChanged.connect(lambda: self.update_data(self.kern_group_data))
+
+		self.btn_apply = QtGui.QPushButton('Apply changes')
+		self.btn_write = QtGui.QPushButton('Write changes')
 		self.btn_reset = QtGui.QPushButton('Clear font classes')
 		self.btn_import = QtGui.QPushButton('Open')
 		self.btn_import_fl = QtGui.QPushButton('Import FontLab Classes')
@@ -136,13 +141,14 @@ class WKernGroups(QtGui.QWidget):
 		self.btn_fromFont = QtGui.QPushButton('Get from Font')
 		self.btn_fromComp = QtGui.QPushButton('Build from References')
 
-		self.btn_apply.clicked.connect(self.apply_changes)
-		self.btn_reset.clicked.connect(self.reset_classes)
-		self.btn_export.clicked.connect(self.export_groups)
+		self.btn_apply.clicked.connect(lambda: self.apply_changes(False))
+		self.btn_write.clicked.connect(lambda: self.apply_changes(True))
+		self.btn_reset.clicked.connect(lambda: self.reset_classes())
+		self.btn_export.clicked.connect(lambda: self.export_groups(True))
 		self.btn_import.clicked.connect(lambda: self.import_groups(True))
 		self.btn_import_fl.clicked.connect(lambda: self.import_groups(False))
-		self.btn_fromComp.clicked.connect(self.from_composites)
-		self.btn_fromFont.clicked.connect(self.from_font)
+		self.btn_fromComp.clicked.connect(lambda: self.from_composites())
+		self.btn_fromFont.clicked.connect(lambda: self.from_font())
 
 		self.tab_groupKern = GroupTableView()
 
@@ -220,16 +226,19 @@ class WKernGroups(QtGui.QWidget):
 		
 		# - Build 	
 		self.lay_grid = QtGui.QGridLayout()
-		self.lay_grid.addWidget(lbl_name,		 		0, 0, 1, 48)
-		self.lay_grid.addWidget(self.tab_groupKern,		1, 0, 8, 42)
+		self.lay_grid.addWidget(lbl_name,		 		0, 0, 1, 42)
+		self.lay_grid.addWidget(QtGui.QLabel('Master:'),0, 40, 1, 2)
+		self.lay_grid.addWidget(self.cmb_layer,			0, 42, 1, 6)
+		self.lay_grid.addWidget(self.tab_groupKern,		1, 0, 9, 42)
 		self.lay_grid.addWidget(self.btn_export,		1, 42, 1, 3)
 		self.lay_grid.addWidget(self.btn_import,		1, 45, 1, 3)
 		self.lay_grid.addWidget(self.btn_import_fl,		2, 42, 1, 6)
 		self.lay_grid.addWidget(self.btn_fromFont,		3, 42, 1, 6)
 		self.lay_grid.addWidget(self.btn_fromComp,		4, 42, 1, 6)
 		self.lay_grid.addWidget(self.chk_preview,		5, 42, 1, 6)
-		self.lay_grid.addWidget(self.btn_reset,			7, 42, 1, 6)
-		self.lay_grid.addWidget(self.btn_apply,			8, 42, 1, 6)
+		self.lay_grid.addWidget(self.btn_apply,			7, 42, 1, 6)
+		self.lay_grid.addWidget(self.btn_reset,			8, 42, 1, 6)
+		self.lay_grid.addWidget(self.btn_write,			9, 42, 1, 6)
 
 
 		for i in range(1,8):
@@ -418,49 +427,59 @@ class WKernGroups(QtGui.QWidget):
 	# - Main Procedures --------------------------------------------
 	def update_data(self, source, updateTable=True, setNotes=False):
 		self.kern_group_data = source
+		layer = self.cmb_layer.currentText
 		
-		if updateTable:	
+		if updateTable and self.kern_group_data.has_key(layer):	
 			self.tab_groupKern.clear()
 			while self.tab_groupKern.rowCount > 0: self.tab_groupKern.removeRow(0)
-			self.tab_groupKern.setTable(source, setNotes)
+			self.tab_groupKern.setTable(source[layer], setNotes)
+			print 'DONE:\t Updating data for master: %s' %layer
+		else:
+			print 'ERROR:\t Updating data for master: %s' %layer
 
-	def apply_changes(self):
-		self.kern_group_data = self.tab_groupKern.getTable()
-		self.active_font.dict_to_kerning_groups(self.kern_group_data)
+	def apply_changes(self, writeToFont=True):
+		layer = self.cmb_layer.currentText
+		self.kern_group_data[layer] = self.tab_groupKern.getTable()
+		if not writeToFont: print 'DONE:\t Internal Database classes updated for layer: %s' %layer
 		
-		print 'DONE:\t Font: %s - Kerning classes updated.' %self.active_font.name
-		print '\nPlease add a new empty class in FL6 Classes panel to preview changes!'
+		if writeToFont:	
+			self.active_font.dict_to_kerning_groups(self.kern_group_data[layer], layer)
+			
+			print 'DONE:\t Font: %s - Kerning classes updated.' %self.active_font.name
+			print '\nPlease add a new empty class in FL6 Classes panel to preview changes!'
 
 	def reset_classes(self):
-		self.active_font.reset_kerning_groups()
+		self.active_font.reset_kerning_groups(self.cmb_layer.currentText)
 		print 'DONE:\t Font: %s - Kerning classes removed.' %self.active_font.name
 		print '\nPlease add a new empty class in FL6 Classes panel to preview changes!'
 
-	def export_groups(self):
+	def export_groups(self, exportRaw=True):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
 		fname = QtGui.QFileDialog.getSaveFileName(self.upper_widget, 'Save kerning classes to file', fontPath , '*.json')
-		
+
+		layer = self.cmb_layer.currentText
+		self.kern_group_data[layer] = self.tab_groupKern.getTable(getNotes=exportRaw)
+
 		if fname != None:
 			with open(fname, 'w') as exportFile:
-				json.dump(self.tab_groupKern.getTable(getNotes=True), exportFile)
-
-			print 'SAVE:\t Font:%s; Group Kerning classes saved to: %s.' %(self.active_font.name, fname)
+				if exportRaw:
+					json.dump(self.kern_group_data, exportFile)
+				
+				print 'SAVE:\t Font:%s; %s format Group Kerning classes saved to: %s.' %(self.active_font.name, ('FontLab','TypeRig')[exportRaw], fname)
 
 	def import_groups(self, importRaw=True):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
 		fname = QtGui.QFileDialog.getOpenFileName(self.upper_widget, 'Load kerning classes from file', fontPath)
-		
+				
 		if fname != None:
 			with open(fname, 'r') as importFile:
 				if importRaw:
-					self.update_data(json.load(importFile), setNotes=True)
+					imported_data = json.load(importFile)
 				else:
-					temp_glyph = pGlyph()
-					active_layer = temp_glyph.activeLayer().name
 					imported_data = json_class_dumb_decoder(json.load(importFile))
-					self.update_data(imported_data[active_layer], setNotes=False)
-
-			print 'LOAD:\t Font:%s; Group Kerning classes loaded from: %s.' %(self.active_font.name, fname)
+					
+				self.update_data(imported_data, setNotes=False)
+				print 'LOAD:\t Font:%s; %s Group Kerning classes loaded from: %s.' %(self.active_font.name, ('FontLab','TypeRig')[importRaw], fname)
 
 	def from_font(self):
 		msg = QtGui.QMessageBox(QtGui.QMessageBox.Warning, 'TypeRig: Warning', 'Due to fatal class kerning bug in FontLab VI (build 6927) the classes cannot be loaded reliably from font.\n\nPress OK to continue loading class information from font without predefined mode (1st, 2nd and etc.)', QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel, self)
@@ -482,7 +501,7 @@ class WKernGroups(QtGui.QWidget):
 		
 		for glyph in process_glyphs:
 			if all([banned_item not in glyph.name for banned_item in ban_list]):
-				layer = '100'
+				layer = self.cmb_layer.currentText
 				clear_comp = [comp.shapeData.name for comp in glyph.shapes(layer) + glyph.components(layer) if comp.shapeData.name in font_workset_names and comp.shapeData.name != glyph.name]
 				
 				if len(clear_comp) == 1:
