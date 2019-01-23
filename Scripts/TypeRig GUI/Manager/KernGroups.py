@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kern Classes', '2.1'
+app_name, app_version = 'TypeRig | Kern Classes', '2.5'
 alt_mark = '.'
 
 # - Dependencies -----------------
@@ -135,24 +135,46 @@ class WKernGroups(QtGui.QWidget):
 		self.btn_apply = QtGui.QPushButton('Apply changes')
 		self.btn_write = QtGui.QPushButton('Write changes')
 		self.btn_reset = QtGui.QPushButton('Clear font classes')
-		self.btn_import = QtGui.QPushButton('Open')
-		self.btn_import_fl = QtGui.QPushButton('Import FontLab Classes')
-		self.btn_export = QtGui.QPushButton('Save')
-		self.btn_fromFont = QtGui.QPushButton('Get from Font')
-		self.btn_fromComp = QtGui.QPushButton('Build from References')
 
 		self.btn_apply.clicked.connect(lambda: self.apply_changes(False))
 		self.btn_write.clicked.connect(lambda: self.apply_changes(True))
 		self.btn_reset.clicked.connect(lambda: self.reset_classes())
-		self.btn_export.clicked.connect(lambda: self.export_groups(True))
-		self.btn_import.clicked.connect(lambda: self.import_groups(True))
-		self.btn_import_fl.clicked.connect(lambda: self.import_groups(False))
-		self.btn_fromComp.clicked.connect(lambda: self.from_composites())
-		self.btn_fromFont.clicked.connect(lambda: self.from_font())
 
 		self.tab_groupKern = GroupTableView()
 
 		# - Menus & Actions
+		# -- Main Database actions
+		self.menu_data = QtGui.QMenu('Class Data', self)
+		act_data_open = QtGui.QAction('Open TypeRig Classes (JSON)', self)
+		act_data_save = QtGui.QAction('Save TypeRig Classes (JSON)', self)
+		act_data_import = QtGui.QAction('Import FontLab Classes (JSON)', self)
+		act_data_export = QtGui.QAction('Export FontLab Classes (JSON)', self)
+		act_data_import_font = QtGui.QAction('Import Classes from Font', self)
+		act_data_build_composite = QtGui.QAction('Build Classes from References', self)
+		act_data_reset = QtGui.QAction('Reset Font Class Data', self)
+		act_data_write = QtGui.QAction('Write class data to Font', self)
+
+		self.menu_data.addAction(act_data_open)
+		self.menu_data.addAction(act_data_save)
+		self.menu_data.addSeparator()
+		self.menu_data.addAction(act_data_import)
+		self.menu_data.addAction(act_data_export)
+		self.menu_data.addSeparator()
+		self.menu_data.addAction(act_data_import_font)
+		self.menu_data.addAction(act_data_build_composite)
+		self.menu_data.addSeparator()
+		self.menu_data.addAction(act_data_reset)
+		self.menu_data.addAction(act_data_write)
+
+		act_data_open.triggered.connect(lambda: self.file_load_groups(True))
+		act_data_save.triggered.connect(lambda: self.file_save_groups(True))
+		act_data_import.triggered.connect(lambda: self.file_load_groups(False))
+		#act_data_export.triggered.connect()
+		act_data_import_font.triggered.connect(lambda: self.from_font())
+		act_data_build_composite.triggered.connect(lambda: self.from_composites())
+		act_data_reset.triggered.connect(lambda: self.reset_classes())
+		act_data_write.triggered.connect(lambda: self.apply_changes(True))
+
 		# -- Main Class actions
 		self.menu_class = QtGui.QMenu('Class Management', self)
 		act_class_add = QtGui.QAction('Add new class', self)
@@ -230,13 +252,8 @@ class WKernGroups(QtGui.QWidget):
 		self.lay_grid.addWidget(QtGui.QLabel('Master:'),0, 40, 1, 2)
 		self.lay_grid.addWidget(self.cmb_layer,			0, 42, 1, 6)
 		self.lay_grid.addWidget(self.tab_groupKern,		1, 0, 9, 42)
-		self.lay_grid.addWidget(self.btn_export,		1, 42, 1, 3)
-		self.lay_grid.addWidget(self.btn_import,		1, 45, 1, 3)
-		self.lay_grid.addWidget(self.btn_import_fl,		2, 42, 1, 6)
-		self.lay_grid.addWidget(self.btn_fromFont,		3, 42, 1, 6)
-		self.lay_grid.addWidget(self.btn_fromComp,		4, 42, 1, 6)
-		self.lay_grid.addWidget(self.chk_preview,		5, 42, 1, 6)
-		self.lay_grid.addWidget(self.btn_apply,			7, 42, 1, 6)
+		self.lay_grid.addWidget(self.chk_preview,		2, 42, 1, 6)
+		self.lay_grid.addWidget(self.btn_apply,			1, 42, 1, 6)
 		self.lay_grid.addWidget(self.btn_reset,			8, 42, 1, 6)
 		self.lay_grid.addWidget(self.btn_write,			9, 42, 1, 6)
 
@@ -267,15 +284,19 @@ class WKernGroups(QtGui.QWidget):
 			self.memb_select()
 
 	def class_add_new(self):
-		self.tab_groupKern.insertRow(0)
-		
-		item_groupName = QtGui.QTableWidgetItem('Class_%s' %self.tab_groupKern.rowCount)
-		item_groupPos = QtGui.QTableWidgetItem('KernLeft')
-		item_groupMem = QtGui.QTableWidgetItem('')
+		if self.tab_groupKern.rowCount > 0:
+			self.tab_groupKern.insertRow(0)
+			item_groupName = QtGui.QTableWidgetItem('Class_%s' %self.tab_groupKern.rowCount)
+			item_groupPos = QtGui.QTableWidgetItem('KernLeft')
+			item_groupMem = QtGui.QTableWidgetItem('')
 
-		self.tab_groupKern.setItem(0, 0, item_groupName)
-		self.tab_groupKern.setItem(0, 1, item_groupPos)
-		self.tab_groupKern.setItem(0, 2, item_groupMem)
+			self.tab_groupKern.setItem(0, 0, item_groupName)
+			self.tab_groupKern.setItem(0, 1, item_groupPos)
+			self.tab_groupKern.setItem(0, 2, item_groupMem)
+		else:
+			layer = self.cmb_layer.currentText
+			empty_table = {layer:{'Class_1':[[''], 'KernLeft']}}
+			self.update_data(empty_table)
 
 	def class_find_replace(self):
 		search = QtGui.QInputDialog.getText(self, 'Find and replace class names', 'Please enter SPACE separated pair:\n(SEARCH_string) (REPLACE_string).', QtGui.QLineEdit.Normal, 'Find Replace')
@@ -289,7 +310,7 @@ class WKernGroups(QtGui.QWidget):
 			if len(mod_keys) and currItem.text() in mod_keys:
 					currItem.setText(currItem.text().replace(find, replace))
 
-		self.update_data(self.tab_groupKern.getTable(), False)
+		self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
 		print 'DONE:\t Search and replace in class names.'
 
 	def class_del(self):
@@ -298,7 +319,7 @@ class WKernGroups(QtGui.QWidget):
 
 		for key in del_keys: temp_data.pop(key, None)
 			
-		self.update_data(temp_data)
+		self.update_data(temp_data, layerUpdate=True)
 		print 'DONE:\t Removed Classes: %s'  %(', '.join(del_keys))
 
 	def class_copy(self):
@@ -312,7 +333,7 @@ class WKernGroups(QtGui.QWidget):
 				temp_data[prefix + key] = temp_data[key]
 				print 'DONE:\t Class: %s; Duplicated with prefix: %s.' %(key, prefix)
 
-			self.update_data(temp_data)
+			self.update_data(temp_data, layerUpdate=True)
 
 	def class_merge(self, delete=False):
 		merge_keys = [self.tab_groupKern.item(row, 0).text() for row, col in self.tab_groupKern.getSelection()]
@@ -331,14 +352,14 @@ class WKernGroups(QtGui.QWidget):
 				else:
 					print 'DONE:\t Classes: %s; Merged to: %s.' %(', '.join(merge_keys), merge_name)
 
-				self.update_data(temp_data)
+				self.update_data(temp_data, layerUpdate=True)
 		
 	def set_type(self, typeStr):
 		for row, col in self.tab_groupKern.getSelection():
 			self.tab_groupKern.item(row, 1).setText(typeStr)
 			print 'DONE:\t Class: %s; Type set to: %s.' %(self.tab_groupKern.item(row, 0).text(), typeStr)
 
-		self.update_data(self.tab_groupKern.getTable(), False)
+		self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
 
 	def toggle_type(self):
 		replace_dict = {'KernLeft':'KernRight', 'KernRight':'KernLeft'}
@@ -349,7 +370,7 @@ class WKernGroups(QtGui.QWidget):
 				self.tab_groupKern.item(row, 1).setText(replace_dict[self.tab_groupKern.item(row, 1).text()])
 				print 'DONE:\t Class: %s; Type set to: %s.' %(self.tab_groupKern.item(row, 0).text(), replace_dict[self.tab_groupKern.item(row, 1).text()])
 
-		self.update_data(self.tab_groupKern.getTable(), False)
+		self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
 
 	def memb_select(self):
 		self.active_font.unselectAll()
@@ -363,7 +384,7 @@ class WKernGroups(QtGui.QWidget):
 			self.tab_groupKern.item(row, 2).setText(new_data)
 			print 'DONE:\t Class: %s; Members cleanup.' %self.tab_groupKern.item(row, 0).text()
 
-		self.update_data(self.tab_groupKern.getTable(), False)
+		self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
 
 	def memb_stripSuffix(self):
 		for row, col in self.tab_groupKern.getSelection():
@@ -372,7 +393,7 @@ class WKernGroups(QtGui.QWidget):
 			self.tab_groupKern.item(row, 2).setText(new_data)
 			print 'DONE:\t Class: %s; All suffixes removed from members.' %self.tab_groupKern.item(row, 0).text()
 
-		self.update_data(self.tab_groupKern.getTable(), False)
+		self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
 
 	def memb_addSuffix(self):
 		suffix = QtGui.QInputDialog.getText(self, 'Add suffix', 'Please enter Suffix for all class members.')
@@ -384,7 +405,7 @@ class WKernGroups(QtGui.QWidget):
 				self.tab_groupKern.item(row, 2).setText(new_data)
 				print 'DONE:\t Class: %s; New suffix (%s) added to members.' %(self.tab_groupKern.item(row, 0).text(), suffix)
 
-			self.update_data(self.tab_groupKern.getTable(), False)
+			self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
 
 	def memb_addGlyphs(self):
 		selection = [glyph.name for glyph in self.active_font.selectedGlyphs()]
@@ -395,7 +416,7 @@ class WKernGroups(QtGui.QWidget):
 			self.tab_groupKern.item(row, 2).setText(new_data)
 			print 'DONE:\t Class: %s; Added members: %s' %(self.tab_groupKern.item(row, 0).text(), ' '.join(selection))
 
-		self.update_data(self.tab_groupKern.getTable(), False)
+		self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
 
 	def memb_change_case(self, toUpper=False):
 		for row, col in self.tab_groupKern.getSelection():
@@ -421,29 +442,42 @@ class WKernGroups(QtGui.QWidget):
 			
 			self.tab_groupKern.item(row, 2).setText(' '.join(new_data))
 
-		self.kern_group_data = self.tab_groupKern.getTable()
+		self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
 		print 'DONE:\t Class: %s; Members change case.' %self.tab_groupKern.item(row, 0).text()
 
 	# - Main Procedures --------------------------------------------
-	def update_data(self, source, updateTable=True, setNotes=False):
-		self.kern_group_data = source
+	def update_data(self, source, updateTable=True, setNotes=False, layerUpdate=False):
 		layer = self.cmb_layer.currentText
+		
+		if not layerUpdate:
+			self.kern_group_data = source
+		else:
+			self.kern_group_data[layer] = source
 		
 		if updateTable and self.kern_group_data.has_key(layer):	
 			self.tab_groupKern.clear()
 			while self.tab_groupKern.rowCount > 0: self.tab_groupKern.removeRow(0)
-			self.tab_groupKern.setTable(source[layer], setNotes)
-			print 'DONE:\t Updating data for master: %s' %layer
+			self.tab_groupKern.setTable(self.kern_group_data[layer], setNotes)
+			print 'DONE:\t Updating classes table for master: %s' %layer
 		else:
-			print 'ERROR:\t Updating data for master: %s' %layer
+			print 'ERROR:\t Updating classes table for master: %s' %layer
+
+			msg = QtGui.QMessageBox(QtGui.QMessageBox.Warning, 'TypeRig: Warning', 'There is no kerning class information for current selected layer: %s.\n\n Do you want to add a new empty table into database for layer: %s?' %(layer, layer), QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel, self)
+			if msg.exec_() == 1024:
+				self.kern_group_data[layer] = {'Class_1':[[''], 'KernLeft']}
+				# ! DO: Better
+				self.tab_groupKern.clear()
+				while self.tab_groupKern.rowCount > 0: self.tab_groupKern.removeRow(0)
+				self.tab_groupKern.setTable(self.kern_group_data[layer], setNotes)
+				print 'DONE:\t Updating classes table for master: %s' %layer
 
 	def apply_changes(self, writeToFont=True):
-		layer = self.cmb_layer.currentText
-		self.kern_group_data[layer] = self.tab_groupKern.getTable()
-		if not writeToFont: print 'DONE:\t Internal Database classes updated for layer: %s' %layer
+		active_layer = self.cmb_layer.currentText
+		self.kern_group_data[active_layer] = self.tab_groupKern.getTable()
+		if not writeToFont: print 'DONE:\t Internal Database classes updated for layer: %s' %active_layer
 		
 		if writeToFont:	
-			self.active_font.dict_to_kerning_groups(self.kern_group_data[layer], layer)
+			self.active_font.dict_to_kerning_groups(self.kern_group_data[active_layer], active_layer)
 			
 			print 'DONE:\t Font: %s - Kerning classes updated.' %self.active_font.name
 			print '\nPlease add a new empty class in FL6 Classes panel to preview changes!'
@@ -453,7 +487,7 @@ class WKernGroups(QtGui.QWidget):
 		print 'DONE:\t Font: %s - Kerning classes removed.' %self.active_font.name
 		print '\nPlease add a new empty class in FL6 Classes panel to preview changes!'
 
-	def export_groups(self, exportRaw=True):
+	def file_save_groups(self, exportRaw=True):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
 		fname = QtGui.QFileDialog.getSaveFileName(self.upper_widget, 'Save kerning classes to file', fontPath , '*.json')
 
@@ -467,10 +501,10 @@ class WKernGroups(QtGui.QWidget):
 				
 				print 'SAVE:\t Font:%s; %s format Group Kerning classes saved to: %s.' %(self.active_font.name, ('FontLab','TypeRig')[exportRaw], fname)
 
-	def import_groups(self, importRaw=True):
+	def file_load_groups(self, importRaw=True):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
 		fname = QtGui.QFileDialog.getOpenFileName(self.upper_widget, 'Load kerning classes from file', fontPath)
-				
+			
 		if fname != None:
 			with open(fname, 'r') as importFile:
 				if importRaw:
@@ -482,11 +516,14 @@ class WKernGroups(QtGui.QWidget):
 				print 'LOAD:\t Font:%s; %s Group Kerning classes loaded from: %s.' %(self.active_font.name, ('FontLab','TypeRig')[importRaw], fname)
 
 	def from_font(self):
+		temp_dict = {}
 		msg = QtGui.QMessageBox(QtGui.QMessageBox.Warning, 'TypeRig: Warning', 'Due to fatal class kerning bug in FontLab VI (build 6927) the classes cannot be loaded reliably from font.\n\nPress OK to continue loading class information from font without predefined mode (1st, 2nd and etc.)', QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel, self)
 				
 		if msg.exec_() == 1024:
-			fl_kern_group_dict = self.active_font.fl_kerning_groups_to_dict()
-			temp_dict = {key: (value, 'UNKNOWN') for key,value in fl_kern_group_dict.iteritems()}
+			for layer in self.active_font.masters():
+				fl_kern_group_dict = self.active_font.fl_kerning_groups_to_dict(layer)
+				temp_dict[layer] = {key: (value, 'UNKNOWN') for key,value in fl_kern_group_dict.iteritems()}
+			
 			self.update_data(temp_dict)
 		
 
@@ -494,8 +531,8 @@ class WKernGroups(QtGui.QWidget):
 		# - Init
 		font_workset_names = [glyph.name for glyph in self.active_font.uppercase()] + [glyph.name for glyph in self.active_font.lowercase()] + [glyph.name for glyph in self.active_font.alternates()]
 		ban_list = ['sups', 'subs', 'ss10', 'ss09', 'ss08', 'dnom', 'numr', 'notdef']
-		class_dict = {}
-
+		class_dict, temp_dict = {}, {}
+		
 		# - Process
 		process_glyphs = self.active_font.pGlyphs()
 		
@@ -514,13 +551,13 @@ class WKernGroups(QtGui.QWidget):
 					print 'WARN:\t Glyph: %s; Multiple components: %s' %(glyph.name, clear_comp)
 		
 		for key, value in class_dict.iteritems():
-			self.kern_group_data['%s_L' %key] = (sorted(value), 'KernLeft')
-			self.kern_group_data['%s_R' %key] = (sorted(value), 'KernRight')
+			temp_dict['%s_L' %key] = (sorted(value), 'KernLeft')
+			temp_dict['%s_R' %key] = (sorted(value), 'KernRight')
 
 			#print 'ADD:\t 1st and 2nd Classes: %s -> %s' %(key, ' '.join(sorted(value)))
 
 		# - Finish
-		self.tab_groupKern.setTable(self.kern_group_data)
+		self.update_data(temp_dict, layerUpdate=True)
 
 
 # - Tabs -------------------------------
@@ -532,6 +569,7 @@ class tool_tab(QtGui.QWidget):
 		self.kernGroups = WKernGroups(self)
 		self.ActionsMenu = QtGui.QMenuBar()
 
+		self.ActionsMenu.addMenu(self.kernGroups.menu_data)
 		self.ActionsMenu.addMenu(self.kernGroups.menu_class)
 		self.ActionsMenu.addMenu(self.kernGroups.menu_type)
 		self.ActionsMenu.addMenu(self.kernGroups.menu_memb)
