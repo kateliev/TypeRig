@@ -454,22 +454,24 @@ class WKernGroups(QtGui.QWidget):
 		else:
 			self.kern_group_data[layer] = source
 		
-		if updateTable and self.kern_group_data.has_key(layer):	
-			self.tab_groupKern.clear()
-			while self.tab_groupKern.rowCount > 0: self.tab_groupKern.removeRow(0)
-			self.tab_groupKern.setTable(self.kern_group_data[layer], setNotes)
-			print 'DONE:\t Updating classes table for master: %s' %layer
-		else:
-			print 'ERROR:\t Updating classes table for master: %s' %layer
-
-			msg = QtGui.QMessageBox(QtGui.QMessageBox.Warning, 'TypeRig: Warning', 'There is no kerning class information for current selected layer: %s.\n\n Do you want to add a new empty table into database for layer: %s?' %(layer, layer), QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel, self)
-			if msg.exec_() == 1024:
-				self.kern_group_data[layer] = {'Class_1':[[''], 'KernLeft']}
-				# ! DO: Better
+		if updateTable:
+			if self.kern_group_data.has_key(layer):	
 				self.tab_groupKern.clear()
 				while self.tab_groupKern.rowCount > 0: self.tab_groupKern.removeRow(0)
 				self.tab_groupKern.setTable(self.kern_group_data[layer], setNotes)
 				print 'DONE:\t Updating classes table for master: %s' %layer
+			
+			else:
+				print 'ERROR:\t Updating classes table for master: %s' %layer
+				msg = QtGui.QMessageBox(QtGui.QMessageBox.Warning, 'TypeRig: Warning', 'There is no kerning class information for current selected layer: %s.\n\n Do you want to add a new empty table into database for layer: %s?' %(layer, layer), QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel, self)
+
+				if msg.exec_() == 1024:
+					self.kern_group_data[layer] = {'Class_1':[[''], 'KernLeft']}
+					# ! DO: Better
+					self.tab_groupKern.clear()
+					while self.tab_groupKern.rowCount > 0: self.tab_groupKern.removeRow(0)
+					self.tab_groupKern.setTable(self.kern_group_data[layer], setNotes)
+					print 'DONE:\t Updating classes table for master: %s' %layer
 
 	def apply_changes(self, writeToFont=True):
 		active_layer = self.cmb_layer.currentText
