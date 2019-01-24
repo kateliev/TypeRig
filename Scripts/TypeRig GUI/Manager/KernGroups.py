@@ -489,7 +489,7 @@ class WKernGroups(QtGui.QWidget):
 
 	def file_save_groups(self, exportRaw=True):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
-		fname = QtGui.QFileDialog.getSaveFileName(self.upper_widget, 'Save kerning classes to file', fontPath , '*.json')
+		fname = QtGui.QFileDialog.getSaveFileName(self.upper_widget, 'Save kerning classes to file', fontPath, fileFormats[not exportRaw])
 
 		layer = self.cmb_layer.currentText
 		self.kern_group_data[layer] = self.tab_groupKern.getTable(getNotes=exportRaw)
@@ -503,7 +503,7 @@ class WKernGroups(QtGui.QWidget):
 
 	def file_load_groups(self, importRaw=True):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
-		fname = QtGui.QFileDialog.getOpenFileName(self.upper_widget, 'Load kerning classes from file', fontPath)
+		fname = QtGui.QFileDialog.getOpenFileName(self.upper_widget, 'Load kerning classes from file', fontPath, fileFormats[not importRaw])
 			
 		if fname != None:
 			with open(fname, 'r') as importFile:

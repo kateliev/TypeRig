@@ -18,11 +18,41 @@ from typerig.proxy import pFont
 from typerig.brain import extBiDict
 
 # - Init --------------------------------
-app_version = '0.95'
+app_version = '1.5'
 app_name = 'Copy Kernig'
 
 # -- Strings 
-str_help = '\nExpressions:\n - Only one source pair (colon) separated;\n - Source adjustment is (bar) separated; \n - Multiple destination pairs (space) separated;\n - Each pair is (colon) separated;\n - Group/class kerning is detected on the fly.\n\nExample: Y:A A:Y A:V = V:A'
+str_help = '''
+Expressions:
+ - Only one source pair (colon) separated;
+ - Source adjustment is (bar) separated; 
+ - Multiple destination pairs (space) separated;
+ - Each pair is (colon) separated;
+ - Group/class kerning is detected on the fly.
+
+Example: Y:A A:Y A:V = V:A'
+'''
+fileFormats = ['TypeRig JSON Raw Classes (*.json)', 'FontLab VI JSON Classes (*.json)']
+
+# - Functions ----------------------------------------------------------------
+def json_class_dumb_decoder(jsonData):
+	retund_dict = {}
+	pos_dict = {(True, False):'KernLeft', (False, True):'KernRight', (True, True):'KernBothSide'}
+	getPos = lambda d: (d['1st'] if d.has_key('1st') else False , d['2nd'] if d.has_key('2nd') else False)
+
+	if len(jsonData.keys()):
+		if jsonData.has_key('masters') and len(jsonData['masters']):
+			for master in jsonData['masters']:
+				if len(master.keys()):
+					if master.has_key('kerningClasses') and len(master['kerningClasses']):
+						temp_dict = {}
+
+						for group in master['kerningClasses']:
+							if group.has_key('names'):
+								temp_dict[group['name']] = (group['names'], pos_dict[getPos(group)])
+
+						retund_dict[master['name']] = temp_dict
+	return retund_dict
 
 # - Dialogs --------------------------------
 class dlg_copyKerning(QtGui.QDialog):
@@ -44,7 +74,6 @@ class dlg_copyKerning(QtGui.QDialog):
 		self.btn_exec = QtGui.QPushButton('Execute')
 
 		self.btn_loadFont.setEnabled(False)
-		#self.btn_loadFile.setEnabled(False)
 		
 		self.btn_loadFile.clicked.connect(self.classes_fromFile)
 		self.btn_exec.clicked.connect(self.process)
@@ -56,15 +85,15 @@ class dlg_copyKerning(QtGui.QDialog):
 		# - Build layouts 
 		layoutV = QtGui.QGridLayout() 
 		layoutV.addWidget(QtGui.QLabel('Load class kerning data:'),	0, 0, 1, 4)
-		layoutV.addWidget(self.btn_loadFont, 		1, 0, 1, 2)
-		layoutV.addWidget(self.btn_loadFile, 		1, 2, 1, 2)
-		layoutV.addWidget(QtGui.QLabel('Process font master:'),	2, 0, 1, 2)
-		layoutV.addWidget(self.cmb_layer,			2, 2, 1, 2)
-		layoutV.addWidget(QtGui.QLabel(str_help),	3, 0, 1, 4)
-		layoutV.addWidget(self.txt_editor,			4, 0, 20, 4)
-		layoutV.addWidget(self.btn_saveExpr, 		24, 0, 1, 2)
-		layoutV.addWidget(self.btn_loadExpr, 		24, 2, 1, 2)
-		layoutV.addWidget(self.btn_exec, 			25, 0, 1, 4)
+		layoutV.addWidget(self.btn_loadFont, 						1, 0, 1, 2)
+		layoutV.addWidget(self.btn_loadFile, 						1, 2, 1, 2)
+		layoutV.addWidget(QtGui.QLabel('Process font master:'),		2, 0, 1, 2)
+		layoutV.addWidget(self.cmb_layer,							2, 2, 1, 2)
+		layoutV.addWidget(QtGui.QLabel(str_help),					3, 0, 1, 4)
+		layoutV.addWidget(self.txt_editor,							4, 0, 20, 4)
+		layoutV.addWidget(self.btn_saveExpr, 						24, 0, 1, 2)
+		layoutV.addWidget(self.btn_loadExpr, 						24, 2, 1, 2)
+		layoutV.addWidget(self.btn_exec, 							25, 0, 1, 4)
 
 		# - Set Widget
 		self.setLayout(layoutV)
@@ -74,12 +103,16 @@ class dlg_copyKerning(QtGui.QDialog):
 		self.show()
 
 	def update_data(self, source):
-		temp_data = {}
+		self.class_data, temp_data = {}, {}
 
-		for key, value in source.iteritems():
-			temp_data.setdefault(value[1], {}).update({key : value[0]})
+		for layer in self.active_font.masters():
+			if source.has_key(layer):
+				for key, value in source[layer].iteritems():
+					temp_data.setdefault(value[1], {}).update({key : value[0]})
 
-		self.class_data = {key:extBiDict(value) for key, value in temp_data.iteritems()}
+				self.class_data[layer] = {key:extBiDict(value) for key, value in temp_data.iteritems()}
+			else:
+				print 'ERROR:\t Class kering not found for Master: %s' %layer
 
 	def expr_fromFile(self):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
@@ -103,87 +136,93 @@ class dlg_copyKerning(QtGui.QDialog):
 
 	def classes_fromFile(self):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
-		fname = QtGui.QFileDialog.getOpenFileName(self, 'Load kerning classes from file', fontPath)
+		fname = QtGui.QFileDialog.getOpenFileName(self, 'Load kerning classes from file', fontPath, ';;'.join(fileFormats))
 		
 		if fname != None:
 			with open(fname, 'r') as importFile:
-				self.update_data(json.load(importFile))			
+				source_data = json.load(importFile)
 
-			print 'LOAD:\t Font:%s; Group Kerning classes loaded from: %s.' %(self.active_font.name, fname)
+				if source_data.has_key('masters'): # A Fontlab JSON Class kerning file
+					self.update_data(json_class_dumb_decoder(source_data))
+					print 'LOAD:\t Font:%s; Fontlab VI JSON Group Kerning classes loaded from: %s.' %(self.active_font.name, fname)
+					
+				else: # A TypeRig JSON Class kerning file
+					self.update_data(source_data)
+					print 'LOAD:\t Font:%s; TypeRig JSON Group Kerning classes loaded from: %s.' %(self.active_font.name, fname)
 
 	def process(self):
 		# - Init
 		getUniGlyph = lambda c: self.active_font.fl.findUnicode(ord(c)).name
 		process_layers = [self.cmb_layer.currentText] if self.cmb_layer.currentText != 'All masters' else self.active_font.masters()	
+		
 		# - Process
 		for line in self.txt_editor.toPlainText().splitlines():
-			dst_pairs, src_pairs = [], []
-
 			if '=' in line and '#' not in line:
-				dst_names, src_names = line.split('=')
-				
-				dst_names = [item.split(':') for item in dst_names.strip().split(' ')]
-				#src_names = [src_names.strip().split(':')]
-				src_raw = [item.split(':') for item in src_names.strip().split('|')]
+				for layer in process_layers:
+					dst_pairs, src_pairs = [], []
 
-				if '@' not in line:
-					# - Build Destination names from actual glyph names in the font
-					dst_names = [(getUniGlyph(pair[0]), getUniGlyph(pair[1])) for pair in dst_names]
-					#src_names = [(getUniGlyph(pair[0]), getUniGlyph(pair[1])) for pair in src_names]
-					src_names = [(getUniGlyph(src_raw[0][0]), getUniGlyph(src_raw[0][1]))]
-
-					# - Build Destination pairs
-					for pair in dst_names:
-						left, right = pair
-						modeLeft, modeRight = 0, 0
+					if self.class_data.has_key(layer):
+						dst_names, src_names = line.split('=')
 						
-						if len(self.class_data.keys()):
-							if self.class_data['KernLeft'].inverse.has_key(left):
-								left = self.class_data['KernLeft'].inverse[left]
-								modeLeft = 1
+						dst_names = [item.split(':') for item in dst_names.strip().split(' ')]
+						src_raw = [item.split(':') for item in src_names.strip().split('|')]
 
-							elif self.class_data['KernBothSide'].inverse.has_key(left):
-								left = self.class_data['KernBothSide'].inverse[left]
-								modeLeft = 1
+						# - Build Destination names from actual glyph names in the font
+						dst_names = [(getUniGlyph(pair[0]), getUniGlyph(pair[1])) for pair in dst_names]
+						src_names = [(getUniGlyph(src_raw[0][0]), getUniGlyph(src_raw[0][1]))]
 
-							if self.class_data['KernRight'].inverse.has_key(right):
-								right = self.class_data['KernRight'].inverse[right]
-								modeRight = 1
+						# - Build Destination pairs
+						for pair in dst_names:
+							left, right = pair
+							modeLeft, modeRight = 0, 0
+							
+							if len(self.class_data[layer].keys()):
+								if self.class_data[layer]['KernLeft'].inverse.has_key(left):
+									left = self.class_data[layer]['KernLeft'].inverse[left]
+									modeLeft = 1
 
-							elif self.class_data['KernBothSide'].inverse.has_key(right):
-								right = self.class_data['KernBothSide'].inverse[right]
-								modeRight = 1
+								elif self.class_data[layer]['KernBothSide'].inverse.has_key(left):
+									left = self.class_data[layer]['KernBothSide'].inverse[left]
+									modeLeft = 1
 
-						dst_pairs.append(self.active_font.newKernPair(left[0], right[0], modeLeft, modeRight))
+								if self.class_data[layer]['KernRight'].inverse.has_key(right):
+									right = self.class_data[layer]['KernRight'].inverse[right]
+									modeRight = 1
 
-					# - Build Source pairs
-					for pair in src_names: # Ugly boilerplate... but may be useful in future
-						left, right = pair
-						modeLeft, modeRight = 0, 0
-						
-						if len(self.class_data.keys()):
-							if self.class_data['KernLeft'].inverse.has_key(left):
-								left = self.class_data['KernLeft'].inverse[left]
-								modeLeft = 1
+								elif self.class_data[layer]['KernBothSide'].inverse.has_key(right):
+									right = self.class_data[layer]['KernBothSide'].inverse[right]
+									modeRight = 1
 
-							elif self.class_data['KernBothSide'].inverse.has_key(left):
-								left = self.class_data['KernBothSide'].inverse[left]
-								modeLeft = 1
+							dst_pairs.append(self.active_font.newKernPair(left[0], right[0], modeLeft, modeRight))
 
-							if self.class_data['KernRight'].inverse.has_key(right):
-								right = self.class_data['KernRight'].inverse[right]
-								modeRight = 1
+						# - Build Source pairs
+						for pair in src_names: # Ugly boilerplate... but may be useful in future
+							left, right = pair
+							modeLeft, modeRight = 0, 0
+							
+							if len(self.class_data[layer].keys()):
+								if self.class_data[layer]['KernLeft'].inverse.has_key(left):
+									left = self.class_data[layer]['KernLeft'].inverse[left]
+									modeLeft = 1
 
-							elif self.class_data['KernBothSide'].inverse.has_key(right):
-								right = self.class_data['KernBothSide'].inverse[right]
-								modeRight = 1
+								elif self.class_data[layer]['KernBothSide'].inverse.has_key(left):
+									left = self.class_data[layer]['KernBothSide'].inverse[left]
+									modeLeft = 1
 
-						
-						src_pairs.append(self.active_font.newKernPair(left[0], right[0], modeLeft, modeRight))
+								if self.class_data[layer]['KernRight'].inverse.has_key(right):
+									right = self.class_data[layer]['KernRight'].inverse[right]
+									modeRight = 1
 
-					# !!! Add only as plain pairs supported - No class kerning trough python in build 6927
-					# !!! Syntax fgKerning.setPlainPairs([(('A','V'),-30)])
-					for layer in process_layers:
+								elif self.class_data[layer]['KernBothSide'].inverse.has_key(right):
+									right = self.class_data[layer]['KernBothSide'].inverse[right]
+									modeRight = 1
+
+							
+							src_pairs.append(self.active_font.newKernPair(left[0], right[0], modeLeft, modeRight))
+
+						# !!! Add only as plain pairs supported - No class kerning trough python in build 6927
+						# !!! Syntax fgKerning.setPlainPairs([(('A','V'),-30)])
+					
 						layer_kerning = self.active_font.kerning(layer)
 						src_value = layer_kerning.get(src_names[0])
 
@@ -194,6 +233,7 @@ class dlg_copyKerning(QtGui.QDialog):
 							if len(src_raw) > 1 and len(src_raw[1]):
 								src_value = int(eval(str(src_value) + str(src_raw[1][0])))
 
+							print dst_pairs, dst_names
 							for wID in range(len(dst_pairs)):
 								work_pair = dst_pairs[wID]
 								work_name = dst_names[wID]
@@ -207,38 +247,10 @@ class dlg_copyKerning(QtGui.QDialog):
 								else: # Class does not exist, add as plain pair due to FL6 limitation 
 									layer_kerning.setPlainPairs([(work_name, src_value)])
 									print 'ADD:\t Plain Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer)
-				else:
-					# Special symbol @ found
-					# !!! Works with whole sets but only in plain part mode. No group kerning heuristic found!
-					# - Init
-					glyph_names = {'UC':self.active_font.uppercase(True), 'LC':self.active_font.lowercase(True), 'FIG':self.active_font.figures(True), 'LIGA':self.active_font.ligatures(True), 'ALT':self.active_font.alternates(True), 'SYM':self.active_font.symbols(True)}
-					src_names_expand = []
-					
-					# - Process
-					for layer in process_layers:
-						layer_kerning_plain = self.active_font.kerning(layer).getPlainPairs()
-						src_left, src_right = src_names[0] # use only single source for now
-
-						for kern_pair in layer_kerning_plain:
-							left, right = kern_pair[0]
-							left_test, right_test = False, False
-
-							if '@' in src_left and left in glyph_names[src_left.strip('@')]:
-								left_test = True
-
-							elif '@' not in src_left and left == src_left:
-								left_test = True
-
-							if '@' in src_right and right in glyph_names[src_right.strip('@')]:
-								right_test = True
-
-							elif '@' not in src_right and right == src_right:
-								right_test = True
-
-							if left_test and right_test:
-								src_names_expand.append(left, right)
-
-								
+						
+					else:
+						print 'ERROR:\t Class kering not found for Master: %s' %layer
+				
 		print 'Done.'
 
 # - RUN ------------------------------
