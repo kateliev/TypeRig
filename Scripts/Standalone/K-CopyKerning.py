@@ -233,7 +233,6 @@ class dlg_copyKerning(QtGui.QDialog):
 							if len(src_raw) > 1 and len(src_raw[1]):
 								src_value = int(eval(str(src_value) + str(src_raw[1][0])))
 
-							print dst_pairs, dst_names
 							for wID in range(len(dst_pairs)):
 								work_pair = dst_pairs[wID]
 								work_name = dst_names[wID]
