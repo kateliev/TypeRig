@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.55
+# VER 	: 0.59
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -1811,6 +1811,18 @@ class pFont(object):
 	def delFeature(self, tag):
 		return self.fg.features.remove(tag)
 
+	def newOTgroup(self, groupName, glyphList):
+		return fgt.fgGroup(groupName, glyphList,'FeaClassGroupMode', 'mainglyphname')
+
+	def addOTgroup(self, groupName, glyphList):
+		temp_groups = self.fg.groups.asDict()
+		new_group = self.newOTgroup(groupName, glyphList)
+		temp_groups[groupName] = new_group
+		self.fg.groups.fromDict(temp_groups)
+
+	def getOTgroups(self):
+		return self.fg.groups
+
 	# - Kerning and Groups -------------------------------------
 	def kerning(self, layer=None):
 		'''Return the fonts kerning object (fgKerning) no matter the reference.'''
@@ -1987,7 +1999,7 @@ class pKerning(object):
 		'''
 		self.groups()[key] = (glyphNameList, self.__kern_group_type[type.upper()])
 
-	def getPair(self, pairTuple):
+	def getPairObject(self, pairTuple):
 		left, right = pairTuple
 		modeLeft, modeRight = 0, 0
 		groupsBiDict = self.groupsBiDict()
@@ -2011,6 +2023,13 @@ class pKerning(object):
 
 		
 		return self.newPair(left[0], right[0], modeLeft, modeRight)
+
+	def getPair(self, pairTuple):
+		pairObject = self.getPairObject(pairTuple)
+		kern_pairs = self.fg.keys()
+
+		if pairObject in kern_pairs:
+			return (pairObject, self.fg[kern_pairs.index(pairObject)])
 
 	def getKerningForLeaders(self, transformLeft=None, transformRight=None):
 		''' Now in FL6 we do not have leaders, but this returns the first glyph name in the group '''
