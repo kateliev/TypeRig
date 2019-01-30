@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.59
+# VER 	: 0.60
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -349,6 +349,23 @@ class pNode(object):
 				if mode: node.shift(deltaX, deltaY)
 		else:
 			self.shift(deltaX, deltaY)
+
+	# - Effects --------------------------------
+	def getSmartAngle(self):
+		return (self.fl.isSmartAngle(), self.fl.smartAngleR)
+
+	def setSmartAngle(self, radius):
+		self.fl.smartAngleR = radius
+		return self.fl.setSmartAngleEnbl(True)
+
+	def delSmartAngle(self):
+		return self.fl.setSmartAngleEnbl(False)
+
+	def setSmartAngleRadius(self, radius):
+		self.fl.smartAngleR = radius
+
+	def getSmartAngleRadius(self):
+		return self.fl.smartAngleR
 
 class pShape(object):
 	'''Proxy to flShape, flShapeData and flShapeInfo objects
