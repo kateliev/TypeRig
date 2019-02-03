@@ -397,6 +397,14 @@ class pShape(object):
 		''' Return flShapeInfo Object'''
 		pass
 
+	def builder(self):
+		''' Return flShapeBuilder Object'''
+		return self.fl.shapeBuilder
+
+	def container(self):
+		''' Returns a list of flShape Objects that are contained within this shape.'''
+		return self.fl.includesList
+
 	def tag(self, tagString):
 		self.data().tag(tagString)
 
@@ -439,6 +447,15 @@ class pShape(object):
 	def nodes(self):
 		return [node for contour in self.contours() for node in contour.nodes()]
 
+	# - Complex shapes, builders and etc. ---------------------
+	def copyBuilder(self, source):
+		if isinstance(source, fl6.flShapeBuilder):
+			self.fl.shapeBuilder = source.clone()
+		elif isinstance(source, fl6.flShape):
+			self.fl.shapeBuilder = source.flShapeBuilder.clone()
+
+		self.fl.update()
+
 	# - Transformation ----------------------------------------
 	'''
 	# -- NOTE: this should go to new eShape object as the proxy is not the palce for such extended functionality
@@ -452,7 +469,7 @@ class pShape(object):
 				node.setXY(*tNode)
 	'''
 	def __repr__(self):
-		return '<%s name=%s references=%s contours=%s>' % (self.__class__.__name__, self.name, self.refs, len(self.contours()))
+		return '<%s name=%s references=%s contours=%s contains=%s>' % (self.__class__.__name__, self.name, self.refs, len(self.contours()), len(self.fl.includesList))
 
 
 class pGlyph(object):
@@ -512,6 +529,7 @@ class pGlyph(object):
 		self.tags = self.fl.tags
 		self.unicode = self.fg.unicode
 		self.package = fl6.flPackage(self.fl.package)
+		self.builders = {}
 
 	def __repr__(self):
 		return '<%s name=%s index=%s unicode=%s>' % (self.__class__.__name__, self.name, self.index, self.unicode)
@@ -642,6 +660,31 @@ class pGlyph(object):
 		else:
 			return [extend(shape) for shape in self.layer(layer).shapes]
 
+	def containers(self, layer=None, extend=None):
+		'''Return all complex shapes that contain other shapes at given layer.
+		Args:
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+		Returns:
+			list[flShapes]
+		'''
+		if extend is None:
+			return [shape for shape in self.layer(layer).shapes if len(shape.includesList)]
+		else:
+			return [extend(shape) for shape in self.layer(layer).shapes if len(shape.includesList)]
+
+	def getBuilders(self, layer=None, store=False):
+		shape_builders = {}
+
+		for shape in self.shapes(layer):
+			wBuilder = shape.shapeBuilder
+
+			if wBuilder is not None and wBuilder.isValid:
+				shape_builders[wBuilder.title] = wBuilder
+
+		if store: self.builders = shape_builders
+		
+		return shape_builders
+
 	def addShape(self, shape, layer=None, clone=False):
 		'''Add a new shape at given layer.
 		Args:
@@ -652,7 +695,25 @@ class pGlyph(object):
 		if clone:
 			return self.layer(layer).addShape(shape.cloneTopLevel())
 		else:
-			return self.layer(layer).addShape(shape)		
+			return self.layer(layer).addShape(shape)
+
+	def addShapeContainer(self, shapeList, layer=None, remove=True):
+		'''Add a new shape container* at given layer.
+		A flShape containing all of the shapes given that
+		could be transformed to Shape-group or shape-filter.
+		Args:
+			shapeList list(flShape): List if Shapes to be grouped.
+		Returns:
+			flShape
+		'''
+		shape_container = fl6.flShape()
+
+		if remove:
+			shape_container.include(shapeList, self.layer(layer))
+		else:
+			shape_container.include(shapeList)
+
+		return self.addShape(shape_container, layer, clone=False)
 
 	def findShape(self, shapeName, layer=None):
 		'''Finds shape by name on given layer
