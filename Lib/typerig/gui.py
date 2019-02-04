@@ -83,7 +83,7 @@ class trTableView(QtGui.QTableWidget):
 		self.flag_valueChanged = QtGui.QColor('powderblue')
 
 		# - Set 
-		self.setTable(data)		
+		if data is not None: self.setTable(data)
 		self.itemChanged.connect(self.markChange)
 
 		# - Styling
@@ -102,7 +102,7 @@ class trTableView(QtGui.QTableWidget):
 		self.setRowCount(len(data.keys()))
 
 		# - Populate
-		for row, value in enumerate(sorted(data.keys()) if sortData[0] else data.keys() ):
+		for row, value in enumerate(sorted(data.keys()) if sortData[0] else data.keys()):
 			name_row.append(value)
 			
 			for col, key in enumerate(sorted(data[value].keys()) if sortData[1] else data[value].keys()):
@@ -126,12 +126,18 @@ class trTableView(QtGui.QTableWidget):
 		self.setVerticalHeaderLabels(name_row)
 		self.blockSignals(False)
 
-	def getTable(self):
-		returnDict = {}
-		for row in range(self.rowCount):
-			returnDict[self.verticalHeaderItem(row).text()] = {self.horizontalHeaderItem(col).text():float(self.item(row, col).text()) for col in range(self.columnCount)}
+	def getTable(self, raw=False):
+		return_list = []
 
-		return returnDict
+		for row in range(self.rowCount):
+			if not raw:
+				return_list.append((self.verticalHeaderItem(row).text(), {self.horizontalHeaderItem(col).text():float(self.item(row, col).text()) for col in range(self.columnCount)}))
+			else:
+				return_list.append((self.verticalHeaderItem(row).text(), [(self.horizontalHeaderItem(col).text(), self.item(row, col).text()) for col in range(self.columnCount)]))
+
+		if raw:	return return_list			
+		return dict(return_list)
+		
 
 	def markChange(self, item):
 		item.setBackground(self.flag_valueChanged)
