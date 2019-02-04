@@ -11,7 +11,7 @@
 import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore, QtGui
-from typerig.proxy import pFont, pGlyph
+from typerig.proxy import pFont, pGlyph, pShape, pNode
 from typerig.glyph import eGlyph
 from typerig.gui import trTableView
 from collections import OrderedDict
@@ -19,7 +19,7 @@ from collections import OrderedDict
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Round', '0.1'
+app_name, app_version = 'TypeRig | Round', '0.5'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -51,6 +51,14 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.btn_savePreset = QtGui.QPushButton('&Save Presets')
 		self.btn_applyPreset = QtGui.QPushButton('&Apply Preset')
 
+		self.btn_getBuilder.setMinimumWidth(30)
+		self.btn_findBuilder.setMinimumWidth(30)
+		self.btn_addPreset.setMinimumWidth(50)
+		self.btn_delPreset.setMinimumWidth(50)
+		self.btn_loadPreset.setMinimumWidth(50)
+		self.btn_savePreset.setMinimumWidth(50)
+		self.btn_applyPreset.setMinimumWidth(50)
+
 		self.btn_getBuilder.setCheckable(True)
 		self.btn_getBuilder.setChecked(False)
 		self.btn_findBuilder.setEnabled(False)
@@ -68,7 +76,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.tab_roundValues.setTable(self.table_dict, sortData=(False, False))
 		self.tab_roundValues.horizontalHeader().setStretchLastSection(False)
 		self.tab_roundValues.verticalHeader().hide()
-		self.tab_roundValues.resizeColumnsToContents()
+		#self.tab_roundValues.resizeColumnsToContents()
 
 		# -- Build Layout
 		self.lay_head.addWidget(QtGui.QLabel('Round: Smart corner'), 0,0,1,8)
@@ -82,6 +90,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.lay_head.addWidget(self.btn_delPreset,				3,4,1,4)
 		self.lay_head.addWidget(self.tab_roundValues,			4,0,2,8)
 		self.lay_head.addWidget(self.btn_applyPreset,			6,0,1,8)
+
 		self.addLayout(self.lay_head)
 
 	def getBuilder(self):
@@ -131,15 +140,44 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		wLayers = glyph._prepareLayers(pLayers)
 		table_raw = self.tab_roundValues.getTable(raw=True)
 		active_preset_index = self.tab_roundValues.selectionModel().selectedIndexes[0].row()
+		if active_preset_index is None: active_preset_index = 0
 		active_preset = dict(table_raw[active_preset_index][1][1:])
 		
 		for layer in wLayers:
 			if layer in active_preset.keys():
-				print float(active_preset[layer])
-		
+				'''
+				#!!! A smarter way, but prone to confusions
+				shape_node_list = glyph.selectedAtShapes(deep=False) + glyph.selectedAtShapes(deep=True)
 
+				for sID, cID, nID in shape_node_list:
+					wShape = glyph.shapes(layer)[sID]
+					wNode = pNode(glyph.nodes(layer)[nID])
 
-	
+					if not len(wShape.includesList):
+						new_container = fl6.flShape()
+						new_container.include(wShape, glyph.layer(layer))
+						new_container.shapeBuilder = self.builder.clone()
+						new_container.update()
+						glyph.layer(layer).addShape(new_container)
+
+					wNode.setSmartAngle(float(active_preset[layer]))
+				'''
+
+				#!!! A simple way
+				if not len(glyph.containers(layer)):
+					new_container = fl6.flShape()
+					new_container.include(glyph.shapes(layer), glyph.layer(layer))
+					new_container.shapeBuilder = self.builder.clone()
+					new_container.update()
+					glyph.layer(layer).addShape(new_container)
+
+				for node in glyph.selectedNodes(layer=layer, extend=pNode):
+					node.setSmartAngle(float(active_preset[layer]))
+
+		glyph.update()
+		glyph.updateObject(glyph.fl)
+						
+
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
 	def __init__(self):
