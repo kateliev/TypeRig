@@ -8,18 +8,21 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
+import os, json
 import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore, QtGui
-from typerig.proxy import pFont, pGlyph, pShape, pNode
+from typerig.proxy import pFont, pShape, pNode, pWorkspace
 from typerig.glyph import eGlyph
 from typerig.gui import trTableView
 from collections import OrderedDict
 
 # - Init
 global pLayers
+global pMode
 pLayers = None
-app_name, app_version = 'TypeRig | Round', '0.5'
+pMode = 0
+app_name, app_version = 'TypeRig | Round', '0.65'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -27,8 +30,9 @@ filter_name = 'Smart corner'
 # - Sub widgets ------------------------
 class QSmartCorner(QtGui.QVBoxLayout):
 	# - Split/Break contour 
-	def __init__(self):
+	def __init__(self, parentWidget):
 		super(QSmartCorner, self).__init__()
+		self.upper_widget = parentWidget
 
 		# -- Init
 		self.active_font = pFont()
@@ -51,13 +55,13 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.btn_savePreset = QtGui.QPushButton('&Save Presets')
 		self.btn_applyPreset = QtGui.QPushButton('&Apply Preset')
 
-		self.btn_getBuilder.setMinimumWidth(30)
-		self.btn_findBuilder.setMinimumWidth(30)
-		self.btn_addPreset.setMinimumWidth(50)
-		self.btn_delPreset.setMinimumWidth(50)
-		self.btn_loadPreset.setMinimumWidth(50)
-		self.btn_savePreset.setMinimumWidth(50)
-		self.btn_applyPreset.setMinimumWidth(50)
+		self.btn_getBuilder.setMinimumWidth(70)
+		self.btn_findBuilder.setMinimumWidth(70)
+		self.btn_addPreset.setMinimumWidth(140)
+		self.btn_delPreset.setMinimumWidth(140)
+		self.btn_loadPreset.setMinimumWidth(140)
+		self.btn_savePreset.setMinimumWidth(140)
+		self.btn_applyPreset.setMinimumWidth(140)
 
 		self.btn_getBuilder.setCheckable(True)
 		self.btn_getBuilder.setChecked(False)
@@ -98,7 +102,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 			if len(self.edt_glyphName.text):
 				builder_glyph = self.active_font.glyph(self.edt_glyphName.text)
 			else:
-				builder_glyph = pGlyph()
+				builder_glyph = eGlyph()
 				self.edt_glyphName.setText(builder_glyph.name)
 
 			if builder_glyph is not None:
@@ -128,42 +132,37 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		if not delete: new_entry[len(table_rawList)] = self.empty_preset(len(table_rawList)).items()[0][1]
 		self.tab_roundValues.setTable(new_entry, sortData=(False, False))
 
-	
 	def preset_load(self):
-		pass
+		fontPath = os.path.split(self.active_font.fg.path)[0]
+		fname = QtGui.QFileDialog.getOpenFileName(self.upper_widget, 'Load presets from file', fontPath, 'TypeRig JSON (*.json)')
+		
+		if fname != None:
+			with open(fname, 'r') as importFile:
+				imported_data = json.load(importFile)
+			
+			# - Convert Data
+			new_data = OrderedDict()
+			for key, data in imported_data:
+				new_data[key] = OrderedDict(data)
+
+			self.tab_roundValues.setTable(new_data, sortData=(False, False))
+			print 'LOAD:\t Font:%s; Presets loaded from: %s.' %(self.active_font.name, fname)
 
 	def preset_save(self):
-		pass
+		fontPath = os.path.split(self.active_font.fg.path)[0]
+		fname = QtGui.QFileDialog.getSaveFileName(self.upper_widget, 'Save presets to file', fontPath, 'TypeRig JSON (*.json)')
+		
+		if fname != None:
+			with open(fname, 'w') as exportFile:
+				json.dump(self.tab_roundValues.getTable(raw=True), exportFile)
 
-	def preset_apply(self):
-		glyph = eGlyph()
-		wLayers = glyph._prepareLayers(pLayers)
-		table_raw = self.tab_roundValues.getTable(raw=True)
-		active_preset_index = self.tab_roundValues.selectionModel().selectedIndexes[0].row()
-		if active_preset_index is None: active_preset_index = 0
-		active_preset = dict(table_raw[active_preset_index][1][1:])
+			print 'SAVE:\t Font:%s; Presets saved to: %s.' %(self.active_font.name, fname)
+
+	def __processGlyph(self, glyph, indices, preset):
+		wLayers = glyph._prepareLayers(pLayers)					
 		
 		for layer in wLayers:
-			if layer in active_preset.keys():
-				'''
-				#!!! A smarter way, but prone to confusions
-				shape_node_list = glyph.selectedAtShapes(deep=False) + glyph.selectedAtShapes(deep=True)
-
-				for sID, cID, nID in shape_node_list:
-					wShape = glyph.shapes(layer)[sID]
-					wNode = pNode(glyph.nodes(layer)[nID])
-
-					if not len(wShape.includesList):
-						new_container = fl6.flShape()
-						new_container.include(wShape, glyph.layer(layer))
-						new_container.shapeBuilder = self.builder.clone()
-						new_container.update()
-						glyph.layer(layer).addShape(new_container)
-
-					wNode.setSmartAngle(float(active_preset[layer]))
-				'''
-
-				#!!! A simple way
+			if layer in preset.keys() and len(indices):
 				if not len(glyph.containers(layer)):
 					new_container = fl6.flShape()
 					new_container.include(glyph.shapes(layer), glyph.layer(layer))
@@ -171,11 +170,37 @@ class QSmartCorner(QtGui.QVBoxLayout):
 					new_container.update()
 					glyph.layer(layer).addShape(new_container)
 
-				for node in glyph.selectedNodes(layer=layer, extend=pNode):
-					node.setSmartAngle(float(active_preset[layer]))
+				for node in glyph.nodesForIndices(indices, layer, extend=pNode):
+					node.setSmartAngle(float(preset[layer]))
 
 		glyph.update()
-		glyph.updateObject(glyph.fl)
+		glyph.updateObject(glyph.fl, 'DONE:\t Glyph: %s; Filter: Smart corner; Parameters: %s' %(glyph.name, preset))
+
+	def preset_apply(self):
+		if self.builder is not None:
+			# - Init
+			process_glyphs = []
+			table_raw = self.tab_roundValues.getTable(raw=True)
+			active_preset_index = self.tab_roundValues.selectionModel().selectedIndexes[0].row()
+			if active_preset_index is None: active_preset_index = 0
+			active_preset = dict(table_raw[active_preset_index][1][1:])
+			active_workspace = pWorkspace()
+			
+			# - Collect process glyphs
+			# -- Current Active Glyph
+			if pMode == 0: process_glyphs.append(eGlyph())
+			# -- All glyphs in current window
+			if pMode == 1: process_glyphs = [eGlyph(glyph) for glyph in active_workspace.getTextBlockGlyphs()]
+			
+			process_glyphs = [(glyph, glyph.selected()) for glyph in process_glyphs]
+
+			# - Process
+			if len(process_glyphs):
+				for glyph, indices in process_glyphs:
+					if glyph is not None: self.__processGlyph(glyph, indices, active_preset)
+
+		else:
+			print 'ERROR:\t Please specify a Glyph with suitable Shape Builder (Smart corner) first!'
 						
 
 # - Tabs -------------------------------
@@ -185,7 +210,7 @@ class tool_tab(QtGui.QWidget):
 
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
-		self.smart_corner = QSmartCorner()
+		self.smart_corner = QSmartCorner(self)
 		layoutV.addLayout(self.smart_corner)
 		
 		# - Build

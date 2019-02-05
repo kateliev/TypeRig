@@ -17,7 +17,7 @@ from PythonQt import QtCore, QtGui
 import Filter as Panel 
 
 # - Init --------------------------
-app_version = '0.1'
+app_version = '0.2'
 app_name = 'TypeRig Filter'
 ignorePanel = '__'
 
@@ -53,11 +53,16 @@ class typerig_filter(QtGui.QDialog):
 		self.rad_window = QtGui.QRadioButton('Window')
 		self.rad_selection = QtGui.QRadioButton('Selection')
 		self.rad_font = QtGui.QRadioButton('Font')
+
+		self.rad_glyph.toggled.connect(self.refreshMode)
+		self.rad_window.toggled.connect(self.refreshMode)
+		self.rad_selection.toggled.connect(self.refreshMode)
+		self.rad_font.toggled.connect(self.refreshMode)
 		
 		self.rad_glyph.setChecked(True)
 
 		self.rad_glyph.setEnabled(True)
-		self.rad_window.setEnabled(False)
+		self.rad_window.setEnabled(True)
 		self.rad_selection.setEnabled(False)
 		self.rad_font.setEnabled(False)
 
@@ -134,6 +139,18 @@ class typerig_filter(QtGui.QDialog):
 		
 		for toolName in Panel.modules:
 			exec('Panel.%s.pLayers = %s' %(toolName, pLayers))
+
+	def refreshMode(self):
+		global pMode
+		pMode = 0
+		
+		if self.rad_glyph.isChecked(): pMode = 0
+		if self.rad_window.isChecked(): pMode = 1
+		if self.rad_selection.isChecked(): pMode = 2
+		if self.rad_font.isChecked(): pMode = 3
+
+		for toolName in Panel.modules:
+			exec('Panel.%s.pMode = %s' %(toolName, pMode))
 
 	def fold(self):
 		# - Init

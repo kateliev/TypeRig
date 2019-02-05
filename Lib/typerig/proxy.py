@@ -925,6 +925,9 @@ class pGlyph(object):
 		'''
 		return [self.nodes(layer, extend, deep)[nid] for nid in self.selectedNodeIndices(filterOn, deep)]
 		#return [node for node in self.nodes(layer, extend, deep) if node.selected]
+
+	def nodesForIndices(self, indices, layer=None, filterOn=False, extend=None, deep=True):
+		return [self.nodes(layer, extend, deep)[nid] for nid in indices]
 	
 	def selectedAtContours(self, index=True, layer=None, filterOn=False, deep=False):	
 		'''Return all selected nodes and the contours they rest upon at current layer.
