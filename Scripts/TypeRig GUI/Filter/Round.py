@@ -14,15 +14,15 @@ import fontgate as fgt
 from PythonQt import QtCore, QtGui
 from typerig.proxy import pFont, pShape, pNode, pWorkspace
 from typerig.glyph import eGlyph
-from typerig.gui import trTableView
-from collections import OrderedDict
+from typerig.gui import trTableView, trSliderCtrl
+from collections import OrderedDict, defaultdict
 
 # - Init
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Round', '0.65'
+app_name, app_version = 'TypeRig | Round', '0.85'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -203,6 +203,106 @@ class QSmartCorner(QtGui.QVBoxLayout):
 			print 'ERROR:\t Please specify a Glyph with suitable Shape Builder (Smart corner) first!'
 						
 
+class QCornerControl(QtGui.QVBoxLayout):
+	# - Split/Break contour 
+	def __init__(self, parentWidget):
+		super(QCornerControl, self).__init__()
+		self.upper_widget = parentWidget
+
+		# - Init
+		self.active_font = pFont()
+		self.font_masters = self.active_font.masters()
+		self.sliders = []
+		self.process_glyphs = []
+
+		# - Widgets
+		self.__build()
+
+	
+	def __build(self):
+		# - Init
+		self.sliders = []
+
+		# - Buttons
+		self.btn_capture = QtGui.QPushButton('Capture Smart Angles')
+		self.btn_capture.clicked.connect(lambda: self.capture())
+
+		# - Set layout
+		self.addWidget(QtGui.QLabel('\nRound: Smart corner control'))
+		self.addWidget(self.btn_capture)
+
+	def __clear(self):
+		'''
+		for i in reversed(range(0, self.count())):
+			self.itemAt(i).widget().setParent(None)
+		'''
+		def deleteItems(layout): 
+			if layout is not None: 
+				while layout.count(): 
+					item = layout.takeAt(0) 
+					widget = item.widget() 
+					if widget is not None: 
+						widget.deleteLater() 
+					else: 
+						deleteItems(item.layout()) 
+			
+		deleteItems(self) 
+
+	def __processNodes(self):
+		# Bad, primitive, but working!
+		for sID in range(len(self.sliders)):
+			slider, last_value, nodes = self.sliders[sID]
+
+			if slider.sld_axis.value != last_value:
+				for node in nodes:
+					node.setSmartAngleRadius(slider.sld_axis.value)
+
+				self.sliders[sID][1] = slider.sld_axis.value # Reset value
+
+		self.__updateGlyphs(self.process_glyphs)
+
+	def __updateGlyphs(self, glyphs):
+		for glyph in glyphs:
+			glyph.update()
+			
+			for contour in glyph.contours():
+				contour.changed()
+
+	def capture(self):
+		# - Init
+		process_angles = {}
+		
+		# - Rebuild Layout
+		self.__clear()
+		self.__build()
+				
+		# - Collect process glyphs
+		# -- Current Active Glyph
+		if pMode == 0: self.process_glyphs.append(eGlyph())
+		# -- All glyphs in current window
+		if pMode == 1: self.process_glyphs = [eGlyph(glyph) for glyph in active_workspace.getTextBlockGlyphs()]
+		
+		# - Get nodes grouped by smart angle value
+		if len(self.process_glyphs):
+			for glyph in self.process_glyphs:
+				#wLayers = glyph._prepareLayers(pLayers)
+				layer = None
+				pNodes = glyph.nodes(layer=layer, extend=pNode)
+				
+				for node in pNodes:
+					smart_angle = node.getSmartAngle()
+					
+					if smart_angle[0]:
+						process_angles.setdefault(smart_angle[1], []).append(node)
+
+		# - Build sliders
+		for angle_value, angle_nodes in process_angles.iteritems():
+			new_slider = trSliderCtrl('0', '100', angle_value, 5)
+			new_slider.sld_axis.valueChanged.connect(self.__processNodes)
+			self.addLayout(new_slider)
+			self.sliders.append([new_slider, angle_value, angle_nodes])
+
+
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
 	def __init__(self):
@@ -211,7 +311,9 @@ class tool_tab(QtGui.QWidget):
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
 		self.smart_corner = QSmartCorner(self)
+		self.corner_control = QCornerControl(self)
 		layoutV.addLayout(self.smart_corner)
+		layoutV.addLayout(self.corner_control)
 		
 		# - Build
 		layoutV.addStretch()
