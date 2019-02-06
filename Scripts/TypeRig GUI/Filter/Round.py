@@ -22,7 +22,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Round', '0.95'
+app_name, app_version = 'TypeRig | Round', '0.98'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -38,7 +38,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.active_font = pFont()
 		self.builder = None
 		self.font_masters = self.active_font.masters()
-		self.empty_preset = lambda row: OrderedDict([(row, OrderedDict([('Preset', 'Preset %s' %row)] + [(master, 0) for master in self.font_masters]))])
+		self.empty_preset = lambda row: OrderedDict([(row, OrderedDict([('Preset', 'Preset %s' %row)] + [(master, '0') for master in self.font_masters]))])
 		self.table_dict = self.empty_preset(0)
 
 		# -- Widgets
@@ -171,7 +171,12 @@ class QSmartCorner(QtGui.QVBoxLayout):
 					glyph.layer(layer).addShape(new_container)
 
 				for node in glyph.nodesForIndices(indices, layer, extend=pNode):
-					node.setSmartAngle(float(preset[layer]))
+					angle_value = preset[layer]
+					
+					if 'DEL' not in angle_value.upper():
+						node.setSmartAngle(float(angle_value))
+					else:
+						node.delSmartAngle()
 
 		glyph.update()
 		glyph.updateObject(glyph.fl, 'DONE:\t Glyph: %s; Filter: Smart corner; Parameters: %s' %(glyph.name, preset))
