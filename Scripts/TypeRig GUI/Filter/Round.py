@@ -22,7 +22,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Round', '0.85'
+app_name, app_version = 'TypeRig | Round', '0.95'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -187,10 +187,9 @@ class QSmartCorner(QtGui.QVBoxLayout):
 			active_workspace = pWorkspace()
 			
 			# - Collect process glyphs
-			# -- Current Active Glyph
-			if pMode == 0: process_glyphs.append(eGlyph())
-			# -- All glyphs in current window
-			if pMode == 1: process_glyphs = [eGlyph(glyph) for glyph in active_workspace.getTextBlockGlyphs()]
+			if pMode == 0: process_glyphs.append(eGlyph()) # Current Active Glyph
+			if pMode == 1: process_glyphs = [eGlyph(glyph) for glyph in active_workspace.getTextBlockGlyphs()] # All glyphs in current window
+			if pMode > 1: return # Not allowed - exit!
 			
 			process_glyphs = [(glyph, glyph.selected()) for glyph in process_glyphs]
 
@@ -222,6 +221,7 @@ class QCornerControl(QtGui.QVBoxLayout):
 	def __build(self):
 		# - Init
 		self.sliders = []
+		self.process_glyphs = []
 
 		# - Buttons
 		self.btn_capture = QtGui.QPushButton('Capture Smart Angles')
@@ -261,27 +261,33 @@ class QCornerControl(QtGui.QVBoxLayout):
 
 		self.__updateGlyphs(self.process_glyphs)
 
-	def __updateGlyphs(self, glyphs):
+	def __updateGlyphs(self, glyphs, complete=False):
 		for glyph in glyphs:
 			glyph.update()
 			
-			for contour in glyph.contours():
-				contour.changed()
+			if not complete: # Partial update - contour only
+				for contour in glyph.contours():
+					contour.changed()
+			else: # Full update - with undo snapshot
+				glyph.updateObject(glyph.fl, verbose=False)
+
+		if complete: print 'DONE:\t Update/Snapshot for glyphs: %s' %'; '.join([g.name for g in glyphs])
 
 	def capture(self):
 		# - Init
 		process_angles = {}
+		active_workspace = pWorkspace()
 		
-		# - Rebuild Layout
+		# - Rebuild
 		self.__clear()
 		self.__build()
 				
 		# - Collect process glyphs
-		# -- Current Active Glyph
-		if pMode == 0: self.process_glyphs.append(eGlyph())
-		# -- All glyphs in current window
-		if pMode == 1: self.process_glyphs = [eGlyph(glyph) for glyph in active_workspace.getTextBlockGlyphs()]
-		
+		if pMode == 0: self.process_glyphs.append(eGlyph()) # Current Active Glyph
+		if pMode == 1: self.process_glyphs = [eGlyph(glyph) for glyph in active_workspace.getTextBlockGlyphs()] # All glyphs in current window
+		if pMode == 2: self.process_glyphs = self.active_font.selectedGlyphs(extend=eGlyph) # Selected glyphs in font window
+		if pMode > 2: return
+
 		# - Get nodes grouped by smart angle value
 		if len(self.process_glyphs):
 			for glyph in self.process_glyphs:
@@ -301,6 +307,9 @@ class QCornerControl(QtGui.QVBoxLayout):
 			new_slider.sld_axis.valueChanged.connect(self.__processNodes)
 			self.addLayout(new_slider)
 			self.sliders.append([new_slider, angle_value, angle_nodes])
+
+		# - Set undo snapshot
+		self.__updateGlyphs(self.process_glyphs, True)
 
 
 # - Tabs -------------------------------

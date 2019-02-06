@@ -17,7 +17,7 @@ from PythonQt import QtCore, QtGui
 import Filter as Panel 
 
 # - Init --------------------------
-app_version = '0.2'
+app_version = '0.25'
 app_name = 'TypeRig Filter'
 ignorePanel = '__'
 
@@ -63,7 +63,7 @@ class typerig_filter(QtGui.QDialog):
 
 		self.rad_glyph.setEnabled(True)
 		self.rad_window.setEnabled(True)
-		self.rad_selection.setEnabled(False)
+		self.rad_selection.setEnabled(True)
 		self.rad_font.setEnabled(False)
 
 		self.rad_glyph.setToolTip('Affect current glyph')
