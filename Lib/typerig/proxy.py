@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.60
+# VER 	: 0.61
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -960,9 +960,9 @@ class pGlyph(object):
 		allShapes = self.shapes(layer) if not deep else self.components(layer)
 
 		if index:
-			return [(allShapes.index(shape), allContours.index(contour), node.index) for shape in allShapes for contour in shape.contours for node in contour.nodes() if node in self.selectedNodes(filterOn=filterOn)]
+			return [(allShapes.index(shape), allContours.index(contour), node.index) for shape in allShapes for contour in shape.contours for node in contour.nodes() if node in self.selectedNodes(layer=layer, filterOn=filterOn, deep=deep)]
 		else:
-			return [(shape, contour, node) for shape in allShapes for contour in shape.contours for node in contour.nodes() if node in self.selectedNodes(filterOn=filterOn)]
+			return [(shape, contour, node) for shape in allShapes for contour in shape.contours for node in contour.nodes() if node in self.selectedNodes(layer=layer, filterOn=filterOn, deep=deep)]
 
 	def selectedCoords(self, layer=None, filterOn=False, applyTransform=False):
 		'''Return the coordinates of all selected nodes at the current layer or other.
