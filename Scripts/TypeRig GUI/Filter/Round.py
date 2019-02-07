@@ -9,20 +9,25 @@
 
 # - Dependencies -----------------
 import os, json
+from itertools import groupby
+from operator import itemgetter
+from collections import OrderedDict
+
 import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore, QtGui
 from typerig.proxy import pFont, pShape, pNode, pWorkspace
 from typerig.glyph import eGlyph
 from typerig.gui import trTableView, trSliderCtrl
-from collections import OrderedDict, defaultdict
+
+
 
 # - Init
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Round', '0.98'
+app_name, app_version = 'TypeRig | Round', '1.1'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -158,19 +163,44 @@ class QSmartCorner(QtGui.QVBoxLayout):
 
 			print 'SAVE:\t Font:%s; Presets saved to: %s.' %(self.active_font.name, fname)
 
-	def __processGlyph(self, glyph, indices, preset):
+	def __setFilter(self, glyph, shape, layer, builder, suffix='.old'):
+		new_container = fl6.flShape()
+		new_container.shapeData.name = shape.shapeData.name
+		shape.shapeData.name = shape.shapeData.name + suffix
+		
+		#!!!! TODO: transformation copy and delete
+
+		new_container.include(shape, glyph.layer(layer))
+		new_container.shapeBuilder = builder.clone()
+		new_container.update()
+		glyph.layer(layer).addShape(new_container)
+
+	def __processGlyph(self, glyph, preset):
 		wLayers = glyph._prepareLayers(pLayers)					
 		
 		for layer in wLayers:
-			if layer in preset.keys() and len(indices):
-				if not len(glyph.containers(layer)):
-					new_container = fl6.flShape()
-					new_container.include(glyph.shapes(layer), glyph.layer(layer))
-					new_container.shapeBuilder = self.builder.clone()
-					new_container.update()
-					glyph.layer(layer).addShape(new_container)
+			if layer in preset.keys():
+				# - Init
+				selection_deep = [(item[0], item[2]) for item in glyph.selectedAtShapes(layer=layer, index=False, deep=True)]
+				selection_shallow = [(item[0], item[2]) for item in glyph.selectedAtShapes(layer=layer, index=False, deep=False)]
+				selection = selection_deep + selection_shallow
 
-				for node in glyph.nodesForIndices(indices, layer, extend=pNode):
+				# - Build note to shape reference
+				nodes_at_shapes = [(shape, [node for shape, node in list(nodes)]) for shape, nodes in groupby(selection, key=itemgetter(0))]
+				
+				# - Build filter if not present
+				for shape, node_list in nodes_at_shapes:
+					if len(glyph.containers(layer)):
+						for container in glyph.containers(layer):
+							if shape not in container.includesList: 
+								self.__setFilter(glyph, shape, layer, self.builder)
+					else:
+						self.__setFilter(glyph, shape, layer, self.builder)
+
+				# - Process the nodes
+				process_nodes = [pNode(node) for shape, node_list in nodes_at_shapes for node in node_list]
+				
+				for node in process_nodes:
 					angle_value = preset[layer]
 					
 					if 'DEL' not in angle_value.upper():
@@ -196,12 +226,10 @@ class QSmartCorner(QtGui.QVBoxLayout):
 			if pMode == 1: process_glyphs = [eGlyph(glyph) for glyph in active_workspace.getTextBlockGlyphs()] # All glyphs in current window
 			if pMode > 1: return # Not allowed - exit!
 			
-			process_glyphs = [(glyph, glyph.selected()) for glyph in process_glyphs]
-
 			# - Process
 			if len(process_glyphs):
-				for glyph, indices in process_glyphs:
-					if glyph is not None: self.__processGlyph(glyph, indices, active_preset)
+				for glyph in process_glyphs:
+					if glyph is not None: self.__processGlyph(glyph, active_preset)
 
 		else:
 			print 'ERROR:\t Please specify a Glyph with suitable Shape Builder (Smart corner) first!'
