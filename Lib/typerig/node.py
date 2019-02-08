@@ -62,6 +62,47 @@ class eNode(pNode):
 		self.getNextOn(False).smartShift(*nextShift.asTuple())
 		#'''
 
+
+	def cornerTrap(self, mouth=10, adj=5):
+		# !!! Not working properly - Think!
+		from typerig.brain import Coord
+		from math import atan2, sin, cos
+
+		# - Calculate unit vectors and shifts
+		nextNode = self.getNextOn(False)
+		prevNode = self.getPrevOn(False)
+
+		nextUnit = Coord(nextNode.asCoord() - self.asCoord()).getUnit()
+		prevUnit = Coord(prevNode.asCoord() - self.asCoord()).getUnit()
+
+		angle = atan2(nextUnit | prevUnit, nextUnit & prevUnit)
+		radius = abs((float(mouth)/2)/sin(angle/2))
+		
+		# - Angle bissector normal - it should shift the whole trap but is not working as expected
+		angle2 = (atan2(*prevUnit.asTuple()) + atan2(*nextUnit.asTuple()))/2
+		corrector = Coord(cos(angle2), sin(angle2))
+
+		#print angle, nextUnit, prevUnit, corrector
+
+		bShift = nextUnit * -(radius + adj)# + corrector
+		cShift = prevUnit * -(radius + adj)# + corrector
+
+		aShift = prevUnit * radius
+		dShift = nextUnit * radius
+
+		# - Insert Node and process
+		b = tn.eNode(self.insertAfter(0.1))
+		c = tn.eNode(b.insertAfter(0.1))
+		d = tn.eNode(c.insertAfter(0.1))
+
+		for node in [b, c, d]:
+			node.smartReloc(self.x,self.y)
+
+		self.smartShift(*aShift.asTuple())
+		b.smartShift(*bShift.asTuple())
+		d.smartShift(*dShift.asTuple())
+		c.smartShift(*cShift.asTuple())
+
 	# - Movement ------------------------
 	def interpShift(self, shift_x, shift_y):
 		'''Interpolated move aka Interpolated Nudge.

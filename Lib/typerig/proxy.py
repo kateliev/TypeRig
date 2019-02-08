@@ -312,7 +312,18 @@ class pNode(object):
 		return self.fl.distanceTo(self.getPrev().position)
 
 	def insertAfter(self, time):
-		self.contour.insertNodeTo(self.getTime() + time)
+		return self.contour.insertNodeTo(self.getTime() + time)
+
+	def insertBefore(self, time):
+		return self.contour.insertNodeTo(self.getPrevOn(False).getTime() + time)
+
+	def insertAfterDist(self, distance):
+		from typerig.brain import ratfrac
+		return self.insertAfter(ratfrac(distance, self.distanceToNext(), 1))
+
+	def insertBeforeDist(self, distance):
+		from typerig.brain import ratfrac
+		return self.insertBefore(1 - ratfrac(distance, self.distanceToPrev(), 1))
 
 	def remove(self):
 		self.contour.removeOne(self.fl)
