@@ -50,23 +50,22 @@ class eNode(pNode):
 		nextShift = nextUnit * radius
 		prevShift = prevUnit * radius
 
-		#print (nextUnit, prevUnit), (nextShift, prevShift)
-		
-		#'''
 		# - Insert Node and process
-		self.insertAfter(.01) # Was 0?, something went wrong in 6871
-		self.contour.updateIndices()
-		self.getNextOn(False).smartReloc(self.x, self.y) # Go back because something went wrong in 6871
+		nextNode = self.__class__(self.insertAfter(.01)) # Was 0?, something went wrong in 6871
+		nextNode.smartReloc(self.x, self.y) # Go back because something went wrong in 6871
 
 		self.smartShift(*prevShift.asTuple())
-		self.getNextOn(False).smartShift(*nextShift.asTuple())
-		#'''
+		nextNode.smartShift(*nextShift.asTuple())
+
+		return (self.fl, nextNode.fl)
 
 
-	def cornerTrap(self, mouth=10, adj=5):
-		# !!! Not working properly - Think!
+	def cornerTrap(self, aperture=10, depth=20, trap=5):
 		from typerig.brain import Coord
 		from math import atan2, sin, cos
+
+		# - Init
+		adjust = aperture - trap
 
 		# - Calculate unit vectors and shifts
 		nextNode = self.getNextOn(False)
@@ -76,32 +75,38 @@ class eNode(pNode):
 		prevUnit = Coord(prevNode.asCoord() - self.asCoord()).getUnit()
 
 		angle = atan2(nextUnit | prevUnit, nextUnit & prevUnit)
-		radius = abs((float(mouth)/2)/sin(angle/2))
+		radius = abs((float(aperture)/2)/sin(angle/2))
 		
-		# - Angle bissector normal - it should shift the whole trap but is not working as expected
-		angle2 = (atan2(*prevUnit.asTuple()) + atan2(*nextUnit.asTuple()))/2
-		corrector = Coord(cos(angle2), sin(angle2))
-
-		#print angle, nextUnit, prevUnit, corrector
-
-		bShift = nextUnit * -(radius + adj)# + corrector
-		cShift = prevUnit * -(radius + adj)# + corrector
+		bShift = nextUnit * -(radius - adjust)# + corrector
+		cShift = prevUnit * -(radius - adjust)# + corrector
 
 		aShift = prevUnit * radius
 		dShift = nextUnit * radius
 
 		# - Insert Node and process
-		b = tn.eNode(self.insertAfter(0.1))
-		c = tn.eNode(b.insertAfter(0.1))
-		d = tn.eNode(c.insertAfter(0.1))
+		b = self.__class__(self.insertAfter(0.1)) # .1 quickfix - should be 0
+		c = self.__class__(b.insertAfter(0.1))
+		d = self.__class__(c.insertAfter(0.1))
 
-		for node in [b, c, d]:
-			node.smartReloc(self.x,self.y)
+		for node in [b, c, d]: # relocate for the quickfix
+			node.smartReloc(self.x, self.y)
 
+		# - Position nodes
 		self.smartShift(*aShift.asTuple())
 		b.smartShift(*bShift.asTuple())
 		d.smartShift(*dShift.asTuple())
 		c.smartShift(*cShift.asTuple())
+
+		# - Properly calculate delth
+		abUnit = Coord(self.asCoord() - b.asCoord()).getUnit()
+		dcUnit = Coord(d.asCoord() - c.asCoord()).getUnit()
+
+		b.smartReloc(self.x, self.y)
+		c.smartReloc(d.x, d.y)
+		b.smartShift(*(abUnit*-depth).asTuple())
+		c.smartShift(*(dcUnit*-depth).asTuple())
+
+		return (self.fl, b.fl, c.fl, d.fl)
 
 	# - Movement ------------------------
 	def interpShift(self, shift_x, shift_y):

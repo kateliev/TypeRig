@@ -31,11 +31,13 @@ class basicOps(QtGui.QGridLayout):
 		self.btn_remove = QtGui.QPushButton('&Remove')
 		self.btn_mitre = QtGui.QPushButton('&Mitre')
 		self.btn_knot = QtGui.QPushButton('&Overlap')
+		self.btn_trap = QtGui.QPushButton('&Trap')
 				
 		self.btn_insert.setMinimumWidth(80)
 		self.btn_remove.setMinimumWidth(80)
 		self.btn_mitre.setMinimumWidth(80)
 		self.btn_knot.setMinimumWidth(80)
+		self.btn_trap.setMinimumWidth(80)
 
 		self.btn_insert.setToolTip('Insert Node after Selection\nat given time T.')
 		self.btn_remove.setToolTip('Remove Selected Nodes!\nFor proper curve node deletion\nalso select the associated handles!')
@@ -46,24 +48,32 @@ class basicOps(QtGui.QGridLayout):
 		self.btn_remove.clicked.connect(self.removeNode)
 		self.btn_mitre.clicked.connect(lambda: self.cornerMitre(False))
 		self.btn_knot.clicked.connect(lambda: self.cornerMitre(True))
+		self.btn_trap.clicked.connect(lambda: self.cornerTrap())
 
 		# - Edit fields
 		self.edt_time = QtGui.QLineEdit('0.5')
 		self.edt_radius = QtGui.QLineEdit('5')
-
+		self.edt_trap = QtGui.QLineEdit('10, 20, 2')
+		
 		self.edt_time.setToolTip('Insertion Time.')
 		self.edt_radius.setToolTip('Mitre size/Overlap or Round Radius.')
+		self.edt_trap.setToolTip('Ink trap: aperture size, depth, trap size')
 
 		# -- Build: Basic Ops
-		self.addWidget(self.btn_insert, 0, 0)
-		self.addWidget(QtGui.QLabel('T:'), 0, 1)
-		self.addWidget(self.edt_time, 0, 2)
-		self.addWidget(self.btn_remove, 0, 3)
+		self.addWidget(self.btn_insert, 	0, 0)
+		self.addWidget(QtGui.QLabel('T:'), 	0, 1)
+		self.addWidget(self.edt_time, 		0, 2)
+		self.addWidget(self.btn_remove, 	0, 3)
 
-		self.addWidget(self.btn_mitre,1,0)
-		self.addWidget(QtGui.QLabel('X:'), 1, 1)
-		self.addWidget(self.edt_radius,1,2)
-		self.addWidget(self.btn_knot,1,3)
+		self.addWidget(self.btn_mitre,		1, 0)
+		self.addWidget(QtGui.QLabel('X:'), 	1, 1)
+		self.addWidget(self.edt_radius,		1, 2)
+		self.addWidget(self.btn_knot,		1, 3)
+
+		self.addWidget(self.btn_trap,		2, 0)
+		self.addWidget(QtGui.QLabel('P:'),	2, 1)
+		self.addWidget(self.edt_trap,		2, 2)
+
 
 	def insertNode(self):
 		glyph = eGlyph()
@@ -152,6 +162,20 @@ class basicOps(QtGui.QGridLayout):
 		glyph.update()
 		glyph.updateObject(glyph.fl, '%s @ %s.' %(action, '; '.join(wLayers)))
 
+	def cornerTrap(self):
+		from typerig.node import eNode
+		glyph = eGlyph()
+		wLayers = glyph._prepareLayers(pLayers)
+		parameters = tuple([float(value.strip()) for value in self.edt_trap.text.split(',')])
+		
+		for layer in wLayers:
+			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode, deep=True)
+			
+			for node in reversed(selection):
+				node.cornerTrap(*parameters)
+
+		glyph.update()
+		glyph.updateObject(glyph.fl, '%s @ %s.' %('Trap Corner', '; '.join(wLayers)))
 
 class alignNodes(QtGui.QGridLayout):
 	# - Basic Node operations
