@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Node Objects | Typerig
-# VER 	: 0.09
+# VER 	: 0.11
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -59,15 +59,14 @@ class eNode(pNode):
 
 		return (self.fl, nextNode.fl)
 
-
-	def cornerTrap(self, aperture=10, depth=20, trap=5):
+	def cornerTrap(self, aperture=10, depth=20, trap=2):
 		from typerig.brain import Coord
 		from math import atan2, sin, cos
 
 		# - Init
-		adjust = aperture - trap
+		adjust = float(aperture - trap)/2
 
-		# - Calculate unit vectors and shifts
+		# - Calculate for aperture postision and structure
 		nextNode = self.getNextOn(False)
 		prevNode = self.getPrevOn(False)
 
@@ -77,34 +76,40 @@ class eNode(pNode):
 		angle = atan2(nextUnit | prevUnit, nextUnit & prevUnit)
 		radius = abs((float(aperture)/2)/sin(angle/2))
 		
-		bShift = nextUnit * -(radius - adjust)# + corrector
-		cShift = prevUnit * -(radius - adjust)# + corrector
+		bCoord = self.asCoord() + (nextUnit * -radius)
+		cCoord = self.asCoord() + (prevUnit * -radius)
 
-		aShift = prevUnit * radius
-		dShift = nextUnit * radius
+		aCoord = self.asCoord() + (prevUnit * radius)
+		dCoord = self.asCoord() + (nextUnit * radius)
 
-		# - Insert Node and process
-		b = self.__class__(self.insertAfter(0.1)) # .1 quickfix - should be 0
-		c = self.__class__(b.insertAfter(0.1))
-		d = self.__class__(c.insertAfter(0.1))
+		# - Calculate for depth
+		abUnit = Coord(aCoord - bCoord).getUnit()
+		dcUnit = Coord(dCoord - cCoord).getUnit()
 
-		for node in [b, c, d]: # relocate for the quickfix
-			node.smartReloc(self.x, self.y)
+		bCoord = aCoord + abUnit*-depth
+		cCoord = dCoord + dcUnit*-depth
+
+		# - Calculate for trap (size)
+		bcUnit = (bCoord - cCoord).getUnit()
+		cbUnit = (cCoord - bCoord).getUnit()
+
+		bCoord += bcUnit*-adjust
+		cCoord += cbUnit*-adjust
+
+		# - Insert Nodes and cleanup
+		b = self.__class__(self.insertAfter(0.01)) # .01 quickfix - should be 0
+		c = self.__class__(b.insertAfter(0.01))
+		d = self.__class__(c.insertAfter(0.01))
+
+		b.fl.convertToLine()
+		c.fl.convertToLine()
+		d.fl.convertToLine()
 
 		# - Position nodes
-		self.smartShift(*aShift.asTuple())
-		b.smartShift(*bShift.asTuple())
-		d.smartShift(*dShift.asTuple())
-		c.smartShift(*cShift.asTuple())
-
-		# - Properly calculate delth
-		abUnit = Coord(self.asCoord() - b.asCoord()).getUnit()
-		dcUnit = Coord(d.asCoord() - c.asCoord()).getUnit()
-
-		b.smartReloc(self.x, self.y)
-		c.smartReloc(d.x, d.y)
-		b.smartShift(*(abUnit*-depth).asTuple())
-		c.smartShift(*(dcUnit*-depth).asTuple())
+		self.smartReloc(*aCoord.asTuple())
+		b.smartReloc(*bCoord.asTuple())
+		d.smartReloc(*dCoord.asTuple())
+		c.smartReloc(*cCoord.asTuple())
 
 		return (self.fl, b.fl, c.fl, d.fl)
 
