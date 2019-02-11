@@ -177,8 +177,14 @@ class QSmartCorner(QtGui.QVBoxLayout):
 
 	def getPreset(self):
 		table_raw = self.tab_presets.getTable(raw=True)
+		'''
+		try:
+			active_preset_index = self.tab_presets.selectionModel().selectedIndexes[0].row()
+		except IndexError:
+			active_preset_index = None
+		'''
 		active_preset_index = self.tab_presets.selectionModel().selectedIndexes[0].row()
-		
+
 		if active_preset_index is None: 
 			active_preset_index = self.last_preset
 		else:
@@ -268,47 +274,49 @@ class QSmartCorner(QtGui.QVBoxLayout):
 	def process_setFilter(self, glyph, shape, layer, builder, suffix='.old'):
 		new_container = fl6.flShape()
 		new_container.shapeData.name = shape.shapeData.name
-		shape.shapeData.name = shape.shapeData.name + suffix
+		shape.shapeData.name += suffix
 		
 		#!!!! TODO: transformation copy and delete
 
 		new_container.include(shape, glyph.layer(layer))
 		new_container.shapeBuilder = builder.clone()
 		new_container.update()
+		
 		glyph.layer(layer).addShape(new_container)
+		glyph.layer(layer).update()
 
 	def process_smartCorner(self, glyph, preset):
-		wLayers = glyph._prepareLayers(pLayers)					
-		
-		for layer in wLayers:
-			if layer in preset.keys():
-				# - Init
-				selection_deep = [(item[0], item[2]) for item in glyph.selectedAtShapes(layer=layer, index=False, deep=True)]
-				selection_shallow = [(item[0], item[2]) for item in glyph.selectedAtShapes(layer=layer, index=False, deep=False)]
-				selection = selection_deep + selection_shallow
+		wLayers = glyph._prepareLayers(pLayers)		
 
+		for work_layer in wLayers:
+			if work_layer in preset.keys():
+				# - Init
+				selection_deep = [(item[0], item[2]) for item in glyph.selectedAtShapes(layer=work_layer, index=False, deep=True)]
+				selection_shallow = [(item[0], item[2]) for item in glyph.selectedAtShapes(layer=work_layer, index=False, deep=False)]
+				selection = selection_deep + selection_shallow
+								
 				# - Build note to shape reference
 				nodes_at_shapes = [(shape, [node for shape, node in list(nodes)]) for shape, nodes in groupby(selection, key=itemgetter(0))]
-				
+
 				# - Build filter if not present
-				for shape, node_list in nodes_at_shapes:
-					if len(glyph.containers(layer)):
-						for container in glyph.containers(layer):
-							if shape not in container.includesList: 
-								self.process_setFilter(glyph, shape, layer, self.builder)
+				for work_shape, node_list in nodes_at_shapes:
+					if len(glyph.containers(work_layer)):
+						for container in glyph.containers(work_layer):
+							if work_shape not in container.includesList: 
+								self.process_setFilter(glyph, work_shape, work_layer, self.builder)
 					else:
-						self.process_setFilter(glyph, shape, layer, self.builder)
+						self.process_setFilter(glyph, shape, work_layer, self.builder)
 
 				# - Process the nodes
 				process_nodes = [pNode(node) for shape, node_list in nodes_at_shapes for node in node_list]
 				
-				for node in process_nodes:
-					angle_value = preset[layer]
+				for work_node in process_nodes:
+					angle_value = preset[work_layer]
 					
 					if 'DEL' not in angle_value.upper():
-						node.setSmartAngle(float(angle_value))
+						work_node.setSmartAngle(float(angle_value))
 					else:
-						node.delSmartAngle()
+						work_node.delSmartAngle()
 
 		glyph.update()
 		glyph.updateObject(glyph.fl, 'DONE:\t Glyph: %s; Filter: Smart corner; Parameters: %s' %(glyph.name, preset))
@@ -317,12 +325,14 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		if self.builder is not None:
 			# - Init
 			process_glyphs = self.getProcessGlyphs()
-			active_preset = self.getPreset()			
-			
+			active_preset = self.getPreset()
+
+			if remove: active_preset = {key:'DEL' for key in active_preset.keys()} # - Build a special preset that deletes
+		
 			# - Process
 			if len(process_glyphs):
-				for glyph in process_glyphs:
-					if glyph is not None: self.process_smartCorner(glyph, active_preset)
+				for work_glyph in process_glyphs:
+					if work_glyph is not None: self.process_smartCorner(work_glyph, active_preset)
 
 		else:
 			print 'ERROR:\t Please specify a Glyph with suitable Shape Builder (Smart corner) first!'
