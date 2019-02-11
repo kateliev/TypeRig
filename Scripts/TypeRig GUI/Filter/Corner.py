@@ -26,7 +26,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Corner', '1.5'
+app_name, app_version = 'TypeRig | Corner', '1.6'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -86,7 +86,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.btn_findBuilder.setEnabled(False)
 		self.btn_apply_round.setEnabled(False)
 
-		self.btn_getBuilder.clicked.connect(self.getBuilder)
+		self.btn_getBuilder.clicked.connect(lambda: self.getBuilder())
 		self.btn_addPreset.clicked.connect(lambda: self.preset_modify(False))
 		self.btn_delPreset.clicked.connect(lambda: self.preset_modify(True))
 		self.btn_loadPreset.clicked.connect(lambda: self.preset_load())
@@ -318,8 +318,8 @@ class QSmartCorner(QtGui.QVBoxLayout):
 					else:
 						work_node.delSmartAngle()
 
-		glyph.update()
-		glyph.updateObject(glyph.fl, 'DONE:\t Glyph: %s; Filter: Smart corner; Parameters: %s' %(glyph.name, preset))
+		#glyph.update()
+		#glyph.updateObject(glyph.fl, 'DONE:\t Glyph: %s; Filter: Smart corner; Parameters: %s' %(glyph.name, preset))
 
 	def apply_SmartCorner(self, remove=False):
 		if self.builder is not None:
@@ -327,15 +327,31 @@ class QSmartCorner(QtGui.QVBoxLayout):
 			process_glyphs = self.getProcessGlyphs()
 			active_preset = self.getPreset()
 
-			if remove: active_preset = {key:'DEL' for key in active_preset.keys()} # - Build a special preset that deletes
+			if remove: # Build a special preset that deletes
+				active_preset = {key:'DEL' for key in active_preset.keys()} 
 		
 			# - Process
 			if len(process_glyphs):
 				for work_glyph in process_glyphs:
-					if work_glyph is not None: self.process_smartCorner(work_glyph, active_preset)
+					if work_glyph is not None: 
+						self.process_smartCorner(work_glyph, active_preset)
+						
+				self.update_window_glyphs(process_glyphs, True)
 
 		else:
 			print 'ERROR:\t Please specify a Glyph with suitable Shape Builder (Smart corner) first!'
+
+	def update_window_glyphs(self, glyphs, complete=False):
+		for glyph in glyphs:
+			glyph.update()
+			
+			if not complete: # Partial update - contour only
+				for contour in glyph.contours():
+					contour.changed()
+			else: # Full update - with undo snapshot
+				glyph.updateObject(glyph.fl, verbose=False)
+
+		if complete: print 'DONE:\t Filter: Smart Corner; Glyphs: %s' %'; '.join([g.name for g in glyphs])
 						
 
 class QCornerControl(QtGui.QVBoxLayout):
