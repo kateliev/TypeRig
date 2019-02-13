@@ -8,6 +8,11 @@
 # that you use it at your own risk!
 
 # - Init
+global pLayers
+global pMode
+pLayers = None
+pMode = 0
+
 app_name, app_version = 'TypeRig | String', '0.22'
 glyphSep = '/'
 joinOpt = {'Empty':'', 'Newline':'\n'}

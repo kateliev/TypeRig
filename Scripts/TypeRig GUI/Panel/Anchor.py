@@ -1,3 +1,4 @@
+
 #FLM: Glyph: Anchor
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
@@ -15,7 +16,9 @@ from typerig.glyph import eGlyph
 
 # - Init
 global pLayers
+global pMode
 pLayers = None
+pMode = 0
 app_name, app_version = 'TypeRig | Anchors', '0.09'
 
 # - Sub widgets ------------------------

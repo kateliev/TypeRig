@@ -17,7 +17,7 @@ from PythonQt import QtCore, QtGui
 import Panel 
 
 # - Init --------------------------
-app_version = '0.45'
+app_version = '0.46'
 app_name = 'TypeRig Panel'
 ignorePanel = '__'
 
@@ -54,11 +54,16 @@ class typerig_Panel(QtGui.QDialog):
 		self.rad_selection = QtGui.QRadioButton('Selection')
 		self.rad_font = QtGui.QRadioButton('Font')
 		
+		self.rad_glyph.toggled.connect(self.refreshMode)
+		self.rad_window.toggled.connect(self.refreshMode)
+		self.rad_selection.toggled.connect(self.refreshMode)
+		self.rad_font.toggled.connect(self.refreshMode)
+		
 		self.rad_glyph.setChecked(True)
 
 		self.rad_glyph.setEnabled(True)
-		self.rad_window.setEnabled(False)
-		self.rad_selection.setEnabled(False)
+		self.rad_window.setEnabled(True)
+		self.rad_selection.setEnabled(True)
 		self.rad_font.setEnabled(False)
 
 		self.rad_glyph.setToolTip('Affect current glyph')
@@ -127,6 +132,18 @@ class typerig_Panel(QtGui.QDialog):
 		#self.setMinimumWidth(300)
 		
 		self.show()
+
+	def refreshMode(self):
+		global pMode
+		pMode = 0
+		
+		if self.rad_glyph.isChecked(): pMode = 0
+		if self.rad_window.isChecked(): pMode = 1
+		if self.rad_selection.isChecked(): pMode = 2
+		if self.rad_font.isChecked(): pMode = 3
+
+		for toolName in Panel.modules:
+			exec('Panel.%s.pMode = %s' %(toolName, pMode))
 
 	def refreshLayers(self):
 		global pLayers

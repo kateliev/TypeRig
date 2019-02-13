@@ -18,6 +18,10 @@ from typerig.brain import ratfrac
 #from collections import OrderedDict
 
 # - Init
+global pLayers
+global pMode
+pLayers = None
+pMode = 0
 app_name, app_version = 'TypeRig | Glyph Statistics', '0.09'
 
 # - Sub widgets ------------------------

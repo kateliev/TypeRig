@@ -9,7 +9,9 @@
 
 # - Init
 global pLayers
+global pMode
 pLayers = None
+pMode = 0
 app_name, app_version = 'TypeRig | Guidelines', '0.33'
 
 # - Dependencies -----------------

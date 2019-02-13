@@ -9,7 +9,9 @@
 
 # - Init
 global pLayers
+global pMode
 pLayers = None
+pMode = 0
 app_name, app_version = 'TypeRig | Mixer', '0.09'
 
 useFortran = True

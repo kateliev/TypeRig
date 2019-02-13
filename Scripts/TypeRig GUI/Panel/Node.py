@@ -9,8 +9,10 @@
 
 # - Init
 global pLayers
+global pMode
 pLayers = None
-app_name, app_version = 'TypeRig | Nodes', '0.54'
+pMode = 0
+app_name, app_version = 'TypeRig | Nodes', '0.55'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -18,8 +20,20 @@ import fontgate as fgt
 from PythonQt import QtCore, QtGui
 from typerig.glyph import eGlyph
 from typerig.node import eNode
-from typerig.proxy import pFont
+from typerig.proxy import pFont, pWorkspace
 
+# - Functions --------------------------
+def getProcessGlyphs(pMode):
+	process_glyphs = []
+	active_workspace = pWorkspace()
+	active_font = pFont()
+		
+	# - Collect process glyphs
+	if pMode == 0: process_glyphs.append(eGlyph()) # Current Active Glyph
+	if pMode == 1: process_glyphs = [eGlyph(glyph) for glyph in active_workspace.getTextBlockGlyphs()] # All glyphs in current window
+	if pMode == 2: process_glyphs = active_font.selectedGlyphs(extend=eGlyph)
+	
+	return process_glyphs
 # - Sub widgets ------------------------
 class basicOps(QtGui.QGridLayout):
 	# - Basic Node operations
@@ -583,30 +597,30 @@ class basicContour(QtGui.QGridLayout):
 		glyph.update()
 
 	def setStart(self, control=(0,0)):
-		glyph = eGlyph()
-		wLayers = glyph._prepareLayers(pLayers)
+		process_glyphs = getProcessGlyphs(pMode)
 
-		if control == (0,0):
-			criteria = lambda node : (node.x, node.y)
-		elif control == (0,1):
-			criteria = lambda node : (-node.y, node.x)
-		elif control == (1,0):
-			criteria = lambda node : (-node.x, node.y)
-		elif control == (1,1):
-			criteria = lambda node : (-node.y, -node.x)
-		
-		for layerName in wLayers:
-			contours = glyph.contours(layerName)
+		for glyph in process_glyphs:
+			wLayers = glyph._prepareLayers(pLayers)
 
-			for contour in contours:
-				onNodes = [node for node in contour.nodes() if node.isOn]
-				newFirstNode = sorted(onNodes, key=criteria)[0]
-				contour.setStartPoint(newFirstNode.index)
+			if control == (0,0):
+				criteria = lambda node : (node.x, node.y)
+			elif control == (0,1):
+				criteria = lambda node : (-node.y, node.x)
+			elif control == (1,0):
+				criteria = lambda node : (-node.x, node.y)
+			elif control == (1,1):
+				criteria = lambda node : (-node.y, -node.x)
+			
+			for layerName in wLayers:
+				contours = glyph.contours(layerName)
 
-		glyph.updateObject(glyph.fl, 'Set Start Points @ %s.' %'; '.join(wLayers))
-		glyph.update()
+				for contour in contours:
+					onNodes = [node for node in contour.nodes() if node.isOn]
+					newFirstNode = sorted(onNodes, key=criteria)[0]
+					contour.setStartPoint(newFirstNode.index)
 
-
+			glyph.update()
+			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Set Start Points @ %s.' %(glyph.name, '; '.join(wLayers)))
 
 class convertHobby(QtGui.QHBoxLayout):
 	# - Split/Break contour 

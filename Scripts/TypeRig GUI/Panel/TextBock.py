@@ -16,6 +16,10 @@ import cPickle, os
 from typerig.proxy import pWorkspace, pTextBlock, pFont
 
 # - Init --------------------------------
+global pLayers
+global pMode
+pLayers = None
+pMode = 0
 app_version = '0.05'
 app_name = 'Text Block Control'
 

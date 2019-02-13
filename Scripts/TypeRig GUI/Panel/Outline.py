@@ -18,7 +18,9 @@ from collections import OrderedDict
 
 # - Init
 global pLayers
+global pMode
 pLayers = None
+pMode = 0
 app_name, app_version = 'TypeRig | Outline', '0.03'
 
 # - Sub widgets ------------------------
