@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kern Classes', '2.5'
+app_name, app_version = 'TypeRig | Kern Classes', '2.6'
 alt_mark = '.'
 
 # - Dependencies -----------------
@@ -569,7 +569,7 @@ class tool_tab(QtGui.QWidget):
 		layoutV = QtGui.QVBoxLayout()
 		
 		self.kernGroups = WKernGroups(self)
-		self.ActionsMenu = QtGui.QMenuBar()
+		self.ActionsMenu = QtGui.QMenuBar(self)
 
 		self.ActionsMenu.addMenu(self.kernGroups.menu_data)
 		self.ActionsMenu.addMenu(self.kernGroups.menu_class)

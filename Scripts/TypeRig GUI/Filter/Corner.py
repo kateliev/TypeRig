@@ -26,7 +26,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Corner', '1.6'
+app_name, app_version = 'TypeRig | Corner', '1.7'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -55,8 +55,9 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		# -- Buttons
 		self.btn_getBuilder = QtGui.QPushButton('Set &Builder')
 		self.btn_findBuilder = QtGui.QPushButton('&From Font')
-		self.btn_addPreset = QtGui.QPushButton('Add &Preset')
-		self.btn_delPreset = QtGui.QPushButton('&Remove Preset')
+		self.btn_addPreset = QtGui.QPushButton('Add')
+		self.btn_delPreset = QtGui.QPushButton('Remove')
+		self.btn_resetPreset = QtGui.QPushButton('Reset')
 		self.btn_loadPreset = QtGui.QPushButton('&Load Presets')
 		self.btn_savePreset = QtGui.QPushButton('&Save Presets')
 		self.btn_apply_smartCorner = QtGui.QPushButton('&Apply Smart Corner')
@@ -74,8 +75,8 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.btn_apply_overlap.setMinimumWidth(70)
 		self.btn_apply_trap.setMinimumWidth(70)
 
-		self.btn_addPreset.setMinimumWidth(140)
-		self.btn_delPreset.setMinimumWidth(140)
+		self.btn_addPreset.setMinimumWidth(70)
+		self.btn_delPreset.setMinimumWidth(70)
 		self.btn_loadPreset.setMinimumWidth(140)
 		self.btn_savePreset.setMinimumWidth(140)
 		self.btn_apply_smartCorner.setMinimumWidth(140)
@@ -89,6 +90,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.btn_getBuilder.clicked.connect(lambda: self.getBuilder())
 		self.btn_addPreset.clicked.connect(lambda: self.preset_modify(False))
 		self.btn_delPreset.clicked.connect(lambda: self.preset_modify(True))
+		self.btn_resetPreset.clicked.connect(lambda: self.preset_reset())
 		self.btn_loadPreset.clicked.connect(lambda: self.preset_load())
 		self.btn_savePreset.clicked.connect(lambda: self.preset_save())
 
@@ -101,19 +103,16 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.btn_apply_trap.clicked.connect(lambda: self.apply_trap())
 
 		# -- Preset Table
-		self.tab_presets = trTableView(None)		
-		self.tab_presets.clear()
-		self.tab_presets.setTable(self.table_dict, sortData=(False, False))
-		self.tab_presets.horizontalHeader().setStretchLastSection(False)
-		self.tab_presets.verticalHeader().hide()
-		#self.tab_presets.resizeColumnsToContents()
+		self.tab_presets = trTableView(None)
+		self.preset_reset()			
 
 		# -- Build Layout
 		self.lay_head.addWidget(QtGui.QLabel('Value Presets:'), 0,0,1,8)
 		self.lay_head.addWidget(self.btn_loadPreset,			1,0,1,4)
 		self.lay_head.addWidget(self.btn_savePreset,			1,4,1,4)
-		self.lay_head.addWidget(self.btn_addPreset,				2,0,1,4)
-		self.lay_head.addWidget(self.btn_delPreset,				2,4,1,4)
+		self.lay_head.addWidget(self.btn_addPreset,				2,0,1,2)
+		self.lay_head.addWidget(self.btn_delPreset,				2,2,1,2)
+		self.lay_head.addWidget(self.btn_resetPreset,			2,4,1,4)
 		self.lay_head.addWidget(self.tab_presets,				3,0,5,8)
 
 		self.lay_head.addWidget(QtGui.QLabel('Corner Actions:'),10, 0, 1, 8)
@@ -133,6 +132,18 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.addLayout(self.lay_head)
 
 	# - Presets management ------------------------------------------------
+	def preset_reset(self):
+		self.builder = None
+		self.active_font = pFont()
+		self.font_masters = self.active_font.masters()
+		
+		self.table_dict = self.empty_preset(0)
+		self.tab_presets.clear()
+		self.tab_presets.setTable(self.table_dict, sortData=(False, False))
+		self.tab_presets.horizontalHeader().setStretchLastSection(False)
+		self.tab_presets.verticalHeader().hide()
+		#self.tab_presets.resizeColumnsToContents()
+
 	def preset_modify(self, delete=False):
 		table_rawList = self.tab_presets.getTable(raw=True)
 		
@@ -274,7 +285,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 	def process_setFilter(self, glyph, shape, layer, builder, suffix='.old'):
 		new_container = fl6.flShape()
 		new_container.shapeData.name = shape.shapeData.name
-		shape.shapeData.name += suffix
+		if len(shape.shapeData.name): shape.shapeData.name += suffix
 		
 		#!!!! TODO: transformation copy and delete
 
@@ -283,11 +294,13 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		new_container.update()
 		
 		glyph.layer(layer).addShape(new_container)
-		glyph.layer(layer).update()
+		#glyph.layer(layer).update()
 
 	def process_smartCorner(self, glyph, preset):
-		wLayers = glyph._prepareLayers(pLayers)		
+		wLayers = glyph._prepareLayers(pLayers)	
+		nodes_at_shapes = {}	
 
+		# - Build selection
 		for work_layer in wLayers:
 			if work_layer in preset.keys():
 				# - Init
@@ -296,19 +309,24 @@ class QSmartCorner(QtGui.QVBoxLayout):
 				selection = selection_deep + selection_shallow
 								
 				# - Build note to shape reference
-				nodes_at_shapes = [(shape, [node for shape, node in list(nodes)]) for shape, nodes in groupby(selection, key=itemgetter(0))]
+				nodes_at_shapes[work_layer] = [(shape, [node for shape, node in list(nodes)]) for shape, nodes in groupby(selection, key=itemgetter(0))]
+
+		# - Process glyph
+		for work_layer in wLayers:
+			if work_layer in nodes_at_shapes.keys():
 
 				# - Build filter if not present
-				for work_shape, node_list in nodes_at_shapes:
+				for work_shape, node_list in nodes_at_shapes[work_layer]:
 					if len(glyph.containers(work_layer)):
 						for container in glyph.containers(work_layer):
 							if work_shape not in container.includesList: 
 								self.process_setFilter(glyph, work_shape, work_layer, self.builder)
 					else:
-						self.process_setFilter(glyph, shape, work_layer, self.builder)
+						self.process_setFilter(glyph, work_shape, work_layer, self.builder)
+
 
 				# - Process the nodes
-				process_nodes = [pNode(node) for shape, node_list in nodes_at_shapes for node in node_list]
+				process_nodes = [pNode(node) for shape, node_list in nodes_at_shapes[work_layer] for node in node_list]
 				
 				for work_node in process_nodes:
 					angle_value = preset[work_layer]
