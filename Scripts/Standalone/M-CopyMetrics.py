@@ -16,7 +16,7 @@ from PythonQt import QtCore, QtGui
 from typerig.proxy import pFont, pGlyph
 
 # - Init --------------------------------
-app_version = '0.02'
+app_version = '0.04'
 app_name = 'Copy Metrics'
 fixedLayer = None
 
@@ -45,18 +45,22 @@ class dlg_copyMetrics(QtGui.QDialog):
 
 		# - Buttons 
 		self.btn_copy = QtGui.QPushButton('&Copy Metric values')
-		self.btn_paste = QtGui.QPushButton('&Paste Metric values')
-		self.btn_export = QtGui.QPushButton('&Export to File')
-		self.btn_import = QtGui.QPushButton('&Import from File')
-		self.btn_importFLC = QtGui.QPushButton('&Import from .FLC')
+		self.btn_pasteADV = QtGui.QPushButton('&Paste Metric values: LSB, Advance')
+		self.btn_pasteRSB = QtGui.QPushButton('&Paste Metric values: LSB, RSB')
+		self.btn_export = QtGui.QPushButton('&Export to File (TypeRig *.json)')
+		self.btn_import = QtGui.QPushButton('&Import from File (TypeRig *.json)')
+		self.btn_importAFM = QtGui.QPushButton('&Import from Adobe Font Metrics (*.AFM)')
+		self.btn_importAFM.setEnabled(False)
 		
 		self.btn_copy.clicked.connect(self.copyExpr)
-		self.btn_paste.clicked.connect(self.pasteExpr)
+		self.btn_pasteADV.clicked.connect(lambda: self.pasteExpr(sbMode=False))
+		self.btn_pasteRSB.clicked.connect(lambda: self.pasteExpr(sbMode=True))
 		self.btn_export.clicked.connect(self.exportExpr)
 		self.btn_import.clicked.connect(self.importExpr)
-		self.btn_importFLC.clicked.connect(self.importExprFLC)
+		self.btn_importAFM.clicked.connect(self.importExprAFM)
 		
-		self.btn_paste.setEnabled(False)
+		self.btn_pasteADV.setEnabled(False)
+		self.btn_pasteRSB.setEnabled(False)
 		#self.btn_export.setEnabled(False)
 		#self.btn_import.setEnabled(False)
 				
@@ -67,15 +71,16 @@ class dlg_copyMetrics(QtGui.QDialog):
 		#layoutV.addWidget(QtGui.QLabel('Mark modified glyphs with:'))
 		#layoutV.addWidget(self.cmb_flag)
 		layoutV.addWidget(self.btn_copy)
-		layoutV.addWidget(self.btn_paste)
+		layoutV.addWidget(self.btn_pasteADV)
+		layoutV.addWidget(self.btn_pasteRSB)
 		layoutV.addWidget(self.btn_export)
 		layoutV.addWidget(self.btn_import)
-		layoutV.addWidget(self.btn_importFLC)
+		layoutV.addWidget(self.btn_importAFM)
 
 		# - Set Widget
 		self.setLayout(layoutV)
 		self.setWindowTitle('%s %s' %(app_name, app_version))
-		self.setGeometry(300, 300, 220, 120)
+		self.setGeometry(300, 300, 280, 140)
 		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 		self.show()
 
@@ -89,9 +94,10 @@ class dlg_copyMetrics(QtGui.QDialog):
 			self.srcGlyphBounds = {glyph.name:(glyph.getLSB(fixedLayer), glyph.getRSB(fixedLayer), glyph.getAdvance(fixedLayer)) for glyph in font.pGlyphs()}
 			print 'COPY:\t Font:%s; Glyph Metric Values copied: %s.' %(font.name,len(self.srcGlyphBounds.keys()))
 		
-		self.btn_paste.setEnabled(True)
+		self.btn_pasteADV.setEnabled(True)
+		self.btn_pasteRSB.setEnabled(True)
 
-	def pasteExpr(self):
+	def pasteExpr(self, sbMode=False):
 		font = pFont()
 		dstGlyphs = {glyph.name:glyph for glyph in font.pGlyphs()}
 		
@@ -104,8 +110,12 @@ class dlg_copyMetrics(QtGui.QDialog):
 					for layer in wGlyph.masters():
 						if glyphMetrics.has_key(layer.name):
 							wGlyph.setLSB(glyphMetrics[layer.name][0], layer.name)
-							#wGlyph.setRSB(glyphMetrics[layer.name][1], layer.name)
-							wGlyph.setAdvance(glyphMetrics[layer.name][2], layer.name)
+							
+							if sbMode: # Paste RSB
+								wGlyph.setRSB(glyphMetrics[layer.name][1], layer.name)
+							else: # Paste Advance
+								wGlyph.setAdvance(glyphMetrics[layer.name][2], layer.name)
+							
 							wGlyph.update()
 							print 'PASTE MM:\t Glyph: /%s;\tLayer: %s;\tValues(LSB, RSB, ADV): %s.' %(glyphName, layer.name, glyphMetrics)
 						else:
@@ -127,10 +137,10 @@ class dlg_copyMetrics(QtGui.QDialog):
 		fname = QtGui.QFileDialog.getSaveFileName(self, 'Save Metrics to file', fontPath , '*.json')
 		
 		if self.cmb_mode.currentIndex == 1:
-			expGlyphBounds = {glyph.name:{layer.name:(layer.metricsLeft, layer.metricsRight, layer.metricsWidth) for layer in glyph.masters()} for glyph in font.pGlyphs()}
+			expGlyphBounds = {glyph.name:{layer.name:(glyph.getLSB(layer.name), glyph.getRSB(layer.name), glyph.getAdvance(layer.name)) for layer in glyph.masters()} for glyph in font.pGlyphs()}
 			print 'EXPORT MM:\t Font:%s; Glyph Metrics found: %s.' %(font.name, len(expGlyphBounds.keys()))
 		else:
-			expGlyphBounds = {glyph.name:(glyph.layer(fixedLayer).metricsLeft, glyph.layer(fixedLayer).metricsRight, glyph.layer(fixedLayer).metricsWidth) for glyph in font.pGlyphs()}
+			expGlyphBounds = {glyph.name:(glyph.getLSB(fixedLayer), glyph.getRSB(fixedLayer), glyph.getAdvance(fixedLayer)) for glyph in font.pGlyphs()}
 			print 'EXPORT:\t Font:%s; Glyph Metrics found: %s.' %(font.name, len(expGlyphBounds.keys()))
 		
 		with open(fname, 'w') as exportFile:
@@ -149,22 +159,11 @@ class dlg_copyMetrics(QtGui.QDialog):
 
 		print 'LOAD:\t Font:%s; %s Glyph Metrics loaded from %s.' %(font.name, len(self.srcGlyphBounds.keys()), fname)
 		print 'NOTE:\t Use < Pastes > to apply loaded!'
-		self.btn_paste.setEnabled(True)
+		self.btn_pasteADV.setEnabled(True)
+		self.btn_pasteRSB.setEnabled(True)
 
-	def importExprFLC(self):
-		from typerig.utils import fontClassesFromFile as importFLC
-		
-		font = pFont()
-		fontPath = os.path.split(font.fg.path)[0]
-
-		fname = QtGui.QFileDialog.getOpenFileName(self, 'Open Fontlab class file', fontPath, '*.flc')
-		
-		classesFLC = importFLC(fname)
-		print classesFLC.classPosition
-
-		#print 'LOAD:\t Font:%s; %s Glyph Metrics loaded from %s.' %(font.name, len(self.srcGlyphBounds.keys()), fname)
-		#print 'NOTE:\t Use < Paste > to apply loaded!'
-		#self.btn_paste.setEnabled(True)
+	def importExprAFM(self):
+		pass
 	
 # - RUN ------------------------------
 dialog = dlg_copyMetrics()

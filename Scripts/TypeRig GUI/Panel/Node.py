@@ -45,24 +45,29 @@ class basicOps(QtGui.QGridLayout):
 		self.btn_remove = QtGui.QPushButton('&Remove')
 		self.btn_mitre = QtGui.QPushButton('&Mitre')
 		self.btn_knot = QtGui.QPushButton('&Overlap')
-		self.btn_trap = QtGui.QPushButton('&Trap')
+		self.btn_trapA = QtGui.QPushButton('&Trap A')
+		self.btn_trapR = QtGui.QPushButton('&Trap R')
+		self.btn_trapR.setEnabled(False)
 				
 		self.btn_insert.setMinimumWidth(80)
 		self.btn_remove.setMinimumWidth(80)
 		self.btn_mitre.setMinimumWidth(80)
 		self.btn_knot.setMinimumWidth(80)
-		self.btn_trap.setMinimumWidth(80)
+		self.btn_trapA.setMinimumWidth(80)
+		self.btn_trapR.setMinimumWidth(80)
 
 		self.btn_insert.setToolTip('Insert Node after Selection\nat given time T.')
 		self.btn_remove.setToolTip('Remove Selected Nodes!\nFor proper curve node deletion\nalso select the associated handles!')
 		self.btn_mitre.setToolTip('Mitre corner using size X.')
 		self.btn_knot.setToolTip('Overlap corner using radius -X.')
+		self.btn_trapA.setToolTip('Insert Angular (generic) Ink Trap at node selected')
+		self.btn_trapR.setToolTip('Insert Soft (traditional) Ink Trap at node selected')
 		
 		self.btn_insert.clicked.connect(self.insertNode)
 		self.btn_remove.clicked.connect(self.removeNode)
 		self.btn_mitre.clicked.connect(lambda: self.cornerMitre(False))
 		self.btn_knot.clicked.connect(lambda: self.cornerMitre(True))
-		self.btn_trap.clicked.connect(lambda: self.cornerTrap())
+		self.btn_trapA.clicked.connect(lambda: self.cornerTrap())
 
 		# - Edit fields
 		self.edt_time = QtGui.QLineEdit('0.5')
@@ -84,9 +89,10 @@ class basicOps(QtGui.QGridLayout):
 		self.addWidget(self.edt_radius,		1, 2)
 		self.addWidget(self.btn_knot,		1, 3)
 
-		self.addWidget(self.btn_trap,		2, 0)
+		self.addWidget(self.btn_trapA,		2, 0)
 		self.addWidget(QtGui.QLabel('P:'),	2, 1)
 		self.addWidget(self.edt_trap,		2, 2)
+		self.addWidget(self.btn_trapR,		2, 3)
 
 
 	def insertNode(self):
