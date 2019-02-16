@@ -1,4 +1,3 @@
-
 #FLM: Glyph: Anchor
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
@@ -13,6 +12,7 @@ import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore, QtGui
 from typerig.glyph import eGlyph
+from typerig.gui import getProcessGlyphs
 
 # - Init
 global pLayers

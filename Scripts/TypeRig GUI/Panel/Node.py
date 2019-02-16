@@ -20,20 +20,9 @@ import fontgate as fgt
 from PythonQt import QtCore, QtGui
 from typerig.glyph import eGlyph
 from typerig.node import eNode
-from typerig.proxy import pFont, pWorkspace
+from typerig.proxy import pFont
+from typerig.gui import getProcessGlyphs
 
-# - Functions --------------------------
-def getProcessGlyphs(pMode):
-	process_glyphs = []
-	active_workspace = pWorkspace()
-	active_font = pFont()
-		
-	# - Collect process glyphs
-	if pMode == 0: process_glyphs.append(eGlyph()) # Current Active Glyph
-	if pMode == 1: process_glyphs = [eGlyph(glyph) for glyph in active_workspace.getTextBlockGlyphs()] # All glyphs in current window
-	if pMode == 2: process_glyphs = active_font.selectedGlyphs(extend=eGlyph)
-	
-	return process_glyphs
 # - Sub widgets ------------------------
 class basicOps(QtGui.QGridLayout):
 	# - Basic Node operations

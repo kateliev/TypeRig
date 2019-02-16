@@ -13,6 +13,35 @@
 # - Dependencies --------------------------
 from PythonQt import QtCore, QtGui
 
+# - Functions --------------------------
+def getProcessGlyphs(mode=0, font=None, workspace=None):
+	'''Returns a list of glyphs for processing in TypeRig gui apps
+
+	Args:
+		mode (int): 0 - Current active glyph; 1 - All glyphs in current window; 2 - All selected glyphs; 3 - All glyphs in font
+		font (fgFont) - Font file (object)
+		workspace (flWorkspace) - Workspace
+	
+	Returns:
+		list(eGlyph)
+	'''
+	# - Dependancies
+	from typerig.glyph import eGlyph
+	from typerig.proxy import pFont, pWorkspace
+
+	# - Init
+	process_glyphs = []
+	active_workspace = pWorkspace(workspace)
+	active_font = pFont(font)
+		
+	# - Collect process glyphs
+	if mode == 0: process_glyphs.append(eGlyph())
+	if mode == 1: process_glyphs = [eGlyph(glyph) for glyph in active_workspace.getTextBlockGlyphs()]
+	if mode == 2: process_glyphs = active_font.selectedGlyphs(extend=eGlyph) 
+	if mode == 3: process_glyphs = active_font.glyphs(extend=eGlyph)
+	
+	return process_glyphs
+	
 # - Classes -------------------------------
 # -- Messages -----------------------------
 class trMsgSimple(QtGui.QVBoxLayout):
