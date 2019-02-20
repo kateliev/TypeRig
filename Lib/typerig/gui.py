@@ -31,7 +31,7 @@ def getProcessGlyphs(mode=0, font=None, workspace=None):
 
 	# - Init
 	process_glyphs = []
-	active_workspace = pWorkspace(workspace)
+	active_workspace = pWorkspace()
 	active_font = pFont(font)
 		
 	# - Collect process glyphs

@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Guidelines', '0.33'
+app_name, app_version = 'TypeRig | Guidelines', '0.34'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -159,7 +159,7 @@ class QDropGuide(QtGui.QGridLayout):
 				width = glyph.layer(layerName).boundingBox.width()
 				origin = glyph.layer(layerName).boundingBox.x()
 			
-			elif 'Advance' in self.cmb_select_V.currentText:
+			elif 'Adv' in self.cmb_select_V.currentText:
 				width = glyph.getAdvance(layerName)
 				origin = 0.
 

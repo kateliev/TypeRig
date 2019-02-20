@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.55'
+app_name, app_version = 'TypeRig | Nodes', '0.61'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -20,8 +20,9 @@ import fontgate as fgt
 from PythonQt import QtCore, QtGui
 from typerig.glyph import eGlyph
 from typerig.node import eNode
-from typerig.proxy import pFont
+from typerig.proxy import pFont, pFontMetrics
 from typerig.gui import getProcessGlyphs
+from typerig.brain import Coord, Line
 
 # - Sub widgets ------------------------
 class basicOps(QtGui.QGridLayout):
@@ -239,11 +240,43 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toBaseline.setToolTip('Send selected nodes to Baseline.')
 		self.btn_toYpos.setToolTip('Send selected nodes to Tagged Guideline.')
 
-		# - Edit
+		self.btn_alignLayer_V = QtGui.QPushButton('Vertical')
+		self.btn_alignLayer_H = QtGui.QPushButton('Horizontal')
+		
+
+		# - Combo boxes
+		self.cmb_select_V = QtGui.QComboBox()
+		self.cmb_select_H = QtGui.QComboBox()
+		self.cmb_select_V.addItems(['BBox width', 'Adv. width'])
+		self.cmb_select_H.addItems(['BBox height', 'X-Height', 'Caps Height', 'Ascender', 'Descender', 'Adv. height'])
+
+		# - Spin Boxes
 		self.edt_toYpos = QtGui.QSpinBox()
 		self.edt_toYpos.setToolTip('Destination Y Coordinate')
 		self.edt_toYpos.setMaximum(1500)
 		self.edt_toYpos.setMinimum(-1500)
+
+		self.spb_prc_V =  QtGui.QSpinBox()
+		self.spb_prc_V.setMaximum(100)
+		self.spb_prc_V.setSuffix('%')
+		self.spb_prc_V.setMinimumWidth(40)
+
+		self.spb_prc_H =  QtGui.QSpinBox()
+		self.spb_prc_H.setMaximum(100)
+		self.spb_prc_H.setSuffix('%')
+		self.spb_prc_H.setMinimumWidth(40)
+
+		self.spb_unit_V =  QtGui.QSpinBox()
+		self.spb_unit_V.setMaximum(100)
+		self.spb_unit_V.setMinimum(-100)
+		self.spb_unit_V.setSuffix(' U')
+		self.spb_unit_V.setMinimumWidth(40)
+
+		self.spb_unit_H =  QtGui.QSpinBox()
+		self.spb_unit_H.setMaximum(100)
+		self.spb_unit_H.setMinimum(-100)
+		self.spb_unit_H.setSuffix(' U')
+		self.spb_unit_H.setMinimumWidth(40)
 
 		# - Properties
 		self.btn_left.setMinimumWidth(40)
@@ -282,6 +315,8 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toXHeight.clicked.connect(lambda: self.alignNodes('FontMetrics_3'))
 		self.btn_toBaseline.clicked.connect(lambda: self.alignNodes('FontMetrics_4'))
 		self.btn_toYpos.clicked.connect(lambda: self.alignNodes('FontMetrics_5'))
+		self.btn_alignLayer_V.clicked.connect(lambda: self.alignNodes('Layer_V'))
+		self.btn_alignLayer_H.clicked.connect(lambda: self.alignNodes('Layer_H'))
 
 		# - Check box
 		self.chk_slope = QtGui.QPushButton('Intercept')
@@ -306,15 +341,24 @@ class alignNodes(QtGui.QGridLayout):
 		self.addWidget(self.edt_toYpos,			5,1)
 		self.addWidget(self.btn_toYpos,			5,2)
 		self.addWidget(self.chk_slope, 			5,3)
-		self.addWidget(QtGui.QLabel('Channel processing and slopes'), 7,0,1,4)
-		self.addWidget(self.btn_solveY, 		8,0,1,2)
-		self.addWidget(self.btn_solveX, 		8,2,1,2)
-		self.addWidget(self.btn_copy,			9,0,1,3)
-		self.addWidget(self.btn_italic,			9,3,1,1)
-		self.addWidget(self.btn_pasteMinY,		10,0,1,1)
-		self.addWidget(self.btn_pasteMaxY,		10,1,1,1)
-		self.addWidget(self.btn_pasteFMinY,		10,2,1,1)
-		self.addWidget(self.btn_pasteFMaxY,		10,3,1,1)
+		self.addWidget(QtGui.QLabel('Align to Glyph Layer'), 	6, 0, 1, 4)
+		self.addWidget(self.cmb_select_V, 						7, 0)
+		self.addWidget(self.spb_prc_V, 							7, 1)
+		self.addWidget(self.spb_unit_V, 						7, 2)
+		self.addWidget(self.btn_alignLayer_V, 					7, 3)
+		self.addWidget(self.cmb_select_H, 						8, 0)
+		self.addWidget(self.spb_prc_H, 							8, 1)
+		self.addWidget(self.spb_unit_H, 						8, 2)
+		self.addWidget(self.btn_alignLayer_H, 					8, 3)
+		self.addWidget(QtGui.QLabel('Channel processing and slopes'), 9,0,1,4)
+		self.addWidget(self.btn_solveY, 		10,0,1,2)
+		self.addWidget(self.btn_solveX, 		10,2,1,2)
+		self.addWidget(self.btn_copy,			11,0,1,3)
+		self.addWidget(self.btn_italic,			11,3,1,1)
+		self.addWidget(self.btn_pasteMinY,		12,0,1,1)
+		self.addWidget(self.btn_pasteMaxY,		12,1,1,1)
+		self.addWidget(self.btn_pasteFMinY,		12,2,1,1)
+		self.addWidget(self.btn_pasteFMaxY,		12,3,1,1)
 
 	def copySlope(self):
 		from typerig.brain import Line
@@ -387,116 +431,158 @@ class alignNodes(QtGui.QGridLayout):
 
 
 	def alignNodes(self, mode):
-		from typerig.brain import Coord, Line
+		process_glyphs = getProcessGlyphs(pMode)
 
-		glyph = eGlyph()
-		wLayers = glyph._prepareLayers(pLayers)
-		
-		for layer in wLayers:
-			selection = glyph.selectedNodes(layer, extend=eNode, deep=True)
-
-			if mode == 'L':
-				target = min(selection, key=lambda item: item.x)
-				control = (True, False)
-
-			elif mode == 'R':
-				target = max(selection, key=lambda item: item.x)
-				control = (True, False)
+		for glyph in process_glyphs:
+			wLayers = glyph._prepareLayers(pLayers)
 			
-			elif mode == 'T':
-				target = max(selection, key=lambda item: item.y)
-				control = (False, True)
-			
-			elif mode == 'B':
-				target = min(selection, key=lambda item: item.y)
-				control = (False, True)
-			
-			elif mode == 'Y':
-				target = Line(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
-				control = (True, False)
+			for layer in wLayers:
+				selection = glyph.selectedNodes(layer, extend=eNode, deep=True)
 
-			elif mode == 'X':
-				target = Line(min(selection, key=lambda item: item.x).fl, max(selection, key=lambda item: item.x).fl)
-				control = (False, True)
+				if mode == 'L':
+					target = min(selection, key=lambda item: item.x)
+					control = (True, False)
 
-			elif mode == 'BBoxCenterX':
-				newX = glyph.layer(layer).boundingBox.x() + glyph.layer(layer).boundingBox.width()/2
-				newY = 0.
-				target = fl6.flNode(newX, newY)
-				control = (True, False)
-
-			elif mode == 'BBoxCenterY':
-				newX = 0.
-				newY = glyph.layer(layer).boundingBox.y() + glyph.layer(layer).boundingBox.height()/2
-				target = fl6.flNode(newX, newY)
-				control = (False, True)
-
-			elif 'FontMetrics' in mode:
-				layerMetrics = glyph.fontMetricsInfo(layer)
-				italicAngle = glyph.package.italicAngle_value
+				elif mode == 'R':
+					target = max(selection, key=lambda item: item.x)
+					control = (True, False)
 				
-				newX = 0.
-				toMaxY = True
+				elif mode == 'T':
+					target = max(selection, key=lambda item: item.y)
+					control = (False, True)
+				
+				elif mode == 'B':
+					target = min(selection, key=lambda item: item.y)
+					control = (False, True)
+				
+				elif mode == 'Y':
+					target = Line(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
+					control = (True, False)
 
-				if '0' in mode:
-					newY = layerMetrics.ascender
-					toMaxY = False
-				elif '1' in mode:
-					newY = layerMetrics.capsHeight
-					toMaxY = False
-				elif '2' in mode:
-					newY = layerMetrics.descender
-					toMaxY = True
-				elif '3' in mode:
-					newY = layerMetrics.xHeight
-					toMaxY = False
-				elif '4' in mode:
-					newY = 0
-					toMaxY = True
-				elif '5' in mode:
-					newY = self.edt_toYpos.value
-					toMaxY = True #self.edt_toYpos.value >= 0
+				elif mode == 'X':
+					target = Line(min(selection, key=lambda item: item.x).fl, max(selection, key=lambda item: item.x).fl)
+					control = (False, True)
 
-			for node in selection:
-				if 'FontMetrics' in mode:
-					if italicAngle != 0 and not self.chk_slope.isChecked():
-						tempTarget = Coord(node.fl)
-						tempTarget.setAngle(italicAngle)
-
-						target = fl6.flNode(tempTarget.getWidth(newY), newY)
-						control = (True, True)
-					
-					elif self.chk_slope.isChecked():
-						pairUp = node.getMaxY().position
-						pairDown = node.getMinY().position
-						pairPos = pairUp if toMaxY else pairDown
-						newLine = Line(node.fl.position, pairPos)
-						newX = newLine.solveX(newY)
-
-						target = fl6.flNode(newX, newY)
-						control = (True, True)
-
-					else:
-						target = fl6.flNode(newX, newY)
-						control = (False, True)
-
-				if mode == 'peerCenterX':
-					newX = node.x + (node.getPrevOn().x + node.getNextOn().x - 2*node.x)/2.
-					newY = node.y
+				elif mode == 'BBoxCenterX':
+					newX = glyph.layer(layer).boundingBox.x() + glyph.layer(layer).boundingBox.width()/2
+					newY = 0.
 					target = fl6.flNode(newX, newY)
 					control = (True, False)
 
-				elif mode == 'peerCenterY':
-					newX = node.x
-					newY = node.y + (node.getPrevOn().y + node.getNextOn().y - 2*node.y)/2.
+				elif mode == 'BBoxCenterY':
+					newX = 0.
+					newY = glyph.layer(layer).boundingBox.y() + glyph.layer(layer).boundingBox.height()/2
 					target = fl6.flNode(newX, newY)
 					control = (False, True)
 
-				# - Execute Align ----------
-				node.alignTo(target, control)
+				elif 'FontMetrics' in mode:
+					layerMetrics = glyph.fontMetricsInfo(layer)
+					italicAngle = glyph.package.italicAngle_value
+					
+					newX = 0.
+					toMaxY = True
 
-		glyph.updateObject(glyph.fl, 'Align Nodes @ %s.' %'; '.join(wLayers))
-		glyph.update()
+					if '0' in mode:
+						newY = layerMetrics.ascender
+						toMaxY = False
+					elif '1' in mode:
+						newY = layerMetrics.capsHeight
+						toMaxY = False
+					elif '2' in mode:
+						newY = layerMetrics.descender
+						toMaxY = True
+					elif '3' in mode:
+						newY = layerMetrics.xHeight
+						toMaxY = False
+					elif '4' in mode:
+						newY = 0
+						toMaxY = True
+					elif '5' in mode:
+						newY = self.edt_toYpos.value
+						toMaxY = True #self.edt_toYpos.value >= 0
+
+				elif mode == 'Layer_V':
+					if 'BBox' in self.cmb_select_V.currentText:
+						width = glyph.layer(layer).boundingBox.width()
+						origin = glyph.layer(layer).boundingBox.x()
+				
+					elif 'Adv' in self.cmb_select_V.currentText:
+						width = glyph.getAdvance(layer)
+						origin = 0.
+
+					target = fl6.flNode(float(width)*self.spb_prc_V.value/100 + origin + self.spb_unit_V.value, 0)
+					control = (True, False)
+
+				elif mode == 'Layer_H':
+					metrics = pFontMetrics(glyph.package)
+
+					if 'BBox' in self.cmb_select_H.currentText:
+						height = glyph.layer(layer).boundingBox.height()
+						origin = glyph.layer(layer).boundingBox.y()
+					
+					elif 'Adv' in self.cmb_select_H.currentText:
+						height = glyph.layer(layer).advanceHeight
+						origin = 0.
+
+					elif 'X-H' in self.cmb_select_H.currentText:
+						height = metrics.getXHeight(layer)
+						origin = 0.
+
+					elif 'Caps' in self.cmb_select_H.currentText:
+						height = metrics.getCapsHeight(layer)
+						origin = 0.
+
+					elif 'Ascender' in self.cmb_select_H.currentText:
+						height = metrics.getAscender(layer)
+						origin = 0.			
+
+					elif 'Descender' in self.cmb_select_H.currentText:
+						height = metrics.getDescender(layer)
+						origin = 0.		
+
+					target = fl6.flNode(0, float(height)*self.spb_prc_H.value/100 + origin + self.spb_unit_H.value)
+					control = (False, True)
+
+				for node in selection:
+					if 'FontMetrics' in mode:
+						if italicAngle != 0 and not self.chk_slope.isChecked():
+							tempTarget = Coord(node.fl)
+							tempTarget.setAngle(italicAngle)
+
+							target = fl6.flNode(tempTarget.getWidth(newY), newY)
+							control = (True, True)
+						
+						elif self.chk_slope.isChecked():
+							pairUp = node.getMaxY().position
+							pairDown = node.getMinY().position
+							pairPos = pairUp if toMaxY else pairDown
+							newLine = Line(node.fl.position, pairPos)
+							newX = newLine.solveX(newY)
+
+							target = fl6.flNode(newX, newY)
+							control = (True, True)
+
+						else:
+							target = fl6.flNode(newX, newY)
+							control = (False, True)
+
+					if mode == 'peerCenterX':
+						newX = node.x + (node.getPrevOn().x + node.getNextOn().x - 2*node.x)/2.
+						newY = node.y
+						target = fl6.flNode(newX, newY)
+						control = (True, False)
+
+					elif mode == 'peerCenterY':
+						newX = node.x
+						newY = node.y + (node.getPrevOn().y + node.getNextOn().y - 2*node.y)/2.
+						target = fl6.flNode(newX, newY)
+						control = (False, True)
+
+					# - Execute Align ----------
+					node.alignTo(target, control)
+
+			glyph.updateObject(glyph.fl, 'Align Nodes @ %s.' %'; '.join(wLayers))
+			glyph.update()
 
 
 class breakContour(QtGui.QGridLayout):
