@@ -12,13 +12,14 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Metrics', '0.14'
+app_name, app_version = 'TypeRig | Metrics', '0.20'
 
 # - Dependencies -----------------
 import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore, QtGui
 from typerig.glyph import eGlyph
+from typerig.gui import getProcessGlyphs
 
 # - Sub widgets ------------------------
 class MLineEdit(QtGui.QLineEdit):
@@ -105,22 +106,24 @@ class metrics_adjust(QtGui.QGridLayout):
 		self.spb_rsb_units.setValue(0)
 
 	def adjMetrics(self):
-		glyph = eGlyph()
-		wLayers = glyph._prepareLayers(pLayers)
-		
-		copyOrder = [False]*3
-		srcGlyphs = [glyph.name]*3
-				
-		adjPercents = (self.spb_lsb_percent.value, self.spb_rsb_percent.value, self.spb_adv_percent.value)
-		adjUnits = (self.spb_lsb_units.value, self.spb_rsb_units.value, self.spb_adv_units.value)
-		
-		for layer in wLayers:
-			glyph.setLSB(glyph.getLSB(layer)*adjPercents[0]/100 + adjUnits[0], layer)
-			glyph.setRSB(glyph.getRSB(layer)*adjPercents[1]/100 + adjUnits[1], layer)
-			glyph.setAdvance(glyph.getAdvance(layer)*adjPercents[2]/100 + adjUnits[2], layer)
+		process_glyphs = getProcessGlyphs(pMode)
 
-		glyph.updateObject(glyph.fl, 'Adjust Metrics @ %s | %s' %('; '.join(wLayers), zip(('LSB','RSB','ADV'), adjPercents, adjUnits)))
-		glyph.update()
+		for glyph in process_glyphs:	
+			wLayers = glyph._prepareLayers(pLayers)
+			
+			copyOrder = [False]*3
+			srcGlyphs = [glyph.name]*3
+					
+			adjPercents = (self.spb_lsb_percent.value, self.spb_rsb_percent.value, self.spb_adv_percent.value)
+			adjUnits = (self.spb_lsb_units.value, self.spb_rsb_units.value, self.spb_adv_units.value)
+			
+			for layer in wLayers:
+				glyph.setLSB(glyph.getLSB(layer)*adjPercents[0]/100 + adjUnits[0], layer)
+				glyph.setRSB(glyph.getRSB(layer)*adjPercents[1]/100 + adjUnits[1], layer)
+				glyph.setAdvance(glyph.getAdvance(layer)*adjPercents[2]/100 + adjUnits[2], layer)
+
+			glyph.updateObject(glyph.fl, 'Adjust Metrics @ %s | %s' %('; '.join(wLayers), zip(('LSB','RSB','ADV'), adjPercents, adjUnits)))
+			glyph.update()
 
 class metrics_copy(QtGui.QGridLayout):
 	# - Copy Metric properties from other glyph
@@ -214,19 +217,21 @@ class metrics_copy(QtGui.QGridLayout):
 		self.spb_rsb_units.setValue(0)
 
 	def copyMetrics(self):
-		glyph = eGlyph()
-		
-		copyOrder = ['--' in name for name in (self.edt_lsb.text, self.edt_rsb.text, self.edt_adv.text)]
-		srcGlyphs = [str(name).replace('--', '') if len(name) else None for name in (self.edt_lsb.text, self.edt_rsb.text, self.edt_adv.text)]
-		
-		adjPercents = (self.spb_lsb_percent.value, self.spb_rsb_percent.value, self.spb_adv_percent.value)
-		adjUnits = (self.spb_lsb_units.value, self.spb_rsb_units.value, self.spb_adv_units.value)
-		
-		glyph.copyMetricsbyName(srcGlyphs, pLayers, copyOrder, adjPercents, adjUnits)
+		process_glyphs = getProcessGlyphs(pMode)
 
+		for glyph in process_glyphs:			
+			copyOrder = ['--' in name for name in (self.edt_lsb.text, self.edt_rsb.text, self.edt_adv.text)]
+			srcGlyphs = [str(name).replace('--', '') if len(name) else None for name in (self.edt_lsb.text, self.edt_rsb.text, self.edt_adv.text)]
+			
+			adjPercents = (self.spb_lsb_percent.value, self.spb_rsb_percent.value, self.spb_adv_percent.value)
+			adjUnits = (self.spb_lsb_units.value, self.spb_rsb_units.value, self.spb_adv_units.value)
+			
+			glyph.copyMetricsbyName(srcGlyphs, pLayers, copyOrder, adjPercents, adjUnits)
+
+			glyph.updateObject(glyph.fl, 'Copy Metrics | LSB: %s; RSB: %s; ADV:%s.' %(srcGlyphs[0], srcGlyphs[1], srcGlyphs[2]))
+			glyph.update()
+		
 		self.reset_fileds()
-		glyph.updateObject(glyph.fl, 'Copy Metrics | LSB: %s; RSB: %s; ADV:%s.' %(srcGlyphs[0], srcGlyphs[1], srcGlyphs[2]))
-		glyph.update()
 
 class metrics_expr(QtGui.QGridLayout):
 	# - Copy Metric properties from other glyph
@@ -289,17 +294,20 @@ class metrics_expr(QtGui.QGridLayout):
 			print 'ERROR: Glyph /%s - No NAMED SHAPE with INDEX [%s] found!' %(glyph.name, shapeIndex)
 
 	def setMetricEquations(self):
-		glyph = eGlyph()
-		wLayers = glyph._prepareLayers(pLayers)
+		process_glyphs = getProcessGlyphs(pMode)
 
-		for layer in wLayers:
-			if len(self.edt_lsb.text): glyph.setLSBeq(self.edt_lsb.text, layer)
-			if len(self.edt_rsb.text): glyph.setRSBeq(self.edt_rsb.text, layer)
-			if len(self.edt_adv.text): glyph.setADVeq(self.edt_adv.text, layer)
+		for glyph in process_glyphs:
+			wLayers = glyph._prepareLayers(pLayers)
 
+			for layer in wLayers:
+				if len(self.edt_lsb.text): glyph.setLSBeq(self.edt_lsb.text, layer)
+				if len(self.edt_rsb.text): glyph.setRSBeq(self.edt_rsb.text, layer)
+				if len(self.edt_adv.text): glyph.setADVeq(self.edt_adv.text, layer)
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, 'Set Metrics Equations @ %s.' %'; '.join(wLayers))
+		
 		self.reset_fileds()
-		glyph.update()
-		glyph.updateObject(glyph.fl, 'Set Metrics Equations @ %s.' %'; '.join(wLayers))
 
 class metrics_font(QtGui.QGridLayout):
 	# - Copy Metric properties from other glyph
