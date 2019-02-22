@@ -392,12 +392,17 @@ class pShape(object):
 	def __init__(self, shape, layer=None, glyph=None):
 		self.fl = shape
 		self.shapeData = self.data()
-		self.name = self.shapeData.name
-		self.currentName = self.fl.name
 		self.refs = self.shapeData.referenceCount
+		self.container = self.fl.includesList
+		
+		self.currentName = self.fl.name
+		self.name = self.shapeData.name
 
 		self.parent = glyph
 		self.layer = layer
+
+	def __repr__(self):
+		return '<%s name=%s references=%s contours=%s contains=%s>' % (self.__class__.__name__, self.name, self.refs, len(self.contours()), len(self.container))
 
 	# - Basics -----------------------------------------------
 	def data(self):
@@ -468,19 +473,18 @@ class pShape(object):
 		self.fl.update()
 
 	# - Transformation ----------------------------------------
-	'''
-	# -- NOTE: this should go to new eShape object as the proxy is not the palce for such extended functionality
-	def applyTransformation(self, transformMatrix, flEngine=False):
-		if not flEngine:
-			from typerig.brain import transform
-			tMat = transform().transform(transformMatrix)
+	def shift(self, dx, dy):
+		self.fl.transform = self.fl.transform.translate(dx, dy)
 
-			for node in self.nodes():
-				tNode = tMat.applyTransformation(node.x, node.y)
-				node.setXY(*tNode)
-	'''
-	def __repr__(self):
-		return '<%s name=%s references=%s contours=%s contains=%s>' % (self.__class__.__name__, self.name, self.refs, len(self.contours()), len(self.fl.includesList))
+	def rotate(self, angle):
+		self.fl.transform = self.fl.transform.rotate(angle)
+
+	def scale(self, sx, sy):
+		self.fl.transform = self.fl.transform.scale(sx, sy)
+
+	def shear(self, sh, sv):
+		self.fl.transform = self.fl.transform.shear(sh, sv)
+	
 
 
 class pGlyph(object):
