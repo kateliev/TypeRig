@@ -1,5 +1,5 @@
 # MODULE: Brain | Typerig
-# VER 	: 2.56
+# VER 	: 2.57
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018  (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -730,6 +730,9 @@ class _Line(object):
 	def __div__(self, other):
 		return self.__class__(self.p0 / other, self.p1 / other)	
 
+	def __and__(self, other):
+		return self.lineIntercept(other)
+
 	def __repr__(self):
 		return '<Line: (%s,%s),(%s,%s)>' %(self.p0.x, self.p0.y, self.p1.x, self.p1.y)
 
@@ -764,6 +767,20 @@ class _Line(object):
 		from math import isnan
 		return (float(y) - self.getYintercept()) / float(self.slope) if not isnan(self.slope) and self.slope != 0 else self.p0.x
 		
+	def lineIntercept(self, other_line):
+		'''Find interception point (X, Y) for two lines.
+		Returns (None, None) if lines do not intercept.'''
+		xdiff = _Point(self.p0.x - self.p1.x, other_line.p0.x - other_line.p1.x)
+		ydiff = _Point(self.p0.y - self.p1.y, other_line.p0.y - other_line.p1.y)
+
+		div = xdiff | ydiff
+		if div == 0: return (None, None)
+
+		d = _Point(self.p0 | self.p1, other_line.p0 | other_line.p1)
+		x = (d | xdiff) / div
+		y = (d | ydiff) / div
+		return (x, y)
+
 	def shift(self, dx, dy):
 		'''Shift coordinates by dx,dy'''
 		self.p0.x += dx

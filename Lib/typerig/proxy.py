@@ -694,7 +694,7 @@ class pGlyph(object):
 			wBuilder = shape.shapeBuilder
 
 			if wBuilder is not None and wBuilder.isValid:
-				shape_builders[wBuilder.title] = wBuilder
+				shape_builders.setdefault(wBuilder.title, []).append(wBuilder)
 
 		if store: self.builders = shape_builders
 		

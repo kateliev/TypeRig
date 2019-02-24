@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Node Objects | Typerig
-# VER 	: 0.11
+# VER 	: 0.12
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -28,6 +28,14 @@ class eNode(pNode):
 		'''Returns Coord object of the node.'''
 		from typerig.brain import Coord
 		return Coord(float(self.x), float(self.y))
+
+	def getNextLine(self):
+		from typerig.brain import Line
+		return Line(self.fl, self.getNextOn())
+
+	def getPrevLine(self):
+		from typerig.brain import Line
+		return Line(self.getPrevOn(), self.fl)
 
 	# - Corner operations ---------------
 	def cornerMitre(self, mitreSize=5, isRadius=False):

@@ -19,14 +19,14 @@ from PythonQt import QtCore, QtGui
 from typerig.proxy import pFont, pShape, pNode, pWorkspace
 from typerig.node import eNode
 from typerig.glyph import eGlyph
-from typerig.gui import trTableView, trSliderCtrl
+from typerig.gui import trTableView, trSliderCtrl, getProcessGlyphs
 
 # - Init
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Corner', '1.7'
+app_name, app_version = 'TypeRig | Corner', '1.8'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -203,21 +203,10 @@ class QSmartCorner(QtGui.QVBoxLayout):
 
 		return dict(table_raw[active_preset_index][1][1:])
 
-	# - Glyphs ----------------------------------------------------
-	def getProcessGlyphs(self):
-		process_glyphs = []
-		active_workspace = pWorkspace()
-			
-		# - Collect process glyphs
-		if pMode == 0: process_glyphs.append(eGlyph()) # Current Active Glyph
-		if pMode == 1: process_glyphs = [eGlyph(glyph) for glyph in active_workspace.getTextBlockGlyphs()] # All glyphs in current window
-		
-		return process_glyphs
-
 	# - Basic Corner ------------------------------------------------
 	def apply_mitre(self, doKnot=False):
 		# - Init
-		process_glyphs = self.getProcessGlyphs()
+		process_glyphs = getProcessGlyphs()
 		active_preset = self.getPreset()	
 
 		# - Process
@@ -242,7 +231,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 
 	def apply_trap(self):
 		# - Init
-		process_glyphs = self.getProcessGlyphs()
+		process_glyphs = getProcessGlyphs()
 		active_preset = self.getPreset()	
 
 		# - Process
@@ -275,7 +264,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 				temp_builder = builder_glyph.getBuilders()
 
 				if len(temp_builder.keys()) and filter_name in temp_builder.keys():
-					self.builder = temp_builder[filter_name]
+					self.builder = temp_builder[filter_name][0]
 					self.btn_getBuilder.setText('Release')
 		else:
 			self.builder = None
@@ -340,9 +329,10 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		#glyph.updateObject(glyph.fl, 'DONE:\t Glyph: %s; Filter: Smart corner; Parameters: %s' %(glyph.name, preset))
 
 	def apply_SmartCorner(self, remove=False):
+		# NOTE: apply and remove here apply only to soelected nodes.
 		if self.builder is not None:
 			# - Init
-			process_glyphs = self.getProcessGlyphs()
+			process_glyphs = getProcessGlyphs()
 			active_preset = self.getPreset()
 
 			if remove: # Build a special preset that deletes
@@ -358,6 +348,34 @@ class QSmartCorner(QtGui.QVBoxLayout):
 
 		else:
 			print 'ERROR:\t Please specify a Glyph with suitable Shape Builder (Smart corner) first!'
+
+	def remove_SmartCorner(self):
+		# Finds active preset in glyphs smart corners and removes them
+		# - Init
+		process_glyphs = getProcessGlyphs()
+		active_preset = self.getPreset()
+
+		# - Process
+		if len(process_glyphs):
+			for work_glyph in process_glyphs:
+				if work_glyph is not None:
+					# - Init
+					wLayers = glyph._prepareLayers(pLayers)	
+					smart_corners, target_corners = [], []
+										
+					
+					# - Get all smart nodes/corners
+					for layer in wLayers:
+						for builder in work_glyph.getBuilders(layer)[filter_name]:
+							smart_corners += builder.getSmartNodes()
+
+						if len(smart_corners):
+							for node in smart_corners:
+								wNode = eNode(node)
+
+								if wNode.getSmartAngleRadius() == active_preset[layer]:
+									wNode.delSmartAngle()
+
 
 	def update_window_glyphs(self, glyphs, complete=False):
 		for glyph in glyphs:
