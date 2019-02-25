@@ -26,7 +26,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Corner', '1.9'
+app_name, app_version = 'TypeRig | Corner', '1.95'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -62,7 +62,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.btn_savePreset = QtGui.QPushButton('&Save Presets')
 		self.btn_apply_smartCorner = QtGui.QPushButton('&Apply Smart Corner')
 		self.btn_remove_smartCorner = QtGui.QPushButton('R&emove Smart Corner')
-		self.btn_remove_presetCorner = QtGui.QPushButton('Find and Remove Smart Corner')
+		self.btn_remove_presetCorner = QtGui.QPushButton('&Find and Remove')
 
 		self.btn_apply_smartCorner.setToolTip('Apply Smart Corner preset on SELECTED nodes.')
 		self.btn_remove_smartCorner.setToolTip('Remove Smart Corner on SELECTED nodes.')
@@ -73,6 +73,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.btn_apply_mitre = QtGui.QPushButton('&Mitre')
 		self.btn_apply_overlap = QtGui.QPushButton('&Overlap')
 		self.btn_apply_trap = QtGui.QPushButton('&Trap')
+		self.btn_rebuild = QtGui.QPushButton('Rebuild corner')
 
 		self.btn_getBuilder.setMinimumWidth(70)
 		self.btn_findBuilder.setMinimumWidth(70)
@@ -80,6 +81,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.btn_apply_mitre.setMinimumWidth(70)
 		self.btn_apply_overlap.setMinimumWidth(70)
 		self.btn_apply_trap.setMinimumWidth(70)
+		self.btn_rebuild.setMinimumWidth(70)
 
 		self.btn_addPreset.setMinimumWidth(70)
 		self.btn_delPreset.setMinimumWidth(70)
@@ -109,6 +111,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.btn_apply_mitre.clicked.connect(lambda: self.apply_mitre(False))
 		self.btn_apply_overlap.clicked.connect(lambda: self.apply_mitre(True))
 		self.btn_apply_trap.clicked.connect(lambda: self.apply_trap())
+		self.btn_rebuild.clicked.connect(lambda: self.rebuild())
 
 		# -- Preset Table
 		self.tab_presets = trTableView(None)
@@ -128,15 +131,16 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.lay_head.addWidget(self.btn_apply_mitre,			11, 2, 1, 2)
 		self.lay_head.addWidget(self.btn_apply_overlap,			11, 4, 1, 2)
 		self.lay_head.addWidget(self.btn_apply_trap,			11, 6, 1, 2)
+		self.lay_head.addWidget(self.btn_rebuild,				12, 0, 1, 8)
 
-		self.lay_head.addWidget(QtGui.QLabel('Smart Corner:'),13,0,1,8)
-		self.lay_head.addWidget(QtGui.QLabel('Builder: '),			14,0,1,1)
+		self.lay_head.addWidget(QtGui.QLabel('Smart Corner:'),	13,0,1,8)
+		self.lay_head.addWidget(QtGui.QLabel('Builder: '),		14,0,1,1)
 		self.lay_head.addWidget(self.edt_glyphName,				14,1,1,3)
 		self.lay_head.addWidget(self.btn_getBuilder,			14,4,1,2)
 		self.lay_head.addWidget(self.btn_findBuilder,			14,6,1,2)
-		self.lay_head.addWidget(self.btn_apply_smartCorner,		15,0,1,4)
-		self.lay_head.addWidget(self.btn_remove_smartCorner,	15,4,1,4)
-		self.lay_head.addWidget(self.btn_remove_presetCorner,	16,0,1,8)
+		self.lay_head.addWidget(self.btn_remove_smartCorner,	15,0,1,4)
+		self.lay_head.addWidget(self.btn_remove_presetCorner,	15,4,1,4)
+		self.lay_head.addWidget(self.btn_apply_smartCorner,		16,0,1,8)
 
 		self.addLayout(self.lay_head)
 
@@ -259,6 +263,34 @@ class QSmartCorner(QtGui.QVBoxLayout):
 					
 					glyph.update()
 					glyph.updateObject(glyph.fl, '%s @ %s.' %('Ink Trap', '; '.join(active_preset.keys())))
+
+	def rebuild(self):
+		# - Init
+		process_glyphs = getProcessGlyphs(pMode)
+
+		# - Process
+		if len(process_glyphs):
+			for glyph in process_glyphs:
+				if glyph is not None:
+					wLayers = glyph._prepareLayers(pLayers)
+		
+					for layer in wLayers:
+						selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode, deep=True)
+						
+						if len(selection) > 1:
+							node_first = selection[0]
+							node_last = selection[-1]
+							
+							line_in = node_first.getPrevLine() if node_first.getPrevOn(False) not in selection else node_first.getNextLine()
+							line_out = node_last.getNextLine() if node_last.getNextOn(False) not in selection else node_last.getPrevLine()
+
+							crossing = line_in & line_out
+
+							node_first.smartReloc(*crossing)
+							node_first.parent.removeNodesBetween(node_first.fl, node_last.getNextOn())
+			
+					glyph.update()
+					glyph.updateObject(glyph.fl, 'Rebuild corner: %s nodes reduced; At layers: %s' %(len(selection), '; '.join(wLayers)))
 
 	# - Smart Corner ------------------------------------------------
 	def getBuilder(self):
