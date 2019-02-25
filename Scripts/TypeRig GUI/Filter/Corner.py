@@ -24,9 +24,9 @@ from typerig.gui import trTableView, trSliderCtrl, getProcessGlyphs
 # - Init
 global pLayers
 global pMode
-pLayers = None
+pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Corner', '1.8'
+app_name, app_version = 'TypeRig | Corner', '1.9'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -62,6 +62,12 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.btn_savePreset = QtGui.QPushButton('&Save Presets')
 		self.btn_apply_smartCorner = QtGui.QPushButton('&Apply Smart Corner')
 		self.btn_remove_smartCorner = QtGui.QPushButton('R&emove Smart Corner')
+		self.btn_remove_presetCorner = QtGui.QPushButton('Find and Remove Smart Corner')
+
+		self.btn_apply_smartCorner.setToolTip('Apply Smart Corner preset on SELECTED nodes.')
+		self.btn_remove_smartCorner.setToolTip('Remove Smart Corner on SELECTED nodes.')
+		self.btn_remove_presetCorner.setToolTip('Find and remove all Smart Corners that equal the currently selected preset.')
+
 
 		self.btn_apply_round = QtGui.QPushButton('&Round')
 		self.btn_apply_mitre = QtGui.QPushButton('&Mitre')
@@ -81,6 +87,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.btn_savePreset.setMinimumWidth(140)
 		self.btn_apply_smartCorner.setMinimumWidth(140)
 		self.btn_remove_smartCorner.setMinimumWidth(140)
+		self.btn_remove_presetCorner.setMinimumWidth(140)
 
 		self.btn_getBuilder.setCheckable(True)
 		self.btn_getBuilder.setChecked(False)
@@ -96,6 +103,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 
 		self.btn_apply_smartCorner.clicked.connect(lambda: self.apply_SmartCorner(False))
 		self.btn_remove_smartCorner.clicked.connect(lambda: self.apply_SmartCorner(True))
+		self.btn_remove_presetCorner.clicked.connect(lambda: self.remove_SmartCorner())
 		
 		#self.btn_apply_round.clicked.connect(lambda: self.apply_round())
 		self.btn_apply_mitre.clicked.connect(lambda: self.apply_mitre(False))
@@ -128,6 +136,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.lay_head.addWidget(self.btn_findBuilder,			14,6,1,2)
 		self.lay_head.addWidget(self.btn_apply_smartCorner,		15,0,1,4)
 		self.lay_head.addWidget(self.btn_remove_smartCorner,	15,4,1,4)
+		self.lay_head.addWidget(self.btn_remove_presetCorner,	16,0,1,8)
 
 		self.addLayout(self.lay_head)
 
@@ -344,7 +353,8 @@ class QSmartCorner(QtGui.QVBoxLayout):
 					if work_glyph is not None: 
 						self.process_smartCorner(work_glyph, active_preset)
 						
-				self.update_window_glyphs(process_glyphs, True)
+				self.update_glyphs(process_glyphs, True)
+				print 'DONE:\t Filter: Smart Corner; Glyphs: %s' %'; '.join([g.name for g in glyphs])
 
 		else:
 			print 'ERROR:\t Please specify a Glyph with suitable Shape Builder (Smart corner) first!'
@@ -360,9 +370,8 @@ class QSmartCorner(QtGui.QVBoxLayout):
 			for work_glyph in process_glyphs:
 				if work_glyph is not None:
 					# - Init
-					wLayers = glyph._prepareLayers(pLayers)	
+					wLayers = work_glyph._prepareLayers(pLayers)	
 					smart_corners, target_corners = [], []
-										
 					
 					# - Get all smart nodes/corners
 					for layer in wLayers:
@@ -373,11 +382,13 @@ class QSmartCorner(QtGui.QVBoxLayout):
 							for node in smart_corners:
 								wNode = eNode(node)
 
-								if wNode.getSmartAngleRadius() == active_preset[layer]:
+								if wNode.getSmartAngleRadius() == float(active_preset[layer]):
 									wNode.delSmartAngle()
 
+			self.update_glyphs(process_glyphs, True)
+			print 'DONE:\t Filter: Remove Smart Corner; Glyphs: %s' %'; '.join([g.name for g in glyphs])
 
-	def update_window_glyphs(self, glyphs, complete=False):
+	def update_glyphs(self, glyphs, complete=False):
 		for glyph in glyphs:
 			glyph.update()
 			
@@ -385,10 +396,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 				for contour in glyph.contours():
 					contour.changed()
 			else: # Full update - with undo snapshot
-				glyph.updateObject(glyph.fl, verbose=False)
-
-		if complete: print 'DONE:\t Filter: Smart Corner; Glyphs: %s' %'; '.join([g.name for g in glyphs])
-						
+				glyph.updateObject(glyph.fl, verbose=False)						
 
 class QCornerControl(QtGui.QVBoxLayout):
 	# - Split/Break contour 
@@ -447,9 +455,9 @@ class QCornerControl(QtGui.QVBoxLayout):
 
 				self.sliders[sID][1] = slider.sld_axis.value # Reset value
 
-		self.__updateGlyphs(self.process_glyphs)
+		self.update_glyphs(self.process_glyphs)
 
-	def __updateGlyphs(self, glyphs, complete=False):
+	def update_glyphs(self, glyphs, complete=False):
 		for glyph in glyphs:
 			glyph.update()
 			
@@ -497,7 +505,7 @@ class QCornerControl(QtGui.QVBoxLayout):
 			self.sliders.append([new_slider, angle_value, angle_nodes])
 
 		# - Set undo snapshot
-		self.__updateGlyphs(self.process_glyphs, True)
+		self.update_glyphs(self.process_glyphs, True)
 
 
 # - Tabs -------------------------------
