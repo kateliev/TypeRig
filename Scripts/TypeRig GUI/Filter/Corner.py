@@ -215,7 +215,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 	# - Basic Corner ------------------------------------------------
 	def apply_mitre(self, doKnot=False):
 		# - Init
-		process_glyphs = getProcessGlyphs()
+		process_glyphs = getProcessGlyphs(pMode)
 		active_preset = self.getPreset()	
 
 		# - Process
@@ -240,7 +240,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 
 	def apply_trap(self):
 		# - Init
-		process_glyphs = getProcessGlyphs()
+		process_glyphs = getProcessGlyphs(pMode)
 		active_preset = self.getPreset()	
 
 		# - Process
@@ -341,7 +341,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		# NOTE: apply and remove here apply only to soelected nodes.
 		if self.builder is not None:
 			# - Init
-			process_glyphs = getProcessGlyphs()
+			process_glyphs = getProcessGlyphs(pMode)
 			active_preset = self.getPreset()
 
 			if remove: # Build a special preset that deletes
@@ -354,7 +354,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 						self.process_smartCorner(work_glyph, active_preset)
 						
 				self.update_glyphs(process_glyphs, True)
-				print 'DONE:\t Filter: Smart Corner; Glyphs: %s' %'; '.join([g.name for g in glyphs])
+				print 'DONE:\t Filter: Smart Corner; Glyphs: %s' %'; '.join([g.name for g in process_glyphs])
 
 		else:
 			print 'ERROR:\t Please specify a Glyph with suitable Shape Builder (Smart corner) first!'
@@ -362,7 +362,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 	def remove_SmartCorner(self):
 		# Finds active preset in glyphs smart corners and removes them
 		# - Init
-		process_glyphs = getProcessGlyphs()
+		process_glyphs = getProcessGlyphs(pMode)
 		active_preset = self.getPreset()
 
 		# - Process
@@ -386,7 +386,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 									wNode.delSmartAngle()
 
 			self.update_glyphs(process_glyphs, True)
-			print 'DONE:\t Filter: Remove Smart Corner; Glyphs: %s' %'; '.join([g.name for g in glyphs])
+			print 'DONE:\t Filter: Remove Smart Corner; Glyphs: %s' %'; '.join([g.name for g in process_glyphs])
 
 	def update_glyphs(self, glyphs, complete=False):
 		for glyph in glyphs:
