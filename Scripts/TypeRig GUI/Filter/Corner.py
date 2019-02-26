@@ -228,7 +228,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 				if glyph is not None:
 					wLayers = glyph._prepareLayers(pLayers)
 		
-					for layer in wLayers:
+					for layer in reversed(wLayers):
 						if layer in active_preset.keys():
 							selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode, deep=True)
 							
@@ -253,7 +253,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 				if glyph is not None:
 					wLayers = glyph._prepareLayers(pLayers)
 		
-					for layer in wLayers:
+					for layer in reversed(wLayers):
 						if layer in active_preset.keys():
 							selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode, deep=True)
 							
@@ -274,7 +274,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 				if glyph is not None:
 					wLayers = glyph._prepareLayers(pLayers)
 		
-					for layer in wLayers:
+					for layer in reversed(wLayers):
 						selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode, deep=True)
 						
 						if len(selection) > 1:
