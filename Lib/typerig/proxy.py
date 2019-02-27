@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.61
+# VER 	: 0.62
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -867,6 +867,17 @@ class pGlyph(object):
 		self.addLayer(dstLayer, toBack)
 		return dstLayer
 
+	def isCompatible(self, strong=False):
+		'''Test if glyph is ready for interpolation - all master layers are compatible.'''
+		from itertools import combinations
+		return all([layerA.isCompatible(layerB, strong) for layerA, layerB in combinations(self.masters(), 2)])
+
+	def reportLayerComp(self, strong=False):
+		'''Returns a layer compatibility report'''
+		from itertools import combinations
+		return [(layerA.name, layerB.name, layerA.isCompatible(layerB, strong)) for layerA, layerB in combinations(self.layers(), 2)]
+
+	# - Update ----------------------------------------------
 	def update(self, fl=True, fg=False):
 		'''Updates the glyph and sends notification to the editor.
 		Args:
