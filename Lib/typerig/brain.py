@@ -33,7 +33,7 @@ def normalize2max(values):
 	return sorted([float(item)/max(values) for item in values])
 
 def normalize2sum(values):
-	'''Normalize all values to the sum of given list so the resiting sum is always 1.0 or close as possible. 
+	'''Normalize all values to the sum of given list so the resuting sum is always 1.0 or close as possible. 
 	
 	Arguments: 
 		values (list(int of float));
