@@ -442,7 +442,8 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 		self.btn_restore = QtGui.QPushButton('Fold Layers')
 		self.btn_copy = QtGui.QPushButton('Copy Outline')
 		self.btn_paste = QtGui.QPushButton('Paste Outline')
-		self.btn_transform = QtGui.QPushButton('Transform')
+		self.btn_transform = QtGui.QPushButton('Transform Layer')
+		self.btn_transform_shape = QtGui.QPushButton('Transform Elements')
 
 		self.btn_restore.setEnabled(False)
 		self.btn_paste.setEnabled(False)
@@ -457,7 +458,8 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 		self.btn_restore.clicked.connect(self.restore)
 		self.btn_copy.clicked.connect(self.copy)
 		self.btn_paste.clicked.connect(self.paste)
-		self.btn_transform.clicked.connect(self.transform)
+		self.btn_transform.clicked.connect(lambda: self.transform(False))
+		self.btn_transform_shape.clicked.connect(lambda: self.transform(True))
 				
 		self.lay_buttons.addWidget(self.btn_unfold,				0, 0, 1, 4)
 		self.lay_buttons.addWidget(self.btn_restore,			0, 4, 1, 4)
@@ -471,9 +473,8 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 		self.lay_buttons.addWidget(self.edt_scale,				3, 2, 1, 2)
 		self.lay_buttons.addWidget(self.edt_slant,				3, 4, 1, 2)
 		self.lay_buttons.addWidget(self.edt_rotate,				3, 6, 1, 2)
-		self.lay_buttons.addWidget(self.btn_transform,			4, 0, 1, 8)
-
-
+		self.lay_buttons.addWidget(self.btn_transform,			4, 0, 1, 4)
+		self.lay_buttons.addWidget(self.btn_transform_shape,	4, 4, 1, 4)
 
 		self.addLayout(self.lay_buttons)
 
@@ -564,7 +565,7 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Paste outline; Glyph: %s; Layers: %s' %(self.aux.glyph.fl.name, '; '.join([item.text() for item in self.aux.lst_layers.selectedItems()])))
 			self.aux.glyph.update()
 
-	def transform(self):
+	def transform(self, shapes=False):
 		if self.aux.doCheck() and len(self.aux.lst_layers.selectedItems()):
 			
 			# - Init
@@ -589,16 +590,34 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 			for item in self.aux.lst_layers.selectedItems():
 				wLayer = wGlyph.layer(item.text())
 				
-				# - Reposition at origin
-				wBBox = wLayer.boundingBox
-				wCenter = (wBBox.width()/2 + wBBox.x(), wBBox.height()/2 + wBBox.y())
-				transform_to_origin = QtGui.QTransform().translate(-wCenter[0], -wCenter[1])
-				transform_from_origin = QtGui.QTransform().translate(*wCenter)
-				
-				# - Transform
-				wLayer.applyTransform(transform_to_origin)
-				wLayer.applyTransform(new_transform)
-				wLayer.applyTransform(transform_from_origin)			
+				if not shapes:
+					# - Transform at origin
+					wBBox = wLayer.boundingBox
+					wCenter = (wBBox.width()/2 + wBBox.x(), wBBox.height()/2 + wBBox.y())
+					transform_to_origin = QtGui.QTransform().translate(-wCenter[0], -wCenter[1])
+					transform_from_origin = QtGui.QTransform().translate(*wCenter)
+					
+					# - Transform
+					wLayer.applyTransform(transform_to_origin)
+					wLayer.applyTransform(new_transform)
+					wLayer.applyTransform(transform_from_origin)
+				else:
+					wShapes = wGlyph.shapes(item.text())
+					
+					for shape in wShapes:
+						# - Transform at origin and move to new location according to transformation
+						wBBox = shape.boundingBox
+						wCenter = (wBBox.width()/2 + wBBox.x(), wBBox.height()/2 + wBBox.y())
+						newCenter = new_transform.map(QtCore.QPointF(*wCenter))
+
+						transform_to_origin = QtGui.QTransform().translate(-wCenter[0], -wCenter[1])
+						transform_from_origin = QtGui.QTransform().translate(newCenter.x(), wCenter[1])
+						#transform_from_origin = QtGui.QTransform().translate(*wCenter)
+
+						# - Transform
+						shape.applyTransform(transform_to_origin)
+						shape.applyTransform(new_transform)
+						shape.applyTransform(transform_from_origin)
 
 
 			self.aux.glyph.updateObject(self.aux.glyph.fl, ' Glyph: %s; Transform Layers: %s' %(self.aux.glyph.fl.name, '; '.join([item.text() for item in self.aux.lst_layers.selectedItems()])))
