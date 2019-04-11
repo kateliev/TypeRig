@@ -19,7 +19,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Anchors', '0.09'
+app_name, app_version = 'TypeRig | Anchors', '0.10'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):
@@ -116,8 +116,8 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		# - Init
 		self.aux = aux
 		self.types = 'Anchor PinPoint'.split(' ')
-		self.posY = 'Coord,Above,Below,Center,Baseline,Copy'.split(',')
-		self.posX = 'Coord,Left,Right,Center,Highest,Lowest'.split(',')
+		self.posY = 'Exact,Above,Below,Center,Baseline'.split(',')
+		self.posX = 'Exact,Left,Right,Center,Highest,Lowest'.split(',')
 		posYvals = (None, 'T', 'B', 'C', None)
 		posXvals = (None ,'L', 'R', 'C', 'AT', 'A')
 		self.posYctrl = dict(zip(self.posY, posYvals))
@@ -136,6 +136,9 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		self.edt_simpleX = QtGui.QLineEdit()
 		self.edt_simpleY = QtGui.QLineEdit()
 		self.edt_autoT = QtGui.QLineEdit()
+
+		self.edt_simpleX.setToolTip('Layer Order: '+', '.join(self.aux.wLayers)) # helper for layer order
+		self.edt_simpleY.setToolTip('Layer Order: '+', '.join(self.aux.wLayers)) # helper for layer order
 
 		self.edt_anchorName.setPlaceholderText('New Anchor')
 		self.edt_simpleX.setText('0')
@@ -166,29 +169,24 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		self.btn_anchorMov.clicked.connect(lambda: self.addAnchors(True))
 
 		# - Build layout
-		self.lay_grid.addWidget(QtGui.QLabel('Remove anchor:'), 0, 0, 1, 4)
-		self.lay_grid.addWidget(self.btn_clearSel, 				1, 0, 1, 4)
-		self.lay_grid.addWidget(self.btn_clearAll, 				1, 4, 1, 4)
-
-		self.lay_grid.addWidget(QtGui.QLabel('Add/move anchor:'),2, 0, 1, 4)
-		self.lay_grid.addWidget(QtGui.QLabel('N:'),				3, 0, 1, 1)
-		self.lay_grid.addWidget(self.edt_anchorName, 			3, 1, 1, 3)
-		self.lay_grid.addWidget(self.cmb_type, 					3, 4, 1, 4)
-
-		self.lay_grid.addWidget(QtGui.QLabel('X:'),				4, 0, 1, 1)
-		self.lay_grid.addWidget(self.cmb_posX, 					4, 1, 1, 2)
-		self.lay_grid.addWidget(self.edt_simpleX, 				4, 3, 1, 1)
-		self.lay_grid.addWidget(QtGui.QLabel('Tolerance:'),		4, 4, 1, 1)
-		self.lay_grid.addWidget(self.edt_autoT, 				4, 5, 1, 3)
-		
-		self.lay_grid.addWidget(QtGui.QLabel('Y:'),				5, 0, 1, 1)
-		self.lay_grid.addWidget(self.cmb_posY,					5, 1, 1, 2)
-		self.lay_grid.addWidget(self.edt_simpleY, 				5, 3, 1, 1)
-		self.lay_grid.addWidget(self.chk_italic,				5, 4, 1, 4)
-		
-		
-		self.lay_grid.addWidget(self.btn_anchorAdd, 			6, 0, 1, 4)
-		self.lay_grid.addWidget(self.btn_anchorMov, 			6, 4, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('Remove anchor:'), 	0, 0, 1, 4)
+		self.lay_grid.addWidget(self.btn_clearSel, 					1, 0, 1, 4)
+		self.lay_grid.addWidget(self.btn_clearAll, 					1, 4, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('Add/move anchor:'),	2, 0, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('N:'),					3, 0, 1, 1)
+		self.lay_grid.addWidget(self.edt_anchorName, 				3, 1, 1, 3)
+		self.lay_grid.addWidget(self.cmb_type, 						3, 4, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('X:'),					4, 0, 1, 1)
+		self.lay_grid.addWidget(self.cmb_posX, 						4, 1, 1, 2)
+		self.lay_grid.addWidget(self.edt_simpleX, 					4, 3, 1, 5)
+		self.lay_grid.addWidget(QtGui.QLabel('Y:'),					5, 0, 1, 1)
+		self.lay_grid.addWidget(self.cmb_posY,						5, 1, 1, 2)
+		self.lay_grid.addWidget(self.edt_simpleY, 					5, 3, 1, 5)
+		self.lay_grid.addWidget(QtGui.QLabel('Tolerance:'),			6, 1, 1, 2)
+		self.lay_grid.addWidget(self.edt_autoT, 					6, 3, 1, 1)
+		self.lay_grid.addWidget(self.chk_italic,					6, 4, 1, 1)		
+		self.lay_grid.addWidget(self.btn_anchorAdd, 				7, 0, 1, 4)
+		self.lay_grid.addWidget(self.btn_anchorMov, 				7, 4, 1, 4)
 
 		# - Build
 		self.addLayout(self.lay_grid)
@@ -219,17 +217,22 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		if self.aux.doCheck():			
 			update = False
 
-			if self.cmb_posX.currentText == 'Coord' and self.cmb_posY.currentText == 'Coord' and len(self.edt_anchorName.text):
+			# - Build coordinates for every layer
+			x_coord = self.edt_simpleX.text.replace(' ','').split(',') if ',' in self.edt_simpleX.text else [self.edt_simpleX.text]*len(self.aux.wLayers)
+			y_coord = self.edt_simpleY.text.replace(' ','').split(',') if ',' in self.edt_simpleY.text else [self.edt_simpleY.text]*len(self.aux.wLayers)
+
+			if self.cmb_posX.currentText == 'Exact' and self.cmb_posY.currentText == 'Exact' and len(self.edt_anchorName.text):
 				for layer in self.aux.wLayers:
-					coords = (int(self.edt_simpleX.text), int(self.edt_simpleY.text))
+					coords = (int(x_coord[self.aux.wLayers.index(layer)]), int(y_coord[self.aux.wLayers.index(layer)]))
 					self.aux.glyph.addAnchor(coords, self.edt_anchorName.text, layer)
 				update = True
 			else:
-				offsetX = int(self.edt_simpleX.text)
-				offsetY = int(self.edt_simpleY.text)
 				autoTolerance = int(self.edt_autoT.text)
 
 				for layer in self.aux.wLayers:
+					offsetX = int(x_coord[self.aux.wLayers.index(layer)])
+					offsetY = int(y_coord[self.aux.wLayers.index(layer)])
+
 					if not move:
 						if len(self.edt_anchorName.text):
 							self.aux.glyph.dropAnchor(self.edt_anchorName.text, layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, False, self.chk_italic.isChecked())
@@ -243,6 +246,9 @@ class QanchorBasic(QtGui.QVBoxLayout):
 			if update:
 				self.aux.glyph.updateObject(self.aux.glyph.fl, '%s anchors: %s.' %('Add' if not move else 'Move', '; '.join(self.aux.wLayers)))
 				self.aux.glyph.update()
+				
+				self.edt_simpleX.setToolTip('Layer Order: '+', '.join(self.aux.wLayers)) # helper for layer order
+				self.edt_simpleY.setToolTip('Layer Order: '+', '.join(self.aux.wLayers)) # helper for layer order
 				self.aux.refresh()
 		
 # - Tabs -------------------------------
