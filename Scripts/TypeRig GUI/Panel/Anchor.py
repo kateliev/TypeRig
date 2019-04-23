@@ -19,7 +19,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Anchors', '0.10'
+app_name, app_version = 'TypeRig | Anchors', '0.11'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):
@@ -95,7 +95,8 @@ class QlayerSelect(QtGui.QVBoxLayout):
 			currItem = self.lst_anchors.item(index)
 			
 			checkLayers = [currItem.text() in name for name in self.wAnchorNames]
-			toolTip = 'Anchor present in all selected layers.' if all(checkLayers) else 'Anchor NOT present in all selected layers.'
+			layer_order = 'Layer Order: '+', '.join(self.wLayers)
+			toolTip = 'Anchor present in all selected layers.\n\n' + layer_order if all(checkLayers) else 'Anchor NOT present in all selected layers.\n\n' + layer_order
 
 			currItem.setData(QtCore.Qt.DecorationRole, QtGui.QColor('LimeGreen' if all(checkLayers) else 'Crimson'))
 			currItem.setData(QtCore.Qt.ToolTipRole, toolTip)		
@@ -246,9 +247,6 @@ class QanchorBasic(QtGui.QVBoxLayout):
 			if update:
 				self.aux.glyph.updateObject(self.aux.glyph.fl, '%s anchors: %s.' %('Add' if not move else 'Move', '; '.join(self.aux.wLayers)))
 				self.aux.glyph.update()
-				
-				self.edt_simpleX.setToolTip('Layer Order: '+', '.join(self.aux.wLayers)) # helper for layer order
-				self.edt_simpleY.setToolTip('Layer Order: '+', '.join(self.aux.wLayers)) # helper for layer order
 				self.aux.refresh()
 		
 # - Tabs -------------------------------
