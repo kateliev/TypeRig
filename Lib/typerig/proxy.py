@@ -14,6 +14,10 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 import FL as legacy
+from struct import calcsize
+
+# - Init
+sys64bit = calcsize('P')*8 == 64
 
 # - Classes -------------------------------
 class pWorkspace(object):
@@ -888,7 +892,13 @@ class pGlyph(object):
 		if fl:self.fl.update()
 		if fg:self.fg.update()
 
-		#fl6.flItems.notifyGlyphUpdated(self.package.id, self.id) #!!!NOTE: does not accept Long ID's produced by Python 64 + FL6 64
+		'''
+		#!!!NOTE: Problem/bug does not accept Long ID's produced by Python 64 + FL6 64
+		if sys64bit:
+			fl6.flItems.notifyGlyphUpdated(self.fg.id, self.fg.id) 
+		else:
+			fl6.flItems.notifyGlyphUpdated(self.package.id, self.id) 
+		'''
 
 	def updateObject(self, flObject, undoMessage='TypeRig', verbose=True):
 		'''Updates a flObject sends notification to the editor as well as undo/history item.
