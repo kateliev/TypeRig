@@ -8,9 +8,9 @@
 # that you use it at your own risk!
 
 # - Init
-app_name, app_version = 'TypeRig | Scaler', '0.10'
+app_name, app_version = 'TypeRig | Scaler', '0.12'
 warnMessage = 'This Panel requires some precompiled FontRig | TypeRig modules.'
-useFortran = True
+useFortran = False
 
 # - Dependencies -----------------
 from math import radians
@@ -281,10 +281,20 @@ class tool_tab(QtGui.QWidget):
 			# - Build
 			def scalerMM(glyph, sx, sy, t):
 				if len(glyph.axis):
-					mms = transform.adaptive_scale([glyph.axis[0].x, glyph.axis[0].y], [glyph.axis[1].x, glyph.axis[1].y], [sw_V[0], sw_H[0]], [sw_V[1], sw_H[1]], [sx, sy], [dx, dy], [t, t], scmp, angle)
-					glyph._setCoordArray(mms)			
-					glyph.update()
-					fl6.Update(fl6.CurrentGlyph())
+					#mms = transform.adaptive_scale([glyph.axis[0].x, glyph.axis[0].y], [glyph.axis[1].x, glyph.axis[1].y], [sw_V[0], sw_H[0]], [sw_V[1], sw_H[1]], [sx, sy], [dx, dy], [t, t], scmp, angle)
+					if useFortran: # Original Fortran 95 implementation
+						mms = lambda sx, sy, t : transform.adaptive_scale([glyph.axis[0].x, glyph.axis[0].y], [glyph.axis[1].x, glyph.axis[1].y], [sw_V[0], sw_H[0]], [sw_V[1], sw_H[1]], [sx, sy], [dx, dy], [t, t], scmp, angle)
+
+					else: # NumPy implementation
+						mms = lambda sx, sy, t : transform.adaptive_scale([glyph.axis[0].x, glyph.axis[0].y], [glyph.axis[1].x, glyph.axis[1].y], sx, sy, dx, dy, t, t, scmp[0], scmp[1], angle, sw_V0, sw_V1)
+					
+					glyph._setCoordArray(mms(sx,sy, tx))
+					
+					for contour in glyph.contours():
+						contour.changed()
+
+					fl6.Update(glyph.fg)
+
 					
 			for glyph in self.processGlyphs:
 				scalerMM(glyph, sx, sy, tx)
