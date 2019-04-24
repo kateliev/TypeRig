@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.62
+# VER 	: 0.63
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -888,7 +888,7 @@ class pGlyph(object):
 		if fl:self.fl.update()
 		if fg:self.fg.update()
 
-		fl6.flItems.notifyGlyphUpdated(self.package.id, self.id)
+		#fl6.flItems.notifyGlyphUpdated(self.package.id, self.id) #!!!NOTE: does not accept Long ID's produced by Python 64 + FL6 64
 
 	def updateObject(self, flObject, undoMessage='TypeRig', verbose=True):
 		'''Updates a flObject sends notification to the editor as well as undo/history item.

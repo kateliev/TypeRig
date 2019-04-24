@@ -12,9 +12,9 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Mixer', '0.09'
+app_name, app_version = 'TypeRig | Mixer', '0.10'
 
-useFortran = True
+useFortran = False
 warnMessage = 'This Panel requires some precompiled FontRig | TypeRig modules.'
 
 # - Dependencies -----------------
@@ -226,7 +226,7 @@ class tool_tab(QtGui.QWidget):
 				mms = lambda sx, sy, t : transform.adaptive_scale([a.x, a.y], [b.x, b.y], [sw_V[0], sw_H[0]], [sw_V[1], sw_H[1]], [sx, sy], [dx, dy], [t, t], scmp, angle)
 
 			else: # NumPy implementation
-				 mms = lambda sx, sy, t : transform.adaptive_scale([a.x, a.y], [b.x, b.y], sx, sy, dx, dy, t, t, scmp, scmp, angle, sw_V0, sw_V1)
+				 mms = lambda sx, sy, t : transform.adaptive_scale([a.x, a.y], [b.x, b.y], sx, sy, dx, dy, t, t, scmp[0], scmp[1], angle, sw_V0, sw_V1)
 			
 			self.glyph._setCoordArray(mms(sx,sy, tx))
 			
