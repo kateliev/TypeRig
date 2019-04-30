@@ -18,7 +18,7 @@ mark_color = 120 # Green
 
 # - Process
 for glyph in font.pGlyphs():
-	if len(glyph.components()):
+	if len(glyph.layers()) and len(glyph.components()):
 		glyph.fl.mark = mark_color
 		print 'MARK:\tGlyph: %s;\tComposite.' %glyph.name
 
