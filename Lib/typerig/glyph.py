@@ -374,7 +374,7 @@ class eGlyph(pGlyph):
 
 		return XminY, XmaxY
 
-	def dropAnchor(self, name, layer, coordTuple, alignTuple=(None,None), tolerance=5, move=False, italic=False):
+	def dropAnchor(self, name, layer, coordTuple, alignTuple=(None,None), tolerance=5, italic=False):
 		'''Drop anchor at given layer
 		Args:
 			name (str): Anchor Name
@@ -397,17 +397,17 @@ class eGlyph(pGlyph):
 		bbox = self.layer(layer).boundingBox
 
 		# - Process
-		if alignX is not None and 'A' in alignX :
+		if alignX is not None and 'A' in alignX :					# Auto
 			XminY, XmaxY = self.getAttachmentCenters(layer, tolerance, True)
 			x += XmaxY if 'T' in alignX else XminY
 
-		elif alignX == 'L':	x = bbox.x() + x*[1,-1][bbox.x() < 0]
-		elif alignX == 'R':	x += bbox.width() + bbox.x()
-		elif alignX == 'C':	x += bbox.width()/2 + bbox.x()
+		elif alignX == 'L':	x = bbox.x() + x*[1,-1][bbox.x() < 0] 	# Left
+		elif alignX == 'R':	x += bbox.width() + bbox.x()			# Right
+		elif alignX == 'C':	x += bbox.width()/2 + bbox.x()			# Center
 
-		if alignY == 'B':	y = bbox.y() + y*[1,-1][bbox.y() < 0]
-		elif alignY == 'T':	y += bbox.height() + bbox.y()
-		elif alignY == 'C':	y += bbox.height()/2 + bbox.y()
+		if alignY == 'B':	y = bbox.y() + y*[1,-1][bbox.y() < 0]	# Bottom
+		elif alignY == 'T':	y += bbox.height() + bbox.y()			# Top
+		elif alignY == 'C':	y += bbox.height()/2 + bbox.y()			# Center
 
 		if italic:
 			from typerig.brain import _Point
@@ -420,5 +420,58 @@ class eGlyph(pGlyph):
 		else:
 			anchor = self.layer(layer).findAnchor(name)
 			anchor.point = pqt.QtCore.QPointF(x,y)
+
+	def moveAnchor(self, name, layer, coordTuple=(0,0), alignTuple=(None,None), tolerance=5, italic=False):
+		'''Move anchor at given layer
+		Args:
+			name (str): Anchor Name
+			layer (int or str): Layer index or name, works with both
+			coordTuple (int, int): New anchor coordinates or auto aligment offsets*
+			alignTuple (str,str): New anchor aligment*
+			tolerance (int): Outline feature auto detection tolerance*
+
+		*Aligment rules: (width, height)
+			- (None,None) - Uses coordinates given
+			- width - (L) Left; (R) Right; (A) Auto Bottom with tolerance; (AT) Auto Top with tolerance; (C) Center;
+			- height - (T) Top; (B) Bottom; (C) Center;
+		Returns:
+			None
+			
+		'''
+		# - Init
+		anchor = self.layer(layer).findAnchor(name)
+
+		if anchor is not None:
+			x, y = coordTuple
+			old_x, old_y = anchor.point.x(), anchor.point.y()
+			
+			alignX, alignY = alignTuple
+			bbox = self.layer(layer).boundingBox		
+
+			# - Calculate position
+			if alignX is not None and 'A' in alignX :					# Auto
+				XminY, XmaxY = self.getAttachmentCenters(layer, tolerance, True)
+				x += XmaxY if 'T' in alignX else XminY
+
+			elif alignX == 'L':	x = bbox.x() + x*[1,-1][bbox.x() < 0] 	# Left
+			elif alignX == 'R':	x += bbox.width() + bbox.x()			# Right
+			elif alignX == 'C':	x += bbox.width()/2 + bbox.x()			# Center
+			elif alignX == 'S': x += old_x								# Shift
+
+			if alignY == 'B':	y = bbox.y() + y*[1,-1][bbox.y() < 0]	# Bottom
+			elif alignY == 'T':	y += bbox.height() + bbox.y()			# Top
+			elif alignY == 'C':	y += bbox.height()/2 + bbox.y()			# Center
+			elif alignY == 'S': y += old_y 								# Shift 			
+
+			if italic:
+				from typerig.brain import _Point
+				bPoint = _Point(x,y)
+				bPoint.setAngle(-self.italicAngle())
+				x = bPoint.getWidth()
+
+			# - Set new position
+			anchor.point = pqt.QtCore.QPointF(x,y)
+
+			
 
 

@@ -13,6 +13,8 @@ import fontgate as fgt
 from PythonQt import QtCore, QtGui
 from typerig.glyph import eGlyph
 from typerig.gui import getProcessGlyphs
+from collections import defaultdict
+from operator import itemgetter
 
 # - Init
 global pLayers
@@ -74,7 +76,7 @@ class QlayerSelect(QtGui.QVBoxLayout):
 		self.wLayers = self.glyph._prepareLayers(pLayers)
 		
 		# - Prepare
-		self.a_data.append((self.glyph.name, [anchor.name for layer in self.wLayers for anchor in self.glyph.anchors(layer)]))
+		self.a_data.append(((self.glyph.name, self.wLayers), [(layer, anchor.name) for layer in self.wLayers for anchor in self.glyph.anchors(layer)]))
 		self.tree_anchors.clear()
 		self.tree_anchors.setTree((self.columns, self.a_data))
 		
@@ -118,15 +120,24 @@ class trTreeView(QtGui.QTreeWidget):
 		self.setAlternatingRowColors(True)
 		self.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
 
-		for glyph_name, glyph_anchors in self._data:
+		for glyph_meta, glyph_anchors in self._data:
+			glyph_name, glyph_wLayers = glyph_meta
 			parent = QtGui.QTreeWidgetItem(self)
 			parent.setText(0, glyph_name)
 			#parent.setFlags(parent.flags() | QtCore.Qt.ItemIsTristate | QtCore.Qt.ItemIsUserCheckable)
 			parent.setToolTip(0, 'Glyph')
 
-			for anchor_name in glyph_anchors:
+			# - Process data
+			glyph_anchors_gr = defaultdict(list)
+			for layer, anchor in glyph_anchors:
+				glyph_anchors_gr[anchor].append(layer)
+
+			print glyph_anchors_gr
+			# - Set tree
+			for anchor_name, layer_list in glyph_anchors_gr.iteritems():
 				child = QtGui.QTreeWidgetItem(parent)
-				child.setData(0, QtCore.Qt.DecorationRole, QtGui.QColor('LimeGreen')) #if all(checkLayers) else 'Crimson'))
+				child.setData(0, QtCore.Qt.DecorationRole, QtGui.QColor('LimeGreen') if len(layer_list) == len(glyph_wLayers) else QtGui.QColor('Crimson'))
+				child.setText(0, '; '.join(layer_list))
 				child.setText(1, anchor_name)
 
 				child.setToolTip(0, 'Compatibility')
@@ -258,10 +269,16 @@ class QanchorBasic(QtGui.QVBoxLayout):
 							self.aux.glyph.dropAnchor(self.edt_anchorName.text, layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, False, self.chk_italic.isChecked())
 							update = True
 					else:
+						print self.aux.tree_anchors.selectedIndexes()
+						index = self.aux.tree_anchors.selectedIndexes()[0]
+						print index.model().parent(index).data() # this gets the parent glyph name
+						print index.model().data(index)
+						'''
 						cmb_sel = self.aux.lst_anchors.selectedItems()
 						if len(cmb_sel):
 							self.aux.glyph.dropAnchor(cmb_sel[0].text(), layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, True, self.chk_italic.isChecked())
 							update = True
+						'''
 
 			if update:
 				self.aux.glyph.updateObject(self.aux.glyph.fl, '%s anchors: %s.' %('Add' if not move else 'Move', '; '.join(self.aux.wLayers)))

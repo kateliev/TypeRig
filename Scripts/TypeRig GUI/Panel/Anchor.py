@@ -117,10 +117,10 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		# - Init
 		self.aux = aux
 		self.types = 'Anchor PinPoint'.split(' ')
-		self.posY = 'Exact,Above,Below,Center,Baseline'.split(',')
-		self.posX = 'Exact,Left,Right,Center,Highest,Lowest'.split(',')
-		posYvals = (None, 'T', 'B', 'C', None)
-		posXvals = (None ,'L', 'R', 'C', 'AT', 'A')
+		self.posY = 'Exact,Above,Below,Center,Baseline,Shift'.split(',')
+		self.posX = 'Exact,Left,Right,Center,Highest,Lowest,Shift'.split(',')
+		posYvals = (None, 'T', 'B', 'C', None,'S')
+		posXvals = (None ,'L', 'R', 'C', 'AT', 'A','S')
 		self.posYctrl = dict(zip(self.posY, posYvals))
 		self.posXctrl = dict(zip(self.posX, posXvals))
 
@@ -241,7 +241,7 @@ class QanchorBasic(QtGui.QVBoxLayout):
 					else:
 						cmb_sel = self.aux.lst_anchors.selectedItems()
 						if len(cmb_sel):
-							self.aux.glyph.dropAnchor(cmb_sel[0].text(), layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, True, self.chk_italic.isChecked())
+							self.aux.glyph.moveAnchor(cmb_sel[0].text(), layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, self.chk_italic.isChecked())
 							update = True
 
 			if update:
