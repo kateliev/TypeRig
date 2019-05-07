@@ -1,4 +1,4 @@
-#FLM: Font: Mark Composites | Typerig
+#FLM: Font: Mark Composites (Typerig)
 # VER : 1.0
 # ----------------------------------------
 # (C) Vassil Kateliev, 2019 (http://www.kateliev.com)

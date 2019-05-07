@@ -467,7 +467,7 @@ class eGlyph(pGlyph):
 				from typerig.brain import _Point
 				bPoint = _Point(x,y)
 				bPoint.setAngle(-self.italicAngle())
-				x = bPoint.getWidth()
+				x = bPoint.getWidth(y)
 
 			# - Set new position
 			anchor.point = pqt.QtCore.QPointF(x,y)

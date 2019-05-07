@@ -566,6 +566,8 @@ class pGlyph(object):
 
 	def italicAngle(self): return self.package.italicAngle_value
 
+	def setMark(self, mark_color): self.fl.mark = mark_color; self.mark = self.fl.mark
+
 	def nodes(self, layer=None, extend=None, deep=True):
 		'''Return all nodes at given layer.
 		Args:
