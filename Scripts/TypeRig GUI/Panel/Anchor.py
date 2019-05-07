@@ -19,7 +19,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Anchors', '0.11'
+app_name, app_version = 'TypeRig | Anchors', '0.12'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):
@@ -236,7 +236,7 @@ class QanchorBasic(QtGui.QVBoxLayout):
 
 					if not move:
 						if len(self.edt_anchorName.text):
-							self.aux.glyph.dropAnchor(self.edt_anchorName.text, layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, False, self.chk_italic.isChecked())
+							self.aux.glyph.dropAnchor(self.edt_anchorName.text, layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, self.chk_italic.isChecked())
 							update = True
 					else:
 						cmb_sel = self.aux.lst_anchors.selectedItems()

@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Glyph Objects | Typerig
-# VER 	: 0.25
+# VER 	: 0.27
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -374,6 +374,57 @@ class eGlyph(pGlyph):
 
 		return XminY, XmaxY
 
+	def getNewBaseCoords(self, layer, adjustTuple, alignTuple, tolerance=5, italic=False, initPosTuple=(0,0)):
+		# - Init
+		x, y = adjustTuple
+		alignX, alignY = alignTuple
+		old_x, old_y = initPosTuple
+		bbox = self.layer(layer).boundingBox		
+
+		# - Calculate position
+		if not italic:
+			# - Process for upright
+			if alignX is not None and 'A' in alignX :					# Auto
+				XminY, XmaxY = self.getAttachmentCenters(layer, tolerance, True)
+				x += XmaxY if 'T' in alignX else XminY
+
+			elif alignX == 'L':	x = bbox.x() + x*[1,-1][bbox.x() < 0] 	# Left
+			elif alignX == 'R':	x += bbox.width() + bbox.x()			# Right
+			elif alignX == 'C':	x += bbox.width()/2 + bbox.x()			# Center
+			elif alignX == 'S': x += old_x								# Shift
+
+			if alignY == 'B':	y = bbox.y() + y*[1,-1][bbox.y() < 0]	# Bottom
+			elif alignY == 'T':	y += bbox.height() + bbox.y()			# Top
+			elif alignY == 'C':	y += bbox.height()/2 + bbox.y()			# Center
+			elif alignY == 'S': y += old_y 								# Shift 			
+
+		else:
+			# - Process for italic
+			from typerig.brain import _Point
+			
+			if alignX is not None and 'A' in alignX :						# Auto
+				XminY, XmaxY = self.getAttachmentCenters(layer, tolerance, True)
+				x_base = XmaxY if 'T' in alignX else XminY
+
+			elif alignX == 'L':	x_base = bbox.x()							# Left
+			elif alignX == 'R':	x_base = bbox.width() + bbox.x()			# Right
+			elif alignX == 'C':	x_base = bbox.width()/2 + bbox.x()			# Center
+			elif alignX == 'S': x_base = old_x								# Shift
+
+			if alignY =='B':	y_base = bbox.y()							# Bottom
+			elif alignY == 'T':	y_base = bbox.height() + bbox.y()			# Top
+			elif alignY == 'C':	y_base = bbox.height()/2 + bbox.y()			# Center
+			elif alignY == 'S': y_base = old_y 
+
+			base_point = _Point(x_base, y_base)
+			base_point.setAngle(self.italicAngle())
+			y = y + y_base*[1,-1][y_base < 0]
+			point_width = base_point.getWidth(y)
+
+			x = x + point_width*[1,-1][point_width < 0]
+
+		return x,y
+
 	def dropAnchor(self, name, layer, coordTuple, alignTuple=(None,None), tolerance=5, italic=False):
 		'''Drop anchor at given layer
 		Args:
@@ -392,34 +443,8 @@ class eGlyph(pGlyph):
 			
 		'''
 		# - Init
-		x, y = coordTuple
-		alignX, alignY = alignTuple
-		bbox = self.layer(layer).boundingBox
-
-		# - Process
-		if alignX is not None and 'A' in alignX :					# Auto
-			XminY, XmaxY = self.getAttachmentCenters(layer, tolerance, True)
-			x += XmaxY if 'T' in alignX else XminY
-
-		elif alignX == 'L':	x = bbox.x() + x*[1,-1][bbox.x() < 0] 	# Left
-		elif alignX == 'R':	x += bbox.width() + bbox.x()			# Right
-		elif alignX == 'C':	x += bbox.width()/2 + bbox.x()			# Center
-
-		if alignY == 'B':	y = bbox.y() + y*[1,-1][bbox.y() < 0]	# Bottom
-		elif alignY == 'T':	y += bbox.height() + bbox.y()			# Top
-		elif alignY == 'C':	y += bbox.height()/2 + bbox.y()			# Center
-
-		if italic:
-			from typerig.brain import _Point
-			bPoint = _Point(x,y)
-			bPoint.setAngle(-self.italicAngle())
-			x = bPoint.getWidth()
-
-		if not move:
-			self.addAnchor((x, y), name, layer)
-		else:
-			anchor = self.layer(layer).findAnchor(name)
-			anchor.point = pqt.QtCore.QPointF(x,y)
+		x, y = self.getNewBaseCoords(layer, coordTuple, alignTuple, tolerance, italic)
+		self.addAnchor((x, y), name, layer)
 
 	def moveAnchor(self, name, layer, coordTuple=(0,0), alignTuple=(None,None), tolerance=5, italic=False):
 		'''Move anchor at given layer
@@ -442,34 +467,7 @@ class eGlyph(pGlyph):
 		anchor = self.layer(layer).findAnchor(name)
 
 		if anchor is not None:
-			x, y = coordTuple
-			old_x, old_y = anchor.point.x(), anchor.point.y()
-			
-			alignX, alignY = alignTuple
-			bbox = self.layer(layer).boundingBox		
-
-			# - Calculate position
-			if alignX is not None and 'A' in alignX :					# Auto
-				XminY, XmaxY = self.getAttachmentCenters(layer, tolerance, True)
-				x += XmaxY if 'T' in alignX else XminY
-
-			elif alignX == 'L':	x = bbox.x() + x*[1,-1][bbox.x() < 0] 	# Left
-			elif alignX == 'R':	x += bbox.width() + bbox.x()			# Right
-			elif alignX == 'C':	x += bbox.width()/2 + bbox.x()			# Center
-			elif alignX == 'S': x += old_x								# Shift
-
-			if alignY == 'B':	y = bbox.y() + y*[1,-1][bbox.y() < 0]	# Bottom
-			elif alignY == 'T':	y += bbox.height() + bbox.y()			# Top
-			elif alignY == 'C':	y += bbox.height()/2 + bbox.y()			# Center
-			elif alignY == 'S': y += old_y 								# Shift 			
-
-			if italic:
-				from typerig.brain import _Point
-				bPoint = _Point(x,y)
-				bPoint.setAngle(-self.italicAngle())
-				x = bPoint.getWidth(y)
-
-			# - Set new position
+			x, y = self.getNewBaseCoords(layer, coordTuple, alignTuple, tolerance, italic, (anchor.point.x(), anchor.point.y()))
 			anchor.point = pqt.QtCore.QPointF(x,y)
 
 			
