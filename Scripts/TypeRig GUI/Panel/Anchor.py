@@ -19,7 +19,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Anchors', '0.12'
+app_name, app_version = 'TypeRig | Anchors', '0.15'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):
@@ -117,10 +117,10 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		# - Init
 		self.aux = aux
 		self.types = 'Anchor PinPoint'.split(' ')
-		self.posY = 'Exact,Above,Below,Center,Baseline,Shift'.split(',')
-		self.posX = 'Exact,Left,Right,Center,Highest,Lowest,Shift'.split(',')
-		posYvals = (None, 'T', 'B', 'C', None,'S')
-		posXvals = (None ,'L', 'R', 'C', 'AT', 'A','S')
+		self.posY = 'Exact,Shift,Above,Below,Center,Baseline'.split(',')
+		self.posX = 'Exact,Shift,Left,Right,Center,Highest,Highest Left,Highest Right,Lowest,Lowest Left,Lowest Right'.split(',')
+		posYvals = (None,'S','T', 'B', 'C', None)
+		posXvals = (None,'S','L', 'R', 'C', 'AT','ATL','ATR','A','AL','AR')
 		self.posYctrl = dict(zip(self.posY, posYvals))
 		self.posXctrl = dict(zip(self.posX, posXvals))
 
@@ -178,11 +178,11 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		self.lay_grid.addWidget(self.edt_anchorName, 				3, 1, 1, 3)
 		self.lay_grid.addWidget(self.cmb_type, 						3, 4, 1, 4)
 		self.lay_grid.addWidget(QtGui.QLabel('X:'),					4, 0, 1, 1)
-		self.lay_grid.addWidget(self.cmb_posX, 						4, 1, 1, 2)
-		self.lay_grid.addWidget(self.edt_simpleX, 					4, 3, 1, 5)
+		self.lay_grid.addWidget(self.cmb_posX, 						4, 1, 1, 3)
+		self.lay_grid.addWidget(self.edt_simpleX, 					4, 4, 1, 4)
 		self.lay_grid.addWidget(QtGui.QLabel('Y:'),					5, 0, 1, 1)
-		self.lay_grid.addWidget(self.cmb_posY,						5, 1, 1, 2)
-		self.lay_grid.addWidget(self.edt_simpleY, 					5, 3, 1, 5)
+		self.lay_grid.addWidget(self.cmb_posY,						5, 1, 1, 3)
+		self.lay_grid.addWidget(self.edt_simpleY, 					5, 4, 1, 4)
 		self.lay_grid.addWidget(QtGui.QLabel('Tolerance:'),			6, 1, 1, 2)
 		self.lay_grid.addWidget(self.edt_autoT, 					6, 3, 1, 1)
 		self.lay_grid.addWidget(self.chk_italic,					6, 4, 1, 1)		

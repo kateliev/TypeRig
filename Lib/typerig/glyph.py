@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Glyph Objects | Typerig
-# VER 	: 0.27
+# VER 	: 0.28
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -346,7 +346,7 @@ class eGlyph(pGlyph):
 			return fgInterpolator
 
 	# - Anchors & Pins -----------------------------------------
-	def getAttachmentCenters(self, layer, tolerance=5, applyTransform=False):
+	def getAttachmentCenters(self, layer, tolerance=5, applyTransform=True, getAll=False):
 		'''Return X center of lowest, highest Y of [glyph] for [layer] within given [tolerance]
 		Note: Determine diacritic to glyph attachment positions (for anchor placement)
 		'''
@@ -369,59 +369,82 @@ class eGlyph(pGlyph):
 		coordsAtMinY = [item for item in nodeCoords if abs(item[1] - minValY) < tolerance]
 		coordsAtMaxY = [item for item in nodeCoords if abs(item[1] - maxValY) < tolerance]
 
-		XminY = (min(coordsAtMinY, key=itemgetter(0))[0] + max(coordsAtMinY, key=itemgetter(0))[0])/2
-		XmaxY = (min(coordsAtMaxY, key=itemgetter(0))[0] + max(coordsAtMaxY, key=itemgetter(0))[0])/2
+		XminY_left 	= min(coordsAtMinY, key=itemgetter(0))[0]
+		XminY_right	= max(coordsAtMinY, key=itemgetter(0))[0]
+		XmaxY_left	= min(coordsAtMaxY, key=itemgetter(0))[0]
+		XmaxY_right	= max(coordsAtMaxY, key=itemgetter(0))[0]
 
-		return XminY, XmaxY
+		XminY_center = (XminY_left + XminY_right)/2
+		XmaxY_center = (XmaxY_left + XmaxY_right)/2
 
-	def getNewBaseCoords(self, layer, adjustTuple, alignTuple, tolerance=5, italic=False, initPosTuple=(0,0)):
+		if getAll:
+			return XminY_left, XminY_right, XmaxY_left, XmaxY_right, XminY_center, XmaxY_center
+		else:
+			return XminY, XmaxY
+
+	def getNewBaseCoords(self, layer, adjustTuple, alignTuple, tolerance=5, italic=False, initPosTuple=(0.,0.)):
+		'''Calculate Anchor base position
+		Args:
+			layer (int or str): Layer index or name, works with both
+			coordTuple (int/float, int/float): New anchor coordinates or auto aligment offsets*
+			alignTuple (str,str): New anchor aligment*
+			tolerance (int/float): Outline feature auto detection tolerance*
+			initPosTuple (int/float, int/float): Itinital anchor position
+
+		*Aligment rules: (width, height)
+			- (None,None) - Uses coordinates given
+			- width - (L) Left; (R) Right; (A) Auto Bottom with tolerance; (AT) Auto Top with tolerance; (C) Center;
+			- height - (T) Top; (B) Bottom; (C) Center;
+		Returns:
+			x, y (int/float)
+			
+		'''
 		# - Init
+		from typerig.brain import _Point
+
 		x, y = adjustTuple
 		alignX, alignY = alignTuple
 		old_x, old_y = initPosTuple
 		bbox = self.layer(layer).boundingBox		
 
 		# - Calculate position
+		# -- Precalc all base locations
+		x_base_dict, y_base_dict = {}, {}
+
+		# --- X
+		# X: Auto
+		x_base_dict['AL'], x_base_dict['AR'], x_base_dict['ATL'], x_base_dict['ATR'], x_base_dict['A'], x_base_dict['AT'] = self.getAttachmentCenters(layer, tolerance, True, True) 
+
+		x_base_dict['L'] = bbox.x() 							# X: Left
+		x_base_dict['R'] = bbox.width() + bbox.x()				# X: Right
+		x_base_dict['C'] = bbox.width()/2 + bbox.x()			# X: Center
+		x_base_dict['S'] = old_x								# X: Shift
+
+		# --- Y
+		y_base_dict['B'] = bbox.y()								# Y: Bottom
+		y_base_dict['T'] = bbox.height() + bbox.y()				# Y: Top
+		y_base_dict['C'] = bbox.height()/2 + bbox.y()			# Y: Center
+		y_base_dict['S'] = old_y 								# Y: Shift 
+
+		# -- Post calc
+		x_base = x_base_dict[alignX] if alignX is not None else 0.
+		y_base = y_base_dict[alignY] if alignY is not None else 0.
+
 		if not italic:
-			# - Process for upright
-			if alignX is not None and 'A' in alignX :					# Auto
-				XminY, XmaxY = self.getAttachmentCenters(layer, tolerance, True)
-				x += XmaxY if 'T' in alignX else XminY
-
-			elif alignX == 'L':	x = bbox.x() + x*[1,-1][bbox.x() < 0] 	# Left
-			elif alignX == 'R':	x += bbox.width() + bbox.x()			# Right
-			elif alignX == 'C':	x += bbox.width()/2 + bbox.x()			# Center
-			elif alignX == 'S': x += old_x								# Shift
-
-			if alignY == 'B':	y = bbox.y() + y*[1,-1][bbox.y() < 0]	# Bottom
-			elif alignY == 'T':	y += bbox.height() + bbox.y()			# Top
-			elif alignY == 'C':	y += bbox.height()/2 + bbox.y()			# Center
-			elif alignY == 'S': y += old_y 								# Shift 			
+			x += x_base 	# x = x + x_base*[1,-1][x_base < 0]
+			y += y_base 	# y = y + y_base*[1,-1][y_base < 0]
 
 		else:
-			# - Process for italic
-			from typerig.brain import _Point
-			
-			if alignX is not None and 'A' in alignX :						# Auto
-				XminY, XmaxY = self.getAttachmentCenters(layer, tolerance, True)
-				x_base = XmaxY if 'T' in alignX else XminY
+			if alignY == 'S' and int(y) == 0:
+				y_bases = sorted([0, y_base_dict['B'], y_base_dict['C'], y_base_dict['T']])
+				y_base = min(y_bases, key=lambda x:abs(x - old_y)) # Find to which Y value the initial Y value is close to
+				y = abs(y_base - old_y)
 
-			elif alignX == 'L':	x_base = bbox.x()							# Left
-			elif alignX == 'R':	x_base = bbox.width() + bbox.x()			# Right
-			elif alignX == 'C':	x_base = bbox.width()/2 + bbox.x()			# Center
-			elif alignX == 'S': x_base = old_x								# Shift
-
-			if alignY =='B':	y_base = bbox.y()							# Bottom
-			elif alignY == 'T':	y_base = bbox.height() + bbox.y()			# Top
-			elif alignY == 'C':	y_base = bbox.height()/2 + bbox.y()			# Center
-			elif alignY == 'S': y_base = old_y 
-
-			base_point = _Point(x_base, y_base)
+			base_point = _Point(float(x_base), float(y_base))
 			base_point.setAngle(self.italicAngle())
-			y = y + y_base*[1,-1][y_base < 0]
-			point_width = base_point.getWidth(y)
 
-			x = x + point_width*[1,-1][point_width < 0]
+			y += y_base 				# y = y + y_base*[1,-1][y_base < 0]
+			x += base_point.getWidth(y)	# point_width = base_point.getWidth(y); x = x + point_width*[1,-1][point_width < 0]
 
 		return x,y
 
@@ -440,7 +463,6 @@ class eGlyph(pGlyph):
 			- height - (T) Top; (B) Bottom; (C) Center;
 		Returns:
 			None
-			
 		'''
 		# - Init
 		x, y = self.getNewBaseCoords(layer, coordTuple, alignTuple, tolerance, italic)
@@ -461,7 +483,6 @@ class eGlyph(pGlyph):
 			- height - (T) Top; (B) Bottom; (C) Center;
 		Returns:
 			None
-			
 		'''
 		# - Init
 		anchor = self.layer(layer).findAnchor(name)
