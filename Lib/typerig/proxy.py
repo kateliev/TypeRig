@@ -1782,6 +1782,9 @@ class pFont(object):
 
 	# - Charset -----------------------------------------------
 	# -- Return Names
+	def getGlyphNames(self):
+		return [glyph.name for glyph in self.glyphs()]
+
 	def getGlyphNameDict(self):
 		# -- Init
 		nameDict = {}
