@@ -17,9 +17,11 @@ from typerig.gui import getProcessGlyphs
 # - Init
 global pLayers
 global pMode
+global clipboard_glyph_anchors
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Anchors', '0.15'
+clipboard_glyph_anchors = {}
+app_name, app_version = 'TypeRig | Anchors', '0.16'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):
@@ -126,6 +128,8 @@ class QanchorBasic(QtGui.QVBoxLayout):
 
 		# -- Basic Tool buttons
 		self.lay_grid = QtGui.QGridLayout()
+		self.btn_anchorCopy = QtGui.QPushButton('Copy')
+		self.btn_anchorPaste = QtGui.QPushButton('Paste')
 		self.btn_clearSel = QtGui.QPushButton('Clear Selected')
 		self.btn_clearAll = QtGui.QPushButton('Clear All')
 		self.btn_anchorAdd = QtGui.QPushButton('Add')
@@ -140,6 +144,8 @@ class QanchorBasic(QtGui.QVBoxLayout):
 
 		self.edt_simpleX.setToolTip('Layer Order: '+', '.join(self.aux.wLayers)) # helper for layer order
 		self.edt_simpleY.setToolTip('Layer Order: '+', '.join(self.aux.wLayers)) # helper for layer order
+		self.btn_anchorCopy.setToolTip('Copy selected Anchors from layers choosen.')
+		self.btn_anchorPaste.setToolTip('Paste Anchors at layers choosen.')
 
 		self.edt_anchorName.setPlaceholderText('New Anchor')
 		self.edt_simpleX.setText('0')
@@ -168,26 +174,30 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		self.btn_clearSel.clicked.connect(lambda: self.clearAnchors(False))
 		self.btn_anchorAdd.clicked.connect(lambda: self.addAnchors(False))
 		self.btn_anchorMov.clicked.connect(lambda: self.addAnchors(True))
+		self.btn_anchorCopy.clicked.connect(lambda: self.copyAnchors(False))
+		self.btn_anchorPaste.clicked.connect(lambda: self.copyAnchors(True))
 
 		# - Build layout
-		self.lay_grid.addWidget(QtGui.QLabel('Remove anchor:'), 	0, 0, 1, 4)
-		self.lay_grid.addWidget(self.btn_clearSel, 					1, 0, 1, 4)
-		self.lay_grid.addWidget(self.btn_clearAll, 					1, 4, 1, 4)
-		self.lay_grid.addWidget(QtGui.QLabel('Add/move anchor:'),	2, 0, 1, 4)
-		self.lay_grid.addWidget(QtGui.QLabel('N:'),					3, 0, 1, 1)
-		self.lay_grid.addWidget(self.edt_anchorName, 				3, 1, 1, 3)
-		self.lay_grid.addWidget(self.cmb_type, 						3, 4, 1, 4)
-		self.lay_grid.addWidget(QtGui.QLabel('X:'),					4, 0, 1, 1)
-		self.lay_grid.addWidget(self.cmb_posX, 						4, 1, 1, 3)
-		self.lay_grid.addWidget(self.edt_simpleX, 					4, 4, 1, 4)
-		self.lay_grid.addWidget(QtGui.QLabel('Y:'),					5, 0, 1, 1)
-		self.lay_grid.addWidget(self.cmb_posY,						5, 1, 1, 3)
-		self.lay_grid.addWidget(self.edt_simpleY, 					5, 4, 1, 4)
-		self.lay_grid.addWidget(QtGui.QLabel('Tolerance:'),			6, 1, 1, 2)
-		self.lay_grid.addWidget(self.edt_autoT, 					6, 3, 1, 1)
-		self.lay_grid.addWidget(self.chk_italic,					6, 4, 1, 1)		
-		self.lay_grid.addWidget(self.btn_anchorAdd, 				7, 0, 1, 4)
-		self.lay_grid.addWidget(self.btn_anchorMov, 				7, 4, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('Anchor actions:'), 	0, 0, 1, 4)
+		self.lay_grid.addWidget(self.btn_anchorCopy, 				1, 0, 1, 4) 
+		self.lay_grid.addWidget(self.btn_anchorPaste, 				1, 4, 1, 4)
+		self.lay_grid.addWidget(self.btn_clearSel, 					2, 0, 1, 4) 
+		self.lay_grid.addWidget(self.btn_clearAll, 					2, 4, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('Add/move anchor:'),	3, 0, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('N:'),					4, 0, 1, 1)
+		self.lay_grid.addWidget(self.edt_anchorName, 				4, 1, 1, 3)
+		self.lay_grid.addWidget(self.cmb_type, 						4, 4, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('X:'),					5, 0, 1, 1)
+		self.lay_grid.addWidget(self.cmb_posX, 						5, 1, 1, 3)
+		self.lay_grid.addWidget(self.edt_simpleX, 					5, 4, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('Y:'),					6, 0, 1, 1)
+		self.lay_grid.addWidget(self.cmb_posY,						6, 1, 1, 3)
+		self.lay_grid.addWidget(self.edt_simpleY, 					6, 4, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('Tolerance:'),			7, 1, 1, 2)
+		self.lay_grid.addWidget(self.edt_autoT, 					7, 3, 1, 1)
+		self.lay_grid.addWidget(self.chk_italic,					7, 4, 1, 1)		
+		self.lay_grid.addWidget(self.btn_anchorAdd, 				8, 0, 1, 4)
+		self.lay_grid.addWidget(self.btn_anchorMov, 				8, 4, 1, 4)
 
 		# - Build
 		self.addLayout(self.lay_grid)
@@ -248,6 +258,41 @@ class QanchorBasic(QtGui.QVBoxLayout):
 				self.aux.glyph.updateObject(self.aux.glyph.fl, '%s anchors: %s.' %('Add' if not move else 'Move', '; '.join(self.aux.wLayers)))
 				self.aux.glyph.update()
 				self.aux.refresh()
+
+	def copyAnchors(self, paste=False):
+		global clipboard_glyph_anchors
+
+		if self.aux.doCheck():			
+			if not paste:
+				update = False
+				clipboard_glyph_anchors = {}
+				
+				for layer in self.aux.wLayers:
+					clipboard_glyph_anchors[layer] = []
+
+					for anchor_name in self.aux.lst_anchors.selectedItems():
+						anchor_coords = self.aux.glyph.findAnchor(anchor_name.text(), layer)
+						
+						if anchor_coords is not None:
+							clipboard_glyph_anchors[layer].append((anchor_name.text(), (anchor_coords.point.x(), anchor_coords.point.y())))
+				print clipboard_glyph_anchors
+			else:
+				if len(clipboard_glyph_anchors.keys()):
+					update = True
+
+					for layer, layer_anchors in clipboard_glyph_anchors.iteritems():
+
+						for anchor_name, anchor_coords in layer_anchors:
+							if self.aux.glyph.findAnchor(anchor_name, layer) is None:
+								self.aux.glyph.dropAnchor(anchor_name, layer, anchor_coords)
+							else:
+								self.aux.glyph.moveAnchor(anchor_name, layer, anchor_coords)
+			
+			if update:
+				self.aux.glyph.updateObject(self.aux.glyph.fl, '%s anchors: %s.' %('Copy' if not paste else 'Paste', '; '.join(self.aux.wLayers)))
+				self.aux.glyph.update()
+				self.aux.refresh()
+
 		
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
