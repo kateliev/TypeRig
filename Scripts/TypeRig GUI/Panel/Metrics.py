@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Metrics', '0.20'
+app_name, app_version = 'TypeRig | Metrics', '0.21'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -248,8 +248,12 @@ class metrics_expr(QtGui.QGridLayout):
 
 		self.btn_setMetrics = QtGui.QPushButton('&Set Metric expressions')
 		self.btn_getShapeParent = QtGui.QPushButton('&Get composite reference')
+		self.btn_autoBind = QtGui.QPushButton('&Auto bind Metric expressions')
+		self.btn_autoBind.setToolTip('Automatically bind metric expressions from available element references.')
+
 		self.btn_setMetrics.clicked.connect(self.setMetricEquations)
 		self.btn_getShapeParent.clicked.connect(self.bindShapeParent)
+		self.btn_autoBind.clicked.connect(self.autoMetricEquations)
 
 		self.spb_shapeIndex = QtGui.QSpinBox()
 
@@ -263,6 +267,8 @@ class metrics_expr(QtGui.QGridLayout):
 		self.addWidget(QtGui.QLabel('E:'), 		4, 0, 1, 1)
 		self.addWidget(self.btn_getShapeParent, 4, 1, 1, 4)
 		self.addWidget(self.spb_shapeIndex, 	4, 5, 1, 1)
+		self.addWidget(QtGui.QLabel('Composite Glyph: Metric expressions'), 	5, 0, 1, 5)
+		self.addWidget(self.btn_autoBind, 		6, 0, 1, 6)
 
 		self.setColumnStretch(0, 0)
 		self.setColumnStretch(1, 5)
@@ -308,6 +314,21 @@ class metrics_expr(QtGui.QGridLayout):
 			glyph.updateObject(glyph.fl, 'Set Metrics Equations @ %s.' %'; '.join(wLayers))
 		
 		self.reset_fileds()
+
+	def autoMetricEquations(self):
+		process_glyphs = getProcessGlyphs(pMode)
+
+		for glyph in process_glyphs:
+			wLayers = glyph._prepareLayers(pLayers)
+			glyph_stat = []
+
+			for layer in wLayers:
+				status = glyph.bindCompMetrics(layer)
+				glyph_stat.append(status)
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAuto Metrics Equations @ %s.' %(glyph.name, '; '.join('%s: %s' %item for item in zip(wLayers, glyph_stat))))
+
 
 class metrics_font(QtGui.QGridLayout):
 	# - Copy Metric properties from other glyph
