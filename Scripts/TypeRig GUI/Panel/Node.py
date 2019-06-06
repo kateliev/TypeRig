@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.61'
+app_name, app_version = 'TypeRig | Nodes', '0.62'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -35,29 +35,29 @@ class basicOps(QtGui.QGridLayout):
 		self.btn_remove = QtGui.QPushButton('&Remove')
 		self.btn_mitre = QtGui.QPushButton('&Mitre')
 		self.btn_knot = QtGui.QPushButton('&Overlap')
-		self.btn_trapA = QtGui.QPushButton('&Trap A')
-		self.btn_trapR = QtGui.QPushButton('&Trap R')
-		self.btn_trapR.setEnabled(False)
-				
+		self.btn_trapA = QtGui.QPushButton('&Trap')
+		self.btn_rebuild = QtGui.QPushButton('Rebuil&d')
+						
 		self.btn_insert.setMinimumWidth(80)
 		self.btn_remove.setMinimumWidth(80)
 		self.btn_mitre.setMinimumWidth(80)
 		self.btn_knot.setMinimumWidth(80)
 		self.btn_trapA.setMinimumWidth(80)
-		self.btn_trapR.setMinimumWidth(80)
+		self.btn_rebuild.setMinimumWidth(80)
 
 		self.btn_insert.setToolTip('Insert Node after Selection\nat given time T.')
 		self.btn_remove.setToolTip('Remove Selected Nodes!\nFor proper curve node deletion\nalso select the associated handles!')
 		self.btn_mitre.setToolTip('Mitre corner using size X.')
 		self.btn_knot.setToolTip('Overlap corner using radius -X.')
 		self.btn_trapA.setToolTip('Insert Angular (generic) Ink Trap at node selected')
-		self.btn_trapR.setToolTip('Insert Soft (traditional) Ink Trap at node selected')
+		self.btn_rebuild.setToolTip('Rebuild corner from nodes selected.')
 		
 		self.btn_insert.clicked.connect(self.insertNode)
 		self.btn_remove.clicked.connect(self.removeNode)
 		self.btn_mitre.clicked.connect(lambda: self.cornerMitre(False))
 		self.btn_knot.clicked.connect(lambda: self.cornerMitre(True))
 		self.btn_trapA.clicked.connect(lambda: self.cornerTrap())
+		self.btn_rebuild.clicked.connect(lambda: self.cornerRebuild())
 
 		# - Edit fields
 		self.edt_time = QtGui.QLineEdit('0.5')
@@ -82,7 +82,7 @@ class basicOps(QtGui.QGridLayout):
 		self.addWidget(self.btn_trapA,		2, 0)
 		self.addWidget(QtGui.QLabel('P:'),	2, 1)
 		self.addWidget(self.edt_trap,		2, 2)
-		self.addWidget(self.btn_trapR,		2, 3)
+		self.addWidget(self.btn_rebuild,		2, 3)
 
 
 	def insertNode(self):
@@ -186,6 +186,31 @@ class basicOps(QtGui.QGridLayout):
 
 		glyph.update()
 		glyph.updateObject(glyph.fl, '%s @ %s.' %('Trap Corner', '; '.join(wLayers)))
+
+	def cornerRebuild(self):
+		from typerig.node import eNode
+		glyph = eGlyph()
+		wLayers = glyph._prepareLayers(pLayers)
+		
+		for layer in wLayers:
+			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode, deep=True)
+			
+			if len(selection) > 1:
+				node_first = selection[0]
+				node_last = selection[-1]
+				
+				line_in = node_first.getPrevLine() if node_first.getPrevOn(False) not in selection else node_first.getNextLine()
+				line_out = node_last.getNextLine() if node_last.getNextOn(False) not in selection else node_last.getPrevLine()
+
+				crossing = line_in & line_out
+
+				node_first.smartReloc(*crossing)
+				node_first.parent.removeNodesBetween(node_first.fl, node_last.getNextOn())
+
+		glyph.update()
+		glyph.updateObject(glyph.fl, 'Rebuild corner: %s nodes reduced; At layers: %s' %(len(selection), '; '.join(wLayers)))
+
+
 
 class alignNodes(QtGui.QGridLayout):
 	# - Basic Node operations
