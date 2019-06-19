@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.63
+# VER 	: 0.64
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -14,10 +14,10 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 import FL as legacy
-from struct import calcsize
+#from struct import calcsize
 
 # - Init
-sys64bit = calcsize('P')*8 == 64
+#sys64bit = calcsize('P')*8 == 64
 
 # - Classes -------------------------------
 class pWorkspace(object):
@@ -1806,8 +1806,8 @@ class pFont(object):
 		nameDict['LatinB_Lower'] = [self.fl.findUnicode(uni).name for uni in range(0x0180, 0x024F) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).islower()]
 
 		# --- Cyrillic: unicode range 0400 - 04FF
-		nameDict['Cyrilic_Upper'] = [self.fl.findUnicode(uni).name for uni in range(0x0400, 0x04FF) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).isupper()]
-		nameDict['Cyrilic_Lower'] = [self.fl.findUnicode(uni).name for uni in range(0x0400, 0x04FF) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).islower()]
+		nameDict['Cyrillic_Upper'] = [self.fl.findUnicode(uni).name for uni in range(0x0400, 0x04FF) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).isupper()]
+		nameDict['Cyrillic_Lower'] = [self.fl.findUnicode(uni).name for uni in range(0x0400, 0x04FF) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).islower()]
 		
 		return nameDict
 
@@ -1832,8 +1832,8 @@ class pFont(object):
 		nameDict['LatinB_Lower'] = [unichr(uni).encode(encoding) for uni in range(0x0180, 0x024F) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).islower()]
 
 		# --- Cyrillic: unicode range 0400 - 04FF
-		nameDict['Cyrilic_Upper'] = [unichr(uni).encode(encoding) for uni in range(0x0400, 0x04FF) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).isupper()]
-		nameDict['Cyrilic_Lower'] = [unichr(uni).encode(encoding) for uni in range(0x0400, 0x04FF) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).islower()]
+		nameDict['Cyrillic_Upper'] = [unichr(uni).encode(encoding) for uni in range(0x0400, 0x04FF) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).isupper()]
+		nameDict['Cyrillic_Lower'] = [unichr(uni).encode(encoding) for uni in range(0x0400, 0x04FF) if isinstance(self.fl.findUnicode(uni), fl6.flGlyph) and unichr(uni).islower()]
 		
 		return nameDict	
 	

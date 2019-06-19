@@ -1,5 +1,5 @@
 # MODULE: String | Typerig
-# VER 	: 0.16
+# VER 	: 0.18
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -172,8 +172,8 @@ def stringGen(inputA, inputB, filler=('HH','HH'), genPattern = 'FL A B A FR', su
 	'''
 	from itertools import product	
 	genPattern = '{1}{0}'.format(sep.join(['{%s}' %s for s in genPattern.split(' ')]), sep) 
-	fillerLeft = sep.join([char for char in filler[0]])
-	fillerRight = sep.join([char for char in filler[1]])
+	fillerLeft = sep.join([char for char in filler[0]]) if sep not in filler[0] else filler[0][1:] # fix that filler[0][1:] some day! It is a drity fix of double separator being inserted at the begining.
+	fillerRight = sep.join([char for char in filler[1]]) if sep not in filler[1] else filler[1][1:]
 	return [genPattern.format(**{'FL':fillerLeft, 'FR': fillerRight, 'A':pair[0] + suffix[0], 'B':pair[1] + suffix[1]}) for pair in product(inputA, inputB)]
 
 class OTGen(object):
