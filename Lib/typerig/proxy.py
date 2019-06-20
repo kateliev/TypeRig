@@ -1592,12 +1592,12 @@ class pFont(object):
 			self.count = parent.fl.mastersCount
 			self.default = parent.fl.defaultMaster
 			self.has = parent.fl.hasMaster
-			self.isInterpolated = parent.fl.can_interpolate
+			self.isActive = parent.fl.can_interpolate
 			self.locate = parent.fl.location
 			self.names = parent.fl.masters
 			self.remove = parent.fl.removeMaster
 			self.rename = parent.fl.renameMaster
-			self.setInterpolated = parent.fl.set_interpolate
+			self.setActive = parent.fl.set_interpolate
 			self.setLocation = parent.fl.setLocation
 			self.setMaster = parent.fl.setMaster
 
