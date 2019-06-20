@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.64
+# VER 	: 0.65
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -1577,11 +1577,34 @@ class pFont(object):
 		self.__specialGlyphs = ['.notdef', 'CR', 'NULL', 'space', '.NOTDEF']
 		self.__kern_group_type = {'L':'KernLeft', 'R':'KernRight', 'B': 'KernBothSide'}
 		self.__kern_pair_mode = ('glyphMode', 'groupMode')
-
+		self.pMasters = self.pMasters(self)
 	
 	def __repr__(self):
 		return '<%s name=%s glyphs=%s path=%s>' % (self.__class__.__name__, self.fg.info.familyName, len(self.fg), self.fg.path)
 
+	# Classes ----------------------------------------------------
+	class pMasters(object):
+	# -- Aliasing some master related commands in common group
+		def __init__(self, parent):
+			self.add = parent.fl.addMaster
+			self.clear = parent.fl.clearMasters
+			self.container = parent.fl.mastersContainer
+			self.count = parent.fl.mastersCount
+			self.default = parent.fl.defaultMaster
+			self.has = parent.fl.hasMaster
+			self.isInterpolated = parent.fl.can_interpolate
+			self.locate = parent.fl.location
+			self.names = parent.fl.masters
+			self.remove = parent.fl.removeMaster
+			self.rename = parent.fl.renameMaster
+			self.setInterpolated = parent.fl.set_interpolate
+			self.setLocation = parent.fl.setLocation
+			self.setMaster = parent.fl.setMaster
+
+		def __repr__(self):
+			return '<%s masters=%s>' % (self.__class__.__name__, ';'.join(self.names))
+
+	# Functions ---------------------------------------------------
 	# - Font Basics -----------------------------------------------
 	def getSelectedIndices(self):
 		# WARN: Legacy syntax used, as of current 6722 build there is no way to get the selected glyphs in editor
