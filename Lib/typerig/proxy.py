@@ -1577,7 +1577,10 @@ class pFont(object):
 		self.__specialGlyphs = ['.notdef', 'CR', 'NULL', 'space', '.NOTDEF']
 		self.__kern_group_type = {'L':'KernLeft', 'R':'KernRight', 'B': 'KernBothSide'}
 		self.__kern_pair_mode = ('glyphMode', 'groupMode')
+		
+		# - Design space related
 		self.pMasters = self.pMasters(self)
+		self.pSpace = self.pDesignSpace(self)
 	
 	def __repr__(self):
 		return '<%s name=%s glyphs=%s path=%s>' % (self.__class__.__name__, self.fg.info.familyName, len(self.fg), self.fg.path)
@@ -1603,6 +1606,16 @@ class pFont(object):
 
 		def __repr__(self):
 			return '<%s masters=%s>' % (self.__class__.__name__, ';'.join(self.names))
+
+	class pDesignSpace(object):
+	# -- Aliasing some axis related commands
+		def __init__(self, parent):
+			self.add = parent.fl.addAxis
+			self.axes = parent.fl.axes
+			self.prepare = parent.fl.prepareAxes
+			
+		def __repr__(self):
+			return '<%s axes=%s>' % (self.__class__.__name__, ';'.join([axis.name for axis in self.axes]))
 
 	# Functions ---------------------------------------------------
 	# - Font Basics -----------------------------------------------
