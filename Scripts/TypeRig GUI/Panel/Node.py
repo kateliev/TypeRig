@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.62'
+app_name, app_version = 'TypeRig | Nodes', '0.63'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -66,7 +66,7 @@ class basicOps(QtGui.QGridLayout):
 		
 		self.edt_time.setToolTip('Insertion Time.')
 		self.edt_radius.setToolTip('Mitre size/Overlap or Round Radius.')
-		self.edt_trap.setToolTip('Ink trap: aperture size, depth, trap size')
+		self.edt_trap.setToolTip('Ink trap: Incision into glyphs flesh, Side depth, Trap size')
 
 		# -- Build: Basic Ops
 		self.addWidget(self.btn_insert, 	0, 0)
@@ -182,7 +182,7 @@ class basicOps(QtGui.QGridLayout):
 			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode, deep=True)
 			
 			for node in reversed(selection):
-				node.cornerTrap(*parameters)
+				node.cornerTrapInc(*parameters)
 
 		glyph.update()
 		glyph.updateObject(glyph.fl, '%s @ %s.' %('Trap Corner', '; '.join(wLayers)))

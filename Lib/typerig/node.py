@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Node Objects | Typerig
-# VER 	: 0.12
+# VER 	: 0.13
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -68,6 +68,17 @@ class eNode(pNode):
 		return (self.fl, nextNode.fl)
 
 	def cornerTrap(self, aperture=10, depth=20, trap=2):
+		'''Trap a corner by given aperture.
+
+		Arguments:
+			aperture (float): Width of the traps mouth (opening);
+			depth (float): Length of the traps sides;
+			trap (float): Width of the traps bottom.
+
+		Returns:
+			tuple(flNode, flNode, flNode, flNode)
+		'''
+
 		from typerig.brain import Coord
 		from math import atan2, sin, cos
 
@@ -82,6 +93,73 @@ class eNode(pNode):
 		prevUnit = Coord(prevNode.asCoord() - self.asCoord()).getUnit()
 
 		angle = atan2(nextUnit | prevUnit, nextUnit & prevUnit)
+		radius = abs((float(aperture)/2)/sin(angle/2))
+		
+		bCoord = self.asCoord() + (nextUnit * -radius)
+		cCoord = self.asCoord() + (prevUnit * -radius)
+
+		aCoord = self.asCoord() + (prevUnit * radius)
+		dCoord = self.asCoord() + (nextUnit * radius)
+
+		# - Calculate for depth
+		abUnit = Coord(aCoord - bCoord).getUnit()
+		dcUnit = Coord(dCoord - cCoord).getUnit()
+
+		bCoord = aCoord + abUnit*-depth
+		cCoord = dCoord + dcUnit*-depth
+
+		# - Calculate for trap (size)
+		bcUnit = (bCoord - cCoord).getUnit()
+		cbUnit = (cCoord - bCoord).getUnit()
+
+		bCoord += bcUnit*-adjust
+		cCoord += cbUnit*-adjust
+
+		# - Insert Nodes and cleanup
+		b = self.__class__(self.insertAfter(0.01)) # .01 quickfix - should be 0
+		c = self.__class__(b.insertAfter(0.01))
+		d = self.__class__(c.insertAfter(0.01))
+
+		b.fl.convertToLine()
+		c.fl.convertToLine()
+		d.fl.convertToLine()
+
+		# - Position nodes
+		self.smartReloc(*aCoord.asTuple())
+		b.smartReloc(*bCoord.asTuple())
+		d.smartReloc(*dCoord.asTuple())
+		c.smartReloc(*cCoord.asTuple())
+
+		return (self.fl, b.fl, c.fl, d.fl)
+
+	def cornerTrapInc(self, incision=10, depth=50, trap=2):
+		'''Trap a corner by given incision into the glyph flesh.
+		
+		Arguments:
+			incision (float): How much to cut into glyphs flesh based from that corner inward;
+			depth (float): Length of the traps sides;
+			trap (float): Width of the traps bottom.
+
+		Returns:
+			tuple(flNode, flNode, flNode, flNode)
+		'''
+
+		from typerig.brain import Coord
+		from math import atan2, sin, cos, radians
+
+		# - Init
+		remains = depth - incision
+
+		# - Calculate for aperture postision and structure
+		nextNode = self.getNextOn(False)
+		prevNode = self.getPrevOn(False)
+
+		nextUnit = Coord(nextNode.asCoord() - self.asCoord()).getUnit()
+		prevUnit = Coord(prevNode.asCoord() - self.asCoord()).getUnit()
+
+		angle = atan2(nextUnit | prevUnit, nextUnit & prevUnit)
+		aperture = abs(2*(remains/sin(radians(90) - angle/2)*sin(angle/2)))
+		adjust = float(aperture - trap)/2
 		radius = abs((float(aperture)/2)/sin(angle/2))
 		
 		bCoord = self.asCoord() + (nextUnit * -radius)

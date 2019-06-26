@@ -26,7 +26,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Corner', '1.95'
+app_name, app_version = 'TypeRig | Corner', '1.96'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -259,7 +259,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 							
 							for node in reversed(selection):
 								preset_values = tuple([float(item.strip()) for item in active_preset[layer].split(',')])
-								node.cornerTrap(*preset_values)
+								node.cornerTrapInc(*preset_values)
 					
 					glyph.update()
 					glyph.updateObject(glyph.fl, '%s @ %s.' %('Ink Trap', '; '.join(active_preset.keys())))
