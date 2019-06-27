@@ -26,7 +26,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Corner', '1.96'
+app_name, app_version = 'TypeRig | Corner', '1.97'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -274,7 +274,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 				if glyph is not None:
 					wLayers = glyph._prepareLayers(pLayers)
 		
-					for layer in reversed(wLayers):
+					for layer in wLayers:
 						selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode, deep=True)
 						
 						if len(selection) > 1:

@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Node Objects | Typerig
-# VER 	: 0.13
+# VER 	: 0.15
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -132,23 +132,25 @@ class eNode(pNode):
 
 		return (self.fl, b.fl, c.fl, d.fl)
 
-	def cornerTrapInc(self, incision=10, depth=50, trap=2):
+	def cornerTrapInc(self, incision=10, depth=50, trap=2, smooth=True):
 		'''Trap a corner by given incision into the glyph flesh.
 		
 		Arguments:
 			incision (float): How much to cut into glyphs flesh based from that corner inward;
 			depth (float): Length of the traps sides;
-			trap (float): Width of the traps bottom.
+			trap (float): Width of the traps bottom;
+			smooth (bool): Creates a smooth trap.
 
 		Returns:
-			tuple(flNode, flNode, flNode, flNode)
+			tuple(flNode, flNode, flNode, flNode) four base (ON) nodes of the trap.
 		'''
 
-		from typerig.brain import Coord
+		from typerig.brain import Coord, Line
 		from math import atan2, sin, cos, radians
 
 		# - Init
 		remains = depth - incision
+		base_coord = self.asCoord()
 
 		# - Calculate for aperture postision and structure
 		nextNode = self.getNextOn(False)
@@ -197,6 +199,29 @@ class eNode(pNode):
 		d.smartReloc(*dCoord.asTuple())
 		c.smartReloc(*cCoord.asTuple())
 
+		# - Make smooth trap transition
+		if smooth: 
+			# -- Convert nodes and extend bpc-s
+			b.fl.convertToCurve()
+			d.fl.convertToCurve()
+
+			# -- Set nodes as smooth
+			self.fl.smooth = True
+			d.fl.smooth = True
+
+			# -- Align bpc-s to the virtual lines connection sides of the trap with the original base node
+			side_ab = Line(self.asCoord(), base_coord)
+			side_cd = Line(base_coord, d.asCoord())
+			control = (True, False)
+			
+			bpc_a, bpc_c = self.getNext(False), c.getNext(False)
+			bpc_b, bpc_d = b.getPrev(False), d.getPrev(False)
+
+			bpc_a.alignTo(side_ab, control)
+			bpc_b.alignTo(side_ab, control)
+			bpc_c.alignTo(side_cd, control)
+			bpc_d.alignTo(side_cd, control)
+			
 		return (self.fl, b.fl, c.fl, d.fl)
 
 	# - Movement ------------------------

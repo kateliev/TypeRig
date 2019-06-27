@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.63'
+app_name, app_version = 'TypeRig | Nodes', '0.64'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -62,7 +62,7 @@ class basicOps(QtGui.QGridLayout):
 		# - Edit fields
 		self.edt_time = QtGui.QLineEdit('0.5')
 		self.edt_radius = QtGui.QLineEdit('5')
-		self.edt_trap = QtGui.QLineEdit('10, 20, 2')
+		self.edt_trap = QtGui.QLineEdit('5, 30, 2')
 		
 		self.edt_time.setToolTip('Insertion Time.')
 		self.edt_radius.setToolTip('Mitre size/Overlap or Round Radius.')

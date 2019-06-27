@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Curve Objects | Typerig
-# VER 	: 0.02
+# VER 	: 0.03
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -46,7 +46,7 @@ class eCurveEx(object):
 			if self.fl is None: self.fl = self.CurveEx = self.n0.getSegment()
 
 			self.curve = Curve(self.CurveEx)
-			self.line = None
+			self.line = Line(self.n0.asCoord(), self.n3.asCoord())
 			self.isCurve = True
 
 		elif len(self.nodes) == 2:
