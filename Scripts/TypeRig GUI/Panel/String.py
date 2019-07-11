@@ -13,13 +13,18 @@ global pMode
 pLayers = None
 pMode = 0
 
-app_name, app_version = 'TypeRig | String', '0.32'
+app_name, app_version = 'TypeRig | String', '0.33'
 glyphSep = '/'
 joinOpt = {'Empty':'', 'Newline':'\n'}
-filler_patterns = [	'FL A B A FR',
+filler_patterns = [	'FL A FR',
+					'FL B FR',
+					'FL A B A FR',
 					'FL B A B FR',
+					'FL A FL FR A FR',
+					'FL B FL FR B FR',
 					'FL A B FL FR B A FR',
 					'FL A B FL A FL B A FL'
+					'FL A B FL B FL B A FL'
 					]
 
 # - Dependencies -----------------

@@ -31,7 +31,7 @@ baseGlyphset = dict(zip(baseGlyphsetKeys, baseGlyphsetNames))
 
 diactiricalMarks = ['grave', 'dieresis', 'macron', 'acute', 'cedilla', 'uni02BC', 'circumflex', 'caron', 'breve', 'dotaccent', 'ring', 'ogonek', 'tilde', 'hungarumlaut', 'caroncomma', 'commaaccent', 'cyrbreve'] # 'dotlessi', 'dotlessj'
 
-fillerList = [('nn','nn'), ('HH','HH'), ('HOII', 'IIOH'), ('ll','ll'), ('dll','llb'), ('hoii', 'iioh')]
+fillerList = [('nn','nn'), ('oo','oo'), ('HH','HH'), ('OO','OO'), ('HOII', 'IIOH'), ('ll','ll'), ('dll','llb'), ('hoii', 'iioh')]
 
 # -- Dicts
 combiningMarks = {'uni030B': 'hungarumlaut', 'uni030C': 'caron', 'uni030A': 'ring', 'acutecomb': 'acute', 'uni0306': 'breve', 'uni0307': 'dotaccent', 'uni0304': 'macron', 'uni0302': 'circumflex', 'gravecomb': 'grave', 'tildecomb': 'tilde', 'uni0308': 'dieresis'}
