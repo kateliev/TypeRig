@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.65
+# VER 	: 0.67
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -397,7 +397,7 @@ class pShape(object):
 		self.fl = shape
 		self.shapeData = self.data()
 		self.refs = self.shapeData.referenceCount
-		self.container = self.fl.includesList
+		self.container = self.includesList = self.fl.includesList
 		
 		self.currentName = self.fl.name
 		self.name = self.shapeData.name
@@ -773,17 +773,17 @@ class pGlyph(object):
 	#	'''Return all glyph components in glyph'''
 	#	return [item if fullData else item[0] for item in [self.package.isComponent(shape.shapeData) for shape in self.shapes(layer)] if item[0] is not None]
 	
-	def listGlyphComponents(self, layer=None):
+	def listGlyphComponents(self, layer=None, extend=None):
 		'''Return all glyph components in glyph'''
-		return [(shape, shape.includesList) for shape in self.shapes(layer) if len(shape.includesList)]
+		return [(shape, shape.includesList) for shape in self.shapes(layer, extend) if len(shape.includesList)]
 
 	def listUnboundShapes(self, layer=None):
 		'''Return all glyph shapes that are not glyph references or those belonging to the original (master) glyph'''
 		return [shape for shape in self.shapes(layer) if self.package.isComponent(shape.shapeData)[0] is None or self.package.isComponent(shape.shapeData)[0] == self.fl]		
 
-	def components(self, layer=None):
+	def components(self, layer=None, extend=None):
 		'''Return all glyph components besides glyph.'''
-		return [comp for pair in self.listGlyphComponents(layer) for comp in pair[1]]
+		return [comp for pair in self.listGlyphComponents(layer, extend) for comp in pair[1]]
 
 	def getCompositionString(self, layer=None, legacy=True):
 		'''Return glyph composition string for Generate Glyph command.'''
@@ -792,10 +792,18 @@ class pGlyph(object):
 		if legacy:
 			return '%s=%s' %('+'.join(comp_names[1:]), comp_names[0])
 
-	# TODO: List glyph elements?!
 	def getCompositionNames(self, layer=None):
 		'''Return name of glyph and the parts it is made of.'''
 		return [self.name] + [shape.shapeData.name for shape in self.components(layer)]
+
+	def getCompositionDict(self, layer=None, extend=None):
+		'''Return composition dict of a glyph. Elements!'''
+		return {shape.shapeData.name:shape for shape in self.components(layer, extend)}
+
+	def getContainersDict(self, layer=None, extend=None):
+		'''Return composition dict of a glyph. Composites!'''
+		return {container.includesList[0].shapeData.name:container for container in self.containers(layer, extend)}	#TODO: Make it better! This references only first shape in container!
+
 
 	# - Layers -----------------------------------------------------
 	def masters(self):
