@@ -29,7 +29,9 @@ baseGlyphsetKeys = ('Latin_Upper', 'Latin_Lower', 'Cyrillic_Upper', 'Cyrillic_Lo
 baseGlyphsetNames = (uppercaseLAT, lowercaseLAT, uppercaseCYR, lowercaseCYR, figureNames)
 baseGlyphset = dict(zip(baseGlyphsetKeys, baseGlyphsetNames))
 
-diactiricalMarks = ['grave', 'dieresis', 'macron', 'acute', 'cedilla', 'uni02BC', 'circumflex', 'caron', 'breve', 'dotaccent', 'ring', 'ogonek', 'tilde', 'hungarumlaut', 'caroncomma', 'commaaccent', 'cyrbreve'] # 'dotlessi', 'dotlessj'
+upper_diac_marks = ['grave', 'dieresis', 'macron', 'acute', 'circumflex', 'caron', 'breve', 'dotaccent', 'ring', 'tilde', 'hungarumlaut', 'cyrbreve'] # 'dotlessi', 'dotlessj'
+lower_diac_marks= ['cedilla', 'ogonek', 'commaaccent'] # 'dotlessi', 'dotlessj'
+diactiricalMarks = list(set(lower_diac_marks + upper_diac_marks + ['uni02BC', 'caroncomma']))
 
 fillerList = [('nn','nn'), ('oo','oo'), ('HH','HH'), ('OO','OO'), ('HOII', 'IIOH'), ('ll','ll'), ('dll','llb'), ('hoii', 'iioh')]
 
