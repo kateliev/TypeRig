@@ -55,7 +55,7 @@ class mixerHead(QtGui.QGridLayout):
 		self.edt_stemH1 = QtGui.QLineEdit('1')
 		
 		self.btn_refresh = QtGui.QPushButton('&Refresh')
-		self.btn_setaxis = QtGui.QPushButton('Set &Axis')
+		self.btn_set_axis = QtGui.QPushButton('Set &Axis')
 		self.btn_getVstem = QtGui.QPushButton('Get &V Stems')
 		self.btn_getHstem = QtGui.QPushButton('Get &H Stems')
 
@@ -88,7 +88,7 @@ class mixerHead(QtGui.QGridLayout):
 		self.addWidget(QtGui.QLabel('Axis:'),		1, 0, 1, 1)
 		self.addWidget(self.cmb_0, 					1, 1, 1, 3)
 		self.addWidget(self.cmb_1, 					1, 4, 1, 3)
-		self.addWidget(self.btn_setaxis, 			1, 7, 1, 1)
+		self.addWidget(self.btn_set_axis, 			1, 7, 1, 1)
 		self.addWidget(QtGui.QLabel('V Stems:'),	2, 0, 1, 1)
 		self.addWidget(self.edt_stemV0,				2, 1, 1, 3)
 		self.addWidget(self.edt_stemV1,				2, 4, 1, 3)
@@ -105,6 +105,43 @@ class mixerHead(QtGui.QGridLayout):
 		self.addWidget(self.chk_single,				5, 1, 1, 4)
 		self.addWidget(self.chk_preview,			5, 5, 1, 3)
 
+class mixerTail(QtGui.QGridLayout):
+	def __init__(self):
+		super(mixerTail, self).__init__()
+
+		self.edt_width_0 = QtGui.QLineEdit()
+		self.edt_width_1 = QtGui.QLineEdit()
+		self.edt_width_t = QtGui.QLineEdit()
+		self.edt_height_0 = QtGui.QLineEdit()
+		self.edt_height_1 = QtGui.QLineEdit()
+		self.edt_height_t = QtGui.QLineEdit()
+
+		self.edt_width_0.setReadOnly(True) 
+		self.edt_width_1.setReadOnly(True)
+		self.edt_width_t.setReadOnly(True)
+		self.edt_height_0.setReadOnly(True)
+		self.edt_height_1.setReadOnly(True)
+		self.edt_height_t.setReadOnly(True)
+
+		self.edt_width_0.setPlaceholderText('BBox width') 
+		self.edt_width_1.setPlaceholderText('BBox width')
+		self.edt_width_t.setPlaceholderText('BBox width')
+		self.edt_height_0.setPlaceholderText('BBox height')
+		self.edt_height_1.setPlaceholderText('BBox height')
+		self.edt_height_t.setPlaceholderText('BBox height')
+		
+		self.addWidget(QtGui.QLabel(''),			0, 0, 1, 1)
+		self.addWidget(QtGui.QLabel('Master 0'),	0, 1, 1, 3)
+		self.addWidget(QtGui.QLabel('Master 1'),	0, 4, 1, 3)
+		self.addWidget(QtGui.QLabel('Result'),		0, 7, 1, 1)
+		self.addWidget(QtGui.QLabel('Width:'),		1, 0, 1, 1)
+		self.addWidget(self.edt_width_0,			1, 1, 1, 3)
+		self.addWidget(self.edt_width_1,			1, 4, 1, 3)
+		self.addWidget(self.edt_width_t, 			1, 7, 1, 1)
+		self.addWidget(QtGui.QLabel('Height'),		2, 0, 1, 1)
+		self.addWidget(self.edt_height_0,			2, 1, 1, 3)
+		self.addWidget(self.edt_height_1,			2, 4, 1, 3)
+		self.addWidget(self.edt_height_t, 			2, 7, 1, 1)
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
@@ -118,10 +155,11 @@ class tool_tab(QtGui.QWidget):
 		# - Build panel
 		if sysReady:			
 			self.head = mixerHead()
+			self.tail = mixerTail()
 			self.head.btn_refresh.clicked.connect(self.refresh)
-			self.head.btn_setaxis.clicked.connect(self.setAxis)
-			self.head.btn_getVstem.clicked.connect(self.getVStems)
-			self.head.btn_getHstem.clicked.connect(self.getHStems)
+			self.head.btn_set_axis.clicked.connect(self.set_axis)
+			self.head.btn_getVstem.clicked.connect(self.get_v_stems)
+			self.head.btn_getHstem.clicked.connect(self.get_h_stems)
 			layoutV.addLayout(self.head)
 			layoutV.addSpacing(15)
 
@@ -137,12 +175,11 @@ class tool_tab(QtGui.QWidget):
 			self.mixer_dy.sld_axis.valueChanged.connect(lambda: self.process_scale(self.head.chk_single.isChecked(), self.head.chk_preview.isChecked()))		
 			layoutV.addLayout(self.mixer_dy)
 
-			# - Process Button
-			self.btn_revWidth = QtGui.QPushButton('Get reverse width for weight')
-			self.btn_revWidth.clicked.connect(self.set_reverse_width)
-			layoutV.addWidget(self.btn_revWidth)
-
-			layoutV.addSpacing(25)
+			# - Constant width Button
+			#self.btn_revWidth = QtGui.QPushButton('Constant width for weight')
+			#self.btn_revWidth.setCheckable(True)
+			#layoutV.addWidget(self.btn_revWidth)
+			layoutV.addSpacing(15)
 
 			# --- Scaler
 			layoutV.addWidget(QtGui.QLabel('Compensative scaler: Width'))
@@ -157,6 +194,7 @@ class tool_tab(QtGui.QWidget):
 			layoutV.addLayout(self.scaler_dy)
 			layoutV.addSpacing(25)
 		
+			layoutV.addLayout(self.tail)
 			# - Process Button
 			self.btn_process = QtGui.QPushButton('Process Transformation')
 			self.btn_process.clicked.connect(lambda: self.process_scale(self.head.chk_single.isChecked(), True, True))
@@ -197,12 +235,19 @@ class tool_tab(QtGui.QWidget):
 		self.head.edt_stemH0.setText('1')
 		self.head.edt_stemH1.setText('2')
 
+		self.tail.edt_width_0.clear()
+		self.tail.edt_width_1.clear()
+		self.tail.edt_width_t.clear()
+		self.tail.edt_height_0.clear()
+		self.tail.edt_height_1.clear()
+		self.tail.edt_height_t.clear()
+
 		self.mixer_dx.reset()
 		self.mixer_dy.reset()
 		self.scaler_dx.reset()
 		self.scaler_dy.reset()
 
-	def getVStems(self):
+	def get_v_stems(self):
 		stemNodes0 = self.glyph.selectedNodes(self.head.cmb_0.currentText, True)
 		stemNodes1 = self.glyph.selectedNodes(self.head.cmb_1.currentText, True)
 		wt_0 = abs(stemNodes0[0].x - stemNodes0[-1].x)
@@ -214,7 +259,7 @@ class tool_tab(QtGui.QWidget):
 		self.mixer_dx.edt_pos.setText(wt_0)
 		self.mixer_dx.refreshSlider()
 
-	def getHStems(self):
+	def get_h_stems(self):
 		stemNodes0 = self.glyph.selectedNodes(self.head.cmb_0.currentText, True)
 		stemNodes1 = self.glyph.selectedNodes(self.head.cmb_1.currentText, True)
 		wt_0 = abs(stemNodes0[0].y - stemNodes0[-1].y)
@@ -226,18 +271,16 @@ class tool_tab(QtGui.QWidget):
 		self.mixer_dy.edt_pos.setText(wt_0)
 		self.mixer_dy.refreshSlider()
 
-	def setAxis(self):
+	def set_axis(self):
 		self.axis = [self.glyph._getCoordArray(self.head.cmb_0.currentText), self.glyph._getCoordArray(self.head.cmb_1.currentText)]
+		axis_0_bounds = self.glyph.getBounds(self.head.cmb_0.currentText)
+		axis_1_bounds = self.glyph.getBounds(self.head.cmb_1.currentText)
+		self.tail.edt_width_0.setText(axis_0_bounds.width())
+		self.tail.edt_width_1.setText(axis_1_bounds.width())
+		self.tail.edt_height_0.setText(axis_0_bounds.height())
+		self.tail.edt_height_1.setText(axis_1_bounds.height())
 		self.glyph.updateObject(self.glyph.fl, 'Mixer Snapshot @ %s' %self.glyph.layer().name)
 	
-	def set_reverse_width(self):
-		glyph_width = self.glyph.getBounds().width()
-		scale_result = self.process_scale(self.head.chk_single.isChecked(), False, False)
-		max_width = scale_result.T[0].max() - scale_result.T[0].min()
-		reverse_ratio = float(self.scaler_dx.edt_1.text) - ratfrac(max_width, glyph_width, float(self.scaler_dx.edt_1.text))
-		self.scaler_dx.edt_pos.setText(self.scaler_dx.sld_axis.value + reverse_ratio)
-		self.scaler_dx.refreshSlider()
-
 	def process_scale(self, anisotropic=False, process=False, true_update=False):
 		if len(self.axis):
 			# - Axis
@@ -271,7 +314,7 @@ class tool_tab(QtGui.QWidget):
 			sx = 100./float(self.scaler_dx.edt_1.text) + float(self.scaler_dx.sld_axis.value)/float(self.scaler_dx.edt_1.text)
 			sy = 100./float(self.scaler_dy.edt_1.text) + float(self.scaler_dy.sld_axis.value)/float(self.scaler_dy.edt_1.text)
 			dx, dy = 0.0, 0.0
-						
+
 			# - Build
 			if useFortran: # Original Fortran 95 implementation
 				mm_scaler = lambda sx, sy, tx, ty : transform.adaptive_scale([a.x, a.y], [b.x, b.y], [sw_dx[0], sw_dy[0]], [sw_dx[1], sw_dy[1]], [sx, sy], [dx, dy], [tx, ty], scmp, angle)
@@ -280,6 +323,15 @@ class tool_tab(QtGui.QWidget):
 				mm_scaler = lambda sx, sy, tx, ty : transform.adaptive_scale([a.x, a.y], [b.x, b.y], sx, sy, dx, dy, tx, ty, scmp[0], scmp[1], angle, sw_dx0, sw_dx1)
 
 			if process:	
+				'''
+				# - Keep width constant for weight change
+				if self.btn_revWidth.isChecked(): 
+					glyph_width = self.glyph.getBounds().width()
+					scale_result = mm_scaler(sx, sy, tx, ty)
+
+					max_width = scale_result.T[0].max() - scale_result.T[0].min()
+					sx = float(glyph_width)/max_width #ratfrac(min(max_width, glyph_width), max(max_width, glyph_width), 1.)
+				'''
 				# - Process
 				if anisotropic:
 					# - Single axis mixer
@@ -297,7 +349,10 @@ class tool_tab(QtGui.QWidget):
 
 			else:
 				# - Just return output
-				return mm_scaler(sx, sy, tx, ty)
+				#return mm_scaler(sx, sy, tx, ty)
+				scale_result = mm_scaler(sx, sy, tx, ty)
+				self.tail.edt_width_t.setText(scale_result.T[0].max() - scale_result.T[0].min())
+				self.tail.edt_height_t.setText(scale_result.T[1].max() - scale_result.T[1].min())
 
 	
 # - Test ----------------------
