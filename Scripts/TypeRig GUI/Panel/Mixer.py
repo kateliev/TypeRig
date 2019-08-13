@@ -7,12 +7,14 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
+# TODO: Anisotropic in Y direction is not precise - investigate!!!
+
 # - Init
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Mixer', '0.10'
+app_name, app_version = 'TypeRig | Mixer', '1.15'
 
 useFortran = False
 warnMessage = 'This Panel requires some precompiled FontRig | TypeRig modules.'
@@ -27,7 +29,7 @@ from PythonQt import QtCore, QtGui
 from typerig.proxy import pFont
 from typerig.glyph import eGlyph
 from typerig.node import eNode
-from typerig.brain import coordArray, linInterp
+from typerig.brain import coordArray, linInterp, ratfrac
 from typerig.gui import trSliderCtrl, trMsgSimple
 
 # -- Check for MathRig instalaltion
@@ -67,7 +69,18 @@ class mixerHead(QtGui.QGridLayout):
 		self.cmb_0 = QtGui.QComboBox()
 		self.cmb_1 = QtGui.QComboBox()
 
-		self.chk_italic = QtGui.QCheckBox('Italic')
+		self.chk_italic = QtGui.QPushButton('Italic')
+		self.chk_single = QtGui.QPushButton('Anisotropic')
+		self.chk_preview = QtGui.QPushButton('Live Preview')
+		
+		self.chk_single.setToolTip('Active: Use X and Y sliders to control interpolation.')
+		self.chk_single.setCheckable(True)
+		self.chk_italic.setCheckable(True)
+		self.chk_preview.setCheckable(True)
+
+		self.chk_single.setChecked(False)
+		self.chk_italic.setChecked(False)
+		self.chk_preview.setChecked(False)
 
 		self.addWidget(QtGui.QLabel('Glyph:'),		0, 0, 1, 1)
 		self.addWidget(self.edt_glyphName,			0, 1, 1, 6)
@@ -88,6 +101,9 @@ class mixerHead(QtGui.QGridLayout):
 		self.addWidget(self.spb_compV,				4, 1, 1, 3)
 		self.addWidget(self.spb_compH,				4, 4, 1, 3)
 		self.addWidget(self.chk_italic,				4, 7, 1, 1)
+		self.addWidget(QtGui.QLabel('Control:'),	5, 0, 1, 1)
+		self.addWidget(self.chk_single,				5, 1, 1, 4)
+		self.addWidget(self.chk_preview,			5, 5, 1, 3)
 
 
 # - Tabs -------------------------------
@@ -97,7 +113,8 @@ class tool_tab(QtGui.QWidget):
 
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
-		
+		layoutH = QtGui.QHBoxLayout()
+
 		# - Build panel
 		if sysReady:			
 			self.head = mixerHead()
@@ -110,24 +127,41 @@ class tool_tab(QtGui.QWidget):
 
 			# -- Set Sliders
 			# --- Mixer
-			layoutV.addWidget(QtGui.QLabel('Single Axis Mixer'))
-			self.mixer = trSliderCtrl('1', '1000', '0', 10)
-			self.mixer.sld_axis.valueChanged.connect(self.intelliScale)		
-			layoutV.addLayout(self.mixer)
+			layoutV.addWidget(QtGui.QLabel('Interpolate: X (Vertical Stems)'))
+			self.mixer_dx = trSliderCtrl('1', '1000', '0', 10)
+			self.mixer_dx.sld_axis.valueChanged.connect(lambda: self.process_scale(self.head.chk_single.isChecked(), self.head.chk_preview.isChecked()))		
+			layoutV.addLayout(self.mixer_dx)
+
+			layoutV.addWidget(QtGui.QLabel('Interpolate: Y (Horizontal Stems)'))
+			self.mixer_dy = trSliderCtrl('1', '1000', '0', 10)
+			self.mixer_dy.sld_axis.valueChanged.connect(lambda: self.process_scale(self.head.chk_single.isChecked(), self.head.chk_preview.isChecked()))		
+			layoutV.addLayout(self.mixer_dy)
+
+			# - Process Button
+			self.btn_revWidth = QtGui.QPushButton('Get reverse width for weight')
+			self.btn_revWidth.clicked.connect(self.set_reverse_width)
+			layoutV.addWidget(self.btn_revWidth)
+
 			layoutV.addSpacing(25)
 
 			# --- Scaler
 			layoutV.addWidget(QtGui.QLabel('Compensative scaler: Width'))
-			self.scalerX = trSliderCtrl('1', '200', '100', 10)
-			self.scalerX.sld_axis.valueChanged.connect(self.intelliScale)		
-			layoutV.addLayout(self.scalerX)
+			self.scaler_dx = trSliderCtrl('1', '200', '100', 10)
+			self.scaler_dx.sld_axis.valueChanged.connect(lambda: self.process_scale(self.head.chk_single.isChecked(), self.head.chk_preview.isChecked()))		
+			layoutV.addLayout(self.scaler_dx)
 			layoutV.addSpacing(15)
 
 			layoutV.addWidget(QtGui.QLabel('Compensative scaler: Height'))
-			self.scalerY = trSliderCtrl('1', '200', '100', 10)
-			self.scalerY.sld_axis.valueChanged.connect(self.intelliScale)		
-			layoutV.addLayout(self.scalerY)
+			self.scaler_dy = trSliderCtrl('1', '200', '100', 10)
+			self.scaler_dy.sld_axis.valueChanged.connect(lambda: self.process_scale(self.head.chk_single.isChecked(), self.head.chk_preview.isChecked()))		
+			layoutV.addLayout(self.scaler_dy)
+			layoutV.addSpacing(25)
 		
+			# - Process Button
+			self.btn_process = QtGui.QPushButton('Process Transformation')
+			self.btn_process.clicked.connect(lambda: self.process_scale(self.head.chk_single.isChecked(), True, True))
+			layoutV.addWidget(self.btn_process)
+
 			# -- Initialize
 			self.refresh()
 
@@ -159,13 +193,14 @@ class tool_tab(QtGui.QWidget):
 		self.axis = []
 
 		self.head.edt_stemV0.setText('1')
-		self.head.edt_stemV1.setText('1')
+		self.head.edt_stemV1.setText('2')
 		self.head.edt_stemH0.setText('1')
-		self.head.edt_stemH1.setText('1')
+		self.head.edt_stemH1.setText('2')
 
-		self.mixer.reset()
-		self.scalerX.reset()
-		self.scalerY.reset()
+		self.mixer_dx.reset()
+		self.mixer_dy.reset()
+		self.scaler_dx.reset()
+		self.scaler_dy.reset()
 
 	def getVStems(self):
 		stemNodes0 = self.glyph.selectedNodes(self.head.cmb_0.currentText, True)
@@ -174,10 +209,10 @@ class tool_tab(QtGui.QWidget):
 		wt_1 = abs(stemNodes1[0].x - stemNodes1[-1].x)
 		self.head.edt_stemV0.setText(wt_0)
 		self.head.edt_stemV1.setText(wt_1)
-		self.mixer.edt_0.setText(min(wt_0, wt_1))
-		self.mixer.edt_1.setText(max(wt_0, wt_1))
-		self.mixer.edt_pos.setText(wt_0)
-		self.mixer.refreshSlider()
+		self.mixer_dx.edt_0.setText(min(wt_0, wt_1))
+		self.mixer_dx.edt_1.setText(max(wt_0, wt_1))
+		self.mixer_dx.edt_pos.setText(wt_0)
+		self.mixer_dx.refreshSlider()
 
 	def getHStems(self):
 		stemNodes0 = self.glyph.selectedNodes(self.head.cmb_0.currentText, True)
@@ -185,13 +220,25 @@ class tool_tab(QtGui.QWidget):
 		wt_0 = abs(stemNodes0[0].y - stemNodes0[-1].y)
 		wt_1 = abs(stemNodes1[0].y - stemNodes1[-1].y)
 		self.head.edt_stemH0.setText(wt_0)
-		self.head.edt_stemH1.setText(wt_1)		
+		self.head.edt_stemH1.setText(wt_1)
+		self.mixer_dy.edt_0.setText(min(wt_0, wt_1))
+		self.mixer_dy.edt_1.setText(max(wt_0, wt_1))
+		self.mixer_dy.edt_pos.setText(wt_0)
+		self.mixer_dy.refreshSlider()
 
 	def setAxis(self):
 		self.axis = [self.glyph._getCoordArray(self.head.cmb_0.currentText), self.glyph._getCoordArray(self.head.cmb_1.currentText)]
 		self.glyph.updateObject(self.glyph.fl, 'Mixer Snapshot @ %s' %self.glyph.layer().name)
 	
-	def intelliScale(self):
+	def set_reverse_width(self):
+		glyph_width = self.glyph.getBounds().width()
+		scale_result = self.process_scale(self.head.chk_single.isChecked(), False, False)
+		max_width = scale_result.T[0].max() - scale_result.T[0].min()
+		reverse_ratio = float(self.scaler_dx.edt_1.text) - ratfrac(max_width, glyph_width, float(self.scaler_dx.edt_1.text))
+		self.scaler_dx.edt_pos.setText(self.scaler_dx.sld_axis.value + reverse_ratio)
+		self.scaler_dx.refreshSlider()
+
+	def process_scale(self, anisotropic=False, process=False, true_update=False):
 		if len(self.axis):
 			# - Axis
 			a = self.axis[0]
@@ -207,31 +254,50 @@ class tool_tab(QtGui.QWidget):
 				angle = 0
 			
 			# - Stems
-			sw_V = (float(self.head.edt_stemV0.text), float(self.head.edt_stemV1.text))
-			sw_H = (float(self.head.edt_stemH0.text), float(self.head.edt_stemH1.text))
+			sw_dx = (float(self.head.edt_stemV0.text), float(self.head.edt_stemV1.text))
+			sw_dy = (float(self.head.edt_stemH0.text), float(self.head.edt_stemH1.text))
 
-			curr_sw_V = float(self.mixer.sld_axis.value)
-			sw_V0, sw_V1 = min(*sw_V), max(*sw_V)
+			curr_sw_dx = float(self.mixer_dx.sld_axis.value)
+			curr_sw_dy = float(self.mixer_dy.sld_axis.value)
+			
+			sw_dx0, sw_dx1 = min(*sw_dx), max(*sw_dx)
+			sw_dy0, sw_dy1 = min(*sw_dy), max(*sw_dy)
 			
 			# - Interpolation
-			tx = ((curr_sw_V - sw_V0)/(sw_V1 - sw_V0))*(1,-1)[sw_V[0] > sw_V[1]] + (0,1)[sw_V[0] > sw_V[1]]
+			tx = ((curr_sw_dx - sw_dx0)/(sw_dx1 - sw_dx0))*(1,-1)[sw_dx[0] > sw_dx[1]] + (0,1)[sw_dx[0] > sw_dx[1]]
+			ty = ((curr_sw_dy - sw_dy0)/(sw_dy1 - sw_dy0))*(1,-1)[sw_dy[0] > sw_dy[1]] + (0,1)[sw_dy[0] > sw_dx[1]]
 
 			# - Scaling
-			sx = 100./float(self.scalerX.edt_1.text) + float(self.scalerX.sld_axis.value)/float(self.scalerX.edt_1.text)
-			sy = 100./float(self.scalerY.edt_1.text) + float(self.scalerY.sld_axis.value)/float(self.scalerY.edt_1.text)
+			sx = 100./float(self.scaler_dx.edt_1.text) + float(self.scaler_dx.sld_axis.value)/float(self.scaler_dx.edt_1.text)
+			sy = 100./float(self.scaler_dy.edt_1.text) + float(self.scaler_dy.sld_axis.value)/float(self.scaler_dy.edt_1.text)
 			dx, dy = 0.0, 0.0
 						
 			# - Build
 			if useFortran: # Original Fortran 95 implementation
-				mms = lambda sx, sy, t : transform.adaptive_scale([a.x, a.y], [b.x, b.y], [sw_V[0], sw_H[0]], [sw_V[1], sw_H[1]], [sx, sy], [dx, dy], [t, t], scmp, angle)
+				mm_scaler = lambda sx, sy, tx, ty : transform.adaptive_scale([a.x, a.y], [b.x, b.y], [sw_dx[0], sw_dy[0]], [sw_dx[1], sw_dy[1]], [sx, sy], [dx, dy], [tx, ty], scmp, angle)
 
 			else: # NumPy implementation
-				 mms = lambda sx, sy, t : transform.adaptive_scale([a.x, a.y], [b.x, b.y], sx, sy, dx, dy, t, t, scmp[0], scmp[1], angle, sw_V0, sw_V1)
-			
-			self.glyph._setCoordArray(mms(sx,sy, tx))
-			
-			self.glyph.update()
-			fl6.Update(fl6.CurrentGlyph())
+				mm_scaler = lambda sx, sy, tx, ty : transform.adaptive_scale([a.x, a.y], [b.x, b.y], sx, sy, dx, dy, tx, ty, scmp[0], scmp[1], angle, sw_dx0, sw_dx1)
+
+			if process:	
+				# - Process
+				if anisotropic:
+					# - Single axis mixer
+					self.glyph._setCoordArray(mm_scaler(sx, sy, tx, ty))
+				else:
+					# - Dual axis mixer - anisotropic 
+					self.glyph._setCoordArray(mm_scaler(sx, sy, tx, tx))
+				
+				if not true_update:
+					self.glyph.update()
+				 	fl6.Update(fl6.CurrentGlyph())
+				else:
+					self.glyph.update()
+					self.glyph.updateObject(self.glyph.fl, 'Glyph: %s | Mixer | sx: %s; sy: %s; tx: %s; ty: %s.' %(self.glyph.name, sx, sy, tx, ty))
+
+			else:
+				# - Just return output
+				return mm_scaler(sx, sy, tx, ty)
 
 	
 # - Test ----------------------
