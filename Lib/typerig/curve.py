@@ -39,7 +39,6 @@ class eCurveEx(object):
 		elif (isinstance(argv[0], list) or isinstance(argv[0], tuple)) and multiCheck(argv[0], flNode):
 			self.nodes = argv[0]
 			self.fl = None
-				
 		
 		if len(self.nodes) == 4:
 			self.n0, self.n1, self.n2, self.n3 = [eNode(node) for node in self.nodes]

@@ -382,6 +382,65 @@ class pNode(object):
 	def getSmartAngleRadius(self):
 		return self.fl.smartAngleR
 
+class pContour(object):
+	'''Proxy to flContour object
+
+	Constructor:
+		pContour(flContour)
+
+	Attributes:
+		.fl (flContour): Original flContour 
+	'''
+	def __init__(self, contour):
+		# - Properties
+		self.fl = contour
+		self.id = self.fl.id
+		self.name = self.fl.name
+		self.selection = self.fl.selection
+		self.bounds = self.fl.bounds # (xMin, yMin, xMax, yMax)
+		self.x, self.y = self.bounds[0], self.bounds[1]
+		self.width, self.height  = self.bounds[2] - self.bounds[0], self.bounds[3] - self.bounds[1]
+		self.cw = self.fl.clockwise
+		self.ccw = not self.fl.clockwise
+		self.closed = self.fl.closed
+		self.start = self.fl.first
+		self.glyph = self.fl.glyph
+		self.font = self.fl.font
+		self.layer = self.fl.layer
+		self.reversed = self.fl.reversed
+		self.transform = self.fl.transform
+
+		# - Functions
+		self.setStart = self.fl.setStartPoint
+		self.segments = self.fl.segments
+		self.nodes = self.fl.nodes
+		self.reverse = self.fl.reverse
+		self.update = self.fl.update
+		self.applyTransform = self.fl.applyTransform
+		self.shift = lambda dx, dy: self.fl.move(pqt.QtCore.QPointF(dx, dy))
+
+	def __repr__(self):
+		return '<%s (%s, %s) nodes=%s ccw=%s closed=%s>' % (self.__class__.__name__, self.x, self.y, len(self.nodes), self.ccw, self.closed)
+
+	def translate(self, dx, dy):
+		self.fl.transform = self.fl.transform.translate(dx, dy)
+		self.fl.applyTransform()
+
+	def scale(self, sx, sy):
+		self.fl.transform = self.fl.transform.scale(dx, dy)
+		self.fl.applyTransform()
+
+	def slant(self, deg):
+		from math import tan, radians
+		self.fl.transform = self.fl.transform.shear(tan(radians(deg)), 0)
+		self.fl.applyTransform()
+		
+	def rotate(self, deg):
+		from math import tan, radians
+		self.fl.transform = self.fl.transform.rotate(tan(radians(deg)))
+		self.fl.applyTransform()
+		
+
 class pShape(object):
 	'''Proxy to flShape, flShapeData and flShapeInfo objects
 
