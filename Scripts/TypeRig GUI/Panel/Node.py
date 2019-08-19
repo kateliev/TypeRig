@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.64'
+app_name, app_version = 'TypeRig | Nodes', '0.65'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -20,7 +20,7 @@ import fontgate as fgt
 from PythonQt import QtCore, QtGui
 from typerig.glyph import eGlyph
 from typerig.node import eNode
-from typerig.proxy import pFont, pFontMetrics
+from typerig.proxy import pFont, pFontMetrics, pContour
 from typerig.gui import getProcessGlyphs
 from typerig.brain import Coord, Line
 
@@ -660,33 +660,40 @@ class basicContour(QtGui.QGridLayout):
 		self.btn_TL = QtGui.QPushButton('T L')
 		self.btn_BR = QtGui.QPushButton('B R')
 		self.btn_TR = QtGui.QPushButton('T R')
-		self.btn_close= QtGui.QPushButton('C&lose contour')
+		self.btn_close= QtGui.QPushButton('C&lose')
+		self.btn_CW = QtGui.QPushButton('CW')
+		self.btn_CCW = QtGui.QPushButton('CCW')
 
 		self.btn_BL.setMinimumWidth(40)
 		self.btn_TL.setMinimumWidth(40)
 		self.btn_BR.setMinimumWidth(40)
 		self.btn_TR.setMinimumWidth(40)
+		self.btn_CW.setMinimumWidth(40)
+		self.btn_CCW.setMinimumWidth(40)
 
 		self.btn_close.setToolTip('Close selected contour')
 		self.btn_BL.setToolTip('Set start point:\nBottom Left Node') 
 		self.btn_TL.setToolTip('Set start point:\nTop Left Node') 
 		self.btn_BR.setToolTip('Set start point:\nBottom Right Node') 
 		self.btn_TR.setToolTip('Set start point:\nTop Right Node') 
-
+		self.btn_CW.setToolTip('Set direction:\nClockwise (TT)') 
+		self.btn_CCW.setToolTip('Set direction::\nCounterclockwise (PS)') 
 		
 		self.btn_BL.clicked.connect(lambda : self.setStart((0,0)))
 		self.btn_TL.clicked.connect(lambda : self.setStart((0,1)))
 		self.btn_BR.clicked.connect(lambda : self.setStart((1,0)))
 		self.btn_TR.clicked.connect(lambda : self.setStart((1,1)))
-
-
+		self.btn_CW.clicked.connect(lambda : self.setDirection(False))
+		self.btn_CCW.clicked.connect(lambda : self.setDirection(True))
 		self.btn_close.clicked.connect(self.closeContour)
 
 		self.addWidget(self.btn_BL, 0, 0, 1, 1)
 		self.addWidget(self.btn_TL, 0, 1, 1, 1)
 		self.addWidget(self.btn_BR, 0, 2, 1, 1)
 		self.addWidget(self.btn_TR, 0, 3, 1, 1)
-		self.addWidget(self.btn_close, 1, 0, 1, 4)
+		self.addWidget(self.btn_close, 1, 0, 1, 2)
+		self.addWidget(self.btn_CW, 1, 2, 1, 1)
+		self.addWidget(self.btn_CCW, 1, 3, 1, 1)
 
 	def closeContour(self):
 		glyph = eGlyph()
@@ -728,6 +735,32 @@ class basicContour(QtGui.QGridLayout):
 			glyph.update()
 			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Set Start Points @ %s.' %(glyph.name, '; '.join(wLayers)))
 
+	def setDirection(self, ccw=True):
+		process_glyphs = getProcessGlyphs(pMode)
+
+		for glyph in process_glyphs:
+			selection = glyph.selectedAtContours()
+
+			wLayers = glyph._prepareLayers(pLayers)
+
+			for layerName in wLayers:
+				all_contours = glyph.contours(layerName)
+
+				if len(selection):
+					process_contours = [pContour(all_contours[item[0]]) for item in selection]
+				else:
+					process_contours = [pContour(contour) for contour in all_contours]
+
+				for contour in process_contours:
+					if ccw:
+						contour.setCCW()
+					else:
+						contour.setCW()
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Set contour direction @ %s.' %(glyph.name, '; '.join(wLayers)))
+
+
 class convertHobby(QtGui.QHBoxLayout):
 	# - Split/Break contour 
 	def __init__(self):
@@ -735,7 +768,7 @@ class convertHobby(QtGui.QHBoxLayout):
 
 		# -- Convert button
 		self.btn_convertNode = QtGui.QPushButton('C&onvert')
-		self.btn_convertNode.setToolTip('Convert/Unconvert selected curve node to Hobby Knot')
+		self.btn_convertNode.setToolTip('Convert/Un-convert selected curve node to Hobby Knot')
 		self.btn_convertNode.clicked.connect(self.convertHobby)
 
 		#self.btn_convertNode.setFixedWidth(80)

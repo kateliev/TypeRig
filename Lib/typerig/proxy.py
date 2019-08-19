@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.67
+# VER 	: 0.69
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -396,12 +396,6 @@ class pContour(object):
 		self.fl = contour
 		self.id = self.fl.id
 		self.name = self.fl.name
-		self.selection = self.fl.selection
-		self.bounds = self.fl.bounds # (xMin, yMin, xMax, yMax)
-		self.x, self.y = self.bounds[0], self.bounds[1]
-		self.width, self.height  = self.bounds[2] - self.bounds[0], self.bounds[3] - self.bounds[1]
-		self.cw = self.fl.clockwise
-		self.ccw = not self.fl.clockwise
 		self.closed = self.fl.closed
 		self.start = self.fl.first
 		self.glyph = self.fl.glyph
@@ -411,16 +405,42 @@ class pContour(object):
 		self.transform = self.fl.transform
 
 		# - Functions
+		self.bounds = lambda : self.fl.bounds # (xMin, yMin, xMax, yMax)
+		self.x = lambda : self.bounds()[0]
+		self.y = lambda : self.bounds()[1]
+		self.width = lambda : self.bounds()[2] - self.bounds()[0]
+		self.height  = lambda : self.bounds()[3] - self.bounds()[1]
+
+		self.selection = lambda : self.fl.selection
 		self.setStart = self.fl.setStartPoint
 		self.segments = self.fl.segments
 		self.nodes = self.fl.nodes
-		self.reverse = self.fl.reverse
 		self.update = self.fl.update
 		self.applyTransform = self.fl.applyTransform
 		self.shift = lambda dx, dy: self.fl.move(pqt.QtCore.QPointF(dx, dy))
 
 	def __repr__(self):
-		return '<%s (%s, %s) nodes=%s ccw=%s closed=%s>' % (self.__class__.__name__, self.x, self.y, len(self.nodes), self.ccw, self.closed)
+		return '<%s (%s, %s) nodes=%s ccw=%s closed=%s>' % (self.__class__.__name__, self.x(), self.y(), len(self.nodes()), self.isCCW(), self.closed)
+
+	def reverse(self):
+		self.fl.reverse()
+
+	def isCW(self):
+		# FL has an error here or.... just misnamed the method?
+		return not self.fl.clockwise
+
+	def isCCW(self):
+		return self.fl.clockwise
+
+	def setCW(self):
+		if not self.isCW(): self.reverse()
+
+	def setCCW(self):
+		if not self.isCCW(): self.reverse()
+
+	def isAllSelected(self):
+		'''Is the whole contour selected '''
+		return all(self.selection())
 
 	def translate(self, dx, dy):
 		self.fl.transform = self.fl.transform.translate(dx, dy)
@@ -652,7 +672,7 @@ class pGlyph(object):
 		'''
 		return sum([contour.nodes.asList() for contour in self.fg_contours(layer)], [])
 
-	def contours(self, layer=None, deep=True):
+	def contours(self, layer=None, deep=True, extend=None):
 		'''Return all contours at given layer.
 		Args:
 			layer (int or str): Layer index or name. If None returns ActiveLayer
@@ -668,7 +688,10 @@ class pGlyph(object):
 			if len(glyph_components):
 				layer_contours = [contour for component in glyph_components for contour in component.contours]
 
-		return layer_contours
+		if extend is None:
+			return layer_contours
+		else:
+			return [extend(contour) for contour in layer_contours]
 
 	def fg_contours(self, layer=None):
 		'''Return all FontGate contours at given layer.

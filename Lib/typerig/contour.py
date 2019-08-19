@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Contour Objects | Typerig
-# VER 	: 0.01
+# VER 	: 0.03
 # ----------------------------------------
 # (C) Vassil Kateliev, 2019 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -17,7 +17,7 @@ import PythonQt as pqt
 from typerig.proxy import pContour
 
 class eContour(pContour):
-	'''Extended representation of the Proxy Contour, adding some advanced functionality
+	'''Extended representation of the Proxy Contour, adding some advanced functionality.
 
 	Constructor:
 		eContour(flContour)
@@ -25,9 +25,9 @@ class eContour(pContour):
 	'''
 	# - Extension -----------------------
 	def asCoord(self):
-		'''Returns Coord object of the node.'''
+		'''Returns Coord object of the Bottom lest corner.'''
 		from typerig.brain import Coord
-		return Coord(float(self.x), float(self.y))
+		return Coord(float(self.x()), float(self.y()))
 
 	def getNext(self):
 		pass
@@ -36,50 +36,55 @@ class eContour(pContour):
 		pass
 
 	# - Align and distribute
-	def alignTo(self, entity, alignX='', alignY='', coord=None):
+	def alignTo(self, entity, alignMode=''):
 		'''Align current contour.
 		Arguments:
 			entity ()
-			alignMode (String) : L(left), R(right), C(center), T(top), B(bottom), E(vertical center)
+			alignMode (String) : L(left), R(right), C(center), T(top), B(bottom), E(vertical center) !ORDER MATTERS
 		'''
 		from typerig.proxy import pNode
 		from PythonQt.QtCore import QPointF
 		from typerig.brain import Coord
-
 		
 		# - Helper
-		def getAlignDict(item)
-			align_dict_x = {	'L': item.x, 
-								'R': item.x + item.width, 
-								'C': item.x + item.width/2
-							}
+		def getAlignDict(item):
+			align_dict = {	'L': item.x(), 
+							'R': item.x() + item.width(), 
+							'C': item.x() + item.width()/2,
+							'B': item.y(), 
+							'T': item.y() + item.height(), 
+							'E': item.y() + item.height()/2
+						}
 
-			align_dict_y = {					
-								'B': item.y, 
-								'T': item.y + item.height, 
-								'E': item.y + item.height/2,
-							}
-
-			return align_dict_x, align_dict_y
+			return align_dict
 
 		# - Init
-		# -- Get target for alignment
-		if any([isinstance(entity, item) for item in [fl6.flNode, pNode]]):
-			target = Coord(entity.x, entity.y)
+		if len(alignMode)==2:
+			alignX, alignY = alignMode.upper()
 
-		elif any([isinstance(entity, item) for item in [fl6.flContour, pContour, self.__class__]]):
-			
-			if isinstance(entity, fl6.flContour):
-				temp_entity = self.__class__(entity)
-			else:
-				temp_entity = entity
+			# -- Get target for alignment
+			if any([isinstance(entity, item) for item in [fl6.flNode, pNode, Coord, QPointF]]):
+				target = Coord(entity.x, entity.y)
 
-			align_dict_x, align_dict_y = getAlignDict(temp_entity)
-			target = Coord(align_dict_x[alignX], align_dict_y[alignX])
+			elif any([isinstance(entity, item) for item in [fl6.flContour, pContour, self.__class__]]):
+				
+				if isinstance(entity, fl6.flContour):
+					temp_entity = self.__class__(entity)
+				else:
+					temp_entity = entity
 
-		# -- Get source for alignment
-		self_dict_x, self_dict_y = getAlignDict(self)
-		source =  Coord(self_dict_x[alignX], self_dict_y[alignX])
+				align_dict = getAlignDict(temp_entity)
+				target = Coord(align_dict[alignX], align_dict[alignY])
+
+			# -- Get source for alignment
+			align_dict = getAlignDict(self)
+			source =  Coord(align_dict[alignX], align_dict[alignY])
+
+			# - Process
+			shift = source - target
+			self.shift(abs(shift.x)*[1,-1][source.x > target.x], abs(shift.y)*[1,-1][source.y > target.y])
+		else:
+			print 'ERROR:\t Invalid Align Mode: %s' %alignMode
 
 
 
