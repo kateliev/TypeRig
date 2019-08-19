@@ -20,6 +20,7 @@ import fontgate as fgt
 from PythonQt import QtCore, QtGui
 from typerig.glyph import eGlyph
 from typerig.node import eNode
+from typerig.contour import eContour
 from typerig.proxy import pFont, pFontMetrics, pContour
 from typerig.gui import getProcessGlyphs
 from typerig.brain import Coord, Line
@@ -209,7 +210,6 @@ class basicOps(QtGui.QGridLayout):
 
 		glyph.update()
 		glyph.updateObject(glyph.fl, 'Rebuild corner: %s nodes reduced; At layers: %s' %(len(selection), '; '.join(wLayers)))
-
 
 
 class alignNodes(QtGui.QGridLayout):
@@ -760,6 +760,69 @@ class basicContour(QtGui.QGridLayout):
 			glyph.update()
 			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Set contour direction @ %s.' %(glyph.name, '; '.join(wLayers)))
 
+class alignContours(QtGui.QGridLayout):
+	# - Align Contours
+	def __init__(self):
+		super(alignContours, self).__init__()
+		from collections import OrderedDict
+		
+		# - Init
+		self.align_x = OrderedDict([('Left','L'), ('Right','R'), ('Center','C'), ('Keep','K')])
+		self.align_y = OrderedDict([('Top','T'), ('Bottom','B'), ('Center','E'), ('Keep','X')])
+		self.align_mode = OrderedDict([('Layer','CL'), ('Contour to Contour','CC'), ('Contour to Contour (REV)','RC'), ('Contour to Node','CN'),('Node to Node','NN')])
+
+		# - Widgets
+		self.cmb_align_x = QtGui.QComboBox()
+		self.cmb_align_y = QtGui.QComboBox()
+		self.cmb_align_mode = QtGui.QComboBox()
+		self.cmb_align_x.addItems(self.align_x.keys())
+		self.cmb_align_y.addItems(self.align_y.keys())
+		self.cmb_align_mode.addItems(self.align_mode.keys())
+
+		self.cmb_align_x.setToolTip('Horizontal Alignment')
+		self.cmb_align_y.setToolTip('Vertical Alignment')
+		self.cmb_align_mode.setToolTip('Alignment Mode')
+
+		self.btn_align = QtGui.QPushButton('Align')
+		self.btn_align.clicked.connect(self.alignContours)
+
+		self.addWidget(self.cmb_align_mode, 	0, 0, 1, 2)
+		self.addWidget(self.cmb_align_x, 		0, 2, 1, 1)
+		self.addWidget(self.cmb_align_y, 		0, 3, 1, 1)
+		self.addWidget(self.btn_align, 			1, 0, 1, 4)
+
+	def alignContours(self):
+		# - Init
+		user_mode =  self.align_mode[self.cmb_align_mode.currentText]
+		user_x = self.align_x[self.cmb_align_x.currentText]
+		user_y = self.align_y[self.cmb_align_y.currentText]
+		
+		process_glyphs = getProcessGlyphs(pMode)
+
+		# - Process
+		for wGlyph in process_glyphs:
+			selection = wGlyph.selectedAtContours()
+			wLayers = wGlyph._prepareLayers(pLayers)
+
+			for layerName in wLayers:
+				glyph_contours = wGlyph.contours(layerName, extend=eContour)
+				
+				if user_mode == 'CL':
+					print wGlyph.getBounds(layerName)					
+
+				elif user_mode =='CC':
+					work_contours = [glyph_contours[index[0]] for index in selection]
+					cont_bounds = [contour.bounds() for contour in work_contours]
+					cont_min_X, cont_min_Y, cont_max_X, cont_max_Y = map(list, zip(*cont_bounds))
+					print layerName, cont_min_X, cont_min_Y, cont_max_X, cont_max_Y 
+					
+				elif user_mode == 'RC':
+					pass
+				elif user_mode == 'CN':
+					pass
+				elif user_mode == 'NN':
+					pass
+
 
 class convertHobby(QtGui.QHBoxLayout):
 	# - Split/Break contour 
@@ -962,11 +1025,14 @@ class tool_tab(QtGui.QWidget):
 		self.alignNodes = alignNodes()
 		layoutV.addLayout(self.alignNodes)
 
-		layoutV.addWidget(QtGui.QLabel('Break/Knot Contour'))
-		layoutV.addLayout(breakContour())
+		#layoutV.addWidget(QtGui.QLabel('Break/Knot Contour'))
+		#layoutV.addLayout(breakContour())
 
 		layoutV.addWidget(QtGui.QLabel('Basic Contour Operations'))
 		layoutV.addLayout(basicContour())
+
+		layoutV.addWidget(QtGui.QLabel('Align Contours'))
+		layoutV.addLayout(alignContours())
 
 		#layoutV.addWidget(QtGui.QLabel('Convert to Hobby'))
 		#layoutV.addLayout(convertHobby())    
