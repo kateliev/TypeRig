@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Custom Contour Objects | Typerig
-# VER 	: 0.03
+# VER 	: 0.04
 # ----------------------------------------
 # (C) Vassil Kateliev, 2019 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -36,7 +36,7 @@ class eContour(pContour):
 		pass
 
 	# - Align and distribute
-	def alignTo(self, entity, alignMode=''):
+	def alignTo(self, entity, alignMode='', align=(True,True)):
 		'''Align current contour.
 		Arguments:
 			entity ()
@@ -82,7 +82,10 @@ class eContour(pContour):
 
 			# - Process
 			shift = source - target
-			self.shift(abs(shift.x)*[1,-1][source.x > target.x], abs(shift.y)*[1,-1][source.y > target.y])
+			shift_dx = abs(shift.x)*[1,-1][source.x > target.x] if align[0] else 0.
+			shift_dy = abs(shift.y)*[1,-1][source.y > target.y] if align[1] else 0.
+
+			self.shift(shift_dx, shift_dy)
 		else:
 			print 'ERROR:\t Invalid Align Mode: %s' %alignMode
 
