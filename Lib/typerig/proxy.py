@@ -999,7 +999,7 @@ class pGlyph(object):
 			undoMessage (string): Message to be added in undo/history list.'''
 		
 		# - General way ---- pre 6774 worked fine!
-		fl6.flItems.notifyChangesApplied(undoMessage, flObject, True)
+		fl6.flItems.notifyChangesApplied(undoMessage[:20], flObject, True)
 		if verbose: print 'DONE:\t %s' %undoMessage
 		
 		# - New from 6774 on

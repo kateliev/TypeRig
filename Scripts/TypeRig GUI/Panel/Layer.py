@@ -21,7 +21,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '0.35'
+app_name, app_version = 'TypeRig | Layers', '0.36'
 
 # - Sub widgets ------------------------
 class QlayerSelect(QtGui.QVBoxLayout):
@@ -228,31 +228,31 @@ class QlayerTools(QtGui.QVBoxLayout):
 		self.btn_copy = QtGui.QPushButton('Copy')
 		self.btn_paste = QtGui.QPushButton('Paste')
 		self.btn_clean = QtGui.QPushButton('Remove')
-		self.btn_unlink = QtGui.QPushButton('Unlink')
+		self.btn_unlock = QtGui.QPushButton('Unlock')
 		self.btn_expand = QtGui.QPushButton('Expand')
 
-		self.btn_unlink.setEnabled(False)
+		#self.btn_unlock.setEnabled(False)
 		self.btn_expand.setEnabled(False)
 		
 		self.btn_swap.setToolTip('Swap Selected Layer with Active Layer')
 		self.btn_copy.setToolTip('Copy Active Layer to Selected Layer')
 		self.btn_paste.setToolTip('Paste Selected Layer to Active Layer')
 		self.btn_clean.setToolTip('Remove contents from selected layers')
-		self.btn_unlink.setToolTip('Unlink element references for selected layers')
+		self.btn_unlock.setToolTip('Unlock all locked references.\nSHIFT+Click will lock all references.')
 		self.btn_expand.setToolTip('Expand transformations for selected layers')
 
 		self.btn_swap.clicked.connect(self.swap)
 		self.btn_copy.clicked.connect(self.copy)
 		self.btn_paste.clicked.connect(self.paste)
 		self.btn_clean.clicked.connect(self.clean)
-		#self.btn_unlink.clicked.connect(self.unlink)
+		self.btn_unlock.clicked.connect(self.unlock)
 		#self.btn_expand.clicked.connect(self.expand)
 				
 		self.lay_buttons.addWidget(self.btn_swap,	0, 0, 1, 1)
 		self.lay_buttons.addWidget(self.btn_copy,	0, 1, 1, 1)
 		self.lay_buttons.addWidget(self.btn_paste,	0, 2, 1, 1)
 		self.lay_buttons.addWidget(self.btn_clean,	1, 0, 1, 1)
-		self.lay_buttons.addWidget(self.btn_unlink,	1, 1, 1, 1)
+		self.lay_buttons.addWidget(self.btn_unlock,	1, 1, 1, 1)
 		self.lay_buttons.addWidget(self.btn_expand,	1, 2, 1, 1)
 
 		self.addLayout(self.lay_buttons)
@@ -273,7 +273,7 @@ class QlayerTools(QtGui.QVBoxLayout):
 		
 		# -- Copy/Paste
 		for shape in srcShapes:
-			glyph.layer(dstLayerName).addShape(shape)
+			glyph.layer(dstLayerName).addShape(shape.cloneTopLevel())
 
 		return exportDSTShapes
 
@@ -327,6 +327,23 @@ class QlayerTools(QtGui.QVBoxLayout):
 		return exportDSTAnchors
 
 	# - Button procedures ---------------------------------------------------
+	def unlock(self):
+		if self.aux.doCheck():
+			modifiers = QtGui.QApplication.keyboardModifiers()
+
+			if self.chk_outline.isChecked():
+				for item in self.aux.lst_layers.selectedItems():
+					for shape in self.aux.glyph.shapes(item.text()):
+						
+						if modifiers == QtCore.Qt.ShiftModifier: # Shift + Click will lock
+							shape.contentLocked = True
+						else:
+							shape.contentLocked = False
+
+			self.aux.glyph.updateObject(self.aux.glyph.fl, '%s shapes on Layer(s) | %s' %(['Unlock', 'Lock'][modifiers == QtCore.Qt.ShiftModifier],'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()])))
+			self.aux.glyph.update()
+
+
 	def swap(self):
 		if self.aux.doCheck():	
 			if self.chk_outline.isChecked():
