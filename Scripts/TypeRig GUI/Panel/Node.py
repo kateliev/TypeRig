@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.65'
+app_name, app_version = 'TypeRig | Nodes', '0.66'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -769,7 +769,10 @@ class alignContours(QtGui.QGridLayout):
 		# - Init
 		self.align_x = OrderedDict([('Left','L'), ('Right','R'), ('Center','C'), ('Keep','K')])
 		self.align_y = OrderedDict([('Top','T'), ('Bottom','B'), ('Center','E'), ('Keep','X')])
-		self.align_mode = OrderedDict([('Layer','CL'), ('Contour to Contour','CC'), ('Contour to Contour (REV)','RC'), ('Contour to Node','CN'),('Node to Node','NN')])
+		self.align_mode = OrderedDict([('Layer','CL'), ('Contour to Contour','CC'), ('Contour to Contour (REV)','RC')])
+		
+		# !!! To be implemented
+		#self.align_mode = OrderedDict([('Layer','CL'), ('Contour to Contour','CC'), ('Contour to Contour (REV)','RC'), ('Contour to Node','CN'),('Node to Node','NN')])
 
 		# - Widgets
 		self.cmb_align_x = QtGui.QComboBox()
@@ -792,36 +795,87 @@ class alignContours(QtGui.QGridLayout):
 		self.addWidget(self.btn_align, 			1, 0, 1, 4)
 
 	def alignContours(self):
+		# - Helpers
+		def getContourBonds(work_contours):
+			tmp_bounds = [contour.bounds() for contour in work_contours]
+			cont_min_X, cont_min_Y, cont_max_X, cont_max_Y = map(set, zip(*tmp_bounds))
+			return (min(cont_min_X), min(cont_min_Y), max(cont_max_X), max(cont_max_Y))
+
+		def getAlignDict(bounds_tuple):
+			align_dict = {	'L': bounds_tuple[0], 
+							'R': bounds_tuple[2],
+							'C': bounds_tuple[2]/2,
+							'B': bounds_tuple[1], 
+							'T': bounds_tuple[3], 
+							'E': bounds_tuple[3]/2
+						}
+
+			return align_dict
+
 		# - Init
 		user_mode =  self.align_mode[self.cmb_align_mode.currentText]
 		user_x = self.align_x[self.cmb_align_x.currentText]
 		user_y = self.align_y[self.cmb_align_y.currentText]
+		keep_x, keep_y = True, True	
+
+		if user_x == 'K': keep_x = False; user_x = 'L'
+		if user_y == 'X': keep_y = False; user_y = 'B'		
 		
 		process_glyphs = getProcessGlyphs(pMode)
 
 		# - Process
-		for wGlyph in process_glyphs:
-			selection = wGlyph.selectedAtContours()
-			wLayers = wGlyph._prepareLayers(pLayers)
+		for glyph in process_glyphs:
+			selection = glyph.selectedAtContours()
+			wLayers = glyph._prepareLayers(pLayers)
 
 			for layerName in wLayers:
-				glyph_contours = wGlyph.contours(layerName, extend=eContour)
+				glyph_contours = glyph.contours(layerName, extend=eContour)
+				work_contours = [glyph_contours[index] for index in list(set([item[0] for item in selection]))]
 				
-				if user_mode == 'CL':
-					print wGlyph.getBounds(layerName)					
+				if user_mode == 'CL': # Align all contours in given Layer
+					layer_bounds = glyph.getBounds(layerName)
+					cont_bounds = (layer_bounds.x(), layer_bounds.y(), layer_bounds.x() + layer_bounds.width(), layer_bounds.y() + layer_bounds.height())
+					align_type = getAlignDict(cont_bounds)
+					target = Coord(align_type[user_x], align_type[user_y])
 
-				elif user_mode =='CC':
-					work_contours = [glyph_contours[index[0]] for index in selection]
-					cont_bounds = [contour.bounds() for contour in work_contours]
-					cont_min_X, cont_min_Y, cont_max_X, cont_max_Y = map(list, zip(*cont_bounds))
-					print layerName, cont_min_X, cont_min_Y, cont_max_X, cont_max_Y 
+					for contour in glyph_contours:
+						contour.alignTo(target, user_x + user_y, (keep_x, keep_y))					
+
+				elif user_mode =='CC': # Align contours to contours
+					if 1 < len(work_contours) < 3:
+						c1, c2 = work_contours
+						c1.alignTo(c2, user_x + user_y, (keep_x, keep_y))
+
+					elif len(work_contours) > 2:
+						cont_bounds = getContourBonds(work_contours)
+						align_type = getAlignDict(cont_bounds)
+						target = Coord(align_type[user_x], align_type[user_y])
+
+						for contour in work_contours:
+							contour.alignTo(target, user_x + user_y, (keep_x, keep_y))
 					
-				elif user_mode == 'RC':
+				elif user_mode == 'RC': # Align contours to contours in reverse order
+					if 1 < len(work_contours) < 3:
+						c1, c2 = work_contours
+						c2.alignTo(c1, user_x + user_y, (keep_x, keep_y))
+
+					elif len(work_contours) > 2:
+						cont_bounds = getContourBonds(work_contours)
+						align_type = getAlignDict(cont_bounds)
+						target = Coord(align_type[user_x], align_type[user_y])
+
+						for contour in reversed(work_contours):
+							contour.alignTo(target, user_x + user_y, (keep_x, keep_y))	
+
+				# !!! To be implemented
+				elif user_mode == 'CN': # Align contour to node
 					pass
-				elif user_mode == 'CN':
+
+				elif user_mode == 'NN': # Align a node on contour to node on another
 					pass
-				elif user_mode == 'NN':
-					pass
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Align Contours @ %s.' %(glyph.name, '; '.join(wLayers)))
 
 
 class convertHobby(QtGui.QHBoxLayout):
