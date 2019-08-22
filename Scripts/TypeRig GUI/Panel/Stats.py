@@ -22,7 +22,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Glyph Statistics', '0.09'
+app_name, app_version = 'TypeRig | Glyph Statistics', '0.10'
 
 # - Sub widgets ------------------------
 class QGlyphInfo(QtGui.QVBoxLayout):
@@ -195,6 +195,87 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 		if 'metrics' in query.lower() and 'left' in query.lower(): return glyph.getLSB(layer)
 		if 'metrics' in query.lower() and 'right' in query.lower(): return glyph.getRSB(layer)
 
+class QRatioInfo(QtGui.QGridLayout):
+	# - Copy Metric properties from other glyph
+	def __init__(self):
+		super(QRatioInfo, self).__init__()
+
+		# - Spin Boxes
+		self.edt_part_width =  QtGui.QLineEdit()
+		self.edt_ratio_width = QtGui.QLineEdit()
+		self.edt_whole_width = QtGui.QLineEdit()
+		self.edt_part_height =  QtGui.QLineEdit()
+		self.edt_ratio_height = QtGui.QLineEdit()
+		self.edt_whole_height = QtGui.QLineEdit()
+
+		self.edt_part_width.setPlaceholderText('width')
+		self.edt_whole_width.setPlaceholderText('width')
+		self.edt_ratio_width.setPlaceholderText('ratio')
+		self.edt_part_height.setPlaceholderText('height')
+		self.edt_whole_height.setPlaceholderText('height')
+		self.edt_ratio_height.setPlaceholderText('ratio')
+
+		# - Buttons
+		self.btn_part = QtGui.QPushButton('Part')
+		self.btn_whole = QtGui.QPushButton('Whole')
+		self.btn_ratio = QtGui.QPushButton('Ratio %')
+		self.btn_part .setToolTip('Set width/height from Node Selection.')
+		self.btn_whole .setToolTip('Set width/height from Node Selection.')
+		self.btn_ratio .setToolTip('Get part/whole ratio in percent.')
+
+		self.btn_part.clicked.connect(lambda: self.setFields((self.edt_part_width, self.edt_part_height)))
+		self.btn_whole.clicked.connect(lambda: self.setFields((self.edt_whole_width, self.edt_whole_height)))
+		self.btn_ratio.clicked.connect(self.getRatio)
+
+		self.addWidget(QtGui.QLabel('Relation calculator:'), 	0, 0, 1, 4)
+		self.addWidget(QtGui.QLabel('W:'), 		1, 0, 1, 1)
+		self.addWidget(self.edt_part_width, 	1, 1, 1, 1)
+		self.addWidget(self.edt_whole_width, 	1, 2, 1, 1)
+		self.addWidget(self.edt_ratio_width, 	1, 3, 1, 1)
+
+		self.addWidget(QtGui.QLabel('H:'), 		2, 0, 1, 1)
+		self.addWidget(self.edt_part_height, 	2, 1, 1, 1)
+		self.addWidget(self.edt_whole_height, 	2, 2, 1, 1)
+		self.addWidget(self.edt_ratio_height, 	2, 3, 1, 1)
+
+		self.addWidget(self.btn_part, 			3, 1, 1, 1)
+		self.addWidget(self.btn_whole, 			3, 2, 1, 1)
+		self.addWidget(self.btn_ratio, 			3, 3, 1, 1)
+
+	def setFields(self, fieldTuple):
+		glyph = eGlyph()
+		selection = glyph.selectedNodes()
+
+		if len(selection):
+			x_coords, y_coords = [],[]
+			for node in selection:
+				x_coords.append(node.x)
+				y_coords.append(node.y)
+
+			x_coords = list(set(x_coords))
+			y_coords = list(set(y_coords))
+			
+			width = max(x_coords) - min(x_coords)
+			height = max(y_coords) - min(y_coords)
+			
+			fieldTuple[0].setText(width)
+			fieldTuple[1].setText(height)
+		else:
+			fieldTuple[0].clear()
+			fieldTuple[1].clear()
+
+	def getRatio(self):
+		if len(self.edt_part_width.text) and len(self.edt_whole_width.text):
+			self.edt_ratio_width.setText(ratfrac(float(self.edt_part_width.text), float(self.edt_whole_width.text)))
+		else:
+			self.edt_ratio_width.clear()
+
+		if len(self.edt_part_height.text) and len(self.edt_whole_height.text):
+			self.edt_ratio_height.setText(ratfrac(float(self.edt_part_height.text), float(self.edt_whole_height.text)))
+		else:
+			self.edt_ratio_height.clear()
+
+
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
 	def __init__(self):
@@ -204,6 +285,7 @@ class tool_tab(QtGui.QWidget):
 		layoutV = QtGui.QVBoxLayout()
 		self.glyph_info = QGlyphInfo()
 		layoutV.addLayout(self.glyph_info)
+		layoutV.addLayout(QRatioInfo())
 		
 		# - Build
 		#layoutV.addStretch()

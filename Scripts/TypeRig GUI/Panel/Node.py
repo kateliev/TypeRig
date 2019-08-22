@@ -1002,10 +1002,11 @@ class advMovement(QtGui.QVBoxLayout):
 		# - Process
 		if method == self.methodList[0]:
 			for node in selectedNodes:
-				if inPercent:						
-					node.smartShift(*scaleOffset(node, offset_x, offset_y))
-				else:
-					node.smartShift(offset_x, offset_y)
+				if node.isOn:
+					if inPercent:						
+						node.smartShift(*scaleOffset(node, offset_x, offset_y))
+					else:
+						node.smartShift(offset_x, offset_y)
 
 		elif method == self.methodList[1]:
 			for node in selectedNodes:
