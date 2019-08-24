@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Metrics', '0.21'
+app_name, app_version = 'TypeRig | Metrics', '0.22'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -246,12 +246,14 @@ class metrics_expr(QtGui.QGridLayout):
 		self.edt_adv.setPlaceholderText('Metric expression')
 		self.edt_rsb.setPlaceholderText('Metric expression')
 
-		self.btn_setMetrics = QtGui.QPushButton('&Set Metric expressions')
-		self.btn_getShapeParent = QtGui.QPushButton('&Get composite reference')
+		self.btn_setMetrics = QtGui.QPushButton('&Set expressions')
+		self.btn_getShapeParent = QtGui.QPushButton('&Get reference')
+		self.btn_delMetrics = QtGui.QPushButton('&Unlink')
 		self.btn_autoBind = QtGui.QPushButton('&Auto bind Metric expressions')
 		self.btn_autoBind.setToolTip('Automatically bind metric expressions from available element references.')
 
-		self.btn_setMetrics.clicked.connect(self.setMetricEquations)
+		self.btn_setMetrics.clicked.connect(lambda: self.setMetricEquations(False))
+		self.btn_delMetrics.clicked.connect(lambda: self.setMetricEquations(True))
 		self.btn_getShapeParent.clicked.connect(self.bindShapeParent)
 		self.btn_autoBind.clicked.connect(self.autoMetricEquations)
 
@@ -263,10 +265,11 @@ class metrics_expr(QtGui.QGridLayout):
 		self.addWidget(self.edt_rsb, 			1, 1, 1, 5)
 		self.addWidget(QtGui.QLabel('ADV:'), 	2, 0, 1, 1)
 		self.addWidget(self.edt_adv, 			2, 1, 1, 5)
-		self.addWidget(self.btn_setMetrics, 	3, 1, 1, 5)
+		self.addWidget(self.btn_setMetrics, 	3, 1, 1, 3)
+		self.addWidget(self.btn_delMetrics, 	3, 4, 1, 2)
 		self.addWidget(QtGui.QLabel('E:'), 		4, 0, 1, 1)
-		self.addWidget(self.btn_getShapeParent, 4, 1, 1, 4)
-		self.addWidget(self.spb_shapeIndex, 	4, 5, 1, 1)
+		self.addWidget(self.btn_getShapeParent, 4, 1, 1, 3)
+		self.addWidget(self.spb_shapeIndex, 	4, 4, 1, 2)
 		self.addWidget(QtGui.QLabel('Composite Glyph: Metric expressions'), 	5, 0, 1, 5)
 		self.addWidget(self.btn_autoBind, 		6, 0, 1, 6)
 
@@ -299,16 +302,21 @@ class metrics_expr(QtGui.QGridLayout):
 		except IndexError:
 			print 'ERROR: Glyph /%s - No NAMED SHAPE with INDEX [%s] found!' %(glyph.name, shapeIndex)
 
-	def setMetricEquations(self):
+	def setMetricEquations(self, clear=False):
 		process_glyphs = getProcessGlyphs(pMode)
 
 		for glyph in process_glyphs:
 			wLayers = glyph._prepareLayers(pLayers)
 
 			for layer in wLayers:
-				if len(self.edt_lsb.text): glyph.setLSBeq(self.edt_lsb.text, layer)
-				if len(self.edt_rsb.text): glyph.setRSBeq(self.edt_rsb.text, layer)
-				if len(self.edt_adv.text): glyph.setADVeq(self.edt_adv.text, layer)
+				if not clear:
+					if len(self.edt_lsb.text): glyph.setLSBeq(self.edt_lsb.text, layer)
+					if len(self.edt_rsb.text): glyph.setRSBeq(self.edt_rsb.text, layer)
+					if len(self.edt_adv.text): glyph.setADVeq(self.edt_adv.text, layer)
+				else:
+					glyph.setLSBeq('', layer)
+					glyph.setRSBeq('', layer)
+					glyph.setADVeq('', layer)
 
 			glyph.update()
 			glyph.updateObject(glyph.fl, 'Set Metrics Equations @ %s.' %'; '.join(wLayers))
