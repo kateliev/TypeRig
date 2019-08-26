@@ -9,16 +9,26 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
-import fontlab as fl6
-from PythonQt import QtCore, QtGui
-
 import os
+from math import radians
 from collections import OrderedDict
+
+import fontlab as fl6
+import fontgate as fgt
+from PythonQt import QtCore
+from typerig import QtGui
+
+from typerig.proxy import pFont
+from typerig.glyph import eGlyph
+from typerig.node import eNode
 from typerig.gui import getProcessGlyphs
-from typerig.proxy import pFont, pGlyph
+from typerig.brain import coordArray, linInterp, ratfrac
+import fontrig.numpy.transform as transform
+#from typerig.gui import trSliderCtrl, trMsgSimple
+
 
 # - Init --------------------------------
-app_version = '0.01'
+app_version = '0.02'
 app_name = 'Delta Machine'
 
 ss_Toolbox_none = """
@@ -41,8 +51,8 @@ column_names = ('Master Name',
 				'V stem [B]',
 				'H stem [A]',
 				'H stem [B]', 
-				'tX stem',
-				'tY stem', 
+				'V stem [tX]',
+				'H stem [tY]', 
 				'Width', 
 				'Height',
 				'Adj. X', 
@@ -121,10 +131,10 @@ class WTableView(QtGui.QTableWidget):
 
 					if 9 <= m <= 10: 
 						spin.setSuffix(' %')
-						spin.setMinimum(-500)
+						spin.setMinimum(0.)
 						spin.setMaximum(500.)
 
-					if 10 <= m:
+					if 10 < m:
 						spin.setMinimum(0)
 						spin.setMaximum(1)
 						spin.setSingleStep(0.01)
@@ -166,9 +176,13 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		super(dlg_DeltaMachine, self).__init__()
 	
 		# - Init
+		self.setStyleSheet(ss_Toolbox_none)
+		
 		self.active_font = pFont()
 		self.pMode = 0
-		self.setStyleSheet(ss_Toolbox_none)
+		self.data_glyphs = getProcessGlyphs(self.pMode)
+		self.data_coordArrays = {}
+		self.data_stems = {}
 		
 		# - Basic Widgets
 		self.tab_masters = WTableView(table_dict)
@@ -183,9 +197,13 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		self.btn_tableLoad = QtGui.QPushButton('Load')
 
 		self.btn_tableRefresh.clicked.connect(self.table_populate)
-		self.btn_execute.clicked.connect(self.execute_table)
+		self.btn_execute.clicked.connect(self.table_execute)
 		self.btn_tableSave.clicked.connect(self.file_save_deltas) 
 		self.btn_tableLoad.clicked.connect(self.file_load_deltas) 
+
+		self.btn_getArrays.clicked.connect(self.get_coordArrays) 
+		self.btn_getVstems.clicked.connect(lambda: self.get_Stems(True))
+		self.btn_getHstems.clicked.connect(lambda: self.get_Stems(False))
 
 		self.rad_glyph = QtGui.QRadioButton('Glyph')
 		self.rad_window = QtGui.QRadioButton('Window')
@@ -198,12 +216,11 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		self.rad_selection.setEnabled(False)
 		self.rad_font.setEnabled(False)
 
-		self.rad_glyph.toggled.connect(self.refreshMode)
-		self.rad_window.toggled.connect(self.refreshMode)
-		self.rad_selection.toggled.connect(self.refreshMode)
-		self.rad_font.toggled.connect(self.refreshMode)
+		self.rad_glyph.toggled.connect(self.table_refresh)
+		self.rad_window.toggled.connect(self.table_refresh)
+		self.rad_selection.toggled.connect(self.table_refresh)
+		self.rad_font.toggled.connect(self.table_refresh)
 		
-
 		# - Build layouts 
 		layoutV = QtGui.QGridLayout() 
 		
@@ -229,6 +246,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		self.show()
 
 	# - Functions ------------------------------------------------------------
+	# - File operations
 	def file_save_deltas(self):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
 		fname = QtGui.QFileDialog.getSaveFileName(self.upper_widget, 'Save Deltas to file', fontPath, fileFormats)
@@ -252,21 +270,59 @@ class dlg_DeltaMachine(QtGui.QDialog):
 				self.tab_masters.setTable(table_dict)
 				print 'LOAD:\t Font:%s; Deltas loaded from: %s.' %(self.active_font.name, fname)
 
-	def refreshMode(self):
+	# - Table operations
+	def table_refresh(self):
 		if self.rad_glyph.isChecked(): self.pMode = 0
 		if self.rad_window.isChecked(): self.pMode = 1
 		if self.rad_selection.isChecked(): self.pMode = 2
 		if self.rad_font.isChecked(): self.pMode = 3
+
+		self.data_glyphs = getProcessGlyphs(self.pMode)
 	
 	def table_populate(self):
-		init_data = [[master, self.active_font.pMasters.names, self.active_font.pMasters.names, 1., 2., 1., 2., 0., 0.,0., 0., 0.00, 0.00] for master in self.active_font.pMasters.names]
+		init_data = [[master, self.active_font.pMasters.names, self.active_font.pMasters.names, 1., 2., 1., 2., 0., 0.,100, 100, 0.00, 0.00] for master in self.active_font.pMasters.names]
 	 	table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
 		self.tab_masters.setTable(table_dict)
 		
 		#self.tab_masters.resizeColumnsToContents()		
 
-	def execute_table(self):
+	def table_execute(self):
 		print self.tab_masters.getTable()[0]
+
+	# - Delta operations
+	def get_coordArrays(self):
+		self.data_coordArrays = {glyph.name:{master_name:glyph._getCoordArray(master_name) for master_name in self.active_font.masters()} for glyph in self.data_glyphs}
+		print 'Done:\tCoordArrays'
+
+	def get_Stems(self, vertical=True):
+		# - Helper
+		def helper_calc_stem(glyph, master_name, vertical):
+			selection = glyph.selectedNodes(master_name)
+			
+			if vertical:
+				return abs(selection[0].x - selection[-1].x)
+			else:
+				return abs(selection[0].y - selection[-1].y)
+
+		# - Init
+		fill_colA = (3,1) if vertical else (5,1)
+		fill_colB = (4,2) if vertical else (6,2)
+		fill_colT = (7,8)[not vertical]
+		# - Make it current glyph only for now...
+		#data_stems = {glyph.name:{ master_name:helper_calc_stem(glyph, master_name, vertical) for master_name in self.active_font.masters()} for glyph in self.data_glyphs}
+		
+		glyph = self.data_glyphs[0]		
+		data_stems = { master_name:helper_calc_stem(glyph, master_name, vertical) for master_name in self.active_font.masters()}
+		
+		for row in range(self.tab_masters.rowCount):
+			self.tab_masters.cellWidget(row, fill_colA[0]).setValue(data_stems[self.tab_masters.cellWidget(row, fill_colA[1]).currentText])
+			self.tab_masters.cellWidget(row, fill_colB[0]).setValue(data_stems[self.tab_masters.cellWidget(row, fill_colB[1]).currentText])
+			self.tab_masters.cellWidget(row, fill_colT).setValue(data_stems[self.tab_masters.cellWidget(row, fill_colA[1]).currentText])
+
+
+
+
+
 
 
 # - RUN ------------------------------

@@ -33,7 +33,7 @@ from typerig.node import eNode
 from typerig.brain import coordArray, linInterp, ratfrac
 from typerig.gui import trSliderCtrl, trMsgSimple
 
-# -- Check for MathRig instalaltion
+# -- Check for FontRig instalaltion
 try:
     if useFortran:
     	import fontrig.transform as transform			# Fortran 95 code
