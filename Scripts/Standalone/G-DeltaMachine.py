@@ -21,7 +21,6 @@ from typerig.proxy import pFont, pGlyph
 app_version = '0.01'
 app_name = 'Delta Machine'
 
-# - Style -------------------------
 ss_Toolbox_none = """
 QDoubleSpinBox { 
 		background-color: transparent;
@@ -35,22 +34,25 @@ QComboBox QAbstractItemView {
 	}
 """
 
-# -- GUI related -------------------------
-table_dict = {1:OrderedDict([	('Master Name', None), 
-								('Source [A]', []), 
-								('Source [B]', []),
-								('V stem [A]', 1.),
-								('V stem [B]', 2.),
-								('H stem [A]', 1.),
-								('H stem [B]', 2.),
-								('tX stem', 0.),
-								('tY stem', 0.),
-								('Width', 0.),
-								('Height', 0.),
-								('Adj. X', 0.00),
-								('Adj. Y', 0.00),
-								('Note', ''),
-							])}
+column_names = ('Master Name',
+				'Source [A]', 
+				'Source [B]', 
+				'V stem [A]',
+				'V stem [B]',
+				'H stem [A]',
+				'H stem [B]', 
+				'tX stem',
+				'tY stem', 
+				'Width', 
+				'Height',
+				'Adj. X', 
+				'Adj. Y', 
+				'Active') 
+
+column_init = (None,[],[], 1., 2., 1., 2., 0., 0., 0., 0., 0.00, 0.00, False)
+table_dict = {1:OrderedDict(zip(column_names, column_init))}
+
+fileFormats = ['TypeRig Deltas (*.json)']
 
 # - Widgets --------------------------------
 class WTableView(QtGui.QTableWidget):
@@ -107,7 +109,7 @@ class WTableView(QtGui.QTableWidget):
 					combo.addItems(data[layer][key])
 					self.setCellWidget(n, m, combo)
 
-				if 2 < m < len(data[layer].keys())-1:
+				if 2 < m < len(data[layer].keys()):
 					#newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
 					#self.setItem(n, m, newitem)
 					spin = QtGui.QDoubleSpinBox()
@@ -122,7 +124,7 @@ class WTableView(QtGui.QTableWidget):
 						spin.setMinimum(-500)
 						spin.setMaximum(500.)
 
-					if 10 < m:
+					if 10 <= m:
 						spin.setMinimum(0)
 						spin.setMaximum(1)
 						spin.setSingleStep(0.01)
@@ -130,25 +132,29 @@ class WTableView(QtGui.QTableWidget):
 					spin.setValue(data[layer][key])
 					self.setCellWidget(n, m, spin)
 
-				if  m == len(data[layer].keys()):
-					newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
-					self.setItem(n, m, newitem)
-
 		
 		self.setHorizontalHeaderLabels(name_column)
 		self.setVerticalHeaderLabels(name_row)
 		self.blockSignals(False)
 
-	def getTable(self):
+	def getTable(self, checked_only=True):
 		returnDict = {}
 		for row in range(self.rowCount):
-			#returnDict[self.item(row, 0).text()] = (self.item(row, 1).checkState() == QtCore.Qt.Checked, self.item(row, 2).checkState() == QtCore.Qt.Checked)
-			if self.item(row, 1).checkState() == QtCore.Qt.Checked:
-				returnDict.setdefault('SRC',[]).append(self.item(row, 0).text())
-			
-			if self.item(row, 2).checkState() == QtCore.Qt.Checked:
-				returnDict.setdefault('DST',[]).append(self.item(row, 0).text())
-
+			#if self.item(row, 1).checkState() == QtCore.Qt.Checked:
+			returnDict[row] = [	self.item(row, 0).text(), 
+								self.cellWidget(row, 1).currentText,
+								self.cellWidget(row, 2).currentText,
+								self.cellWidget(row, 3).value,
+								self.cellWidget(row, 4).value,
+								self.cellWidget(row, 5).value,
+								self.cellWidget(row, 6).value,
+								self.cellWidget(row, 7).value,
+								self.cellWidget(row, 8).value, 
+								self.cellWidget(row, 9).value, 
+								self.cellWidget(row, 10).value, 
+								self.cellWidget(row, 11).value, 
+								self.cellWidget(row, 12).value,
+								self.item(row, 0).checkState() == QtCore.Qt.Checked]
 		return returnDict
 
 	def markChange(self, item):
@@ -177,6 +183,9 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		self.btn_tableLoad = QtGui.QPushButton('Load')
 
 		self.btn_tableRefresh.clicked.connect(self.table_populate)
+		self.btn_execute.clicked.connect(self.execute_table)
+		self.btn_tableSave.clicked.connect(self.file_save_deltas) 
+		self.btn_tableLoad.clicked.connect(self.file_load_deltas) 
 
 		self.rad_glyph = QtGui.QRadioButton('Glyph')
 		self.rad_window = QtGui.QRadioButton('Window')
@@ -193,7 +202,8 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		self.rad_window.toggled.connect(self.refreshMode)
 		self.rad_selection.toggled.connect(self.refreshMode)
 		self.rad_font.toggled.connect(self.refreshMode)
-				
+		
+
 		# - Build layouts 
 		layoutV = QtGui.QGridLayout() 
 		
@@ -218,6 +228,30 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 		self.show()
 
+	# - Functions ------------------------------------------------------------
+	def file_save_deltas(self):
+		fontPath = os.path.split(self.active_font.fg.path)[0]
+		fname = QtGui.QFileDialog.getSaveFileName(self.upper_widget, 'Save Deltas to file', fontPath, fileFormats)
+
+		if fname != None:
+			with open(fname, 'w') as exportFile:
+				if exportRaw:
+					json.dump(self.tab_masters.getTable(), exportFile)
+				
+				print 'SAVE:\t Font:%s; Deltas saved to: %s.' %(self.active_font.name, fname)
+
+	def file_load_deltas(self):
+		fontPath = os.path.split(self.active_font.fg.path)[0]
+		fname = QtGui.QFileDialog.getOpenFileName(self.upper_widget, 'Load Deltas from file', fontPath, fileFormats)
+			
+		if fname != None:
+			with open(fname, 'r') as importFile:
+				imported_data = json.load(importFile)
+								
+				table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(imported_data)}
+				self.tab_masters.setTable(table_dict)
+				print 'LOAD:\t Font:%s; Deltas loaded from: %s.' %(self.active_font.name, fname)
+
 	def refreshMode(self):
 		if self.rad_glyph.isChecked(): self.pMode = 0
 		if self.rad_window.isChecked(): self.pMode = 1
@@ -225,29 +259,14 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		if self.rad_font.isChecked(): self.pMode = 3
 	
 	def table_populate(self):
-		table_dict = {n:OrderedDict([	('Master Name', master), 
-							('Source [A]', self.active_font.pMasters.names), 
-							('Source [B]', self.active_font.pMasters.names),
-							('V stem [A]', 1.),
-							('V stem [B]', 2.),
-							('H stem [A]', 1.),
-							('H stem [B]', 2.),
-							('tX stem', 0.),
-							('tY stem', 0.),
-							('Width', 0.),
-							('Height', 0.),
-							('Adj. X', 0.00),
-							('Adj. Y', 0.00),
-							('Note', ''),
-						])
-
-						for n, master in enumerate(self.active_font.pMasters.names)}
-
+		init_data = [[master, self.active_font.pMasters.names, self.active_font.pMasters.names, 1., 2., 1., 2., 0., 0.,0., 0., 0.00, 0.00] for master in self.active_font.pMasters.names]
+	 	table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
 		self.tab_masters.setTable(table_dict)
+		
 		#self.tab_masters.resizeColumnsToContents()		
 
 	def execute_table(self):
-		pass
+		print self.tab_masters.getTable()[0]
 
 
 # - RUN ------------------------------
