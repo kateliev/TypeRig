@@ -30,7 +30,8 @@ filler_patterns = [	'FL A FR',
 # - Dependencies -----------------
 import fontlab as fl6
 import fontgate as fgt
-from PythonQt import QtCore, QtGui
+from PythonQt import QtCore
+from typerig import QtGui
 from typerig.proxy import pFont
 from typerig.string import stringGen, strRepDict, fillerList, baseGlyphset
 

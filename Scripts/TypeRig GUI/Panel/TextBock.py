@@ -10,7 +10,8 @@
 # - Dependencies -----------------
 import fontlab as fl6
 import fontgate as fgt
-from PythonQt import QtCore, QtGui
+from PythonQt import QtCore
+from typerig import QtGui
 import cPickle, os
 
 from typerig.proxy import pWorkspace, pTextBlock, pFont

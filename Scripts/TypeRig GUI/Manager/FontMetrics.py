@@ -16,7 +16,8 @@ app_name, app_version = 'TypeRig | Font Metrics', '0.12'
 import os, json
 import fontlab as fl6
 import fontgate as fgt
-from PythonQt import QtCore, QtGui
+from PythonQt import QtCore
+from typerig import QtGui
 from typerig.proxy import pGlyph, pFont
 from typerig.gui import trTableView
 

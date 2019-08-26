@@ -1,1 +1,10 @@
-*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.eggs/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.idea/
