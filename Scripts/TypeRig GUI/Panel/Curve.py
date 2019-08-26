@@ -17,7 +17,8 @@ app_name, app_version = 'TypeRig | Curves', '0.10'
 # - Dependencies -----------------
 import fontlab as fl6
 import fontgate as fgt
-from PythonQt import QtCore, QtGui
+from PythonQt import QtCore
+from typerig import QtGui
 from typerig.glyph import eGlyph
 from typerig.node import eNode
 from typerig.curve import eCurveEx

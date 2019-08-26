@@ -11,7 +11,8 @@
 # - Dependencies -----------------
 #import fontlab as fl6
 #import fontgate as fgt
-from PythonQt import QtCore, QtGui
+from PythonQt import QtCore
+from typerig import QtGui
 
 # -- Internals - Load toolpanels 
 import Panel 
@@ -29,8 +30,8 @@ ss_Toolbox_none = """/* EMPTY STYLESHEET */ """
 class typerig_Panel(QtGui.QDialog):
 	def __init__(self):
 		super(typerig_Panel, self).__init__()
-	
-		self.setStyleSheet(ss_Toolbox_none)
+
+		#self.setStyleSheet(ss_Toolbox_none)
 		
 		# - Layers --------------------------
 		self.chk_ActiveLayer = QtGui.QCheckBox('Active')
@@ -103,8 +104,9 @@ class typerig_Panel(QtGui.QDialog):
 		
 		self.lay_controller = QtGui.QGridLayout()
 		self.fr_controller = QtGui.QFrame()
-		self.lay_controller.setContentsMargins(15,10,5,5)
-				
+		self.lay_controller.setContentsMargins(15,5,5,3)
+		self.lay_controller.setSpacing(5)
+
 		# -- Build layouts -------------------------------
 		self.lay_controller.addWidget(self.chk_ActiveLayer,	0, 0, 1, 1)
 		self.lay_controller.addWidget(self.chk_Masters, 	0, 1, 1, 1)
@@ -179,7 +181,7 @@ class typerig_Panel(QtGui.QDialog):
 # -- Following (uncommented) will override the default OS styling for Qt Widgets on Mac OS.
 from platform import system
 if system() == 'Darwin':
-	QtGui.QApplication.setStyle(QtGui.QStyleFactory.create('Fusion')) # Options: Windows, WindowsXP, WindowsVista, Fusion
+	QtGui.QApplication.setStyle(QtGui.QStyleFactory.create('macintosh')) # Options: Windows, WindowsXP, WindowsVista, Fusion
 
 # - RUN ------------------------------
 dialog = typerig_Panel()

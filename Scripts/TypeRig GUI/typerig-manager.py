@@ -11,7 +11,8 @@
 # - Dependencies -----------------
 #import fontlab as fl6
 #import fontgate as fgt
-from PythonQt import QtCore, QtGui
+from PythonQt import QtCore
+from typerig import QtGui
 
 # -- Internals - Load toolpanels 
 import Manager
@@ -30,7 +31,7 @@ class typerig_Manager(QtGui.QDialog):
 	def __init__(self):
 		super(typerig_Manager, self).__init__()
 	
-		self.setStyleSheet(ss_Toolbox_none)
+		#self.setStyleSheet(ss_Toolbox_none)
 				
 		# - Tabs --------------------------
 		# -- Dynamically load all tabs
@@ -48,8 +49,8 @@ class typerig_Manager(QtGui.QDialog):
 		layoutV.setContentsMargins(0,0,0,0)
 		
 		self.lay_layers = QtGui.QGridLayout()
-		self.lay_layers.setContentsMargins(15,10,5,5)
-				
+		self.lay_layers.setContentsMargins(15,5,5,3)
+
 		# -- Build layouts -------------------------------
 		layoutV.addWidget(self.tabs)
 
@@ -65,7 +66,7 @@ class typerig_Manager(QtGui.QDialog):
 # -- Following (uncommented) will override the default OS styling for Qt Widgets on Mac OS.
 from platform import system
 if system() == 'Darwin':
-	QtGui.QApplication.setStyle(QtGui.QStyleFactory.create('Fusion')) # Options: Windows, WindowsXP, WindowsVista, Fusion
+	QtGui.QApplication.setStyle(QtGui.QStyleFactory.create('macintosh')) # Options: Windows, WindowsXP, WindowsVista, Fusion
 
 # - RUN ------------------------------
 dialog = typerig_Manager()
