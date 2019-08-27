@@ -309,7 +309,7 @@ class tool_tab(QtGui.QWidget):
 			
 			# - Interpolation
 			tx = ((curr_sw_dx - sw_dx0)/(sw_dx1 - sw_dx0))*(1,-1)[sw_dx[0] > sw_dx[1]] + (0,1)[sw_dx[0] > sw_dx[1]]
-			ty = ((curr_sw_dy - sw_dy0)/(sw_dy1 - sw_dy0))*(1,-1)[sw_dy[0] > sw_dy[1]] + (0,1)[sw_dy[0] > sw_dx[1]]
+			ty = ((curr_sw_dy - sw_dy0)/(sw_dy1 - sw_dy0))*(1,-1)[sw_dy[0] > sw_dy[1]] + (0,1)[sw_dy[0] > sw_dy[1]]
 
 			# - Scaling
 			sx = 100./float(self.scaler_dx.edt_1.text) + float(self.scaler_dx.sld_axis.value)/float(self.scaler_dx.edt_1.text)
@@ -343,7 +343,8 @@ class tool_tab(QtGui.QWidget):
 				
 				if not true_update:
 					self.glyph.update()
-				 	fl6.Update(fl6.CurrentGlyph())
+				 	#fl6.Update(fl6.CurrentGlyph())
+				 	fl6.Update(self.glyph.fl)
 				else:
 					self.glyph.update()
 					self.glyph.updateObject(self.glyph.fl, 'Glyph: %s | Mixer | sx: %s; sy: %s; tx: %s; ty: %s.' %(self.glyph.name, sx, sy, tx, ty))
