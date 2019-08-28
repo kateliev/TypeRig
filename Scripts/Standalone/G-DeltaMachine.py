@@ -42,6 +42,13 @@ QComboBox{
 QComboBox QAbstractItemView {
 		border: 0px;
 	}
+
+QTableView::item:selected
+
+{		color:black;
+		background-color:yellow;
+}
+
 """
 
 column_names = ('Master Name',
@@ -108,6 +115,12 @@ class WTableView(QtGui.QTableWidget):
 
 				if 0 < m < 3:
 					combo = QtGui.QComboBox()
+
+					if m%2:
+						combo.setStyleSheet('QComboBox { background-color: rgba(255, 0, 0, 15); }')
+					else:
+						combo.setStyleSheet('QComboBox { background-color: rgba(0, 255, 0, 15); }')
+
 					combo.addItems(data[layer][key])
 					self.setCellWidget(n, m, combo)
 
@@ -116,11 +129,18 @@ class WTableView(QtGui.QTableWidget):
 					
 					if m <= 8: 
 						spin.setSuffix(' u')
+
+						if m%2:
+							spin.setStyleSheet('QDoubleSpinBox { background-color: rgba(255, 0, 0, 15); }')
+						else:
+							spin.setStyleSheet('QDoubleSpinBox { background-color: rgba(0, 255, 0, 15); }')
+
 						spin.setMinimum(0.)
 						spin.setMaximum(1000.)
 
 					if 9 <= m <= 10: 
 						spin.setSuffix(' %')
+						spin.setStyleSheet('QDoubleSpinBox { background-color: rgba(0, 0, 255, 15); }')
 						spin.setMinimum(0.)
 						spin.setMaximum(500.)
 
