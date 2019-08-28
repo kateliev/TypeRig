@@ -28,7 +28,7 @@ from typerig.gui import trSliderCtrl, trMsgSimple
 
 
 # - Init --------------------------------
-app_version = '0.12'
+app_version = '0.14'
 app_name = 'Delta Machine'
 
 ss_controls = """
@@ -217,6 +217,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		self.btn_tableLoad = QtGui.QPushButton('Load')
 		self.btn_getVstems = QtGui.QPushButton('Get V Stems')
 		self.btn_getHstems = QtGui.QPushButton('Get H Stems')
+		self.btn_tableCheck = QtGui.QPushButton('Check All')
 		self.btn_resetT = QtGui.QPushButton('Reset Tx Ty')
 		self.btn_getTx = QtGui.QPushButton('Get Tx Stems')
 		self.btn_getTy = QtGui.QPushButton('Get Ty Stems')
@@ -231,7 +232,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		self.btn_tableSave.clicked.connect(self.file_save_deltas) 
 		self.btn_tableLoad.clicked.connect(self.file_load_deltas) 
 		self.btn_execute.clicked.connect(self.table_execute)
-
+		
 		self.btn_getPart.clicked.connect(lambda: self.get_ratio(True))
 		self.btn_getWhole.clicked.connect(lambda: self.get_ratio(False))
 		self.btn_pushWidth.clicked.connect(lambda: self.push_ratio(False))
@@ -247,13 +248,16 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		self.chk_italic = QtGui.QPushButton('Italic')
 		self.chk_single = QtGui.QPushButton('Anisotropic')
 		self.chk_preview = QtGui.QPushButton('Live Preview')
+		self.chk_boundry = QtGui.QPushButton('Fix Boundry')
 		self.chk_single.setToolTip('Active: Use X and Y to control interpolation.')
 		self.chk_single.setCheckable(True)
 		self.chk_italic.setCheckable(True)
 		self.chk_preview.setCheckable(True)
+		self.chk_boundry.setCheckable(True)
 		self.chk_single.setChecked(False)
 		self.chk_italic.setChecked(False)
 		self.chk_preview.setChecked(False)
+		self.chk_boundry.setChecked(True)
 
 		# -- Radio
 		self.rad_glyph = QtGui.QRadioButton('Glyph')
@@ -286,24 +290,26 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		# - Build layout
 		layoutV = QtGui.QGridLayout() 
 		layoutV.addWidget(QtGui.QLabel('Preferences:'), 	0, 0, 1, 1)
-		layoutV.addWidget(self.btn_tableSave, 				0, 1, 1, 2)
-		layoutV.addWidget(self.btn_tableLoad, 				0, 3, 1, 2)
-		layoutV.addWidget(self.btn_tableRefresh, 			0, 5, 1, 2)
-		layoutV.addWidget(QtGui.QLabel('Source:'),			0, 7, 1, 1, QtCore.Qt.AlignRight)
-		layoutV.addWidget(self.btn_getVstems, 				0, 8, 1, 2)
-		layoutV.addWidget(self.btn_getHstems, 				0, 10, 1, 2)
-		layoutV.addWidget(QtGui.QLabel('Ratio BBOX:'),			0, 12, 1, 1, QtCore.Qt.AlignRight)
-		layoutV.addWidget(self.btn_getPart, 				0, 13, 1, 2)
-		layoutV.addWidget(self.btn_getWhole, 				0, 15, 1, 2)
+		layoutV.addWidget(self.btn_tableCheck, 				0, 1, 1, 2)
+		layoutV.addWidget(self.btn_tableSave, 				0, 3, 1, 2)
+		layoutV.addWidget(self.btn_tableLoad, 				0, 5, 1, 2)
+		layoutV.addWidget(self.btn_tableRefresh, 			0, 7, 1, 2)
+		layoutV.addWidget(QtGui.QLabel('Source:'),			0, 10, 1, 1, QtCore.Qt.AlignRight)
+		layoutV.addWidget(self.btn_getVstems, 				0, 11, 1, 2)
+		layoutV.addWidget(self.btn_getHstems, 				0, 13, 1, 2)
+		layoutV.addWidget(QtGui.QLabel('Ratio BBOX:'),		0, 15, 1, 1, QtCore.Qt.AlignRight)
+		layoutV.addWidget(self.btn_getPart, 				0, 16, 1, 2)
+		layoutV.addWidget(self.btn_getWhole, 				0, 18, 1, 2)
+
 
 		layoutV.addWidget(QtGui.QLabel('Glyph:'), 			1, 0, 1, 1)
 		layoutV.addWidget(self.btn_getArrays, 				1, 1, 1, 6)
-		layoutV.addWidget(QtGui.QLabel('Target:'),			1, 7, 1, 1, QtCore.Qt.AlignRight)
-		layoutV.addWidget(self.btn_getTx, 					1, 8, 1, 2)
-		layoutV.addWidget(self.btn_getTy, 					1, 10, 1, 2)
-		layoutV.addWidget(QtGui.QLabel('Populate:'),		1, 12, 1, 1, QtCore.Qt.AlignRight)
-		layoutV.addWidget(self.btn_pushWidth, 				1, 13, 1, 2)
-		layoutV.addWidget(self.btn_pushHeight, 				1, 15, 1, 2)
+		layoutV.addWidget(QtGui.QLabel('Target:'),			1, 10, 1, 1, QtCore.Qt.AlignRight)
+		layoutV.addWidget(self.btn_getTx, 					1, 11, 1, 2)
+		layoutV.addWidget(self.btn_getTy, 					1, 13, 1, 2)
+		layoutV.addWidget(QtGui.QLabel('Populate:'),		1, 15, 1, 1, QtCore.Qt.AlignRight)
+		layoutV.addWidget(self.btn_pushWidth, 				1, 16, 1, 2)
+		layoutV.addWidget(self.btn_pushHeight, 				1, 18, 1, 2)
 
 		layoutV.addWidget(self.tab_masters, 				2, 0, 15, 20)
 
@@ -324,7 +330,8 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		layoutV.addWidget(QtGui.QLabel('Mode:'),			25, 5, 1, 1)
 		layoutV.addWidget(self.chk_single,					25, 6, 1, 2)
 		layoutV.addWidget(self.chk_italic,					25, 8, 1, 2)
-		layoutV.addWidget(self.chk_preview,					25, 10, 1, 5)
+		layoutV.addWidget(self.chk_boundry,					25, 10, 1, 2)
+		layoutV.addWidget(self.chk_preview,					25, 12, 1, 3)
 		layoutV.addWidget(self.btn_execute, 				25, 15, 1, 5)
 
 		# - Set Widget
@@ -483,7 +490,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 			
 			# - Stems
 			sw_dx = (float(config_data[3]), float(config_data[4]))
-			sw_dy = (float(config_data[5]), float(config_data[6]))
+			sw_dy = (float(config_data[5]), float(config_data[6]))			
 
 			if live_update:
 				curr_sw_dx = float(self.mixer_dx.sld_axis.value)
@@ -494,6 +501,10 @@ class dlg_DeltaMachine(QtGui.QDialog):
 			
 			sw_dx0, sw_dx1 = min(*sw_dx), max(*sw_dx)
 			sw_dy0, sw_dy1 = min(*sw_dy), max(*sw_dy)
+
+			# !!! Very crude boundry error fix
+			if self.chk_boundry.isChecked() and curr_sw_dx == sw_dx1: sw_dx1 += 1
+			if self.chk_boundry.isChecked() and curr_sw_dy == sw_dy1: sw_dy1 += 1
 			
 			# - Interpolation
 			try:
