@@ -243,8 +243,8 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		self.btn_getTy = QtGui.QPushButton('Get Ty Stems')
 		self.btn_getArrays = QtGui.QPushButton('Get Master Sources')
 
-		self.btn_getPart = QtGui.QPushButton('Get Target')
-		self.btn_getWhole = QtGui.QPushButton('Get Source')
+		self.btn_getPart = QtGui.QPushButton('Part')
+		self.btn_getWhole = QtGui.QPushButton('Whole')
 		self.btn_pushWidth = QtGui.QPushButton('Ratio width')
 		self.btn_pushHeight = QtGui.QPushButton('Ratio height')
 		
@@ -370,7 +370,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		if fname != None:
 			with open(fname, 'w') as exportFile:
 				json.dump(self.tab_masters.getTable(), exportFile)
-				print 'SAVE:\t | Delta Machine | Font:%s; Deltas saved to: %s.' %(self.active_font.name, fname)
+				print 'SAVE:\t| Delta Machine | Font:%s; Deltas saved to: %s.' %(self.active_font.name, fname)
 
 	def file_load_deltas(self):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
@@ -382,7 +382,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 								
 				table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in imported_data.iteritems()}
 				self.tab_masters.updateTable(table_dict)
-				print 'LOAD:\t | Delta Machine | Font:%s; Deltas loaded from: %s.' %(self.active_font.name, fname)
+				print 'LOAD:\t| Delta Machine | Font:%s; Deltas loaded from: %s.' %(self.active_font.name, fname)
 
 	# - Table operations
 	def table_refresh(self):
@@ -467,15 +467,34 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		print 'Done:\t| Delta Machine | Stored BBOX data for Glyph: %s' %glyph.name
 
 	def push_ratio(self, height=False):
+		modifiers = QtGui.QApplication.keyboardModifiers() # Listen to Shift - reverses the ratio
+		
+		if modifiers == QtCore.Qt.AltModifier:
+			target = QtGui.QInputDialog.getDouble(self, 'Ratio Calculator','Set Target Ratio:', 100, 0, 500, 2)
+
 		for row in range(self.tab_masters.rowCount):
 			layerName = self.tab_masters.item(row, 0).text()
+			
 			if not height:
-				self.tab_masters.cellWidget(row, 9).setValue(ratfrac(self.ratio_target[layerName].width(), self.ratio_source[layerName].width(), 100))
-				print 'Done:\t| Delta Machine | Pushed width ratio data per master.'
-			else:
-				self.tab_masters.cellWidget(row, 10).setValue(ratfrac(self.ratio_target[layerName].height(), self.ratio_source[layerName].height(), 100))
-				print 'Done:\t| Delta Machine | Pushed height ratio data per master.'
+				ratio_height = ratfrac(self.ratio_target[layerName].width(), self.ratio_source[layerName].width(), 100)
+				
+				if modifiers == QtCore.Qt.ShiftModifier: 
+					ratio_height = 2*100. - ratio_height # Reverse ratio
 
+				elif modifiers == QtCore.Qt.AltModifier:
+					ratio_height = 100 + target - ratio_height # Reverse ratio
+				
+				self.tab_masters.cellWidget(row, 9).setValue(ratio_height)
+			else:
+				if modifiers == QtCore.Qt.ShiftModifier: 
+					ratio_width = 2*100. - ratio_width # Reverse ratio
+					
+				elif modifiers == QtCore.Qt.AltModifier:
+					ratio_width = 100 + target - ratio_width # Reverse ratio
+
+				self.tab_masters.cellWidget(row, 10).setValue(ratio_width)
+		
+		print 'Done:\t| Delta Machine | Pushed Ratio data per master.'
 
 	# - Processing --------------------------
 	def table_execute(self):
@@ -488,13 +507,18 @@ class dlg_DeltaMachine(QtGui.QDialog):
 				self.process_scale(wGlyph, layerIndex, anisotropic=self.chk_single.isChecked(), live_update=False)	
 
 		wGlyph.update()
-		wGlyph.updateObject(wGlyph.fl, 'Glyph: %s | Delta Machine | Layers procesed: %s' %(wGlyph.name, '; '.join(process_out)))
+		wGlyph.updateObject(wGlyph.fl, '| Delta Machine | Glyph: %s\tLayers procesed: %s' %(wGlyph.name, '; '.join(process_out)))
 
-	def process_scale(self, glyph, layerIndex=None, anisotropic=False, live_update=False):
+	def process_scale(self, glyph, layerIndex=None, anisotropic=False, live_update=False, keep_metrics=False):
 		wGlyph = glyph
 		config_data = self.tab_masters.getRow(layerIndex)
 	
 		if len(self.data_coordArrays.keys()) and wGlyph.name in self.data_coordArrays.keys():
+			# - Backup Metrics
+			if keep_metrics:
+				data_lsb, data_rsb = wGlyph.getLSB(config_data[0]), wGlyph.getRSB(config_data[0])
+				data_lsb_eq, data_rsb_eq = wGlyph.getSBeq(config_data[0])
+
 			# - Axis
 			a = self.data_coordArrays[wGlyph.name][config_data[1]]
 			b = self.data_coordArrays[wGlyph.name][config_data[2]]
@@ -559,7 +583,14 @@ class dlg_DeltaMachine(QtGui.QDialog):
 			
 			if live_update:
 				wGlyph.update()
-			 	fl6.Update(wGlyph.fl)	
+			 	fl6.Update(wGlyph.fl)
+
+			# - Restore metrics
+			if keep_metrics:
+				wGlyph.setLSB(data_lsb)	
+				wGlyph.setRSB(data_rsb)	
+				wGlyph.setLSBeq(data_lsb_eq)
+				wGlyph.setRSBeq(data_rsb_eq)
 
 
 # - RUN ------------------------------
