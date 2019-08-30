@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.69
+# VER 	: 0.70
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -510,6 +510,13 @@ class pShape(object):
 	def isChanged(self):
 		return self.data().hasChanges
 
+	def update(self):
+		return self.fl.update()
+
+	# - Management ---------------------------------
+	def setName(self, shape_name):
+		self.data().name = shape_name
+
 	# - Position, composition ---------------------------------
 	def decompose(self):
 		self.fl.decomposite()
@@ -799,6 +806,27 @@ class pGlyph(object):
 			return self.layer(layer).addShape(shape.cloneTopLevel())
 		else:
 			return self.layer(layer).addShape(shape)
+
+	def replaceShape(self, old_shape, new_shape, layer=None):
+		'''Repalce a shape at given layer.
+		Args:
+			old_shape, new_shape (flShape): Shapes
+			layer (str): Layer name
+		Returns:
+			None
+		'''
+		self.layer(layer).replaceShape(old_shape, new_shape)
+
+	def removeShape(self, shape, layer=None, recursive=True):
+		'''Remove a new shape at given layer.
+		Args:
+			old_shape, new_shape (flShape): Shapes
+			layer (str): Layer name
+			recursive (bool): 
+		Returns:
+			None
+		'''
+		self.layer(layer).removeShape(shape, recursive)
 
 	def addShapeContainer(self, shapeList, layer=None, remove=True):
 		'''Add a new shape container* at given layer.
@@ -1091,6 +1119,30 @@ class pGlyph(object):
 			return [(allShapes.index(shape), allContours.index(contour), node.index) for shape in allShapes for contour in shape.contours for node in contour.nodes() if node in self.selectedNodes(layer=layer, filterOn=filterOn, deep=deep)]
 		else:
 			return [(shape, contour, node) for shape in allShapes for contour in shape.contours for node in contour.nodes() if node in self.selectedNodes(layer=layer, filterOn=filterOn, deep=deep)]
+
+	def selectedShapeIndices(self, select_all=False, deep=False):
+		'''Return all indices of nodes selected at current layer.
+		Args:
+			select_all (bool): True all nodes on Shape should be selected. False any node will do.
+		Returns:
+			list[int]
+		'''
+		selection_mode = ['AnyNodeSelected', 'AllContourSelected'][select_all]
+		allShapes = self.shapes() if not deep else self.components()
+
+		return [allShapes.index(shape) for shape in allShapes if shape.hasSelected(selection_mode)]
+		
+
+	def selectedShapes(self, layer=None, select_all=False, deep=False, extend=None):
+		'''Return all shapes that have a node selected.
+		'''
+		selection_mode = ['AnyNodeSelected', 'AllContourSelected'][select_all]
+		allShapes = self.shapes(layer) if not deep else self.components(layer)
+
+		if extend is None:
+			return [allShapes[sid] for sid in self.selectedShapeIndices(select_all, deep)]
+		else:
+			return [extend(allShapes[sid]) for sid in self.selectedShapeIndices(select_all, deep)]
 
 	def selectedCoords(self, layer=None, filterOn=False, applyTransform=False):
 		'''Return the coordinates of all selected nodes at the current layer or other.
