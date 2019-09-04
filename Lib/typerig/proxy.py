@@ -640,6 +640,8 @@ class pGlyph(object):
 		return '<%s name=%s index=%s unicode=%s>' % (self.__class__.__name__, self.name, self.index, self.unicode)
 
 	# - Basics -----------------------------------------------
+	def version(self): return self.fl.lastModified
+
 	def activeLayer(self): return self.fl.activeLayer
 
 	def fg_activeLayer(self): return self.fg.layer
