@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.70
+# VER 	: 0.71
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -381,6 +381,33 @@ class pNode(object):
 
 	def getSmartAngleRadius(self):
 		return self.fl.smartAngleR
+
+class pNodesContainer(object):
+	'''Abstract nodes container
+
+	Constructor:
+		pNodesContainer(list(flNode))
+
+	Attributes:
+		
+	'''
+	def __init__(self, nodeList):
+		self.nodes = nodeList
+		self.bounds = self.getBounds()
+
+	def __repr__(self):
+		return '<%s (%s, %s, %s, %s) nodes=%s>' %(self.__class__.__name__, self.bounds.x, self.bounds.y, self.bounds.width, self.bounds.height, len(self.nodes))
+
+	def getPosition(self):
+		return [(node.x, node.y) for node in self.nodes]
+
+	def getCoord(self):
+		from typerig.brain import Coord
+		return [Coord(node) for node in self.nodes]
+
+	def getBounds(self):
+		from typerig.brain import bounds
+		return bounds(self.getPosition())
 
 class pContour(object):
 	'''Proxy to flContour object
