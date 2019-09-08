@@ -67,6 +67,42 @@ class eNode(pNode):
 
 		return (self.fl, nextNode.fl)
 
+	def cornerRound(self, size=5, curvature=(.9,.9), isRadius=False):
+		from typerig.brain import Coord
+		from typerig.curve import eCurveEx
+
+		# - Calculate unit vectors and shifts
+		nextNode = self.getNextOn(False)
+		prevNode = self.getPrevOn(False)
+
+		nextUnit = Coord(nextNode.asCoord() - self.asCoord()).getUnit()
+		prevUnit = Coord(prevNode.asCoord() - self.asCoord()).getUnit()
+		
+		if not isRadius:
+			from math import atan2, sin
+			angle = atan2(nextUnit | prevUnit, nextUnit & prevUnit)
+			radius = abs((float(size)/2)/sin(angle/2))
+		else:
+			radius = size
+
+		nextShift = nextUnit * radius
+		prevShift = prevUnit * radius
+
+		# - Insert Nodes and process
+		nextNode = self.__class__(self.insertAfter(.01)) # Was 0?, something went wrong in 6871
+		nextNode.smartReloc(self.x, self.y) # Go back because something went wrong in 6871
+
+		self.smartShift(*prevShift.asTuple())
+		nextNode.smartShift(*nextShift.asTuple())
+		
+		# -- Make round corner
+		nextNode.fl.convertToCurve(True)
+		segment = self.getSegmentNodes()
+		curve = eCurveEx(segment)
+		curve.eqHobbySpline(curvature)
+
+		return segment
+
 	def cornerTrap(self, aperture=10, depth=20, trap=2):
 		'''Trap a corner by given aperture.
 
