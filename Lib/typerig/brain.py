@@ -760,6 +760,10 @@ class _Line(object):
 	def __repr__(self):
 		return '<Line: (%s,%s),(%s,%s)>' %(self.p0.x, self.p0.y, self.p1.x, self.p1.y)
 
+	def getLenght(self):
+		from math import hypot
+		return hypot(self.p0.x - self.p1.x, self.p0.y - self.p1.y)
+
 	def getSlope(self):
 		try:
 			return self.yDiff / float(self.xDiff)
