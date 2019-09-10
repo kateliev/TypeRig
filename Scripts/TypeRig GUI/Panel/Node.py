@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.66'
+app_name, app_version = 'TypeRig | Nodes', '0.68'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -236,6 +236,7 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toXHeight = QtGui.QPushButton('X Hgt.')
 		self.btn_toBaseline = QtGui.QPushButton('Base')
 		self.btn_toYpos = QtGui.QPushButton('Y Pos')
+		self.btn_toMpos = QtGui.QPushButton('Measure Line')
 		self.btn_solveY = QtGui.QPushButton('Lineup Min/Max Y')
 		self.btn_solveX = QtGui.QPushButton('Lineup Min/Max X')
 		self.btn_copy = QtGui.QPushButton('Copy Slope')
@@ -341,6 +342,7 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toXHeight.clicked.connect(lambda: self.alignNodes('FontMetrics_3'))
 		self.btn_toBaseline.clicked.connect(lambda: self.alignNodes('FontMetrics_4'))
 		self.btn_toYpos.clicked.connect(lambda: self.alignNodes('FontMetrics_5'))
+		self.btn_toMpos.clicked.connect(lambda: self.alignNodes('FontMetrics_6'))
 		self.btn_alignLayer_V.clicked.connect(lambda: self.alignNodes('Layer_V'))
 		self.btn_alignLayer_H.clicked.connect(lambda: self.alignNodes('Layer_H'))
 
@@ -358,16 +360,18 @@ class alignNodes(QtGui.QGridLayout):
 		self.addWidget(self.btn_bboxCenterY,	1,2,1,2)
 		self.addWidget(self.btn_peerCenterX,	2,0,1,2)
 		self.addWidget(self.btn_peerCenterY,	2,2,1,2)
-		self.addWidget(QtGui.QLabel('Align to Font metrics'), 3,0,1,2)
-		self.addWidget(self.btn_toAscender,		4,0)
-		self.addWidget(self.btn_toCapsHeight,	4,1)
-		self.addWidget(self.btn_toDescender,	4,2)
-		self.addWidget(self.btn_toXHeight,		4,3)
-		self.addWidget(self.btn_toBaseline,		5,0)
-		self.addWidget(self.edt_toYpos,			5,1)
-		self.addWidget(self.btn_toYpos,			5,2)
-		self.addWidget(self.chk_slope, 			5,3)
-		self.addWidget(QtGui.QLabel('Align to Glyph Layer'), 	6, 0, 1, 4)
+		self.addWidget(QtGui.QLabel('Align to Font & Glyph metrics'), 3,0,1,2)
+		self.addWidget(self.btn_toAscender,		4,0,1,1)
+		self.addWidget(self.btn_toCapsHeight,	4,1,1,1)
+		self.addWidget(self.btn_toDescender,	4,2,1,1)
+		self.addWidget(self.btn_toXHeight,		4,3,1,1)
+		self.addWidget(self.btn_toBaseline,		5,0,1,1)
+		self.addWidget(self.edt_toYpos,			5,1,1,1)
+		self.addWidget(self.btn_toYpos,			5,2,1,1)
+		self.addWidget(self.btn_toMpos, 		5,3,1,1)
+		self.addWidget(self.chk_slope, 			6,0,1,4)
+
+		#self.addWidget(QtGui.QLabel('Align to Glyph Layer'), 	6, 0, 1, 4)
 		self.addWidget(self.cmb_select_V, 						7, 0)
 		self.addWidget(self.spb_prc_V, 							7, 1)
 		self.addWidget(self.spb_unit_V, 						7, 2)
@@ -526,6 +530,9 @@ class alignNodes(QtGui.QGridLayout):
 					elif '5' in mode:
 						newY = self.edt_toYpos.value
 						toMaxY = True #self.edt_toYpos.value >= 0
+					elif '6' in mode:
+						newY = glyph.mLine()
+						toMaxY = newY >= 0 
 
 				elif mode == 'Layer_V':
 					if 'BBox' in self.cmb_select_V.currentText:

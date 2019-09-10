@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.71
+# VER 	: 0.72
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -676,6 +676,8 @@ class pGlyph(object):
 	def mask(self): return self.fl.activeLayer.getMaskLayer(True)
 
 	def activeGuides(self): return self.fl.activeLayer.guidelines
+
+	def mLine(self): return self.fl.measurementLine()
 
 	def object(self): return fl6.flObject(self.fl.id)
 
