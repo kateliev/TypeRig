@@ -236,7 +236,7 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toXHeight = QtGui.QPushButton('X Hgt.')
 		self.btn_toBaseline = QtGui.QPushButton('Base')
 		self.btn_toYpos = QtGui.QPushButton('Y Pos')
-		self.btn_toMpos = QtGui.QPushButton('Measure Line')
+		self.btn_toMpos = QtGui.QPushButton('Measure')
 		self.btn_solveY = QtGui.QPushButton('Lineup Min/Max Y')
 		self.btn_solveX = QtGui.QPushButton('Lineup Min/Max X')
 		self.btn_copy = QtGui.QPushButton('Copy Slope')
@@ -265,7 +265,8 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toDescender.setToolTip('Send selected nodes to Descender height.')
 		self.btn_toXHeight.setToolTip('Send selected nodes to X Height.')
 		self.btn_toBaseline.setToolTip('Send selected nodes to Baseline.')
-		self.btn_toYpos.setToolTip('Send selected nodes to Tagged Guideline.')
+		self.btn_toYpos.setToolTip('Send selected nodes to Y coordinate.')
+		self.btn_toMpos.setToolTip('Send selected nodes to Measurment Line.\nSHIFT + Click switch intercept.')
 
 		self.btn_alignLayer_V = QtGui.QPushButton('Vertical')
 		self.btn_alignLayer_H = QtGui.QPushButton('Horizontal')
@@ -462,6 +463,7 @@ class alignNodes(QtGui.QGridLayout):
 
 	def alignNodes(self, mode):
 		process_glyphs = getProcessGlyphs(pMode)
+		modifiers = QtGui.QApplication.keyboardModifiers()
 
 		for glyph in process_glyphs:
 			wLayers = glyph._prepareLayers(pLayers)
@@ -514,25 +516,26 @@ class alignNodes(QtGui.QGridLayout):
 
 					if '0' in mode:
 						newY = layerMetrics.ascender
-						toMaxY = False
+						toMaxY = True if modifiers == QtCore.Qt.ShiftModifier else False 
 					elif '1' in mode:
 						newY = layerMetrics.capsHeight
-						toMaxY = False
+						toMaxY = True if modifiers == QtCore.Qt.ShiftModifier else False 
 					elif '2' in mode:
 						newY = layerMetrics.descender
-						toMaxY = True
+						toMaxY = False if modifiers == QtCore.Qt.ShiftModifier else True 
 					elif '3' in mode:
 						newY = layerMetrics.xHeight
-						toMaxY = False
+						toMaxY = True if modifiers == QtCore.Qt.ShiftModifier else False 
 					elif '4' in mode:
 						newY = 0
-						toMaxY = True
+						toMaxY = False if modifiers == QtCore.Qt.ShiftModifier else True 
 					elif '5' in mode:
 						newY = self.edt_toYpos.value
-						toMaxY = True #self.edt_toYpos.value >= 0
+						toMaxY = False if modifiers == QtCore.Qt.ShiftModifier else True 
 					elif '6' in mode:
 						newY = glyph.mLine()
 						toMaxY = newY >= 0 
+						if modifiers == QtCore.Qt.ShiftModifier: toMaxY = not toMaxY
 
 				elif mode == 'Layer_V':
 					if 'BBox' in self.cmb_select_V.currentText:
