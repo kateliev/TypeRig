@@ -1,5 +1,5 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.72
+# VER 	: 0.73
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -801,6 +801,24 @@ class pGlyph(object):
 		else:
 			return [extend(shape) for shape in self.layer(layer).shapes]
 
+	def dereference(self, layer=None):
+		'''Remove all shape references but leave components.
+		Args:
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+		Returns:
+			list[flShapes]
+		'''
+		wLayer = self.layer(layer)
+		shapes = self.shapes(layer)
+		components = self.containers(layer)
+		only_shapes = [shape for shape in shapes if shape not in components]
+		clones = [shape.cloneTopLevel() for shape in only_shapes]
+
+		wLayer.removeAllShapes()
+		for clone in clones: wLayer.addShape(clone)
+
+		return clones
+
 	def containers(self, layer=None, extend=None):
 		'''Return all complex shapes that contain other shapes at given layer.
 		Args:
@@ -812,6 +830,16 @@ class pGlyph(object):
 			return [shape for shape in self.layer(layer).shapes if len(shape.includesList)]
 		else:
 			return [extend(shape) for shape in self.layer(layer).shapes if len(shape.includesList)]
+
+	def decompose(self, layer=None):
+		'''Decompose all complex shapes that contain other shapes at given layer.
+		Args:
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+		Returns:
+			None
+		'''
+		for container in self.containers(layer):
+			container.decomposite()
 
 	def getBuilders(self, layer=None, store=False):
 		shape_builders = {}
@@ -1027,6 +1055,11 @@ class pGlyph(object):
 		from itertools import combinations
 		return all([layerA.isCompatible(layerB, strong) for layerA, layerB in combinations(self.masters(), 2)])
 
+	def isMixedReference(self):
+		'''Test if glyph has mixed references - components on some layers and referenced shapes on others'''
+		from itertools import combinations
+		return not all([len(self.components(layerA.name))==len(self.components(layerB.name)) for layerA, layerB in combinations(self.masters(), 2)])
+
 	def reportLayerComp(self, strong=False):
 		'''Returns a layer compatibility report'''
 		from itertools import combinations
@@ -1042,15 +1075,7 @@ class pGlyph(object):
 		# !TODO: Undo?
 		if fl:self.fl.update()
 		if fg:self.fg.update()
-
-		'''
-		#!!!NOTE: Problem/bug does not accept Long ID's produced by Python 64 + FL6 64
-		if sys64bit:
-			fl6.flItems.notifyGlyphUpdated(self.fg.id, self.fg.id) 
-		else:
-			fl6.flItems.notifyGlyphUpdated(self.package.id, self.id) 
-		'''
-
+	
 	def updateObject(self, flObject, undoMessage='TypeRig', verbose=True):
 		'''Updates a flObject sends notification to the editor as well as undo/history item.
 		Args:
