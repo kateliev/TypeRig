@@ -1,5 +1,4 @@
 # MODULE: Fontlab 6 Custom Curve Objects | Typerig
-# VER 	: 0.03
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -8,6 +7,8 @@
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
+
+__version__ = '0.3.0'
 
 # - Dependencies -------------------------
 import fontlab as fl6

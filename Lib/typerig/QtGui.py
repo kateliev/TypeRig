@@ -1,3 +1,16 @@
+# MODULE: QtGui | Typerig
+# ----------------------------------------
+# (C) Adam Twardoch, 2019
+#-----------------------------------------
+# www.typerig.com
+
+# No warranties. By using this you agree
+# that you use it at your own risk!
+
+# Note: Mac Os Gui compatibility module
+
+__version__ = '0.0.1'
+
 from PythonQt.QtGui import *
 from platform import system
 

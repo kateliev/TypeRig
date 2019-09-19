@@ -1,5 +1,4 @@
 # MODULE: Fontlab 6 Proxy | Typerig
-# VER 	: 0.72
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -8,6 +7,8 @@
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
+
+__version__ = '0.72.0'
 
 # - Dependencies --------------------------
 import fontlab as fl6

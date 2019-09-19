@@ -1,5 +1,4 @@
 # MODULE: Misc Utils | Typerig
-# VER   : 0.03
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -10,6 +9,8 @@
 # that you use it at your own risk!
 
 # Note: Revisit as most of these are redundant as they were needed for FDK5, some are even from Python 2.4 times
+
+__version__ = '0.2.3'
 
 # - Dependencies -------------------------
 import json

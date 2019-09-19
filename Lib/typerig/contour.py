@@ -1,5 +1,4 @@
 # MODULE: Fontlab 6 Custom Contour Objects | Typerig
-# VER 	: 0.04
 # ----------------------------------------
 # (C) Vassil Kateliev, 2019 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -8,6 +7,8 @@
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
+
+__version__ = '0.4.0'
 
 # - Dependencies -------------------------
 import fontlab as fl6

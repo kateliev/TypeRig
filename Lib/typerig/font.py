@@ -1,5 +1,4 @@
 # MODULE: Fontlab 6 Custom Font Objects | Typerig
-# VER 	: 0.02
 # ----------------------------------------
 # (C) Vassil Kateliev, 2017 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -8,6 +7,8 @@
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
+
+__version__ = '0.2.0'
 
 # - Dependencies -------------------------
 import json

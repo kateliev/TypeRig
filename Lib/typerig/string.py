@@ -1,5 +1,4 @@
 # MODULE: String | Typerig
-# VER 	: 0.18
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -9,8 +8,9 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-# - Dependancies -----------------
+__version__ = '0.18.0'
 
+# - Dependancies -----------------
 
 # - Collections (Static)
 # -- Values

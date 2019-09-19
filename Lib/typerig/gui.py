@@ -1,5 +1,4 @@
 # MODULE: Gui | Typerig
-# VER 	: 0.01
 # NOTE	: Assorted Gui Elements
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
@@ -9,6 +8,8 @@
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
+
+__version__ = '0.0.2'
 
 # - Dependencies --------------------------
 from PythonQt import QtCore, QtGui
