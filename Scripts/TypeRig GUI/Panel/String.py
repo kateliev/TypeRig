@@ -13,7 +13,7 @@ global pMode
 pLayers = None
 pMode = 0
 
-app_name, app_version = 'TypeRig | String', '0.33'
+app_name, app_version = 'TypeRig | String', '0.34'
 glyphSep = '/'
 joinOpt = {'Empty':'', 'Newline':'\n'}
 filler_patterns = [	'FL A FR',
@@ -96,16 +96,19 @@ class QStringGen(QtGui.QGridLayout):
 		self.btn_genUni = QtGui.QPushButton('Unicode Str.')
 		self.btn_populate = QtGui.QPushButton('&Populate lists')
 		self.btn_clear = QtGui.QPushButton('&Rest fields')
+		self.btn_glyphNames = QtGui.QPushButton('Get Selected Names')
 
 		self.btn_genCopy.setToolTip('Generate the pair string using Glyph Names and send it to the clipboard.')
 		self.btn_genUni.setToolTip('Generate the pair string using Unicode Characters and send it to the clipboard.')
 		self.btn_populate.setToolTip('Populate name lists with existing glyph names in active font.')
 		self.btn_clear.setToolTip('Clear all manual input fields.')
+		self.btn_glyphNames.setToolTip('Get Names of currently selected glyphs.')
 
 		self.btn_clear.clicked.connect(self.clear)
 		self.btn_populate.clicked.connect(self.populate)
 		self.btn_genCopy.clicked.connect(self.generate)
 		self.btn_genUni.clicked.connect(self.generateUni)
+		self.btn_glyphNames.clicked.connect(self.getNames)
 		
 		# - Build
 		self.addWidget(QtGui.QLabel('A:'), 		0, 0, 1, 1)
@@ -135,6 +138,7 @@ class QStringGen(QtGui.QGridLayout):
 		self.addWidget(self.btn_genUni, 		10, 6, 1, 3)
 		self.addWidget(QtGui.QLabel('OUT:'), 	11, 0, 1, 1)
 		self.addWidget(self.edt_output, 		11, 1, 4, 8)
+		self.addWidget(self.btn_glyphNames, 	16, 1, 4, 8)
 
 		self.setColumnStretch(0, 0)
 		self.setColumnStretch(1, 2)
@@ -142,6 +146,15 @@ class QStringGen(QtGui.QGridLayout):
 		self.setColumnStretch(7, 1)
 				
 	# - Procedures
+	def getNames(self):
+		font = pFont()
+		selection_names = [glyph.name for glyph in font.selected_pGlyphs()]
+		selection_str = '/' + ' /'.join(selection_names)
+
+		print 'SELECTION:\t %s' %selection_str
+		clipboard = QtGui.QApplication.clipboard()
+		clipboard.setText(selection_str)
+
 	def clear(self):
 		self.glyphNames = baseGlyphset
 		self.edt_inputA.clear()
