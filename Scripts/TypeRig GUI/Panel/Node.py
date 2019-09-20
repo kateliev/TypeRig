@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.68'
+app_name, app_version = 'TypeRig | Nodes', '0.70'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -998,69 +998,75 @@ class advMovement(QtGui.QVBoxLayout):
 
 	def moveNodes(self, offset_x, offset_y, method, inPercent):
 		# - Init
-		glyph = eGlyph()
 		font = pFont()
-		selectedNodes = glyph.selectedNodes(extend=eNode)
+		glyph = eGlyph()
 		italic_angle = font.getItalicAngle()
-		
-		# -- Scaling move - coordinates as percent of position
-		def scaleOffset(node, off_x, off_y):
-			return (-node.x + width*(float(node.x)/width + offset_x), -node.y + height*(float(node.y)/height + offset_y))
 
-		width = glyph.layer().boundingBox.width() # glyph.layer().advanceWidth
-		height = glyph.layer().boundingBox.height() # glyph.layer().advanceHeight
+		process_glyphs = getProcessGlyphs(pMode)
 
-		# - Process
-		if method == self.methodList[0]:
-			for node in selectedNodes:
-				if node.isOn:
-					if inPercent:						
-						node.smartShift(*scaleOffset(node, offset_x, offset_y))
+		for glyph in process_glyphs:
+			wLayers = glyph._prepareLayers(pLayers)
+
+			for layer in wLayers:
+				selectedNodes = glyph.selectedNodes(layer=layer, extend=eNode)
+				
+				
+				# -- Scaling move - coordinates as percent of position
+				def scaleOffset(node, off_x, off_y):
+					return (-node.x + width*(float(node.x)/width + offset_x), -node.y + height*(float(node.y)/height + offset_y))
+
+				width = glyph.layer(layer).boundingBox.width() # glyph.layer().advanceWidth
+				height = glyph.layer(layer).boundingBox.height() # glyph.layer().advanceHeight
+
+				# - Process
+				if method == self.methodList[0]:
+					for node in selectedNodes:
+						if node.isOn:
+							if inPercent:						
+								node.smartShift(*scaleOffset(node, offset_x, offset_y))
+							else:
+								node.smartShift(offset_x, offset_y)
+
+				elif method == self.methodList[1]:
+					for node in selectedNodes:
+						if inPercent:						
+							node.shift(*scaleOffset(node, offset_x, offset_y))
+						else:
+							node.shift(offset_x, offset_y)
+
+				elif method == self.methodList[2]:
+					for node in selectedNodes:
+						if inPercent:						
+							node.interpShift(*scaleOffset(node, offset_x, offset_y))
+						else:
+							node.interpShift(offset_x, offset_y)
+
+				elif method == self.methodList[3]:
+					if italic_angle != 0:
+						for node in selectedNodes:
+							if inPercent:						
+								node.slantShift(*scaleOffset(node, offset_x, offset_y))
+							else:
+								node.slantShift(offset_x, offset_y, italic_angle)
 					else:
-						node.smartShift(offset_x, offset_y)
+						for node in selectedNodes:
+							if inPercent:						
+								node.smartShift(*scaleOffset(node, offset_x, offset_y))
+							else:
+								node.smartShift(offset_x, offset_y)
 
-		elif method == self.methodList[1]:
-			for node in selectedNodes:
-				if inPercent:						
-					node.shift(*scaleOffset(node, offset_x, offset_y))
-				else:
-					node.shift(offset_x, offset_y)
+				elif method == self.methodList[4]:			
+					current_layer = glyph.activeLayer().name
 
-		elif method == self.methodList[2]:
-			for node in selectedNodes:
-				if inPercent:						
-					node.interpShift(*scaleOffset(node, offset_x, offset_y))
-				else:
-					node.interpShift(offset_x, offset_y)
-
-		elif method == self.methodList[3]:
-			if italic_angle != 0:
-				for node in selectedNodes:
-					if inPercent:						
-						node.slantShift(*scaleOffset(node, offset_x, offset_y))
+					if len(self.aux.copyLine) and current_layer in self.aux.copyLine:
+						for node in selectedNodes:
+							node.slantShift(offset_x, offset_y, -90 + self.aux.copyLine[current_layer].getAngle())				
 					else:
-						node.slantShift(offset_x, offset_y, italic_angle)
-			else:
-				for node in selectedNodes:
-					if inPercent:						
-						node.smartShift(*scaleOffset(node, offset_x, offset_y))
-					else:
-						node.smartShift(offset_x, offset_y)
+						print 'ERROR:\tNo slope information for layer found!\nNOTE:\tPlease <<Copy Slope>> first using TypeRig Node align toolbox.'
 
-		elif method == self.methodList[4]:			
-			current_layer = glyph.activeLayer().name
-
-			if len(self.aux.copyLine) and current_layer in self.aux.copyLine:
-				for node in selectedNodes:
-					node.slantShift(offset_x, offset_y, -90 + self.aux.copyLine[current_layer].getAngle())				
-			else:
-				print 'ERROR:\tNo slope information for Active layer found!\nNOTE:\tPlease <<Copy Slope>> first using TypeRig Node align toolbox.'
-
-		# - Set Undo
-		glyph.updateObject(glyph.activeLayer(), '%s @ %s.' %(method, glyph.activeLayer().name), verbose=False)
-
-		# - Finish it
-		glyph.update()
+			# - Finish it
+			glyph.update()
+			glyph.updateObject(glyph.fl, 'Node: %s @ %s.' %(method, '; '.join(wLayers)))
 
 	def onUp(self):
 		self.moveNodes(.0, float(self.edt_offY.text), method=str(self.cmb_methodSelector.currentText), inPercent=self.chk_percent.isChecked())
