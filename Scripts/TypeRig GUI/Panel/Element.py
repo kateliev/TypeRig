@@ -1,4 +1,4 @@
-#FLM: Glyph: Element
+#FLM: Glyph: Elements
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Element', '0.02'
+app_name, app_version = 'TypeRig | Elements', '0.02'
 
 # - Dependencies -----------------
 import fontlab as fl6
