@@ -18,7 +18,7 @@ from typerig.proxy import pFont, pGlyph
 from typerig.brain import Coord
 
 # - Init --------------------------------
-app_version = '1.1'
+app_version = '1.2'
 app_name = 'Insert elements'
 
 # -- Syntax
@@ -249,6 +249,16 @@ class dlg_glyphComposer(QtGui.QDialog):
 										w_shape = self.active_font.findShape(insert_name, layer)
 										insert_origin = Coord(w_shape.boundingBox.x() + w_shape.boundingBox.height(), w_shape.boundingBox.y() + w_shape.boundingBox.width())
 									
+									elif syn_label in insert[0]: # Shape origin: At source Glyphs Labeled Node
+										insert_name, node_label = insert[0].split(syn_label)
+										for glyph in self.active_font.pGlyphs():
+											w_shape = glyph.findShape(insert_name, layer)
+											
+											if w_shape is not None:
+												insert_origin = Coord(glyph.findNodeCoords(node_label, layer))
+												break											
+
+										
 									else: # Shape origin: Not set
 										insert_name = insert[0]
 										w_shape = self.active_font.findShape(insert_name, layer)
