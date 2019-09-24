@@ -1,4 +1,4 @@
-#FLM: Delta Machine
+#FLM: TR: Delta Machine
 # ----------------------------------------
 # (C) Vassil Kateliev, 2019 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -28,8 +28,8 @@ from typerig.gui import trSliderCtrl, trMsgSimple
 
 
 # - Init --------------------------------
-app_version = '0.14'
-app_name = 'Delta Machine'
+app_version = '0.15'
+app_name = 'TypeRig | Delta Machine'
 
 ss_controls = """
 QDoubleSpinBox { 
@@ -54,12 +54,12 @@ QTableView::item:selected
 column_names = ('Master Name',
 				'Source [A]', 
 				'Source [B]', 
-				'V stem [A]',
-				'V stem [B]',
-				'H stem [A]',
-				'H stem [B]', 
-				'V stem [tX]',
-				'H stem [tY]', 
+				'V-stem [A]',
+				'V-stem [B]',
+				'H-stem [A]',
+				'H-stem [B]', 
+				'V[dX]',
+				'H[dY]', 
 				'Width', 
 				'Height',
 				'Adj. X', 
@@ -77,6 +77,7 @@ class WTableView(QtGui.QTableWidget):
 		super(WTableView, self).__init__()
 		
 		# - Init
+		self.setStyleSheet(ss_controls)
 		self.setColumnCount(max(map(len, data.values())))
 		self.setRowCount(len(data.keys()))
 	
@@ -127,13 +128,24 @@ class WTableView(QtGui.QTableWidget):
 				if 2 < m < len(data[layer].keys()):
 					spin = QtGui.QDoubleSpinBox()
 					
-					if m <= 8: 
+					if m <= 6: 
 						spin.setSuffix(' u')
 
 						if m%2:
 							spin.setStyleSheet('QDoubleSpinBox { background-color: rgba(255, 0, 0, 15); }')
 						else:
 							spin.setStyleSheet('QDoubleSpinBox { background-color: rgba(0, 255, 0, 15); }')
+
+						spin.setMinimum(0.)
+						spin.setMaximum(1000.)
+
+					if 7 <= m <= 8: 
+						spin.setSuffix(' u')
+
+						if m%2:
+							spin.setStyleSheet('QDoubleSpinBox { background-color: rgba(255, 200, 0, 25); }')
+						else:
+							spin.setStyleSheet('QDoubleSpinBox { background-color: rgba(255, 200, 0, 25); }')
 
 						spin.setMinimum(0.)
 						spin.setMaximum(1000.)
@@ -214,7 +226,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		super(dlg_DeltaMachine, self).__init__()
 	
 		# - Init
-		self.setStyleSheet(ss_controls)
+		#self.setStyleSheet(ss_controls)
 		
 		self.pMode = 0
 		self.active_font = pFont()
@@ -230,33 +242,41 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		self.table_populate()
 		self.tab_masters.selectionModel().selectionChanged.connect(self.set_sliders)
 		
+		# -- Combos
+		self.cmb_infoArrays = QtGui.QComboBox()
+
 		# -- Buttons
 		self.btn_execute = QtGui.QPushButton('Execute transformation')
 		self.btn_tableRefresh = QtGui.QPushButton('Reset')
 		self.btn_tableSave = QtGui.QPushButton('Save')
 		self.btn_tableLoad = QtGui.QPushButton('Load')
-		self.btn_getVstems = QtGui.QPushButton('Get V Stems')
-		self.btn_getHstems = QtGui.QPushButton('Get H Stems')
+		self.btn_getVstems = QtGui.QPushButton('Get V-stems')
+		self.btn_getHstems = QtGui.QPushButton('Get H-stems')
 		self.btn_tableCheck = QtGui.QPushButton('Check All')
-		self.btn_resetT = QtGui.QPushButton('Reset Tx Ty')
-		self.btn_getTx = QtGui.QPushButton('Get Tx Stems')
-		self.btn_getTy = QtGui.QPushButton('Get Ty Stems')
+		self.btn_resetT = QtGui.QPushButton('Reset dX dY')
+		self.btn_getTx = QtGui.QPushButton('Get V[dX]')
+		self.btn_getTy = QtGui.QPushButton('Get H[dY]')
 		self.btn_getArrays = QtGui.QPushButton('Get Master Sources')
 
-		self.btn_getPart = QtGui.QPushButton('Part')
-		self.btn_getWhole = QtGui.QPushButton('Whole')
-		self.btn_pushWidth = QtGui.QPushButton('Ratio width')
-		self.btn_pushHeight = QtGui.QPushButton('Ratio height')
+		self.btn_getPart = QtGui.QPushButton('Get Part')
+		self.btn_getWhole = QtGui.QPushButton('Get Whole')
+		self.btn_pushWidthPW = QtGui.QPushButton('Eval Width')
+		self.btn_pushHeightPW = QtGui.QPushButton('Eval Height')
+		self.btn_pushWidth = QtGui.QPushButton('Set Width Ratio')
+		self.btn_pushHeight = QtGui.QPushButton('Set Height Ratio')
 		
+		self.btn_tableCheck.clicked.connect(self.table_check_all)
 		self.btn_tableRefresh.clicked.connect(self.table_populate)
 		self.btn_tableSave.clicked.connect(self.file_save_deltas) 
 		self.btn_tableLoad.clicked.connect(self.file_load_deltas) 
 		self.btn_execute.clicked.connect(self.table_execute)
-		
+
 		self.btn_getPart.clicked.connect(lambda: self.get_ratio(True))
 		self.btn_getWhole.clicked.connect(lambda: self.get_ratio(False))
-		self.btn_pushWidth.clicked.connect(lambda: self.push_ratio(False))
-		self.btn_pushHeight.clicked.connect(lambda: self.push_ratio(True))
+		self.btn_pushWidthPW.clicked.connect(lambda: self.push_ratio(False, True))
+		self.btn_pushHeightPW.clicked.connect(lambda: self.push_ratio(True, True))
+		self.btn_pushWidth.clicked.connect(lambda: self.push_ratio(False, False))
+		self.btn_pushHeight.clicked.connect(lambda: self.push_ratio(True, False))
 
 		self.btn_getArrays.clicked.connect(self.get_coordArrays) 
 		self.btn_getVstems.clicked.connect(lambda: self.get_Stems(True))
@@ -311,19 +331,22 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		layoutV = QtGui.QGridLayout() 
 		layoutV.addWidget(QtGui.QLabel('Preferences:'), 	0, 0, 1, 1)
 		layoutV.addWidget(self.btn_tableCheck, 				0, 1, 1, 2)
-		layoutV.addWidget(self.btn_tableSave, 				0, 3, 1, 2)
-		layoutV.addWidget(self.btn_tableLoad, 				0, 5, 1, 2)
-		layoutV.addWidget(self.btn_tableRefresh, 			0, 7, 1, 2)
+		layoutV.addWidget(self.btn_tableSave, 				0, 3, 1, 1)
+		layoutV.addWidget(self.btn_tableLoad, 				0, 4, 1, 4)
+		layoutV.addWidget(self.btn_tableRefresh, 			0, 8, 1, 1)
 		layoutV.addWidget(QtGui.QLabel('Source:'),			0, 10, 1, 1, QtCore.Qt.AlignRight)
 		layoutV.addWidget(self.btn_getVstems, 				0, 11, 1, 2)
 		layoutV.addWidget(self.btn_getHstems, 				0, 13, 1, 2)
 		layoutV.addWidget(QtGui.QLabel('Ratio BBOX:'),		0, 15, 1, 1, QtCore.Qt.AlignRight)
-		layoutV.addWidget(self.btn_getPart, 				0, 16, 1, 2)
-		layoutV.addWidget(self.btn_getWhole, 				0, 18, 1, 2)
+		layoutV.addWidget(self.btn_getPart, 				0, 16, 1, 1)
+		layoutV.addWidget(self.btn_getWhole, 				0, 17, 1, 1)
+		layoutV.addWidget(self.btn_pushWidthPW, 			0, 18, 1, 1)
+		layoutV.addWidget(self.btn_pushHeightPW, 			0, 19, 1, 1)
 
 
-		layoutV.addWidget(QtGui.QLabel('Glyph:'), 			1, 0, 1, 1)
-		layoutV.addWidget(self.btn_getArrays, 				1, 1, 1, 6)
+		layoutV.addWidget(QtGui.QLabel('Master data:'), 	1, 0, 1, 1)
+		layoutV.addWidget(self.cmb_infoArrays, 				1, 1, 1, 2)
+		layoutV.addWidget(self.btn_getArrays, 				1, 3, 1, 6)
 		layoutV.addWidget(QtGui.QLabel('Target:'),			1, 10, 1, 1, QtCore.Qt.AlignRight)
 		layoutV.addWidget(self.btn_getTx, 					1, 11, 1, 2)
 		layoutV.addWidget(self.btn_getTy, 					1, 13, 1, 2)
@@ -333,9 +356,9 @@ class dlg_DeltaMachine(QtGui.QDialog):
 
 		layoutV.addWidget(self.tab_masters, 				2, 0, 15, 20)
 
-		layoutV.addWidget(QtGui.QLabel('LERP [tX]:'),		23, 0, 1, 1, QtCore.Qt.AlignTop)
+		layoutV.addWidget(QtGui.QLabel('LERP [dX]:'),		23, 0, 1, 1, QtCore.Qt.AlignTop)
 		layoutV.addLayout(self.mixer_dx,					23, 1, 1, 4)
-		layoutV.addWidget(QtGui.QLabel('[tY]:'),			23, 5, 1, 1, QtCore.Qt.AlignTop | QtCore.Qt.AlignRight)
+		layoutV.addWidget(QtGui.QLabel('[dY]:'),			23, 5, 1, 1, QtCore.Qt.AlignTop | QtCore.Qt.AlignRight)
 		layoutV.addLayout(self.mixer_dy,					23, 6, 1, 4)
 		layoutV.addWidget(QtGui.QLabel('Width:'),			23, 10, 1, 1, QtCore.Qt.AlignTop | QtCore.Qt.AlignRight)
 		layoutV.addLayout(self.scaler_dx,					23, 11, 1, 4)
@@ -391,6 +414,15 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		if self.rad_selection.isChecked(): self.pMode = 2
 		if self.rad_font.isChecked(): self.pMode = 3
 		self.data_glyphs = getProcessGlyphs(self.pMode)
+
+	def table_check_all(self):
+		for row in range(self.tab_masters.rowCount):
+			if self.tab_masters.item(row,0).checkState() == QtCore.Qt.Unchecked:
+				self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Checked)
+				self.btn_tableCheck.setText('Uncheck all')
+			else:
+				self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Unchecked)
+				self.btn_tableCheck.setText('Check all')
 	
 	def table_populate(self):
 		init_data = [[master, self.active_font.pMasters.names, self.active_font.pMasters.names, 1., 2., 1., 2., 0., 0.,100, 100, 0.00, 0.00] for master in self.active_font.pMasters.names]
@@ -401,6 +433,10 @@ class dlg_DeltaMachine(QtGui.QDialog):
 	def get_coordArrays(self):
 		glyph = eGlyph()
 		self.data_coordArrays.update({glyph.name:{master_name:glyph._getCoordArray(master_name) for master_name in self.active_font.masters()}})
+		
+		self.cmb_infoArrays.clear()
+		self.cmb_infoArrays.addItems(sorted(self.data_coordArrays.keys()))
+
 		print 'Done:\t| Delta Machine | Updated CoordArrays.\tGlyph:%s' %glyph.name
 
 	def get_Stems(self, vertical=True, source=True):
@@ -466,33 +502,41 @@ class dlg_DeltaMachine(QtGui.QDialog):
 
 		print 'Done:\t| Delta Machine | Stored BBOX data for Glyph: %s' %glyph.name
 
-	def push_ratio(self, height=False):
+	def push_ratio(self, height=False, bbox=False):
 		modifiers = QtGui.QApplication.keyboardModifiers() # Listen to Shift - reverses the ratio
 		
-		if modifiers == QtCore.Qt.AltModifier:
-			target = QtGui.QInputDialog.getDouble(self, 'Ratio Calculator','Set Target Ratio:', 100, 0, 500, 2)
+		if bbox:
+			if modifiers == QtCore.Qt.AltModifier:
+				target = QtGui.QInputDialog.getDouble(self, 'Ratio Calculator','Set Target Ratio:', 100, 0, 500, 2)
 
-		for row in range(self.tab_masters.rowCount):
-			layerName = self.tab_masters.item(row, 0).text()
-			
-			if not height:
-				ratio_height = ratfrac(self.ratio_target[layerName].width(), self.ratio_source[layerName].width(), 100)
+			for row in range(self.tab_masters.rowCount):
+				layerName = self.tab_masters.item(row, 0).text()
 				
-				if modifiers == QtCore.Qt.ShiftModifier: 
-					ratio_height = 2*100. - ratio_height # Reverse ratio
-
-				elif modifiers == QtCore.Qt.AltModifier:
-					ratio_height = 100 + target - ratio_height # Reverse ratio
-				
-				self.tab_masters.cellWidget(row, 9).setValue(ratio_height)
-			else:
-				if modifiers == QtCore.Qt.ShiftModifier: 
-					ratio_width = 2*100. - ratio_width # Reverse ratio
+				if not height:
+					ratio_height = ratfrac(self.ratio_target[layerName].width(), self.ratio_source[layerName].width(), 100)
 					
-				elif modifiers == QtCore.Qt.AltModifier:
-					ratio_width = 100 + target - ratio_width # Reverse ratio
+					if modifiers == QtCore.Qt.ShiftModifier: 
+						ratio_height = 2*100. - ratio_height # Reverse ratio
 
-				self.tab_masters.cellWidget(row, 10).setValue(ratio_width)
+					elif modifiers == QtCore.Qt.AltModifier:
+						ratio_height = 100 + target - ratio_height # Reverse ratio
+					
+					self.tab_masters.cellWidget(row, 9).setValue(ratio_height)
+				else:
+					if modifiers == QtCore.Qt.ShiftModifier: 
+						ratio_width = 2*100. - ratio_width # Reverse ratio
+						
+					elif modifiers == QtCore.Qt.AltModifier:
+						ratio_width = 100 + target - ratio_width # Reverse ratio
+
+					self.tab_masters.cellWidget(row, 10).setValue(ratio_width)
+
+		else:
+			ratio = QtGui.QInputDialog.getDouble(self, 'Ratio','Enter Ratio:', 100, -500, 500, 2)
+			for row in range(self.tab_masters.rowCount):
+				self.tab_masters.cellWidget(row, [9, 10][height]).setValue(ratio)
+		
+
 		
 		print 'Done:\t| Delta Machine | Pushed Ratio data per master.'
 
