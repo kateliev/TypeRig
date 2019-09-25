@@ -7,7 +7,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-# - Dependencies -----------------
+# - Dependencies -------------------------
 import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore
@@ -21,7 +21,7 @@ from typerig.brain import Coord, Line
 from math import radians
 import os
 
-# -- Syntax
+# - Syntax -------------------------------
 syn_comment = '#'
 syn_insert = '->'
 syn_label = '!'
@@ -40,7 +40,7 @@ syn_bboxBL = syn_label + 'BL'
 syn_bboxBR = syn_label + 'BR'
 syn_passlayer = syn_label + 'passlayer'
 
-# -- Strings 
+# - Strings ------------------------------
 str_help = '''Examples:
 _element_ -> A B C D 
 Inserts _element_ into glyphs with names /A, /B, /C, /D at the layer specified using the layer selector.
@@ -78,12 +78,12 @@ layer2 - > e1!BL@!foo e2!TL@!baz^-50,0 -> H N
 Inserts elements e1, e2, into every glyph (/H, /N) at specified node tags with correction different for every layer set explicitly.
 '''
 
-# - Init
+# - Init ------------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '0.15'
+app_name, app_version = 'TypeRig | Elements', '0.20'
 
 # - Sub-widgets --------------------
 class MLineEdit(QtGui.QLineEdit):
@@ -148,7 +148,6 @@ class TrPlainTextEdit(QtGui.QPlainTextEdit):
 		selection = [g.name for g in temp_font.selectedGlyphs()]
 		self.insertPlainText(' '.join(selection))
 		
-
 class basicOps(QtGui.QGridLayout):
 	# - Basic Node operations
 	def __init__(self):
@@ -159,33 +158,65 @@ class basicOps(QtGui.QGridLayout):
 		self.edt_shapeName.setPlaceholderText('Element name')
 
 		self.btn_setShapeName = QtGui.QPushButton('&Set Name')
-		self.btn_delShapeName = QtGui.QPushButton('&Unlink References')
+		self.btn_unlinkShape = QtGui.QPushButton('&Unlink References')
+		self.btn_delShape = QtGui.QPushButton('&Remove')
+		self.btn_lockShape = QtGui.QPushButton('&Lock')
 
-		self.btn_setShapeName.clicked.connect(lambda: self.setShapeName())
-		self.btn_delShapeName.clicked.connect(lambda: self.delShapeName())
+		self.btn_setShapeName.clicked.connect(self.shape_setname)
+		self.btn_unlinkShape.clicked.connect(self.shape_unlink)
+		self.btn_delShape.clicked.connect(self.shape_delete)
 
 		self.addWidget(self.edt_shapeName, 		0, 0, 1, 6)
 		self.addWidget(self.btn_setShapeName, 	1, 0, 1, 3)
-		self.addWidget(self.btn_delShapeName, 	1, 3, 1, 3)
+		self.addWidget(self.btn_unlinkShape, 	1, 3, 1, 3)
+		self.addWidget(self.btn_lockShape, 		2, 0, 1, 3)
+		self.addWidget(self.btn_delShape, 		2, 3, 1, 3)
 
 	def reset_fileds(self):
 		self.edt_shapeName.clear()
 
-	def setShapeName(self):
+	def shape_setname(self):
 		process_glyphs = getProcessGlyphs(pMode)
 
 		for glyph in process_glyphs:
-			wLayers = glyph._prepareLayers(pLayers)
+			process_layers = glyph._prepareLayers(pLayers)
 
-			for layer in wLayers:
+			for layer in process_layers:
 				#print glyph.selectedAtShapes(index=False, layer=layer, deep=False)
 				wShape = pShape(glyph.selectedAtShapes(index=False, layer=layer, deep=False)[0][0])
 				wShape.setName(self.edt_shapeName.text)
 
 			glyph.update()
-			glyph.updateObject(glyph.fl, 'Set Element Name @ %s.' %'; '.join(wLayers))
-		
+			glyph.updateObject(glyph.fl, 'Set Element Name @ %s.' %'; '.join(process_layers))
+
 		self.reset_fileds()
+
+	def shape_delete(self):
+		process_glyphs = getProcessGlyphs(pMode)
+
+		for glyph in process_glyphs:
+			process_layers = glyph._prepareLayers(pLayers)
+			process_shapes = {layer:glyph.selectedAtShapes(index=False, layer=layer, deep=False)[0][0] for layer in process_layers}
+				
+			for layer, shape in process_shapes.items():
+				glyph.layer(layer).removeShape(shape)
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, 'Remove Element @ %s.' %'; '.join(process_layers))
+
+	def shape_unlink(self):
+		process_glyphs = getProcessGlyphs(pMode)
+
+		for glyph in process_glyphs:
+			process_layers = glyph._prepareLayers(pLayers)
+			process_shapes = {layer:glyph.selectedAtShapes(index=False, layer=layer, deep=False)[0][0] for layer in process_layers}
+				
+			for layer, shape in process_shapes.items():
+				glyph.addShape(shape, layer, clone=True)
+				glyph.layer(layer).removeShape(shape)
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, 'Unlink Element @ %s.' %'; '.join(process_layers))
 
 class alignShapes(QtGui.QGridLayout):
 	# - Align Contours
@@ -312,12 +343,21 @@ class glyphComposer(QtGui.QGridLayout):
 		self.parentWgt = parent
 
 		# - Widgets
+		self.cmb_fontShapes = QtGui.QComboBox()
+		self.btn_populateShapes = QtGui.QPushButton('Populate')
+		self.btn_insertShape = QtGui.QPushButton('Insert')
+		self.btn_replaceShape = QtGui.QPushButton('Replace')
 		self.btn_help = QtGui.QPushButton('Help')
 		self.btn_saveExpr = QtGui.QPushButton('Save')
 		self.btn_loadExpr = QtGui.QPushButton('Load')
 		self.btn_exec = QtGui.QPushButton('Execute')
 
-		self.btn_exec.clicked.connect(self.process)
+		self.cmb_fontShapes.setEditable(True)
+
+		self.btn_populateShapes.clicked.connect(self.populate_shapes)
+		self.btn_insertShape.clicked.connect(self.shape_insert)
+		self.btn_replaceShape.clicked.connect(self.shape_replace)
+		self.btn_exec.clicked.connect(self.process_insert)
 		self.btn_saveExpr.clicked.connect(self.expr_toFile)
 		self.btn_loadExpr.clicked.connect(self.expr_fromFile)
 		self.btn_help.clicked.connect(lambda: QtGui.QMessageBox.information(self.parentWgt, 'Help', str_help))
@@ -325,12 +365,17 @@ class glyphComposer(QtGui.QGridLayout):
 		self.txt_editor = TrPlainTextEdit()
 		
 		# - Build layouts 
-		self.addWidget(QtGui.QLabel('Insert elements:'),	2, 0, 1, 2)
-		self.addWidget(self.txt_editor,						4, 0, 30, 4)
-		self.addWidget(self.btn_saveExpr, 					34, 0, 1, 2)
-		self.addWidget(self.btn_loadExpr, 					34, 2, 1, 2)
-		self.addWidget(self.btn_help,						35, 0, 1, 2)
-		self.addWidget(self.btn_exec, 						35, 2, 1, 2)
+		self.addWidget(QtGui.QLabel('Insert elements:'),			0, 0, 1, 4)
+		self.addWidget(self.cmb_fontShapes,							1, 0, 1, 6)
+		self.addWidget(self.btn_populateShapes,						1, 6, 1, 2)
+		self.addWidget(self.btn_insertShape,						2, 0, 1, 4)
+		self.addWidget(self.btn_replaceShape,						2, 4, 1, 4)
+		self.addWidget(QtGui.QLabel('Advanced Insert elements:'),	5, 0, 1, 4)
+		self.addWidget(self.txt_editor,								7, 0, 30, 8)
+		self.addWidget(self.btn_saveExpr, 							37, 0, 1, 4)
+		self.addWidget(self.btn_loadExpr, 							37, 4, 1, 4)
+		self.addWidget(self.btn_help,								38, 0, 1, 2)
+		self.addWidget(self.btn_exec, 								38, 2, 1, 6)
 
 	def expr_fromFile(self):
 		self.active_font = pFont()
@@ -354,7 +399,56 @@ class glyphComposer(QtGui.QGridLayout):
 
 			print 'SAVE:\t Font:%s; Expressions saved to: %s.' %(self.active_font.name, fname)
 
-	def process(self):
+	def populate_shapes(self):
+		self.active_font = pFont()
+		self.font_shapes = {}
+		for glyph in self.active_font.pGlyphs():
+			for shape in glyph.shapes():
+				if len(shape.shapeData.name):
+					self.font_shapes.setdefault(shape.shapeData.name,[]).append(glyph.name)
+		
+		self.cmb_fontShapes.addItems(sorted(self.font_shapes.keys()))
+
+	def shape_insert(self):
+		process_glyphs = getProcessGlyphs(pMode)
+		insert_shape_name = self.cmb_fontShapes.currentText
+
+		for glyph in process_glyphs:
+			process_layers = glyph._prepareLayers(pLayers)
+
+			for layer in process_layers:
+				insert_shape = self.active_font.findShape(insert_shape_name, layer)
+				
+				if insert_shape is not None:
+					glyph.addShape(insert_shape, layer)
+				else:
+					print 'ERROR:\t Glyph: %s\tElement: %s not found @Layer: %s' %(glyph.name, insert_shape_name,layer)
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, 'Glyph: %s;\tInsert Element:%s @ %s.' %(glyph.name, insert_shape_name,'; '.join(process_layers)))
+
+	def shape_replace(self):
+		process_glyphs = getProcessGlyphs(pMode)
+		replace_shape_name = self.cmb_fontShapes.currentText
+
+		for glyph in process_glyphs:
+			process_layers = glyph._prepareLayers(pLayers)
+
+			for layer in process_layers:
+				replace_shape = self.active_font.findShape(replace_shape_name, layer)
+				selected_shape = glyph.selectedAtShapes(index=False, layer=layer, deep=False)[0][0]
+												
+				if selected_shape is not None:
+					if replace_shape is not None:
+						replace_shape.transform = selected_shape.transform # Apply transform
+						glyph.replaceShape(selected_shape, replace_shape, layer)
+					else:
+						print 'ERROR:\t Glyph: %s\tElement: %s not found @Layer: %s' %(glyph.name, replace_shape_name,layer)
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, 'Glyph: %s;\tInsert Element:%s @ %s.' %(glyph.name, replace_shape_name,'; '.join(process_layers)))
+
+	def process_insert(self):
 		# - Init
 		self.active_font = pFont()
 		current_glyph = eGlyph()
@@ -578,7 +672,7 @@ class shapeMovement(QtGui.QVBoxLayout):
 						wShape.shift(offset_x, offset_y)
 
 					elif method == 'Scale':
-						wShape.scale(1. - offset_x/100., 1. - offset_y/100.)
+						wShape.scale(1. + offset_x/100., 1. + offset_y/100.)
 
 					elif method == 'Shear':
 						wShape.shear(radians(offset_x), radians(offset_y))				
