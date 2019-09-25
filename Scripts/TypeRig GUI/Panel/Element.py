@@ -40,6 +40,13 @@ syn_bboxBL = syn_label + 'BL'
 syn_bboxBR = syn_label + 'BR'
 syn_passlayer = syn_label + 'passlayer'
 
+# - Init ------------------------------
+global pLayers
+global pMode
+pLayers = None
+pMode = 0
+app_name, app_version = 'TypeRig | Elements', '0.21'
+
 # - Strings ------------------------------
 str_help = '''Examples:
 _element_ -> A B C D 
@@ -77,13 +84,6 @@ layer1 - > e1!BL@!foo e2!TL@!baz^-20,0 -> H N
 layer2 - > e1!BL@!foo e2!TL@!baz^-50,0 -> H N
 Inserts elements e1, e2, into every glyph (/H, /N) at specified node tags with correction different for every layer set explicitly.
 '''
-
-# - Init ------------------------------
-global pLayers
-global pMode
-pLayers = None
-pMode = 0
-app_name, app_version = 'TypeRig | Elements', '0.20'
 
 # - Sub-widgets --------------------
 class MLineEdit(QtGui.QLineEdit):
@@ -407,6 +407,7 @@ class glyphComposer(QtGui.QGridLayout):
 				if len(shape.shapeData.name):
 					self.font_shapes.setdefault(shape.shapeData.name,[]).append(glyph.name)
 		
+		self.cmb_fontShapes.clear()
 		self.cmb_fontShapes.addItems(sorted(self.font_shapes.keys()))
 
 	def shape_insert(self):
