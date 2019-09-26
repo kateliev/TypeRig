@@ -28,7 +28,7 @@ from typerig.gui import trSliderCtrl, trMsgSimple
 
 
 # - Init --------------------------------
-app_version = '0.15'
+app_version = '0.16'
 app_name = 'TypeRig | Delta Machine'
 
 ss_controls = """
@@ -512,8 +512,8 @@ class dlg_DeltaMachine(QtGui.QDialog):
 			for row in range(self.tab_masters.rowCount):
 				layerName = self.tab_masters.item(row, 0).text()
 				
-				if not height:
-					ratio_height = ratfrac(self.ratio_target[layerName].width(), self.ratio_source[layerName].width(), 100)
+				if height:
+					ratio_height = ratfrac(self.ratio_target[layerName].height(), self.ratio_source[layerName].height(), 100)
 					
 					if modifiers == QtCore.Qt.ShiftModifier: 
 						ratio_height = 2*100. - ratio_height # Reverse ratio
@@ -521,15 +521,16 @@ class dlg_DeltaMachine(QtGui.QDialog):
 					elif modifiers == QtCore.Qt.AltModifier:
 						ratio_height = 100 + target - ratio_height # Reverse ratio
 					
-					self.tab_masters.cellWidget(row, 9).setValue(ratio_height)
+					self.tab_masters.cellWidget(row, 10).setValue(ratio_height)
 				else:
+					ratio_width = ratfrac(self.ratio_target[layerName].width(), self.ratio_source[layerName].width(), 100)
 					if modifiers == QtCore.Qt.ShiftModifier: 
 						ratio_width = 2*100. - ratio_width # Reverse ratio
 						
 					elif modifiers == QtCore.Qt.AltModifier:
 						ratio_width = 100 + target - ratio_width # Reverse ratio
 
-					self.tab_masters.cellWidget(row, 10).setValue(ratio_width)
+					self.tab_masters.cellWidget(row, 9).setValue(ratio_width)
 
 		else:
 			ratio = QtGui.QInputDialog.getDouble(self, 'Ratio','Enter Ratio:', 100, -500, 500, 2)

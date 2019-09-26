@@ -307,7 +307,7 @@ class alignShapes(QtGui.QGridLayout):
 				glyph_shapes = glyph.shapes(layerName, extend=eShape)
 				work_shapes = [glyph_shapes[index] for index in list(set([item[0] for item in selection]))]
 				
-				if user_mode == 'CL': # Align all contours in given Layer
+				if user_mode == 'CL': # Align all shapes in given Layer
 					layer_bounds = glyph.getBounds(layerName)
 					shape_bounds = (layer_bounds.x(), layer_bounds.y(), layer_bounds.x() + layer_bounds.width(), layer_bounds.y() + layer_bounds.height())
 					align_type = getAlignDict(shape_bounds)
@@ -316,7 +316,7 @@ class alignShapes(QtGui.QGridLayout):
 					for shape in glyph_shapes:
 						shape.alignTo(target, user_x + user_y, (keep_x, keep_y))					
 
-				elif user_mode =='CC': # Align contours to contours
+				elif user_mode =='CC': # Align shapes to shapes
 					if 1 < len(work_shapes) < 3:
 						sh1, sh2 = work_shapes
 						sh1.alignTo(sh2, user_x + user_y, (keep_x, keep_y))
@@ -329,7 +329,7 @@ class alignShapes(QtGui.QGridLayout):
 						for shape in work_shapes:
 							shape.alignTo(target, user_x + user_y, (keep_x, keep_y))
 					
-				elif user_mode == 'RC': # Align contours to contours in reverse order
+				elif user_mode == 'RC': # Align shapes to shapes in reverse order
 					if 1 < len(work_shapes) < 3:
 						sh1, sh2 = work_shapes
 						sh2.alignTo(sh1, user_x + user_y, (keep_x, keep_y))
