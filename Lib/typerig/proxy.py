@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.72.0'
+__version__ = '0.72.5'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -509,6 +509,12 @@ class pShape(object):
 		self.currentName = self.fl.name
 		self.name = self.shapeData.name
 
+		self.bounds = lambda: self.fl.boundingBox
+		self.x = lambda : self.bounds().x()
+		self.y = lambda : self.bounds().y()
+		self.width = lambda : self.bounds().width()
+		self.height  = lambda : self.bounds().height()
+
 		self.parent = glyph
 		self.layer = layer
 
@@ -591,16 +597,25 @@ class pShape(object):
 		self.fl.update()
 
 	# - Transformation ----------------------------------------
-	def shift(self, dx, dy):
+	def reset_transform(self):
+		temp_transform = self.fl.transform
+		temp_transform.reset()
+		self.fl.transform = temp_transform
+
+	def shift(self, dx, dy, reset=False):
+		self.reset_transform()
 		self.fl.transform = self.fl.transform.translate(dx, dy)
 
-	def rotate(self, angle):
+	def rotate(self, angle, reset=False):
+		self.reset_transform()
 		self.fl.transform = self.fl.transform.rotate(angle)
 
-	def scale(self, sx, sy):
+	def scale(self, sx, sy, reset=False):
+		self.reset_transform()
 		self.fl.transform = self.fl.transform.scale(sx, sy)
 
-	def shear(self, sh, sv):
+	def shear(self, sh, sv, reset=False):
+		self.reset_transform()
 		self.fl.transform = self.fl.transform.shear(sh, sv)
 	
 

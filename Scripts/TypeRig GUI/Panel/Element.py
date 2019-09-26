@@ -14,7 +14,7 @@ from PythonQt import QtCore
 from typerig import QtGui
 from typerig.glyph import eGlyph
 from typerig.node import eNode
-from typerig.contour import eContour
+from typerig.shape import eShape
 from typerig.proxy import pFont, pFontMetrics, pContour, pShape
 from typerig.gui import getProcessGlyphs
 from typerig.brain import Coord, Line
@@ -45,7 +45,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '0.21'
+app_name, app_version = 'TypeRig | Elements', '0.25'
 
 # - Strings ------------------------------
 str_help = '''Examples:
@@ -160,20 +160,37 @@ class basicOps(QtGui.QGridLayout):
 		self.btn_setShapeName = QtGui.QPushButton('&Set Name')
 		self.btn_unlinkShape = QtGui.QPushButton('&Unlink References')
 		self.btn_delShape = QtGui.QPushButton('&Remove')
+		self.btn_resetShape = QtGui.QPushButton('&Reset transform')
 		self.btn_lockShape = QtGui.QPushButton('&Lock')
 
 		self.btn_setShapeName.clicked.connect(self.shape_setname)
 		self.btn_unlinkShape.clicked.connect(self.shape_unlink)
 		self.btn_delShape.clicked.connect(self.shape_delete)
+		self.btn_resetShape.clicked.connect(self.shape_resetTransform)
 
 		self.addWidget(self.edt_shapeName, 		0, 0, 1, 6)
 		self.addWidget(self.btn_setShapeName, 	1, 0, 1, 3)
 		self.addWidget(self.btn_unlinkShape, 	1, 3, 1, 3)
-		self.addWidget(self.btn_lockShape, 		2, 0, 1, 3)
+		self.addWidget(self.btn_resetShape, 	2, 0, 1, 3)
 		self.addWidget(self.btn_delShape, 		2, 3, 1, 3)
 
 	def reset_fileds(self):
 		self.edt_shapeName.clear()
+
+	def shape_resetTransform(self):
+		process_glyphs = getProcessGlyphs(pMode)
+
+		for glyph in process_glyphs:
+			process_layers = glyph._prepareLayers(pLayers)
+
+			for layer in process_layers:
+				wShape = pShape(glyph.selectedAtShapes(index=False, layer=layer, deep=False)[0][0])
+				wShape.reset_transform()
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, 'Reset Element transformation data @ %s.' %'; '.join(process_layers))
+
+		self.reset_fileds()
 
 	def shape_setname(self):
 		process_glyphs = getProcessGlyphs(pMode)
@@ -227,10 +244,10 @@ class alignShapes(QtGui.QGridLayout):
 		# - Init
 		self.align_x = OrderedDict([('Left','L'), ('Right','R'), ('Center','C'), ('Keep','K')])
 		self.align_y = OrderedDict([('Top','T'), ('Bottom','B'), ('Center','E'), ('Keep','X')])
-		self.align_mode = OrderedDict([('Layer','CL'), ('Contour to Contour','CC'), ('Contour to Contour (REV)','RC')])
+		self.align_mode = OrderedDict([('Layer','CL'), ('Shape to Shape','CC'), ('Shape to Shape (REV)','RC')])
 		
 		# !!! To be implemented
-		#self.align_mode = OrderedDict([('Layer','CL'), ('Contour to Contour','CC'), ('Contour to Contour (REV)','RC'), ('Contour to Node','CN'),('Node to Node','NN')])
+		#self.align_mode = OrderedDict([('Layer','CL'), ('Shape to Shape','CC'), ('Shape to Shape (REV)','RC'), ('Shape to Node','CN'),('Node to Node','NN')])
 
 		# - Widgets
 		self.cmb_align_x = QtGui.QComboBox()
@@ -254,10 +271,10 @@ class alignShapes(QtGui.QGridLayout):
 
 	def alignShapes(self):
 		# - Helpers
-		def getContourBonds(work_contours):
-			tmp_bounds = [contour.bounds() for contour in work_contours]
-			cont_min_X, cont_min_Y, cont_max_X, cont_max_Y = map(set, zip(*tmp_bounds))
-			return (min(cont_min_X), min(cont_min_Y), max(cont_max_X), max(cont_max_Y))
+		def getShapeBounds(work_shapes):
+			tmp_bounds = [shape.bounds() for shape in work_shapes]
+			shape_min_X, shape_min_Y, shape_max_X, shape_max_Y = map(set, zip(*tmp_bounds))
+			return (min(shape_min_X), min(shape_min_Y), max(shape_max_X), max(shape_max_Y))
 
 		def getAlignDict(bounds_tuple):
 			align_dict = {	'L': bounds_tuple[0], 
@@ -283,57 +300,57 @@ class alignShapes(QtGui.QGridLayout):
 
 		# - Process
 		for glyph in process_glyphs:
-			selection = glyph.selectedAtContours()
+			selection = glyph.selectedAtShapes(deep=False)
 			wLayers = glyph._prepareLayers(pLayers)
 
 			for layerName in wLayers:
-				glyph_contours = glyph.contours(layerName, extend=eContour)
-				work_contours = [glyph_contours[index] for index in list(set([item[0] for item in selection]))]
+				glyph_shapes = glyph.shapes(layerName, extend=eShape)
+				work_shapes = [glyph_shapes[index] for index in list(set([item[0] for item in selection]))]
 				
 				if user_mode == 'CL': # Align all contours in given Layer
 					layer_bounds = glyph.getBounds(layerName)
-					cont_bounds = (layer_bounds.x(), layer_bounds.y(), layer_bounds.x() + layer_bounds.width(), layer_bounds.y() + layer_bounds.height())
-					align_type = getAlignDict(cont_bounds)
+					shape_bounds = (layer_bounds.x(), layer_bounds.y(), layer_bounds.x() + layer_bounds.width(), layer_bounds.y() + layer_bounds.height())
+					align_type = getAlignDict(shape_bounds)
 					target = Coord(align_type[user_x], align_type[user_y])
 
-					for contour in glyph_contours:
-						contour.alignTo(target, user_x + user_y, (keep_x, keep_y))					
+					for shape in glyph_shapes:
+						shape.alignTo(target, user_x + user_y, (keep_x, keep_y))					
 
 				elif user_mode =='CC': # Align contours to contours
-					if 1 < len(work_contours) < 3:
-						c1, c2 = work_contours
-						c1.alignTo(c2, user_x + user_y, (keep_x, keep_y))
+					if 1 < len(work_shapes) < 3:
+						sh1, sh2 = work_shapes
+						sh1.alignTo(sh2, user_x + user_y, (keep_x, keep_y))
 
-					elif len(work_contours) > 2:
-						cont_bounds = getContourBonds(work_contours)
-						align_type = getAlignDict(cont_bounds)
+					elif len(work_shapes) > 2:
+						shape_bounds = getShapeBounds(work_shapes)
+						align_type = getAlignDict(shape_bounds)
 						target = Coord(align_type[user_x], align_type[user_y])
 
-						for contour in work_contours:
-							contour.alignTo(target, user_x + user_y, (keep_x, keep_y))
+						for shape in work_shapes:
+							shape.alignTo(target, user_x + user_y, (keep_x, keep_y))
 					
 				elif user_mode == 'RC': # Align contours to contours in reverse order
-					if 1 < len(work_contours) < 3:
-						c1, c2 = work_contours
-						c2.alignTo(c1, user_x + user_y, (keep_x, keep_y))
+					if 1 < len(work_shapes) < 3:
+						sh1, sh2 = work_shapes
+						sh2.alignTo(sh1, user_x + user_y, (keep_x, keep_y))
 
-					elif len(work_contours) > 2:
-						cont_bounds = getContourBonds(work_contours)
-						align_type = getAlignDict(cont_bounds)
+					elif len(work_shapes) > 2:
+						shape_bounds = getShapeBounds(work_shapes)
+						align_type = getAlignDict(shape_bounds)
 						target = Coord(align_type[user_x], align_type[user_y])
 
-						for contour in reversed(work_contours):
-							contour.alignTo(target, user_x + user_y, (keep_x, keep_y))	
+						for shape in reversed(work_shapes):
+							shape.alignTo(target, user_x + user_y, (keep_x, keep_y))	
 
 				# !!! To be implemented
-				elif user_mode == 'CN': # Align contour to node
+				elif user_mode == 'CN': # Align shape to node
 					pass
 
-				elif user_mode == 'NN': # Align a node on contour to node on another
+				elif user_mode == 'NN': # Align a node on shape to node on another
 					pass
 
 			glyph.update()
-			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Align Contours @ %s.' %(glyph.name, '; '.join(wLayers)))
+			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Align Shapes @ %s.' %(glyph.name, '; '.join(wLayers)))
 
 class glyphComposer(QtGui.QGridLayout):
 	def __init__(self, parent):
@@ -713,9 +730,9 @@ class tool_tab(QtGui.QWidget):
 		layoutV.addLayout(basicOps())
 		layoutV.addLayout(glyphComposer(self))
 
-		#layoutV.addWidget(QtGui.QLabel('Align Shapes'))
-		#self.alignShapes = alignShapes()
-		#layoutV.addLayout(self.alignShapes)
+		layoutV.addWidget(QtGui.QLabel('Align Shapes:'))
+		self.alignShapes = alignShapes()
+		layoutV.addLayout(self.alignShapes)
 
 		layoutV.addStretch()
 		layoutV.addWidget(QtGui.QLabel('Transformation:'))
