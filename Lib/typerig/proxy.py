@@ -603,19 +603,19 @@ class pShape(object):
 		self.fl.transform = temp_transform
 
 	def shift(self, dx, dy, reset=False):
-		self.reset_transform()
+		if reset: self.reset_transform()
 		self.fl.transform = self.fl.transform.translate(dx, dy)
 
 	def rotate(self, angle, reset=False):
-		self.reset_transform()
+		if reset: self.reset_transform()
 		self.fl.transform = self.fl.transform.rotate(angle)
 
 	def scale(self, sx, sy, reset=False):
-		self.reset_transform()
+		if reset: self.reset_transform()
 		self.fl.transform = self.fl.transform.scale(sx, sy)
 
 	def shear(self, sh, sv, reset=False):
-		self.reset_transform()
+		if reset: self.reset_transform()
 		self.fl.transform = self.fl.transform.shear(sh, sv)
 	
 
