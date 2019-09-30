@@ -28,7 +28,7 @@ from typerig.gui import trSliderCtrl, trMsgSimple
 
 
 # - Init --------------------------------
-app_version = '0.16'
+app_version = '0.17'
 app_name = 'TypeRig | Delta Machine'
 
 ss_controls = """
@@ -70,6 +70,96 @@ column_init = (None,[],[], 1., 2., 1., 2., 0., 0., 0., 0., 0.00, 0.00, False)
 table_dict = {1:OrderedDict(zip(column_names, column_init))}
 
 fileFormats = 'TypeRig Deltas (*.json);;'
+
+# - Helpers --------------------------------
+global probe_stem
+global probe_ratio
+
+'''
+Example usage of probe_stem:
+Assignment: Desired stem weight = lowercase + 15% of the difference between lowercase and caps
+Solution:
+	py> uc = _get_stem() #/H get vertical stems
+	py> lc = _get_stem() #/n get vertical stems
+	py> probe_stem = lc + (uc-lc)*0.15 
+	py> probe_stem = probe_stem.round_values()
+'''
+
+class probe_dict(dict):
+	'''A dict extension that allows for simple math. For stem measuring purpouses and more.'''
+	def __add__(self, other):
+		result = self.__class__()
+
+		for key, value in self.iteritems():
+			if isinstance(other, self.__class__):
+				if other.has_key(key):
+					result[key] = self[key] + other[key]
+
+			elif isinstance(other, (float, int)):
+				result[key] = self[key] + other
+
+		return result
+		
+	def __sub__(self, other):
+		result = self.__class__()
+
+		for key, value in self.iteritems():
+			if isinstance(other, self.__class__):
+				if other.has_key(key):
+					result[key] = self[key] - other[key]
+
+			elif isinstance(other, (float, int)):
+				result[key] = self[key] - other
+
+		return result
+
+	def __mul__(self, other):
+		result = self.__class__()
+
+		for key, value in self.iteritems():
+			if isinstance(other, self.__class__):
+				if other.has_key(key):
+					result[key] = self[key] * other[key]
+
+			elif isinstance(other, (float, int)):
+				result[key] = self[key] * other
+
+		return result
+
+	def __div__(self, other):
+		result = self.__class__()
+
+		for key, value in self.iteritems():
+			if isinstance(other, self.__class__):
+				if other.has_key(key):
+					result[key] = self[key] / other[key]
+
+			elif isinstance(other, (float, int)):
+				result[key] = self[key] / other
+
+		return result
+
+	def round_values(self):
+		result = self.__class__()
+
+		for key, value in self.iteritems():
+			result[key] = round(self[key])
+
+		return result
+
+def _get_stem(vertical=True, glyphName=None):
+	'''Get the stem measurement at glyph'''
+	# - Init
+	font = pFont()
+	glyph = eGlyph() if glyphName is None else font.glyph(glyphName)
+	stem_dict = probe_dict()
+
+	for layer in font.masters():
+		selection = glyph.selectedNodes(layer)
+		stem_dict[layer] = (abs(selection[0].x - selection[-1].x), abs(selection[0].y - selection[-1].y))[not vertical]
+		
+	return stem_dict
+
 
 # - Widgets --------------------------------
 class WTableView(QtGui.QTableWidget):
@@ -458,7 +548,12 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		#data_stems = {glyph.name:{ master_name:helper_calc_stem(glyph, master_name, vertical) for master_name in self.active_font.masters()} for glyph in self.data_glyphs}
 		
 		glyph = eGlyph()
-		data_stems = { master_name:helper_calc_stem(glyph, master_name, vertical) for master_name in self.active_font.masters()}
+		modifiers = QtGui.QApplication.keyboardModifiers() # Listen to Shift - reverses the ratio
+		
+		if modifiers == QtCore.Qt.AltModifier:
+			data_stems = probe_stem
+		else:
+			data_stems = { master_name:helper_calc_stem(glyph, master_name, vertical) for master_name in self.active_font.masters()}
 		
 		for row in range(self.tab_masters.rowCount):
 			if source:
