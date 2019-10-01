@@ -397,9 +397,9 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		
 		self.rad_glyph.setChecked(True)
 		self.rad_glyph.setEnabled(True)
-		self.rad_window.setEnabled(False)
-		self.rad_selection.setEnabled(False)
-		self.rad_font.setEnabled(False)
+		self.rad_window.setEnabled(True)
+		self.rad_selection.setEnabled(True)
+		self.rad_font.setEnabled(True)
 
 		self.rad_glyph.toggled.connect(self.table_refresh)
 		self.rad_window.toggled.connect(self.table_refresh)
@@ -520,8 +520,8 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		self.tab_masters.setTable(table_dict)
 		
 	# - Stem operations
-	def get_coordArrays(self):
-		glyph = eGlyph()
+	def get_coordArrays(self, glyph=None):
+		if glyph is None: glyph = eGlyph()
 		self.data_coordArrays.update({glyph.name:{master_name:glyph._getCoordArray(master_name) for master_name in self.active_font.masters()}})
 		
 		self.cmb_infoArrays.clear()
@@ -638,16 +638,19 @@ class dlg_DeltaMachine(QtGui.QDialog):
 
 	# - Processing --------------------------
 	def table_execute(self):
-		wGlyph = eGlyph()
-		process_out = []
+		process_glyphs = getProcessGlyphs(self.pMode)
 		
-		for layerIndex in range(self.tab_masters.rowCount):
-			if self.tab_masters.item(layerIndex, 0).checkState() == QtCore.Qt.Checked:
-				process_out.append(self.tab_masters.item(layerIndex, 0).text())
-				self.process_scale(wGlyph, layerIndex, anisotropic=self.chk_single.isChecked(), live_update=False)	
+		for wGlyph in process_glyphs:
+			if self.pMode != 0: self.get_coordArrays(wGlyph)
+			process_out = []
+			
+			for layerIndex in range(self.tab_masters.rowCount):
+				if self.tab_masters.item(layerIndex, 0).checkState() == QtCore.Qt.Checked:
+					process_out.append(self.tab_masters.item(layerIndex, 0).text())
+					self.process_scale(wGlyph, layerIndex, anisotropic=self.chk_single.isChecked(), live_update=False)	
 
-		wGlyph.update()
-		wGlyph.updateObject(wGlyph.fl, '| Delta Machine | Glyph: %s\tLayers procesed: %s' %(wGlyph.name, '; '.join(process_out)))
+			wGlyph.update()
+			wGlyph.updateObject(wGlyph.fl, '| Delta Machine | Glyph: %s\tLayers procesed: %s' %(wGlyph.name, '; '.join(process_out)))
 
 	def process_scale(self, glyph, layerIndex=None, anisotropic=False, live_update=False, keep_metrics=False):
 		wGlyph = glyph

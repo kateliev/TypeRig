@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Font Metrics', '0.12'
+app_name, app_version = 'TypeRig | Font Metrics', '0.15'
 
 # - Dependencies -----------------
 import os, json
@@ -135,14 +135,14 @@ class WTreeWidget(QtGui.QTreeWidget):
 	def setTree(self, data, reset=False):
 		self.blockSignals(True)
 		self.clear()
-		header_row = ['Layer/Zone', 'Position', 'Width', 'Private Name']
+		header_row = ['Layer/Zone', 'Position', 'Width', 'Type']
 		self.setHeaderLabels(header_row)
 
 		for key, value in data.iteritems():
 			master = QtGui.QTreeWidgetItem(self, [key])
 
 			for zoneTuple in value:
-				zoneData = QtGui.QTreeWidgetItem(master, [('B: %s', 'T: %s')[zoneTuple[1] > 0] %zoneTuple[0], zoneTuple[0], zoneTuple[1], zoneTuple[2]])
+				zoneData = QtGui.QTreeWidgetItem(master, [zoneTuple[2], zoneTuple[0], zoneTuple[1], ('B: %s', 'T: %s')[zoneTuple[1] > 0] %zoneTuple[0]])
 				zoneData.setFlags(zoneData.flags() | QtCore.Qt.ItemIsEditable)
 
 		self.blockSignals(False)
@@ -158,7 +158,7 @@ class WTreeWidget(QtGui.QTreeWidget):
 		return returnDict
 
 	def markChange(self, item):
-		item.setText(0, ('B: %s', 'T: %s')[float(item.text(2)) > 0] %item.text(1))
+		item.setText(3, ('B: %s', 'T: %s')[float(item.text(2)) > 0] %item.text(1))
 		for col in range(item.columnCount()):			
 			item.setBackground(col, QtGui.QColor('powderblue'))
 
@@ -185,6 +185,9 @@ class WFontZones(QtGui.QWidget):
 
 		self.edt_pos = ZLineEdit()
 		self.edt_width = QtGui.QLineEdit()
+		self.edt_name = QtGui.QLineEdit()
+		
+		self.edt_name.setPlaceholderText('Name')
 		self.edt_pos.setPlaceholderText('Position')
 		self.edt_width.setPlaceholderText('Width')
 
@@ -201,43 +204,33 @@ class WFontZones(QtGui.QWidget):
 		lbl_name = QtGui.QLabel('Font Zones (Local)')
 		lbl_name.setMaximumHeight(20)
 		self.grid.addWidget(lbl_name, 			0, 0, 	1, 24)
-		self.grid.addWidget(self.tree_fontZones,1, 0, 	6, 18)
+		self.grid.addWidget(self.tree_fontZones,1, 0, 	15, 21)
 		
-		self.grid.addWidget(self.cmb_layer,		1, 18, 	1, 3)
-		self.grid.addWidget(self.edt_pos,		2, 18, 	1, 3)
-		self.grid.addWidget(self.edt_width,		3, 18, 	1, 3)
-		self.grid.addWidget(self.btn_new,		4, 18, 	1, 3)
-		self.grid.addWidget(self.btn_del,		5, 18, 	1, 3)
+		self.grid.addWidget(self.cmb_layer,		1, 21, 	1, 3)
+		self.grid.addWidget(self.edt_name,		2, 21, 	1, 3)
+		self.grid.addWidget(self.edt_pos,		3, 21, 	1, 3)
+		self.grid.addWidget(self.edt_width,		4, 21, 	1, 3)
+		self.grid.addWidget(self.btn_new,		5, 21, 	1, 3)
+		self.grid.addWidget(self.btn_del,		6, 21, 	1, 3)
 
-		self.grid.addWidget(self.btn_save,		1, 21, 	1, 3)
-		self.grid.addWidget(self.btn_open,		2, 21, 	1, 3)
-		self.grid.addWidget(self.btn_reset,		4, 21, 	1, 3)
-		self.grid.addWidget(self.btn_apply,		5, 21, 	1, 3)
-		
-		'''
-		self.grid.setRowStretch(0,0)		
-		for i in range(1,6):
-			self.grid.setRowStretch(i,6)
-
-		self.grid.setColumnStretch(0,18)
-		self.grid.setColumnStretch(18,3)
-		self.grid.setColumnStretch(21,3)
-		'''
-
+		self.grid.addWidget(self.btn_save,		12, 21, 1, 3)
+		self.grid.addWidget(self.btn_open,		13, 21, 1, 3)
+		self.grid.addWidget(self.btn_reset,		14,21, 	1, 3)
+		self.grid.addWidget(self.btn_apply,		15,21, 	1, 3)
 		self.setLayout(self.grid)
 
 	def applyChanges(self):
 		newZoneData = self.tree_fontZones.getTree()
 		
 		for layer, zones in newZoneData.iteritems():
-			self.activeFont.zonesFromTuples(zones, layer)
+			self.activeFont.zonesFromTuples(zones, layer, True)
 
 		self.zoneData = {master:self.activeFont.zonesToTuples() for master in self.activeFont.masters()}
-		print 'DONE:\t Font:%s; Font Zone data Updated!.' %self.activeFont.name
+		print 'DONE:\t Font:%s; Font Zones data Updated!.' %self.activeFont.name
 
 	def resetChanges(self):
 		self.tree_fontZones.setTree(self.zoneData, True)
-		print 'DONE:\t Font:%s; Font Zone data realoaded.' %self.activeFont.name
+		print 'DONE:\t Font:%s; Font Zones data reloaded.' %self.activeFont.name
 
 	def addZone(self):
 		import copy
@@ -248,7 +241,7 @@ class WFontZones(QtGui.QWidget):
 			if '=' in self.edt_pos.text:
 				self.newZoneData[layer].append((float(fontMetrics[layer][self.edt_pos.text.strip('=')]), float(self.edt_width.text), self.edt_pos.text.strip('=')))
 			else:
-				self.newZoneData[layer].append((float(self.edt_pos.text), float(self.edt_width.text), 'New'))
+				self.newZoneData[layer].append((float(self.edt_pos.text), float(self.edt_width.text), self.edt_name.text))
 
 		if self.cmb_layer.currentText == 'All Layers':
 			for layer in self.activeFont.masters():
