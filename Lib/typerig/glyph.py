@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.28.0'
+__version__ = '0.28.1'
 
 # - Dependencies -------------------------
 import fontlab as fl6
@@ -43,8 +43,11 @@ class eGlyph(pGlyph):
 			
 			tempLayers = [] + bpass(layers[0], [self.activeLayer()]) + bpass(layers[1], self.masters()) + bpass(layers[2], self.masks()) + bpass(layers[3], self.services())
 			return list(set([layer.name for layer in tempLayers if all([item not in layer.name for item in layerBanList])]))
+		
+		elif isinstance(layers, list):
+			return list(set([layer for layer in layers if all([item not in layer for item in layerBanList])]))	
 		else:
-			print 'ERROR:\tIncorrect layer triple!'
+			print 'ERROR:\tIncorrect layer control definition!'
 
 	def _compatibleLayers(self, layerName=None):
 		return [layer.isCompatible(self.layer(layerName), True) for layer in self.layers()]

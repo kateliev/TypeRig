@@ -9,45 +9,189 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
+from collections import OrderedDict
 #import fontlab as fl6
 #import fontgate as fgt
 from PythonQt import QtCore
 from typerig import QtGui
+from typerig.proxy import pGlyph, pFont
 
 # -- Internals - Load toolpanels 
 import Panel 
 
 # - Init --------------------------
-app_version = '0.46'
+app_version = '0.50'
 app_name = 'TypeRig Panel'
 ignorePanel = '__'
+
+# -- Global parameters
+pMode = 0
+pLayers = (True, False, False, False)
+
+# -- Inital config for Get Layers dialog
+column_names = ('Layer Name', 'Layer Type','Compatible')
+column_init = (None, None, False)
+table_dict = {1:OrderedDict(zip(column_names, column_init))}
 
 # - Style -------------------------
 ss_Toolbox_none = """/* EMPTY STYLESHEET */ """
 
 # - Interface -----------------------------
+# - Widgets --------------------------------
+class WMasterTableView(QtGui.QTableWidget):
+	def __init__(self, data):
+		super(WMasterTableView, self).__init__()
+		
+		# - Init
+		self.setColumnCount(max(map(len, data.values())))
+		self.setRowCount(len(data.keys()))
+	
+		# - Set 
+		self.setTable(data)		
+	
+		# - Styling
+		self.setSortingEnabled(True)
+		self.horizontalHeader().setStretchLastSection(True)
+		self.setAlternatingRowColors(True)
+		self.setShowGrid(True)
+		self.resizeColumnsToContents()
+		self.resizeRowsToContents()
+
+	def setTable(self, data, reset=False):
+		self.clear()
+		name_row, name_column = [], []
+
+		self.setColumnCount(max(map(len, data.values())))
+		self.setRowCount(len(data.keys()))
+
+		# - Populate
+		for n, layer in enumerate(sorted(data.keys())):
+			name_row.append(layer)
+
+			for m, key in enumerate(data[layer].keys()):
+				
+				# -- Build name column
+				name_column.append(key)
+				
+				# -- Selectively add data
+				if m == 0:
+					newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
+					newitem.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+					newitem.setCheckState(QtCore.Qt.Unchecked) 
+					self.setItem(n, m, newitem)
+
+				if m > 0:
+					newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
+					newitem.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+					newitem.setBackground(QtGui.QColor(0, 255, 0, 15) if data[layer]['Compatible'] else QtGui.QColor(255, 0, 0, 15))
+					self.setItem(n, m, newitem)					
+
+		self.setHorizontalHeaderLabels(name_column)
+		self.setVerticalHeaderLabels(name_row)
+		self.resizeColumnsToContents()
+
+	def getTable(self):
+		return [self.item(row, 0).text() for row in range(self.rowCount) if self.item(row, 0).checkState() == QtCore.Qt.Checked]
+
+# - Dialogs --------------------------------
+class dlg_LayerSelect(QtGui.QDialog):
+	def __init__(self, parent, mode):
+		super(dlg_LayerSelect, self).__init__()
+	
+		# - Init
+		self.parent_widget = parent
+		
+		# - Basic Widgets
+		self.tab_masters = WMasterTableView(table_dict)
+		self.table_populate(mode)
+		self.tab_masters.cellChanged.connect(lambda: self.parent_widget.layers_refresh())
+
+		# -- Buttons
+		self.btn_tableCheck = QtGui.QPushButton('Select All')
+		self.btn_tableCheckMasters = QtGui.QPushButton('Masters')
+		self.btn_tableCheckMasks = QtGui.QPushButton('Masks')
+		self.btn_tableCheckServices = QtGui.QPushButton('Services')
+		
+		if mode !=0:
+			self.btn_tableCheckMasters.setEnabled(False)
+			self.btn_tableCheckMasks.setEnabled(False)
+			self.btn_tableCheckServices.setEnabled(False)
+		
+		self.btn_tableCheck.clicked.connect(lambda: self.table_check_all())
+		self.btn_tableCheckMasters.clicked.connect(lambda: self.table_check_all('Master'))
+		self.btn_tableCheckMasks.clicked.connect(lambda: self.table_check_all('Mask'))
+		self.btn_tableCheckServices.clicked.connect(lambda: self.table_check_all('Service'))
+
+		# - Build layout
+		layoutV = QtGui.QGridLayout() 
+		layoutV.addWidget(self.btn_tableCheck, 				0, 0, 1, 1)
+		layoutV.addWidget(self.btn_tableCheckMasters, 		0, 1, 1, 1)
+		layoutV.addWidget(self.btn_tableCheckMasks, 		0, 2, 1, 1)
+		layoutV.addWidget(self.btn_tableCheckServices, 		0, 3, 1, 1)
+		layoutV.addWidget(self.tab_masters, 				2, 0, 20, 4)
+
+		# - Set Widget
+		self.setLayout(layoutV)
+		self.setWindowTitle('%s %s | Select Layers' %(app_name, app_version))
+		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
+		self.setGeometry(500, 200, 300, 600)
+		#self.show()
+
+	# - Table operations
+	def table_check_all(self, layer_type=None):
+		for row in range(self.tab_masters.rowCount):
+			if self.tab_masters.item(row,0).checkState() == QtCore.Qt.Unchecked:
+				if layer_type is None or self.tab_masters.item(row,1).text() == layer_type:
+					self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Checked)
+					one_check = True
+			else:
+				self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Unchecked)
+	
+	def table_populate(self, mode):
+		active_font = pFont()
+		active_glyph = pGlyph()
+
+		def check_type(layer):
+			if layer.isMaskLayer: return 'Mask'
+			if layer.isMasterLayer: return 'Master'
+			if layer.isService: return 'Service'
+
+		if mode == 0:
+			init_data = [(layer.name, check_type(layer), active_glyph.activeLayer().isCompatible(layer, True)) for layer in active_glyph.layers() if '#' not in layer.name]
+		else:
+			init_data = [(master, 'Master', 'Multiple') for master in active_font.pMasters.names]
+	 	
+	 	table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
+		self.tab_masters.setTable(table_dict)	
+
 # -- Main Widget --------------------------
 class typerig_Panel(QtGui.QDialog):
 	def __init__(self):
 		super(typerig_Panel, self).__init__()
 
+		# - Init ----------------------------
 		#self.setStyleSheet(ss_Toolbox_none)
+		self.layers_selected = []
 		
+		# - Dialogs -------------------------
+		self.layer_dialog = dlg_LayerSelect(self, pMode)
+
 		# - Layers --------------------------
 		self.chk_ActiveLayer = QtGui.QCheckBox('Active')
 		self.chk_Masters = QtGui.QCheckBox('Masters')
 		self.chk_Masks = QtGui.QCheckBox('Masks')
 		self.chk_Service = QtGui.QCheckBox('Services')
+		self.chk_Selected = QtGui.QCheckBox('Selected')
 
 		self.chk_ActiveLayer.setCheckState(QtCore.Qt.Checked)
-		#self.chk_ActiveLayer.setStyleSheet('QCheckBox::indicator:checked {background-color: limegreen; border: 1px Solid limegreen;}')
-			
-		self.chk_ActiveLayer.stateChanged.connect(self.refreshLayers)
-		self.chk_Masters.stateChanged.connect(self.refreshLayers)
-		self.chk_Masks.stateChanged.connect(self.refreshLayers)
-		self.chk_Service.stateChanged.connect(self.refreshLayers)
 
-		self.refreshLayers()
+		self.chk_ActiveLayer.stateChanged.connect(self.layers_refresh)
+		self.chk_Masters.stateChanged.connect(self.layers_refresh)
+		self.chk_Masks.stateChanged.connect(self.layers_refresh)
+		self.chk_Service.stateChanged.connect(self.layers_refresh)
+		self.chk_Selected.stateChanged.connect(self.layers_refresh)
+
+		self.layers_refresh()
 
 		# - Glyphs --------------------------
 		self.rad_glyph = QtGui.QRadioButton('Glyph')
@@ -55,10 +199,10 @@ class typerig_Panel(QtGui.QDialog):
 		self.rad_selection = QtGui.QRadioButton('Selection')
 		self.rad_font = QtGui.QRadioButton('Font')
 		
-		self.rad_glyph.toggled.connect(self.refreshMode)
-		self.rad_window.toggled.connect(self.refreshMode)
-		self.rad_selection.toggled.connect(self.refreshMode)
-		self.rad_font.toggled.connect(self.refreshMode)
+		self.rad_glyph.toggled.connect(self.mode_refresh)
+		self.rad_window.toggled.connect(self.mode_refresh)
+		self.rad_selection.toggled.connect(self.mode_refresh)
+		self.rad_font.toggled.connect(self.mode_refresh)
 		
 		self.rad_glyph.setChecked(True)
 
@@ -72,7 +216,8 @@ class typerig_Panel(QtGui.QDialog):
 		self.rad_selection.setToolTip('Affect selected glyphs')
 		self.rad_font.setToolTip('Affect the entire font')
 
-		# - Fold Button ---------------------
+		# - Buttons ------------------------
+		self.btn_layersSelect = QtGui.QPushButton('Layers')
 		self.btn_fold = QtGui.QPushButton('^')
 		self.btn_unfold = QtGui.QPushButton('Restore Panel')
 		
@@ -80,8 +225,9 @@ class typerig_Panel(QtGui.QDialog):
 		self.btn_fold.setFixedWidth(self.chk_ActiveLayer.sizeHint.height())
 		self.btn_unfold.setFixedHeight(self.chk_ActiveLayer.sizeHint.height() + 5)
 
-		self.btn_fold.setToolTip('Fold Panel')
-		self.btn_unfold.setToolTip('Unfold Panel')
+		self.btn_fold.setToolTip('Fold Panel.')
+		self.btn_unfold.setToolTip('Unfold Panel.')
+		self.btn_layersSelect.setToolTip('Select layers for processing.')
 
 		self.btn_fold.clicked.connect(self.fold)
 		self.btn_unfold.clicked.connect(self.fold)
@@ -111,7 +257,8 @@ class typerig_Panel(QtGui.QDialog):
 		self.lay_controller.addWidget(self.chk_ActiveLayer,	0, 0, 1, 1)
 		self.lay_controller.addWidget(self.chk_Masters, 	0, 1, 1, 1)
 		self.lay_controller.addWidget(self.chk_Masks, 		0, 2, 1, 1)
-		self.lay_controller.addWidget(self.chk_Service, 	0, 3, 1, 1)
+		#self.lay_controller.addWidget(self.chk_Service, 	0, 3, 1, 1)
+		self.lay_controller.addWidget(self.chk_Selected, 	0, 3, 1, 1)
 		self.lay_controller.addWidget(self.btn_fold, 		0, 4, 2, 1)
 		self.lay_controller.addWidget(self.rad_glyph, 		1, 0, 1, 1)
 		self.lay_controller.addWidget(self.rad_window, 		1, 1, 1, 1)
@@ -129,28 +276,41 @@ class typerig_Panel(QtGui.QDialog):
 		# - Set Widget -------------------------------
 		self.setLayout(layoutV)
 		self.setWindowTitle('%s %s' %(app_name, app_version))
-		self.setGeometry(300, 300, 240, 440)
+		self.setGeometry(100, 200, 300, 600)
 		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
-		#self.setMinimumWidth(300)
-		
 		self.show()
 
-	def refreshMode(self):
+	# - Procedures -----------------------------------
+	def mode_refresh(self):
 		global pMode
-		pMode = 0
-		
+
 		if self.rad_glyph.isChecked(): pMode = 0
 		if self.rad_window.isChecked(): pMode = 1
 		if self.rad_selection.isChecked(): pMode = 2
 		if self.rad_font.isChecked(): pMode = 3
 
+		self.layer_dialog.table_populate(pMode)
+
 		for toolName in Panel.modules:
 			exec('Panel.%s.pMode = %s' %(toolName, pMode))
 
-	def refreshLayers(self):
+	def layers_refresh(self):
 		global pLayers
-		pLayers = (self.chk_ActiveLayer.isChecked(), self.chk_Masters.isChecked(), self.chk_Masks.isChecked(), self.chk_Service.isChecked())
-		
+
+		if self.chk_Selected.isChecked():
+			self.chk_ActiveLayer.setChecked(False),
+			self.chk_Masters.setChecked(False)
+			self.chk_Masks.setChecked(False)
+			self.chk_Service.setChecked(False)
+			
+			self.layer_dialog.show()
+			pLayers = self.layer_dialog.tab_masters.getTable()
+
+		else:
+			self.chk_Selected.setChecked(False)
+			self.layer_dialog.hide()
+			pLayers = (self.chk_ActiveLayer.isChecked(), self.chk_Masters.isChecked(), self.chk_Masks.isChecked(), self.chk_Service.isChecked())
+	
 		for toolName in Panel.modules:
 			exec('Panel.%s.pLayers = %s' %(toolName, pLayers))
 
