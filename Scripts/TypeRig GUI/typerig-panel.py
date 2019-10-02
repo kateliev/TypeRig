@@ -20,7 +20,7 @@ from typerig.proxy import pGlyph, pFont
 import Panel 
 
 # - Init --------------------------
-app_version = '0.50'
+app_version = '0.51'
 app_name = 'TypeRig Panel'
 ignorePanel = '__'
 
@@ -50,14 +50,14 @@ class WMasterTableView(QtGui.QTableWidget):
 		self.setTable(data)		
 	
 		# - Styling
-		self.setSortingEnabled(True)
+		#self.setSortingEnabled(True)
 		self.horizontalHeader().setStretchLastSection(True)
 		self.setAlternatingRowColors(True)
 		self.setShowGrid(True)
 		self.resizeColumnsToContents()
 		self.resizeRowsToContents()
 
-	def setTable(self, data, reset=False):
+	def setTable(self, data):
 		self.clear()
 		name_row, name_column = [], []
 
@@ -65,7 +65,7 @@ class WMasterTableView(QtGui.QTableWidget):
 		self.setRowCount(len(data.keys()))
 
 		# - Populate
-		for n, layer in enumerate(sorted(data.keys())):
+		for n, layer in enumerate(data.keys()):
 			name_row.append(layer)
 
 			for m, key in enumerate(data[layer].keys()):
@@ -111,6 +111,11 @@ class dlg_LayerSelect(QtGui.QDialog):
 		self.btn_tableCheckMasters = QtGui.QPushButton('Masters')
 		self.btn_tableCheckMasks = QtGui.QPushButton('Masks')
 		self.btn_tableCheckServices = QtGui.QPushButton('Services')
+
+		self.btn_tableCheck.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
+		self.btn_tableCheckMasters.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
+		self.btn_tableCheckMasks.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
+		self.btn_tableCheckServices.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
 		
 		if mode !=0:
 			self.btn_tableCheckMasters.setEnabled(False)
@@ -139,13 +144,14 @@ class dlg_LayerSelect(QtGui.QDialog):
 
 	# - Table operations
 	def table_check_all(self, layer_type=None):
+		modifiers = QtGui.QApplication.keyboardModifiers() # Listen to Shift - reverses the ratio
+
 		for row in range(self.tab_masters.rowCount):
-			if self.tab_masters.item(row,0).checkState() == QtCore.Qt.Unchecked:
+			if modifiers == QtCore.Qt.AltModifier:
+				self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Unchecked)								
+			else:
 				if layer_type is None or self.tab_masters.item(row,1).text() == layer_type:
 					self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Checked)
-					one_check = True
-			else:
-				self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Unchecked)
 	
 	def table_populate(self, mode):
 		active_font = pFont()
@@ -162,6 +168,7 @@ class dlg_LayerSelect(QtGui.QDialog):
 			init_data = [(master, 'Master', 'Multiple') for master in active_font.pMasters.names]
 	 	
 	 	table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
+		self.tab_masters.clear()
 		self.tab_masters.setTable(table_dict)	
 
 # -- Main Widget --------------------------

@@ -368,7 +368,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		self.btn_pushWidth.clicked.connect(lambda: self.push_ratio(False, False))
 		self.btn_pushHeight.clicked.connect(lambda: self.push_ratio(True, False))
 
-		self.btn_getArrays.clicked.connect(self.get_coordArrays) 
+		self.btn_getArrays.clicked.connect(lambda: self.get_coordArrays(None)) 
 		self.btn_getVstems.clicked.connect(lambda: self.get_Stems(True))
 		self.btn_getHstems.clicked.connect(lambda: self.get_Stems(False))
 		self.btn_getTx.clicked.connect(lambda: self.get_Stems(True, False))
