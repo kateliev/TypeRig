@@ -10,14 +10,18 @@
 Below listed featueres are implemented as TypeRig GUI. They affect **all compatible layers** simultaneously unless noted so.
 
 ##### Node Panel
-- Add/remove nodes 
-- Align Nodes, chanel processing and more... 
+- Add/remove nodes
+- Align Nodes, chanel processing, slope interceptions and more... 
 - Copy slope from one node pair to another
 - Align selected nodes to font metrics
-- Break, cut and knot contours.
-- Close open contours.
-- Interpolated move aka Interpolated nudge (Active Layer only).
-- Slanted Grid move with the italic angle applied in the Y direction (Active Layer only).
+- Align nodes to specific glyph metrics (ex. 80% of the width/height of Glyph's BBox)
+- Align contours on all masters simultaniously 
+- Break, cut, knot, mitre contours as well as simple ink-trap generation
+- Close/open contours
+- Set contour sense of rotation
+- Move nodes on all masters simultaniously 
+- Interpolated move aka Interpolated nudge
+- Slanted Grid move with the italic angle applied in the Y direction.
 - "Slope walker" movement along inclined contour lines.
 
 ##### Contour Panel
@@ -90,6 +94,7 @@ Below listed featueres are implemented as TypeRig GUI. They affect **all compati
 - Save/load font metrics bindings to/from external file'
 - Kopy kerning data between kern pairs using kern-equations.
 - Apply transformations to multiple glyphs
+- Insert elements using element equations
 
 *'User modifiable JSON format*
 
