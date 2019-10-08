@@ -22,7 +22,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Outline', '0.03'
+app_name, app_version = 'TypeRig | Outline', '0.04'
 
 # - Sub widgets ------------------------
 class QContourSelect(QtGui.QVBoxLayout):
@@ -59,7 +59,7 @@ class QContourSelect(QtGui.QVBoxLayout):
 		self.tab_nodes = trTableView(self.table_dict)
 		
 		self.addWidget(self.tab_nodes)
-		self.refresh() # Build Table
+		#self.refresh() # Build Table
 
 		self.btn_refresh.clicked.connect(lambda: self.refresh())
 		self.cmb_layer.currentIndexChanged.connect(lambda: self.changeLayer())

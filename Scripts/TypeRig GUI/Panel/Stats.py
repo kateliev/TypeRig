@@ -23,7 +23,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Glyph Statistics', '0.10'
+app_name, app_version = 'TypeRig | Glyph Statistics', '0.11'
 
 # - Sub widgets ------------------------
 class QGlyphInfo(QtGui.QVBoxLayout):
@@ -98,7 +98,7 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 
 		# -- Table
 		self.tab_stats = trTableView(self.table_dict)
-		self.refresh()
+		#self.refresh()
 		
 		# -- Note/Descriotion
 		self.addWidget(self.tab_stats)

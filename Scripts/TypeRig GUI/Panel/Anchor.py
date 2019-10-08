@@ -22,7 +22,7 @@ global clipboard_glyph_anchors
 pLayers = None
 pMode = 0
 clipboard_glyph_anchors = {}
-app_name, app_version = 'TypeRig | Anchors', '0.16'
+app_name, app_version = 'TypeRig | Anchors', '0.17'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):
@@ -73,7 +73,7 @@ class QlayerSelect(QtGui.QVBoxLayout):
 		self.lst_anchors.setMinimumHeight(100)
 		self.lst_anchors.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
 		self.addWidget(self.lst_anchors)
-		self.refresh()
+		#self.refresh()
 
 	def refresh(self):
 		# - Init
@@ -143,8 +143,8 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		self.edt_simpleY = QtGui.QLineEdit()
 		self.edt_autoT = QtGui.QLineEdit()
 
-		self.edt_simpleX.setToolTip('Layer Order: '+', '.join(self.aux.wLayers)) # helper for layer order
-		self.edt_simpleY.setToolTip('Layer Order: '+', '.join(self.aux.wLayers)) # helper for layer order
+		#self.edt_simpleX.setToolTip('Layer Order: '+', '.join(self.aux.wLayers)) # helper for layer order
+		#self.edt_simpleY.setToolTip('Layer Order: '+', '.join(self.aux.wLayers)) # helper for layer order
 		self.btn_anchorCopy.setToolTip('Copy selected Anchors from layers choosen.')
 		self.btn_anchorPaste.setToolTip('Paste Anchors at layers choosen.')
 

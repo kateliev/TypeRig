@@ -22,7 +22,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '0.36'
+app_name, app_version = 'TypeRig | Layers', '0.37'
 
 # - Sub widgets ------------------------
 class QlayerSelect(QtGui.QVBoxLayout):
@@ -50,7 +50,7 @@ class QlayerSelect(QtGui.QVBoxLayout):
 		#self.lst_layers.setMaximumHeight(100)
 		self.lst_layers.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection) # Select multiple items call .selectedItems() to get a QList
 		self.addWidget(self.lst_layers)
-		self.refresh()
+		#self.refresh()
 
 	def refresh(self):
 		# - Init

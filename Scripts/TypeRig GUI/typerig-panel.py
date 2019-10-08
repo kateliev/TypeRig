@@ -10,7 +10,7 @@
 
 # - Dependencies -----------------
 from collections import OrderedDict
-#import fontlab as fl6
+import fontlab as fl6
 #import fontgate as fgt
 from PythonQt import QtCore
 from typerig import QtGui
@@ -20,7 +20,7 @@ from typerig.proxy import pGlyph, pFont
 import Panel 
 
 # - Init --------------------------
-app_version = '0.51'
+app_version = '0.52'
 app_name = 'TypeRig Panel'
 ignorePanel = '__'
 
@@ -154,22 +154,24 @@ class dlg_LayerSelect(QtGui.QDialog):
 					self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Checked)
 	
 	def table_populate(self, mode):
-		active_font = pFont()
-		active_glyph = pGlyph()
-
+		
 		def check_type(layer):
 			if layer.isMaskLayer: return 'Mask'
 			if layer.isMasterLayer: return 'Master'
 			if layer.isService: return 'Service'
+		
+		if fl6.CurrentFont() is not None and fl6.CurrentGlyph() is not None:
+			active_font = pFont()
+			active_glyph = pGlyph()
 
-		if mode == 0:
-			init_data = [(layer.name, check_type(layer), active_glyph.activeLayer().isCompatible(layer, True)) for layer in active_glyph.layers() if '#' not in layer.name]
-		else:
-			init_data = [(master, 'Master', 'Multiple') for master in active_font.pMasters.names]
-	 	
-	 	table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
-		self.tab_masters.clear()
-		self.tab_masters.setTable(table_dict)	
+			if mode == 0:
+				init_data = [(layer.name, check_type(layer), active_glyph.activeLayer().isCompatible(layer, True)) for layer in active_glyph.layers() if '#' not in layer.name]
+			else:
+				init_data = [(master, 'Master', 'Multiple') for master in active_font.pMasters.names]
+		 	
+		 	table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
+			self.tab_masters.clear()
+			self.tab_masters.setTable(table_dict)	
 
 # -- Main Widget --------------------------
 class typerig_Panel(QtGui.QDialog):
