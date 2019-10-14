@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.70'
+app_name, app_version = 'TypeRig | Nodes', '0.71'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -1125,48 +1125,47 @@ class tool_tab(QtGui.QWidget):
 		layoutV.addStretch()
 		self.setLayout(layoutV)
 
-
 	def keyPressEvent(self, eventQKeyEvent):
-
-		#self.setFocus()
-		key = eventQKeyEvent.key()
-		modifier = int(eventQKeyEvent.modifiers())
-		addon = .0
-		
-		if key == QtCore.Qt.Key_Escape:
-			#self.close()
-			self.releaseKeyboard()
-			self.KeyboardOverride = False
-			self.btn_capture.setChecked(False)
-			self.btn_capture.setText('Capture Keyboard')
-			
-		# - Keyboard listener
-		# -- Modifier addon
-		if modifier == QtCore.Qt.ShiftModifier:
-			addon = 10.0 if not self.advMovement.chk_percent.isChecked() else 0.1
-		elif modifier == QtCore.Qt.ControlModifier:
-			addon = 100.0 if not self.advMovement.chk_percent.isChecked() else 1.0
-		else:
+		if self.KeyboardOverride:
+			#self.setFocus()
+			key = eventQKeyEvent.key()
+			modifier = int(eventQKeyEvent.modifiers())
 			addon = .0
-		
-		# -- Standard movement keys	
-		if key == QtCore.Qt.Key_Up:
-			shiftXY = (.0, float(self.advMovement.edt_offY.text) + addon)
-		
-		elif key == QtCore.Qt.Key_Down:
-			shiftXY = (.0, -float(self.advMovement.edt_offY.text) - addon)
-		
-		elif key == QtCore.Qt.Key_Left:
-			shiftXY = (-float(self.advMovement.edt_offX.text) - addon, .0)
-		
-		elif key == QtCore.Qt.Key_Right:
-			shiftXY = (float(self.advMovement.edt_offX.text) + addon, .0)
-		
-		else:
-			shiftXY = (.0,.0)
-		
-		# - Move
-		self.advMovement.moveNodes(*shiftXY, method=str(self.advMovement.cmb_methodSelector.currentText),  inPercent=self.advMovement.chk_percent.isChecked())
+			
+			if key == QtCore.Qt.Key_Escape:
+				#self.close()
+				self.releaseKeyboard()
+				self.KeyboardOverride = False
+				self.btn_capture.setChecked(False)
+				self.btn_capture.setText('Capture Keyboard')
+				
+			# - Keyboard listener
+			# -- Modifier addon
+			if modifier == QtCore.Qt.ShiftModifier:
+				addon = 10.0 if not self.advMovement.chk_percent.isChecked() else 0.1
+			elif modifier == QtCore.Qt.ControlModifier:
+				addon = 100.0 if not self.advMovement.chk_percent.isChecked() else 1.0
+			else:
+				addon = .0
+			
+			# -- Standard movement keys	
+			if key == QtCore.Qt.Key_Up:
+				shiftXY = (.0, float(self.advMovement.edt_offY.text) + addon)
+			
+			elif key == QtCore.Qt.Key_Down:
+				shiftXY = (.0, -float(self.advMovement.edt_offY.text) - addon)
+			
+			elif key == QtCore.Qt.Key_Left:
+				shiftXY = (-float(self.advMovement.edt_offX.text) - addon, .0)
+			
+			elif key == QtCore.Qt.Key_Right:
+				shiftXY = (float(self.advMovement.edt_offX.text) + addon, .0)
+			
+			else:
+				shiftXY = (.0,.0)
+			
+			# - Move
+			self.advMovement.moveNodes(*shiftXY, method=str(self.advMovement.cmb_methodSelector.currentText),  inPercent=self.advMovement.chk_percent.isChecked())
 
 	def captureKeyaboard(self):
 		if not self.KeyboardOverride:

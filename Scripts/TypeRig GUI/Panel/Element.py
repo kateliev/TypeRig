@@ -45,7 +45,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '0.25'
+app_name, app_version = 'TypeRig | Elements', '0.26'
 
 # - Strings ------------------------------
 str_help = '''Examples:
@@ -671,7 +671,7 @@ class shapeMovement(QtGui.QVBoxLayout):
 
 		self.addLayout(self.lay_btn)
 
-	def moveNodes(self, offset_x, offset_y, method):
+	def moveElement(self, offset_x, offset_y, method):
 		# - Init
 		glyph = eGlyph()
 		font = pFont()
@@ -705,16 +705,16 @@ class shapeMovement(QtGui.QVBoxLayout):
 		glyph.update()
 
 	def onUp(self):
-		self.moveNodes(.0, float(self.edt_offY.text), method=str(self.cmb_methodSelector.currentText))
+		self.moveElement(.0, float(self.edt_offY.text), method=str(self.cmb_methodSelector.currentText))
 
 	def onDown(self):
-		self.moveNodes(.0, -float(self.edt_offY.text), method=str(self.cmb_methodSelector.currentText))
+		self.moveElement(.0, -float(self.edt_offY.text), method=str(self.cmb_methodSelector.currentText))
 			
 	def onLeft(self):
-		self.moveNodes(-float(self.edt_offX.text), .0, method=str(self.cmb_methodSelector.currentText))
+		self.moveElement(-float(self.edt_offX.text), .0, method=str(self.cmb_methodSelector.currentText))
 			
 	def onRight(self):
-		self.moveNodes(float(self.edt_offX.text), .0, method=str(self.cmb_methodSelector.currentText))
+		self.moveElement(float(self.edt_offX.text), .0, method=str(self.cmb_methodSelector.currentText))
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
@@ -744,53 +744,53 @@ class tool_tab(QtGui.QWidget):
 
 		self.btn_capture.setCheckable(True)
 		self.btn_capture.setToolTip('Click here to capture keyboard arrows input.\nNote:\n+10 SHIFT\n+100 CTRL\n Exit ESC')
-		self.btn_capture.clicked.connect(self.captureKeyaboard)
+		self.btn_capture.clicked.connect(lambda: self.captureKeyaboard())
 
 		layoutV.addWidget(self.btn_capture)
 
 		# - Build ---------------------------
 		self.setLayout(layoutV)
 
-
 	def keyPressEvent(self, eventQKeyEvent):
-		key = eventQKeyEvent.key()
-		modifier = int(eventQKeyEvent.modifiers())
-		addon = .0
-		
-		if key == QtCore.Qt.Key_Escape:
-			#self.close()
-			self.releaseKeyboard()
-			self.KeyboardOverride = False
-			self.btn_capture.setChecked(False)
-			self.btn_capture.setText('Capture Keyboard')
-			
-		# - Keyboard listener
-		# -- Modifier addon
-		if modifier == QtCore.Qt.ShiftModifier:
-			addon = 10.0
-		elif modifier == QtCore.Qt.ControlModifier:
-			addon = 100.0
-		else:
+		if self.KeyboardOverride:	
+			key = eventQKeyEvent.key()
+			modifier = int(eventQKeyEvent.modifiers())
 			addon = .0
-		
-		# -- Standard movement keys	
-		if key == QtCore.Qt.Key_Up:
-			shiftXY = (.0, float(self.shapeMovement.edt_offY.text) + addon)
-		
-		elif key == QtCore.Qt.Key_Down:
-			shiftXY = (.0, -float(self.shapeMovement.edt_offY.text) - addon)
-		
-		elif key == QtCore.Qt.Key_Left:
-			shiftXY = (-float(self.shapeMovement.edt_offX.text) - addon, .0)
-		
-		elif key == QtCore.Qt.Key_Right:
-			shiftXY = (float(self.shapeMovement.edt_offX.text) + addon, .0)
-		
-		else:
-			shiftXY = (.0,.0)
-		
-		# - Move
-		self.shapeMovement.moveNodes(*shiftXY, method=str(self.shapeMovement.cmb_methodSelector.currentText))
+			
+			if key == QtCore.Qt.Key_Escape:
+				#self.close()
+				self.releaseKeyboard()
+				self.KeyboardOverride = False
+				self.btn_capture.setChecked(False)
+				self.btn_capture.setText('Capture Keyboard')
+				
+			# - Keyboard listener
+			# -- Modifier addon
+			if modifier == QtCore.Qt.ShiftModifier:
+				addon = 10.0
+			elif modifier == QtCore.Qt.ControlModifier:
+				addon = 100.0
+			else:
+				addon = .0
+			
+			# -- Standard movement keys	
+			if key == QtCore.Qt.Key_Up:
+				shiftXY = (.0, float(self.shapeMovement.edt_offY.text) + addon)
+			
+			elif key == QtCore.Qt.Key_Down:
+				shiftXY = (.0, -float(self.shapeMovement.edt_offY.text) - addon)
+			
+			elif key == QtCore.Qt.Key_Left:
+				shiftXY = (-float(self.shapeMovement.edt_offX.text) - addon, .0)
+			
+			elif key == QtCore.Qt.Key_Right:
+				shiftXY = (float(self.shapeMovement.edt_offX.text) + addon, .0)
+			
+			else:
+				shiftXY = (.0,.0)
+			
+			# - Move
+			self.shapeMovement.moveElement(*shiftXY, method=str(self.shapeMovement.cmb_methodSelector.currentText))
 
 	def captureKeyaboard(self):
 		if not self.KeyboardOverride:

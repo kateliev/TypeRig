@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.72.5'
+__version__ = '0.72.8'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -393,8 +393,15 @@ class pNodesContainer(object):
 		
 	'''
 	def __init__(self, nodeList):
-		self.nodes = nodeList
+		from typerig.proxy import pNode
+		
+		self.nodes = [pNode(node) for node in nodeList]
 		self.bounds = self.getBounds()
+
+		self.x = lambda : self.getBounds().x
+		self.y = lambda : self.getBounds().y
+		self.width = lambda : self.getBounds().width
+		self.height  = lambda : self.getBounds().height
 
 	def __repr__(self):
 		return '<%s (%s, %s, %s, %s) nodes=%s>' %(self.__class__.__name__, self.bounds.x, self.bounds.y, self.bounds.width, self.bounds.height, len(self.nodes))
@@ -409,6 +416,14 @@ class pNodesContainer(object):
 	def getBounds(self):
 		from typerig.brain import bounds
 		return bounds(self.getPosition())
+
+	def shift(self, dx, dy):
+		for node in self.nodes:
+			node.shift(dx, dy)
+
+	def smartShift(self, dx, dy):
+		for node in self.nodes:
+			node.smartShift(dx, dy)
 
 class pContour(object):
 	'''Proxy to flContour object
