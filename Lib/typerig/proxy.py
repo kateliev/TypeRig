@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.72.8'
+__version__ = '0.72.9'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -1115,7 +1115,7 @@ class pGlyph(object):
 		
 		# - General way ---- pre 6774 worked fine!
 		fl6.flItems.notifyChangesApplied(undoMessage[:20], flObject, True)
-		if verbose: print 'DONE:\t %s' %undoMessage
+		if verbose: print 'DONE:\t%s' %undoMessage
 		
 		# - New from 6774 on
 		for contour in self.contours():
@@ -1938,7 +1938,7 @@ class pFont(object):
 			undoMessage (string): Message to be added in undo/history list.
 		'''
 		fl6.flItems.notifyChangesApplied(undoMessage, flObject, True)
-		if verbose: print 'DONE:\t %s' %undoMessage
+		if verbose: print 'DONE:\t%s' %undoMessage
 
 	def update(self):
 		self.updateObject(self.fl, verbose=False)
