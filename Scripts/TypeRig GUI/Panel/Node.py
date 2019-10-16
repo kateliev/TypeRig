@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.71'
+app_name, app_version = 'TypeRig | Nodes', '0.73'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -20,7 +20,7 @@ import fontgate as fgt
 from PythonQt import QtCore
 from typerig import QtGui
 from typerig.glyph import eGlyph
-from typerig.node import eNode
+from typerig.node import eNode, eNodesContainer
 from typerig.contour import eContour
 from typerig.proxy import pFont, pFontMetrics, pContour
 from typerig.gui import getProcessGlyphs
@@ -348,9 +348,12 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_alignLayer_H.clicked.connect(lambda: self.alignNodes('Layer_H'))
 
 		# - Check box
-		self.chk_slope = QtGui.QPushButton('Intercept')
-		self.chk_slope.setCheckable(True)
-		self.chk_slope.setToolTip('Find intersections of selected font metric\nwith slopes on which selected nodes resign.')
+		self.chk_intercept = QtGui.QPushButton('Intercept')
+		self.chk_relations = QtGui.QPushButton('Keep Relations')
+		self.chk_intercept.setCheckable(True)
+		self.chk_relations.setCheckable(True)
+		self.chk_intercept.setToolTip('Find intersections of selected font metric\nwith slopes on which selected nodes resign.')
+		self.chk_intercept.setToolTip('Keep relations between selected nodes.')
 				
 		# - Build Layout
 		self.addWidget(self.btn_left, 			0,0)
@@ -370,7 +373,8 @@ class alignNodes(QtGui.QGridLayout):
 		self.addWidget(self.edt_toYpos,			5,1,1,1)
 		self.addWidget(self.btn_toYpos,			5,2,1,1)
 		self.addWidget(self.btn_toMpos, 		5,3,1,1)
-		self.addWidget(self.chk_slope, 			6,0,1,4)
+		self.addWidget(self.chk_relations, 			6,0,1,2)
+		self.addWidget(self.chk_intercept, 			6,2,1,2)
 
 		#self.addWidget(QtGui.QLabel('Align to Glyph Layer'), 	6, 0, 1, 4)
 		self.addWidget(self.cmb_select_V, 						7, 0)
@@ -469,7 +473,8 @@ class alignNodes(QtGui.QGridLayout):
 			wLayers = glyph._prepareLayers(pLayers)
 			
 			for layer in wLayers:
-				selection = glyph.selectedNodes(layer, extend=eNode, deep=True)
+				extend_nodes = None if self.chk_relations.isChecked() else eNode
+				selection = glyph.selectedNodes(layer, extend=extend_nodes, deep=True)
 
 				if mode == 'L':
 					target = min(selection, key=lambda item: item.x)
@@ -517,24 +522,37 @@ class alignNodes(QtGui.QGridLayout):
 					if '0' in mode:
 						newY = layerMetrics.ascender
 						toMaxY = True if modifiers == QtCore.Qt.ShiftModifier else False 
+						container_mode = 'LB' if modifiers == QtCore.Qt.ShiftModifier else 'LT'
+
 					elif '1' in mode:
 						newY = layerMetrics.capsHeight
 						toMaxY = True if modifiers == QtCore.Qt.ShiftModifier else False 
+						container_mode = 'LB' if modifiers == QtCore.Qt.ShiftModifier else 'LT'
+
 					elif '2' in mode:
 						newY = layerMetrics.descender
 						toMaxY = False if modifiers == QtCore.Qt.ShiftModifier else True 
+						container_mode = 'LT' if modifiers == QtCore.Qt.ShiftModifier else 'LB'
+
 					elif '3' in mode:
 						newY = layerMetrics.xHeight
 						toMaxY = True if modifiers == QtCore.Qt.ShiftModifier else False 
+						container_mode = 'LB' if modifiers == QtCore.Qt.ShiftModifier else 'LT'
+
 					elif '4' in mode:
 						newY = 0
 						toMaxY = False if modifiers == QtCore.Qt.ShiftModifier else True 
+						container_mode = 'LT' if modifiers == QtCore.Qt.ShiftModifier else 'LB'
+
 					elif '5' in mode:
 						newY = self.edt_toYpos.value
 						toMaxY = False if modifiers == QtCore.Qt.ShiftModifier else True 
+						container_mode = 'LT' if modifiers == QtCore.Qt.ShiftModifier else 'LB'
+
 					elif '6' in mode:
 						newY = glyph.mLine()
 						toMaxY = newY >= 0 
+						container_mode = 'LB' if modifiers == QtCore.Qt.ShiftModifier else 'LT'
 						if modifiers == QtCore.Qt.ShiftModifier: toMaxY = not toMaxY
 
 				elif mode == 'Layer_V':
@@ -547,7 +565,13 @@ class alignNodes(QtGui.QGridLayout):
 						origin = 0.
 
 					target = fl6.flNode(float(width)*self.spb_prc_V.value/100 + origin + self.spb_unit_V.value, 0)
+					container_mode = 'LB' if modifiers == QtCore.Qt.ShiftModifier else 'RB'
 					control = (True, False)
+
+					container_mode_H = ['R','L'][modifiers == QtCore.Qt.ShiftModifier]
+					container_mode_H = [container_mode_H,'C'][modifiers == QtCore.Qt.AltModifier]
+					container_mode_V = 'B'
+					container_mode = container_mode_H + container_mode_V
 
 				elif mode == 'Layer_H':
 					metrics = pFontMetrics(glyph.package)
@@ -577,45 +601,61 @@ class alignNodes(QtGui.QGridLayout):
 						origin = 0.		
 
 					target = fl6.flNode(0, float(height)*self.spb_prc_H.value/100 + origin + self.spb_unit_H.value)
+					
+					container_mode_H = 'L'
+					container_mode_V = ['T','B'][modifiers == QtCore.Qt.ShiftModifier]
+					container_mode_V = [container_mode_V,'E'][modifiers == QtCore.Qt.AltModifier]
+					container_mode = container_mode_H + container_mode_V
+
 					control = (False, True)
 
-				for node in selection:
+				if self.chk_relations.isChecked():
+					container = eNodesContainer(selection)
+					
 					if 'FontMetrics' in mode:
-						if italicAngle != 0 and not self.chk_slope.isChecked():
-							tempTarget = Coord(node.fl)
-							tempTarget.setAngle(italicAngle)
+						target = fl6.flNode(newX, newY)
+						control = (False, True)												
+					
+					container.alignTo(target, container_mode, control)
 
-							target = fl6.flNode(tempTarget.getWidth(newY), newY)
-							control = (True, True)
-						
-						elif self.chk_slope.isChecked():
-							pairUp = node.getMaxY().position
-							pairDown = node.getMinY().position
-							pairPos = pairUp if toMaxY else pairDown
-							newLine = Line(node.fl.position, pairPos)
-							newX = newLine.solveX(newY)
+				else:
+					for node in selection:
+						if 'FontMetrics' in mode:
+							if italicAngle != 0 and not self.chk_intercept.isChecked():
+								tempTarget = Coord(node.fl)
+								tempTarget.setAngle(italicAngle)
 
+								target = fl6.flNode(tempTarget.getWidth(newY), newY)
+								control = (True, True)
+							
+							elif self.chk_intercept.isChecked():
+								pairUp = node.getMaxY().position
+								pairDown = node.getMinY().position
+								pairPos = pairUp if toMaxY else pairDown
+								newLine = Line(node.fl.position, pairPos)
+								newX = newLine.solveX(newY)
+
+								target = fl6.flNode(newX, newY)
+								control = (True, True)
+
+							else:
+								target = fl6.flNode(newX, newY)
+								control = (False, True)
+
+						if mode == 'peerCenterX':
+							newX = node.x + (node.getPrevOn().x + node.getNextOn().x - 2*node.x)/2.
+							newY = node.y
 							target = fl6.flNode(newX, newY)
-							control = (True, True)
+							control = (True, False)
 
-						else:
+						elif mode == 'peerCenterY':
+							newX = node.x
+							newY = node.y + (node.getPrevOn().y + node.getNextOn().y - 2*node.y)/2.
 							target = fl6.flNode(newX, newY)
 							control = (False, True)
 
-					if mode == 'peerCenterX':
-						newX = node.x + (node.getPrevOn().x + node.getNextOn().x - 2*node.x)/2.
-						newY = node.y
-						target = fl6.flNode(newX, newY)
-						control = (True, False)
-
-					elif mode == 'peerCenterY':
-						newX = node.x
-						newY = node.y + (node.getPrevOn().y + node.getNextOn().y - 2*node.y)/2.
-						target = fl6.flNode(newX, newY)
-						control = (False, True)
-
-					# - Execute Align ----------
-					node.alignTo(target, control)
+						# - Execute Align ----------
+						node.alignTo(target, control)
 
 			glyph.updateObject(glyph.fl, 'Align Nodes @ %s.' %'; '.join(wLayers))
 			glyph.update()

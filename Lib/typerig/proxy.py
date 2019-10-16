@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.72.9'
+__version__ = '0.73.0'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -1867,12 +1867,14 @@ class pFont(object):
 
 	def selected_pGlyphs(self):
 		'''Return TypeRig proxy glyph object for each selected glyph'''
-		return self.pGlyphs(self.selectedGlyphs())
+		selection = self.getSelectedIndices()
+		return self.pGlyphs(self.selectedGlyphs()) if len(selection) else []
 
 	def selectedGlyphs(self, extend=None):
 		'''Return TypeRig proxy glyph object for each selected glyph'''
-		return self.glyphs(self.getSelectedIndices(), extend)
-
+		selection = self.getSelectedIndices()
+		return self.glyphs(selection, extend) if len(selection) else []
+		
 	def glyph(self, glyph):
 		'''Return TypeRig proxy glyph object (pGlyph) by index (int) or name (str).'''
 		if isinstance(glyph, int) or isinstance(glyph, basestring):
