@@ -464,7 +464,7 @@ class glyphComposer(QtGui.QGridLayout):
 						print 'ERROR:\t Glyph: %s\tElement: %s not found @Layer: %s' %(glyph.name, replace_shape_name,layer)
 
 			for layer, shape_triple in process_shapes_dict.items():
-					replace_shape.transform =  shape_triple[3] # Apply transform
+					replace_shape.transform =  shape_triple[2] # Apply transform
 					glyph.replaceShape(shape_triple[0], shape_triple[1], layer)
 
 			glyph.update()
