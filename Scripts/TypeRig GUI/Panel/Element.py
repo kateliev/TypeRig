@@ -45,7 +45,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '0.26'
+app_name, app_version = 'TypeRig | Elements', '0.27'
 
 # - Strings ------------------------------
 str_help = '''Examples:
@@ -451,17 +451,21 @@ class glyphComposer(QtGui.QGridLayout):
 
 		for glyph in process_glyphs:
 			process_layers = glyph._prepareLayers(pLayers)
+			process_shapes_dict = {}
 
 			for layer in process_layers:
 				replace_shape = self.active_font.findShape(replace_shape_name, layer)
 				selected_shape = glyph.selectedAtShapes(index=False, layer=layer, deep=False)[0][0]
-												
+				
 				if selected_shape is not None:
 					if replace_shape is not None:
-						replace_shape.transform = selected_shape.transform # Apply transform
-						glyph.replaceShape(selected_shape, replace_shape, layer)
+						process_shapes_dict[layer] = (selected_shape, replace_shape, selected_shape.transform)
 					else:
 						print 'ERROR:\t Glyph: %s\tElement: %s not found @Layer: %s' %(glyph.name, replace_shape_name,layer)
+
+			for layer, shape_triple in process_shapes_dict.items():
+					replace_shape.transform =  shape_triple[3] # Apply transform
+					glyph.replaceShape(shape_triple[0], shape_triple[1], layer)
 
 			glyph.update()
 			glyph.updateObject(glyph.fl, 'Glyph: %s;\tInsert Element:%s @ %s.' %(glyph.name, replace_shape_name,'; '.join(process_layers)))
