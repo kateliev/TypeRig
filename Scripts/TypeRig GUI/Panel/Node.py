@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.73'
+app_name, app_version = 'TypeRig | Nodes', '0.74'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -239,27 +239,40 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toMpos = QtGui.QPushButton('Measure')
 		self.btn_solveY = QtGui.QPushButton('Lineup Min/Max Y')
 		self.btn_solveX = QtGui.QPushButton('Lineup Min/Max X')
-		self.btn_copy = QtGui.QPushButton('Copy Slope')
-		self.btn_italic = QtGui.QPushButton('Italic')
+		
 		self.btn_pasteMinY = QtGui.QPushButton('Min Y')
 		self.btn_pasteMaxY = QtGui.QPushButton('Max Y')
 		self.btn_pasteFMinY = QtGui.QPushButton('Flip Min')
 		self.btn_pasteFMaxY = QtGui.QPushButton('Flip Max')
+		self.btn_alignLayer_V = QtGui.QPushButton('Vertical')
+		self.btn_alignLayer_H = QtGui.QPushButton('Horizontal')
 
-		self.btn_copy.setCheckable(True)
-		self.btn_copy.setChecked(False)
-
-		self.btn_italic.setCheckable(True)
-		self.btn_italic.setChecked(False)
+		# - Check buttons
+		self.chk_intercept = QtGui.QPushButton('Intercept')
+		self.chk_relations = QtGui.QPushButton('Keep Relations')
+		self.chk_copy = QtGui.QPushButton('Copy Slope')
+		self.chk_italic = QtGui.QPushButton('Italic')
+		
+		self.chk_copy.setCheckable(True)
+		self.chk_italic.setCheckable(True)
+		self.chk_intercept.setCheckable(True)
+		self.chk_relations.setCheckable(True)
+		
+		# - Help 
+		self.chk_intercept.setToolTip('Find intersections of selected font metric\nwith slopes on which selected nodes resign.')
+		self.chk_relations.setToolTip('Keep relations between selected nodes.')
 
 		self.btn_solveY.setToolTip('Channel Process selected nodes according to Y values')
 		self.btn_solveX.setToolTip('Channel Process selected nodes according to X values')
-		self.btn_copy.setToolTip('Copy slope between lowest and highest of selected nodes.')
-		self.btn_italic.setToolTip('Use Italic Angle as slope.')
+
+		self.chk_copy.setToolTip('Copy slope between lowest and highest of selected nodes.')
+		self.chk_italic.setToolTip('Use Italic Angle as slope.')
+
 		self.btn_pasteMinY.setToolTip('Apply slope to selected nodes.\nReference at MIN Y value.')
 		self.btn_pasteMaxY.setToolTip('Apply slope to selected nodes.\nReference at MAX Y value.')
 		self.btn_pasteFMinY.setToolTip('Apply X flipped slope to selected nodes.\nReference at MIN Y value.')
 		self.btn_pasteFMaxY.setToolTip('Apply X flipped slope to selected nodes.\nReference at MAX Y value.')
+
 		self.btn_toAscender.setToolTip('Send selected nodes to Ascender height.')
 		self.btn_toCapsHeight.setToolTip('Send selected nodes to Caps Height.')
 		self.btn_toDescender.setToolTip('Send selected nodes to Descender height.')
@@ -268,9 +281,8 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toYpos.setToolTip('Send selected nodes to Y coordinate.')
 		self.btn_toMpos.setToolTip('Send selected nodes to Measurment Line.\nSHIFT + Click switch intercept.')
 
-		self.btn_alignLayer_V = QtGui.QPushButton('Vertical')
-		self.btn_alignLayer_H = QtGui.QPushButton('Horizontal')
-		
+		self.btn_alignLayer_V.setToolTip('If Keep Relations is on:\n - Click: Align Top\n - SHIFT + Click: Align Bottom\n - Alt + Click: Align Center')
+		self.btn_alignLayer_H.setToolTip('If Keep Relations is on:\n - Click: Align Right\n - SHIFT + Click: Align Left\n - Alt + Click: Align Center')
 
 		# - Combo boxes
 		self.cmb_select_V = QtGui.QComboBox()
@@ -322,7 +334,7 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toYpos.setMinimumWidth(40)
 		self.edt_toYpos.setMinimumWidth(20)
 				
-		self.btn_copy.clicked.connect(self.copySlope)
+		self.chk_copy.clicked.connect(self.copySlope)
 		self.btn_left.clicked.connect(lambda: self.alignNodes('L'))
 		self.btn_right.clicked.connect(lambda: self.alignNodes('R'))
 		self.btn_top.clicked.connect(lambda: self.alignNodes('T'))
@@ -347,14 +359,6 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_alignLayer_V.clicked.connect(lambda: self.alignNodes('Layer_V'))
 		self.btn_alignLayer_H.clicked.connect(lambda: self.alignNodes('Layer_H'))
 
-		# - Check box
-		self.chk_intercept = QtGui.QPushButton('Intercept')
-		self.chk_relations = QtGui.QPushButton('Keep Relations')
-		self.chk_intercept.setCheckable(True)
-		self.chk_relations.setCheckable(True)
-		self.chk_intercept.setToolTip('Find intersections of selected font metric\nwith slopes on which selected nodes resign.')
-		self.chk_intercept.setToolTip('Keep relations between selected nodes.')
-				
 		# - Build Layout
 		self.addWidget(self.btn_left, 			0,0)
 		self.addWidget(self.btn_right, 			0,1)
@@ -388,8 +392,8 @@ class alignNodes(QtGui.QGridLayout):
 		self.addWidget(QtGui.QLabel('Channel processing and slopes'), 9,0,1,4)
 		self.addWidget(self.btn_solveY, 		10,0,1,2)
 		self.addWidget(self.btn_solveX, 		10,2,1,2)
-		self.addWidget(self.btn_copy,			11,0,1,3)
-		self.addWidget(self.btn_italic,			11,3,1,1)
+		self.addWidget(self.chk_copy,			11,0,1,3)
+		self.addWidget(self.chk_italic,			11,3,1,1)
 		self.addWidget(self.btn_pasteMinY,		12,0,1,1)
 		self.addWidget(self.btn_pasteMaxY,		12,1,1,1)
 		self.addWidget(self.btn_pasteFMinY,		12,2,1,1)
@@ -398,9 +402,9 @@ class alignNodes(QtGui.QGridLayout):
 	def copySlope(self):
 		from typerig.brain import Line
 
-		if self.btn_copy.isChecked():
-			self.btn_copy.setText('Reset Slope')
-			self.btn_italic.setChecked(False)
+		if self.chk_copy.isChecked():
+			self.chk_copy.setText('Reset Slope')
+			self.chk_italic.setChecked(False)
 
 			glyph = eGlyph()
 			wLayers = glyph._prepareLayers(pLayers)
@@ -410,13 +414,13 @@ class alignNodes(QtGui.QGridLayout):
 				self.copyLine[layer] = Line(selection[0], selection[-1])
 				#print self.copyLine[layer].getAngle(), self.copyLine[layer].getSlope()
 		else:
-			self.btn_copy.setText('Copy Slope')
-			self.btn_italic.setChecked(False)
+			self.chk_copy.setText('Copy Slope')
+			self.chk_italic.setChecked(False)
 
 	def pasteSlope(self, mode):
 		from typerig.brain import Line
 		
-		if self.btn_copy.isChecked() or self.btn_italic.isChecked():
+		if self.chk_copy.isChecked() or self.chk_italic.isChecked():
 			glyph = eGlyph()
 			wLayers = glyph._prepareLayers(pLayers)
 			italicAngle = glyph.package.italicAngle_value
@@ -424,12 +428,12 @@ class alignNodes(QtGui.QGridLayout):
 			
 			for layer in wLayers:
 				selection = [eNode(node) for node in glyph.selectedNodes(layer)]
-				srcLine = self.copyLine[layer] if not self.btn_italic.isChecked() else None
+				srcLine = self.copyLine[layer] if not self.chk_italic.isChecked() else None
 
 				if mode == 'MinY':
 					dstLine = Line(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
 					
-					if not self.btn_italic.isChecked():
+					if not self.chk_italic.isChecked():
 						dstLine.slope = srcLine.getSlope()
 					else:
 						dstLine.setAngle(-1*italicAngle)
@@ -437,7 +441,7 @@ class alignNodes(QtGui.QGridLayout):
 				elif mode == 'MaxY':
 					dstLine = Line(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
 					
-					if not self.btn_italic.isChecked():
+					if not self.chk_italic.isChecked():
 						dstLine.slope = srcLine.getSlope()
 					else:
 						dstLine.setAngle(-1*italicAngle)
@@ -445,7 +449,7 @@ class alignNodes(QtGui.QGridLayout):
 				elif mode == 'FLMinY':
 					dstLine = Line(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
 					
-					if not self.btn_italic.isChecked():
+					if not self.chk_italic.isChecked():
 						dstLine.slope = -1.*srcLine.getSlope()
 					else:
 						dstLine.setAngle(italicAngle)
@@ -453,7 +457,7 @@ class alignNodes(QtGui.QGridLayout):
 				elif mode == 'FLMaxY':
 					dstLine = Line(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
 					
-					if not self.btn_italic.isChecked():
+					if not self.chk_italic.isChecked():
 						dstLine.slope = -1.*srcLine.getSlope()
 					else:
 						dstLine.setAngle(italicAngle)
