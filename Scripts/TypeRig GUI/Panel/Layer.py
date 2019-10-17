@@ -22,7 +22,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '0.37'
+app_name, app_version = 'TypeRig | Layers', '0.38'
 
 # - Sub widgets ------------------------
 class QlayerSelect(QtGui.QVBoxLayout):
@@ -242,11 +242,11 @@ class QlayerTools(QtGui.QVBoxLayout):
 		self.btn_unlock.setToolTip('Unlock all locked references.\nSHIFT+Click will lock all references.')
 		self.btn_expand.setToolTip('Expand transformations for selected layers')
 
-		self.btn_swap.clicked.connect(self.swap)
-		self.btn_copy.clicked.connect(self.copy)
-		self.btn_paste.clicked.connect(self.paste)
-		self.btn_clean.clicked.connect(self.clean)
-		self.btn_unlock.clicked.connect(self.unlock)
+		self.btn_swap.clicked.connect(self.layer_swap)
+		self.btn_copy.clicked.connect(self.layer_copy)
+		self.btn_paste.clicked.connect(self.layer_paste)
+		self.btn_clean.clicked.connect(self.layer_clean)
+		self.btn_unlock.clicked.connect(self.layer_unlock)
 		#self.btn_expand.clicked.connect(self.expand)
 				
 		self.lay_buttons.addWidget(self.btn_swap,	0, 0, 1, 1)
@@ -328,7 +328,7 @@ class QlayerTools(QtGui.QVBoxLayout):
 		return exportDSTAnchors
 
 	# - Button procedures ---------------------------------------------------
-	def unlock(self):
+	def layer_unlock(self):
 		if self.aux.doCheck():
 			modifiers = QtGui.QApplication.keyboardModifiers()
 
@@ -345,7 +345,7 @@ class QlayerTools(QtGui.QVBoxLayout):
 			self.aux.glyph.update()
 
 
-	def swap(self):
+	def layer_swap(self):
 		if self.aux.doCheck():	
 			if self.chk_outline.isChecked():
 				exportSRC = self.Copy_Paste_Layer_Shapes(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True, True)
@@ -373,7 +373,7 @@ class QlayerTools(QtGui.QVBoxLayout):
 			self.aux.glyph.update()
 
 
-	def copy(self):
+	def layer_copy(self):
 		if self.aux.doCheck():
 			if self.chk_outline.isChecked():
 				self.Copy_Paste_Layer_Shapes(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True)
@@ -396,7 +396,7 @@ class QlayerTools(QtGui.QVBoxLayout):
 			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Copy Layer | %s <- %s.' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
 			self.aux.glyph.update()
 
-	def paste(self):
+	def layer_paste(self):
 		if self.aux.doCheck():	
 			if self.chk_outline.isChecked():
 				self.Copy_Paste_Layer_Shapes(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False)
@@ -419,7 +419,7 @@ class QlayerTools(QtGui.QVBoxLayout):
 			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Paste Layer | %s -> %s.' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
 			self.aux.glyph.update()
 
-	def clean(self):
+	def layer_clean(self):
 		if self.aux.doCheck():	
 			if self.chk_outline.isChecked():
 				for item in self.aux.lst_layers.selectedItems():
@@ -469,15 +469,15 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 		self.btn_unfold.setToolTip('Reposition selected layers side by side. Selection order does matter!')
 		self.btn_restore.setToolTip('Restore Layer Metrics.')
 		self.btn_copy.setToolTip('Copy selected outline to cliboard for each of selected layers.')
-		self.btn_paste.setToolTip('Paste outline from cliboard layer by layer (by name). Non existing layers are discarded! New Element is created upon Paste!')
-		self.btn_transform.setToolTip('Affine transform selected layers')
+		self.btn_paste.setToolTip('Paste outline from cliboard layer by layer (by name).\nNon existing layers are discarded!\nClick: New Element is created upon Paste.\nSHIFT+Click: Paste inside currently selected Element.')
+		self.btn_transform.setToolTip('Affine transform selected layers.')
 
-		self.btn_unfold.clicked.connect(self.unfold)
-		self.btn_restore.clicked.connect(self.restore)
-		self.btn_copy.clicked.connect(self.copy)
-		self.btn_paste.clicked.connect(self.paste)
-		self.btn_transform.clicked.connect(lambda: self.transform(False))
-		self.btn_transform_shape.clicked.connect(lambda: self.transform(True))
+		self.btn_unfold.clicked.connect(self.layers_unfold)
+		self.btn_restore.clicked.connect(self.layers_restore)
+		self.btn_copy.clicked.connect(self.outline_copy)
+		self.btn_paste.clicked.connect(self.outline_paste)
+		self.btn_transform.clicked.connect(lambda: self.layer_transform(False))
+		self.btn_transform_shape.clicked.connect(lambda: self.layer_transform(True))
 				
 		self.lay_buttons.addWidget(self.btn_unfold,				0, 0, 1, 4)
 		self.lay_buttons.addWidget(self.btn_restore,			0, 4, 1, 4)
@@ -497,7 +497,7 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 		self.addLayout(self.lay_buttons)
 
 	# - Button procedures ---------------------------------------------------
-	def unfold(self):
+	def layers_unfold(self):
 		if self.aux.doCheck() and len(self.aux.lst_layers.selectedItems()) > 1:
 			# - Init
 			wGlyph = self.aux.glyph
@@ -524,7 +524,7 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Unfold Layers (Side By Side): %s.' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
 			self.aux.glyph.update()
 
-	def restore(self):
+	def layers_restore(self):
 		if self.aux.doCheck() and len(self.backup.keys()):
 			# - Resore metrics
 			wGlyph = self.aux.glyph
@@ -541,7 +541,7 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Restore Layer metrics: %s.' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
 			self.aux.glyph.update()
 
-	def copy(self):
+	def outline_copy(self):
 		# - Init
 		wGlyph = self.aux.glyph
 		wContours = wGlyph.contours()
@@ -551,7 +551,7 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 		selectionTuples = wGlyph.selectedAtContours()
 		selection = {key:[item[1] for item in value] if not wContours[key].isAllNodesSelected() else [] for key, value in groupby(selectionTuples, lambda x:x[0])}
 
-		
+		# - Process
 		if len(selection.keys()):
 			self.btn_paste.setEnabled(True)
 						
@@ -568,22 +568,40 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 
 			print 'DONE:\t Copy outline; Glyph: %s; Layers: %s.' %(self.aux.glyph.fl.name, '; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
 		
-	def paste(self):
+	def outline_paste(self):
+		# - Init
 		wGlyph = self.aux.glyph
+		modifiers = QtGui.QApplication.keyboardModifiers()
 
+		# - Helper
+		def add_new_shape(layer, contours):
+			newShape = fl6.flShape()
+			newShape.addContours(contours, True)
+			layer.addShape(newShape)
+
+		# - Process
 		if len(self.contourClipboard.keys()):
 			for layerName, contours in self.contourClipboard.iteritems():
 				wLayer = wGlyph.layer(layerName)
 
 				if wLayer is not None:
-					newShape = fl6.flShape()
-					newShape.addContours(contours, True)
-					wLayer.addShape(newShape)			
-			
+					if modifiers == QtCore.Qt.ShiftModifier:
+						# - Insert contours into currently selected shape
+						selected_shapes_list = wGlyph.selectedAtShapes(index=False, layer=layerName, deep=False)
+
+						if len(selected_shapes_list):
+							selected_shape = selected_shapes_list[0][0]
+							selected_shape.addContours(contours, True)
+						else:
+							add_new_shape(wLayer, contours)	# Fallback
+					else:
+						# - Create new shape
+						add_new_shape(wLayer, contours)
+		
 			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Paste outline; Glyph: %s; Layers: %s' %(self.aux.glyph.fl.name, '; '.join([item.text() for item in self.aux.lst_layers.selectedItems()])))
 			self.aux.glyph.update()
 
-	def transform(self, shapes=False):
+	def layer_transform(self, shapes=False):
 		if self.aux.doCheck() and len(self.aux.lst_layers.selectedItems()):
 			
 			# - Init
