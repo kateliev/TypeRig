@@ -20,7 +20,7 @@ from typerig.proxy import pGlyph, pFont
 import Panel 
 
 # - Init --------------------------
-app_version = '0.52'
+app_version = '0.53'
 app_name = 'TypeRig Panel'
 ignorePanel = '__'
 
@@ -29,9 +29,10 @@ pMode = 0
 pLayers = (True, False, False, False)
 
 # -- Inital config for Get Layers dialog
-column_names = ('Layer Name', 'Layer Type','Compatible')
+column_names = ('Layer Name', 'Layer Type')
 column_init = (None, None, False)
 table_dict = {1:OrderedDict(zip(column_names, column_init))}
+color_dict = {'Master': QtGui.QColor(0, 255, 0, 20), 'Service': QtGui.QColor(0, 0, 255, 20), 'Mask': QtGui.QColor(255, 0, 0, 20)}
 
 # - Style -------------------------
 ss_Toolbox_none = """/* EMPTY STYLESHEET */ """
@@ -74,17 +75,14 @@ class WMasterTableView(QtGui.QTableWidget):
 				name_column.append(key)
 				
 				# -- Selectively add data
+				newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
+				
 				if m == 0:
-					newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
 					newitem.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
 					newitem.setCheckState(QtCore.Qt.Unchecked) 
-					self.setItem(n, m, newitem)
-
-				if m > 0:
-					newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
-					newitem.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
-					newitem.setBackground(QtGui.QColor(0, 255, 0, 15) if data[layer]['Compatible'] else QtGui.QColor(255, 0, 0, 15))
-					self.setItem(n, m, newitem)					
+				
+				if data[layer]['Layer Type']: newitem.setBackground(color_dict[data[layer]['Layer Type']])
+				self.setItem(n, m, newitem)
 
 		self.setHorizontalHeaderLabels(name_column)
 		self.setVerticalHeaderLabels(name_row)
@@ -129,10 +127,10 @@ class dlg_LayerSelect(QtGui.QDialog):
 
 		# - Build layout
 		layoutV = QtGui.QGridLayout() 
-		layoutV.addWidget(self.btn_tableCheck, 				0, 0, 1, 1)
-		layoutV.addWidget(self.btn_tableCheckMasters, 		0, 1, 1, 1)
-		layoutV.addWidget(self.btn_tableCheckMasks, 		0, 2, 1, 1)
-		layoutV.addWidget(self.btn_tableCheckServices, 		0, 3, 1, 1)
+		layoutV.addWidget(self.btn_tableCheck, 				0, 0, 1, 2)
+		layoutV.addWidget(self.btn_tableCheckMasters, 		0, 2, 1, 2)
+		layoutV.addWidget(self.btn_tableCheckMasks, 		1, 0, 1, 2)
+		layoutV.addWidget(self.btn_tableCheckServices, 		1, 2, 1, 2)
 		layoutV.addWidget(self.tab_masters, 				2, 0, 20, 4)
 
 		# - Set Widget
@@ -165,9 +163,9 @@ class dlg_LayerSelect(QtGui.QDialog):
 			active_glyph = pGlyph()
 
 			if mode == 0:
-				init_data = [(layer.name, check_type(layer), active_glyph.activeLayer().isCompatible(layer, True)) for layer in active_glyph.layers() if '#' not in layer.name]
+				init_data = [(layer.name, check_type(layer)) for layer in active_glyph.layers() if '#' not in layer.name]
 			else:
-				init_data = [(master, 'Master', 'Multiple') for master in active_font.pMasters.names]
+				init_data = [(master, 'Master') for master in active_font.pMasters.names]
 		 	
 		 	table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
 			self.tab_masters.clear()

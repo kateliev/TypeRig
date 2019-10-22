@@ -23,7 +23,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Glyph Statistics', '0.11'
+app_name, app_version = 'TypeRig | Glyph Statistics', '0.13'
 
 # - Sub widgets ------------------------
 class QGlyphInfo(QtGui.QVBoxLayout):
@@ -33,8 +33,6 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 
 		# -- Init
 		self.table_dict = {0:{0:None}} # Empty table
-		self.layer_names = [] # Empty layer list
-		self.table_columns = 'N,Sh,Cn,X,Y,Type,Rel'.split(',')
 
 		# -- Widgets
 		self.lay_head = QtGui.QGridLayout()
@@ -132,20 +130,18 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 		# - Init
 		font = pFont()
 		glyph = eGlyph()
-		wLayers = glyph._prepareLayers((True, True, False, False))
+		wLayers = glyph._prepareLayers(pLayers)
+		self.table_data, self.table_proc = {}, {}
 
-		self.edt_glyphName.setText(eGlyph().name)
-				
-		self.table_data = {}
-		self.table_proc = {}
-
-		# - Populate table
-		self.table_data[glyph.name] = {layer:glyph.getBounds(layer).width() for layer in wLayers}
+		current_glyph_name = eGlyph().name
+		self.edt_glyphName.setText(current_glyph_name)
 		
-		if len(self.edt_glyphsSeq.text):
-			for glyph_name in self.edt_glyphsSeq.text.split(' '):
-				wGlyph = font.glyph(glyph_name)
-				self.table_data[glyph_name] = {layer:self.process_query(wGlyph, layer, self.cmb_query.currentText) for layer in wLayers}
+		# - Populate table
+		process_glyph_names = [current_glyph_name] + self.edt_glyphsSeq.text.split(' ') if len(self.edt_glyphsSeq.text) else [current_glyph_name]
+		
+		for glyph_name in process_glyph_names:
+			wGlyph = font.glyph(glyph_name)
+			self.table_data[glyph_name] = {layer:self.process_query(wGlyph, layer, self.cmb_query.currentText) for layer in wLayers}
 			
 		self.tab_stats.setTable(self.table_data)
 		self.tab_stats.resizeColumnsToContents()		
