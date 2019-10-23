@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.74'
+app_name, app_version = 'TypeRig | Nodes', '0.75'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -770,20 +770,20 @@ class basicContour(QtGui.QGridLayout):
 		for glyph in process_glyphs:
 			wLayers = glyph._prepareLayers(pLayers)
 
-			if control == (0,0):
-				criteria = lambda node : (node.x, node.y)
-			elif control == (0,1):
+			if control == (0,0): 	# BL
+				criteria = lambda node : (node.y, node.x)
+			elif control == (0,1): 	# TL
 				criteria = lambda node : (-node.y, node.x)
-			elif control == (1,0):
-				criteria = lambda node : (-node.x, node.y)
-			elif control == (1,1):
+			elif control == (1,0): 	# BR
+				criteria = lambda node : (node.y, -node.x)
+			elif control == (1,1): 	# TR
 				criteria = lambda node : (-node.y, -node.x)
 			
 			for layerName in wLayers:
 				contours = glyph.contours(layerName)
 
 				for contour in contours:
-					onNodes = [node for node in contour.nodes() if node.isOn]
+					onNodes = [node for node in contour.nodes() if node.isOn()]
 					newFirstNode = sorted(onNodes, key=criteria)[0]
 					contour.setStartPoint(newFirstNode.index)
 

@@ -12,15 +12,17 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Metrics', '0.22'
+app_name, app_version = 'TypeRig | Metrics', '0.25'
 
 # - Dependencies -----------------
 import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore
 from typerig import QtGui
-from typerig.glyph import eGlyph
+from typerig.proxy import pFont
 from typerig.gui import getProcessGlyphs
+from typerig.glyph import eGlyph
+from typerig.node import eNodesContainer
 
 # - Sub widgets ------------------------
 class MLineEdit(QtGui.QLineEdit):
@@ -179,29 +181,28 @@ class metrics_copy(QtGui.QGridLayout):
 		self.btn_copyMetrics.clicked.connect(self.copyMetrics)
 
 		# - Build
+		self.addWidget(QtGui.QLabel('ADV:'), 	0, 0, 1, 1)
+		self.addWidget(self.edt_adv, 			0, 1, 1, 3)
+		self.addWidget(QtGui.QLabel('@'), 		0, 4, 1, 1)
+		self.addWidget(self.spb_adv_percent, 	0, 5, 1, 1)
+		self.addWidget(QtGui.QLabel('+'), 		0, 6, 1, 1)
+		self.addWidget(self.spb_adv_units, 		0, 7, 1, 1)
 
-		self.addWidget(QtGui.QLabel('LSB:'), 0, 0, 1, 1)
-		self.addWidget(self.edt_lsb, 0, 1, 1, 3)
-		self.addWidget(QtGui.QLabel('@'), 0, 4, 1, 1)
-		self.addWidget(self.spb_lsb_percent, 0, 5, 1, 1)
-		self.addWidget(QtGui.QLabel('+'), 0, 6, 1, 1)
-		self.addWidget(self.spb_lsb_units, 0, 7, 1, 1)
+		self.addWidget(QtGui.QLabel('LSB:'), 	1, 0, 1, 1)
+		self.addWidget(self.edt_lsb, 			1, 1, 1, 3)
+		self.addWidget(QtGui.QLabel('@'), 		1, 4, 1, 1)
+		self.addWidget(self.spb_lsb_percent,	1, 5, 1, 1)
+		self.addWidget(QtGui.QLabel('+'), 		1, 6, 1, 1)
+		self.addWidget(self.spb_lsb_units, 		1, 7, 1, 1)
 
-		self.addWidget(QtGui.QLabel('RSB:'), 1, 0, 1, 1)
-		self.addWidget(self.edt_rsb, 1, 1, 1, 3)
-		self.addWidget(QtGui.QLabel('@'), 1, 4, 1, 1)
-		self.addWidget(self.spb_rsb_percent, 1, 5, 1, 1)
-		self.addWidget(QtGui.QLabel('+'), 1, 6, 1, 1)
-		self.addWidget(self.spb_rsb_units, 1, 7, 1, 1)
+		self.addWidget(QtGui.QLabel('RSB:'), 	2, 0, 1, 1)
+		self.addWidget(self.edt_rsb, 			2, 1, 1, 3)
+		self.addWidget(QtGui.QLabel('@'), 		2, 4, 1, 1)
+		self.addWidget(self.spb_rsb_percent, 	2, 5, 1, 1)
+		self.addWidget(QtGui.QLabel('+'), 		2, 6, 1, 1)
+		self.addWidget(self.spb_rsb_units, 		2, 7, 1, 1)
 
-		self.addWidget(QtGui.QLabel('ADV:'), 2, 0, 1, 1)
-		self.addWidget(self.edt_adv, 2, 1, 1, 3)
-		self.addWidget(QtGui.QLabel('@'), 2, 4, 1, 1)
-		self.addWidget(self.spb_adv_percent, 2, 5, 1, 1)
-		self.addWidget(QtGui.QLabel('+'), 2, 6, 1, 1)
-		self.addWidget(self.spb_adv_units, 2, 7, 1, 1)
-
-		self.addWidget(self.btn_copyMetrics, 3, 1, 1, 8)
+		self.addWidget(self.btn_copyMetrics, 	3, 0, 1, 8)
 
 	def reset_fileds(self):
 		# - Reset text fields
@@ -234,6 +235,106 @@ class metrics_copy(QtGui.QGridLayout):
 		
 		self.reset_fileds()
 
+
+class bbox_copy(QtGui.QGridLayout):
+	# - Copy Metric properties from other glyph
+	def __init__(self):
+		super(bbox_copy, self).__init__()
+
+		# - Edit Fields
+		self.edt_width = QtGui.QLineEdit()
+		self.edt_height = QtGui.QLineEdit()
+
+		self.edt_width.setPlaceholderText('Glyph Name')
+		self.edt_height.setPlaceholderText('Glyph Name')
+
+		# - Spin Box
+		self.spb_bbox_percent =  QtGui.QSpinBox()
+		self.spb_bbox_units =  QtGui.QSpinBox()
+
+		self.spb_bbox_percent.setMaximum(200)
+		self.spb_bbox_units.setMaximum(200)
+		self.spb_bbox_units.setMinimum(-200)
+
+		self.spb_bbox_percent.setSuffix('%')
+		self.spb_bbox_units.setSuffix(' u')
+
+		self.spb_bbox_percent.setMaximumWidth(50)
+		self.spb_bbox_units.setMaximumWidth(50)
+
+		self.reset_fileds()
+
+		# - Buttons
+		self.btn_copyBBox_width = QtGui.QPushButton('&Copy Width')
+		self.btn_copyBBox_height = QtGui.QPushButton('&Copy Height')
+		self.btn_copyBBox_width.clicked.connect(lambda: self.copy_bbox(False))
+		self.btn_copyBBox_height.clicked.connect(lambda: self.copy_bbox(True))
+		
+		# - Build
+		self.addWidget(QtGui.QLabel('SRC:'), 		0, 0, 1, 1)
+		self.addWidget(self.edt_width, 				0, 1, 1, 3)
+		self.addWidget(QtGui.QLabel('@'), 			0, 4, 1, 1)
+		self.addWidget(self.spb_bbox_percent, 		0, 5, 1, 1)
+		self.addWidget(QtGui.QLabel('+'), 			0, 6, 1, 1)
+		self.addWidget(self.spb_bbox_units, 		0, 7, 1, 1)
+			
+		self.addWidget(self.btn_copyBBox_width,		2, 0, 1, 5)
+		self.addWidget(self.btn_copyBBox_height,	2, 5, 1, 4)
+		
+	def reset_fileds(self):
+		# - Reset text fields
+		self.edt_width.setText('')
+		self.edt_height.setText('')
+		
+		# - Reset spin-box
+		self.spb_bbox_percent.setValue(100)
+		self.spb_bbox_units.setValue(0)
+
+	def copy_bbox(self, copy_height=False):
+		dst_glyph = eGlyph()
+
+		if len(dst_glyph.selectedNodes()):
+			font = pFont()
+			src_glyph = font.glyph(self.edt_width.text)
+			
+			adjPercent = self.spb_bbox_percent.value
+			adjUnits = self.spb_bbox_units.value
+			
+			wLayers = dst_glyph._prepareLayers(pLayers)
+			
+			for layer in wLayers:
+				selection = eNodesContainer(dst_glyph.selectedNodes(layer))
+				
+				if copy_height:
+					dst_glyph_height = dst_glyph.getBounds(layer).height()
+					src_glyph_height = src_glyph.getBounds(layer).height()
+
+					dst_glyph_y = dst_glyph.getBounds(layer).y()
+					src_glyph_y = src_glyph.getBounds(layer).y()
+
+					process_shift = src_glyph_height*adjPercent/100  - dst_glyph_height + adjUnits
+					process_y = src_glyph_y*adjPercent/100 - dst_glyph_y + adjUnits
+
+					selection.shift(0, process_shift)
+					
+					if process_y != 0:
+						selection = eNodesContainer(dst_glyph.nodes(layer))
+						selection.shift(0, process_y)
+
+				else:
+					dst_glyph_width = dst_glyph.getBounds(layer).width()
+					src_glyph_width = src_glyph.getBounds(layer).width()
+
+					process_shift = src_glyph_width*adjPercent/100 - dst_glyph_width + adjUnits
+					selection.shift(process_shift, 0)
+
+
+			dst_glyph.updateObject(dst_glyph.fl, 'Copy BBox | SRC: %s; DST: %s @ %s.' %(src_glyph.name, dst_glyph.name, '; '.join(wLayers)))
+			dst_glyph.update()
+		
+		else:
+			print 'ERROR:\tNo selection found! Please select nodes to be shifted and run script again!'
+
 class metrics_expr(QtGui.QGridLayout):
 	# - Copy Metric properties from other glyph
 	def __init__(self):
@@ -248,9 +349,9 @@ class metrics_expr(QtGui.QGridLayout):
 		self.edt_rsb.setPlaceholderText('Metric expression')
 
 		self.btn_setMetrics = QtGui.QPushButton('&Set expressions')
-		self.btn_getShapeParent = QtGui.QPushButton('&Get reference')
+		self.btn_getShapeParent = QtGui.QPushButton('&Get Reference')
 		self.btn_delMetrics = QtGui.QPushButton('&Unlink')
-		self.btn_autoBind = QtGui.QPushButton('&Auto bind Metric expressions')
+		self.btn_autoBind = QtGui.QPushButton('&Auto Link')
 		self.btn_autoBind.setToolTip('Automatically bind metric expressions from available element references.')
 
 		self.btn_setMetrics.clicked.connect(lambda: self.setMetricEquations(False))
@@ -260,19 +361,19 @@ class metrics_expr(QtGui.QGridLayout):
 
 		self.spb_shapeIndex = QtGui.QSpinBox()
 
-		self.addWidget(QtGui.QLabel('LSB:'), 	0, 0, 1, 1)
-		self.addWidget(self.edt_lsb, 			0, 1, 1, 5)
-		self.addWidget(QtGui.QLabel('RSB:'), 	1, 0, 1, 1)
-		self.addWidget(self.edt_rsb, 			1, 1, 1, 5)
-		self.addWidget(QtGui.QLabel('ADV:'), 	2, 0, 1, 1)
-		self.addWidget(self.edt_adv, 			2, 1, 1, 5)
-		self.addWidget(self.btn_setMetrics, 	3, 1, 1, 3)
+		self.addWidget(QtGui.QLabel('ADV:'), 	0, 0, 1, 1)
+		self.addWidget(self.edt_adv, 			0, 1, 1, 5)
+		self.addWidget(QtGui.QLabel('LSB:'), 	1, 0, 1, 1)
+		self.addWidget(self.edt_lsb, 			1, 1, 1, 5)
+		self.addWidget(QtGui.QLabel('RSB:'), 	2, 0, 1, 1)
+		self.addWidget(self.edt_rsb, 			2, 1, 1, 5)
+		self.addWidget(self.btn_setMetrics, 	3, 0, 1, 4)
 		self.addWidget(self.btn_delMetrics, 	3, 4, 1, 2)
-		self.addWidget(QtGui.QLabel('E:'), 		4, 0, 1, 1)
-		self.addWidget(self.btn_getShapeParent, 4, 1, 1, 3)
-		self.addWidget(self.spb_shapeIndex, 	4, 4, 1, 2)
-		self.addWidget(QtGui.QLabel('Composite Glyph: Metric expressions'), 	5, 0, 1, 5)
-		self.addWidget(self.btn_autoBind, 		6, 0, 1, 6)
+
+		self.addWidget(QtGui.QLabel('Composite Glyph: Metric expressions'), 	4, 0, 1, 5)
+		self.addWidget(self.btn_getShapeParent, 5, 0, 1, 2)
+		self.addWidget(self.spb_shapeIndex, 	5, 2, 1, 1)
+		self.addWidget(self.btn_autoBind, 		5, 3, 1, 3)
 
 		self.setColumnStretch(0, 0)
 		self.setColumnStretch(1, 5)
@@ -424,6 +525,9 @@ class tool_tab(QtGui.QWidget):
 		layoutV.addSpacing(10)
 		layoutV.addWidget(QtGui.QLabel('Glyph: Copy Metric data'))
 		layoutV.addLayout(metrics_copy())
+		layoutV.addSpacing(10)
+		layoutV.addWidget(QtGui.QLabel('Glyph: Copy BBox data'))
+		layoutV.addLayout(bbox_copy())
 		layoutV.addSpacing(10)
 		layoutV.addWidget(QtGui.QLabel('Glyph: Set metric expressions'))
 		layoutV.addLayout(metrics_expr())
