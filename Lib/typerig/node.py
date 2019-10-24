@@ -38,6 +38,63 @@ class eNode(pNode):
 		from typerig.brain import Line
 		return Line(self.getPrevOn(), self.fl)
 
+	def diffTo(self, node):
+		cPos = self.fl.position
+		nPos = node.fl.position if isinstance(node, self.__class__) else node.position
+		
+		xdiff = nPos.x() - float(cPos.x())
+		ydiff = nPos.y() - float(cPos.y())
+		return xdiff, ydiff
+
+	def diffToNext(self):
+		return self.diffTo(self.getNext())
+
+	def diffToPrev(self):
+		return self.diffTo(self.getPrev())
+
+	def shiftFromNext(self, diffX, diffY):
+		newX = self.getNext().x + diffX
+		newY = self.getNext().y + diffY
+		self.reloc(newX, newY)	
+
+	def shiftFromPrev(self, diffX, diffY):
+		newX = self.getPrev().x + diffX
+		newY = self.getPrev().y + diffY
+		self.reloc(newX, newY)		
+
+	def polarTo(self, node):
+		return self.angleTo(node), self.distanceTo(node)
+
+	def polarToNext(self):
+		return self.angleToNext(), self.distanceToNext()
+
+	def polarToPrev(self):
+		return self.angleToPrev(), self.distanceToPrev()
+
+	def polarReloc(self, angle, distance):
+		from math import sin, cos
+		newX = distance * cos(angle) + self.x
+		newY = distance * sin(angle) + self.y
+		self.reloc(newX, newY)
+
+	def relPolarReloc(self, angle, distance):
+		from math import sin, cos, asin, acos, pi, degrees
+		
+		parent_angle = self.getPrev(False).angleToPrev()
+		ox, oy = self.getPrev().x, self.getPrev().y
+
+		qx = ox + cos(parent_angle) * distance * cos(angle) + sin(parent_angle) * distance * sin(angle)
+		qy = oy - sin(parent_angle) * distance * cos(angle) + cos(parent_angle) * distance * sin(angle)
+		
+		self.reloc(qx, qy)
+		#self.reloc(x, y)
+
+	def smartPolarReloc(self, angle, distance):
+		from math import sin, cos
+		newX = distance * cos(angle) + self.x
+		newY = distance * sin(angle) + self.y
+		self.smartReloc(newX, newY)
+
 	# - Corner operations ---------------
 	def cornerMitre(self, mitreSize=5, isRadius=False):
 		from typerig.brain import Coord

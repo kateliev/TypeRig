@@ -316,6 +316,18 @@ class pNode(object):
 	def distanceToPrev(self):
 		return self.fl.distanceTo(self.getPrev().position)
 
+	def angleTo(self, node):
+		if isinstance(node, self.__class__):
+			return self.fl.angleTo(node.fl.position)
+		else:
+			return self.fl.angleTo(node.position)
+
+	def angleToNext(self):
+		return self.fl.angleTo(self.getNext().position)
+
+	def angleToPrev(self):
+		return self.fl.angleTo(self.getPrev().position)
+
 	def insertAfter(self, time):
 		return self.contour.insertNodeTo(self.getTime() + time)
 
