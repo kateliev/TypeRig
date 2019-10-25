@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.73.1'
+__version__ = '0.73.2'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -415,8 +415,29 @@ class pNodesContainer(object):
 		self.width = lambda : self.getBounds().width
 		self.height  = lambda : self.getBounds().height
 
+	def __getitem__(self, index):
+		return self.nodes.__getitem__(index)
+
+	def __setitem__(self, index, value):
+		return self.nodes.__setitem__(index, value)
+
+	def __delitem__(self, index):
+		self.nodes.__delitem__(index)
+
 	def __repr__(self):
 		return '<%s (%s, %s, %s, %s) nodes=%s>' %(self.__class__.__name__, self.bounds.x, self.bounds.y, self.bounds.width, self.bounds.height, len(self.nodes))
+
+	def __len__(self):
+		return len(self.nodes)
+
+	def __hash__(self):
+		return self.nodes.__hash__()
+
+	def insert(self, index, value):
+		self.nodes.insert(index, value)
+
+	def append(self, index):
+		self.nodes.append(index)
 
 	def getPosition(self):
 		return [(node.x, node.y) for node in self.nodes]

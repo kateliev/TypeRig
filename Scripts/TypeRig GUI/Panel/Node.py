@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.75'
+app_name, app_version = 'TypeRig | Nodes', '0.76'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -707,6 +707,104 @@ class breakContour(QtGui.QGridLayout):
 		glyph.updateObject(glyph.fl, 'Break Contour & Close @ %s.' %'; '.join(glyph._prepareLayers(pLayers)))
 		glyph.update()        
 
+class copyNodes(QtGui.QGridLayout):
+	# - Split/Break contour 
+	def __init__(self):
+		super(copyNodes, self).__init__()
+
+		# - Init
+		self.copy_state = ''
+		self.node_bank = {}
+
+		# - Buttons
+		self.chk_BL = QtGui.QPushButton('B L')
+		self.chk_TL = QtGui.QPushButton('T L')
+		self.chk_BR = QtGui.QPushButton('B R')
+		self.chk_TR = QtGui.QPushButton('T R')
+		self.chk_copy = QtGui.QPushButton('Copy')
+		self.btn_paste = QtGui.QPushButton('Paste')
+		self.btn_inject = QtGui.QPushButton('Inject')
+
+		self.btn_inject.setEnabled(False)
+
+		self.chk_BL.setCheckable(True)
+		self.chk_TL.setCheckable(True)
+		self.chk_BR.setCheckable(True)
+		self.chk_TR.setCheckable(True)
+		self.chk_copy.setCheckable(True)
+
+		self.chk_BL.setChecked(False)
+		self.chk_TL.setChecked(False)
+		self.chk_BR.setChecked(False)
+		self.chk_TR.setChecked(False)
+		
+		self.chk_BL.setMinimumWidth(40)
+		self.chk_TL.setMinimumWidth(40)
+		self.chk_BR.setMinimumWidth(40)
+		self.chk_TR.setMinimumWidth(40)
+		self.btn_paste.setMinimumWidth(40)
+		self.btn_inject.setMinimumWidth(40)
+
+		self.chk_BL.setToolTip('Align:\nBottom Left Node') 
+		self.chk_TL.setToolTip('Align:\nTop Left Node') 
+		self.chk_BR.setToolTip('Align:\nBottom Right Node') 
+		self.chk_TR.setToolTip('Align:\nTop Right Node') 
+		self.chk_copy.setToolTip('Copy node positions of selected nodes')
+		self.btn_paste.setToolTip('Paste nodes') 
+		self.btn_inject.setToolTip('Inject nodes') 
+		
+		self.chk_BL.clicked.connect(lambda: self.setAlignStates('LB'))
+		self.chk_TL.clicked.connect(lambda: self.setAlignStates('LT'))
+		self.chk_BR.clicked.connect(lambda: self.setAlignStates('RB'))
+		self.chk_TR.clicked.connect(lambda: self.setAlignStates('RT'))
+		
+		self.chk_copy.clicked.connect(self.copyNodes)
+		self.btn_paste.clicked.connect(self.pasteNodes)
+		#self.btn_inject.clicked.connect(lambda : self.setDirection(True))
+
+		self.addWidget(self.chk_copy, 	0, 0, 1, 1)
+		self.addWidget(self.btn_paste, 	0, 1, 1, 2)
+		self.addWidget(self.btn_inject, 0, 3, 1, 1)
+		self.addWidget(self.chk_BL, 	1, 0, 1, 1)
+		self.addWidget(self.chk_TL, 	1, 1, 1, 1)
+		self.addWidget(self.chk_BR, 	1, 2, 1, 1)
+		self.addWidget(self.chk_TR, 	1, 3, 1, 1)
+
+	def setAlignStates(self, align_state):
+		self.copy_align_state = align_state
+		if align_state != 'LB' and self.chk_BL.isChecked(): self.chk_BL.setChecked(False)
+		if align_state != 'LT' and self.chk_TL.isChecked(): self.chk_TL.setChecked(False)
+		if align_state != 'RB' and self.chk_BR.isChecked(): self.chk_BR.setChecked(False)
+		if align_state != 'RT' and self.chk_TR.isChecked(): self.chk_TR.setChecked(False)
+
+	def copyNodes(self):
+		if self.chk_copy.isChecked():
+			self.chk_copy.setText('Reset')
+			glyph = eGlyph()
+			wLayers = glyph._prepareLayers(pLayers)
+			self.node_bank = {layer : eNodesContainer(glyph.selectedNodes(layer)) for layer in wLayers}
+		else:
+			self.node_bank = {}
+			self.chk_copy.setText('Copy')
+
+	def pasteNodes(self):
+		if self.chk_copy.isChecked():
+			process_glyphs = getProcessGlyphs(pMode)
+
+			for glyph in process_glyphs:
+				wLayers = glyph._prepareLayers(pLayers)
+				
+				for layer in wLayers:
+					if self.node_bank.has_key(layer):
+						selection = glyph.selectedNodes(layer)
+						if len(selection) == len(self.node_bank[layer]):
+							for nid in range(len(selection)):
+								selection[nid].x = self.node_bank[layer][nid].x
+								selection[nid].y = self.node_bank[layer][nid].y
+
+				glyph.updateObject(glyph.fl, 'Paste Nodes @ %s.' %'; '.join(wLayers))
+				glyph.update()
+
 class basicContour(QtGui.QGridLayout):
 	# - Split/Break contour 
 	def __init__(self):
@@ -1143,6 +1241,9 @@ class tool_tab(QtGui.QWidget):
 
 		#layoutV.addWidget(QtGui.QLabel('Break/Knot Contour'))
 		#layoutV.addLayout(breakContour())
+
+		#layoutV.addWidget(QtGui.QLabel('Node Copy/Paste Operations'))
+		#layoutV.addLayout(copyNodes())
 
 		layoutV.addWidget(QtGui.QLabel('Basic Contour Operations'))
 		layoutV.addLayout(basicContour())

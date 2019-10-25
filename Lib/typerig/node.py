@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.15.2'
+__version__ = '0.15.3'
 
 # - Dependencies -------------------------
 import fontlab as fl6
@@ -82,6 +82,13 @@ class eNode(pNode):
 		newX = distance * cos(angle) + self.x
 		newY = distance * sin(angle) + self.y
 		self.smartReloc(newX, newY)
+
+	def polarRelocFromPrev(self, distance):
+		from math import sin, cos
+		newX = distance * cos(angle + pi/2*[-1,1][self.contour.clockwise]) + self.getPrev().x
+		newY = distance * sin(angle + pi/2*[-1,1][self.contour.clockwise]) + self.getPrev().y
+
+		self.reloc(newX, newY)
 
 	# - Corner operations ---------------
 	def cornerMitre(self, mitreSize=5, isRadius=False):
