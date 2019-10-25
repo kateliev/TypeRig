@@ -758,8 +758,8 @@ class copyNodes(QtGui.QGridLayout):
 		self.chk_BR.clicked.connect(lambda: self.setAlignStates('RB'))
 		self.chk_TR.clicked.connect(lambda: self.setAlignStates('RT'))
 		
-		self.chk_copy.clicked.connect(self.copyNodes)
-		self.btn_paste.clicked.connect(self.pasteNodes)
+		self.chk_copy.clicked.connect(lambda: self.copyNodes())
+		self.btn_paste.clicked.connect(lambda: self.pasteNodes())
 		#self.btn_inject.clicked.connect(lambda : self.setDirection(True))
 
 		self.addWidget(self.chk_copy, 	0, 0, 1, 1)
@@ -779,10 +779,10 @@ class copyNodes(QtGui.QGridLayout):
 
 	def copyNodes(self):
 		if self.chk_copy.isChecked():
-			self.chk_copy.setText('Reset')
 			glyph = eGlyph()
+			self.chk_copy.setText('Reset')
 			wLayers = glyph._prepareLayers(pLayers)
-			self.node_bank = {layer : eNodesContainer(glyph.selectedNodes(layer)) for layer in wLayers}
+			self.node_bank = {layer : eNodesContainer(glyph.selectedNodes(layer), extend=eNode) for layer in wLayers}
 		else:
 			self.node_bank = {}
 			self.chk_copy.setText('Copy')
@@ -796,8 +796,11 @@ class copyNodes(QtGui.QGridLayout):
 				
 				for layer in wLayers:
 					if self.node_bank.has_key(layer):
-						selection = glyph.selectedNodes(layer)
+						selection = glyph.selectedNodes(layer, extend=eNode)
+						
 						if len(selection) == len(self.node_bank[layer]):
+							self.node_bank[layer].shift(*self.node_bank[layer][0].diffTo(selection[0]))
+
 							for nid in range(len(selection)):
 								selection[nid].x = self.node_bank[layer][nid].x
 								selection[nid].y = self.node_bank[layer][nid].y
@@ -1251,8 +1254,8 @@ class tool_tab(QtGui.QWidget):
 		layoutV.addWidget(QtGui.QLabel('Align Contours'))
 		layoutV.addLayout(alignContours())
 
-		#layoutV.addWidget(QtGui.QLabel('Convert to Hobby'))
-		#layoutV.addLayout(convertHobby())    
+		layoutV.addWidget(QtGui.QLabel('Convert to Hobby'))
+		layoutV.addLayout(convertHobby())    
 
 		layoutV.addWidget(QtGui.QLabel('Movement'))
 		self.advMovement = advMovement(self.alignNodes)
@@ -1329,7 +1332,7 @@ class tool_tab(QtGui.QWidget):
 if __name__ == '__main__':
 	test = tool_tab()
 	test.setWindowTitle('%s %s' %(app_name, app_version))
-	test.setGeometry(300, 300, 200, 400)
+	test.setGeometry(100, 100, 200, 400)
 	test.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 	
 	test.show()

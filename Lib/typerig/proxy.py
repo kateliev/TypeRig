@@ -404,10 +404,13 @@ class pNodesContainer(object):
 	Attributes:
 		
 	'''
-	def __init__(self, nodeList):
+	def __init__(self, nodeList, extend=None):
 		from typerig.proxy import pNode
+
+		# - Init
+		if extend is None: extend = pNode
 		
-		self.nodes = [pNode(node) for node in nodeList]
+		self.nodes = [extend(node) for node in nodeList]
 		self.bounds = self.getBounds()
 
 		self.x = lambda : self.getBounds().x
