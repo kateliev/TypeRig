@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.15.1'
+__version__ = '0.15.2'
 
 # - Dependencies -------------------------
 import fontlab as fl6
@@ -76,18 +76,6 @@ class eNode(pNode):
 		newX = distance * cos(angle) + self.x
 		newY = distance * sin(angle) + self.y
 		self.reloc(newX, newY)
-
-	def relPolarReloc(self, angle, distance):
-		from math import sin, cos, asin, acos, pi, degrees
-		
-		parent_angle = self.getPrev(False).angleToPrev()
-		ox, oy = self.getPrev().x, self.getPrev().y
-
-		qx = ox + cos(parent_angle) * distance * cos(angle) + sin(parent_angle) * distance * sin(angle)
-		qy = oy - sin(parent_angle) * distance * cos(angle) + cos(parent_angle) * distance * sin(angle)
-		
-		self.reloc(qx, qy)
-		#self.reloc(x, y)
 
 	def smartPolarReloc(self, angle, distance):
 		from math import sin, cos

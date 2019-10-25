@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.73.0'
+__version__ = '0.73.1'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -1577,8 +1577,16 @@ class pGlyph(object):
 
 	# - Anchors and pins -----------------------------------------------
 	def anchors(self, layer=None):
+		# BUGFIX FL7 build 7234
 		'''Return list of anchors (list[flAnchor]) at given layer (int or str)'''
-		return self.layer(layer).anchors
+		# Shouls work but it is not....
+		# return self.layer(layer).anchors 
+		
+		# So a workaround:
+		work_layer = self.layer(layer)
+		anchor_names = [obj.name for obj in work_layer.anchors]
+		anchors = [work_layer.findAnchor(name) for name in anchor_names]
+		return anchors
 
 	def addAnchor(self, coordTuple, name, layer=None, isAnchor=True):
 		'''	Adds named Anchor at given layer.
