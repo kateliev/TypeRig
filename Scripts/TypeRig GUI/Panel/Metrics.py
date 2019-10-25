@@ -22,7 +22,7 @@ from typerig import QtGui
 from typerig.proxy import pFont
 from typerig.gui import getProcessGlyphs
 from typerig.glyph import eGlyph
-from typerig.node import eNodesContainer
+from typerig.node import eNodesContainer, eNode
 
 # - Sub widgets ------------------------
 class MLineEdit(QtGui.QLineEdit):
@@ -352,6 +352,8 @@ class metrics_expr(QtGui.QGridLayout):
 		self.btn_getShapeParent = QtGui.QPushButton('&Get Reference')
 		self.btn_delMetrics = QtGui.QPushButton('&Unlink')
 		self.btn_autoBind = QtGui.QPushButton('&Auto Link')
+		
+		self.btn_setMetrics.setToolTip('Set Metric expressions.\n\n - Click: Set\n - SHIFT + Click: Set LSB with distance between selected two nodes removed from the expression.\n - Alt + Click: Set RSB with distance between selected two nodes removed from the expression.\n - All above + CTRL: - Negate operation (distance added)')
 		self.btn_autoBind.setToolTip('Automatically bind metric expressions from available element references.')
 
 		self.btn_setMetrics.clicked.connect(lambda: self.setMetricEquations(False))
@@ -406,15 +408,36 @@ class metrics_expr(QtGui.QGridLayout):
 
 	def setMetricEquations(self, clear=False):
 		process_glyphs = getProcessGlyphs(pMode)
+		modifiers = QtGui.QApplication.keyboardModifiers()
 
 		for glyph in process_glyphs:
 			wLayers = glyph._prepareLayers(pLayers)
 
 			for layer in wLayers:
 				if not clear:
-					if len(self.edt_lsb.text): glyph.setLSBeq(self.edt_lsb.text, layer)
-					if len(self.edt_rsb.text): glyph.setRSBeq(self.edt_rsb.text, layer)
-					if len(self.edt_adv.text): glyph.setADVeq(self.edt_adv.text, layer)
+					if len(self.edt_lsb.text): 
+						eq_set = self.edt_lsb.text
+						
+						if modifiers == QtCore.Qt.ShiftModifier :
+							selection = glyph.selectedNodes(layer, extend=eNode)
+							diffX = selection[0].diffTo(selection[-1])[0]
+							eq_set += '%s%s' %(['-','+'][modifiers == QtCore.Qt.ControlModifier], abs(diffX))
+						
+						glyph.setLSBeq(eq_set, layer)
+					
+					if len(self.edt_rsb.text): 
+						eq_set = self.edt_rsb.text
+						
+						if modifiers == QtCore.Qt.AltModifier :
+							selection = glyph.selectedNodes(layer, extend=eNode)
+							diffX = selection[0].diffTo(selection[-1])[0]
+							eq_set += '%s%s' %(['-','+'][modifiers == QtCore.Qt.ControlModifier], abs(diffX))
+
+						glyph.setRSBeq(eq_set, layer)
+					
+					if len(self.edt_adv.text): 
+						eq_set = self.edt_adv.text
+						glyph.setADVeq(eq_set, layer)
 				else:
 					glyph.setLSBeq('', layer)
 					glyph.setRSBeq('', layer)
