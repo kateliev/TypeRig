@@ -782,7 +782,7 @@ class copyNodes(QtGui.QGridLayout):
 			glyph = eGlyph()
 			self.chk_copy.setText('Reset')
 			wLayers = glyph._prepareLayers(pLayers)
-			self.node_bank = {layer : eNodesContainer(glyph.selectedNodes(layer), extend=eNode) for layer in wLayers}
+			self.node_bank = {layer : eNodesContainer([fl6.flNode(node.position) for node in glyph.selectedNodes(layer)], extend=eNode) for layer in wLayers}
 		else:
 			self.node_bank = {}
 			self.chk_copy.setText('Copy')
@@ -790,6 +790,7 @@ class copyNodes(QtGui.QGridLayout):
 	def pasteNodes(self):
 		if self.chk_copy.isChecked():
 			process_glyphs = getProcessGlyphs(pMode)
+			update = False
 
 			for glyph in process_glyphs:
 				wLayers = glyph._prepareLayers(pLayers)
@@ -800,13 +801,15 @@ class copyNodes(QtGui.QGridLayout):
 						
 						if len(selection) == len(self.node_bank[layer]):
 							self.node_bank[layer].shift(*self.node_bank[layer][0].diffTo(selection[0]))
+							update = True
 
 							for nid in range(len(selection)):
-								selection[nid].x = self.node_bank[layer][nid].x
-								selection[nid].y = self.node_bank[layer][nid].y
+								selection[nid].fl.x = self.node_bank[layer][nid].x
+								selection[nid].fl.y = self.node_bank[layer][nid].y
 
-				glyph.updateObject(glyph.fl, 'Paste Nodes @ %s.' %'; '.join(wLayers))
-				glyph.update()
+				if update:	
+					glyph.updateObject(glyph.fl, 'Paste Nodes @ %s.' %'; '.join(wLayers))
+					glyph.update()
 
 class basicContour(QtGui.QGridLayout):
 	# - Split/Break contour 
@@ -1245,8 +1248,8 @@ class tool_tab(QtGui.QWidget):
 		#layoutV.addWidget(QtGui.QLabel('Break/Knot Contour'))
 		#layoutV.addLayout(breakContour())
 
-		#layoutV.addWidget(QtGui.QLabel('Node Copy/Paste Operations'))
-		#layoutV.addLayout(copyNodes())
+		layoutV.addWidget(QtGui.QLabel('Node Copy/Paste Operations'))
+		layoutV.addLayout(copyNodes())
 
 		layoutV.addWidget(QtGui.QLabel('Basic Contour Operations'))
 		layoutV.addLayout(basicContour())
