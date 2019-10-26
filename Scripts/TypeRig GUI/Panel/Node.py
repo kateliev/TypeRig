@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.76'
+app_name, app_version = 'TypeRig | Nodes', '0.78'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -71,20 +71,20 @@ class basicOps(QtGui.QGridLayout):
 		self.edt_trap.setToolTip('Ink trap: Incision into glyphs flesh, Side depth, Trap size')
 
 		# -- Build: Basic Ops
-		self.addWidget(self.btn_insert, 	0, 0)
-		self.addWidget(QtGui.QLabel('T:'), 	0, 1)
-		self.addWidget(self.edt_time, 		0, 2)
-		self.addWidget(self.btn_remove, 	0, 3)
+		self.addWidget(self.btn_insert, 	0, 0, 1, 1)
+		self.addWidget(QtGui.QLabel('T:'), 	0, 1, 1, 1)
+		self.addWidget(self.edt_time, 		0, 2, 1, 1)
+		self.addWidget(self.btn_remove, 	0, 3, 1, 1)
 
-		self.addWidget(self.btn_mitre,		1, 0)
-		self.addWidget(QtGui.QLabel('X:'), 	1, 1)
-		self.addWidget(self.edt_radius,		1, 2)
-		self.addWidget(self.btn_knot,		1, 3)
+		self.addWidget(self.btn_mitre,		1, 0, 1, 1)
+		self.addWidget(QtGui.QLabel('X:'), 	1, 1, 1, 1)
+		self.addWidget(self.edt_radius,		1, 2, 1, 1)
+		self.addWidget(self.btn_knot,		1, 3, 1, 1)
 
-		self.addWidget(self.btn_trapA,		2, 0)
-		self.addWidget(QtGui.QLabel('P:'),	2, 1)
-		self.addWidget(self.edt_trap,		2, 2)
-		self.addWidget(self.btn_rebuild,		2, 3)
+		self.addWidget(self.btn_trapA,		2, 0, 1, 1)
+		self.addWidget(QtGui.QLabel('P:'),	2, 1, 1, 1)
+		self.addWidget(self.edt_trap,		2, 2, 1, 1)
+		self.addWidget(self.btn_rebuild,	2, 3, 1, 1)
 
 
 	def insertNode(self):
@@ -332,7 +332,7 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_toDescender.setMinimumWidth(40)
 		self.btn_toXHeight.setMinimumWidth(40)
 		self.btn_toYpos.setMinimumWidth(40)
-		self.edt_toYpos.setMinimumWidth(20)
+		self.edt_toYpos.setMinimumWidth(40)
 				
 		self.chk_copy.clicked.connect(self.copySlope)
 		self.btn_left.clicked.connect(lambda: self.alignNodes('L'))
@@ -360,44 +360,46 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_alignLayer_H.clicked.connect(lambda: self.alignNodes('Layer_H'))
 
 		# - Build Layout
-		self.addWidget(self.btn_left, 			0,0)
-		self.addWidget(self.btn_right, 			0,1)
-		self.addWidget(self.btn_top, 			0,2)
-		self.addWidget(self.btn_bottom,	 		0,3)
-		self.addWidget(self.btn_bboxCenterX,	1,0,1,2)
-		self.addWidget(self.btn_bboxCenterY,	1,2,1,2)
-		self.addWidget(self.btn_peerCenterX,	2,0,1,2)
-		self.addWidget(self.btn_peerCenterY,	2,2,1,2)
-		self.addWidget(QtGui.QLabel('Align to Font & Glyph metrics'), 3,0,1,2)
-		self.addWidget(self.btn_toAscender,		4,0,1,1)
-		self.addWidget(self.btn_toCapsHeight,	4,1,1,1)
-		self.addWidget(self.btn_toDescender,	4,2,1,1)
-		self.addWidget(self.btn_toXHeight,		4,3,1,1)
-		self.addWidget(self.btn_toBaseline,		5,0,1,1)
-		self.addWidget(self.edt_toYpos,			5,1,1,1)
-		self.addWidget(self.btn_toYpos,			5,2,1,1)
-		self.addWidget(self.btn_toMpos, 		5,3,1,1)
-		self.addWidget(self.chk_relations, 			6,0,1,2)
-		self.addWidget(self.chk_intercept, 			6,2,1,2)
+		self.addWidget(self.btn_left, 			0, 0, 1, 1)
+		self.addWidget(self.btn_right, 			0, 1, 1, 1)
+		self.addWidget(self.btn_top, 			0, 2, 1, 1)
+		self.addWidget(self.btn_bottom,	 		0, 3, 1, 1)
+		self.addWidget(self.btn_bboxCenterX,	1, 0, 1, 2)
+		self.addWidget(self.btn_bboxCenterY,	1, 2, 1, 2)
+		self.addWidget(self.btn_peerCenterX,	2, 0, 1, 2)
+		self.addWidget(self.btn_peerCenterY,	2, 2, 1, 2)
+		
+		self.addWidget(QtGui.QLabel('Nodes: Align to Font and Glyph metrics'), 3, 0, 1, 4)
+		self.addWidget(self.btn_toAscender,		4, 0, 1, 1)
+		self.addWidget(self.btn_toCapsHeight,	4, 1, 1, 1)
+		self.addWidget(self.btn_toDescender,	4, 2, 1, 1)
+		self.addWidget(self.btn_toXHeight,		4, 3, 1, 1)
+		self.addWidget(self.btn_toBaseline,		5, 0, 1, 1)
+		self.addWidget(self.edt_toYpos,			5, 1, 1, 1)
+		self.addWidget(self.btn_toYpos,			5, 2, 1, 1)
+		self.addWidget(self.btn_toMpos, 		5, 3, 1, 1)
+		self.addWidget(self.chk_relations, 		6, 0, 1, 2)
+		self.addWidget(self.chk_intercept, 		6, 2, 1, 2)
 
 		#self.addWidget(QtGui.QLabel('Align to Glyph Layer'), 	6, 0, 1, 4)
-		self.addWidget(self.cmb_select_V, 						7, 0)
-		self.addWidget(self.spb_prc_V, 							7, 1)
-		self.addWidget(self.spb_unit_V, 						7, 2)
-		self.addWidget(self.btn_alignLayer_V, 					7, 3)
-		self.addWidget(self.cmb_select_H, 						8, 0)
-		self.addWidget(self.spb_prc_H, 							8, 1)
-		self.addWidget(self.spb_unit_H, 						8, 2)
-		self.addWidget(self.btn_alignLayer_H, 					8, 3)
-		self.addWidget(QtGui.QLabel('Channel processing and slopes'), 9,0,1,4)
-		self.addWidget(self.btn_solveY, 		10,0,1,2)
-		self.addWidget(self.btn_solveX, 		10,2,1,2)
-		self.addWidget(self.chk_copy,			11,0,1,3)
-		self.addWidget(self.chk_italic,			11,3,1,1)
-		self.addWidget(self.btn_pasteMinY,		12,0,1,1)
-		self.addWidget(self.btn_pasteMaxY,		12,1,1,1)
-		self.addWidget(self.btn_pasteFMinY,		12,2,1,1)
-		self.addWidget(self.btn_pasteFMaxY,		12,3,1,1)
+		self.addWidget(self.cmb_select_V, 		7, 0, 0, 1)
+		self.addWidget(self.spb_prc_V, 			7, 1, 0, 1)
+		self.addWidget(self.spb_unit_V, 		7, 2, 0, 1)
+		self.addWidget(self.btn_alignLayer_V, 	7, 3, 0, 1)
+		self.addWidget(self.cmb_select_H, 		8, 0, 0, 1)
+		self.addWidget(self.spb_prc_H, 			8, 1, 0, 1)
+		self.addWidget(self.spb_unit_H, 		8, 2, 0, 1)
+		self.addWidget(self.btn_alignLayer_H, 	8, 3, 0, 1)
+		
+		self.addWidget(QtGui.QLabel('Nodes: Channel processing and slopes'), 9,0,1,4)
+		self.addWidget(self.btn_solveY, 		10, 0, 1, 2)
+		self.addWidget(self.btn_solveX, 		10, 2, 1, 2)
+		self.addWidget(self.chk_copy,			11, 0, 1, 3)
+		self.addWidget(self.chk_italic,			11, 3, 1, 1)
+		self.addWidget(self.btn_pasteMinY,		12, 0, 1, 1)
+		self.addWidget(self.btn_pasteMaxY,		12, 1, 1, 1)
+		self.addWidget(self.btn_pasteFMinY,		12, 2, 1, 1)
+		self.addWidget(self.btn_pasteFMaxY,		12, 3, 1, 1)
 
 	def copySlope(self):
 		from typerig.brain import Line
@@ -742,8 +744,9 @@ class copyNodes(QtGui.QGridLayout):
 		self.chk_TL.setMinimumWidth(40)
 		self.chk_BR.setMinimumWidth(40)
 		self.chk_TR.setMinimumWidth(40)
-		self.btn_paste.setMinimumWidth(40)
-		self.btn_inject.setMinimumWidth(40)
+		self.chk_copy.setMinimumWidth(80)
+		self.btn_paste.setMinimumWidth(80)
+		self.btn_inject.setMinimumWidth(80)
 
 		self.chk_BL.setToolTip('Align:\nBottom Left Node') 
 		self.chk_TL.setToolTip('Align:\nTop Left Node') 
@@ -762,13 +765,14 @@ class copyNodes(QtGui.QGridLayout):
 		self.btn_paste.clicked.connect(lambda: self.pasteNodes())
 		#self.btn_inject.clicked.connect(lambda : self.setDirection(True))
 
-		self.addWidget(self.chk_copy, 	0, 0, 1, 1)
-		self.addWidget(self.btn_paste, 	0, 1, 1, 2)
-		self.addWidget(self.btn_inject, 0, 3, 1, 1)
-		self.addWidget(self.chk_BL, 	1, 0, 1, 1)
-		self.addWidget(self.chk_TL, 	1, 1, 1, 1)
-		self.addWidget(self.chk_BR, 	1, 2, 1, 1)
-		self.addWidget(self.chk_TR, 	1, 3, 1, 1)
+		self.addWidget(self.chk_copy, 	0, 0, 1, 2)
+		self.addWidget(self.btn_paste, 	1, 0, 1, 2)
+		#self.addWidget(self.btn_inject, 0, 3, 1, 1)
+
+		self.addWidget(self.chk_TL, 	0, 2, 1, 1)
+		self.addWidget(self.chk_TR, 	0, 3, 1, 1)
+		self.addWidget(self.chk_BL, 	1, 2, 1, 1)
+		self.addWidget(self.chk_BR, 	1, 3, 1, 1)
 
 	def setAlignStates(self, align_state):
 		self.copy_align_state = align_state
@@ -797,15 +801,19 @@ class copyNodes(QtGui.QGridLayout):
 				
 				for layer in wLayers:
 					if self.node_bank.has_key(layer):
-						selection = glyph.selectedNodes(layer, extend=eNode)
+						selection = eNodesContainer(glyph.selectedNodes(layer), extend=eNode)
 						
 						if len(selection) == len(self.node_bank[layer]):
-							self.node_bank[layer].shift(*self.node_bank[layer][0].diffTo(selection[0]))
-							update = True
+							if self.copy_align_state == '':
+								self.node_bank[layer].shift(*self.node_bank[layer][0].diffTo(selection[0]))
+							else:
+								self.node_bank[layer].alignTo(selection, self.copy_align_state, align=(True,True))
 
 							for nid in range(len(selection)):
 								selection[nid].fl.x = self.node_bank[layer][nid].x
 								selection[nid].fl.y = self.node_bank[layer][nid].y
+							
+							update = True
 
 				if update:	
 					glyph.updateObject(glyph.fl, 'Paste Nodes @ %s.' %'; '.join(wLayers))
@@ -823,6 +831,7 @@ class basicContour(QtGui.QGridLayout):
 		self.btn_CW = QtGui.QPushButton('CW')
 		self.btn_CCW = QtGui.QPushButton('CCW')
 
+		self.btn_close.setMinimumWidth(80)
 		self.btn_BL.setMinimumWidth(40)
 		self.btn_TL.setMinimumWidth(40)
 		self.btn_BR.setMinimumWidth(40)
@@ -846,13 +855,15 @@ class basicContour(QtGui.QGridLayout):
 		self.btn_CCW.clicked.connect(lambda : self.setDirection(True))
 		self.btn_close.clicked.connect(self.closeContour)
 
-		self.addWidget(self.btn_BL, 0, 0, 1, 1)
-		self.addWidget(self.btn_TL, 0, 1, 1, 1)
-		self.addWidget(self.btn_BR, 0, 2, 1, 1)
+		self.addWidget(self.btn_close, 0, 0, 1, 2)
+		self.addWidget(self.btn_CW, 1, 0, 1, 1)
+		self.addWidget(self.btn_CCW, 1, 1, 1, 1)
+
+		self.addWidget(self.btn_TL, 0, 2, 1, 1)
 		self.addWidget(self.btn_TR, 0, 3, 1, 1)
-		self.addWidget(self.btn_close, 1, 0, 1, 2)
-		self.addWidget(self.btn_CW, 1, 2, 1, 1)
-		self.addWidget(self.btn_CCW, 1, 3, 1, 1)
+		self.addWidget(self.btn_BL, 1, 2, 1, 1)
+		self.addWidget(self.btn_BR, 1, 3, 1, 1)
+		
 
 	def closeContour(self):
 		glyph = eGlyph()
@@ -1037,51 +1048,6 @@ class alignContours(QtGui.QGridLayout):
 			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Align Contours @ %s.' %(glyph.name, '; '.join(wLayers)))
 
 
-class convertHobby(QtGui.QHBoxLayout):
-	# - Split/Break contour 
-	def __init__(self):
-		super(convertHobby, self).__init__()
-
-		# -- Convert button
-		self.btn_convertNode = QtGui.QPushButton('C&onvert')
-		self.btn_convertNode.setToolTip('Convert/Un-convert selected curve node to Hobby Knot')
-		self.btn_convertNode.clicked.connect(self.convertHobby)
-
-		#self.btn_convertNode.setFixedWidth(80)
-
-		# -- Close contour checkbox
-		#self.chk_Safe = QtGui.QCheckBox('Safe')
-
-		# -- Tension value (not implemented yet)
-		#self.edt_tension = QtGui.QLineEdit('0.0')
-		#self.edt_tension.setDisabled(True)    
-				
-		# -- Build
-		self.addWidget(self.btn_convertNode)
-		#self.addWidget(QtGui.QLabel('T:'), 1, 1)
-		#self.addWidget(self.edt_tension, 1, 2)
-		#self.addWidget(self.chk_Safe, 1, 3)
-
-	def convertHobby(self):
-		glyph = eGlyph()
-		wLayers = glyph._prepareLayers(pLayers)
-		selection = glyph.selected()
-
-		for layerName in wLayers:
-			pNodes = [glyph.nodes(layerName)[nID] for nID in selection]
-			
-			for node in pNodes:
-				if not node.hobby:
-					node.hobby = True
-				else:
-					node.hobby = False
-				node.update()
-
-		glyph.updateObject(glyph.fl, 'Convert to Hobby @ %s.' %'; '.join(wLayers))
-		glyph.update()
-		
-		#fl6.Update(fl6.CurrentGlyph())
-
 class advMovement(QtGui.QVBoxLayout):
 	def __init__(self, aux):
 		super(advMovement, self).__init__()
@@ -1237,37 +1203,34 @@ class tool_tab(QtGui.QWidget):
 		layoutV = QtGui.QVBoxLayout()
 		self.KeyboardOverride = False
 		
-		# - Build		
-		layoutV.addWidget(QtGui.QLabel('Basic Operations'))
+		# - Add widgets to main dialog -------------------------
+		layoutV.addWidget(QtGui.QLabel('Nodes: Basic Operations'))
 		layoutV.addLayout(basicOps())
 
-		layoutV.addWidget(QtGui.QLabel('Align nodes'))
+		layoutV.addWidget(QtGui.QLabel('Nodes: Align'))
 		self.alignNodes = alignNodes()
 		layoutV.addLayout(self.alignNodes)
 
 		#layoutV.addWidget(QtGui.QLabel('Break/Knot Contour'))
 		#layoutV.addLayout(breakContour())
 
-		layoutV.addWidget(QtGui.QLabel('Node Copy/Paste Operations'))
+		layoutV.addWidget(QtGui.QLabel('Nodes: Copy/Paste'))
 		layoutV.addLayout(copyNodes())
 
-		layoutV.addWidget(QtGui.QLabel('Basic Contour Operations'))
+		layoutV.addWidget(QtGui.QLabel('Contour: Basic Operations'))
 		layoutV.addLayout(basicContour())
 
-		layoutV.addWidget(QtGui.QLabel('Align Contours'))
+		layoutV.addWidget(QtGui.QLabel('Contours: Align '))
 		layoutV.addLayout(alignContours())
 
-		layoutV.addWidget(QtGui.QLabel('Convert to Hobby'))
-		layoutV.addLayout(convertHobby())    
-
-		layoutV.addWidget(QtGui.QLabel('Movement'))
+		layoutV.addWidget(QtGui.QLabel('Nodes: Movement'))
 		self.advMovement = advMovement(self.alignNodes)
 		layoutV.addLayout(self.advMovement)  
 
-		# - Capture Kyaboard
+		# - Capture Kyaboard ----------------------------------
 		self.btn_capture = QtGui.QPushButton('Capture Keyboard')
 		self.btn_capture.setCheckable(True)
-		self.btn_capture.setToolTip('Click here to capture keyboard arrows input.\nNote:\n+10 SHIFT\n+100 CTRL\n Exit ESC')
+		self.btn_capture.setToolTip('Click to capture keyboard arrows input.\nNote:\n+10 SHIFT\n+100 CTRL\n Exit ESC')
 		self.btn_capture.clicked.connect(self.captureKeyaboard)
 
 		layoutV.addWidget(self.btn_capture)
@@ -1276,6 +1239,7 @@ class tool_tab(QtGui.QWidget):
 		layoutV.addStretch()
 		self.setLayout(layoutV)
 
+	# - Capture keyboard -------------------------------------
 	def keyPressEvent(self, eventQKeyEvent):
 		if self.KeyboardOverride:
 			#self.setFocus()

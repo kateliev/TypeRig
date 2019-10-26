@@ -15,7 +15,7 @@ import fontlab as fl6
 #import fontgate as fgt
 import PythonQt as pqt
 
-from typerig.proxy import pNode, pNodesContainer
+from typerig.proxy import pNode, pContour, pNodesContainer
 
 class eNode(pNode):
 	'''Extended representation of the Proxy Node, adding some advanced functionality
