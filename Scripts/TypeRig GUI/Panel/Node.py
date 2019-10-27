@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.78'
+app_name, app_version = 'TypeRig | Nodes', '0.80'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -715,7 +715,7 @@ class copyNodes(QtGui.QGridLayout):
 		super(copyNodes, self).__init__()
 
 		# - Init
-		self.copy_state = ''
+		self.copy_align_state = None
 		self.node_bank = {}
 
 		# - Buttons
@@ -723,6 +723,11 @@ class copyNodes(QtGui.QGridLayout):
 		self.chk_TL = QtGui.QPushButton('T L')
 		self.chk_BR = QtGui.QPushButton('B R')
 		self.chk_TR = QtGui.QPushButton('T R')
+
+		self.chk_flipH = QtGui.QPushButton('Flip H')
+		self.chk_flipV = QtGui.QPushButton('Flip V')
+		self.chk_reverse = QtGui.QPushButton('Reverse')
+
 		self.chk_copy = QtGui.QPushButton('Copy')
 		self.btn_paste = QtGui.QPushButton('Paste')
 		self.btn_inject = QtGui.QPushButton('Inject')
@@ -734,16 +739,25 @@ class copyNodes(QtGui.QGridLayout):
 		self.chk_BR.setCheckable(True)
 		self.chk_TR.setCheckable(True)
 		self.chk_copy.setCheckable(True)
+		self.chk_flipH.setCheckable(True)
+		self.chk_flipV.setCheckable(True)
+		self.chk_reverse.setCheckable(True)
 
 		self.chk_BL.setChecked(False)
 		self.chk_TL.setChecked(False)
 		self.chk_BR.setChecked(False)
 		self.chk_TR.setChecked(False)
+		self.chk_flipH.setChecked(False)
+		self.chk_flipV.setChecked(False)
+		self.chk_reverse.setChecked(False)
 		
 		self.chk_BL.setMinimumWidth(40)
 		self.chk_TL.setMinimumWidth(40)
 		self.chk_BR.setMinimumWidth(40)
 		self.chk_TR.setMinimumWidth(40)
+		self.chk_flipH.setMinimumWidth(40)
+		self.chk_flipV.setMinimumWidth(40)
+		self.chk_reverse.setMinimumWidth(40)
 		self.chk_copy.setMinimumWidth(80)
 		self.btn_paste.setMinimumWidth(80)
 		self.btn_inject.setMinimumWidth(80)
@@ -765,14 +779,18 @@ class copyNodes(QtGui.QGridLayout):
 		self.btn_paste.clicked.connect(lambda: self.pasteNodes())
 		#self.btn_inject.clicked.connect(lambda : self.setDirection(True))
 
-		self.addWidget(self.chk_copy, 	0, 0, 1, 2)
-		self.addWidget(self.btn_paste, 	1, 0, 1, 2)
 		#self.addWidget(self.btn_inject, 0, 3, 1, 1)
 
-		self.addWidget(self.chk_TL, 	0, 2, 1, 1)
-		self.addWidget(self.chk_TR, 	0, 3, 1, 1)
-		self.addWidget(self.chk_BL, 	1, 2, 1, 1)
-		self.addWidget(self.chk_BR, 	1, 3, 1, 1)
+		self.addWidget(self.chk_TL, 		0, 0, 1, 1)
+		self.addWidget(self.chk_TR, 		0, 1, 1, 1)
+		self.addWidget(self.chk_flipH, 		0, 2, 1, 1)
+		self.addWidget(self.chk_flipV, 		0, 3, 1, 1)
+		self.addWidget(self.chk_BL, 		1, 0, 1, 1)
+		self.addWidget(self.chk_BR, 		1, 1, 1, 1)
+		self.addWidget(self.chk_reverse,	1, 2, 1, 2)
+	
+		self.addWidget(self.chk_copy, 		3, 0, 1, 2)
+		self.addWidget(self.btn_paste, 		3, 2, 1, 2)
 
 	def setAlignStates(self, align_state):
 		self.copy_align_state = align_state
@@ -780,13 +798,19 @@ class copyNodes(QtGui.QGridLayout):
 		if align_state != 'LT' and self.chk_TL.isChecked(): self.chk_TL.setChecked(False)
 		if align_state != 'RB' and self.chk_BR.isChecked(): self.chk_BR.setChecked(False)
 		if align_state != 'RT' and self.chk_TR.isChecked(): self.chk_TR.setChecked(False)
+		
+		if all([not self.chk_BL.isChecked(), 
+				not self.chk_TL.isChecked(), 
+				not self.chk_BR.isChecked(), 
+				not self.chk_TR.isChecked()]): 
+			self.copy_align_state = None
 
 	def copyNodes(self):
 		if self.chk_copy.isChecked():
 			glyph = eGlyph()
 			self.chk_copy.setText('Reset')
 			wLayers = glyph._prepareLayers(pLayers)
-			self.node_bank = {layer : eNodesContainer([fl6.flNode(node.position) for node in glyph.selectedNodes(layer)], extend=eNode) for layer in wLayers}
+			self.node_bank = {layer : eNodesContainer([node.clone() for node in glyph.selectedNodes(layer)], extend=eNode) for layer in wLayers}
 		else:
 			self.node_bank = {}
 			self.chk_copy.setText('Copy')
@@ -801,18 +825,42 @@ class copyNodes(QtGui.QGridLayout):
 				
 				for layer in wLayers:
 					if self.node_bank.has_key(layer):
-						selection = eNodesContainer(glyph.selectedNodes(layer), extend=eNode)
+						dst_container = eNodesContainer(glyph.selectedNodes(layer), extend=eNode)
+						src_countainer = self.node_bank[layer].clone()
+						src_transform = QtGui.QTransform()
 						
-						if len(selection) == len(self.node_bank[layer]):
-							if self.copy_align_state == '':
-								self.node_bank[layer].shift(*self.node_bank[layer][0].diffTo(selection[0]))
-							else:
-								self.node_bank[layer].alignTo(selection, self.copy_align_state, align=(True,True))
+						if len(dst_container) == len(self.node_bank[layer]):
+							print src_countainer.x()
+							# - Transform
+							if self.chk_flipH.isChecked() or self.chk_flipV.isChecked():
+								scaleX = -1 if self.chk_flipH.isChecked() else 1
+								scaleY = -1 if self.chk_flipV.isChecked() else 1
+								dX = src_countainer.x() + src_countainer.width()/2.
+								dY = src_countainer.y() + src_countainer.height()/2.
 
-							for nid in range(len(selection)):
-								selection[nid].fl.x = self.node_bank[layer][nid].x
-								selection[nid].fl.y = self.node_bank[layer][nid].y
+								src_transform.translate(dX, dY)
+								src_transform.scale(scaleX, scaleY)
+								src_transform.translate(-dX, -dY)
+								src_countainer.applyTransform(src_transform)
+								
+
+							# - Align source
+							if self.copy_align_state is None:
+								src_countainer.shift(*src_countainer[0].diffTo(dst_container[0]))
+							else:
+								src_countainer.alignTo(dst_container, self.copy_align_state, align=(True,True))
+
+							print src_countainer.x()
 							
+							if self.chk_reverse.isChecked(): 
+								src_countainer = src_countainer.reverse()
+
+							# - Process
+							for nid in range(len(dst_container)):
+								dst_container[nid].fl.x = src_countainer[nid].x 
+								dst_container[nid].fl.y = src_countainer[nid].y 
+							
+							# - Done
 							update = True
 
 				if update:	

@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.73.2'
+__version__ = '0.73.4'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -404,15 +404,16 @@ class pNodesContainer(object):
 	Attributes:
 		
 	'''
-	def __init__(self, nodeList, extend=None):
-		from typerig.proxy import pNode
-
-		# - Init
-		if extend is None: extend = pNode
+	def __init__(self, nodeList, extend=pNode):
 		
-		self.nodes = [extend(node) for node in nodeList]
+		# - Init
+		if extend is not None: 
+			self.nodes = [extend(node) for node in nodeList]
+		else:
+			self.nodes = nodeList
+		
+		self.extender = extend
 		self.bounds = self.getBounds()
-
 		self.x = lambda : self.getBounds().x
 		self.y = lambda : self.getBounds().y
 		self.width = lambda : self.getBounds().width
@@ -435,6 +436,15 @@ class pNodesContainer(object):
 
 	def __hash__(self):
 		return self.nodes.__hash__()
+
+	def clone(self):
+		try:
+			return self.__class__([node.fl.clone() for node in self.nodes], extend=self.extender)
+		except AttributeError:
+			return self.__class__([node.clone() for node in self.nodes], extend=self.extender)
+
+	def reverse(self):
+		return self.__class__(list(reversed(self.nodes)), extend=None)
 
 	def insert(self, index, value):
 		self.nodes.insert(index, value)
@@ -460,6 +470,18 @@ class pNodesContainer(object):
 	def smartShift(self, dx, dy):
 		for node in self.nodes:
 			node.smartShift(dx, dy)
+
+	def applyTransform(self, transform):
+		for node in self.nodes:
+			try:
+				node.fl.applyTransform(transform)
+			except AttributeError:
+				node.applyTransform(transform)
+
+	def cloneTransform(self, transform):
+		temp_container = self.clone()
+		temp_container.applyTransform(transform)
+		return temp_container
 
 class pContour(object):
 	'''Proxy to flContour object
