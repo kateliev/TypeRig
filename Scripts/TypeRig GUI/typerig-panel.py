@@ -283,7 +283,7 @@ class typerig_Panel(QtGui.QDialog):
 		# - Set Widget -------------------------------
 		self.setLayout(layoutV)
 		self.setWindowTitle('%s %s' %(app_name, app_version))
-		self.setGeometry(100, 200, 300, 600)
+		self.setGeometry(100, 100, 300, 600)
 		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 		self.show()
 

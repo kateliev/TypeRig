@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.80'
+app_name, app_version = 'TypeRig | Nodes', '0.81'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -382,14 +382,14 @@ class alignNodes(QtGui.QGridLayout):
 		self.addWidget(self.chk_intercept, 		6, 2, 1, 2)
 
 		#self.addWidget(QtGui.QLabel('Align to Glyph Layer'), 	6, 0, 1, 4)
-		self.addWidget(self.cmb_select_V, 		7, 0, 0, 1)
-		self.addWidget(self.spb_prc_V, 			7, 1, 0, 1)
-		self.addWidget(self.spb_unit_V, 		7, 2, 0, 1)
-		self.addWidget(self.btn_alignLayer_V, 	7, 3, 0, 1)
-		self.addWidget(self.cmb_select_H, 		8, 0, 0, 1)
-		self.addWidget(self.spb_prc_H, 			8, 1, 0, 1)
-		self.addWidget(self.spb_unit_H, 		8, 2, 0, 1)
-		self.addWidget(self.btn_alignLayer_H, 	8, 3, 0, 1)
+		self.addWidget(self.cmb_select_V, 		7, 0, 1, 1)
+		self.addWidget(self.spb_prc_V, 			7, 1, 1, 1)
+		self.addWidget(self.spb_unit_V, 		7, 2, 1, 1)
+		self.addWidget(self.btn_alignLayer_V, 	7, 3, 1, 1)
+		self.addWidget(self.cmb_select_H, 		8, 0, 1, 1)
+		self.addWidget(self.spb_prc_H, 			8, 1, 1, 1)
+		self.addWidget(self.spb_unit_H, 		8, 2, 1, 1)
+		self.addWidget(self.btn_alignLayer_H, 	8, 3, 1, 1)
 		
 		self.addWidget(QtGui.QLabel('Nodes: Channel processing and slopes'), 9,0,1,4)
 		self.addWidget(self.btn_solveY, 		10, 0, 1, 2)
