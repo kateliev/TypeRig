@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.85'
+app_name, app_version = 'TypeRig | Nodes', '0.86'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -892,26 +892,30 @@ class basicContour(QtGui.QGridLayout):
 		self.btn_TL = QtGui.QPushButton('T L')
 		self.btn_BR = QtGui.QPushButton('B R')
 		self.btn_TR = QtGui.QPushButton('T R')
-		self.btn_close= QtGui.QPushButton('C&lose')
+		self.btn_close = QtGui.QPushButton('C&lose')
+		self.btn_start = QtGui.QPushButton('&Start')
 		self.btn_CW = QtGui.QPushButton('CW')
 		self.btn_CCW = QtGui.QPushButton('CCW')
 
-		self.btn_close.setMinimumWidth(80)
+		self.btn_close.setMinimumWidth(40)
 		self.btn_BL.setMinimumWidth(40)
 		self.btn_TL.setMinimumWidth(40)
 		self.btn_BR.setMinimumWidth(40)
 		self.btn_TR.setMinimumWidth(40)
+		self.btn_start.setMinimumWidth(40)
 		self.btn_CW.setMinimumWidth(40)
 		self.btn_CCW.setMinimumWidth(40)
 
 		self.btn_close.setToolTip('Close selected contour')
+		self.btn_start.setToolTip('Set start point:\n Selected Node') 
 		self.btn_BL.setToolTip('Set start point:\nBottom Left Node') 
 		self.btn_TL.setToolTip('Set start point:\nTop Left Node') 
 		self.btn_BR.setToolTip('Set start point:\nBottom Right Node') 
 		self.btn_TR.setToolTip('Set start point:\nTop Right Node') 
 		self.btn_CW.setToolTip('Set direction:\nClockwise (TT)') 
-		self.btn_CCW.setToolTip('Set direction::\nCounterclockwise (PS)') 
+		self.btn_CCW.setToolTip('Set direction:\nCounterclockwise (PS)') 
 		
+		self.btn_start.clicked.connect(lambda : self.setStartSelection())
 		self.btn_BL.clicked.connect(lambda : self.setStart((0,0)))
 		self.btn_TL.clicked.connect(lambda : self.setStart((0,1)))
 		self.btn_BR.clicked.connect(lambda : self.setStart((1,0)))
@@ -920,14 +924,15 @@ class basicContour(QtGui.QGridLayout):
 		self.btn_CCW.clicked.connect(lambda : self.setDirection(True))
 		self.btn_close.clicked.connect(self.closeContour)
 
-		self.addWidget(self.btn_close, 0, 0, 1, 2)
-		self.addWidget(self.btn_CW, 1, 0, 1, 1)
-		self.addWidget(self.btn_CCW, 1, 1, 1, 1)
+		self.addWidget(self.btn_close, 	0, 0, 1, 1)
+		self.addWidget(self.btn_start, 	0, 1, 1, 1)
+		self.addWidget(self.btn_CW, 	1, 0, 1, 1)
+		self.addWidget(self.btn_CCW, 	1, 1, 1, 1)
 
-		self.addWidget(self.btn_TL, 0, 2, 1, 1)
-		self.addWidget(self.btn_TR, 0, 3, 1, 1)
-		self.addWidget(self.btn_BL, 1, 2, 1, 1)
-		self.addWidget(self.btn_BR, 1, 3, 1, 1)
+		self.addWidget(self.btn_TL, 	0, 2, 1, 1)
+		self.addWidget(self.btn_TR, 	0, 3, 1, 1)
+		self.addWidget(self.btn_BL, 	1, 2, 1, 1)
+		self.addWidget(self.btn_BR, 	1, 3, 1, 1)
 		
 
 	def closeContour(self):
@@ -943,6 +948,21 @@ class basicContour(QtGui.QGridLayout):
 
 		glyph.updateObject(glyph.fl, 'Close Contour @ %s.' %'; '.join(wLayers))
 		glyph.update()
+
+	def setStartSelection(self):
+		process_glyphs = getProcessGlyphs(pMode)
+
+		for glyph in process_glyphs:
+			wLayers = glyph._prepareLayers(pLayers)
+			
+			selected_contours = {layer:glyph.selectedAtContours(layer)[0] for layer in wLayers}
+
+			for layer, selection in selected_contours.iteritems():
+				cid, nid = selection
+				glyph.contours(layer)[cid].setStartPoint(nid)
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, 'Glyph: %s;\tManual: Set Start Point @ %s.' %(glyph.name, '; '.join(wLayers)))
 
 	def setStart(self, control=(0,0)):
 		process_glyphs = getProcessGlyphs(pMode)

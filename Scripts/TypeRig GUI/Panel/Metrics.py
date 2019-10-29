@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Metrics', '0.25'
+app_name, app_version = 'TypeRig | Metrics', '0.27'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -39,6 +39,9 @@ class MLineEdit(QtGui.QLineEdit):
 
 	def _addCustomMenuItems(self, menu):
 		menu.addSeparator()
+		menu.addAction(u'To Lowercase', lambda: self.setText(self.text.lower()))
+		menu.addAction(u'To Uppercase', lambda: self.setText(self.text.upper()))
+		menu.addSeparator()
 		menu.addAction(u'EQ', lambda: self.setText('=%s' %self.text))
 		menu.addAction(u'LSB', lambda: self.setText('=lsb("%s")' %self.text))
 		menu.addAction(u'RSB', lambda: self.setText('=rsb("%s")' %self.text))
@@ -46,8 +49,18 @@ class MLineEdit(QtGui.QLineEdit):
 		menu.addAction(u'L', lambda: self.setText('=l("%s")' %self.text))
 		menu.addAction(u'R', lambda: self.setText('=r("%s")' %self.text))
 		menu.addAction(u'W', lambda: self.setText('=w("%s")' %self.text))
-		menu.addAction(u'G', lambda: self.setText('=g("%s")' %self.text))	
-		
+		menu.addAction(u'G', lambda: self.setText('=g("%s")' %self.text))
+		menu.addSeparator()
+		menu.addAction(u'.salt', lambda: self.setText('%s.salt' %self.text))
+		menu.addAction(u'.calt', lambda: self.setText('%s.calt' %self.text))
+		menu.addAction(u'.ss0', lambda: self.setText('%s.ss0' %self.text))
+		menu.addAction(u'.locl', lambda: self.setText('%s.locl' %self.text))
+		menu.addAction(u'.smcp', lambda: self.setText('%s.smcp' %self.text))
+		menu.addAction(u'.cscp', lambda: self.setText('%s.cscp' %self.text))
+		menu.addAction(u'.onum', lambda: self.setText('%s.onum' %self.text))
+		menu.addAction(u'.pnum', lambda: self.setText('%s.pnum' %self.text))
+		menu.addAction(u'.tnum', lambda: self.setText('%s.tnum' %self.text))
+
 class metrics_adjust(QtGui.QGridLayout):
 	# - Copy Metric properties from other glyph
 	def __init__(self):
@@ -348,14 +361,17 @@ class metrics_expr(QtGui.QGridLayout):
 		self.edt_adv.setPlaceholderText('Metric expression')
 		self.edt_rsb.setPlaceholderText('Metric expression')
 
-		self.btn_setMetrics = QtGui.QPushButton('&Set expressions')
-		self.btn_getShapeParent = QtGui.QPushButton('&Get Reference')
+		self.btn_setMetrics = QtGui.QPushButton('&Set')
+		self.btn_getMetrics = QtGui.QPushButton('&Get')
+		self.btn_getShapeParent = QtGui.QPushButton('&Reference')
 		self.btn_delMetrics = QtGui.QPushButton('&Unlink')
 		self.btn_autoBind = QtGui.QPushButton('&Auto Link')
 		
+		self.btn_getMetrics.setToolTip('Get Metric expressions for current layer')
 		self.btn_setMetrics.setToolTip('Set Metric expressions.\n\n - Click: Set\n - SHIFT + Click: Set LSB with distance between selected two nodes removed from the expression.\n - Alt + Click: Set RSB with distance between selected two nodes removed from the expression.\n - All above + CTRL: - Negate operation (distance added)')
 		self.btn_autoBind.setToolTip('Automatically bind metric expressions from available element references.')
 
+		self.btn_getMetrics.clicked.connect(lambda: self.getMetricEquations())
 		self.btn_setMetrics.clicked.connect(lambda: self.setMetricEquations(False))
 		self.btn_delMetrics.clicked.connect(lambda: self.setMetricEquations(True))
 		self.btn_getShapeParent.clicked.connect(self.bindShapeParent)
@@ -369,20 +385,21 @@ class metrics_expr(QtGui.QGridLayout):
 		self.addWidget(self.edt_lsb, 			1, 1, 1, 5)
 		self.addWidget(QtGui.QLabel('RSB:'), 	2, 0, 1, 1)
 		self.addWidget(self.edt_rsb, 			2, 1, 1, 5)
-		self.addWidget(self.btn_setMetrics, 	3, 0, 1, 4)
-		self.addWidget(self.btn_delMetrics, 	3, 4, 1, 2)
+		self.addWidget(self.btn_getMetrics, 	3, 0, 1, 2)
+		self.addWidget(self.btn_setMetrics, 	3, 2, 1, 4)
 
 		self.addWidget(QtGui.QLabel('Composite Glyph: Metric expressions'), 	4, 0, 1, 5)
 		self.addWidget(self.btn_getShapeParent, 5, 0, 1, 2)
 		self.addWidget(self.spb_shapeIndex, 	5, 2, 1, 1)
-		self.addWidget(self.btn_autoBind, 		5, 3, 1, 3)
+		self.addWidget(self.btn_autoBind, 		5, 3, 1, 1)
+		self.addWidget(self.btn_delMetrics, 	5, 4, 1, 1)
 
 		self.setColumnStretch(0, 0)
 		self.setColumnStretch(1, 5)
 
 	def reset_fileds(self):
-		self.edt_lsb.clear()
 		self.edt_adv.clear()
+		self.edt_lsb.clear()
 		self.edt_rsb.clear()
 
 	def bindShapeParent(self):
@@ -405,6 +422,14 @@ class metrics_expr(QtGui.QGridLayout):
 
 		except IndexError:
 			print 'ERROR: Glyph /%s - No NAMED SHAPE with INDEX [%s] found!' %(glyph.name, shapeIndex)
+
+	def getMetricEquations(self):
+		glyph = eGlyph()
+		lsbEq, rsbEq = glyph.getSBeq()
+
+		self.reset_fileds()
+		self.edt_lsb.setText(lsbEq)
+		self.edt_rsb.setText(rsbEq)
 
 	def setMetricEquations(self, clear=False):
 		process_glyphs = getProcessGlyphs(pMode)

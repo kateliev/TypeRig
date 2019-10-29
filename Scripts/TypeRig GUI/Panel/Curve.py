@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Curves', '0.10'
+app_name, app_version = 'TypeRig | Curves', '0.12'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -31,16 +31,18 @@ class curveEq(QtGui.QGridLayout):
 		
 		# - Basic operations
 		self.btn_tunni = QtGui.QPushButton('&Tunni (Auto)')
+		
+		self.btn_prop = QtGui.QPushButton('Set &Handles')
+		self.btn_prop_30 = QtGui.QPushButton('30%')
+		self.btn_prop_50 = QtGui.QPushButton('50%')
+		self.btn_prop_00 = QtGui.QPushButton('Retract')
+		
 		self.btn_hobby = QtGui.QPushButton('Set &Curvature')
 		self.btn_hobby_get = QtGui.QPushButton('Get')
 		self.btn_hobby_swap = QtGui.QPushButton('Swap')
-		self.btn_prop = QtGui.QPushButton('Set &Handles')
-		
-		self.btn_tunni.setToolTip('Apply Tunni curve optimization')
-		self.btn_hobby.setToolTip('Set Hobby spline curvature')
-		self.btn_hobby_swap.setToolTip('Swap C0, C1 curvatures')
-		self.btn_hobby_get.setToolTip('Get curvature for current selected\nsegment at active layer.')
-		self.btn_prop.setToolTip('Set handle length in proportion to bezier node distance')
+		self.btn_hobby_90 = QtGui.QPushButton('.90')
+		self.btn_hobby_80 = QtGui.QPushButton('.80')
+		self.btn_hobby_85 = QtGui.QPushButton('.85')
 		
 		self.spn_hobby0 = QtGui.QDoubleSpinBox()
 		self.spn_hobby1 = QtGui.QDoubleSpinBox()
@@ -53,35 +55,52 @@ class curveEq(QtGui.QGridLayout):
 		self.spn_prop.setValue(0.30)
 		self.spn_prop.setSingleStep(0.1)
 
+		self.btn_tunni.setToolTip('Apply Tunni curve optimization')
+		self.btn_hobby.setToolTip('Set Hobby spline curvature')
+		self.btn_hobby_swap.setToolTip('Swap START, END curvatures')
+		self.btn_hobby_get.setToolTip('Get curvature for current selected\nsegment at active layer.')
+		self.btn_prop.setToolTip('Set handle length in proportion to bezier node distance')
+		self.spn_hobby0.setToolTip('Curvature at the START of Bezier segment.')
+		self.spn_hobby1.setToolTip('Curvature at the END of Bezier segment.')
+		self.spn_prop.setToolTip('Handle length in proportion to curve length.')
+
 		self.btn_tunni.clicked.connect(lambda: self.eqContour('tunni'))
+		self.btn_prop.clicked.connect(lambda: self.eqContour('prop'))
+		self.btn_prop_00.clicked.connect(lambda: self.eqContour('prop_value', value=0))
+		self.btn_prop_30.clicked.connect(lambda: self.eqContour('prop_value', value=.30))
+		self.btn_prop_50.clicked.connect(lambda: self.eqContour('prop_value', value=.50))
+
 		self.btn_hobby_swap.clicked.connect(self.hobby_swap)
 		self.btn_hobby_get.clicked.connect(self.hobby_get)
 		self.btn_hobby.clicked.connect(lambda: self.eqContour('hobby'))
-		self.btn_prop.clicked.connect(lambda: self.eqContour('prop'))
+		self.btn_hobby_90.clicked.connect(lambda: self.eqContour('hobby_value', value=.90))
+		self.btn_hobby_80.clicked.connect(lambda: self.eqContour('hobby_value', value=.80)) 
+		self.btn_hobby_85.clicked.connect(lambda: self.eqContour('hobby_value', value=.85))
 
 		# -- Build: Curve optimization
-		self.addWidget(self.btn_tunni,						 0, 0, 1, 5)    
-		self.addWidget(QtGui.QLabel('Proportional handles'), 1, 0, 1, 5)
-		self.addWidget(self.btn_prop,						 2, 0, 1, 3)
-		self.addWidget(QtGui.QLabel('P:'),					 2, 3, 1, 1)
-		self.addWidget(self.spn_prop,						 2, 4, 1, 1)
-		self.addWidget(QtGui.QLabel('Hobby curvature'),		 3, 0, 1, 5)
-		self.addWidget(self.btn_hobby_swap,					 4, 0, 1, 1)
-		self.addWidget(QtGui.QLabel('C0'),					 4, 1, 1, 1)
-		self.addWidget(self.spn_hobby0,						 4, 2, 1, 1)    
-		self.addWidget(QtGui.QLabel('C1'),					 4, 3, 1, 1)
-		self.addWidget(self.spn_hobby1,						 4, 4, 1, 1)  
-		self.addWidget(self.btn_hobby_get,					 5, 0, 1, 1)  
-		self.addWidget(self.btn_hobby,						 5, 1, 1, 4)
+		self.addWidget(self.btn_tunni,						 0, 0, 1, 6)    
+		self.addWidget(QtGui.QLabel('Curve: Handles proportion (BCP length)'), 1, 0, 1, 6)
+		self.addWidget(self.spn_prop,						 2, 0, 1, 1)
+		self.addWidget(self.btn_prop,						 2, 1, 1, 5)
+		self.addWidget(self.btn_prop_50,					 3, 0, 1, 2)
+		self.addWidget(self.btn_prop_00,					 3, 2, 1, 2)
+		self.addWidget(self.btn_prop_30,					 3, 4, 1, 2)
+		
+		self.addWidget(QtGui.QLabel('Curve: Hobby curvature (Curve tension)'),		 4, 0, 1, 6)
+		self.addWidget(self.btn_hobby_get,					 5, 0, 1, 2)  
+		self.addWidget(self.spn_hobby0,						 5, 2, 1, 1)    
+		self.addWidget(self.spn_hobby1,						 5, 3, 1, 1)  
+		self.addWidget(self.btn_hobby_swap,					 5, 4, 1, 2)
+		self.addWidget(self.btn_hobby,						 6, 0, 1, 6)
+		self.addWidget(self.btn_hobby_90,					 7, 0, 1, 2)
+		self.addWidget(self.btn_hobby_85,					 7, 2, 1, 2)
+		self.addWidget(self.btn_hobby_80,					 7, 4, 1, 2)
 
 		self.setColumnStretch(0,1)
 		self.setColumnStretch(4,0)
 		self.setColumnStretch(5,0)
 		self.setColumnStretch(6,0)
 		self.setColumnStretch(7,0)
-
-		#self.setColumnMinimumWidth(0, 40)
-
 
 	def hobby_swap(self):
 		temp = self.spn_hobby0.value
@@ -96,7 +115,7 @@ class curveEq(QtGui.QGridLayout):
 		self.spn_hobby0.setValue(c0.real)
 		self.spn_hobby1.setValue(c1.real)
 
-	def eqContour(self, method):
+	def eqContour(self, method, value=None):
 		glyph = eGlyph()
 		selection = glyph.selected(True)
 		wLayers = glyph._prepareLayers(pLayers)
@@ -119,9 +138,15 @@ class curveEq(QtGui.QGridLayout):
 						curvature = (float(self.spn_hobby0.value), float(self.spn_hobby1.value))
 						wSegment.eqHobbySpline(curvature)
 
+					elif method is 'hobby_value':
+						wSegment.eqHobbySpline((float(value), float(value)))
+
 					elif method is 'prop':
 						proportion = float(self.spn_prop.value)
 						wSegment.eqProportionalHandles(proportion)
+
+					elif method is 'prop_value':
+						wSegment.eqProportionalHandles(value)
 
 		glyph.updateObject(glyph.fl, 'Optimize %s @ %s.' %(method, '; '.join(wLayers)))
 		glyph.update()
@@ -136,7 +161,7 @@ class tool_tab(QtGui.QWidget):
 		layoutV = QtGui.QVBoxLayout()
 				
 		# - Build   
-		layoutV.addWidget(QtGui.QLabel('Curve optimization'))
+		layoutV.addWidget(QtGui.QLabel('Curve: Optimization'))
 		layoutV.addLayout(curveEq())
 
 		 # - Build ---------------------------
