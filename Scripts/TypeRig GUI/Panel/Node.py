@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '0.81'
+app_name, app_version = 'TypeRig | Nodes', '0.85'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -762,12 +762,12 @@ class copyNodes(QtGui.QGridLayout):
 		self.btn_paste.setMinimumWidth(80)
 		self.btn_inject.setMinimumWidth(80)
 
-		self.chk_BL.setToolTip('Align:\nBottom Left Node') 
-		self.chk_TL.setToolTip('Align:\nTop Left Node') 
-		self.chk_BR.setToolTip('Align:\nBottom Right Node') 
-		self.chk_TR.setToolTip('Align:\nTop Right Node') 
-		self.chk_copy.setToolTip('Copy node positions of selected nodes')
-		self.btn_paste.setToolTip('Paste nodes') 
+		self.chk_BL.setToolTip('Align:\nTo Bottom Left bounding box of selection.') 
+		self.chk_TL.setToolTip('Align:\nTo Top Left bounding box of selection.') 
+		self.chk_BR.setToolTip('Align:\nTo Bottom Right bounding box of selection.') 
+		self.chk_TR.setToolTip('Align:\nTo Top Right bounding box of selection.') 
+		self.chk_copy.setToolTip('Copy selected nodes to memory.')
+		self.btn_paste.setToolTip('Paste nodes.\nAdvanced operations:\n - Shift + Click: Inject source behind first node selected;\n - Alt + Click: Replace selection with source;') 
 		self.btn_inject.setToolTip('Inject nodes') 
 		
 		self.chk_BL.clicked.connect(lambda: self.setAlignStates('LB'))
@@ -818,7 +818,8 @@ class copyNodes(QtGui.QGridLayout):
 	def pasteNodes(self):
 		if self.chk_copy.isChecked():
 			process_glyphs = getProcessGlyphs(pMode)
-			update = False
+			modifiers = QtGui.QApplication.keyboardModifiers()
+			update_flag = False
 
 			for glyph in process_glyphs:
 				wLayers = glyph._prepareLayers(pLayers)
@@ -826,11 +827,11 @@ class copyNodes(QtGui.QGridLayout):
 				for layer in wLayers:
 					if self.node_bank.has_key(layer):
 						dst_container = eNodesContainer(glyph.selectedNodes(layer), extend=eNode)
-						src_countainer = self.node_bank[layer].clone()
-						src_transform = QtGui.QTransform()
-						
-						if len(dst_container) == len(self.node_bank[layer]):
-							print src_countainer.x()
+
+						if len(dst_container):
+							src_countainer = self.node_bank[layer].clone()
+							src_transform = QtGui.QTransform()
+																		
 							# - Transform
 							if self.chk_flipH.isChecked() or self.chk_flipV.isChecked():
 								scaleX = -1 if self.chk_flipH.isChecked() else 1
@@ -850,20 +851,36 @@ class copyNodes(QtGui.QGridLayout):
 							else:
 								src_countainer.alignTo(dst_container, self.copy_align_state, align=(True,True))
 
-							print src_countainer.x()
-							
 							if self.chk_reverse.isChecked(): 
 								src_countainer = src_countainer.reverse()
 
 							# - Process
-							for nid in range(len(dst_container)):
-								dst_container[nid].fl.x = src_countainer[nid].x 
-								dst_container[nid].fl.y = src_countainer[nid].y 
-							
-							# - Done
-							update = True
+							if modifiers == QtCore.Qt.ShiftModifier: # - Inject mode - insert source after first node index
+								dst_container[0].contour.insert(dst_container[0].index, [node.fl for node in src_countainer.nodes])
+								update_flag = True
 
-				if update:	
+							elif modifiers == QtCore.Qt.AltModifier: # - Overwrite mode - delete all nodes in selection and replace with source
+								insert_index = dst_container[0].index
+								insert_contour = dst_container[0].contour
+								insert_contour.removeNodesBetween(dst_container[0].fl, dst_container[-1].getNextOn())
+								insert_contour.insert(dst_container[0].index, [node.fl for node in src_countainer.nodes])
+								insert_contour.removeAt(insert_index + len(src_countainer))
+
+								update_flag = True
+
+							else: # - Paste mode - remap node by node
+								if len(dst_container) == len(self.node_bank[layer]):
+									for nid in range(len(dst_container)):
+										dst_container[nid].fl.x = src_countainer[nid].x 
+										dst_container[nid].fl.y = src_countainer[nid].y 
+
+									update_flag = True
+								else:
+									update_flag = False
+									print 'ERROR:\t Layer: %s;\tCount Mismatch: Selected nodes [%s]; Source nodes [%s].' %(layer,len(dst_container), len(src_countainer))
+							
+				# - Done							
+				if update_flag:	
 					glyph.updateObject(glyph.fl, 'Paste Nodes @ %s.' %'; '.join(wLayers))
 					glyph.update()
 
