@@ -22,7 +22,7 @@ global clipboard_glyph_anchors
 pLayers = None
 pMode = 0
 clipboard_glyph_anchors = {}
-app_name, app_version = 'TypeRig | Anchors', '0.17'
+app_name, app_version = 'TypeRig | Anchors', '0.18'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):
@@ -135,6 +135,8 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		self.btn_clearAll = QtGui.QPushButton('Clear All')
 		self.btn_anchorAdd = QtGui.QPushButton('Add')
 		self.btn_anchorMov = QtGui.QPushButton('Move')
+		self.btn_anchorRename = QtGui.QPushButton('Rename')
+		self.btn_anchorSuffix = QtGui.QPushButton('Suffix')
 		self.chk_italic = QtGui.QCheckBox('Use Italic Angle')
 
 		# -- Edit fields
@@ -143,10 +145,10 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		self.edt_simpleY = QtGui.QLineEdit()
 		self.edt_autoT = QtGui.QLineEdit()
 
-		#self.edt_simpleX.setToolTip('Layer Order: '+', '.join(self.aux.wLayers)) # helper for layer order
-		#self.edt_simpleY.setToolTip('Layer Order: '+', '.join(self.aux.wLayers)) # helper for layer order
-		self.btn_anchorCopy.setToolTip('Copy selected Anchors from layers choosen.')
-		self.btn_anchorPaste.setToolTip('Paste Anchors at layers choosen.')
+		self.btn_anchorCopy.setToolTip('Copy selected Anchors from layers chosen.')
+		self.btn_anchorPaste.setToolTip('Paste Anchors at layers chosen.')
+		self.btn_anchorRename.setToolTip('Rename selected anchors.')
+		self.btn_anchorSuffix.setToolTip('Extend the name of selected Anchors.')
 
 		self.edt_anchorName.setPlaceholderText('New Anchor')
 		self.edt_simpleX.setText('0')
@@ -177,6 +179,8 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		self.btn_anchorMov.clicked.connect(lambda: self.addAnchors(True))
 		self.btn_anchorCopy.clicked.connect(lambda: self.copyAnchors(False))
 		self.btn_anchorPaste.clicked.connect(lambda: self.copyAnchors(True))
+		self.btn_anchorSuffix.clicked.connect(lambda: self.renameAnchors(False))
+		self.btn_anchorRename.clicked.connect(lambda: self.renameAnchors(True))
 
 		# - Build layout
 		self.lay_grid.addWidget(QtGui.QLabel('Anchor actions:'), 	0, 0, 1, 4)
@@ -199,6 +203,8 @@ class QanchorBasic(QtGui.QVBoxLayout):
 		self.lay_grid.addWidget(self.chk_italic,					7, 4, 1, 1)		
 		self.lay_grid.addWidget(self.btn_anchorAdd, 				8, 0, 1, 4)
 		self.lay_grid.addWidget(self.btn_anchorMov, 				8, 4, 1, 4)
+		self.lay_grid.addWidget(self.btn_anchorRename, 				9, 0, 1, 4)
+		self.lay_grid.addWidget(self.btn_anchorSuffix, 				9, 4, 1, 4)
 
 		# - Build
 		self.addLayout(self.lay_grid)
@@ -294,6 +300,27 @@ class QanchorBasic(QtGui.QVBoxLayout):
 				self.aux.glyph.update()
 				self.aux.refresh()
 
+	def renameAnchors(self, rename=True):
+		if self.aux.doCheck():	
+			update = False		
+
+			for layer in self.aux.wLayers:
+				
+				for anchor_name in self.aux.lst_anchors.selectedItems():
+					anchor = self.aux.glyph.findAnchor(anchor_name.text(), layer)
+					
+					if anchor is not None:
+						if len(self.edt_anchorName.text):
+							anchor.name = self.edt_anchorName.text if rename else anchor.name + self.edt_anchorName.text
+							update = True
+						else:
+							print 'ERROR:\t No input string given for anchor %s.' %anchor.name
+		
+			if update:
+				self.aux.glyph.updateObject(self.aux.glyph.fl, '%s anchors: %s.' %('Rename' if rename else 'Extend name of', '; '.join(self.aux.wLayers)))
+				self.aux.glyph.update()
+				self.aux.refresh()
+
 		
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
@@ -307,7 +334,6 @@ class tool_tab(QtGui.QWidget):
 		self.basicTools = QanchorBasic(self.anchorSelector)
 		
 		layoutV.addLayout(self.anchorSelector)
-		#layoutV.addWidget(QtGui.QLabel('Basic Tools:'))
 		layoutV.addLayout(self.basicTools)
 		
 		# - Build ---------------------------
