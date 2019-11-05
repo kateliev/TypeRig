@@ -20,7 +20,7 @@ from typerig.proxy import pGlyph, pFont
 import Panel 
 
 # - Init --------------------------
-app_version = '0.53'
+app_version = '0.54'
 app_name = 'TypeRig Panel'
 ignorePanel = '__'
 
