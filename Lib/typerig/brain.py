@@ -152,6 +152,7 @@ def bilinInterp(x, y, points):
 			q12 * (x2 - x) * (y - y1) +
 			q22 * (x - x1) * (y - y1)
 		   ) / ((x2 - x1) * (y2 - y1) + 0.0)
+	
 # -- Contour tests ----------------------------------------------------------
 def ccw(A, B, C):
 	'''Tests whether the turn formed by A, B, and C is Counter clock wise (CCW)'''
