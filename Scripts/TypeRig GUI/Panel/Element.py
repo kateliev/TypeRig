@@ -1,6 +1,6 @@
 #FLM: Glyph: Elements
 # ----------------------------------------
-# (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
+# (C) Vassil Kateliev, 2019 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
 #-----------------------------------------
 
