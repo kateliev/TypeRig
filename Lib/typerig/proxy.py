@@ -1941,12 +1941,12 @@ class pFont(object):
 		selection = self.getSelectedIndices()
 		return self.glyphs(selection, extend) if len(selection) else []
 		
-	def glyph(self, glyph):
+	def glyph(self, glyph, extend=None):
 		'''Return TypeRig proxy glyph object (pGlyph) by index (int) or name (str).'''
 		if isinstance(glyph, int) or isinstance(glyph, basestring):
-			return pGlyph(self.fg, self.fg[glyph])
+			return pGlyph(self.fg, self.fg[glyph]) if extend is None else extend(self.fg, self.fg[glyph])
 		else:
-			return pGlyph(self.fg, glyph)
+			return pGlyph(self.fg, glyph) if extend is None else extend(self.fg, self.fg[glyph])
 
 	def symbol(self, gID):
 		'''Return fgSymbol by glyph index (int)'''
