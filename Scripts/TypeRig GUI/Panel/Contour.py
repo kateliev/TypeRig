@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '0.20'
+app_name, app_version = 'TypeRig | Contour', '0.22'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -208,7 +208,7 @@ class alignContours(QtGui.QGridLayout):
 		# - Init
 		self.align_x = OrderedDict([('Left','L'), ('Right','R'), ('Center','C'), ('Keep','K')])
 		self.align_y = OrderedDict([('Top','T'), ('Bottom','B'), ('Center','E'), ('Keep','X')])
-		self.align_mode = OrderedDict([('Layer','CL'), ('Contour to Contour','CC'), ('Contour to Contour (REV)','RC')])
+		self.align_mode = OrderedDict([('Layer','CL'), ('Contour to Contour','CC'), ('Contour to Contour (REV)','RC'), ('Contour to Node','CN'), ('Contour to Node (REV)','RN')])
 		
 		# !!! To be implemented
 		#self.align_mode = OrderedDict([('Layer','CL'), ('Contour to Contour','CC'), ('Contour to Contour (REV)','RC'), ('Contour to Node','CN'),('Node to Node','NN')])
@@ -308,7 +308,20 @@ class alignContours(QtGui.QGridLayout):
 
 				# !!! To be implemented
 				elif user_mode == 'CN': # Align contour to node
-					pass
+					target = work_contours.pop(0)
+					target_node_index = selection[0][1]
+					target_node = target.fl.nodes()[target_node_index]
+
+					for contour in work_contours:
+							contour.alignTo(target_node, user_x + user_y, (keep_x, keep_y))
+
+				elif user_mode == 'RN': # Align contour to node reversed
+					target = work_contours.pop()
+					target_node_index = selection[-1][1]
+					target_node = target.fl.nodes()[target_node_index]
+
+					for contour in work_contours:
+							contour.alignTo(target_node, user_x + user_y, (keep_x, keep_y))
 
 				elif user_mode == 'NN': # Align a node on contour to node on another
 					pass
