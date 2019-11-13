@@ -10,13 +10,14 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kern Classes', '2.6'
+app_name, app_version = 'TypeRig | Kern Classes', '2.9'
 alt_mark = '.'
 
 # - Dependencies -----------------
 import os, json
 import fontlab as fl6
 import fontgate as fgt
+from platform import system
 from PythonQt import QtCore
 from typerig import QtGui
 from typerig.proxy import pFont, pGlyph
@@ -52,17 +53,15 @@ class GroupTableView(QtGui.QTableWidget):
 				
 		# - Init
 		self.flag_valueChanged = QtGui.QColor('powderblue')
-		self.kern_pos_mods = ['KernLeft', 'KernRight', 'KernBothSide']
+		self.header = self.horizontalHeader()
 
 		# - Behavior
 		self.itemChanged.connect(self.markChange)
 
 		# - Styling
 		self.verticalHeader().hide()
-		self.horizontalHeader().setStretchLastSection(True)
 		self.setAlternatingRowColors(True)
 		self.setShowGrid(False)
-		#self.resizeRowsToContents()
 		self.setSortingEnabled(True)
 
 	def setTable(self, data, setNotes=False):
@@ -93,6 +92,11 @@ class GroupTableView(QtGui.QTableWidget):
 					pass
 
 		self.setHorizontalHeaderLabels(name_column)
+		self.header.setSectionResizeMode(0, QtGui.QHeaderView.ResizeToContents)
+		self.header.setSectionResizeMode(1, QtGui.QHeaderView.ResizeToContents)
+		self.header.setSectionResizeMode(2, QtGui.QHeaderView.Stretch)
+		self.header.setSectionResizeMode(3, QtGui.QHeaderView.ResizeToContents)
+
 		self.blockSignals(False)
 		self.setSortingEnabled(True)
 
@@ -135,8 +139,8 @@ class WKernGroups(QtGui.QWidget):
 
 		self.btn_apply = QtGui.QPushButton('Apply changes')
 		self.btn_write = QtGui.QPushButton('Write changes')
-		self.btn_reset = QtGui.QPushButton('Clear font classes')
-
+		self.btn_reset = QtGui.QPushButton('Clear Font classes')
+		
 		self.btn_apply.clicked.connect(lambda: self.apply_changes(False))
 		self.btn_write.clicked.connect(lambda: self.apply_changes(True))
 		self.btn_reset.clicked.connect(lambda: self.reset_classes())
@@ -240,8 +244,22 @@ class WKernGroups(QtGui.QWidget):
 		self.menu_memb.addAction(act_memb_lower)
 		self.menu_memb.addAction(act_memb_strip)
 		self.menu_memb.addAction(act_memb_suff)		
-		self.menu_memb.addAction(act_memb_addglyphs)	
+		self.menu_memb.addAction(act_memb_addglyphs)
 
+		# -- MACOS buttons menu
+		self.btn_mac_data_open = QtGui.QPushButton('Open')
+		self.btn_mac_data_save = QtGui.QPushButton('Save')
+		self.btn_mac_data_import = QtGui.QPushButton('Import')
+		self.btn_mac_data_export = QtGui.QPushButton('Export')
+		self.btn_mac_data_import_font = QtGui.QPushButton('From Font')
+		self.btn_mac_data_build_composite = QtGui.QPushButton('Auto Build Classes')
+
+		self.btn_mac_data_open.clicked.connect(lambda: self.file_load_groups(True))
+		self.btn_mac_data_save.clicked.connect(lambda: self.file_save_groups(True))
+		self.btn_mac_data_import.clicked.connect(lambda: self.file_load_groups(False))
+		#self.btn_mac_data_export.clicked.connect()
+		self.btn_mac_data_import_font.clicked.connect(lambda: self.from_font())
+		self.btn_mac_data_build_composite.clicked.connect(lambda: self.from_composites())
 
 		# - Table auto preview selection
 		self.chk_preview = QtGui.QCheckBox('Auto select/preview class.')
@@ -249,19 +267,25 @@ class WKernGroups(QtGui.QWidget):
 		
 		# - Build 	
 		self.lay_grid = QtGui.QGridLayout()
-		self.lay_grid.addWidget(lbl_name,		 		0, 0, 1, 42)
-		self.lay_grid.addWidget(QtGui.QLabel('Master:'),0, 40, 1, 2)
-		self.lay_grid.addWidget(self.cmb_layer,			0, 42, 1, 6)
-		self.lay_grid.addWidget(self.tab_groupKern,		1, 0, 9, 42)
-		self.lay_grid.addWidget(self.chk_preview,		2, 42, 1, 6)
-		self.lay_grid.addWidget(self.btn_apply,			1, 42, 1, 6)
-		self.lay_grid.addWidget(self.btn_reset,			8, 42, 1, 6)
-		self.lay_grid.addWidget(self.btn_write,			9, 42, 1, 6)
-
-
-		for i in range(1,8):
-			self.lay_grid.setRowStretch(i,2)
+		self.lay_grid.addWidget(lbl_name,		 					0, 0, 1, 42)
+		self.lay_grid.addWidget(QtGui.QLabel('Master:'),			0, 40, 1, 2)
+		self.lay_grid.addWidget(self.cmb_layer,						0, 42, 1, 6)
+		self.lay_grid.addWidget(self.tab_groupKern,					1, 0, 11, 42)
+		self.lay_grid.addWidget(self.btn_apply,						1, 42, 1, 6)
+		self.lay_grid.addWidget(self.chk_preview,					2, 42, 1, 6)
 		
+		# -- MAC buttons
+		if system() == 'Darwin':
+			self.lay_grid.addWidget(self.btn_mac_data_open,				4, 42, 1, 3)	
+			self.lay_grid.addWidget(self.btn_mac_data_save,				4, 45, 1, 3)	
+			self.lay_grid.addWidget(self.btn_mac_data_import,			5, 42, 1, 3)	
+			self.lay_grid.addWidget(self.btn_mac_data_export,			5, 45, 1, 3)	
+			self.lay_grid.addWidget(self.btn_mac_data_import_font,		6, 42, 1, 6)
+			self.lay_grid.addWidget(self.btn_mac_data_build_composite,	8, 42, 1, 6)			
+
+		self.lay_grid.addWidget(self.btn_reset,						10, 42, 1, 6)
+		self.lay_grid.addWidget(self.btn_write,						11, 42, 1, 6)
+
 		self.setLayout(self.lay_grid)
 	
 	# - Context Menu Procedures --------------------------------------
@@ -554,8 +578,8 @@ class WKernGroups(QtGui.QWidget):
 					print 'WARN:\t Glyph: %s; Multiple components: %s' %(glyph.name, clear_comp)
 		
 		for key, value in class_dict.iteritems():
-			temp_dict['%s_L' %key] = (sorted(value), 'KernLeft')
-			temp_dict['%s_R' %key] = (sorted(value), 'KernRight')
+			temp_dict['%s_1' %key] = (sorted(value), 'KernLeft')
+			temp_dict['%s_2' %key] = (sorted(value), 'KernRight')
 
 			#print 'ADD:\t 1st and 2nd Classes: %s -> %s' %(key, ' '.join(sorted(value)))
 
@@ -570,14 +594,15 @@ class tool_tab(QtGui.QWidget):
 		layoutV = QtGui.QVBoxLayout()
 		
 		self.kernGroups = WKernGroups(self)
-		self.ActionsMenu = QtGui.QMenuBar(self)
-
-		self.ActionsMenu.addMenu(self.kernGroups.menu_data)
-		self.ActionsMenu.addMenu(self.kernGroups.menu_class)
-		self.ActionsMenu.addMenu(self.kernGroups.menu_type)
-		self.ActionsMenu.addMenu(self.kernGroups.menu_memb)
-
-		layoutV.setMenuBar(self.ActionsMenu)
+		
+		if system() != 'Darwin': # - Menubar only on Windows
+			self.ActionsMenu = QtGui.QMenuBar(self)
+			self.ActionsMenu.addMenu(self.kernGroups.menu_data)
+			self.ActionsMenu.addMenu(self.kernGroups.menu_class)
+			self.ActionsMenu.addMenu(self.kernGroups.menu_type)
+			self.ActionsMenu.addMenu(self.kernGroups.menu_memb)
+			layoutV.setMenuBar(self.ActionsMenu)
+		
 		layoutV.addWidget(self.kernGroups)
 						
 		# - Build ---------------------------
@@ -587,7 +612,7 @@ class tool_tab(QtGui.QWidget):
 if __name__ == '__main__':
   test = tool_tab()
   test.setWindowTitle('%s %s' %(app_name, app_version))
-  test.setGeometry(300, 300, 900, 400)
+  test.setGeometry(300, 300, 900, 600)
   test.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
   
   test.show()
