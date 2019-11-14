@@ -22,7 +22,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '0.38'
+app_name, app_version = 'TypeRig | Layers', '0.39'
 
 # - Sub widgets ------------------------
 class QlayerSelect(QtGui.QVBoxLayout):
@@ -634,9 +634,9 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 					transform_from_origin = QtGui.QTransform().translate(*wCenter)
 					
 					# - Transform
-					wLayer.applyTransform(transform_to_origin)
+					if wRotate != 0: wLayer.applyTransform(transform_to_origin) # Transform at origin only if we have rotation!
 					wLayer.applyTransform(new_transform)
-					wLayer.applyTransform(transform_from_origin)
+					if wRotate != 0: wLayer.applyTransform(transform_from_origin)
 				else:
 					wShapes = wGlyph.shapes(item.text())
 					
