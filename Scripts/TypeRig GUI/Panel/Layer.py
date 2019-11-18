@@ -46,7 +46,7 @@ class QlayerSelect(QtGui.QVBoxLayout):
 		# -- Layer List
 		self.lst_layers = QtGui.QListWidget()
 		self.lst_layers.setAlternatingRowColors(True)
-		self.lst_layers.setMinimumHeight(100)
+		self.lst_layers.setMinimumHeight(200)
 		#self.lst_layers.setMaximumHeight(100)
 		self.lst_layers.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection) # Select multiple items call .selectedItems() to get a QList
 		self.addWidget(self.lst_layers)
@@ -63,7 +63,8 @@ class QlayerSelect(QtGui.QVBoxLayout):
 		self.lst_layers.clear()
 					
 		# - Build List and style it
-		self.lst_layers.addItems(sorted([layer.name for layer in self.glyph.layers() if all([item not in layer.name for item in layerBanList])]))
+		#self.lst_layers.addItems(sorted([layer.name for layer in self.glyph.layers() if all([item not in layer.name for item in layerBanList])]))
+		self.lst_layers.addItems([layer.name for layer in self.glyph.layers() if all([item not in layer.name for item in layerBanList])])
 		
 		for index in range(self.lst_layers.count):
 			currItem = self.lst_layers.item(index)
