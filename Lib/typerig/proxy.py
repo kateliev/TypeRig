@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.73.4'
+__version__ = '0.73.5'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -1026,10 +1026,7 @@ class pGlyph(object):
 		return [activeLayer[sid] for sid in range(activeLayer.countShapes())]
 
 	# - Composite glyph --------------------------------------------
-	# ! Deactivated not working as expected
-	#def listGlyphComponents(self, layer=None, fullData=False):
-	#	'''Return all glyph components in glyph'''
-	#	return [item if fullData else item[0] for item in [self.package.isComponent(shape.shapeData) for shape in self.shapes(layer)] if item[0] is not None]
+	# !!! Note: Too much nested loops revisit!
 	
 	def listGlyphComponents(self, layer=None, extend=None):
 		'''Return all glyph components in glyph'''
@@ -1142,13 +1139,32 @@ class pGlyph(object):
 	def isCompatible(self, strong=False):
 		'''Test if glyph is ready for interpolation - all master layers are compatible.'''
 		from itertools import combinations
-		return all([layerA.isCompatible(layerB, strong) for layerA, layerB in combinations(self.masters(), 2)])
+		glyph_masters = self.masters()
+		layer_pairs = combinations(glyph_masters, 2)
+		return all([layerA.isCompatible(layerB, strong) for layerA, layerB in layer_pairs])
 
 	def isMixedReference(self):
 		'''Test if glyph has mixed references - components on some layers and referenced shapes on others'''
+		'''
 		from itertools import combinations
-		return not all([len(self.components(layerA.name))==len(self.components(layerB.name)) for layerA, layerB in combinations(self.masters(), 2)])
+		glyph_masters = self.masters()
+		layer_pairs = combinations(glyph_masters, 2)
+		return not all([len(self.components(layerA.name))==len(self.components(layerB.name)) for layerA, layerB in layer_pairs])
+		'''
+		#!!! Far simpler code
+		master_components_count = []
+		for layer in self.fl.layers:
+			if layer.isMasterLayer:
+				pShapes = layer.shapes
+				counter = 0
+				if len(pShapes):
+					for shape in pShapes:
+						counter += len(shape.includesList)
 
+				master_components_count.append(counter)
+
+		return not len(set(master_components_count)) == 1	
+			
 	def reportLayerComp(self, strong=False):
 		'''Returns a layer compatibility report'''
 		from itertools import combinations
