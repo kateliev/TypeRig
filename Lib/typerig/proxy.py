@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.73.5'
+__version__ = '0.73.7'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -1059,7 +1059,6 @@ class pGlyph(object):
 		'''Return composition dict of a glyph. Composites!'''
 		return {container.includesList[0].shapeData.name:container for container in self.containers(layer, extend)}	#TODO: Make it better! This references only first shape in container!
 
-
 	# - Layers -----------------------------------------------------
 	def masters(self):
 		'''Returns all master layers.'''
@@ -1096,45 +1095,88 @@ class pGlyph(object):
 		'''
 		self.fl.removeLayer(self.layer(layer))
 
-	def duplicateLayer(self, layer=None, newLayerName='New Layer', toBack=False):
+	def duplicateLayer(self, layer=None, newLayerName='New Layer'):
 		'''Duplicates a layer with new name and adds it to glyph's layers.
 		Args:
 			layer (int or str): Layer index or name. If None returns ActiveLayer
 			toBack(bool): send to back
 		Returns:
 			flLayer
-		Note:
-			This is redundant and false duplication until better solution is found.
-			Currently Guidelines are not duplicated due to crash.
 		'''
-		srcLayer = self.layer(layer)
-		dstLayer = fl6.flLayer()
+		options = {'out': True, 'gui': True, 'anc': True, 'lsb': True, 'adv': True, 'rsb': True, 'lnk': True, 'ref': True}
+		self.copyLayer(layer, newLayerName, options, True, True)
 
-		dstLayer.name = newLayerName
-		dstLayer.advanceHeight = srcLayer.advanceHeight
-		dstLayer.advanceWidth = srcLayer.advanceWidth
-		#dstLayer.flags = srcLayer.flags
-		#dstLayer.data = srcLayer.data
-		dstLayer.wireframeColor = srcLayer.wireframeColor
-		dstLayer.mark = srcLayer.mark
+	def copyLayer(self, srcLayerName, dstLayerName, options = {'out': True, 'gui': True, 'anc': True, 'lsb': True, 'adv': True, 'rsb': True, 'lnk': True, 'ref': True}, addLayer=False, cleanDST=True, toBack=True):
+		'''Copies a layer within the glyph.
+		Args:
+			srcLayerName, dstLayerName (string): Source and destination layer names
+			options (dict): Copy Options as follows {'out': Outline, 'gui': Guidelines, 'anc': Anchors, 'lsb': LSB, 'adv': Advance, 'rsb': RSB, 'lnk': Linked metrics, 'ref': References}, addLayer=False):
+			addLayer (bool): Create a new layer
+			cleanDST (bool): Clean destination layer
+			toBack (bool): Add layer to back of the layer stack
+		Returns:
+			flLayer
+		'''
+		# - Init
+		srcLayer = self.layer(srcLayerName)
 
-		dstLayer.metricsLeft = srcLayer.metricsLeft
-		dstLayer.metricsRight = srcLayer.metricsRight
-		dstLayer.metricsWidth = srcLayer.metricsWidth
+		# -- Check if dstLayerExists
+		if self.layer(dstLayerName) is None:
+			if addLayer:
+				# -- Create new layer
+				newLayer = fl6.flLayer()
+				newLayer.name = str(dstLayerName)
 
-		dstLayer.assignStyle(srcLayer)
-		dstLayer.addShapes([shape.cloneTopLevel() for shape in srcLayer.shapes])
-		dstLayer.appendGuidelines(srcLayer.guidelines)
+				# -- Assign same styling
+				newLayer.advanceHeight = srcLayer.advanceHeight
+				newLayer.advanceWidth = srcLayer.advanceWidth
+				newLayer.wireframeColor = srcLayer.wireframeColor
+				newLayer.mark = srcLayer.mark
+				newLayer.assignStyle(srcLayer)
 
-		for anchor in srcLayer.anchors:
-			dstLayer.addAnchor(anchor)
+				# -- Add to glyph
+				self.addLayer(newLayer, toBack)
+			else:
+				return
 
-		for comp in srcLayer.components:
-			dstLayer.addComponent(comp)
+		# -- Outline
+		if options['out']:
+			# --- Get shapes
+			srcShapes = self.shapes(srcLayerName)
 
-		dstLayer.update()
-		self.addLayer(dstLayer, toBack)
-		return dstLayer
+			# --- Cleanup destination layers
+			if cleanDST:
+				self.layer(dstLayerName).removeAllShapes()
+			
+			# --- Copy/Paste shapes
+			for shape in srcShapes:
+				newShape = self.layer(dstLayerName).addShape(shape.cloneTopLevel())
+
+			#self.update()
+
+		# -- Metrics
+		if options['lsb']: 
+			self.setLSB(self.getLSB(srcLayerName), dstLayerName)
+		
+		if options['adv']: 
+			self.setAdvance(self.getAdvance(srcLayerName), dstLayerName)
+		
+		if options['rsb']: 
+			self.setRSB(self.getRSB(srcLayerName), dstLayerName)
+
+		if options['lnk']:
+			self.setLSBeq(self.getSBeq(srcLayerName)[0], dstLayerName)
+			self.setRSBeq(self.getSBeq(srcLayerName)[1], dstLayerName)
+
+		# -- Anchors
+		if options['anc']:
+			if cleanDST:
+				self.clearAnchors(dstLayerName)
+
+			for src_anchor in self.anchors(srcLayerName):
+				self.addAnchor((src_anchor.point.x(), src_anchor.point.y()), src_anchor.name, dstLayerName)
+
+		return newLayer
 
 	def isCompatible(self, strong=False):
 		'''Test if glyph is ready for interpolation - all master layers are compatible.'''

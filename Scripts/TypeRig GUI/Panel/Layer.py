@@ -144,15 +144,9 @@ class QlayerBasic(QtGui.QVBoxLayout):
 
 	def duplicateLayers(self):	
 		if self.aux.doCheck():	
-			''' # This should work but it does not
+			# - Duplicate 
 			for item in self.aux.lst_layers.selectedItems():
-				newLayer = fl6.flLayer(self.aux.glyph.layer(item.text()))
-				newLayer.name += '.%s' #%str(self.edt_name.text)
-				self.aux.glyph.addLayer(newLayer)
-			'''
-			# - Duplicate by layer copy solution		
-			for item in self.aux.lst_layers.selectedItems():
-				self.aux.glyph.duplicateLayer(item.text() , '%s.%s' %(item.text(), self.edt_name.text), True)			
+				self.aux.glyph.duplicateLayer(item.text() , '%s%s' %(item.text(), self.edt_name.text))			
 			
 			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Duplicate Layer: %s.' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
 			self.aux.glyph.update()
@@ -642,6 +636,7 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 					wShapes = wGlyph.shapes(item.text())
 					
 					for shape in wShapes:
+						'''
 						# - Transform at origin and move to new location according to transformation
 						wBBox = shape.boundingBox
 						wCenter = (wBBox.width()/2 + wBBox.x(), wBBox.height()/2 + wBBox.y())
@@ -655,7 +650,10 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 						shape.applyTransform(transform_to_origin)
 						shape.applyTransform(new_transform)
 						shape.applyTransform(transform_from_origin)
-
+						'''
+						edit_transform = shape.transform.scale(wScale_x, wScale_y).rotate(wRotate).shear(wSlant, 0).translate(wSift_x, wSift_y)
+						shape.transform = edit_transform
+						#shape.update()
 
 			self.aux.glyph.updateObject(self.aux.glyph.fl, ' Glyph: %s; Transform Layers: %s' %(self.aux.glyph.fl.name, '; '.join([item.text() for item in self.aux.lst_layers.selectedItems()])))
 			self.aux.glyph.update()
