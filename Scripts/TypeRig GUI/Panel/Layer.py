@@ -1,4 +1,4 @@
-#FLM: Glyph: Layers
+#FLM: Glyph: Layers NEW
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -16,21 +16,29 @@ from typerig.glyph import eGlyph
 from typerig.gui import trSliderCtrl
 from itertools import groupby
 from math import radians
+from collections import OrderedDict
 
 # - Init
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '0.39'
+app_name, app_version = 'TypeRig | Layers', '1.05'
+
+# -- Inital config for Get Layers dialog
+column_names = ('Layer Name', 'Layer Type', 'Color')
+column_init = (None, None, QtGui.QColor(0, 255, 0, 10))
+init_table_dict = {1:OrderedDict(zip(column_names, column_init))}
+color_dict = {'Master': QtGui.QColor(0, 255, 0, 10), 'Service': QtGui.QColor(0, 0, 255, 10), 'Mask': QtGui.QColor(255, 0, 0, 10)}
 
 # - Sub widgets ------------------------
-class QlayerSelect(QtGui.QVBoxLayout):
+class WLayerSelect(QtGui.QVBoxLayout):
 	# - Split/Break contour 
 	def __init__(self):
-		super(QlayerSelect, self).__init__()
+		super(WLayerSelect, self).__init__()
 
 		# - Init
+		self.glyph = None
 
 		# -- Head
 		self.lay_head = QtGui.QHBoxLayout()
@@ -44,49 +52,119 @@ class QlayerSelect(QtGui.QVBoxLayout):
 		self.addLayout(self.lay_head)
 
 		# -- Layer List
-		self.lst_layers = QtGui.QListWidget()
-		self.lst_layers.setAlternatingRowColors(True)
-		self.lst_layers.setMinimumHeight(200)
-		#self.lst_layers.setMaximumHeight(100)
-		self.lst_layers.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection) # Select multiple items call .selectedItems() to get a QList
+		self.lst_layers = WMasterTableView(init_table_dict)
+		self.lst_layers.selectionModel().selectionChanged.connect(self.set_selected)
 		self.addWidget(self.lst_layers)
-		#self.refresh()
+		self.refresh()
 
-	def refresh(self):
-		# - Init
-		layerBanList = ['#', 'img']
-		self.glyph = eGlyph()
-
-		# - Prepare
-		self.edt_glyphName.setText(eGlyph().name)
-		self.selection = self.glyph.layer().name
-		self.lst_layers.clear()
-					
-		# - Build List and style it
-		#self.lst_layers.addItems(sorted([layer.name for layer in self.glyph.layers() if all([item not in layer.name for item in layerBanList])]))
-		self.lst_layers.addItems([layer.name for layer in self.glyph.layers() if all([item not in layer.name for item in layerBanList])])
+	def refresh(self, master_mode=False):
+		def check_type(layer):
+			if layer.isMaskLayer: 	return 'Mask'
+			if layer.isMasterLayer: return 'Master'
+			if layer.isService: 	return 'Service'
 		
-		for index in range(self.lst_layers.count):
-			currItem = self.lst_layers.item(index)
-			currLayer = self.glyph.layer(currItem.text())
+		if fl6.CurrentFont() is not None and fl6.CurrentGlyph() is not None:
+			self.glyph = eGlyph()
+			self.edt_glyphName.setText(self.glyph.name)
 
-			control = (currLayer.isService, currLayer.isMasterLayer, currLayer.isMaskLayer, currLayer.isWireframe)
-			controlColor = [int(item)*255 for item in control[:-1]] + [150-int(control[-1])*100]
-			text = 'Service Master Mask Wireframe'.split(' ')
-			controlText = ' | '.join([text[pos] for pos in range(len(text)) if control[pos]])
+			if master_mode:
+				init_data = [(layer, 'Master', layer.wireframeColor) for layer in self.glyph.layers() if layer.isMasterLayer]
+			else:
+				init_data = [(layer.name, check_type(layer), layer.wireframeColor) for layer in self.glyph.layers() if '#' not in layer.name]
+		 	
+		 	table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
+		 	
+		 	self.lst_layers.setTable(init_table_dict)
+		 	self.lst_layers.setTable(table_dict)
 
-			currItem.setData(QtCore.Qt.DecorationRole, QtGui.QColor(*controlColor))
-			currItem.setData(QtCore.Qt.ToolTipRole, controlText)
-
+	def set_selected(self):
+		selected_rows = [si.row() for si in self.lst_layers.selectionModel().selectedRows()]
+		
+		for row in range(self.lst_layers.rowCount):
+			if row in selected_rows:
+				self.lst_layers.item(row,0).setCheckState(QtCore.Qt.Checked)
+			else:
+				self.lst_layers.item(row,0).setCheckState(QtCore.Qt.Unchecked)
+				
 	def doCheck(self):
 		if self.glyph.fg.id != fl6.CurrentGlyph().id and self.glyph.fl.name != fl6.CurrentGlyph().name:
 			print '\nERRO:\tGlyph mismatch:\n\tCurrent active glyph: %s\n\tLayers panel glyph: %s' %(fl6.CurrentGlyph(), self.glyph.fg)
 			print 'WARN:\tNo action taken! Forcing refresh!' 
 			self.refresh()
-			#raise Exception('Glyph mismatch')
 			return 0
-
 		return 1
+
+class WMasterTableView(QtGui.QTableWidget):
+	def __init__(self, data):
+		super(WMasterTableView, self).__init__()
+		
+		# - Init
+		self.setColumnCount(max(map(len, data.values())))
+		self.setRowCount(len(data.keys()))
+		self.header = self.horizontalHeader()
+
+		# - Set 
+		self.setTable(data)		
+	
+		# - Styling
+		self.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
+		self.horizontalHeader().setStretchLastSection(True)
+		self.setAlternatingRowColors(True)
+		self.setShowGrid(True)
+		self.resizeColumnsToContents()
+		self.resizeRowsToContents()
+	
+	def setTable(self, data):
+		# - Fix sorting
+		self.clear()
+		self.setSortingEnabled(False)
+		self.blockSignals(True)
+		self.model().sort(-1)
+		self.horizontalHeader().setSortIndicator(-1, 0)
+
+		# - Init
+		name_row, name_column = [], []
+
+		self.setColumnCount(max(map(len, data.values())))
+		self.setRowCount(len(data.keys()))
+
+		# - Populate
+		for n, layer in enumerate(data.keys()):
+			name_row.append(layer)
+
+			for m, key in enumerate(data[layer].keys()):
+				
+				# -- Build name column
+				name_column.append(key)
+				
+				# -- Selectively add data
+				newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
+				
+				if m == 0:
+					newitem.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+					newitem.setData(QtCore.Qt.DecorationRole, data[layer]['Color'])
+					newitem.setCheckState(QtCore.Qt.Unchecked) 
+
+				newitem.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+
+				if data[layer]['Layer Type']: newitem.setBackground(color_dict[data[layer]['Layer Type']])
+
+				self.setItem(n, m, newitem)
+
+		self.verticalHeader().hide()
+		self.setVerticalHeaderLabels(name_row)
+		self.setHorizontalHeaderLabels(name_column)
+		
+		self.header.setSectionResizeMode(0, QtGui.QHeaderView.Stretch)
+		self.header.setSectionResizeMode(1, QtGui.QHeaderView.ResizeToContents)
+		self.header.setSectionResizeMode(2, QtGui.QHeaderView.ResizeToContents)
+
+		self.blockSignals(False)
+		self.setSortingEnabled(True)
+		self.setColumnHidden(2, True)
+	
+	def getTable(self):
+		return [self.item(row, 0).text() for row in range(self.rowCount) if self.item(row, 0).checkState() == QtCore.Qt.Checked]
 
 class QlayerBasic(QtGui.QVBoxLayout):
 	def __init__(self, aux):
@@ -145,46 +223,46 @@ class QlayerBasic(QtGui.QVBoxLayout):
 	def duplicateLayers(self):	
 		if self.aux.doCheck():	
 			# - Duplicate 
-			for item in self.aux.lst_layers.selectedItems():
-				self.aux.glyph.duplicateLayer(item.text() , '%s%s' %(item.text(), self.edt_name.text))			
+			for layer_name in self.aux.lst_layers.getTable():
+				self.aux.glyph.duplicateLayer(layer_name , '%s%s' %(layer_name, self.edt_name.text))			
 			
-			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Duplicate Layer: %s.' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Duplicate Layer: %s.' %'; '.join([layer_name for layer_name in self.aux.lst_layers.getTable()]))
 			self.aux.glyph.update()
 			self.aux.refresh()
 
 	def addMaskLayers(self):	
 		if self.aux.doCheck():	
-			for item in self.aux.lst_layers.selectedItems():
+			for layer_name in self.aux.lst_layers.getTable():
 				# - Build mask layer
-				srcShapes = self.aux.glyph.shapes(item.text())
-				newMaskLayer = self.aux.glyph.layer(item.text()).getMaskLayer(True)			
+				srcShapes = self.aux.glyph.shapes(layer_name)
+				newMaskLayer = self.aux.glyph.layer(layer_name).getMaskLayer(True)			
 
 				# - Copy shapes to mask layer
 				for shape in srcShapes:
 					newMaskLayer.addShape(shape.cloneTopLevel()) # Clone so that the shapes are NOT referenced, but actually copied!
 			
-			self.aux.glyph.updateObject(self.aux.glyph.fl, 'New Mask Layer: %s.' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'New Mask Layer: %s.' %'; '.join([layer_name for layer_name in self.aux.lst_layers.getTable()]))
 			self.aux.glyph.update()
 			self.aux.refresh()
 
 	def deleteLayers(self):				
 		if self.aux.doCheck():	
-			for item in self.aux.lst_layers.selectedItems():
-				self.aux.glyph.removeLayer(item.text())
+			for layer_name in self.aux.lst_layers.getTable():
+				self.aux.glyph.removeLayer(layer_name)
 
-			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Delete Layer: %s.' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Delete Layer: %s.' %'; '.join([layer_name for layer_name in self.aux.lst_layers.getTable()]))
 			self.aux.glyph.update()
 			self.aux.refresh()
 
 	def setLayer(self, type):
 		if self.aux.doCheck():	
-			for item in self.aux.lst_layers.selectedItems():
-				wLayer = self.aux.glyph.layer(item.text())
+			for layer_name in self.aux.lst_layers.getTable():
+				wLayer = self.aux.glyph.layer(layer_name)
 
 				if type is 'Service': wLayer.isService = not wLayer.isService
 				if type is 'Wireframe': wLayer.isWireframe = not wLayer.isWireframe
 
-			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Set Layer as <%s>: %s.' %(type, '; '.join([item.text() for item in self.aux.lst_layers.selectedItems()])))
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Set Layer as <%s>: %s.' %(type, '; '.join([layer_name for layer_name in self.aux.lst_layers.getTable()])))
 			self.aux.glyph.update()
 			self.aux.refresh()
 
@@ -328,15 +406,15 @@ class QlayerTools(QtGui.QVBoxLayout):
 			modifiers = QtGui.QApplication.keyboardModifiers()
 
 			if self.chk_outline.isChecked():
-				for item in self.aux.lst_layers.selectedItems():
-					for shape in self.aux.glyph.shapes(item.text()):
+				for layer_name in self.aux.lst_layers.getTable():
+					for shape in self.aux.glyph.shapes(layer_name):
 						
 						if modifiers == QtCore.Qt.ShiftModifier: # Shift + Click will lock
 							shape.contentLocked = True
 						else:
 							shape.contentLocked = False
 
-			self.aux.glyph.updateObject(self.aux.glyph.fl, '%s shapes on Layer(s) | %s' %(['Unlock', 'Lock'][modifiers == QtCore.Qt.ShiftModifier],'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()])))
+			self.aux.glyph.updateObject(self.aux.glyph.fl, '%s shapes on Layer(s) | %s' %(['Unlock', 'Lock'][modifiers == QtCore.Qt.ShiftModifier],'; '.join([layer_name for layer_name in self.aux.lst_layers.getTable()])))
 			self.aux.glyph.update()
 
 
@@ -417,8 +495,8 @@ class QlayerTools(QtGui.QVBoxLayout):
 	def layer_clean(self):
 		if self.aux.doCheck():	
 			if self.chk_outline.isChecked():
-				for item in self.aux.lst_layers.selectedItems():
-					self.aux.glyph.layer(item.text()).removeAllShapes()
+				for layer_name in self.aux.lst_layers.getTable():
+					self.aux.glyph.layer(layer_name).removeAllShapes()
 
 			if self.chk_guides.isChecked():
 				pass # TODO!!!!!
@@ -426,7 +504,7 @@ class QlayerTools(QtGui.QVBoxLayout):
 			if self.chk_anchors.isChecked():
 				pass # TODO!!!!!
 			
-			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Clean Layer(s) | %s' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Clean Layer(s) | %s' %'; '.join([layer_name for layer_name in self.aux.lst_layers.getTable()]))
 			self.aux.glyph.update()
 
 class QlayerMultiEdit(QtGui.QVBoxLayout):
@@ -493,21 +571,21 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 
 	# - Button procedures ---------------------------------------------------
 	def layers_unfold(self):
-		if self.aux.doCheck() and len(self.aux.lst_layers.selectedItems()) > 1:
+		if self.aux.doCheck() and len(self.aux.lst_layers.getTable()) > 1:
 			# - Init
 			wGlyph = self.aux.glyph
 
 			# - Prepare Backup
-			self.backup = {item.text():(wGlyph.getLSB(item.text()), wGlyph.getAdvance(item.text())) for item in self.aux.lst_layers.selectedItems()}
+			self.backup = {layer_name:(wGlyph.getLSB(layer_name), wGlyph.getAdvance(layer_name)) for layer_name in self.aux.lst_layers.getTable()}
 			self.btn_restore.setEnabled(True)
 
 			# - Calculate metrics
 			newLSB = 0
 			nextLSB = 0
-			newAdvance = sum([sum(item) for item in self.backup.values()])
+			newAdvance = sum([sum(layer_name) for layer_name in self.backup.values()])
 			
-			for item in self.aux.lst_layers.selectedItems():
-				wLayer = item.text()
+			for layer_name in self.aux.lst_layers.getTable():
+				wLayer = layer_name
 				
 				newLSB += nextLSB + self.backup[wLayer][0]
 				nextLSB = self.backup[wLayer][1]
@@ -516,7 +594,7 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 				wGlyph.setAdvance(newAdvance, wLayer)
 				wGlyph.layer(wLayer).isVisible = True
 
-			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Unfold Layers (Side By Side): %s.' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Unfold Layers (Side By Side): %s.' %'; '.join([layer_name for layer_name in self.aux.lst_layers.getTable()]))
 			self.aux.glyph.update()
 
 	def layers_restore(self):
@@ -533,7 +611,7 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 			self.backup = {}
 			self.btn_restore.setEnabled(False)
 
-			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Restore Layer metrics: %s.' %'; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Restore Layer metrics: %s.' %'; '.join([layer_name for layer_name in self.aux.lst_layers.getTable()]))
 			self.aux.glyph.update()
 
 	def outline_copy(self):
@@ -544,14 +622,14 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 		
 		# - Build initial contour information
 		selectionTuples = wGlyph.selectedAtContours()
-		selection = {key:[item[1] for item in value] if not wContours[key].isAllNodesSelected() else [] for key, value in groupby(selectionTuples, lambda x:x[0])}
+		selection = {key:[layer_name[1] for layer_name in value] if not wContours[key].isAllNodesSelected() else [] for key, value in groupby(selectionTuples, lambda x:x[0])}
 
 		# - Process
 		if len(selection.keys()):
 			self.btn_paste.setEnabled(True)
 						
-			for item in self.aux.lst_layers.selectedItems():
-				wLayer = item.text()
+			for layer_name in self.aux.lst_layers.getTable():
+				wLayer = layer_name
 				self.contourClipboard[wLayer] = []
 
 				for cid, nList in selection.iteritems():
@@ -561,7 +639,7 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 						self.contourClipboard[wLayer].append(wGlyph.contours(wLayer)[cid].clone())
 
 
-			print 'DONE:\t Copy outline; Glyph: %s; Layers: %s.' %(self.aux.glyph.fl.name, '; '.join([item.text() for item in self.aux.lst_layers.selectedItems()]))
+			print 'DONE:\t Copy outline; Glyph: %s; Layers: %s.' %(self.aux.glyph.fl.name, '; '.join([layer_name for layer_name in self.aux.lst_layers.getTable()]))
 		
 	def outline_paste(self):
 		# - Init
@@ -593,11 +671,11 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 						# - Create new shape
 						add_new_shape(wLayer, contours)
 		
-			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Paste outline; Glyph: %s; Layers: %s' %(self.aux.glyph.fl.name, '; '.join([item.text() for item in self.aux.lst_layers.selectedItems()])))
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Paste outline; Glyph: %s; Layers: %s' %(self.aux.glyph.fl.name, '; '.join([layer_name for layer_name in self.aux.lst_layers.getTable()])))
 			self.aux.glyph.update()
 
 	def layer_transform(self, shapes=False):
-		if self.aux.doCheck() and len(self.aux.lst_layers.selectedItems()):
+		if self.aux.doCheck() and len(self.aux.lst_layers.getTable()):
 			
 			# - Init
 			wGlyph = self.aux.glyph
@@ -618,8 +696,8 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 			# ! Note: wrong but will do...
 			new_transform = QtGui.QTransform().scale(wScale_x, wScale_y).rotate(wRotate).shear(wSlant, 0).translate(wSift_x, wSift_y)
 			
-			for item in self.aux.lst_layers.selectedItems():
-				wLayer = wGlyph.layer(item.text())
+			for layer_name in self.aux.lst_layers.getTable():
+				wLayer = wGlyph.layer(layer_name)
 				
 				if not shapes:
 					# - Transform at origin
@@ -633,7 +711,7 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 					wLayer.applyTransform(new_transform)
 					if wRotate != 0: wLayer.applyTransform(transform_from_origin)
 				else:
-					wShapes = wGlyph.shapes(item.text())
+					wShapes = wGlyph.shapes(layer_name)
 					
 					for shape in wShapes:
 						'''
@@ -655,7 +733,7 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 						shape.transform = edit_transform
 						#shape.update()
 
-			self.aux.glyph.updateObject(self.aux.glyph.fl, ' Glyph: %s; Transform Layers: %s' %(self.aux.glyph.fl.name, '; '.join([item.text() for item in self.aux.lst_layers.selectedItems()])))
+			self.aux.glyph.updateObject(self.aux.glyph.fl, ' Glyph: %s; Transform Layers: %s' %(self.aux.glyph.fl.name, '; '.join([layer_name for layer_name in self.aux.lst_layers.getTable()])))
 			self.aux.glyph.update()
 
 class QlayerBlend(QtGui.QVBoxLayout):
@@ -712,7 +790,7 @@ class QlayerBlend(QtGui.QVBoxLayout):
 	def simpleBlend(self, timeStep, currentTime):
 		if self.chk_multi.isChecked():
 			self.currentTime = tuple(map(sum, zip(self.currentTime, timeStep))) if isinstance(timeStep, tuple) else self.currentTime + timeStep
-			blend = self.aux.glyph.blendLayers(self.aux.glyph.layer(self.aux.lst_layers.selectedItems()[0].text()), self.aux.glyph.layer(self.aux.lst_layers.selectedItems()[1].text()), self.currentTime)
+			blend = self.aux.glyph.blendLayers(self.aux.glyph.layer(self.aux.lst_layers.getTable()[0].text()), self.aux.glyph.layer(self.aux.lst_layers.getTable()[1].text()), self.currentTime)
 		else:
 			blend = self.aux.glyph.blendLayers(self.aux.glyph.layer(), self.aux.glyph.layer(self.aux.lst_layers.currentItem().text()), timeStep)
 		
@@ -746,7 +824,8 @@ class tool_tab(QtGui.QWidget):
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
 
-		self.layerSelector = QlayerSelect()
+		#self.layerSelector = QlayerSelect()
+		self.layerSelector = WLayerSelect()
 		self.quickTools = QlayerTools(self.layerSelector)
 		self.blendTools = QlayerBlend(self.layerSelector)
 		self.basicTools = QlayerBasic(self.layerSelector)
@@ -765,7 +844,7 @@ class tool_tab(QtGui.QWidget):
 
 
 		# - Build ---------------------------
-		layoutV.addStretch()
+		#layoutV.addStretch()
 		self.setLayout(layoutV)
 
 # - Test ----------------------
