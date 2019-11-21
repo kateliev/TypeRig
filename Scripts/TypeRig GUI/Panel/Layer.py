@@ -1,4 +1,4 @@
-#FLM: Glyph: Layers NEW
+#FLM: Glyph: Layers
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -8,25 +8,28 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
-import fontlab as fl6
-import fontgate as fgt
-from PythonQt import QtCore
-from typerig import QtGui
-from typerig.glyph import eGlyph
-from typerig.gui import trSliderCtrl
-from itertools import groupby
 from math import radians
 from collections import OrderedDict
+from itertools import groupby
+
+import fontlab as fl6
+import fontgate as fgt
+
+from typerig import QtGui
+from PythonQt import QtCore
+from typerig.glyph import eGlyph
+from typerig.gui import trSliderCtrl
+from typerig.brain import linInterp as lerp
 
 # - Init
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '1.05'
+app_name, app_version = 'TypeRig | Layers', '1.25'
 
 # -- Inital config for Get Layers dialog
-column_names = ('Layer Name', 'Layer Type', 'Color')
+column_names = ('Name', 'Type', 'Color')
 column_init = (None, None, QtGui.QColor(0, 255, 0, 10))
 init_table_dict = {1:OrderedDict(zip(column_names, column_init))}
 color_dict = {'Master': QtGui.QColor(0, 255, 0, 10), 'Service': QtGui.QColor(0, 0, 255, 10), 'Mask': QtGui.QColor(255, 0, 0, 10)}
@@ -108,11 +111,11 @@ class WMasterTableView(QtGui.QTableWidget):
 	
 		# - Styling
 		self.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
-		self.horizontalHeader().setStretchLastSection(True)
+		#self.horizontalHeader().setStretchLastSection(True)
 		self.setAlternatingRowColors(True)
 		self.setShowGrid(True)
-		self.resizeColumnsToContents()
-		self.resizeRowsToContents()
+		#self.resizeColumnsToContents()
+		#self.resizeRowsToContents()
 	
 	def setTable(self, data):
 		# - Fix sorting
@@ -147,7 +150,7 @@ class WMasterTableView(QtGui.QTableWidget):
 
 				newitem.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
 
-				if data[layer]['Layer Type']: newitem.setBackground(color_dict[data[layer]['Layer Type']])
+				if data[layer]['Type']: newitem.setBackground(color_dict[data[layer]['Type']])
 
 				self.setItem(n, m, newitem)
 
@@ -181,7 +184,6 @@ class QlayerBasic(QtGui.QVBoxLayout):
 		self.btn_setServ = QtGui.QPushButton('Service')
 		self.btn_setMask = QtGui.QPushButton('Mask')
 		self.btn_setWire = QtGui.QPushButton('Wireframe')
-		#self.btn_dup.setEnabled(False)
 				
 		self.btn_add.setToolTip('Add new layer with name')
 		self.btn_dup.setToolTip('Duplicate selected with suffix')
@@ -301,7 +303,7 @@ class QlayerTools(QtGui.QVBoxLayout):
 		self.btn_swap = QtGui.QPushButton('Swap')
 		self.btn_copy = QtGui.QPushButton('Copy')
 		self.btn_paste = QtGui.QPushButton('Paste')
-		self.btn_clean = QtGui.QPushButton('Remove')
+		self.btn_clean = QtGui.QPushButton('Empty')
 		self.btn_unlock = QtGui.QPushButton('Unlock')
 		self.btn_expand = QtGui.QPushButton('Expand')
 
@@ -358,6 +360,7 @@ class QlayerTools(QtGui.QVBoxLayout):
 		if 'LSB' in mode.upper():
 			exportMetric = glyph.getLSB(dstLayerName) 
 			glyph.setLSB(glyph.getLSB(srcLayerName) if impSRC is None else impSRC, dstLayerName)
+			glyph.setLSBeq(glyph.getSBeq(srcLayerName)[0], dstLayerName)
 			return exportMetric
 
 		if 'ADV' in mode.upper():
@@ -368,6 +371,7 @@ class QlayerTools(QtGui.QVBoxLayout):
 		if 'RSB' in mode.upper():
 			exportMetric = glyph.getRSB(dstLayerName)
 			glyph.setRSB(glyph.getRSB(srcLayerName) if impSRC is None else impSRC, dstLayerName)
+			glyph.setRSBeq(glyph.getSBeq(srcLayerName)[1], dstLayerName)
 			return exportMetric
 
 	def Copy_Paste_Layer_Guides(self, glyph, layerName, copy=True, cleanDST=False):
@@ -736,85 +740,69 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 			self.aux.glyph.updateObject(self.aux.glyph.fl, ' Glyph: %s; Transform Layers: %s' %(self.aux.glyph.fl.name, '; '.join([layer_name for layer_name in self.aux.lst_layers.getTable()])))
 			self.aux.glyph.update()
 
-class QlayerBlend(QtGui.QVBoxLayout):
+class NEWlayerBlend(QtGui.QVBoxLayout):
 	def __init__(self, aux):
-		super(QlayerBlend, self).__init__()
+		super(NEWlayerBlend, self).__init__()
 
 		# - Init
 		self.aux = aux
-		self.currentTime = .0
-		self.timeStep = .01
-
+		self.process_array = []
+		
 		# - Interface
+		self.lay_buttons = QtGui.QGridLayout()
+		
+		self.chk_setAxis = QtGui.QPushButton('Set Axis')
+		self.chk_swapAxis = QtGui.QPushButton('Swap')
+
+		self.chk_setAxis.setCheckable(True)
+		self.chk_swapAxis.setCheckable(True)
+
+		self.chk_setAxis.clicked.connect(lambda: self.prepare_lerp())
+
 		# -- Blend active layer to single selected layer
-		self.lay_blend = QtGui.QHBoxLayout()
-		self.btn_minus = QtGui.QPushButton(' - ')
-		self.btn_plus = QtGui.QPushButton(' + ')
-		self.btn_minus.setMinimumWidth(75)
-		self.btn_plus.setMinimumWidth(75)
-		self.btn_minus.clicked.connect(self.blendMinus)
-		self.btn_plus.clicked.connect(self.blendPlus)
+		self.mixer_dx = trSliderCtrl('1', '1000', '0', 1)
+		self.mixer_dx.sld_axis.valueChanged.connect(lambda: self.process_lerp())		
 
-		self.edt_timeStep = QtGui.QLineEdit()
-		self.edt_timeStep.setText(self.timeStep)
+		self.lay_buttons.addWidget(self.chk_setAxis,	0, 0, 1, 1)
+		self.lay_buttons.addWidget(self.chk_swapAxis,	0, 1, 1, 1)
 
-		self.btn_minus.setToolTip('Blend Active Layer to selected Layer.\nOriginal Active layer is lost!')
-		self.btn_plus.setToolTip('Blend Active Layer to selected Layer.\nOriginal Active layer is lost!')
-		self.edt_timeStep.setToolTip('Blend time (0.0 - 1.0) Step.')
+		self.addLayout(self.lay_buttons)
+		self.addLayout(self.mixer_dx)
 		
-		self.lay_blend.addWidget(self.btn_minus)
-		self.lay_blend.addWidget(QtGui.QLabel('T:'))
-		self.lay_blend.addWidget(self.edt_timeStep)
-		self.lay_blend.addWidget(self.btn_plus)
-
-		self.addLayout(self.lay_blend)
-
-		# -- Build Axis from current selected layers and send result to active layer
-
-		self.lay_opt = QtGui.QHBoxLayout()
-		self.chk_multi = QtGui.QCheckBox('Use Selected Layers as Axis')
-		self.chk_multi.stateChanged.connect(self.setCurrentTime)
-		self.chk_width = QtGui.QCheckBox('Fixed Width')
-
-		self.chk_multi.setToolTip('Blend selected layers to Active layer.\nUSAGE:\n- Create blank new layer;\n- Select two layers to build Interpolation Axis;\n- Use [+][-] to blend along axis.\nNote:\n- Selection order is important!\n- Checking/unchecking resets the blend position!')
-		self.chk_width.setToolTip('Keep current Advance Width')
+	def prepare_lerp(self):
+		if self.chk_setAxis.isChecked():
+			self.chk_setAxis.setText('Reset Axis')
+			
+			selection = self.aux.lst_layers.getTable()
+			src_array_t0 = self.aux.glyph._getCoordArray(selection[0]).asPairs()
+			src_array_t1 = self.aux.glyph._getCoordArray(selection[1]).asPairs()
+			
+			self.process_array = zip(src_array_t0[0], src_array_t1[0])
 		
-		self.lay_opt.addWidget(self.chk_multi)
-		self.lay_opt.addWidget(self.chk_width)
-		
-		self.addLayout(self.lay_opt)
-		
-	def setCurrentTime(self):
-		self.currentTime = (.0,.0) if isinstance(self.timeStep, tuple) else 0
-
-	def simpleBlend(self, timeStep, currentTime):
-		if self.chk_multi.isChecked():
-			self.currentTime = tuple(map(sum, zip(self.currentTime, timeStep))) if isinstance(timeStep, tuple) else self.currentTime + timeStep
-			blend = self.aux.glyph.blendLayers(self.aux.glyph.layer(self.aux.lst_layers.getTable()[0].text()), self.aux.glyph.layer(self.aux.lst_layers.getTable()[1].text()), self.currentTime)
 		else:
-			blend = self.aux.glyph.blendLayers(self.aux.glyph.layer(), self.aux.glyph.layer(self.aux.lst_layers.currentItem().text()), timeStep)
-		
-		self.aux.glyph.layer().removeAllShapes()
-		self.aux.glyph.layer().addShapes(blend.shapes)
-		
-		if not self.chk_width.isChecked():
-			self.aux.glyph.layer().advanceWidth = blend.advanceWidth 
-		
-		self.aux.glyph.updateObject(self.aux.glyph.fl, 'Blend <t:%s> @ %s.' %(self.currentTime + timeStep, self.aux.glyph.layer().name))
-		self.aux.glyph.update()
+			self.process_array = []
+			self.mixer_dx.reset()
+			self.chk_setAxis.setText('Set Axis')			
 
-	def blendMinus(self):
-		if self.aux.doCheck():	
-			temp_timeStep = self.edt_timeStep.text.replace(' ', '').split(',')
-			self.timeStep = -float(temp_timeStep[0]) if len(temp_timeStep) == 1 else tuple([-float(value) for value in temp_timeStep])
-			self.simpleBlend(self.timeStep, self.currentTime)
+	def lerpXY(self, t0, t1, tx, ty):
+		if self.chk_swapAxis.isChecked():
+			return (lerp(t1[0], t0[0], tx), lerp(t1[1], t0[1], ty))
+		else:
+			return (lerp(t0[0], t1[0], tx), lerp(t0[1], t1[1], ty))
 
-	def blendPlus(self):
-		if self.aux.doCheck():	
-			temp_timeStep = self.edt_timeStep.text.replace(' ', '').split(',')
-			self.timeStep = float(temp_timeStep[0]) if len(temp_timeStep) == 1 else tuple([float(value) for value in temp_timeStep])
-			self.simpleBlend(self.timeStep, self.currentTime)
-		
+	def process_lerp(self):
+		if self.chk_setAxis.isChecked():
+			try:
+				tx = self.mixer_dx.sld_axis.value/float(self.mixer_dx.edt_1.text)
+			except ZeroDivisionError:
+				tx = 0.
+			
+			dst_array = [self.lerpXY(item[0], item[1], tx, tx) for item in self.process_array]
+			
+			self.aux.glyph._setCoordArray(dst_array)
+			
+			self.aux.glyph.update()
+			fl6.Update(self.aux.glyph.fl)
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
@@ -827,7 +815,8 @@ class tool_tab(QtGui.QWidget):
 		#self.layerSelector = QlayerSelect()
 		self.layerSelector = WLayerSelect()
 		self.quickTools = QlayerTools(self.layerSelector)
-		self.blendTools = QlayerBlend(self.layerSelector)
+		#self.blendTools = QlayerBlend(self.layerSelector)
+		self.blendTools = NEWlayerBlend(self.layerSelector)
 		self.basicTools = QlayerBasic(self.layerSelector)
 		self.unfoldLayers = QlayerMultiEdit(self.layerSelector)
 
@@ -838,20 +827,18 @@ class tool_tab(QtGui.QWidget):
 		layoutV.addLayout(self.quickTools)
 		layoutV.addWidget(QtGui.QLabel('Layer Multi-editing (Layers selected)'))
 		layoutV.addLayout(self.unfoldLayers)
-		layoutV.addWidget(QtGui.QLabel('Interpolate/Blend (Active Layer to selection)'))
-		#layoutV.addWidget(QtGui.QLabel('\nWARN: Disabled due FL6 6722 Bug!'))
+		layoutV.addWidget(QtGui.QLabel('Interpolate/Blend (Selection to Active Layer)'))
 		layoutV.addLayout(self.blendTools)
 
 
 		# - Build ---------------------------
-		#layoutV.addStretch()
 		self.setLayout(layoutV)
 
 # - Test ----------------------
 if __name__ == '__main__':
 	test = tool_tab()
 	test.setWindowTitle('%s %s' %(app_name, app_version))
-	test.setGeometry(100, 100, 300, 600)
+	test.setGeometry(100, 100, 300, 700)
 	test.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 	
 	test.show()
