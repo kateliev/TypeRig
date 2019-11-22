@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Metrics', '0.27'
+app_name, app_version = 'TypeRig | Metrics', '0.28'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -38,6 +38,8 @@ class MLineEdit(QtGui.QLineEdit):
 		self._normalMenu.exec_(QtGui.QCursor.pos())
 
 	def _addCustomMenuItems(self, menu):
+		menu.addSeparator()
+		menu.addAction(u'{Glyph Name}', lambda: self.setText(eGlyph().name))
 		menu.addSeparator()
 		menu.addAction(u'To Lowercase', lambda: self.setText(self.text.lower()))
 		menu.addAction(u'To Uppercase', lambda: self.setText(self.text.upper()))
