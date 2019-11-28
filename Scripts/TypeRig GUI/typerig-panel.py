@@ -20,7 +20,7 @@ from typerig.proxy import pGlyph, pFont
 import Panel 
 
 # - Init --------------------------
-app_version = '0.54'
+app_version = '0.56'
 app_name = 'TypeRig Panel'
 ignorePanel = '__'
 
@@ -30,7 +30,7 @@ pLayers = (True, False, False, False)
 
 # -- Inital config for Get Layers dialog
 column_names = ('Layer Name', 'Layer Type')
-column_init = (None, None, False)
+column_init = (None, None)
 table_dict = {1:OrderedDict(zip(column_names, column_init))}
 color_dict = {'Master': QtGui.QColor(0, 255, 0, 20), 'Service': QtGui.QColor(0, 0, 255, 20), 'Mask': QtGui.QColor(255, 0, 0, 20)}
 
@@ -39,9 +39,9 @@ ss_Toolbox_none = """/* EMPTY STYLESHEET */ """
 
 # - Interface -----------------------------
 # - Widgets --------------------------------
-class WMasterTableView(QtGui.QTableWidget):
+class TRtableView(QtGui.QTableWidget):
 	def __init__(self, data):
-		super(WMasterTableView, self).__init__()
+		super(TRtableView, self).__init__()
 		
 		# - Init
 		self.setColumnCount(max(map(len, data.values())))
@@ -53,13 +53,19 @@ class WMasterTableView(QtGui.QTableWidget):
 		# - Styling
 		#self.setSortingEnabled(True)
 		self.horizontalHeader().setStretchLastSection(True)
+		self.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
 		self.setAlternatingRowColors(True)
 		self.setShowGrid(True)
 		self.resizeColumnsToContents()
 		self.resizeRowsToContents()
 
-	def setTable(self, data):
+	def setTable(self, data, color_dict=None):
 		self.clear()
+		self.setSortingEnabled(False)
+		self.blockSignals(True)
+		self.model().sort(-1)
+		self.horizontalHeader().setSortIndicator(-1, 0)
+
 		name_row, name_column = [], []
 
 		self.setColumnCount(max(map(len, data.values())))
@@ -79,14 +85,25 @@ class WMasterTableView(QtGui.QTableWidget):
 				
 				if m == 0:
 					newitem.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
-					newitem.setCheckState(QtCore.Qt.Unchecked) 
+					newitem.setCheckState(QtCore.Qt.Unchecked)
 				
-				if data[layer]['Layer Type']: newitem.setBackground(color_dict[data[layer]['Layer Type']])
+				'''
+				if color_dict is not None:
+					if color_dict.has_key(layer):
+						newitem.setBackground(color_dict[data[layer]['Layer Type']])
+				'''
+
 				self.setItem(n, m, newitem)
 
 		self.setHorizontalHeaderLabels(name_column)
 		self.setVerticalHeaderLabels(name_row)
 		self.resizeColumnsToContents()
+
+		self.blockSignals(False)
+		self.setSortingEnabled(True)
+
+		self.horizontalHeader().setSectionResizeMode(0, QtGui.QHeaderView.Stretch)
+		self.horizontalHeader().setSectionResizeMode(1, QtGui.QHeaderView.ResizeToContents)
 
 	def getTable(self):
 		return [self.item(row, 0).text() for row in range(self.rowCount) if self.item(row, 0).checkState() == QtCore.Qt.Checked]
@@ -100,7 +117,7 @@ class dlg_LayerSelect(QtGui.QDialog):
 		self.parent_widget = parent
 		
 		# - Basic Widgets
-		self.tab_masters = WMasterTableView(table_dict)
+		self.tab_masters = TRtableView(table_dict)
 		self.table_populate(mode)
 		self.tab_masters.cellChanged.connect(lambda: self.parent_widget.layers_refresh())
 
@@ -241,6 +258,11 @@ class typerig_Panel(QtGui.QDialog):
 		self.flag_fold = False
 				
 		# - Tabs --------------------------
+		panel_vers = {n:OrderedDict([	('Panel', toolName), ('Version', eval('Panel.%s.app_version' %toolName))])
+										for n, toolName in enumerate(Panel.modules)} 
+
+		self.options = TRtableView(panel_vers)
+
 		# -- Dynamically load all tabs
 		self.tabs = QtGui.QTabWidget()
 		self.tabs.setTabPosition(QtGui.QTabWidget.East)
@@ -251,6 +273,9 @@ class typerig_Panel(QtGui.QDialog):
 			if ignorePanel not in toolName:
 				self.tabs.addTab(eval('Panel.%s.tool_tab()' %toolName), toolName)
 		
+		# --- Add options tab
+		self.tabs.addTab(self.options, '...')
+
 		# - Layouts -------------------------------
 		layoutV = QtGui.QVBoxLayout() 
 		layoutV.setContentsMargins(0,0,0,0)
@@ -323,25 +348,28 @@ class typerig_Panel(QtGui.QDialog):
 
 	def fold(self):
 		# - Init
-		width_all = self.chk_ActiveLayer.sizeHint.width()
+		width_all = self.width
+		height_expanded = self.height
 		height_folded = self.btn_unfold.sizeHint.height()
-		height_expanded = self.tabs.sizeHint.height() + 40 #Fix this! + 40 Added because Nodes tab breaks
-		#self.resize(QtCore,Qsize(width_all, height_folded))
-		
+				
 		# - Do
 		if not self.flag_fold:
 			self.tabs.hide()
 			self.fr_controller.hide()
 			self.btn_unfold.show()
 			self.repaint()
-			self.setFixedHeight(height_folded)
+			#self.setFixedHeight(height_folded)
+			#self.adjustSize()
+			self.resize(width_all, height_folded)
 			self.flag_fold = True
 		else:
-			self.setFixedHeight(height_expanded) 
+			#self.setFixedHeight(height_expanded)
 			self.tabs.show()
 			self.fr_controller.show()
 			self.btn_unfold.hide()
 			self.repaint()
+			self.resize(width_all, height_expanded)
+			#self.adjustSize()
 			self.flag_fold = False
 	
 # - STYLE OVERRIDE -------------------
