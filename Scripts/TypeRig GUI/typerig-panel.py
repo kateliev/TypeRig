@@ -86,11 +86,12 @@ class TRtableView(QtGui.QTableWidget):
 					newitem.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
 					newitem.setCheckState(QtCore.Qt.Unchecked)
 				
-				'''
 				if color_dict is not None:
-					if color_dict.has_key(layer):
+					try:
 						newitem.setBackground(color_dict[data[layer]['Layer Type']])
-				'''
+					except KeyError:
+						pass
+				
 
 				self.setItem(n, m, newitem)
 
@@ -185,7 +186,7 @@ class dlg_LayerSelect(QtGui.QDialog):
 		 	
 		 	table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
 			self.tab_masters.clear()
-			self.tab_masters.setTable(table_dict, enable_check=True)	
+			self.tab_masters.setTable(table_dict, color_dict=color_dict, enable_check=True)	
 
 # -- Main Widget --------------------------
 class typerig_Panel(QtGui.QDialog):
