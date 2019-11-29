@@ -11,7 +11,6 @@
 # - Dependencies -----------------
 from collections import OrderedDict
 import fontlab as fl6
-#import fontgate as fgt
 from PythonQt import QtCore
 from typerig import QtGui
 from typerig.proxy import pGlyph, pFont
@@ -20,7 +19,7 @@ from typerig.proxy import pGlyph, pFont
 import Panel 
 
 # - Init --------------------------
-app_version = '0.56'
+app_version = '0.57'
 app_name = 'TypeRig Panel'
 ignorePanel = '__'
 
@@ -59,7 +58,7 @@ class TRtableView(QtGui.QTableWidget):
 		self.resizeColumnsToContents()
 		self.resizeRowsToContents()
 
-	def setTable(self, data, color_dict=None):
+	def setTable(self, data, color_dict=None, enable_check=False):
 		self.clear()
 		self.setSortingEnabled(False)
 		self.blockSignals(True)
@@ -83,7 +82,7 @@ class TRtableView(QtGui.QTableWidget):
 				# -- Selectively add data
 				newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
 				
-				if m == 0:
+				if m == 0 and enable_check:
 					newitem.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
 					newitem.setCheckState(QtCore.Qt.Unchecked)
 				
@@ -186,7 +185,7 @@ class dlg_LayerSelect(QtGui.QDialog):
 		 	
 		 	table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
 			self.tab_masters.clear()
-			self.tab_masters.setTable(table_dict)	
+			self.tab_masters.setTable(table_dict, enable_check=True)	
 
 # -- Main Widget --------------------------
 class typerig_Panel(QtGui.QDialog):
@@ -262,6 +261,7 @@ class typerig_Panel(QtGui.QDialog):
 										for n, toolName in enumerate(Panel.modules)} 
 
 		self.options = TRtableView(panel_vers)
+		self.options.verticalHeader().hide()
 
 		# -- Dynamically load all tabs
 		self.tabs = QtGui.QTabWidget()
@@ -272,7 +272,7 @@ class typerig_Panel(QtGui.QDialog):
 		for toolName in Panel.modules:
 			if ignorePanel not in toolName:
 				self.tabs.addTab(eval('Panel.%s.tool_tab()' %toolName), toolName)
-		
+
 		# --- Add options tab
 		self.tabs.addTab(self.options, '...')
 
