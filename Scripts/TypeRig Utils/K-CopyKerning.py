@@ -18,7 +18,7 @@ from typerig.proxy import pFont
 from typerig.brain import extBiDict
 
 # - Init --------------------------------
-app_version = '1.5'
+app_version = '1.6'
 app_name = 'Copy Kernig'
 
 # -- Strings 
@@ -152,7 +152,14 @@ class dlg_copyKerning(QtGui.QDialog):
 
 	def process(self):
 		# - Init
-		getUniGlyph = lambda c: self.active_font.fl.findUnicode(ord(c)).name
+		#getUniGlyph = lambda c: self.active_font.fl.findUnicode(ord(c)).name
+		
+		def getUniGlyph(char):
+			if '/' in char and char != '//':
+				return char.replace('/','')
+
+			return self.active_font.fl.findUnicode(ord(char)).name
+		
 		process_layers = [self.cmb_layer.currentText] if self.cmb_layer.currentText != 'All masters' else self.active_font.masters()	
 		
 		# - Process
