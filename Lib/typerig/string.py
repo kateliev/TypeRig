@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.18.0'
+__version__ = '0.18.1'
 
 # - Dependancies -----------------
 
@@ -161,7 +161,7 @@ def getUppercaseCodepoint(unicodeName):
 
 # -- Generators ----------------------
 def stringGen(inputA, inputB, filler=('HH','HH'), genPattern = 'FL A B A FR', suffix=('',''), sep='/'):
-	''' Generate test text string
+	''' Generate test text string for metrics, kerning and pairs/phrases
 	Args:
 		inputA, inputB (list/string) : Input lists to be paired
 		filler (tuple(str)) : Filler string 
@@ -173,7 +173,7 @@ def stringGen(inputA, inputB, filler=('HH','HH'), genPattern = 'FL A B A FR', su
 		list(str)
 	'''
 	from itertools import product	
-	genPattern = '{1}{0}'.format(sep.join(['{%s}' %s for s in genPattern.split(' ')]), sep) 
+	genPattern = '{1}{0}'.format(sep.join(['{%s}' %s if s.isalpha() else '%s' %s for s in genPattern.split(' ')]), sep) 
 	fillerLeft = sep.join([char for char in filler[0]]) if sep not in filler[0] else filler[0][1:] # fix that filler[0][1:] some day! It is a drity fix of double separator being inserted at the begining.
 	fillerRight = sep.join([char for char in filler[1]]) if sep not in filler[1] else filler[1][1:]
 	return [genPattern.format(**{'FL':fillerLeft, 'FR': fillerRight, 'A':pair[0] + suffix[0], 'B':pair[1] + suffix[1]}) for pair in product(inputA, inputB)]

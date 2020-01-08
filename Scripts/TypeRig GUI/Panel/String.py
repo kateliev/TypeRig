@@ -13,8 +13,9 @@ global pMode
 pLayers = None
 pMode = 0
 
-app_name, app_version = 'TypeRig | String', '0.34'
+app_name, app_version = 'TypeRig | String', '0.36'
 glyphSep = '/'
+pairSep = '|'
 joinOpt = {'Empty':'', 'Newline':'\n'}
 filler_patterns = [	'FL A FR',
 					'FL B FR',
@@ -59,7 +60,7 @@ class QStringGen(QtGui.QGridLayout):
 		self.edt_suffixA.setToolTip('Suffix to be added to each glyph name.')
 		self.edt_suffixB.setToolTip('Suffix to be added to each glyph name.')
 		
-		self.edt_sep.setText('/')
+		self.edt_sep.setText(glyphSep)
 
 		#self.edt_inputA.setEnabled(False)
 		#self.edt_inputB.setEnabled(False)
@@ -95,50 +96,54 @@ class QStringGen(QtGui.QGridLayout):
 		self.btn_genCopy = QtGui.QPushButton('Generate')
 		self.btn_genUni = QtGui.QPushButton('Unicode Str.')
 		self.btn_populate = QtGui.QPushButton('&Populate lists')
-		self.btn_clear = QtGui.QPushButton('&Rest fields')
-		self.btn_glyphNames = QtGui.QPushButton('Get Selected Names')
+		self.btn_clear = QtGui.QPushButton('&Rest')
+		self.btn_kernPairs = QtGui.QPushButton('String from kerning')
+		self.btn_kernPairsUni = QtGui.QPushButton('Unicode pairs from kerning')
 
 		self.btn_genCopy.setToolTip('Generate the pair string using Glyph Names and send it to the clipboard.')
 		self.btn_genUni.setToolTip('Generate the pair string using Unicode Characters and send it to the clipboard.')
 		self.btn_populate.setToolTip('Populate name lists with existing glyph names in active font.')
 		self.btn_clear.setToolTip('Clear all manual input fields.')
-		self.btn_glyphNames.setToolTip('Get Names of currently selected glyphs.')
+		self.btn_kernPairs.setToolTip('Get string containing pairs from fonts kerning for current layer.\n SHIFT+Click discard filler - pure pairs.')
+		self.btn_kernPairsUni.setToolTip('Get Unicode pairs list from fonts kerning for current layer.\n SHIFT+Click use auto filler.')
 
 		self.btn_clear.clicked.connect(self.clear)
 		self.btn_populate.clicked.connect(self.populate)
 		self.btn_genCopy.clicked.connect(self.generate)
 		self.btn_genUni.clicked.connect(self.generateUni)
-		self.btn_glyphNames.clicked.connect(self.getNames)
+		self.btn_kernPairs.clicked.connect(lambda: self.getKerning(False))
+		self.btn_kernPairsUni.clicked.connect(lambda: self.getKerning(True))
 		
 		# - Build
-		self.addWidget(QtGui.QLabel('A:'), 		0, 0, 1, 1)
-		self.addWidget(self.cmb_inputA, 		0, 1, 1, 5)
-		self.addWidget(QtGui.QLabel('Suffix:'), 0, 6, 1, 1)
-		self.addWidget(self.edt_suffixA, 		0, 7, 1, 2)
-		self.addWidget(self.edt_inputA, 		1, 1, 1, 8)
-		self.addWidget(QtGui.QLabel('B:'), 		2, 0, 1, 1)
-		self.addWidget(self.cmb_inputB, 		2, 1, 1, 5)
-		self.addWidget(QtGui.QLabel('Suffix:'), 2, 6, 1, 1)
-		self.addWidget(self.edt_suffixB, 		2, 7, 1, 2)
-		self.addWidget(self.edt_inputB, 		3, 1, 1, 8)
-		self.addWidget(QtGui.QLabel('FL:'), 	4, 0, 1, 1)
-		self.addWidget(self.cmb_fillerLeft, 	4, 1, 1, 8)
-		self.addWidget(QtGui.QLabel('FR:'), 	5, 0, 1, 1)
-		self.addWidget(self.cmb_fillerRight, 	5, 1, 1, 8)
-		self.addWidget(QtGui.QLabel('E:'), 		6, 0, 1, 1)
-		self.addWidget(self.cmb_fillerPattern, 	6, 1, 1, 8)
-		self.addWidget(QtGui.QLabel('Join:'), 	7, 0, 1, 1)
-		self.addWidget(self.cmb_join, 			7, 1, 1, 5)
-		self.addWidget(QtGui.QLabel('Sep.:'), 	7, 6, 1, 1)
-		self.addWidget(self.edt_sep, 			7, 7, 1, 2)
-		self.addWidget(QtGui.QLabel(''), 		8, 0, 1, 1)
-		self.addWidget(self.btn_populate, 		9, 1, 1, 5)
-		self.addWidget(self.btn_clear, 			9, 6, 1, 3)
-		self.addWidget(self.btn_genCopy, 		10, 1, 1, 5)
-		self.addWidget(self.btn_genUni, 		10, 6, 1, 3)
-		self.addWidget(QtGui.QLabel('OUT:'), 	11, 0, 1, 1)
-		self.addWidget(self.edt_output, 		11, 1, 4, 8)
-		self.addWidget(self.btn_glyphNames, 	16, 1, 4, 8)
+		self.addWidget(self.btn_populate, 		0, 1, 1, 5)
+		self.addWidget(self.btn_clear, 			0, 6, 1, 4)
+		self.addWidget(QtGui.QLabel('A:'), 		1, 0, 1, 1)
+		self.addWidget(self.cmb_inputA, 		1, 1, 1, 5)
+		self.addWidget(QtGui.QLabel('Suffix:'), 1, 6, 1, 1)
+		self.addWidget(self.edt_suffixA, 		1, 7, 1, 2)
+		self.addWidget(self.edt_inputA, 		2, 1, 1, 8)
+		self.addWidget(QtGui.QLabel('B:'), 		3, 0, 1, 1)
+		self.addWidget(self.cmb_inputB, 		3, 1, 1, 5)
+		self.addWidget(QtGui.QLabel('Suffix:'), 3, 6, 1, 1)
+		self.addWidget(self.edt_suffixB, 		3, 7, 1, 2)
+		self.addWidget(self.edt_inputB, 		4, 1, 1, 8)
+		self.addWidget(QtGui.QLabel('FL:'), 	5, 0, 1, 1)
+		self.addWidget(self.cmb_fillerLeft, 	5, 1, 1, 8)
+		self.addWidget(QtGui.QLabel('FR:'), 	6, 0, 1, 1)
+		self.addWidget(self.cmb_fillerRight, 	6, 1, 1, 8)
+		self.addWidget(QtGui.QLabel('E:'), 		7, 0, 1, 1)
+		self.addWidget(self.cmb_fillerPattern, 	7, 1, 1, 8)
+		self.addWidget(QtGui.QLabel('Join:'), 	8, 0, 1, 1)
+		self.addWidget(self.cmb_join, 			8, 1, 1, 4)
+		self.addWidget(QtGui.QLabel('Sep.:'), 	8, 5, 1, 1)
+		self.addWidget(self.edt_sep, 			8, 6, 1, 3)
+		self.addWidget(QtGui.QLabel(''), 		9, 0, 1, 1)
+		self.addWidget(self.btn_kernPairs, 		10, 1, 1, 8)
+		self.addWidget(self.btn_kernPairsUni,	11, 1, 1, 8)
+		self.addWidget(self.btn_genCopy, 		12, 1, 1, 4)
+		self.addWidget(self.btn_genUni, 		12, 5, 1, 4)
+		self.addWidget(QtGui.QLabel('OUT:'), 	13, 0, 1, 1)
+		self.addWidget(self.edt_output, 		13, 1, 12, 8)
 
 		self.setColumnStretch(0, 0)
 		self.setColumnStretch(1, 2)
@@ -146,14 +151,64 @@ class QStringGen(QtGui.QGridLayout):
 		self.setColumnStretch(7, 1)
 				
 	# - Procedures
-	def getNames(self):
-		font = pFont()
-		selection_names = [glyph.name for glyph in font.selected_pGlyphs()]
-		selection_str = '/' + ' /'.join(selection_names)
+	def getKerning(self, getUnicodeString=False):
+		# - Init
+		modifiers = QtGui.QApplication.keyboardModifiers()
+		fillerLeft = self.cmb_fillerLeft.currentText
+		fillerRight = self.cmb_fillerRight.currentText
+		
+		self.font = pFont()
+		class_kern_dict = self.font.fl_kerning_groups_to_dict()
+		layer_kernig = self.font.kerning()
+		
+		kern_list, drop_list = [], []
 
-		print 'SELECTION:\t %s' %selection_str
+		# - Convert kerning to list
+		for kern_pair in layer_kernig.asDict().keys():
+			current_pair = kern_pair.asTuple()
+			a = current_pair[0].asTuple()
+			b = current_pair[1].asTuple()
+			
+			a = class_kern_dict[a[0]][0] if a[1] == 'groupMode' else a[0] # If class kerning then take first glyph from group kerning...
+			b = class_kern_dict[b[0]][0] if b[1] == 'groupMode' else b[0] # ...else just return the glyph name
+			
+			if getUnicodeString:
+				try:
+					new_a = unichr(self.font.fg[a].unicode)
+					new_b = unichr(self.font.fg[b].unicode)
+					
+					if modifiers == QtCore.Qt.ShiftModifier:
+						fillerLeft = 'HOH' if new_a.isupper() else 'non'
+						fillerRight = 'HOH' if new_b.isupper() else 'non'
+
+					kern_list.append(u'{0}{1}|{2}{3}'.format(fillerLeft, new_a, new_b, fillerRight))
+					
+				except TypeError:
+					drop_list.append((a,b))
+			else:
+				if modifiers == QtCore.Qt.ShiftModifier or modifiers == (QtCore.Qt.ShiftModifier| QtCore.Qt.AltModifier):
+					kern_list.append(u'/{0} |/{1}'.format(a, b))
+
+					if modifiers == (QtCore.Qt.ShiftModifier| QtCore.Qt.AltModifier):
+						kern_list.append(u'/{1} |/{0}'.format(a, b))						
+				else:	
+					kern_list.append(u'/{0}/{1} |/{2}/{3}'.format('/'.join(fillerLeft), a, b, '/'.join(fillerRight)))
+
+					if modifiers == QtCore.Qt.AltModifier:
+						kern_list.append(u'/{0}/{2} |/{1}/{3}'.format('/'.join(fillerLeft), a, b, '/'.join(fillerRight)))
+
+		# - Build string
+		generatedString = kern_list #sorted(kern_list)
+		self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
+
+		# - Copy to clipboard
 		clipboard = QtGui.QApplication.clipboard()
-		clipboard.setText(selection_str)
+		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
+		
+		if len(drop_list):
+			print 'WARN:\t %s Non-Unicode pairs dropped from string.' %len(drop_list)
+
+		print 'DONE:\t Generated string sent to clipboard.'
 
 	def clear(self):
 		self.glyphNames = baseGlyphset
@@ -169,7 +224,7 @@ class QStringGen(QtGui.QGridLayout):
 		self.edt_output.clear()
 		self.cmb_fillerPattern.clear()
 		self.cmb_fillerPattern.addItems(filler_patterns)
-		self.edt_sep.setText('/')
+		self.edt_sep.setText(glyphSep)
 		self.cmb_join.clear()
 		self.cmb_join.addItems(joinOpt.keys())
 
