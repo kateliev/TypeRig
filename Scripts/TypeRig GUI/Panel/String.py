@@ -13,7 +13,7 @@ global pMode
 pLayers = None
 pMode = 0
 
-app_name, app_version = 'TypeRig | String', '0.36'
+app_name, app_version = 'TypeRig | String', '0.37'
 glyphSep = '/'
 pairSep = '|'
 joinOpt = {'Empty':'', 'Newline':'\n'}
@@ -24,8 +24,11 @@ filler_patterns = [	'FL A FR',
 					'FL A FL FR A FR',
 					'FL B FL FR B FR',
 					'FL A B FL FR B A FR',
-					'FL A B FL A FL B A FL'
-					'FL A B FL B FL B A FL'
+					'FL A B FL A FL B A FL',
+					'FL A B FL B FL B A FL',
+					'FL A | B FR',
+					'FL B | A FR',
+					'FL A | B FR \\n FR B A FL',
 					]
 
 # - Dependencies -----------------
@@ -34,7 +37,7 @@ import fontgate as fgt
 from PythonQt import QtCore
 from typerig import QtGui
 from typerig.proxy import pFont
-from typerig.string import stringGen, strRepDict, fillerList, baseGlyphset
+from typerig.string import stringGen, stringGenPairs, strRepDict, fillerList, baseGlyphset
 
 # - Tabs -------------------------------
 class QStringGen(QtGui.QGridLayout):
@@ -186,6 +189,7 @@ class QStringGen(QtGui.QGridLayout):
 				except TypeError:
 					drop_list.append((a,b))
 			else:
+				'''
 				if modifiers == QtCore.Qt.ShiftModifier or modifiers == (QtCore.Qt.ShiftModifier| QtCore.Qt.AltModifier):
 					kern_list.append(u'/{0} |/{1}'.format(a, b))
 
@@ -196,11 +200,17 @@ class QStringGen(QtGui.QGridLayout):
 
 					if modifiers == QtCore.Qt.AltModifier:
 						kern_list.append(u'/{0}/{2} |/{1}/{3}'.format('/'.join(fillerLeft), a, b, '/'.join(fillerRight)))
+				'''
+				kern_list.append((a,b))
 
 		# - Build string
-		generatedString = kern_list #sorted(kern_list)
-		self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
+		if getUnicodeString:
+			generatedString = sorted(kern_list)
+		else:
+			generatedString = stringGenPairs(sorted(kern_list), (fillerLeft, fillerRight), self.cmb_fillerPattern.currentText, (self.edt_suffixA.text, self.edt_suffixB.text), self.edt_sep.text)
 
+		self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
+		
 		# - Copy to clipboard
 		clipboard = QtGui.QApplication.clipboard()
 		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
@@ -267,7 +277,7 @@ class QStringGen(QtGui.QGridLayout):
 		generatedString = stringGen(inputA, inputB, (fillerLeft, fillerRight), self.cmb_fillerPattern.currentText, (self.edt_suffixA.text, self.edt_suffixB.text), self.edt_sep.text)
 		self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
 		
-		# - Copy to cliboard
+		# - Copy to clipboard
 		clipboard = QtGui.QApplication.clipboard()
 		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
 		print 'DONE:\t Generated string sent to clipboard.'

@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.18.1'
+__version__ = '0.18.2'
 
 # - Dependancies -----------------
 
@@ -177,6 +177,24 @@ def stringGen(inputA, inputB, filler=('HH','HH'), genPattern = 'FL A B A FR', su
 	fillerLeft = sep.join([char for char in filler[0]]) if sep not in filler[0] else filler[0][1:] # fix that filler[0][1:] some day! It is a drity fix of double separator being inserted at the begining.
 	fillerRight = sep.join([char for char in filler[1]]) if sep not in filler[1] else filler[1][1:]
 	return [genPattern.format(**{'FL':fillerLeft, 'FR': fillerRight, 'A':pair[0] + suffix[0], 'B':pair[1] + suffix[1]}) for pair in product(inputA, inputB)]
+
+def stringGenPairs(pairs_input, filler=('HH','HH'), genPattern = 'FL A B A FR', suffix=('',''), sep='/'):
+	''' Generate test text string for metrics, kerning and pairs/phrases
+	Args:
+		pairs_input (list(tuple)): Input list contaiing pairs
+		filler (tuple(str)) : Filler string 
+		genPattern (string): A SPACE separated ordering pattern, where FL, FR is Filler Left/Right and A, B are input strings
+		suffix (tuple(str)) : Suffixes to be added to inputs A and B
+		sep (str) : Glyph Separator to be used. '/' default for Fontlab
+	
+	Returns:
+		list(str)
+	'''
+	from itertools import product	
+	genPattern = ''.join(['/{%s}' %s if s.isalpha() else ' %s' %s for s in genPattern.split(' ')])
+	fillerLeft = sep.join([char for char in filler[0]]) if sep not in filler[0] else filler[0][1:] # fix that filler[0][1:] some day! It is a drity fix of double separator being inserted at the begining.
+	fillerRight = sep.join([char for char in filler[1]]) if sep not in filler[1] else filler[1][1:]
+	return [genPattern.format(**{'FL':fillerLeft, 'FR': fillerRight, 'A':pair[0] + suffix[0], 'B':pair[1] + suffix[1]}) for pair in pairs_input]
 
 class OTGen(object):
 	''' Generate OpenType features '''
