@@ -13,7 +13,7 @@ global pMode
 pLayers = None
 pMode = 0
 
-app_name, app_version = 'TypeRig | String', '0.37'
+app_name, app_version = 'TypeRig | String', '0.38'
 glyphSep = '/'
 pairSep = '|'
 joinOpt = {'Empty':'', 'Newline':'\n'}
@@ -172,8 +172,8 @@ class QStringGen(QtGui.QGridLayout):
 			a = current_pair[0].asTuple()
 			b = current_pair[1].asTuple()
 			
-			a = class_kern_dict[a[0]][0] if a[1] == 'groupMode' else a[0] # If class kerning then take first glyph from group kerning...
-			b = class_kern_dict[b[0]][0] if b[1] == 'groupMode' else b[0] # ...else just return the glyph name
+			a = min(class_kern_dict[a[0]], key=len) if a[1] == 'groupMode' else a[0] # If class kerning then take the glyph with the shortest name* from group kerning...
+			b = min(class_kern_dict[b[0]], key=len) if b[1] == 'groupMode' else b[0] # ...else just return the glyph name /* Avoid uniXXXX names as much as possible
 			
 			if getUnicodeString:
 				try:
@@ -189,18 +189,6 @@ class QStringGen(QtGui.QGridLayout):
 				except TypeError:
 					drop_list.append((a,b))
 			else:
-				'''
-				if modifiers == QtCore.Qt.ShiftModifier or modifiers == (QtCore.Qt.ShiftModifier| QtCore.Qt.AltModifier):
-					kern_list.append(u'/{0} |/{1}'.format(a, b))
-
-					if modifiers == (QtCore.Qt.ShiftModifier| QtCore.Qt.AltModifier):
-						kern_list.append(u'/{1} |/{0}'.format(a, b))						
-				else:	
-					kern_list.append(u'/{0}/{1} |/{2}/{3}'.format('/'.join(fillerLeft), a, b, '/'.join(fillerRight)))
-
-					if modifiers == QtCore.Qt.AltModifier:
-						kern_list.append(u'/{0}/{2} |/{1}/{3}'.format('/'.join(fillerLeft), a, b, '/'.join(fillerRight)))
-				'''
 				kern_list.append((a,b))
 
 		# - Build string
