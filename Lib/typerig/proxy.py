@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.73.7'
+__version__ = '0.73.8'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -42,6 +42,9 @@ class pWorkspace(object):
 
 	def getCanvasList(self):
 		return self.fl.canvases()
+
+	def getSelectedNodes(self):
+		return [nif.node for nif in self.getCanvas().selectedNodes()]
 
 	def getTextBlockList(self, atCursor=False):
 		return self.getCanvas(atCursor).textBlocks()
@@ -1251,6 +1254,16 @@ class pGlyph(object):
 		'''
 
 	# - Glyph Selection -----------------------------------------------
+	def selectedNodesOnCanvas(self, filterOn=False):
+		from typerig.proxy import pWorkspace
+		workspace = pWorkspace()
+		allNodes = workspace.getSelectedNodes()
+
+		if not filterOn:
+			return [allNodes.index(node) for node in allNodes if node.selected]
+		else:
+			return [allNodes.index(node) for node in allNodes if node.selected and node.isOn()]
+
 	def selectedNodeIndices(self, filterOn=False, deep=True):
 		'''Return all indices of nodes selected at current layer.
 		Args:
