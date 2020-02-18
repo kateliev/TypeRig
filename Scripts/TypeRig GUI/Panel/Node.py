@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '1.11'
+app_name, app_version = 'TypeRig | Nodes', '1.12'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -161,7 +161,7 @@ class basicOps(QtGui.QGridLayout):
 		wLayers = glyph._prepareLayers(pLayers)
 		
 		for layer in wLayers:
-			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode, deep=True)
+			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
 			
 			for node in reversed(selection):
 				if not doKnot:
@@ -181,7 +181,7 @@ class basicOps(QtGui.QGridLayout):
 		parameters = tuple([float(value.strip()) for value in self.edt_trap.text.split(',')])
 		
 		for layer in wLayers:
-			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode, deep=True)
+			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
 			
 			for node in reversed(selection):
 				node.cornerTrapInc(*parameters)
@@ -195,7 +195,7 @@ class basicOps(QtGui.QGridLayout):
 		wLayers = glyph._prepareLayers(pLayers)
 		
 		for layer in wLayers:
-			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode, deep=True)
+			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
 			
 			if len(selection) > 1:
 				node_first = selection[0]
@@ -493,7 +493,7 @@ class alignNodes(QtGui.QGridLayout):
 			
 			for layer in wLayers:
 				extend_nodes = None if self.chk_relations.isChecked() else eNode
-				selection = glyph.selectedNodes(layer, extend=extend_nodes, deep=True)
+				selection = glyph.selectedNodes(layer, extend=extend_nodes)
 
 				if mode == 'L':
 					target = min(selection, key=lambda item: item.x)

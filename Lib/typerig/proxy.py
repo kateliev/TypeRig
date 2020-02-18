@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.73.8'
+__version__ = '0.73.9'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -777,7 +777,7 @@ class pGlyph(object):
 
 	def setMark(self, mark_color): self.fl.mark = mark_color; self.mark = self.fl.mark
 
-	def nodes(self, layer=None, extend=None, deep=True):
+	def nodes(self, layer=None, extend=None, deep=False):
 		'''Return all nodes at given layer.
 		Args:
 			layer (int or str): Layer index or name. If None returns ActiveLayer.
@@ -1264,7 +1264,7 @@ class pGlyph(object):
 		else:
 			return [allNodes.index(node) for node in allNodes if node.selected and node.isOn()]
 
-	def selectedNodeIndices(self, filterOn=False, deep=True):
+	def selectedNodeIndices(self, filterOn=False, deep=False):
 		'''Return all indices of nodes selected at current layer.
 		Args:
 			filterOn (bool): Return only on-curve nodes
@@ -1278,7 +1278,7 @@ class pGlyph(object):
 		else:
 			return [allNodes.index(node) for node in allNodes if node.selected and node.isOn()]
 	
-	def selected(self, filterOn=False, deep=True):
+	def selected(self, filterOn=False, deep=False):
 		'''Return all selected nodes indexes at current layer.
 		Args:
 			filterOn (bool): Return only on-curve nodes
@@ -1287,7 +1287,7 @@ class pGlyph(object):
 		'''
 		return self.selectedNodeIndices(filterOn, deep)
 
-	def selectedNodes(self, layer=None, filterOn=False, extend=None, deep=True):
+	def selectedNodes(self, layer=None, filterOn=False, extend=None, deep=False):
 		'''Return all selected nodes at given layer.
 		Args:
 			filterOn (bool): Return only on-curve nodes
@@ -1298,7 +1298,7 @@ class pGlyph(object):
 		return [self.nodes(layer, extend, deep)[nid] for nid in self.selectedNodeIndices(filterOn, deep)]
 		#return [node for node in self.nodes(layer, extend, deep) if node.selected]
 
-	def nodesForIndices(self, indices, layer=None, filterOn=False, extend=None, deep=True):
+	def nodesForIndices(self, indices, layer=None, filterOn=False, extend=None, deep=False):
 		return [self.nodes(layer, extend, deep)[nid] for nid in indices]
 	
 	def selectedAtContours(self, index=True, layer=None, filterOn=False, deep=False):	
@@ -1317,7 +1317,7 @@ class pGlyph(object):
 		else:
 			return [(node.contour, node) for node in self.selectedNodes(layer, filterOn, deep=deep)]
 
-	def selectedAtShapes(self, index=True, filterOn=False, layer=None, deep=True):
+	def selectedAtShapes(self, index=True, filterOn=False, layer=None, deep=False):
 		'''Return all selected nodes and the shapes they belong at current layer.
 		Args:
 			index (bool): If True returns only indexes, False returns flShape, flNode
