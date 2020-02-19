@@ -130,6 +130,7 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 		# - Init
 		font = pFont()
 		glyph = eGlyph()
+		pLayers = (True, True, False, False) # !!! Quickfix: Stats crashes FL after mode switch + refresh
 		wLayers = glyph._prepareLayers(pLayers)
 		self.table_data, self.table_proc = {}, {}
 
