@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '1.12'
+app_name, app_version = 'TypeRig | Nodes', '1.13'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -1048,6 +1048,9 @@ class tool_tab(QtGui.QWidget):
 		# - Build ---------------------------
 		layoutV.addStretch()
 		self.setLayout(layoutV)
+
+		# !!! Hotfix FL7 7355 
+		self.setMinimumSize(300,self.sizeHint.height())
 
 	# - Capture keyboard -------------------------------------
 	def keyPressEvent(self, eventQKeyEvent):

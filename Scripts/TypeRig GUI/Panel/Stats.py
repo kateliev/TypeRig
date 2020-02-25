@@ -23,7 +23,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Glyph Statistics', '0.13'
+app_name, app_version = 'TypeRig | Glyph Statistics', '0.14'
 
 # - Sub widgets ------------------------
 class QGlyphInfo(QtGui.QVBoxLayout):
@@ -288,6 +288,9 @@ class tool_tab(QtGui.QWidget):
 		# - Build
 		#layoutV.addStretch()
 		self.setLayout(layoutV)
+
+		# !!! Hotfix FL7 7355 
+		self.setMinimumSize(300,self.sizeHint.height())
 
 # - Test ----------------------
 if __name__ == '__main__':

@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Curves', '0.12'
+app_name, app_version = 'TypeRig | Curves', '0.13'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -159,6 +159,7 @@ class tool_tab(QtGui.QWidget):
 
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
+		
 				
 		# - Build   
 		layoutV.addWidget(QtGui.QLabel('Curve: Optimization'))
@@ -167,12 +168,15 @@ class tool_tab(QtGui.QWidget):
 		 # - Build ---------------------------
 		layoutV.addStretch()
 		self.setLayout(layoutV)
+		
+		# !!! Hotfix FL7 7355 
+		self.setMinimumSize(300,self.sizeHint.height())
 
 # - Test ----------------------
 if __name__ == '__main__':
 	test = tool_tab()
 	test.setWindowTitle('%s %s' %(app_name, app_version))
-	test.setGeometry(100, 100, 300, 600)
+	test.setGeometry(100, 100, 100, 600)
 	test.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 	
 	test.show()

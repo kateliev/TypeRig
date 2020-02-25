@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Guidelines', '0.34'
+app_name, app_version = 'TypeRig | Guidelines', '0.35'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -329,6 +329,9 @@ class tool_tab(QtGui.QWidget):
 
 		layoutV.addStretch()
 		self.setLayout(layoutV)
+
+		# !!! Hotfix FL7 7355 
+		self.setMinimumSize(300,self.sizeHint.height())
 
 # - Test ----------------------
 if __name__ == '__main__':

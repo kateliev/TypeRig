@@ -45,7 +45,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '0.27'
+app_name, app_version = 'TypeRig | Elements', '0.28'
 
 # - Strings ------------------------------
 str_help = '''Examples:
@@ -754,6 +754,9 @@ class tool_tab(QtGui.QWidget):
 
 		# - Build ---------------------------
 		self.setLayout(layoutV)
+
+		# !!! Hotfix FL7 7355 
+		self.setMinimumSize(300,self.sizeHint.height())
 
 	def keyPressEvent(self, eventQKeyEvent):
 		if self.KeyboardOverride:	

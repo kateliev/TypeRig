@@ -13,7 +13,7 @@ global pMode
 pLayers = None
 pMode = 0
 
-app_name, app_version = 'TypeRig | String', '0.38'
+app_name, app_version = 'TypeRig | String', '0.39'
 glyphSep = '/'
 pairSep = '|'
 joinOpt = {'Empty':'', 'Newline':'\n'}
@@ -308,6 +308,9 @@ class tool_tab(QtGui.QWidget):
 
 		layoutV.addStretch()
 		self.setLayout(layoutV)
+
+		# !!! Hotfix FL7 7355 
+		self.setMinimumSize(300,self.sizeHint.height())
 
 # - Test ----------------------
 if __name__ == '__main__':

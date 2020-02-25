@@ -21,7 +21,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_version = '0.05'
+app_version = '0.06'
 app_name = 'Text Block Control'
 
 text_align = 'Left Right Center'.split(' ')
@@ -305,6 +305,9 @@ class tool_tab(QtGui.QWidget):
 		# - Build ---------------------------
 		layoutV.addStretch()
 		self.setLayout(layoutV)
+
+		# !!! Hotfix FL7 7355 
+		self.setMinimumSize(300,self.sizeHint.height())
 
 # - Test ----------------------
 if __name__ == '__main__':

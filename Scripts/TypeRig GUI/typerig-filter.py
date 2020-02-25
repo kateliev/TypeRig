@@ -18,7 +18,7 @@ from typerig import QtGui
 import Filter as Panel
 
 # - Init --------------------------
-app_version = '0.25'
+app_version = '0.26'
 app_name = 'TypeRig Filter'
 ignorePanel = '__'
 
@@ -130,7 +130,9 @@ class typerig_filter(QtGui.QDialog):
 		self.setWindowTitle('%s %s' %(app_name, app_version))
 		self.setGeometry(300, 300, 240, 440)
 		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
-		#self.setMinimumWidth(300)
+		
+		# !!! Hotfix FL7 7355 
+		self.setMinimumSize(350,self.sizeHint.height())
 
 		self.show()
 
@@ -155,24 +157,25 @@ class typerig_filter(QtGui.QDialog):
 
 	def fold(self):
 		# - Init
-		width_all = self.chk_ActiveLayer.sizeHint.width()
+		width_all = self.width
 		height_folded = self.btn_unfold.sizeHint.height()
-		height_expanded = self.tabs.sizeHint.height() + 40 #Fix this! + 40 Added because Nodes tab breaks
-		#self.resize(QtCore,Qsize(width_all, height_folded))
-
+						
 		# - Do
 		if not self.flag_fold:
 			self.tabs.hide()
 			self.fr_controller.hide()
 			self.btn_unfold.show()
+			self.setMinimumHeight(height_folded)
 			self.repaint()
-			self.setFixedHeight(height_folded)
+			self.resize(width_all, height_folded)
 			self.flag_fold = True
+
 		else:
-			self.setFixedHeight(height_expanded)
 			self.tabs.show()
 			self.fr_controller.show()
 			self.btn_unfold.hide()
+			self.adjustSize()
+			self.resize(350, self.sizeHint.height()) # !!! Hotfix FL7 7355 
 			self.repaint()
 			self.flag_fold = False
 

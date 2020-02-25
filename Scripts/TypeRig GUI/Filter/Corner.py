@@ -557,6 +557,9 @@ class tool_tab(QtGui.QWidget):
 		layoutV.addStretch()
 		self.setLayout(layoutV)
 
+		# !!! Hotfix FL7 7355 
+		self.setMinimumSize(300,self.sizeHint.height())
+
 # - Test ----------------------
 if __name__ == '__main__':
 	test = tool_tab()

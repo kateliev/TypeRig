@@ -19,7 +19,7 @@ from typerig.proxy import pGlyph, pFont
 import Panel 
 
 # - Init --------------------------
-app_version = '0.57'
+app_version = '0.58'
 app_name = 'TypeRig Panel'
 ignorePanel = '__'
 
@@ -311,6 +311,10 @@ class typerig_Panel(QtGui.QDialog):
 		self.setWindowTitle('%s %s' %(app_name, app_version))
 		self.setGeometry(100, 100, 300, 600)
 		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
+
+		# !!! Hotfix FL7 7355 
+		self.setMinimumSize(350, self.sizeHint.height())
+
 		self.show()
 
 	# - Procedures -----------------------------------
@@ -350,27 +354,25 @@ class typerig_Panel(QtGui.QDialog):
 	def fold(self):
 		# - Init
 		width_all = self.width
-		height_expanded = self.height
 		height_folded = self.btn_unfold.sizeHint.height()
-				
+						
 		# - Do
 		if not self.flag_fold:
 			self.tabs.hide()
 			self.fr_controller.hide()
 			self.btn_unfold.show()
+			self.setMinimumHeight(height_folded)
 			self.repaint()
-			#self.setFixedHeight(height_folded)
-			#self.adjustSize()
 			self.resize(width_all, height_folded)
 			self.flag_fold = True
+
 		else:
-			#self.setFixedHeight(height_expanded)
 			self.tabs.show()
 			self.fr_controller.show()
 			self.btn_unfold.hide()
+			self.adjustSize()
+			self.resize(350, self.sizeHint.height()) # !!! Hotfix FL7 7355 
 			self.repaint()
-			self.resize(width_all, height_expanded)
-			#self.adjustSize()
 			self.flag_fold = False
 	
 # - STYLE OVERRIDE -------------------

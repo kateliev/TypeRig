@@ -22,7 +22,7 @@ global clipboard_glyph_anchors
 pLayers = None
 pMode = 0
 clipboard_glyph_anchors = {}
-app_name, app_version = 'TypeRig | Anchors', '0.18'
+app_name, app_version = 'TypeRig | Anchors', '0.19'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):
@@ -339,6 +339,9 @@ class tool_tab(QtGui.QWidget):
 		# - Build ---------------------------
 		layoutV.addStretch()
 		self.setLayout(layoutV)
+
+		# !!! Hotfix FL7 7355 
+		self.setMinimumSize(300,self.sizeHint.height())
 
 # - Test ----------------------
 if __name__ == '__main__':

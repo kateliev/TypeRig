@@ -22,7 +22,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Outline', '0.04'
+app_name, app_version = 'TypeRig | Outline', '0.05'
 
 # - Sub widgets ------------------------
 class QContourSelect(QtGui.QVBoxLayout):
@@ -168,6 +168,9 @@ class tool_tab(QtGui.QWidget):
 		# - Build
 		#layoutV.addStretch()
 		self.setLayout(layoutV)
+
+		# !!! Hotfix FL7 7355 
+		self.setMinimumSize(300,self.sizeHint.height())
 
 # - Test ----------------------
 if __name__ == '__main__':

@@ -26,7 +26,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '1.25'
+app_name, app_version = 'TypeRig | Layers', '1.26'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -833,6 +833,9 @@ class tool_tab(QtGui.QWidget):
 
 		# - Build ---------------------------
 		self.setLayout(layoutV)
+
+		# !!! Hotfix FL7 7355 
+		self.setMinimumSize(300,self.sizeHint.height())
 
 # - Test ----------------------
 if __name__ == '__main__':
