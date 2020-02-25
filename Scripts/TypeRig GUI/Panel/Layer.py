@@ -26,7 +26,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '1.26'
+app_name, app_version = 'TypeRig | Layers', '1.27'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -777,7 +777,7 @@ class NEWlayerBlend(QtGui.QVBoxLayout):
 			src_array_t0 = self.aux.glyph._getCoordArray(selection[0]).asPairs()
 			src_array_t1 = self.aux.glyph._getCoordArray(selection[1]).asPairs()
 			
-			self.process_array = zip(src_array_t0[0], src_array_t1[0])
+			self.process_array = zip(src_array_t0, src_array_t1)
 		
 		else:
 			self.process_array = []

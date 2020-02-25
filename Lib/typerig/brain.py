@@ -13,7 +13,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.25.8'
+__version__ = '0.25.9'
 
 # - Dependancies -----------------
 import math
@@ -401,7 +401,7 @@ class coordArray(object):
 		self.y.reverse()
 
 	def asPairs(self):
-		return [zip(self.x, self.y)]
+		return zip(self.x, self.y)
 
 	def asList(self):
 		return [self.x, self.y]
