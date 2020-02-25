@@ -27,7 +27,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Corner', '1.97'
+app_name, app_version = 'TypeRig | Corner', '1.98'
 
 # -- Strings
 filter_name = 'Smart corner'
