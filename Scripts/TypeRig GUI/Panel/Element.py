@@ -45,7 +45,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '0.28'
+app_name, app_version = 'TypeRig | Elements', '0.29'
 
 # - Strings ------------------------------
 str_help = '''Examples:
@@ -160,19 +160,25 @@ class basicOps(QtGui.QGridLayout):
 		self.btn_setShapeName = QtGui.QPushButton('&Set Name')
 		self.btn_unlinkShape = QtGui.QPushButton('&Unlink References')
 		self.btn_delShape = QtGui.QPushButton('&Remove')
-		self.btn_resetShape = QtGui.QPushButton('&Reset transform')
+		self.btn_resetShape = QtGui.QPushButton('Reset &transform')
 		self.btn_lockShape = QtGui.QPushButton('&Lock')
+		self.btn_roundShape = QtGui.QPushButton('R&ound transform')
+
+		self.btn_lockShape.setEnabled(False)
 
 		self.btn_setShapeName.clicked.connect(self.shape_setname)
 		self.btn_unlinkShape.clicked.connect(self.shape_unlink)
 		self.btn_delShape.clicked.connect(self.shape_delete)
 		self.btn_resetShape.clicked.connect(self.shape_resetTransform)
+		self.btn_roundShape.clicked.connect(self.shape_roundTransform)
 
 		self.addWidget(self.edt_shapeName, 		0, 0, 1, 6)
 		self.addWidget(self.btn_setShapeName, 	1, 0, 1, 3)
 		self.addWidget(self.btn_unlinkShape, 	1, 3, 1, 3)
-		self.addWidget(self.btn_resetShape, 	2, 0, 1, 3)
+		self.addWidget(self.btn_lockShape, 		2, 0, 1, 3)
 		self.addWidget(self.btn_delShape, 		2, 3, 1, 3)
+		self.addWidget(self.btn_resetShape, 	3, 0, 1, 3)
+		self.addWidget(self.btn_roundShape, 	3, 3, 1, 3)
 
 	def reset_fileds(self):
 		self.edt_shapeName.clear()
@@ -189,6 +195,27 @@ class basicOps(QtGui.QGridLayout):
 
 			glyph.update()
 			glyph.updateObject(glyph.fl, 'Reset Element transformation data @ %s.' %'; '.join(process_layers))
+
+		self.reset_fileds()
+
+	def shape_roundTransform(self):
+		process_glyphs = getProcessGlyphs(pMode)
+
+		for glyph in process_glyphs:
+			process_layers = glyph._prepareLayers(pLayers)
+
+			for layer in process_layers:
+				selected_shapes = glyph.selectedAtShapes(index=False, layer=layer, deep=False)
+				
+				if len(selected_shapes):
+					wShape = eShape(selected_shapes[0][0])
+					wShape.round()
+				else:
+					for s in glyph.shapes(layer, extend=eShape):
+						s.round()				
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, 'Round Element transformation data @ %s.' %'; '.join(process_layers))
 
 		self.reset_fileds()
 

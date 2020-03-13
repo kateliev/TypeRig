@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.4.0'
+__version__ = '0.4.1'
 
 # - Dependencies -------------------------
 import fontlab as fl6
@@ -89,6 +89,28 @@ class eShape(pShape):
 			self.shift(shift_dx, shift_dy, True)
 		else:
 			print 'ERROR:\t Invalid Align Mode: %s' %alignMode
+
+	def _round_transformations(self, shape):
+		rm11 = round(shape.fl_transform.transform.m11())
+		rm12 = round(shape.fl_transform.transform.m12())
+		rm13 = round(shape.fl_transform.transform.m13())
+		rm21 = round(shape.fl_transform.transform.m21())
+		rm22 = round(shape.fl_transform.transform.m22())
+		rm23 = round(shape.fl_transform.transform.m23())
+		rm31 = round(shape.fl_transform.transform.m31())
+		rm32 = round(shape.fl_transform.transform.m32())
+		rm33 = round(shape.fl_transform.transform.m33())
+		
+		new_transform = pqt.QtGui.QTransform(rm11, rm12, rm13, rm21, rm22, rm23, rm31, rm32, rm33)
+		shape.fl_transform.transform = new_transform
+		shape.update()
+
+		if len(shape.includesList):
+			for icluded_shape in shape.includesList:
+				round_transformations(icluded_shape)
+
+	def round(self):
+		self._round_transformations(self.fl)
 
 
 
