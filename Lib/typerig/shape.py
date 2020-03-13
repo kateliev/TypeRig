@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.4.1'
+__version__ = '0.4.2'
 
 # - Dependencies -------------------------
 import fontlab as fl6
@@ -107,7 +107,7 @@ class eShape(pShape):
 
 		if len(shape.includesList):
 			for icluded_shape in shape.includesList:
-				round_transformations(icluded_shape)
+				self._round_transformations(icluded_shape)
 
 	def round(self):
 		self._round_transformations(self.fl)
