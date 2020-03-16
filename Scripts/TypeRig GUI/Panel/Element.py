@@ -45,7 +45,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '0.29'
+app_name, app_version = 'TypeRig | Elements', '0.31'
 
 # - Strings ------------------------------
 str_help = '''Examples:
@@ -161,24 +161,27 @@ class basicOps(QtGui.QGridLayout):
 		self.btn_unlinkShape = QtGui.QPushButton('&Unlink References')
 		self.btn_delShape = QtGui.QPushButton('&Remove')
 		self.btn_resetShape = QtGui.QPushButton('Reset &transform')
-		self.btn_lockShape = QtGui.QPushButton('&Lock')
+		self.btn_reorderShape = QtGui.QPushButton('&Auto Reorder Layer')
 		self.btn_roundShape = QtGui.QPushButton('R&ound transform')
-
-		self.btn_lockShape.setEnabled(False)
+		self.btn_ungroupAllShapes = QtGui.QPushButton('Un&group All')
 
 		self.btn_setShapeName.clicked.connect(self.shape_setname)
 		self.btn_unlinkShape.clicked.connect(self.shape_unlink)
 		self.btn_delShape.clicked.connect(self.shape_delete)
 		self.btn_resetShape.clicked.connect(self.shape_resetTransform)
 		self.btn_roundShape.clicked.connect(self.shape_roundTransform)
+		self.btn_reorderShape.clicked.connect(self.shape_autoReorder)
+		self.btn_ungroupAllShapes.clicked.connect(self.shape_ungroupAll)
 
-		self.addWidget(self.edt_shapeName, 		0, 0, 1, 6)
-		self.addWidget(self.btn_setShapeName, 	1, 0, 1, 3)
-		self.addWidget(self.btn_unlinkShape, 	1, 3, 1, 3)
-		self.addWidget(self.btn_lockShape, 		2, 0, 1, 3)
-		self.addWidget(self.btn_delShape, 		2, 3, 1, 3)
-		self.addWidget(self.btn_resetShape, 	3, 0, 1, 3)
-		self.addWidget(self.btn_roundShape, 	3, 3, 1, 3)
+		self.addWidget(self.edt_shapeName, 			0, 0, 1, 6)
+		self.addWidget(self.btn_setShapeName, 		1, 0, 1, 3)
+		self.addWidget(self.btn_unlinkShape, 		1, 3, 1, 3)
+		self.addWidget(self.btn_delShape, 			2, 0, 1, 3)
+		self.addWidget(self.btn_resetShape, 		2, 3, 1, 3)
+		
+		self.addWidget(self.btn_reorderShape, 		3, 0, 1, 6)
+		self.addWidget(self.btn_roundShape, 		4, 0, 1, 3)
+		self.addWidget(self.btn_ungroupAllShapes, 	4, 3, 1, 3)
 
 	def reset_fileds(self):
 		self.edt_shapeName.clear()
@@ -197,6 +200,30 @@ class basicOps(QtGui.QGridLayout):
 			glyph.updateObject(glyph.fl, 'Reset Element transformation data @ %s.' %'; '.join(process_layers))
 
 		self.reset_fileds()
+
+	def shape_autoReorder(self):
+		process_glyphs = getProcessGlyphs(pMode)
+
+		for glyph in process_glyphs:
+			process_layers = glyph._prepareLayers(pLayers)
+
+			for layer in process_layers:
+				glyph.reorder_shapes(layer)
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, 'Auto Shape Order @ %s.' %'; '.join(process_layers))
+
+	def shape_ungroupAll(self):
+		process_glyphs = getProcessGlyphs(pMode)
+
+		for glyph in process_glyphs:
+			process_layers = glyph._prepareLayers(pLayers)
+
+			for layer in process_layers:
+				glyph.ungroup_all_shapes(layer)
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, 'Ungroup all Shapes @ %s.' %'; '.join(process_layers))
 
 	def shape_roundTransform(self):
 		process_glyphs = getProcessGlyphs(pMode)

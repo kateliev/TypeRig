@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.28.1'
+__version__ = '0.28.3'
 
 # - Dependencies -------------------------
 import fontlab as fl6
@@ -495,6 +495,47 @@ class eGlyph(pGlyph):
 			x, y = self.getNewBaseCoords(layer, coordTuple, alignTuple, tolerance, italic, (anchor.point.x(), anchor.point.y()))
 			anchor.point = pqt.QtCore.QPointF(x,y)
 
-			
+	# - Shapes (Elements) ---------------------------------------
+	def reorder_shapes(self, layer=None, mode=(0,0)):
+		'''Auto reorder shapes on given layer using criteria.
+		Args:
+			layer (int or str): Layer index or name, works with both
+			mode (bool, bool): Mode of shape reordering/sorting by (X, Y)
+		
+		Returns:
+			None
+		'''
+		# - Init
+		sort_bbox = []
+
+		# - Process
+		for shape in self.shapes(layer):
+			bbox = shape.boundingBox
+			trans = shape.fl_transform.transform
+			base = trans.map(pqt.QtCore.QPointF(bbox.x(), bbox.y()))
+			sort_bbox.append((base, shape.id)) # Base of BBoX (X,Y); FL Shape ID uInt
+		
+		sort_bbox = sorted(sort_bbox, key=lambda a: (a[0].x()*[1,-1][mode[0]], a[0].y()*[1,-1][mode[1]]))
+		new_order = [i[1] for i in sort_bbox]
+
+		# - Finish
+		self.layer(layer).reorderShapes(new_order) # Reorders shapes by ID
+
+	def ungroup_all_shapes(self, layer=None, applyTransform=True):
+		'''Ungroup all shapes at given layer.
+		Args:
+			layer (int or str): Layer index or name, works with both
+			applyTransform (bool): Apply transformation at shape.
+		
+		Returns:
+			None
+		'''
+		# - Init
+		ejected_shapes = [(shape, shape.ejectTo(False, applyTransform)) for shape in self.shapes(layer) if len(shape.includesList)]
+		
+		# - Process
+		for shape, eject in ejected_shapes:
+			self.layer(layer).addShapes(eject)
+			self.layer(layer).removeShape(shape)
 
 
