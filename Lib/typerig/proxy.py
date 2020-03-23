@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.73.9'
+__version__ = '0.74.0'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -1788,6 +1788,23 @@ class pGlyph(object):
 
 	def tag(self, newTag):
 		self.setTags([newTag], True)
+
+	# - Pens -----------------------------------------------
+	def draw(self, pen, layer=None):
+		''' Utilizes the Pen protocol'''
+			
+		for shape in self.shapes(layer):
+			for contour in shape.contours:
+				contour.convertToFgContour(shape.fl_transform.transform).draw(pen)
+
+		'''
+		for anchor in self.anchors(layer):
+			anchor.draw(pen)
+
+		for component in self.components(layer):
+			component.draw(pen)
+
+		'''
 
 
 class pFontMetrics(object):
