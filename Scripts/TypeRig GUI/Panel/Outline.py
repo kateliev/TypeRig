@@ -14,7 +14,7 @@ from PythonQt import QtCore
 from typerig import QtGui
 from typerig.glyph import eGlyph
 from typerig.node import eNode
-from typerig.gui import trTableView
+from typerig.gui import TRTableView
 from collections import OrderedDict
 
 # - Init
@@ -25,10 +25,10 @@ pMode = 0
 app_name, app_version = 'TypeRig | Outline', '0.05'
 
 # - Sub widgets ------------------------
-class QContourSelect(QtGui.QVBoxLayout):
+class TRContourSelect(QtGui.QVBoxLayout):
 	# - Split/Break contour 
 	def __init__(self):
-		super(QContourSelect, self).__init__()
+		super(TRContourSelect, self).__init__()
 
 		# -- Init
 		self.table_dict = {0:{0:None}} # Empty table
@@ -56,8 +56,8 @@ class QContourSelect(QtGui.QVBoxLayout):
 		self.addLayout(self.lay_head)
 
 		# -- Node List Table
-		self.tab_nodes = trTableView(self.table_dict)
-		
+		self.tab_nodes = TRTableView(self.table_dict)
+
 		self.addWidget(self.tab_nodes)
 		#self.refresh() # Build Table
 
@@ -162,7 +162,7 @@ class tool_tab(QtGui.QWidget):
 
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
-		self.outline = QContourSelect()
+		self.outline = TRContourSelect()
 		layoutV.addLayout(self.outline)
 		
 		# - Build

@@ -40,9 +40,9 @@ from typerig.proxy import pFont
 from typerig.string import stringGen, stringGenPairs, strRepDict, fillerList, baseGlyphset
 
 # - Tabs -------------------------------
-class QStringGen(QtGui.QGridLayout):
+class TRStringGen(QtGui.QGridLayout):
 	def __init__(self):
-		super(QStringGen, self).__init__()
+		super(TRStringGen, self).__init__()
 		
 		# - Init data
 		val_fillerLeft, val_fillerRight = zip(*fillerList)
@@ -300,7 +300,7 @@ class tool_tab(QtGui.QWidget):
 
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
-		self.strGenerator = QStringGen()
+		self.strGenerator = TRStringGen()
 
 		# - Build ---------------------------
 		layoutV.addWidget(QtGui.QLabel('String generator:'))

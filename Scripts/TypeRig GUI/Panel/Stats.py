@@ -14,7 +14,7 @@ from PythonQt import QtCore
 from typerig import QtGui
 from typerig.proxy import pFont, pWorkspace
 from typerig.glyph import eGlyph
-from typerig.gui import trTableView
+from typerig.gui import TRTableView
 from typerig.brain import ratfrac
 #from collections import OrderedDict
 
@@ -26,10 +26,10 @@ pMode = 0
 app_name, app_version = 'TypeRig | Glyph Statistics', '0.14'
 
 # - Sub widgets ------------------------
-class QGlyphInfo(QtGui.QVBoxLayout):
+class TRGlyphInfo(QtGui.QVBoxLayout):
 	# - Split/Break contour 
 	def __init__(self):
-		super(QGlyphInfo, self).__init__()
+		super(TRGlyphInfo, self).__init__()
 
 		# -- Init
 		self.table_dict = {0:{0:None}} # Empty table
@@ -95,7 +95,7 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 		self.addLayout(self.lay_head)
 
 		# -- Table
-		self.tab_stats = trTableView(self.table_dict)
+		self.tab_stats = TRTableView(self.table_dict)
 		#self.refresh()
 		
 		# -- Note/Descriotion
@@ -193,10 +193,10 @@ class QGlyphInfo(QtGui.QVBoxLayout):
 		if 'metrics' in query.lower() and 'left' in query.lower(): return glyph.getLSB(layer)
 		if 'metrics' in query.lower() and 'right' in query.lower(): return glyph.getRSB(layer)
 
-class QRatioInfo(QtGui.QGridLayout):
+class TRRatioInfo(QtGui.QGridLayout):
 	# - Copy Metric properties from other glyph
 	def __init__(self):
-		super(QRatioInfo, self).__init__()
+		super(TRRatioInfo, self).__init__()
 
 		# - Spin Boxes
 		self.edt_part_width =  QtGui.QLineEdit()
@@ -281,9 +281,9 @@ class tool_tab(QtGui.QWidget):
 
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
-		self.glyph_info = QGlyphInfo()
+		self.glyph_info = TRGlyphInfo()
 		layoutV.addLayout(self.glyph_info)
-		layoutV.addLayout(QRatioInfo())
+		layoutV.addLayout(TRRatioInfo())
 		
 		# - Build
 		#layoutV.addStretch()

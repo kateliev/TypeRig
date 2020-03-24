@@ -25,10 +25,10 @@ from typerig.glyph import eGlyph
 from typerig.node import eNodesContainer, eNode
 
 # - Sub widgets ------------------------
-class MLineEdit(QtGui.QLineEdit):
+class TRMLineEdit(QtGui.QLineEdit):
 	# - Custom QLine Edit extending the contextual menu with FL6 metric expressions
 	def __init__(self, *args, **kwargs):
-		super(MLineEdit, self).__init__(*args, **kwargs)
+		super(TRMLineEdit, self).__init__(*args, **kwargs)
 		self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
 		self.customContextMenuRequested.connect(self.__contextMenu)
 
@@ -355,9 +355,9 @@ class metrics_expr(QtGui.QGridLayout):
 	def __init__(self):
 		super(metrics_expr, self).__init__()
 
-		self.edt_lsb = MLineEdit()
-		self.edt_adv = MLineEdit()
-		self.edt_rsb = MLineEdit()
+		self.edt_lsb = TRMLineEdit()
+		self.edt_adv = TRMLineEdit()
+		self.edt_rsb = TRMLineEdit()
 
 		self.edt_lsb.setPlaceholderText('Metric expression')
 		self.edt_adv.setPlaceholderText('Metric expression')

@@ -20,7 +20,7 @@ from typerig import QtGui
 from typerig.proxy import pFont, pShape, pNode, pWorkspace
 from typerig.node import eNode
 from typerig.glyph import eGlyph
-from typerig.gui import trTableView, trSliderCtrl, getProcessGlyphs
+from typerig.gui import TRTableView, TRSliderCtrl, getProcessGlyphs
 
 # - Init
 global pLayers
@@ -33,10 +33,10 @@ app_name, app_version = 'TypeRig | Corner', '1.98'
 filter_name = 'Smart corner'
 
 # - Sub widgets ------------------------
-class QSmartCorner(QtGui.QVBoxLayout):
+class TRSmartCorner(QtGui.QVBoxLayout):
 	# - Split/Break contour 
 	def __init__(self, parentWidget):
-		super(QSmartCorner, self).__init__()
+		super(TRSmartCorner, self).__init__()
 		self.upper_widget = parentWidget
 
 		# -- Init
@@ -115,7 +115,7 @@ class QSmartCorner(QtGui.QVBoxLayout):
 		self.btn_rebuild.clicked.connect(lambda: self.rebuild())
 
 		# -- Preset Table
-		self.tab_presets = trTableView(None)
+		self.tab_presets = TRTableView(None)
 		self.preset_reset()			
 
 		# -- Build Layout
@@ -431,10 +431,10 @@ class QSmartCorner(QtGui.QVBoxLayout):
 			else: # Full update - with undo snapshot
 				glyph.updateObject(glyph.fl, verbose=False)						
 
-class QCornerControl(QtGui.QVBoxLayout):
+class TRCornerControl(QtGui.QVBoxLayout):
 	# - Split/Break contour 
 	def __init__(self, parentWidget):
-		super(QCornerControl, self).__init__()
+		super(TRCornerControl, self).__init__()
 		self.upper_widget = parentWidget
 
 		# - Init
@@ -532,7 +532,7 @@ class QCornerControl(QtGui.QVBoxLayout):
 
 		# - Build sliders
 		for angle_value, angle_nodes in process_angles.iteritems():
-			new_slider = trSliderCtrl('0', '100', angle_value, 5)
+			new_slider = TRSliderCtrl('0', '100', angle_value, 5)
 			new_slider.sld_axis.valueChanged.connect(self.__processNodes)
 			self.addLayout(new_slider)
 			self.sliders.append([new_slider, angle_value, angle_nodes])
@@ -548,8 +548,8 @@ class tool_tab(QtGui.QWidget):
 
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
-		self.smart_corner = QSmartCorner(self)
-		self.corner_control = QCornerControl(self)
+		self.smart_corner = TRSmartCorner(self)
+		self.corner_control = TRCornerControl(self)
 		layoutV.addLayout(self.smart_corner)
 		layoutV.addLayout(self.corner_control)
 		

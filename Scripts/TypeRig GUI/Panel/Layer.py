@@ -18,7 +18,7 @@ import fontgate as fgt
 from typerig import QtGui
 from PythonQt import QtCore
 from typerig.glyph import eGlyph
-from typerig.gui import trSliderCtrl
+from typerig.gui import TRSliderCtrl
 from typerig.brain import linInterp as lerp
 
 # - Init
@@ -35,10 +35,10 @@ init_table_dict = {1:OrderedDict(zip(column_names, column_init))}
 color_dict = {'Master': QtGui.QColor(0, 255, 0, 10), 'Service': QtGui.QColor(0, 0, 255, 10), 'Mask': QtGui.QColor(255, 0, 0, 10)}
 
 # - Sub widgets ------------------------
-class WLayerSelect(QtGui.QVBoxLayout):
+class TRWLayerSelect(QtGui.QVBoxLayout):
 	# - Split/Break contour 
 	def __init__(self):
-		super(WLayerSelect, self).__init__()
+		super(TRWLayerSelect, self).__init__()
 
 		# - Init
 		self.glyph = None
@@ -55,7 +55,7 @@ class WLayerSelect(QtGui.QVBoxLayout):
 		self.addLayout(self.lay_head)
 
 		# -- Layer List
-		self.lst_layers = WMasterTableView(init_table_dict)
+		self.lst_layers = TRWMasterTableView(init_table_dict)
 		self.lst_layers.selectionModel().selectionChanged.connect(self.set_selected)
 		self.addWidget(self.lst_layers)
 		self.refresh()
@@ -97,9 +97,10 @@ class WLayerSelect(QtGui.QVBoxLayout):
 			return 0
 		return 1
 
-class WMasterTableView(QtGui.QTableWidget):
+class TRWMasterTableView(QtGui.QTableWidget):
 	def __init__(self, data):
-		super(WMasterTableView, self).__init__()
+		super(TRWMasterTableView, self).__init__()
+		self.setMaximumHeight(200)
 		
 		# - Init
 		self.setColumnCount(max(map(len, data.values())))
@@ -169,9 +170,9 @@ class WMasterTableView(QtGui.QTableWidget):
 	def getTable(self):
 		return [self.item(row, 0).text() for row in range(self.rowCount) if self.item(row, 0).checkState() == QtCore.Qt.Checked]
 
-class QlayerBasic(QtGui.QVBoxLayout):
+class TRLayerBasic(QtGui.QVBoxLayout):
 	def __init__(self, aux):
-		super(QlayerBasic, self).__init__()
+		super(TRLayerBasic, self).__init__()
 
 		# - Init
 		self.aux = aux
@@ -268,9 +269,9 @@ class QlayerBasic(QtGui.QVBoxLayout):
 			self.aux.glyph.update()
 			self.aux.refresh()
 
-class QlayerTools(QtGui.QVBoxLayout):
+class TRLayerTools(QtGui.QVBoxLayout):
 	def __init__(self, aux):
-		super(QlayerTools, self).__init__()
+		super(TRLayerTools, self).__init__()
 
 		# - Init
 		self.aux = aux
@@ -511,9 +512,9 @@ class QlayerTools(QtGui.QVBoxLayout):
 			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Clean Layer(s) | %s' %'; '.join([layer_name for layer_name in self.aux.lst_layers.getTable()]))
 			self.aux.glyph.update()
 
-class QlayerMultiEdit(QtGui.QVBoxLayout):
+class TRLayerMultiEdit(QtGui.QVBoxLayout):
 	def __init__(self, aux):
-		super(QlayerMultiEdit, self).__init__()
+		super(TRLayerMultiEdit, self).__init__()
 
 		# - Init
 		self.aux = aux
@@ -740,9 +741,9 @@ class QlayerMultiEdit(QtGui.QVBoxLayout):
 			self.aux.glyph.updateObject(self.aux.glyph.fl, ' Glyph: %s; Transform Layers: %s' %(self.aux.glyph.fl.name, '; '.join([layer_name for layer_name in self.aux.lst_layers.getTable()])))
 			self.aux.glyph.update()
 
-class NEWlayerBlend(QtGui.QVBoxLayout):
+class TRNewLayerBlend(QtGui.QVBoxLayout):
 	def __init__(self, aux):
-		super(NEWlayerBlend, self).__init__()
+		super(TRNewLayerBlend, self).__init__()
 
 		# - Init
 		self.aux = aux
@@ -760,7 +761,7 @@ class NEWlayerBlend(QtGui.QVBoxLayout):
 		self.chk_setAxis.clicked.connect(lambda: self.prepare_lerp())
 
 		# -- Blend active layer to single selected layer
-		self.mixer_dx = trSliderCtrl('1', '1000', '0', 1)
+		self.mixer_dx = TRSliderCtrl('1', '1000', '0', 1)
 		self.mixer_dx.sld_axis.valueChanged.connect(lambda: self.process_lerp())		
 
 		self.lay_buttons.addWidget(self.chk_setAxis,	0, 0, 1, 1)
@@ -812,13 +813,13 @@ class tool_tab(QtGui.QWidget):
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
 
-		#self.layerSelector = QlayerSelect()
-		self.layerSelector = WLayerSelect()
-		self.quickTools = QlayerTools(self.layerSelector)
+		#self.layerSelector = TRLayerSelect()
+		self.layerSelector = TRWLayerSelect()
+		self.quickTools = TRLayerTools(self.layerSelector)
 		#self.blendTools = QlayerBlend(self.layerSelector)
-		self.blendTools = NEWlayerBlend(self.layerSelector)
-		self.basicTools = QlayerBasic(self.layerSelector)
-		self.unfoldLayers = QlayerMultiEdit(self.layerSelector)
+		self.blendTools = TRNewLayerBlend(self.layerSelector)
+		self.basicTools = TRLayerBasic(self.layerSelector)
+		self.unfoldLayers = TRLayerMultiEdit(self.layerSelector)
 
 		layoutV.addLayout(self.layerSelector)
 		layoutV.addWidget(QtGui.QLabel('Basic Tools (Layers selected)'))

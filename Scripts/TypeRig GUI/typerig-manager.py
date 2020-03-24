@@ -13,6 +13,7 @@
 #import fontgate as fgt
 from PythonQt import QtCore
 from typerig import QtGui
+from typerig.gui import TRHTabWidget
 
 # -- Internals - Load toolpanels 
 import Manager
@@ -35,8 +36,7 @@ class typerig_Manager(QtGui.QDialog):
 				
 		# - Tabs --------------------------
 		# -- Dynamically load all tabs
-		self.tabs = QtGui.QTabWidget()
-		#self.tabs.setTabPosition(QtGui.QTabWidget.East)
+		self.tabs = TRHTabWidget()
 
 		# --- Load all tabs from this directory as modules. Check __init__.py 
 		# --- <dirName>.modules tabs/modules manifest in list format
@@ -61,12 +61,6 @@ class typerig_Manager(QtGui.QDialog):
 		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 		#self.setMinimumWidth(300)
 		self.show()
-	
-# - STYLE OVERRIDE -------------------
-# -- Following (uncommented) will override the default OS styling for Qt Widgets on Mac OS.
-from platform import system
-if system() == 'Darwin':
-	QtGui.QApplication.setStyle(QtGui.QStyleFactory.create('macintosh')) # Options: Windows, WindowsXP, WindowsVista, Fusion
 
 # - RUN ------------------------------
 dialog = typerig_Manager()

@@ -19,13 +19,13 @@ import fontgate as fgt
 from PythonQt import QtCore
 from typerig import QtGui
 from typerig.proxy import pGlyph, pFont
-from typerig.gui import trTableView
+from typerig.gui import TRTableView
 
 # - Sub widgets ------------------------
-class ZLineEdit(QtGui.QLineEdit):
+class TRZLineEdit(QtGui.QLineEdit):
 	# - Custom QLine Edit extending the contextual menu with FL6 metric expressions
 	def __init__(self, *args, **kwargs):
-		super(ZLineEdit, self).__init__(*args, **kwargs)
+		super(TRZLineEdit, self).__init__(*args, **kwargs)
 		self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
 		self.customContextMenuRequested.connect(self.__contextMenu)
 
@@ -63,7 +63,7 @@ class WFontMetrics(QtGui.QWidget):
 		self.btn_save.clicked.connect(self.exportMetrics)
 		self.btn_open.clicked.connect(self.importMetrics)
 
-		self.tab_fontMetrics = trTableView(self.metricData)
+		self.tab_fontMetrics = TRTableView(self.metricData)
 
 		# - Build
 		lbl_name = QtGui.QLabel('Font Metrics (All Masters)')
@@ -183,7 +183,7 @@ class WFontZones(QtGui.QWidget):
 		self.cmb_layer = QtGui.QComboBox()
 		self.cmb_layer.addItems(['All Layers'] + self.activeFont.masters())
 
-		self.edt_pos = ZLineEdit()
+		self.edt_pos = TRZLineEdit()
 		self.edt_width = QtGui.QLineEdit()
 		self.edt_name = QtGui.QLineEdit()
 		

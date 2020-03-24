@@ -23,11 +23,11 @@ from typerig.glyph import eGlyph
 from typerig.proxy import pFontMetrics, pFont, pGlyph, pWorkspace
 
 # - Sub widgets ------------------------
-class GLineEdit(QtGui.QLineEdit):
+class TRGLineEdit(QtGui.QLineEdit):
 	# - Custom QLine Edit extending the contextual menu with FL6 metric expressions
 	def __init__(self, *args, **kwargs):
 		
-		super(GLineEdit, self).__init__(*args, **kwargs)
+		super(TRGLineEdit, self).__init__(*args, **kwargs)
 		self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
 		self.customContextMenuRequested.connect(self.__contextMenu)
 
@@ -52,15 +52,15 @@ class GLineEdit(QtGui.QLineEdit):
 		menu.addAction('CYR', lambda: self.setText('CYR'))
 		
 # - Tabs -------------------------------
-class QDropGuide(QtGui.QGridLayout):
+class TRDropGuide(QtGui.QGridLayout):
 	def __init__(self):
-		super(QDropGuide, self).__init__()
+		super(TRDropGuide, self).__init__()
 
 		# -- Editi fileds
 		self.edt_guideName = QtGui.QLineEdit()
 		self.edt_guideName.setPlaceholderText('New Guideline')
 
-		self.edt_guideTag = GLineEdit()
+		self.edt_guideTag = TRGLineEdit()
 		self.edt_guideTag.setPlaceholderText('Tag')
 
 		# -- Combo box
@@ -210,12 +210,12 @@ class QDropGuide(QtGui.QGridLayout):
 		glyph.updateObject(glyph.fl, 'Drop Guide <%s> @ %s.' %(self.edt_guideName.text, '; '.join(glyph._prepareLayers(pLayers))))
 		glyph.update()
 
-class QGlyphTag(QtGui.QGridLayout):
+class TRGlyphTag(QtGui.QGridLayout):
 	def __init__(self):
-		super(QGlyphTag, self).__init__()
+		super(TRGlyphTag, self).__init__()
 
 		# - Widget & Layout 
-		self.edt_tagString = GLineEdit()
+		self.edt_tagString = TRGLineEdit()
 		self.edt_tagString.setPlaceholderText('Glyph tags')
 		self.edt_tagString.setToolTip('A comma separated list of tags.')
 
@@ -320,8 +320,8 @@ class tool_tab(QtGui.QWidget):
 
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
-		self.dropGuide = QDropGuide()
-		self.glyphTags = QGlyphTag()
+		self.dropGuide = TRDropGuide()
+		self.glyphTags = TRGlyphTag()
 
 		# - Build ---------------------------
 		layoutV.addLayout(self.dropGuide)

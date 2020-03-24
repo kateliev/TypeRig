@@ -112,12 +112,14 @@ class MLineEdit(QtGui.QLineEdit):
 		menu.addAction(u'_LAT', lambda: self.smartSetText('_LAT'))
 		menu.addAction(u'_CYR', lambda: self.smartSetText('_CYR'))
 
-class TrPlainTextEdit(QtGui.QPlainTextEdit):
+class TRPlainTextEdit(QtGui.QPlainTextEdit):
 	# - Custom QLine Edit extending the contextual menu with FL6 metric expressions
 	def __init__(self, *args, **kwargs):
-		super(TrPlainTextEdit, self).__init__(*args, **kwargs)
+		super(TRPlainTextEdit, self).__init__(*args, **kwargs)
 		self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
 		self.customContextMenuRequested.connect(self.__contextMenu)
+		self.setToolTip('Hold F1 for Help')
+		self.setStatusTip(str_help)
 
 	def __contextMenu(self):
 		self._normalMenu = self.createStandardContextMenu()
@@ -433,8 +435,8 @@ class glyphComposer(QtGui.QGridLayout):
 		self.btn_loadExpr.clicked.connect(self.expr_fromFile)
 		self.btn_help.clicked.connect(lambda: QtGui.QMessageBox.information(self.parentWgt, 'Help', str_help))
 
-		self.txt_editor = TrPlainTextEdit()
-		
+		self.txt_editor = TRPlainTextEdit()
+
 		# - Build layouts 
 		self.addWidget(QtGui.QLabel('Insert elements:'),			0, 0, 1, 4)
 		self.addWidget(self.cmb_fontShapes,							1, 0, 1, 6)
@@ -788,7 +790,8 @@ class tool_tab(QtGui.QWidget):
 		layoutV.addLayout(basicOps())
 		layoutV.addLayout(glyphComposer(self))
 
-		layoutV.addWidget(QtGui.QLabel('Align Shapes:'))
+		layoutV.addStretch()
+		layoutV.addWidget(QtGui.QLabel('Align Elements:'))
 		self.alignShapes = alignShapes()
 		layoutV.addLayout(self.alignShapes)
 
@@ -802,6 +805,7 @@ class tool_tab(QtGui.QWidget):
 
 		self.btn_capture.setCheckable(True)
 		self.btn_capture.setToolTip('Click here to capture keyboard arrows input.\nNote:\n+10 SHIFT\n+100 CTRL\n Exit ESC')
+		self.btn_capture.setStatusTip(self.btn_capture.toolTip)
 		self.btn_capture.clicked.connect(lambda: self.captureKeyaboard())
 
 		layoutV.addWidget(self.btn_capture)

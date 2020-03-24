@@ -54,10 +54,10 @@ page_sizes = {
 			'A9.96':(140, 197)
 			}
 
-class QTextBlockSelect(QtGui.QVBoxLayout):
+class TRTextBlockSelect(QtGui.QVBoxLayout):
 	# - Split/Break contour 
 	def __init__(self):
-		super(QTextBlockSelect, self).__init__()
+		super(TRTextBlockSelect, self).__init__()
 
 		# -- Head
 		self.lay_head = QtGui.QHBoxLayout()
@@ -87,9 +87,9 @@ class QTextBlockSelect(QtGui.QVBoxLayout):
 	def doCheck(self):
 		pass
 
-class QTextBlockBasic(QtGui.QVBoxLayout):
+class TRTextBlockBasic(QtGui.QVBoxLayout):
 	def __init__(self, aux, upperWidget):
-		super(QTextBlockBasic, self).__init__()
+		super(TRTextBlockBasic, self).__init__()
 
 		# - Init
 		self.aux = aux
@@ -296,8 +296,8 @@ class tool_tab(QtGui.QWidget):
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
 
-		self.blockSelector = QTextBlockSelect()
-		self.basicTools = QTextBlockBasic(self.blockSelector, self)
+		self.blockSelector = TRTextBlockSelect()
+		self.basicTools = TRTextBlockBasic(self.blockSelector, self)
 		
 		layoutV.addLayout(self.blockSelector)
 		layoutV.addLayout(self.basicTools)

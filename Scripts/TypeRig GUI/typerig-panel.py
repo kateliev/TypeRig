@@ -13,6 +13,7 @@ from collections import OrderedDict
 import fontlab as fl6
 from PythonQt import QtCore
 from typerig import QtGui
+from typerig.gui import TRVTabWidget
 from typerig.proxy import pGlyph, pFont
 
 # -- Internals - Load toolpanels 
@@ -38,9 +39,9 @@ ss_Toolbox_none = """/* EMPTY STYLESHEET */ """
 
 # - Interface -----------------------------
 # - Widgets --------------------------------
-class TRtableView(QtGui.QTableWidget):
+class TRTableView(QtGui.QTableWidget):
 	def __init__(self, data):
-		super(TRtableView, self).__init__()
+		super(TRTableView, self).__init__()
 		
 		# - Init
 		self.setColumnCount(max(map(len, data.values())))
@@ -117,7 +118,7 @@ class dlg_LayerSelect(QtGui.QDialog):
 		self.parent_widget = parent
 		
 		# - Basic Widgets
-		self.tab_masters = TRtableView(table_dict)
+		self.tab_masters = TRTableView(table_dict)
 		self.table_populate(mode)
 		self.tab_masters.cellChanged.connect(lambda: self.parent_widget.layers_refresh())
 
@@ -261,12 +262,11 @@ class typerig_Panel(QtGui.QDialog):
 		panel_vers = {n:OrderedDict([	('Panel', toolName), ('Version', eval('Panel.%s.app_version' %toolName))])
 										for n, toolName in enumerate(Panel.modules)} 
 
-		self.options = TRtableView(panel_vers)
+		self.options = TRTableView(panel_vers)
 		self.options.verticalHeader().hide()
 
 		# -- Dynamically load all tabs
-		self.tabs = QtGui.QTabWidget()
-		self.tabs.setTabPosition(QtGui.QTabWidget.East)
+		self.tabs = TRVTabWidget()
 
 		# --- Load all tabs from this directory as modules. Check __init__.py 
 		# --- <dirName>.modules tabs/modules manifest in list format
@@ -367,6 +367,7 @@ class typerig_Panel(QtGui.QDialog):
 			self.flag_fold = True
 
 		else:
+			QtGui.uiRefresh(self)
 			self.tabs.show()
 			self.fr_controller.show()
 			self.btn_unfold.hide()
@@ -374,12 +375,6 @@ class typerig_Panel(QtGui.QDialog):
 			self.resize(350, self.sizeHint.height()) # !!! Hotfix FL7 7355 
 			self.repaint()
 			self.flag_fold = False
-	
-# - STYLE OVERRIDE -------------------
-# -- Following (uncommented) will override the default OS styling for Qt Widgets on Mac OS.
-from platform import system
-if system() == 'Darwin':
-	QtGui.QApplication.setStyle(QtGui.QStyleFactory.create('macintosh')) # Options: Windows, WindowsXP, WindowsVista, Fusion
 
 # - RUN ------------------------------
 dialog = typerig_Panel()

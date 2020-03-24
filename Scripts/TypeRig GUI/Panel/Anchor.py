@@ -50,10 +50,10 @@ class ALineEdit(QtGui.QLineEdit):
 		menu.addAction(u'ascender', lambda: self.setText('ascender'))
 		menu.addAction(u'descender', lambda: self.setText('descender'))		
 
-class QlayerSelect(QtGui.QVBoxLayout):
+class TRLayerSelect(QtGui.QVBoxLayout):
 	# - Split/Break contour 
 	def __init__(self):
-		super(QlayerSelect, self).__init__()
+		super(TRLayerSelect, self).__init__()
 
 		# - Init
 		# -- Head
@@ -113,9 +113,9 @@ class QlayerSelect(QtGui.QVBoxLayout):
 			return 0
 		return 1
 
-class QanchorBasic(QtGui.QVBoxLayout):
+class TRAnchorBasic(QtGui.QVBoxLayout):
 	def __init__(self, aux):
-		super(QanchorBasic, self).__init__()
+		super(TRAnchorBasic, self).__init__()
 
 		# - Init
 		self.aux = aux
@@ -330,8 +330,8 @@ class tool_tab(QtGui.QWidget):
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
 
-		self.anchorSelector = QlayerSelect()
-		self.basicTools = QanchorBasic(self.anchorSelector)
+		self.anchorSelector = TRLayerSelect()
+		self.basicTools = TRAnchorBasic(self.anchorSelector)
 		
 		layoutV.addLayout(self.anchorSelector)
 		layoutV.addLayout(self.basicTools)

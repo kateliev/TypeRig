@@ -9,10 +9,12 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.2'
+__version__ = '0.0.3'
 
 # - Dependencies --------------------------
-from PythonQt import QtCore, QtGui
+from PythonQt import QtCore
+import QtGui
+from platform import system
 
 # - Functions --------------------------
 def getProcessGlyphs(mode=0, font=None, workspace=None):
@@ -45,18 +47,18 @@ def getProcessGlyphs(mode=0, font=None, workspace=None):
 	
 # - Classes -------------------------------
 # -- Messages -----------------------------
-class trMsgSimple(QtGui.QVBoxLayout):
+class TRMsgSimple(QtGui.QVBoxLayout):
 	def __init__(self, msg):
-		super(trMsgSimple, self).__init__()
+		super(TRMsgSimple, self).__init__()
 		self.warnMessage = QtGui.QLabel(msg)
 		self.warnMessage.setOpenExternalLinks(True)
 		self.warnMessage.setWordWrap(True)
 		self.addWidget(self.warnMessage)
 
 # -- Sliders ------------------------------
-class trSliderCtrl(QtGui.QGridLayout):
+class TRSliderCtrl(QtGui.QGridLayout):
 	def __init__(self, edt_0, edt_1, edt_pos, spb_step):
-		super(trSliderCtrl, self).__init__()
+		super(TRSliderCtrl, self).__init__()
 		
 		# - Init
 		self.initValues = (edt_0, edt_1, edt_pos, spb_step)
@@ -105,10 +107,10 @@ class trSliderCtrl(QtGui.QGridLayout):
 		self.edt_pos.setText(self.sld_axis.value)
 
 # -- Tables ------------------------------------------------------
-class trTableView(QtGui.QTableWidget):
+class TRTableView(QtGui.QTableWidget):
 	def __init__(self, data):
-		super(trTableView, self).__init__()
-				
+		super(TRTableView, self).__init__()
+
 		# - Init
 		self.flag_valueChanged = QtGui.QColor('powderblue')
 
@@ -171,3 +173,43 @@ class trTableView(QtGui.QTableWidget):
 
 	def markChange(self, item):
 		item.setBackground(self.flag_valueChanged)
+
+class TRHTabWidget(QtGui.QTabWidget):
+	def __init__(self, *args, **kwargs):
+		super(QtGui.QTabWidget, self).__init__(*args, **kwargs)
+		if system() == 'Darwin':
+			self.setStyleSheet('''
+			QTabBar::tab { 
+				margin-bottom: 10px;
+				padding: 5px 7px 4px 7px; 
+				margin-right: 1px;
+				color: black; 
+				background-color: white; 
+				border: none; 
+			}
+			QTabBar::tab:selected { 
+				color: white; 
+				background-color: #808080; 
+			}
+			''')
+
+class TRVTabWidget(QtGui.QTabWidget):
+	def __init__(self, *args, **kwargs):
+		super(QtGui.QTabWidget, self).__init__(*args, **kwargs)
+		self.setUsesScrollButtons(True)
+		self.setTabPosition(QtGui.QTabWidget.East)
+		if system() == 'Darwin':
+			self.setStyleSheet('''
+			QTabBar::tab { 
+				margin-left: 11px;
+				padding: 5px 4px 5px 5px; 
+				margin-bottom: 1px;
+				color: black; 
+				background-color: white; 
+				border: none; 
+			}
+			QTabBar::tab:selected { 
+				color: white; 
+				background-color: #808080; 
+			}
+			''')
