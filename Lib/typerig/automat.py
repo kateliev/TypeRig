@@ -49,6 +49,7 @@ class Automat(object):
 
 
 if __name__ == '__main__':
+    # from typerig.automat import Automat
     auto = Automat()
     print auto.helpAll()
     auto.run('About')
