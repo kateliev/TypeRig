@@ -71,7 +71,6 @@ def uiRefresh(widget):
 				}
 			''' % {'fontSize': fontSize, 'fontWidgets': fontWidgets}
 		widget.setStyleSheet(css)
-		print "UI", desktopHeight, fontSize, widget
 
 class QDialog(QDialog):
 	def __init__(self, *args, **kwargs):
