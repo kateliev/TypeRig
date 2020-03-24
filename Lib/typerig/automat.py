@@ -14,7 +14,7 @@ from typerig.QtGui import QAction
 from collections import OrderedDict
 
 
-class TRActions(object):
+class Automat(object):
     def __init__(self):
         self.ws = pWorkspace()
         self.main = self.ws.main
@@ -49,6 +49,6 @@ class TRActions(object):
 
 
 if __name__ == '__main__':
-    actions = TRActions()
-    print actions.helpAll()
-    actions.run('About')
+    auto = Automat()
+    print auto.helpAll()
+    auto.run('About')
