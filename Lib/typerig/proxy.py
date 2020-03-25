@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.74.0'
+__version__ = '0.74.1'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -693,7 +693,12 @@ class pShape(object):
 	def shear(self, sh, sv, reset=False):
 		if reset: self.reset_transform()
 		self.fl.transform = self.fl.transform.shear(sh, sv)
-	
+
+	# - Pens -----------------------------------------------
+	def draw(self, pen):
+		''' Utilizes the Pen protocol'''
+		for contour in self.fl.contours:
+			contour.convertToFgContour(shape.fl_transform.transform).draw(pen)
 
 
 class pGlyph(object):
