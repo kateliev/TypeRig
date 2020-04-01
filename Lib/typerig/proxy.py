@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.74.1'
+__version__ = '0.74.2'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -19,6 +19,12 @@ import FL as legacy
 
 # - Init
 #sys64bit = calcsize('P')*8 == 64
+
+# - Procedures/Functions ------------------
+def openFont(file_path):
+	''' Loads Font file from path (str) and returns opened fgFont object'''
+	fl6.flItems.requestLoadingFont(file_path)
+	return fl6.CurrentFont()
 
 # - Classes -------------------------------
 class pWorkspace(object):
@@ -1935,16 +1941,23 @@ class pFont(object):
 	A Proxy Font representation of Fonlab fgFont and flPackage.
 
 	Constructor:
-		pFont() - default represents the current glyph and current font
-		pFont(fgFont)
+		pFont(None) : Default represents the current glyph and current font
+		pFont(fgFont) : Creates a pFont object from FontGate fgFont object
+		pFont(file_path) : Loats a existing font form file_path (str) and creates a pFont object
 	
 	'''
 
 	def __init__(self, font=None):
 
 		if font is not None:
-			self.fg = font
-			self.fl = fl6.flPackage(font)
+			if isinstance(font, fgt.fgFont):
+				self.fg = font
+				self.fl = fl6.flPackage(font)
+
+			elif isinstance(font, basestring):
+				fl6.flItems.requestLoadingFont(font)
+				self.fg = fl6.CurrentFont()
+				self.fl = fl6.flPackage(fl6.CurrentFont())
 			
 		else:
 			self.fg = fl6.CurrentFont()
