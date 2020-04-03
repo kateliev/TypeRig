@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.74.2'
+__version__ = '0.74.4'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -2313,6 +2313,31 @@ class pFont(object):
 		'''Adds a List of Glyphs [fgGlyph or flGlyph] to font'''
 		for glyph in glyphList:
 			self.addGlyph(glyph)
+
+	def newGlyph(self, newGlyphName, unicode_int=None, layers=None, recipe=None):
+		'''Creates new glyph and adds it to the font'''
+		# - Init
+		add_layers = layers if layers is not None else self.masters()
+
+		# - Build
+		base_glyph = fl6.flGlyph()
+		base_glyph.name = newGlyphName
+		self.addGlyph(base_glyph)
+
+		# - Get the newly added glyph (all sane methods exhausted)
+		new_glyph = self.glyph(newGlyphName)
+
+		# - Set Unicode
+		if unicode_int is not None: new_glyph.fg.setUnicode(unicode_int)
+		
+		# - Add layers
+		for layerName in add_layers:
+			new_layer = fl6.flLayer()
+			new_layer.name = layerName
+			new_glyph.addLayer(new_layer)
+
+		# - Add to font
+		return new_glyph
 
 	def generateGlyph(self, newGlyphName, strRecipe, layerName, rtl=False):
 		''' Generate new glyph (newGlyphName) using String Recipe (strRecipe) on given Layer (int/str layerName)'''		
