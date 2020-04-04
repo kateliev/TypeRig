@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.74.4'
+__version__ = '0.74.5'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -1133,25 +1133,21 @@ class pGlyph(object):
 		'''
 		# - Init
 		srcLayer = self.layer(srcLayerName)
+		
+		# -- Create new layer
+		newLayer = fl6.flLayer()
+		newLayer.name = str(dstLayerName)
 
-		# -- Check if dstLayerExists
-		if self.layer(dstLayerName) is None:
-			if addLayer:
-				# -- Create new layer
-				newLayer = fl6.flLayer()
-				newLayer.name = str(dstLayerName)
+		# -- Assign same styling
+		newLayer.advanceHeight = srcLayer.advanceHeight
+		newLayer.advanceWidth = srcLayer.advanceWidth
+		newLayer.wireframeColor = srcLayer.wireframeColor
+		newLayer.mark = srcLayer.mark
+		newLayer.assignStyle(srcLayer)
 
-				# -- Assign same styling
-				newLayer.advanceHeight = srcLayer.advanceHeight
-				newLayer.advanceWidth = srcLayer.advanceWidth
-				newLayer.wireframeColor = srcLayer.wireframeColor
-				newLayer.mark = srcLayer.mark
-				newLayer.assignStyle(srcLayer)
-
-				# -- Add to glyph
-				self.addLayer(newLayer, toBack)
-			else:
-				return
+		if self.layer(dstLayerName) is None and addLayer:
+			# -- Add to glyph
+			self.addLayer(newLayer, toBack)
 
 		# -- Outline
 		if options['out']:
@@ -1164,31 +1160,33 @@ class pGlyph(object):
 			
 			# --- Copy/Paste shapes
 			for shape in srcShapes:
-				newShape = self.layer(dstLayerName).addShape(shape.cloneTopLevel())
+				if addLayer:
+					newShape = self.layer(dstLayerName).addShape(shape.cloneTopLevel())
+				else:
+					newLayer.addShape(shape.cloneTopLevel())
 
-			#self.update()
+		if addLayer: # Ugly!!! Refactor!
+			# -- Metrics
+			if options['lsb']: 
+				self.setLSB(self.getLSB(srcLayerName), dstLayerName)
+			
+			if options['adv']: 
+				self.setAdvance(self.getAdvance(srcLayerName), dstLayerName)
+			
+			if options['rsb']: 
+				self.setRSB(self.getRSB(srcLayerName), dstLayerName)
 
-		# -- Metrics
-		if options['lsb']: 
-			self.setLSB(self.getLSB(srcLayerName), dstLayerName)
-		
-		if options['adv']: 
-			self.setAdvance(self.getAdvance(srcLayerName), dstLayerName)
-		
-		if options['rsb']: 
-			self.setRSB(self.getRSB(srcLayerName), dstLayerName)
+			if options['lnk']:
+				self.setLSBeq(self.getSBeq(srcLayerName)[0], dstLayerName)
+				self.setRSBeq(self.getSBeq(srcLayerName)[1], dstLayerName)
 
-		if options['lnk']:
-			self.setLSBeq(self.getSBeq(srcLayerName)[0], dstLayerName)
-			self.setRSBeq(self.getSBeq(srcLayerName)[1], dstLayerName)
+			# -- Anchors
+			if options['anc']:
+				if cleanDST:
+					self.clearAnchors(dstLayerName)
 
-		# -- Anchors
-		if options['anc']:
-			if cleanDST:
-				self.clearAnchors(dstLayerName)
-
-			for src_anchor in self.anchors(srcLayerName):
-				self.addAnchor((src_anchor.point.x(), src_anchor.point.y()), src_anchor.name, dstLayerName)
+				for src_anchor in self.anchors(srcLayerName):
+					self.addAnchor((src_anchor.point.x(), src_anchor.point.y()), src_anchor.name, dstLayerName)
 
 		return newLayer
 
@@ -2314,55 +2312,56 @@ class pFont(object):
 		for glyph in glyphList:
 			self.addGlyph(glyph)
 
-	def newGlyph(self, newGlyphName, unicode_int=None, layers=None, recipe=None):
+	def newGlyph(self, glyph_name, layers=[], unicode_int=None):
 		'''Creates new glyph and adds it to the font'''
-		# - Init
-		add_layers = layers if layers is not None else self.masters()
-
 		# - Build
 		base_glyph = fl6.flGlyph()
-		base_glyph.name = newGlyphName
+		base_glyph.name = glyph_name
 		self.addGlyph(base_glyph)
 
 		# - Get the newly added glyph (all sane methods exhausted)
-		new_glyph = self.glyph(newGlyphName)
+		new_glyph = self.glyph(glyph_name)
 
 		# - Set Unicode
 		if unicode_int is not None: new_glyph.fg.setUnicode(unicode_int)
 		
 		# - Add layers
-		for layerName in add_layers:
-			new_layer = fl6.flLayer()
-			new_layer.name = layerName
-			new_glyph.addLayer(new_layer)
+		if len(layers):
+			for layer in layers:
+				if isinstance(layer, basestring):
+					new_layer = fl6.flLayer()
+					new_layer.name = layer
+					new_glyph.addLayer(new_layer)
+				
+				elif isinstance(layer, fl6.flLayer):
+					new_glyph.addLayer(layer)
 
 		# - Add to font
 		return new_glyph
 
-	def generateGlyph(self, newGlyphName, strRecipe, layerName, rtl=False):
-		''' Generate new glyph (newGlyphName) using String Recipe (strRecipe) on given Layer (int/str layerName)'''		
+	def newGlyphFromRecipe(self, glyph_name, recipe, layers=[], unicode_int=None, rtl=False):
+		''' Generate new glyph (glyph_name) using String Recipe (recipe)'''		
 		
-		# - Init
+		# - Prepare
 		advanceWidth = 0 #!!! Figure it out later
+		prepared_layers = []
 
-		if isinstance(layerName, int):
-			fontMetrics = fl6.FontMetrics(self.fl, self.fl.masters[layerName]) 
-			layerName = self.fl.masters[layerName]
+		for layer_name in layers:
+			layer_fontMetrics = fl6.FontMetrics(self.fl, layer_name)
+			new_layer = fl6.flLayer(layer_name)
+			gen_component = self.fl.generateGlyph(recipe, layer_name, layer_fontMetrics, rtl)
+			new_layer.setGlyphComponents(gen_component, advanceWidth, self.fl, True)
+			prepared_layers.append(new_layer)
 
-		elif isinstance(layerName, basestring):
-			fontMetrics = fl6.FontMetrics(self.fl, layerName)
-		
-		# - Build
-		# -- Glyph
-		new_glyph = fl6.flGlyph()
-		new_glyph.name = newGlyphName
+		new_glyph = self.newGlyph(glyph_name, prepared_layers, unicode_int)
+		return new_glyph
 
-		# -- Layer
-		new_layer = fl6.flLayer(layerName)
-		gen_component = self.fl.generateGlyph(strRecipe, layerName, fontMetrics, rtl)
-		new_layer.setGlyphComponents(gen_component, advanceWidth, self.fl, True)
-		
-		new_glyph.addLayer(new_layer)
+	def duplicateGlyph(self, src_name, dst_name, dst_unicode=None):
+		src_glyph = self.glyph(src_name)
+		options = {'out': True, 'gui': True, 'anc': True, 'lsb': True, 'adv': True, 'rsb': True, 'lnk': True, 'ref': True}
+		prepared_layers = [src_glyph.copyLayer(layer.name, layer.name, options, False, False) for layer in src_glyph.layers()]
+
+		new_glyph = self.newGlyph(dst_name, prepared_layers, dst_unicode)
 		return new_glyph
 
 	# - Information -----------------------------------------------
