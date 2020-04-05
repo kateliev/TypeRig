@@ -8,17 +8,13 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.74.5'
+__version__ = '0.74.7'
 
 # - Dependencies --------------------------
 import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 import FL as legacy
-#from struct import calcsize
-
-# - Init
-#sys64bit = calcsize('P')*8 == 64
 
 # - Procedures/Functions ------------------
 def openFont(file_path):
@@ -1109,7 +1105,7 @@ class pGlyph(object):
 		'''
 		self.fl.removeLayer(self.layer(layer))
 
-	def duplicateLayer(self, layer=None, newLayerName='New Layer'):
+	def duplicateLayer(self, layer=None, newLayerName='New Layer', references=False):
 		'''Duplicates a layer with new name and adds it to glyph's layers.
 		Args:
 			layer (int or str): Layer index or name. If None returns ActiveLayer
@@ -1117,7 +1113,7 @@ class pGlyph(object):
 		Returns:
 			flLayer
 		'''
-		options = {'out': True, 'gui': True, 'anc': True, 'lsb': True, 'adv': True, 'rsb': True, 'lnk': True, 'ref': True}
+		options = {'out': True, 'gui': True, 'anc': True, 'lsb': True, 'adv': True, 'rsb': True, 'lnk': True, 'ref': references}
 		self.copyLayer(layer, newLayerName, options, True, True)
 
 	def copyLayer(self, srcLayerName, dstLayerName, options = {'out': True, 'gui': True, 'anc': True, 'lsb': True, 'adv': True, 'rsb': True, 'lnk': True, 'ref': True}, addLayer=False, cleanDST=True, toBack=True):
@@ -1133,10 +1129,11 @@ class pGlyph(object):
 		'''
 		# - Init
 		srcLayer = self.layer(srcLayerName)
-		
+		dstLayerName = str(dstLayerName) if self.layer(dstLayerName) is None else str(dstLayerName) + '.copy'
+
 		# -- Create new layer
 		newLayer = fl6.flLayer()
-		newLayer.name = str(dstLayerName)
+		newLayer.name = dstLayerName
 
 		# -- Assign same styling
 		newLayer.advanceHeight = srcLayer.advanceHeight
@@ -1145,9 +1142,8 @@ class pGlyph(object):
 		newLayer.mark = srcLayer.mark
 		newLayer.assignStyle(srcLayer)
 
-		if self.layer(dstLayerName) is None and addLayer:
-			# -- Add to glyph
-			self.addLayer(newLayer, toBack)
+		# -- Add to glyph
+		self.addLayer(newLayer, toBack)
 
 		# -- Outline
 		if options['out']:
@@ -1160,33 +1156,35 @@ class pGlyph(object):
 			
 			# --- Copy/Paste shapes
 			for shape in srcShapes:
-				if addLayer:
-					newShape = self.layer(dstLayerName).addShape(shape.cloneTopLevel())
+				if options['ref']:
+					newShape = self.layer(dstLayerName).addShape(shape)
 				else:
-					newLayer.addShape(shape.cloneTopLevel())
+					newShape = self.layer(dstLayerName).addShape(shape.cloneTopLevel())
+		
+		# -- Metrics
+		if options['lsb']: 
+			self.setLSB(self.getLSB(srcLayerName), dstLayerName)
+		
+		if options['adv']: 
+			self.setAdvance(self.getAdvance(srcLayerName), dstLayerName)
+		
+		if options['rsb']: 
+			self.setRSB(self.getRSB(srcLayerName), dstLayerName)
 
-		if addLayer: # Ugly!!! Refactor!
-			# -- Metrics
-			if options['lsb']: 
-				self.setLSB(self.getLSB(srcLayerName), dstLayerName)
-			
-			if options['adv']: 
-				self.setAdvance(self.getAdvance(srcLayerName), dstLayerName)
-			
-			if options['rsb']: 
-				self.setRSB(self.getRSB(srcLayerName), dstLayerName)
+		if options['lnk']:
+			self.setLSBeq(self.getSBeq(srcLayerName)[0], dstLayerName)
+			self.setRSBeq(self.getSBeq(srcLayerName)[1], dstLayerName)
 
-			if options['lnk']:
-				self.setLSBeq(self.getSBeq(srcLayerName)[0], dstLayerName)
-				self.setRSBeq(self.getSBeq(srcLayerName)[1], dstLayerName)
+		# -- Anchors
+		if options['anc']:
+			if cleanDST:
+				self.clearAnchors(dstLayerName)
 
-			# -- Anchors
-			if options['anc']:
-				if cleanDST:
-					self.clearAnchors(dstLayerName)
+			for src_anchor in self.anchors(srcLayerName):
+				self.addAnchor((src_anchor.point.x(), src_anchor.point.y()), src_anchor.name, dstLayerName)
 
-				for src_anchor in self.anchors(srcLayerName):
-					self.addAnchor((src_anchor.point.x(), src_anchor.point.y()), src_anchor.name, dstLayerName)
+		if not addLayer:
+			self.removeLayer(newLayer.name)
 
 		return newLayer
 
@@ -2313,7 +2311,15 @@ class pFont(object):
 			self.addGlyph(glyph)
 
 	def newGlyph(self, glyph_name, layers=[], unicode_int=None):
-		'''Creates new glyph and adds it to the font'''
+		'''Creates new glyph and adds it to the font
+		Args:
+			glyph_name (str): New glyph name
+			layers (list(str) or list(flLayer)): List of layers to be added to the new glyph
+			unicode_int (int): Unicode int of the new glyph
+		Returns
+			pGlyph
+		'''
+
 		# - Build
 		base_glyph = fl6.flGlyph()
 		base_glyph.name = glyph_name
@@ -2340,7 +2346,16 @@ class pFont(object):
 		return new_glyph
 
 	def newGlyphFromRecipe(self, glyph_name, recipe, layers=[], unicode_int=None, rtl=False):
-		''' Generate new glyph (glyph_name) using String Recipe (recipe)'''		
+		''' Generate new glyph (glyph_name) using String Recipe (recipe)
+		Args:
+			glyph_name (str): New glyph name
+			recipe (str): Glyph composition recipe using OLD Fontlab syntax (ex. A+acute=Aacute)
+			layers (list(str)): List of layer names to be added
+			unicode_int (int): Unicode int of the new glyph
+			rtl (bool): Right to left
+		Returns
+			pGlyph
+		'''		
 		
 		# - Prepare
 		advanceWidth = 0 #!!! Figure it out later
@@ -2356,10 +2371,24 @@ class pFont(object):
 		new_glyph = self.newGlyph(glyph_name, prepared_layers, unicode_int)
 		return new_glyph
 
-	def duplicateGlyph(self, src_name, dst_name, dst_unicode=None):
+	def duplicateGlyph(self, src_name, dst_name, dst_unicode=None, references=True):
+		'''Duplicates a glyph and adds it to the font
+		Args:
+			src_name, dst_name (str): Source and destination names
+			dst_unicode (int): Unicode int of the new glyph
+			references (bool): Keep existing element references (True) or decompose (False)
+		Returns
+			pGlyph
+		'''
+
 		src_glyph = self.glyph(src_name)
-		options = {'out': True, 'gui': True, 'anc': True, 'lsb': True, 'adv': True, 'rsb': True, 'lnk': True, 'ref': True}
-		prepared_layers = [src_glyph.copyLayer(layer.name, layer.name, options, False, False) for layer in src_glyph.layers()]
+		options = {'out': True, 'gui': True, 'anc': True, 'lsb': True, 'adv': True, 'rsb': True, 'lnk': True, 'ref': references}
+		prepared_layers = []
+
+		for layer in src_glyph.layers():
+			new_layer = src_glyph.copyLayer(layer.name, layer.name + '.duplicate', options, False, False)
+			new_layer.name = new_layer.name.replace('.duplicate', '')
+			prepared_layers.append(new_layer)
 
 		new_glyph = self.newGlyph(dst_name, prepared_layers, dst_unicode)
 		return new_glyph
