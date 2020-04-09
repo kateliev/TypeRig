@@ -28,8 +28,9 @@ from typerig.proxy import pFontMetrics, pFont, pWorkspace
 number_token = '#'
 
 # - String -----------------------------
-help_numeration = 'Use # for sequential numeration.\n\nExample:\n#=1; ##=01; ###=001\nA.ss## will crearte A.ss01 to A.ss99'
+help_numeration = 'Use # for sequential numeration.\n\nExample:\n#=1; ##=01; ###=001\nA.ss## will crearte A.ss01 to A.ss20'
 help_setName = 'Set name for current glyph or multiple selected glyphs (TR Selection mode).\n' + help_numeration
+help_duplicate = 'Duplicate current glyph or multiple selected glyphs (TR Selection mode).\n' + help_numeration
 
 # - Functions --------------------------
 fromat_number = lambda x, i: '0'*(i - 1) + str(x) if len(str(x)) < i else str(x)
@@ -174,7 +175,9 @@ class TRGlyphCopyTools(QtGui.QGridLayout):
 		self.chk_slot04 = QtGui.QPushButton('')
 		self.chk_slot04.setCheckable(True)
 
+		self.btn_duplicate.setToolTip(help_duplicate)
 		self.btn_duplicate.clicked.connect(self.glyph_duplicate)
+
 
 		# -- Spin boxes 
 		self.spb_duplicate =  QtGui.QSpinBox()
