@@ -161,6 +161,7 @@ class TRGlyphCopyTools(QtGui.QGridLayout):
 		# -- Edit Fields
 		self.edt_glyphsuffix = TRGLineEdit()
 		self.edt_glyphsuffix.setPlaceholderText('Glyph Suffix')
+		self.edt_glyphsuffix.setToolTip(help_numeration)
 
 		# -- Buttons
 		self.btn_duplicate = QtGui.QPushButton('Duplicate')
