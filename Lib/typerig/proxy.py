@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.74.7'
+__version__ = '0.74.9'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -759,6 +759,7 @@ class pGlyph(object):
 		self.mark = self.fl.mark
 		self.tags = self.fl.tags
 		self.unicode = self.fg.unicode
+		self.unicodes = self.fg.unicodes
 		self.package = fl6.flPackage(self.fl.package)
 		self.builders = {}
 
@@ -782,7 +783,13 @@ class pGlyph(object):
 
 	def italicAngle(self): return self.package.italicAngle_value
 
-	def setMark(self, mark_color): self.fl.mark = mark_color; self.mark = self.fl.mark
+	def setMark(self, mark_color, layer=None): 
+		if layer is None:
+			self.fl.mark = self.mark = mark_color
+		else:
+			self.layers(layer).mark = mark_color
+
+	def setName(self, glyph_name): self.fl.name = self.fg.name = self.name = glyph_name
 
 	def nodes(self, layer=None, extend=None, deep=False):
 		'''Return all nodes at given layer.
@@ -2078,6 +2085,9 @@ class pFont(object):
 			foundShape = glyph.findShape(shapeName, master)
 			if foundShape is not None:
 				return foundShape
+	
+	def hasGlyph(self, glyphName):
+		return self.fg.has_key(glyphName)
 
 	# - Font metrics -----------------------------------------------
 	def getItalicAngle(self):
@@ -2108,6 +2118,7 @@ class pFont(object):
 			undoMessage (string): Message to be added in undo/history list.
 		'''
 		fl6.flItems.notifyChangesApplied(undoMessage, flObject, True)
+		fl6.flItems.notifyPackageContentUpdated(self.fl.fgPackage.id)
 		if verbose: print 'DONE:\t%s' %undoMessage
 
 	def update(self):
@@ -2316,7 +2327,7 @@ class pFont(object):
 			glyph_name (str): New glyph name
 			layers (list(str) or list(flLayer)): List of layers to be added to the new glyph
 			unicode_int (int): Unicode int of the new glyph
-		Returns
+		Returns:
 			pGlyph
 		'''
 
@@ -2353,7 +2364,7 @@ class pFont(object):
 			layers (list(str)): List of layer names to be added
 			unicode_int (int): Unicode int of the new glyph
 			rtl (bool): Right to left
-		Returns
+		Returns:
 			pGlyph
 		'''		
 		
@@ -2371,18 +2382,19 @@ class pFont(object):
 		new_glyph = self.newGlyph(glyph_name, prepared_layers, unicode_int)
 		return new_glyph
 
-	def duplicateGlyph(self, src_name, dst_name, dst_unicode=None, references=True):
+	def duplicateGlyph(self, src_name, dst_name, dst_unicode=None, options={'out': True, 'gui': True, 'anc': True, 'lsb': True, 'adv': True, 'rsb': True, 'lnk': True, 'ref': True, 'flg': True, 'tag': True}):
 		'''Duplicates a glyph and adds it to the font
 		Args:
 			src_name, dst_name (str): Source and destination names
 			dst_unicode (int): Unicode int of the new glyph
 			references (bool): Keep existing element references (True) or decompose (False)
-		Returns
+		Returns:
 			pGlyph
 		'''
-
+		# - Init
 		src_glyph = self.glyph(src_name)
-		options = {'out': True, 'gui': True, 'anc': True, 'lsb': True, 'adv': True, 'rsb': True, 'lnk': True, 'ref': references}
+		
+		# - Copy Layer data
 		prepared_layers = []
 
 		for layer in src_glyph.layers():
@@ -2391,6 +2403,11 @@ class pFont(object):
 			prepared_layers.append(new_layer)
 
 		new_glyph = self.newGlyph(dst_name, prepared_layers, dst_unicode)
+
+		# - Copy Glyph specific stuff
+		if options['tag']: new_glyph.setTags(src_glyph.tags) # Copy tags
+		if options['flg']: new_glyph.setMark(src_glyph.mark) # Copy glyph flag/mark
+
 		return new_glyph
 
 	# - Information -----------------------------------------------
