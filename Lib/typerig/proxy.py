@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.74.9'
+__version__ = '0.75.0'
 
 # - Dependencies --------------------------
 import fontlab as fl6
@@ -1043,38 +1043,70 @@ class pGlyph(object):
 		return [activeLayer[sid] for sid in range(activeLayer.countShapes())]
 
 	# - Composite glyph --------------------------------------------
-	# !!! Note: Too much nested loops revisit!
+	def elements(self, layer=None, extend=None):
+		'''Return all glyph elements in glyph'''
+		return [shape.includesList for shape in self.shapes(layer, extend) if len(shape.includesList)]
+
+	def noncomplex(self, layer=None,  extend=None):
+		'''Return all glyph shapes that are not glyph references or components'''
+		special = self.components(layer) + self.elements(layer) +  self.containers(layer)
+		return [shape for shape in self.shapes(layer, extend) if shape not in special]		
 	
-	def listGlyphComponents(self, layer=None, extend=None):
-		'''Return all glyph components in glyph'''
-		return [(shape, shape.includesList) for shape in self.shapes(layer, extend) if len(shape.includesList)]
-
-	def listUnboundShapes(self, layer=None):
-		'''Return all glyph shapes that are not glyph references or those belonging to the original (master) glyph'''
-		return [shape for shape in self.shapes(layer) if self.package.isComponent(shape.shapeData)[0] is None or self.package.isComponent(shape.shapeData)[0] == self.fl]		
-
 	def components(self, layer=None, extend=None):
 		'''Return all glyph components besides glyph.'''
-		return [comp for pair in self.listGlyphComponents(layer, extend) for comp in pair[1]]
-
-	def getCompositionString(self, layer=None, legacy=True):
-		'''Return glyph composition string for Generate Glyph command.'''
-		comp_names = self.getCompositionNames(layer)
-
-		if legacy:
-			return '%s=%s' %('+'.join(comp_names[1:]), comp_names[0])
+		return [shape for shape in self.shapes(layer, extend) if shape.shapeData.isComponent]
 
 	def getCompositionNames(self, layer=None):
 		'''Return name of glyph and the parts it is made of.'''
-		return [self.name] + [shape.shapeData.name for shape in self.components(layer)]
+		return [shape.shapeData.componentGlyph for shape in self.components(layer)]
 
-	def getCompositionDict(self, layer=None, extend=None):
+	def getCompositionDict(self, layer=None):
 		'''Return composition dict of a glyph. Elements!'''
-		return {shape.shapeData.name:shape for shape in self.components(layer, extend)}
+		return {shape.shapeData.componentGlyph:shape for shape in self.components(layer)}
 
-	def getContainersDict(self, layer=None, extend=None):
-		'''Return composition dict of a glyph. Composites!'''
-		return {container.includesList[0].shapeData.name:container for container in self.containers(layer, extend)}	#TODO: Make it better! This references only first shape in container!
+	def addComponents(self, componentConfig, layer=None, useAnchors=True, colorize=False):
+		'''Adds a components to given glyph layer.
+		Args:
+			componentConfig (list(tuple(glyph_name (str), glyph_transform (QTransform), layer_pointer (str)))): List contianign component configuration.  
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+			useAnchors (bool): Compose using anchors
+			colorize (bool): Flag new glyphs
+		Returns:
+			list(flShapes): List of components added
+		'''
+		from typerig.proxy import pFont
+
+		# - Init
+		font = pFont(self.parent)
+		component_add = []
+		component_fin = []
+		component_widths = []
+		component_pointers = {}
+		component_snapshot = self.components(layer)
+		
+		for glyph_name, glyph_transform, layer_pointer in componentConfig:
+			new_component = fl6.GlyphComponent(glyph_name)
+			if glyph_transform is not None: new_component.transform = glyph_transform
+			new_component.use_anchors = useAnchors
+			
+			component_pointers[glyph_name] = layer_pointer
+			component_add.append(new_component)
+			component_widths.append(font.glyph(glyph_name).getAdvance(layer))
+
+		if len(component_add):
+			self.layer(layer).setGlyphComponents(component_add, max(component_widths), font.fl, colorize)
+			
+			for shape in self.components(layer):
+				shape_name = shape.shapeData.componentGlyph
+				
+				if shape not in component_snapshot:
+					if shape_name in component_pointers.keys():	
+						shape.componentLayer = component_pointers[shape_name] # Set layer reference
+					
+					component_fin.append(shape)
+		
+		return component_fin
+
 
 	# - Layers -----------------------------------------------------
 	def masters(self):
