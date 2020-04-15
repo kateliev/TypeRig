@@ -1101,7 +1101,7 @@ class pGlyph(object):
 				
 				if shape not in component_snapshot:
 					if shape_name in component_pointers.keys():	
-						shape.componentLayer = component_pointers[shape_name] # Set layer reference
+						shape.shapeData.componentLayer = component_pointers[shape_name] # Set layer reference
 					
 					component_fin.append(shape)
 		
