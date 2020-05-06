@@ -12,9 +12,12 @@
 __version__ = '0.0.3'
 
 # - Dependencies --------------------------
+from platform import system
+
 from PythonQt import QtCore
 import QtGui
-from platform import system
+
+from typerig.proxy import *
 
 # - Functions --------------------------
 def getProcessGlyphs(mode=0, font=None, workspace=None):
@@ -28,10 +31,6 @@ def getProcessGlyphs(mode=0, font=None, workspace=None):
 	Returns:
 		list(eGlyph)
 	'''
-	# - Dependancies
-	from typerig.glyph import eGlyph
-	from typerig.proxy import pFont, pWorkspace
-
 	# - Init
 	process_glyphs = []
 	active_workspace = pWorkspace()
