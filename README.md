@@ -8,7 +8,7 @@
 
 **Delta Machine** (`.\Scripts\Delta Machine`) - an advanced tool for adaptive outline scaling based on the exceptional work *A Multiple Master based method for scaling glyphs without changing the stroke characteristics* by Tim Ahrens.
 
-#### Known issues
+### Known issues
 Please refer to https://github.com/kateliev/TypeRig/issues
 
 ### Installation
@@ -23,4 +23,5 @@ Unpack files anywhere you want. Then:
 TypeRig FDK is developed by: **Vassil Kateliev** (2017-2020) and **Adam Twardoch** (2019-2020)
 
 For contact and inquiries: vassil(at)kateliev(dot)com
+
 www.typerig.com
