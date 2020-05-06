@@ -1,8 +1,8 @@
-# MODULE: TypeRig Panel | Sub Panels
-# ----------------------------------------
-# (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
-# (C) Karandash Type Foundry (http://www.karandash.eu)
-#-----------------------------------------
+# MODULE: TypeRig Panel / Sub Panels
+# -----------------------------------------------------------
+# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Karandash Type Foundry 		(http://www.karandash.eu)
+#------------------------------------------------------------
 # www.typerig.com
 
 # No warranties. By using this you agree

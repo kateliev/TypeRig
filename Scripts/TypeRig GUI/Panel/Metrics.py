@@ -1,8 +1,8 @@
-#FLM: Glyph: Metrics
-# ----------------------------------------
-# (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
-# (C) Karandash Type Foundry (http://www.karandash.eu)
-#-----------------------------------------
+#FLM: TR: Metrics
+# -----------------------------------------------------------
+# (C) Vassil Kateliev, 2017-2020 	(http://www.kateliev.com)
+# (C) Karandash Type Foundry 		(http://www.karandash.eu)
+#------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
@@ -12,17 +12,17 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Metrics', '0.29'
+app_name, app_version = 'TypeRig | Metrics', '0.30'
 
 # - Dependencies -----------------
 import fontlab as fl6
 import fontgate as fgt
+
+from typerig.proxy import *
+
 from PythonQt import QtCore
-from typerig import QtGui
-from typerig.proxy import pFont
-from typerig.gui import getProcessGlyphs
-from typerig.glyph import eGlyph
-from typerig.node import eNodesContainer, eNode
+from typerig.gui import QtGui
+from typerig.gui.widgets import getProcessGlyphs
 
 # - Sub widgets ------------------------
 class TRMLineEdit(QtGui.QLineEdit):

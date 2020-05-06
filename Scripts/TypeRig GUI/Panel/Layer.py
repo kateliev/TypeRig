@@ -1,8 +1,8 @@
-#FLM: Glyph: Layers
-# ----------------------------------------
-# (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
-# (C) Karandash Type Foundry (http://www.karandash.eu)
-#-----------------------------------------
+#FLM: TR: Layers
+# -----------------------------------------------------------
+# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Karandash Type Foundry 		(http://www.karandash.eu)
+#------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
@@ -15,18 +15,20 @@ from itertools import groupby
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig import QtGui
+from typerig.proxy import *
+
+from typerig.core.func.math import linInterp as lerp
+
 from PythonQt import QtCore
-from typerig.glyph import eGlyph
-from typerig.gui import TRSliderCtrl
-from typerig.brain import linInterp as lerp
+from typerig.gui import QtGui
+from typerig.gui.widgets import getProcessGlyphs, TRSliderCtrl
 
 # - Init
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '1.27'
+app_name, app_version = 'TypeRig | Layers', '1.28'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')

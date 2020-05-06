@@ -1,4 +1,4 @@
-#FLM: Typerig Filter
+#FLM: TypeRig: Filter
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -11,9 +11,10 @@
 # - Dependencies -----------------
 #import fontlab as fl6
 #import fontgate as fgt
+
 from PythonQt import QtCore
-from typerig import QtGui
-from typerig.gui import TRVTabWidget
+from typerig.gui import QtGui
+from typerig.gui.widgets import getProcessGlyphs, TRVTabWidget
 
 # -- Internals - Load toolpanels
 import Filter as Panel

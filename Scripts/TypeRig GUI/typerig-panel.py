@@ -1,4 +1,4 @@
-#FLM: Typerig Panel
+#FLM: TypeRig: Panel
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -10,11 +10,14 @@
 
 # - Dependencies -----------------
 from collections import OrderedDict
+
 import fontlab as fl6
+
+from typerig.proxy import *
+
 from PythonQt import QtCore
-from typerig import QtGui
-from typerig.gui import TRVTabWidget
-from typerig.proxy import pGlyph, pFont
+from typerig.gui import QtGui
+from typerig.gui.widgets import getProcessGlyphs, TRVTabWidget
 
 # -- Internals - Load toolpanels 
 import Panel 

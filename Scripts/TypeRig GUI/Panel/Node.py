@@ -1,8 +1,8 @@
-#FLM: Glyph: Nodes
-# ----------------------------------------
-# (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
-# (C) Karandash Type Foundry (http://www.karandash.eu)
-#-----------------------------------------
+#FLM: TR: Nodes
+# -----------------------------------------------------------
+# (C) Vassil Kateliev, 2017-2020 	(http://www.kateliev.com)
+# (C) Karandash Type Foundry 		(http://www.karandash.eu)
+#------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
@@ -12,19 +12,17 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '1.13'
+app_name, app_version = 'TypeRig | Nodes', '1.14'
 
 # - Dependencies -----------------
 import fontlab as fl6
 import fontgate as fgt
+
+from typerig.proxy import *
+
 from PythonQt import QtCore
-from typerig import QtGui
-from typerig.glyph import eGlyph
-from typerig.node import eNode, eNodesContainer
-from typerig.contour import eContour
-from typerig.proxy import pFont, pFontMetrics, pContour
-from typerig.gui import getProcessGlyphs
-from typerig.brain import Coord, Line
+from typerig.gui import QtGui
+from typerig.gui.widgets import getProcessGlyphs
 
 # - Sub widgets ------------------------
 class basicOps(QtGui.QGridLayout):
@@ -156,7 +154,6 @@ class basicOps(QtGui.QGridLayout):
 		glyph.updateObject(glyph.fl, 'Delete Node @ %s.' %'; '.join(wLayers))
 
 	def cornerMitre(self, doKnot=False):
-		from typerig.node import eNode
 		glyph = eGlyph()
 		wLayers = glyph._prepareLayers(pLayers)
 		
@@ -175,7 +172,6 @@ class basicOps(QtGui.QGridLayout):
 		glyph.updateObject(glyph.fl, '%s @ %s.' %(action, '; '.join(wLayers)))
 
 	def cornerTrap(self):
-		from typerig.node import eNode
 		glyph = eGlyph()
 		wLayers = glyph._prepareLayers(pLayers)
 		parameters = tuple([float(value.strip()) for value in self.edt_trap.text.split(',')])
@@ -190,7 +186,6 @@ class basicOps(QtGui.QGridLayout):
 		glyph.updateObject(glyph.fl, '%s @ %s.' %('Trap Corner', '; '.join(wLayers)))
 
 	def cornerRebuild(self):
-		from typerig.node import eNode
 		glyph = eGlyph()
 		wLayers = glyph._prepareLayers(pLayers)
 		
@@ -415,8 +410,6 @@ class alignNodes(QtGui.QGridLayout):
 		self.addWidget(self.btn_pasteFMaxY,		13, 3, 1, 1)
 
 	def copySlope(self):
-		from typerig.brain import Line
-
 		if self.chk_copy.isChecked():
 			self.chk_copy.setText('Reset Slope')
 			self.chk_italic.setChecked(False)
@@ -426,15 +419,13 @@ class alignNodes(QtGui.QGridLayout):
 			
 			for layer in wLayers:
 				selection = glyph.selectedNodes(layer)
-				self.copyLine[layer] = Line(selection[0], selection[-1])
-				#print self.copyLine[layer].getAngle(), self.copyLine[layer].getSlope()
+				self.copyLine[layer] = Vector(selection[0], selection[-1])
+				#print self.copyLine[layer].angle, self.copyLine[layer].slope
 		else:
 			self.chk_copy.setText('Copy Slope')
 			self.chk_italic.setChecked(False)
 
 	def pasteSlope(self, mode):
-		from typerig.brain import Line
-		
 		if self.chk_copy.isChecked() or self.chk_italic.isChecked():
 			glyph = eGlyph()
 			wLayers = glyph._prepareLayers(pLayers)
@@ -446,39 +437,39 @@ class alignNodes(QtGui.QGridLayout):
 				srcLine = self.copyLine[layer] if not self.chk_italic.isChecked() else None
 
 				if mode == 'MinY':
-					dstLine = Line(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
+					dstVector = Vector(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
 					
 					if not self.chk_italic.isChecked():
-						dstLine.slope = srcLine.getSlope()
+						dstVector.slope = srcLine.slope
 					else:
-						dstLine.setAngle(-1*italicAngle)
+						dstVector.angle = -1*italicAngle
 
 				elif mode == 'MaxY':
-					dstLine = Line(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
+					dstVector = Vector(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
 					
 					if not self.chk_italic.isChecked():
-						dstLine.slope = srcLine.getSlope()
+						dstVector.slope = srcLine.slope
 					else:
-						dstLine.setAngle(-1*italicAngle)
+						dstVector.angle = -1*italicAngle
 
 				elif mode == 'FLMinY':
-					dstLine = Line(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
+					dstVector = Vector(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
 					
 					if not self.chk_italic.isChecked():
-						dstLine.slope = -1.*srcLine.getSlope()
+						dstVector.slope = -1.*srcLine.slope
 					else:
-						dstLine.setAngle(italicAngle)
+						dstVector.angle = italicAngle
 
 				elif mode == 'FLMaxY':
-					dstLine = Line(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
+					dstVector = Vector(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
 					
 					if not self.chk_italic.isChecked():
-						dstLine.slope = -1.*srcLine.getSlope()
+						dstVector.slope = -1.*srcLine.slope
 					else:
-						dstLine.setAngle(italicAngle)
+						dstVector.angle = italicAngle
 				
 				for node in selection:
-					node.alignTo(dstLine, control)
+					node.alignTo(dstVector, control)
 
 			glyph.updateObject(glyph.fl, 'Paste Slope @ %s.' %'; '.join(wLayers))
 			glyph.update()
@@ -524,11 +515,11 @@ class alignNodes(QtGui.QGridLayout):
 					control = (False, True)
 
 				elif mode == 'Y':
-					target = Line(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
+					target = Vector(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
 					control = (True, False)
 
 				elif mode == 'X':
-					target = Line(min(selection, key=lambda item: item.x).fl, max(selection, key=lambda item: item.x).fl)
+					target = Vector(min(selection, key=lambda item: item.x).fl, max(selection, key=lambda item: item.x).fl)
 					control = (False, True)
 
 				elif mode == 'BBoxCenterX':
@@ -664,7 +655,7 @@ class alignNodes(QtGui.QGridLayout):
 								pairDown = node.getMinY().position
 								pairPos = pairUp if toMaxY else pairDown
 								newLine = Line(node.fl.position, pairPos)
-								newX = newLine.solveX(newY)
+								newX = newLine.solve_x(newY)
 
 								target = fl6.flNode(newX, newY)
 								control = (True, True)
@@ -993,7 +984,7 @@ class advMovement(QtGui.QVBoxLayout):
 
 					if len(self.aux.copyLine) and current_layer in self.aux.copyLine:
 						for node in selectedNodes:
-							node.slantShift(offset_x, offset_y, -90 + self.aux.copyLine[current_layer].getAngle())				
+							node.slantShift(offset_x, offset_y, -90 + self.aux.copyLine[current_layer].angle)				
 					else:
 						print 'ERROR:\tNo slope information for layer found!\nNOTE:\tPlease <<Copy Slope>> first using TypeRig Node align toolbox.'
 

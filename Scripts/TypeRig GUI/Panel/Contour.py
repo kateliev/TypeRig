@@ -1,8 +1,8 @@
-#FLM: Glyph: Contour
-# ----------------------------------------
-# (C) Vassil Kateliev, 2019 (http://www.kateliev.com)
-# (C) Karandash Type Foundry (http://www.karandash.eu)
-#-----------------------------------------
+#FLM: TR: Contour
+# -----------------------------------------------------------
+# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Karandash Type Foundry 		(http://www.karandash.eu)
+#------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
@@ -12,18 +12,19 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '0.23'
+app_name, app_version = 'TypeRig | Contour', '0.24'
 
 # - Dependencies -----------------
+from collections import OrderedDict
+
 import fontlab as fl6
 import fontgate as fgt
+
+from typerig.proxy import *
+
 from PythonQt import QtCore
-from typerig import QtGui
-from typerig.glyph import eGlyph
-from typerig.contour import eContour
-from typerig.proxy import pFont, pContour
-from typerig.gui import getProcessGlyphs
-from typerig.brain import Coord
+from typerig.gui import QtGui
+from typerig.gui.widgets import getProcessGlyphs
 
 # - Sub widgets ------------------------
 class breakContour(QtGui.QGridLayout):
@@ -203,8 +204,7 @@ class alignContours(QtGui.QGridLayout):
 	# - Align Contours
 	def __init__(self):
 		super(alignContours, self).__init__()
-		from collections import OrderedDict
-		
+				
 		# - Init
 		self.align_x = OrderedDict([('Left','L'), ('Right','R'), ('Center','C'), ('Keep','K')])
 		self.align_y = OrderedDict([('Top','T'), ('Bottom','B'), ('Center','E'), ('Keep','X')])

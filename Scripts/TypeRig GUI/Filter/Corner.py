@@ -1,8 +1,8 @@
-#FLM: Filter: Corner
-# ----------------------------------------
-# (C) Vassil Kateliev, 2019 (http://www.kateliev.com)
-# (C) Karandash Type Foundry (http://www.karandash.eu)
-#-----------------------------------------
+#FLM: TR: Corner Filter
+# -----------------------------------------------------------
+# (C) Vassil Kateliev, 2019-2020 	(http://www.kateliev.com)
+# (C) Karandash Type Foundry 		(http://www.karandash.eu)
+#------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
@@ -16,11 +16,11 @@ from collections import OrderedDict
 import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore
-from typerig import QtGui
-from typerig.proxy import pFont, pShape, pNode, pWorkspace
-from typerig.node import eNode
-from typerig.glyph import eGlyph
-from typerig.gui import TRTableView, TRSliderCtrl, getProcessGlyphs
+
+from typerig.proxy import *
+
+from typerig.gui import QtGui
+from typerig.gui.widgets import TRTableView, TRSliderCtrl, getProcessGlyphs
 
 # - Init
 global pLayers

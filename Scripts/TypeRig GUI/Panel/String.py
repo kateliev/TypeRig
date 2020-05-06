@@ -1,11 +1,20 @@
-#FLM: Text: String Generator
-# ----------------------------------------
-# (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
-# (C) Karandash Type Foundry (http://www.karandash.eu)
-#-----------------------------------------
+#FLM: TR: String Generator
+# -----------------------------------------------------------
+# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Karandash Type Foundry 		(http://www.karandash.eu)
+#------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
+
+# - Dependencies -----------------
+import fontlab as fl6
+import fontgate as fgt
+
+from typerig.proxy import *
+
+from PythonQt import QtCore
+from typerig.gui import QtGui
 
 # - Init
 global pLayers
@@ -13,7 +22,7 @@ global pMode
 pLayers = None
 pMode = 0
 
-app_name, app_version = 'TypeRig | String', '0.39'
+app_name, app_version = 'TypeRig | String', '0.40'
 glyphSep = '/'
 pairSep = '|'
 joinOpt = {'Empty':'', 'Newline':'\n'}
@@ -30,14 +39,6 @@ filler_patterns = [	'FL A FR',
 					'FL B | A FR',
 					'FL A | B FR \\n FR B A FL',
 					]
-
-# - Dependencies -----------------
-import fontlab as fl6
-import fontgate as fgt
-from PythonQt import QtCore
-from typerig import QtGui
-from typerig.proxy import pFont
-from typerig.string import stringGen, stringGenPairs, strRepDict, fillerList, baseGlyphset
 
 # - Tabs -------------------------------
 class TRStringGen(QtGui.QGridLayout):

@@ -1,8 +1,8 @@
-#FLM: Font: Metrics
-# ----------------------------------------
-# (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
-# (C) Karandash Type Foundry (http://www.karandash.eu)
-#-----------------------------------------
+#FLM: TR: Font Metrics
+# -----------------------------------------------------------
+# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Karandash Type Foundry 		(http://www.karandash.eu)
+#------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
@@ -16,10 +16,12 @@ app_name, app_version = 'TypeRig | Font Metrics', '0.15'
 import os, json
 import fontlab as fl6
 import fontgate as fgt
+
+from typerig.proxy import *
+
 from PythonQt import QtCore
-from typerig import QtGui
-from typerig.proxy import pGlyph, pFont
-from typerig.gui import TRTableView
+from typerig.gui import QtGui
+from typerig.gui.widgets import TRTableView
 
 # - Sub widgets ------------------------
 class TRZLineEdit(QtGui.QLineEdit):

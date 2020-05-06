@@ -1,8 +1,8 @@
-#FLM: Font: Kern Classes
-# ----------------------------------------
-# (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
-# (C) Karandash Type Foundry (http://www.karandash.eu)
-#-----------------------------------------
+#FLM: TR: Kern Classes
+# -----------------------------------------------------------
+# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Karandash Type Foundry 		(http://www.karandash.eu)
+#------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
@@ -15,13 +15,16 @@ alt_mark = '.'
 
 # - Dependencies -----------------
 import os, json
+from platform import system
+
 import fontlab as fl6
 import fontgate as fgt
-from platform import system
+
 from PythonQt import QtCore
-from typerig import QtGui
-from typerig.proxy import pFont, pGlyph
-from typerig.utils import getUppercaseCodepoint, getLowercaseCodepoint
+from typerig.gui import QtGui
+
+from typerig.proxy import *
+from typerig.core.func.string import getUppercaseCodepoint, getLowercaseCodepoint
 
 # - Strings ------------------------------------------------------------------
 fileFormats = ['TypeRig JSON Raw Classes (*.json)', 'FontLab VI JSON Classes (*.json)']

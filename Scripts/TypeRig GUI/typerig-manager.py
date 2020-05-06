@@ -1,4 +1,4 @@
-#FLM: Typerig Manager
+#FLM: TypeRig: Manager
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -11,9 +11,10 @@
 # - Dependencies -----------------
 #import fontlab as fl6
 #import fontgate as fgt
+
 from PythonQt import QtCore
-from typerig import QtGui
-from typerig.gui import TRHTabWidget
+from typerig.gui import QtGui
+from typerig.gui.widgets import getProcessGlyphs, TRHTabWidget
 
 # -- Internals - Load toolpanels 
 import Manager

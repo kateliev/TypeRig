@@ -1,27 +1,29 @@
-#FLM: Text: Block
-# ----------------------------------------
-# (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
-# (C) Karandash Type Foundry (http://www.karandash.eu)
-#-----------------------------------------
+#FLM: TR: Text Block
+# -----------------------------------------------------------
+# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Karandash Type Foundry 		(http://www.karandash.eu)
+#------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
 # - Dependencies -----------------
-import fontlab as fl6
-import fontgate as fgt
-from PythonQt import QtCore
-from typerig import QtGui
 import cPickle, os
 
-from typerig.proxy import pWorkspace, pTextBlock, pFont
+import fontlab as fl6
+import fontgate as fgt
+
+from typerig.proxy import *
+
+from PythonQt import QtCore
+from typerig.gui import QtGui
 
 # - Init --------------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_version = '0.06'
+app_version = '0.07'
 app_name = 'Text Block Control'
 
 text_align = 'Left Right Center'.split(' ')

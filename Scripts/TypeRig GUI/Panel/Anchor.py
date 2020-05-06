@@ -1,8 +1,8 @@
-#FLM: Glyph: Anchor
-# ----------------------------------------
-# (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
-# (C) Karandash Type Foundry (http://www.karandash.eu)
-#-----------------------------------------
+#FLM: TR: Anchor
+# -----------------------------------------------------------
+# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Karandash Type Foundry 		(http://www.karandash.eu)
+#------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
@@ -10,10 +10,12 @@
 # - Dependencies -----------------
 import fontlab as fl6
 import fontgate as fgt
+
+from typerig.proxy import *
+
 from PythonQt import QtCore
-from typerig import QtGui
-from typerig.glyph import eGlyph
-from typerig.gui import getProcessGlyphs
+from typerig.gui import QtGui
+from typerig.gui.widgets import getProcessGlyphs
 
 # - Init
 global pLayers
@@ -22,7 +24,7 @@ global clipboard_glyph_anchors
 pLayers = None
 pMode = 0
 clipboard_glyph_anchors = {}
-app_name, app_version = 'TypeRig | Anchors', '0.19'
+app_name, app_version = 'TypeRig | Anchors', '0.20'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):

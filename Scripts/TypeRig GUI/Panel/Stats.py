@@ -1,8 +1,8 @@
-#FLM: Glyph: Statistics
-# ----------------------------------------
-# (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
-# (C) Karandash Type Foundry (http://www.karandash.eu)
-#-----------------------------------------
+#FLM: TR: Statistics
+# -----------------------------------------------------------
+# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Karandash Type Foundry 		(http://www.karandash.eu)
+#------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
@@ -10,20 +10,22 @@
 # - Dependencies -----------------
 import fontlab as fl6
 import fontgate as fgt
+
+from typerig.proxy import *
+
+from typerig.core.func.math import ratfrac
+
 from PythonQt import QtCore
-from typerig import QtGui
-from typerig.proxy import pFont, pWorkspace
-from typerig.glyph import eGlyph
-from typerig.gui import TRTableView
-from typerig.brain import ratfrac
-#from collections import OrderedDict
+from typerig.gui import QtGui
+from typerig.gui.widgets import getProcessGlyphs, TRTableView
+
 
 # - Init
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Glyph Statistics', '0.14'
+app_name, app_version = 'TypeRig | Glyph Statistics', '0.15'
 
 # - Sub widgets ------------------------
 class TRGlyphInfo(QtGui.QVBoxLayout):

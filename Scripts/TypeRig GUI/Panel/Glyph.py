@@ -1,8 +1,8 @@
-#FLM: Glyph: Glyph
-# ----------------------------------------
-# (C) Vassil Kateliev, 2020 (http://www.kateliev.com)
-# (C) Karandash Type Foundry (http://www.karandash.eu)
-#-----------------------------------------
+#FLM: TR: Glyph
+# -----------------------------------------------------------
+# (C) Vassil Kateliev, 2019-2020 	(http://www.kateliev.com)
+# (C) Karandash Type Foundry 		(http://www.karandash.eu)
+#------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
@@ -12,17 +12,17 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Glyph', '0.08'
+app_name, app_version = 'TypeRig | Glyph', '0.09'
 
 # - Dependencies -----------------
 import fontlab as fl6
 import fontgate as fgt
+
+from typerig.proxy import *
+
 from PythonQt import QtCore
-from typerig import QtGui
-from typerig.string import fontMarkColors as colorNames
-from typerig.gui import getProcessGlyphs
-from typerig.glyph import eGlyph
-from typerig.proxy import pFontMetrics, pFont, pWorkspace
+from typerig.gui import QtGui
+from typerig.gui.widgets import getProcessGlyphs
 
 # - Init -------------------------------
 number_token = '#'
@@ -100,13 +100,13 @@ class TRGlyphBasic(QtGui.QGridLayout):
 		self.btn_setName.setToolTip(help_setName)
 
 		# -- Combo box
-		#colorNames = [(QtGui.QColor(name).hue(), name) for name in QtGui.QColor.colorNames()]
+		#fontMarkColors = [(QtGui.QColor(name).hue(), name) for name in QtGui.QColor.fontMarkColors()]
 		self.cmb_select_color = QtGui.QComboBox()
-		self.color_codes = {name:value for name, value, discard in colorNames}
+		self.color_codes = {name:value for name, value, discard in fontMarkColors}
 		
-		for i in range(len(colorNames)):
-			self.cmb_select_color.addItem(colorNames[i][0])
-			self.cmb_select_color.setItemData(i, QtGui.QColor(colorNames[i][2]), QtCore.Qt.DecorationRole)
+		for i in range(len(fontMarkColors)):
+			self.cmb_select_color.addItem(fontMarkColors[i][0])
+			self.cmb_select_color.setItemData(i, QtGui.QColor(fontMarkColors[i][2]), QtCore.Qt.DecorationRole)
 
 		self.cmb_select_color.setMinimumWidth(40)
 		self.edt_glyphName.setMinimumWidth(40)

@@ -1,8 +1,8 @@
-#FLM: Glyph: Curve
-# ----------------------------------------
-# (C) Vassil Kateliev, 2018 (http://www.kateliev.com)
-# (C) Karandash Type Foundry (http://www.karandash.eu)
-#-----------------------------------------
+#FLM: TR: Curve
+# -----------------------------------------------------------
+# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Karandash Type Foundry 		(http://www.karandash.eu)
+#------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
@@ -12,16 +12,17 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Curves', '0.13'
+app_name, app_version = 'TypeRig | Curves', '0.14'
 
 # - Dependencies -----------------
 import fontlab as fl6
 import fontgate as fgt
+
+from typerig.proxy import *
+
 from PythonQt import QtCore
-from typerig import QtGui
-from typerig.glyph import eGlyph
-from typerig.node import eNode
-from typerig.curve import eCurveEx
+from typerig.gui import QtGui
+from typerig.gui.widgets import getProcessGlyphs
 
 # - Sub widgets ------------------------
 class curveEq(QtGui.QGridLayout):
@@ -110,7 +111,7 @@ class curveEq(QtGui.QGridLayout):
 	def hobby_get(self):
 		glyph = eGlyph()
 		selSegment = eCurveEx(eNode(glyph.selectedNodes()[0]).getSegmentNodes())
-		c0, c1 = selSegment.curve.getHobbyCurvature()
+		c0, c1 = selSegment.curve.solve_hobby_curvature()
 
 		self.spn_hobby0.setValue(c0.real)
 		self.spn_hobby1.setValue(c1.real)
