@@ -17,8 +17,7 @@ moduleName = 'typerig'
 moduleSubPath = 'Lib'
 
 # - String
-tr_head =
-r'''
+tr_head = r'''
  ___ ___ ____
 |   |   |   /\   TypeRig
 |___|___|__/__\  
