@@ -57,7 +57,6 @@ class Coord(trobj.Point): # Dumb Name but avoids name collision with FL Point ob
 
 class Line(trobj.Line):
 	def __init__(self, *argv):
-		from typerig.brain import Coord
 		super(Line, self).__init__((0., 0.), (0., 0.))
 
 		if len(argv) == 4:
@@ -89,7 +88,6 @@ class Line(trobj.Line):
 
 class Vector(trobj.Vector):
 	def __init__(self, *argv):
-		from typerig.brain import Coord, Line
 		temp_line = Line(*argv)
 		super(Vector, self).__init__(*temp_line.tuple)	
 
