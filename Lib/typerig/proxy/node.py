@@ -10,12 +10,14 @@
 
 # - Dependencies -------------------------
 from __future__ import print_function
+import math
 
 import fontlab as fl6
 import PythonQt as pqt
 
 from typerig.proxy.base import *
 #from typerig.proxy.contour import pContour
+#from typerig.proxy.node import pNode, eNode
 
 # - Init ---------------------------------
 __version__ = '0.26.0'
@@ -342,21 +344,18 @@ class eNode(pNode):
 		return self.angleToPrev(), self.distanceToPrev()
 
 	def polarReloc(self, angle, distance):
-		from math import sin, cos
-		newX = distance * cos(angle) + self.x
-		newY = distance * sin(angle) + self.y
+		newX = distance * math.cos(angle) + self.x
+		newY = distance * math.sin(angle) + self.y
 		self.reloc(newX, newY)
 
 	def smartPolarReloc(self, angle, distance):
-		from math import sin, cos
-		newX = distance * cos(angle) + self.x
-		newY = distance * sin(angle) + self.y
+		newX = distance * math.cos(angle) + self.x
+		newY = distance * math.sin(angle) + self.y
 		self.smartReloc(newX, newY)
 
 	def polarRelocFromPrev(self, distance):
-		from math import sin, cos
-		newX = distance * cos(angle + pi/2*[-1,1][self.contour.clockwise]) + self.getPrev().x
-		newY = distance * sin(angle + pi/2*[-1,1][self.contour.clockwise]) + self.getPrev().y
+		newX = distance * math.cos(angle + pi/2*[-1,1][self.contour.clockwise]) + self.getPrev().x
+		newY = distance * math.sin(angle + pi/2*[-1,1][self.contour.clockwise]) + self.getPrev().y
 
 		self.reloc(newX, newY)
 
@@ -370,9 +369,8 @@ class eNode(pNode):
 		prevUnit = Coord(prevNode.asCoord() - self.asCoord()).unit
 		
 		if not isRadius:
-			from math import atan2, sin
-			angle = atan2(nextUnit | prevUnit, nextUnit & prevUnit)
-			radius = abs((float(mitreSize)/2)/sin(angle/2))
+			angle = math.atan2(nextUnit | prevUnit, nextUnit & prevUnit)
+			radius = abs((float(mitreSize)/2)/math.sin(angle/2))
 		else:
 			radius = mitreSize
 
@@ -389,8 +387,6 @@ class eNode(pNode):
 		return (self.fl, nextNode.fl)
 
 	def cornerRound(self, size=5, curvature=(.9,.9), isRadius=False):
-		from typerig.curve import eCurveEx
-
 		# - Calculate unit vectors and shifts
 		nextNode = self.getNextOn(False)
 		prevNode = self.getPrevOn(False)
@@ -399,9 +395,8 @@ class eNode(pNode):
 		prevUnit = Coord(prevNode.asCoord() - self.asCoord()).unit
 		
 		if not isRadius:
-			from math import atan2, sin
-			angle = atan2(nextUnit | prevUnit, nextUnit & prevUnit)
-			radius = abs((float(size)/2)/sin(angle/2))
+			angle = math.atan2(nextUnit | prevUnit, nextUnit & prevUnit)
+			radius = abs((float(size)/2)/math.sin(angle/2))
 		else:
 			radius = size
 
@@ -434,8 +429,6 @@ class eNode(pNode):
 		Returns:
 			tuple(flNode, flNode, flNode, flNode)
 		'''
-		from math import atan2, sin, cos
-
 		# - Init
 		adjust = float(aperture - trap)/2
 
@@ -446,8 +439,8 @@ class eNode(pNode):
 		nextUnit = Coord(nextNode.asCoord() - self.asCoord()).unit
 		prevUnit = Coord(prevNode.asCoord() - self.asCoord()).unit
 
-		angle = atan2(nextUnit | prevUnit, nextUnit & prevUnit)
-		radius = abs((float(aperture)/2)/sin(angle/2))
+		angle = math.atan2(nextUnit | prevUnit, nextUnit & prevUnit)
+		radius = abs((float(aperture)/2)/math.sin(angle/2))
 		
 		bCoord = self.asCoord() + (nextUnit * -radius)
 		cCoord = self.asCoord() + (prevUnit * -radius)
@@ -498,8 +491,6 @@ class eNode(pNode):
 		Returns:
 			tuple(flNode, flNode, flNode, flNode) four base (ON) nodes of the trap.
 		'''
-		from math import atan2, sin, cos, radians
-
 		# - Init
 		remains = depth - incision
 		base_coord = self.asCoord()
@@ -511,10 +502,10 @@ class eNode(pNode):
 		nextUnit = Coord(nextNode.asCoord() - self.asCoord()).unit
 		prevUnit = Coord(prevNode.asCoord() - self.asCoord()).unit
 
-		angle = atan2(nextUnit | prevUnit, nextUnit & prevUnit)
-		aperture = abs(2*(remains/sin(radians(90) - angle/2)*sin(angle/2)))
+		angle = math.atan2(nextUnit | prevUnit, nextUnit & prevUnit)
+		aperture = abs(2*(remains/math.sin(math.radians(90) - angle/2)*math.sin(angle/2)))
 		adjust = float(aperture - trap)/2
-		radius = abs((float(aperture)/2)/sin(angle/2))
+		radius = abs((float(aperture)/2)/math.sin(angle/2))
 		
 		bCoord = self.asCoord() + (nextUnit * -radius)
 		cCoord = self.asCoord() + (prevUnit * -radius)
@@ -630,7 +621,7 @@ class eNode(pNode):
 			shift_x, shift_y (float)
 			angle (float): Angle in degrees
 		'''
-		from PythonQt.QtCore import QPointF
+		
 		
 		# - Init
 		cNode = Coord((self.x + shift_x, self.y))
@@ -638,7 +629,7 @@ class eNode(pNode):
 		
 		# - Calculate & set
 		newX = cNode.solve_width(cNode.y + shift_y)
-		#self.fl.smartSetXY(QPointF(newX, self.y + shift_y))
+		#self.fl.smartSetXY(pqt.QtCore.QPointF(newX, self.y + shift_y))
 		self.smartReloc(newX, self.y + shift_y)
 
 	def alignTo(self, entity, align=(True, True)):
@@ -647,21 +638,18 @@ class eNode(pNode):
 			entity (flNode, pNode, eNode or Line)
 			align (tuple(Align_X (bool), Align_Y (bool)) 
 		'''
-		from typerig.proxy import pNode
-		from PythonQt.QtCore import QPointF
-
 		if isinstance(entity, (fl6.flNode, pNode, self.__class__)):
 			newX = entity.x if align[0] else self.fl.x
 			newY = entity.y if align[1] else self.fl.y
 				
-			#self.fl.smartSetXY(QPointF(newX, newY))
+			#self.fl.smartSetXY(pqt.QtCore.QPointF(newX, newY))
 			self.smartReloc(newX, newY)
 
 		elif isinstance(entity, (Line, Vector)):
 			newX = entity.solve_x(self.fl.y) if align[0] else self.fl.x
 			newY = entity.solve_y(self.fl.x) if align[1] else self.fl.y
 
-			#self.fl.smartSetXY(QPointF(newX, newY))
+			#self.fl.smartSetXY(pqt.QtCore.QPointF(newX, newY))
 			self.smartReloc(newX, newY)
 
 
@@ -678,10 +666,7 @@ class eNodesContainer(pNodesContainer):
 			entity ()
 			alignMode (String) : L(left), R(right), C(center), T(top), B(bottom), E(vertical center) !ORDER MATTERS
 		'''
-		from typerig.proxy import pNode
-		from typerig.node import eNode
-		from PythonQt.QtCore import QPointF
-		
+			
 		# - Helper
 		def getAlignDict(item):
 			align_dict = {	'L': item.x(), 
@@ -699,10 +684,10 @@ class eNodesContainer(pNodesContainer):
 			alignX, alignY = alignMode.upper()
 
 			# -- Get target for alignment
-			if isinstance(entity, (fl6.flNode, pNode, eNode, Coord, QPointF)):
+			if isinstance(entity, (fl6.flNode, pNode, eNode, Coord, pqt.QtCore.QPointF)):
 				target = Coord(entity.x, entity.y)
 
-			elif isinstance(entity, (fl6.flContour, pContour, self.__class__)):
+			elif isinstance(entity, (fl6.flContour, self.__class__)): #(fl6.flContour, pContour, self.__class__)
 				
 				if isinstance(entity, fl6.flContour):
 					temp_entity = self.__class__(fl6.flContour.nodes())
