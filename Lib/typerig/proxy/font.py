@@ -14,6 +14,7 @@ from __future__ import print_function
 import json
 import json.scanner
 
+import FL as legacy
 import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
@@ -23,7 +24,7 @@ from typerig.proxy.glyph import *
 from typerig.proxy.string import *
 
 # - Init ---------------------------------
-__version__ = '0.26.0'
+__version__ = '0.26.1'
 
 # - Classes -------------------------------
 class pFontMetrics(object):
