@@ -8,13 +8,18 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.26.0'
-
 # - Dependencies ------------------------
+from __future__ import absolute_import
 import math, random
+
+# - Init --------------------------------
+__version__ = '0.26.1'
 
 # - Functions ---------------------------
 # -- Math -------------------------------
+def roundFloat(f, error=1000000.):
+	return round(f*error)/error
+
 def normalize2max(values):
 	'''Normalize all values to the maximum value in a given list. 
 	

@@ -14,13 +14,13 @@ import warnings
 import fontlab as fl6
 import PythonQt as pqt
 
-from typerig.proxy.base import *
-from typerig.proxy.node import *
+from typerig.proxy.objects.base import *
+from typerig.proxy.objects.node import *
 
 from typerig.core.func.utils import isMultiInstance
 
 # - Init -----------------------------------
-__version__ = '0.3.5'
+__version__ = '0.3.6'
 
 # - Classes ---------------------------------
 class eCurveEx(object):

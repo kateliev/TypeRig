@@ -15,11 +15,11 @@ import math
 import fontlab as fl6
 import PythonQt as pqt
 
-from typerig.proxy.base import Coord
-from typerig.proxy.node import pNode
+from typerig.proxy.objects.base import Coord
+from typerig.proxy.objects.node import pNode
 
 # - Init --------------------------------
-__version__ = '0.26.0'
+__version__ = '0.26.1'
 
 # - Classes -----------------------------
 class pContour(object):
@@ -97,6 +97,10 @@ class pContour(object):
 	def rotate(self, deg):
 		self.fl.transform = self.fl.transform.rotate(math.tan(math.radians((deg))))
 		self.fl.applyTransform()
+
+	def draw(self, pen, transform=None):
+		''' Utilizes the Pen protocol'''
+		self.fl.convertToFgContour(transform).draw(pen)
 
 # -- Extensions -------------------------
 class eContour(pContour):

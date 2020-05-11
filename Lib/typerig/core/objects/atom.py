@@ -9,7 +9,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 
 # - Dependencies ------------------------
 #import collections.abc
@@ -24,6 +24,7 @@ class Member(object):
 	def __repr__(self):
 		return self.data
 
+	# - Properties -----------------------
 	@property
 	def next(self):
 		try:
@@ -39,13 +40,13 @@ class Member(object):
 			return None
 
 class Linker(object):
-	''' Doubly linked list node primitive. '''
+	''' Doubly-linked-list/node primitive. '''
 	def __init__(self, data, **kwargs):
 		self.data = data
 		self.parent = kwargs.get('parent', None)
 		self.next = kwargs.get('next', None)
 		self.prev = kwargs.get('prev', None)
-		self.head = kwargs.get('prev', False)
+		self.start = kwargs.get('start', False)
 
 	def __add__(self, other):
 		if isinstance(other, self.__class__):
@@ -68,5 +69,25 @@ class Linker(object):
 
 			return self
 
+	def __iter__(self):
+		curr_link = self
+
+		while curr_link is not None: # and not curr_link.next.start:
+			yield curr_link
+			
+			curr_link = curr_link.next
+
 	def __repr__(self):
 		return str(self.data)
+
+	# - Functions ------------------
+	def where(self, search, value):
+		curr_link = self
+
+		while curr_link is not None:
+			if eval('curr_link.{}{}'.format(search, value)):
+				yield curr_link
+			
+			curr_link = curr_link.next
+
+		

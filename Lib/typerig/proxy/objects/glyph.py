@@ -22,12 +22,12 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.pointarray import coordArray
 from typerig.core.func.math import linInterp
 
-#from typerig.proxy.font import pFont
-from typerig.proxy.app import pWorkspace
-from typerig.proxy.string import diactiricalMarks
+#from typerig.proxy.objects.font import pFont
+from typerig.proxy.application.app import pWorkspace
+from typerig.proxy.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.26.0'
+__version__ = '0.26.3'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -666,6 +666,14 @@ class pGlyph(object):
 		return [self.nodes(layer, extend, deep)[nid] for nid in self.selectedNodeIndices(filterOn, deep)]
 		#return [node for node in self.nodes(layer, extend, deep) if node.selected]
 
+	def selectedContours(self, layer=None, allNodesSelected=False):
+		selection_mode = 3 if allNodesSelected else 1
+		return [contour for contour in self.contours(layer) if contour.hasSelected(selection_mode)]
+
+	def selectedShapes(self, layer=None, allNodesSelected=False):
+		selection_mode = 3 if allNodesSelected else 1
+		return [shape for shape in self.shapes(layer) if shape.hasSelected(selection_mode)]
+
 	def nodesForIndices(self, indices, layer=None, filterOn=False, extend=None, deep=False):
 		return [self.nodes(layer, extend, deep)[nid] for nid in indices]
 	
@@ -716,7 +724,6 @@ class pGlyph(object):
 
 		return [allShapes.index(shape) for shape in allShapes if shape.hasSelected(selection_mode)]
 		
-
 	def selectedShapes(self, layer=None, select_all=False, deep=False, extend=None):
 		'''Return all shapes that have a node selected.
 		'''
@@ -1172,6 +1179,13 @@ class pGlyph(object):
 			component.draw(pen)
 
 		'''
+
+	def drawPoints(self, pen, layer=None):
+		''' Utilizes the PointPen protocol'''
+			
+		for shape in self.shapes(layer):
+			for contour in shape.contours:
+				contour.convertToFgContour(shape.fl_transform.transform).drawPoints(pen)
 
 
 # -- Exensions -------------------------------------------

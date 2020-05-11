@@ -15,12 +15,12 @@ import math
 import fontlab as fl6
 import PythonQt as pqt
 
-from typerig.proxy.base import *
-#from typerig.proxy.contour import pContour
-#from typerig.proxy.node import pNode, eNode
+from typerig.proxy.objects.base import *
+#from typerig.proxy.objects.contour import pContour
+#from typerig.proxy.objects.node import pNode, eNode
 
 # - Init ---------------------------------
-__version__ = '0.26.0'
+__version__ = '0.26.1'
 
 # - Classes -------------------------------
 class pNode(object):

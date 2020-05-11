@@ -9,13 +9,14 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import math
+
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.transform import Transform
 
 # - Init -------------------------------
-__version__ = '0.26.0'
+__version__ = '0.26.1'
 
 # - Classes -----------------------------
 class Point(object): 
@@ -34,6 +35,7 @@ class Point(object):
 
 		self.angle = 0
 		self.transform = Transform()
+		self.complex_math = True
 
 	# -- Operators
 	def __add__(self, other):
@@ -82,10 +84,13 @@ class Point(object):
 
 	def __mul__(self, other):
 		if isinstance(other, self.__class__):
-			a = complex(self.x , self.y)
-			b = complex(other.x, other.y)
-			product = a * b
-			return self.__class__(product.real, product.imag)
+			if self.complex_math:
+				a = complex(self.x , self.y)
+				b = complex(other.x, other.y)
+				product = a * b
+				return self.__class__(product.real, product.imag)
+			else:
+				return self.__class__(self.x * other.x, self.y * other.x)
 		
 		elif isinstance(other, int):
 			return self.__class__(self.x * other, self.y * other)
@@ -109,10 +114,13 @@ class Point(object):
 
 	def __div__(self, other):
 		if isinstance(other, self.__class__):
-			a = complex(self.x , self.y)
-			b = complex(other.x, other.y)
-			product = a / b
-			return self.__class__(product.real, product.imag)
+			if self.complex_math:
+				a = complex(self.x , self.y)
+				b = complex(other.x, other.y)
+				product = a / b
+				return self.__class__(product.real, product.imag)
+			else:
+				return self.__class__(self.x // other.x, self.y // other.x)
 		
 		elif isinstance(other, int):
 			return self.__class__(self.x / other, self.y / other)
@@ -133,6 +141,7 @@ class Point(object):
 			print('ERROR:\t Cannot evaluate {} <<{}, {}>> with {}'.format(type(self.__class__), self.x, self.y, type(other)))
 
 	__rdiv__ = __div__
+	__truediv__ = __div__
 
 	# - Scalar product and cross product --------------------
 	# -- Usable in determining angle between unit vectors 
@@ -233,6 +242,22 @@ class Point(object):
 
 	def diff_to(self, other):
 		return math.hypot(self.x - other.x, self.y - other.y)
+
+	def angle_to(self, other, add=90):
+		''' Angle to another point in radians'''
+		b = float(other.x - self.x)
+		a = float(other.y - self.y)
+		c = self.diff_to(other)
+		
+		if c == 0: return float('nan')
+		if add is None:	return b/c
+
+		cosAngle = math.degrees(math.acos(b/c))
+		sinAngle = math.degrees(math.asin(a/c))
+
+		if sinAngle < 0: cosAngle = 360 - cosAngle
+			
+		return math.radians(cosAngle + add)
 
 	# -- Modifiers
 	def doSwap(self):

@@ -8,10 +8,12 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.26.0'
-
 # - Dependencies ------------------------
+from __future__ import absolute_import
 import math
+
+# - Init --------------------------------
+__version__ = '0.26.1'
 
 # - Functions ---------------------------
 # -- Point ------------------------------
@@ -166,28 +168,28 @@ def line_intersect(a0, a1, b0, b1):
 	Returns:
 		intersect node -> tuple(x,y)
 	'''
-	from sys.float_info import epsilon
+	import sys
 	from typerig.core.func.geometry import line_slope
 
 	a0x, a0y = a0
 	a1x, a1y = a1
 	b0x, b0y = b0
-	a1x, a1y = a1
+	b1x, b1y = b1
 
 	slope_a = line_slope(a0, a1)
 	slope_b = line_slope(b0, b1)
 
-	if abs(a1x - a0x) < epsilon:
+	if abs(a1x - a0x) < sys.float_info.epsilon:
 	  x = a0x
 	  y = slope_b * (x - b0x) + b0y
 	  return x, y
 
-	if abs(b1x - b0x) < epsilon:
+	if abs(b1x - b0x) < sys.float_info.epsilon:
 	  x = b0x
 	  y = slope_a * (x - a0x) + a0y
 	  return x, y
 
-	if abs(slope_a - slope_b) < epsilon: 
+	if abs(slope_a - slope_b) < sys.float_info.epsilon: 
 		return
 	
 	x = (slope_a * a0x - a0y - slope_b * b0x + b0y) / (slope_a - slope_b)
@@ -195,4 +197,30 @@ def line_intersect(a0, a1, b0, b1):
 
 	return x, y
 	
+# - Angle/Connection --------------------------------
+def checkSmooth(firstAngle, lastAngle, error=4):
+	'''Check if connection is smooth within error margin.
+	Adapted from RoboFont pens. (NOTE: To be deleted)
+	'''
+	if firstAngle is None or lastAngle is None: return True
+	
+	firstAngle = math.degrees(firstAngle)
+	lastAngle = math.degrees(lastAngle)
 
+	if int(firstAngle) + error >= int(lastAngle) >= int(firstAngle) - error: return True
+	
+	return False
+
+def checkInnerOuter(firstAngle, lastAngle):
+	'''Check if connection is inner or outer.
+	Adapted from RoboFont pens. (NOTE: To be deleted)
+	'''
+	if firstAngle is None or lastAngle is None:	return True
+	
+	dirAngle = math.degrees(firstAngle) - math.degrees(lastAngle)
+
+	if dirAngle > 180:		dirAngle = 180 - dirAngle
+	elif dirAngle < -180:	dirAngle = -180 - dirAngle
+
+	if dirAngle > 0:	return True
+	if dirAngle <= 0:	return False

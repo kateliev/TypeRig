@@ -99,8 +99,7 @@ class AbstractPointPen(object):
 		'''End the current sub path.'''
 		raise NotImplementedError
 
-	def addPoint(self, pt, segmentType=None, smooth=False, name=None,
-				 identifier=None, **kwargs):
+	def addPoint(self, pt, segmentType=None, smooth=False, name=None, identifier=None, **kwargs):
 		'''Add a point to the current sub path.'''
 		raise NotImplementedError
 

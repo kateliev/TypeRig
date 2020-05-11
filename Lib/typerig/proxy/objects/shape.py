@@ -15,11 +15,11 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
-from typerig.proxy.base import *
-from typerig.proxy.node import *
+from typerig.proxy.objects.base import *
+from typerig.proxy.objects.node import *
 
 # - Init ---------------------------------
-__version__ = '0.26.0'
+__version__ = '0.26.1'
 
 # - Classes -------------------------------
 class pShape(object):

@@ -8,9 +8,11 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.26.0'
-
 # - Dependencies ------------------------
+from __future__ import absolute_import
+
+# - Init --------------------------------
+__version__ = '0.26.1'
 
 # - Functions ---------------------------
 # -- Dictionary -------------------------

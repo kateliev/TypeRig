@@ -20,11 +20,11 @@ import fontgate as fgt
 import PythonQt as pqt
 
 from typerig.core.objects.collection import jsontree, vfj_encoder, vfj_decoder
-from typerig.proxy.glyph import *
-from typerig.proxy.string import *
+from typerig.proxy.objects.glyph import *
+from typerig.proxy.objects.string import *
 
 # - Init ---------------------------------
-__version__ = '0.26.1'
+__version__ = '0.26.2'
 
 # - Classes -------------------------------
 class pFontMetrics(object):

@@ -11,13 +11,14 @@
 # - Dependencies ------------------------
 from __future__ import print_function
 import math
+
 from typerig.core.func.math import linInterp as lerp
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.point import Point, Void
 
 # - Init -------------------------------
-__version__ = '0.26.0'
+__version__ = '0.26.1'
 
 # - Classes -----------------------------
 class Line(object):
