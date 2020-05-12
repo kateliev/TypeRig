@@ -27,7 +27,7 @@ from typerig.proxy.application.app import pWorkspace
 from typerig.proxy.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.26.3'
+__version__ = '0.26.4'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -80,18 +80,44 @@ class pGlyph(object):
 			self.fg = glyph
 			self.fl = fl6.flGlyph(glyph, font)
 			
-		self.name = self.fg.name
-		self.index = self.fg.index
-		self.id = self.fl.id
-		self.mark = self.fl.mark
-		self.tags = self.fl.tags
-		self.unicode = self.fg.unicode
-		self.unicodes = self.fg.unicodes
-		self.package = fl6.flPackage(self.fl.package)
 		self.builders = {}
 
 	def __repr__(self):
 		return '<{} name={} index={} unicode={}>'.format(self.__class__.__name__, self.name, self.index, self.unicode)
+
+	# - Properties -------------------------------------------
+	# TODO: Add setters
+	@property
+	def name(self):
+		return self.fg.name
+
+	@property
+	def index(self):
+		return self.fg.index
+
+	@property
+	def id(self):
+		return self.fg.id
+
+	@property
+	def mark(self):
+		return self.fl.mark
+
+	@property
+	def tags(self):
+		return self.fl.tags
+
+	@property
+	def unicode(self):
+		return self.fg.unicode
+
+	@property
+	def unicodes(self):
+		return self.fg.unicodes
+
+	@property
+	def package(self):
+		return self.fl.package
 
 	# - Basics -----------------------------------------------
 	def version(self): return self.fl.lastModified
