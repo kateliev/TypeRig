@@ -27,7 +27,7 @@ from typerig.proxy.application.app import pWorkspace
 from typerig.proxy.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.26.4'
+__version__ = '0.26.5'
 
 # - Classes -----------------------------------------
 class pGlyph(object):

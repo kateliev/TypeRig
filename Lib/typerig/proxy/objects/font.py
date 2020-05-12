@@ -24,7 +24,7 @@ from typerig.proxy.objects.glyph import *
 from typerig.proxy.objects.string import *
 
 # - Init ---------------------------------
-__version__ = '0.26.2'
+__version__ = '0.26.3'
 
 # - Classes -------------------------------
 class pFontMetrics(object):
@@ -172,15 +172,6 @@ class pFont(object):
 			self.fg = fl6.CurrentFont()
 			self.fl = fl6.flPackage(fl6.CurrentFont())
 
-		# - Basics
-		self.italic_angle = self.getItalicAngle()
-		self.info = self.fg.info
-		self.familyName = self.info.familyName
-		self.name = self.familyName # Change later
-		self.OTfullName = self.info.openTypeNameCompatibleFullName
-		self.PSfullName = self.info.postscriptFullName
-		self.path = self.fg.path
-
 		# - Special 
 		self.__altMarks = {'liga':'_', 'alt':'.', 'hide':'__'}
 		self.__diactiricalMarks = ['grave', 'dieresis', 'macron', 'acute', 'cedilla', 'uni02BC', 'circumflex', 'caron', 'breve', 'dotaccent', 'ring', 'ogonek', 'tilde', 'hungarumlaut', 'caroncomma', 'commaaccent', 'cyrbreve'] # 'dotlessi', 'dotlessj'
@@ -188,14 +179,50 @@ class pFont(object):
 		self.__kern_group_type = {'L':'KernLeft', 'R':'KernRight', 'B': 'KernBothSide'}
 		self.__kern_pair_mode = ('glyphMode', 'groupMode')
 		
-		# - Design space related
-		self.pMasters = self.pMasters(self)
-		self.pSpace = self.pDesignSpace(self)
-	
+		
 	def __repr__(self):
 		return '<{} name={} glyphs={} path={}>'.format(self.__class__.__name__, self.fg.info.familyName, len(self.fg), self.fg.path)
 
-	# Classes ----------------------------------------------------
+	# - Properties ----------------------------------------------
+	# -- Basics -------------------------------------------------
+	@property
+	def italic_angle(self):
+		return self.getItalicAngle()
+	
+	@property
+	def info(self):
+		return self.fg.info
+	
+	@property
+	def familyName(self):
+		return self.info.familyName
+	
+	@property
+	def name(self):
+		return self.familyName 
+	
+	@property
+	def OTfullName(self):
+		return self.info.openTypeNameCompatibleFullName
+	
+	@property
+	def PSfullName(self):
+		return self.info.postscriptFullName
+	
+	@property
+	def path(self):
+		return self.fg.path
+
+	# -- Design space related ----------------------------------
+	@property
+	def pMasters(self):
+		return self.pMasters(self)
+
+	@property
+	def pSpace(self):
+		return self.pDesignSpace(self)
+
+	# - Classes -------------------------------------------------
 	class pMasters(object):
 	# -- Aliasing some master related commands in common group
 		def __init__(self, parent):
