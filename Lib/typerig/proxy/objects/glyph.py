@@ -117,7 +117,7 @@ class pGlyph(object):
 
 	@property
 	def package(self):
-		return self.fl.package
+		return fl6.flPackage(self.fl.package)
 
 	# - Basics -----------------------------------------------
 	def version(self): return self.fl.lastModified
