@@ -16,11 +16,12 @@ import fontlab as fl6
 import PythonQt as pqt
 
 from typerig.proxy.objects.base import *
+#from typerig.proxy.objects.curve import eCurveEx
 #from typerig.proxy.objects.contour import pContour
 #from typerig.proxy.objects.node import pNode, eNode
 
 # - Init ---------------------------------
-__version__ = '0.26.1'
+__version__ = '0.26.3'
 
 # - Classes -------------------------------
 class pNode(object):
@@ -386,7 +387,7 @@ class eNode(pNode):
 
 		return (self.fl, nextNode.fl)
 
-	def cornerRound(self, size=5, curvature=(.9,.9), isRadius=False):
+	def cornerRound(self, size=5, proportion=None, curvature=None, isRadius=False):
 		# - Calculate unit vectors and shifts
 		nextNode = self.getNextOn(False)
 		prevNode = self.getPrevOn(False)
@@ -413,8 +414,19 @@ class eNode(pNode):
 		# -- Make round corner
 		nextNode.fl.convertToCurve(True)
 		segment = self.getSegmentNodes()
-		curve = eCurveEx(segment)
-		curve.eqHobbySpline(curvature)
+		
+		# -- Curvature and handle length  
+		curve = Curve(segment)
+
+		if proportion is not None: 
+			new_curve = curve.solve_proportional_handles(proportion)
+			segment[1].x = new_curve.p1.x; segment[1].y = new_curve.p1.y
+			segment[2].x = new_curve.p2.x; segment[2].y = new_curve.p2.y
+		
+		if curvature is not None: 
+			new_curve = curve.solve_hobby(curvature)
+			segment[1].x = new_curve.p1.x; segment[1].y = new_curve.p1.y
+			segment[2].x = new_curve.p2.x; segment[2].y = new_curve.p2.y
 
 		return segment
 
@@ -621,8 +633,6 @@ class eNode(pNode):
 			shift_x, shift_y (float)
 			angle (float): Angle in degrees
 		'''
-		
-		
 		# - Init
 		cNode = Coord((self.x + shift_x, self.y))
 		cNode.angle = angle

@@ -102,6 +102,7 @@ class Vector(trobj.Vector):
 class Curve(trobj.CubicBezier):
 	def __init__(self, *argv):
 		points = []
+
 		if len(argv) == 4:
 			if isMultiInstance(argv, (Coord, fl6.flNode)):
 				points = [(item.x, item.y) for item in argv]
@@ -109,12 +110,19 @@ class Curve(trobj.CubicBezier):
 			if isMultiInstance(argv, (tuple, list)):
 				points = argv
 
-		if len(argv) == 1 and isinstance(argv[0], fl6.CurveEx):
+		if len(argv) == 1:
+			if isMultiInstance(argv[0], (Coord, fl6.flNode)):
+				points = [(item.x, item.y) for item in argv[0]]
+
+			if isMultiInstance(argv[0], (tuple, list)):
+				points = argv[0]
+
+			if isinstance(argv[0], fl6.CurveEx):
 				points = [(argv[0].p0.x(), argv[0].p0.y()), 
 						(argv[0].bcp0.x(), argv[0].bcp0.y()),
 						(argv[0].bcp1.x(), argv[0].bcp1.y()),
 						(argv[0].p1.x(), argv[0].p1.y())]
 
-		super(Curve, self).__init__(*points)
-		
+		super(Curve, self).__init__(points)
 		self.parent = argv
+

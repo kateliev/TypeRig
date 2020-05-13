@@ -18,21 +18,26 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.26.0'
+__version__ = '0.26.1'
 
 # - Classes -----------------------------
 class CubicBezier(object):
 	def __init__(self, *argv):
-		if len(argv):
+		if len(argv) == 1:
 			if isinstance(argv[0], self.__class__): # Clone
 				self.p0, self.p1, self.p2, self.p3 = argv[0].p0, argv[0].p1, argv[0].p2, argv[0].p3
+			
+			if isMultiInstance(argv[0], (tuple, list)):
+				self.p0, self.p1, self.p2, self.p3 = [Point(item) for item in argv[0]]
+
+		if len(argv) == 4:
+			if isMultiInstance(argv, (tuple, list)):
+				self.p0, self.p1, self.p2, self.p3 = [Point(item) for item in argv]
 
 			if isMultiInstance(argv, Point):
 				self.p0, self.p1, self.p2, self.p3 = argv
 
-			if isMultiInstance(argv, (tuple, list)):
-				self.p0, self.p1, self.p2, self.p3 = [Point(item) for item in argv]
-
+		if len(argv) == 8:
 			if isMultiInstance(argv, (float, int)):
 				self.p0, self.p1, self.p2, self.p3 = [Point(argv[i], argv[i+1]) for i in range(len(argv)-1)]
 
