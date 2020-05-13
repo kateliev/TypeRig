@@ -13,7 +13,7 @@ from __future__ import absolute_import
 import math
 
 # - Init --------------------------------
-__version__ = '0.26.1'
+__version__ = '0.26.2'
 
 # - Functions ---------------------------
 # -- Point ------------------------------
@@ -203,6 +203,7 @@ def checkSmooth(firstAngle, lastAngle, error=4):
 	Adapted from RoboFont pens. (NOTE: To be deleted)
 	'''
 	if firstAngle is None or lastAngle is None: return True
+	if math.isnan(firstAngle) or math.isnan(lastAngle): return False
 	
 	firstAngle = math.degrees(firstAngle)
 	lastAngle = math.degrees(lastAngle)
@@ -216,6 +217,7 @@ def checkInnerOuter(firstAngle, lastAngle):
 	Adapted from RoboFont pens. (NOTE: To be deleted)
 	'''
 	if firstAngle is None or lastAngle is None:	return True
+	if math.isnan(firstAngle) or math.isnan(lastAngle): return False
 	
 	dirAngle = math.degrees(firstAngle) - math.degrees(lastAngle)
 
