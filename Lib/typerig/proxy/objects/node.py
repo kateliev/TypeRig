@@ -422,7 +422,7 @@ class eNode(pNode):
 			new_curve = curve.solve_proportional_handles(proportion)
 			segment[1].x = new_curve.p1.x; segment[1].y = new_curve.p1.y
 			segment[2].x = new_curve.p2.x; segment[2].y = new_curve.p2.y
-		
+					
 		if curvature is not None: 
 			new_curve = curve.solve_hobby(curvature)
 			segment[1].x = new_curve.p1.x; segment[1].y = new_curve.p1.y

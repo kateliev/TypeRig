@@ -179,6 +179,9 @@ class pFont(object):
 		self.__kern_group_type = {'L':'KernLeft', 'R':'KernRight', 'B': 'KernBothSide'}
 		self.__kern_pair_mode = ('glyphMode', 'groupMode')
 		
+		# -- Design space related 
+		self.pMasters = self.pMasters(self)
+		self.pSpace = self.pDesignSpace(self)
 		
 	def __repr__(self):
 		return '<{} name={} glyphs={} path={}>'.format(self.__class__.__name__, self.fg.info.familyName, len(self.fg), self.fg.path)
@@ -212,15 +215,6 @@ class pFont(object):
 	@property
 	def path(self):
 		return self.fg.path
-
-	# -- Design space related ----------------------------------
-	@property
-	def pMasters(self):
-		return self.pMasters(self)
-
-	@property
-	def pSpace(self):
-		return self.pDesignSpace(self)
 
 	# - Classes -------------------------------------------------
 	class pMasters(object):
