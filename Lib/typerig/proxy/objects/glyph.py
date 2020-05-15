@@ -1327,6 +1327,22 @@ class eGlyph(pGlyph):
 						contour.closed = True
 						contour.update()
 
+	def setStart(self, layer=None, control=(0,0)):
+		contours = self.contours(layer)
+
+		if control == (0,0): 	# BL
+			criteria = lambda node : (node.y, node.x)
+		elif control == (0,1): 	# TL
+			criteria = lambda node : (-node.y, node.x)
+		elif control == (1,0): 	# BR
+			criteria = lambda node : (node.y, -node.x)
+		elif control == (1,1): 	# TR
+			criteria = lambda node : (-node.y, -node.x)
+		
+		for contour in contours:
+			onNodes = [node for node in contour.nodes() if node.isOn()]
+			newFirstNode = sorted(onNodes, key=criteria)[0]
+			contour.setStartPoint(newFirstNode.index)
 
 	# - Guidelines -----------------------------------------
 	def dropGuide(self, nodes=None, layers=None, name='*DropGuideline', tag='', color='darkMagenta', flip=(1,1), style='gsGlyphGuideline'):
