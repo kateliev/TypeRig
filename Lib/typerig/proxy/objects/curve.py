@@ -20,7 +20,7 @@ from typerig.proxy.objects.node import *
 from typerig.core.func.utils import isMultiInstance
 
 # - Init -----------------------------------
-__version__ = '0.3.6'
+__version__ = '0.3.7'
 
 # - Classes ---------------------------------
 class eCurveEx(object):
@@ -34,13 +34,17 @@ class eCurveEx(object):
 	'''
 	def __init__(self, *argv):
 		
-		if isinstance(argv[0], fl6.CurveEx) and isMultiInstance(argv[1], fl6.flNode):
+		if isinstance(argv[0], fl6.CurveEx):
 			self.fl = self.CurveEx = argv[0]
 			self.nodes = argv[1]
-			
-		elif (isinstance(argv[0], (list, tuple))) and isMultiInstance(argv[0], fl6.flNode):
-			self.nodes = argv[0]
+		
+		elif isinstance(argv[0], (list, tuple)) and isMultiInstance(argv[0], fl6.flNode):
 			self.fl = None
+			self.nodes = argv[0]
+
+		elif isMultiInstance(argv, fl6.flNode):
+			self.fl = None			
+			self.nodes = argv
 		
 		if len(self.nodes) == 4:
 			self.n0, self.n1, self.n2, self.n3 = [eNode(node) for node in self.nodes]
@@ -89,6 +93,14 @@ class eCurveEx(object):
 	def eqProportionalHandles(self, proportion=.3, apply=True):
 		if self.isCurve:	
 			self.curve = self.curve.solve_proportional_handles(proportion)
+			if apply: self.updateNodes()
+			return self.curve
+		else:
+			return self.__riseCurveWaring()
+
+	def eqRatioHandles(self, ratio=.3, apply=True):
+		if self.isCurve:	
+			self.curve = self.curve.solve_handle_distance_from_base((ratio, ratio))
 			if apply: self.updateNodes()
 			return self.curve
 		else:

@@ -18,7 +18,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.26.1'
+__version__ = '0.26.3'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -330,6 +330,19 @@ class CubicBezier(object):
 		new_p2 = getNewPoint(self.p2, self.p3, self.p1, eqDistance)
 
 		return self.__class__(self.p0.tuple, new_p1, new_p2, self.p3.tuple)
+
+	def solve_handle_distance_from_base(self, ratio=(.5,.5)):
+		'''Finds new handle positions for given ratio from base points'''
+		from typerig.core.func.geometry import line_intersect
+
+		handle_intersection  = Point(line_intersect(*self.tuple))
+		hl0i = Line(self.p0, handle_intersection)
+		hl1i = Line(self.p3, handle_intersection)
+
+		new_p1 = hl0i.solve_point(ratio[0])
+		new_p2 = hl1i.solve_point(ratio[1])
+
+		return self.__class__(self.p0.tuple, new_p1.tuple, new_p2.tuple, self.p3.tuple)
 
 	def solve_hobby(self, curvature=(.9,.9)):
 		'''Calculates and applies John Hobby's mock-curvature-smoothness by given curvature - tuple(float,float) or (float)

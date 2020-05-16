@@ -122,6 +122,7 @@ class curveEq(QtGui.QGridLayout):
 		wLayers = glyph._prepareLayers(pLayers)
 
 		for layer in wLayers:
+			
 			# !!! Fixed the problem, but with too many loops - rethink
 			nodes_fl = [glyph.nodes(layer)[nid] for nid in selection]
 			nodes = [eNode(node) for node in nodes_fl]
