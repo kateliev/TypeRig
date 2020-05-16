@@ -12,13 +12,14 @@
 from __future__ import print_function
 import math
 from typerig.core.func.math import linInterp as lerp
+from typerig.core.func.math import ratfrac
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.26.3'
+__version__ = '0.26.5'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -332,7 +333,7 @@ class CubicBezier(object):
 		return self.__class__(self.p0.tuple, new_p1, new_p2, self.p3.tuple)
 
 	def solve_handle_distance_from_base(self, ratio=(.5,.5)):
-		'''Finds new handle positions for given ratio from base points'''
+		'''Finds new handle positions for given ratio from base points.'''
 		from typerig.core.func.geometry import line_intersect
 
 		handle_intersection  = Point(line_intersect(*self.tuple))
@@ -343,6 +344,29 @@ class CubicBezier(object):
 		new_p2 = hl1i.solve_point(ratio[1])
 
 		return self.__class__(self.p0.tuple, new_p1.tuple, new_p2.tuple, self.p3.tuple)
+
+	def get_handle_length(self):
+		'''Returns handle length and radii from base points.'''
+		from typerig.core.func.geometry import line_intersect
+
+		hl0 = Line(self.p0, self.p1)
+		hl1 = Line(self.p2, self.p3)
+		
+		handle_intersection  = Point(line_intersect(*self.tuple))
+
+		hl0i = Line(self.p0, handle_intersection)
+		hl1i = Line(self.p3, handle_intersection)
+
+		radius_0 = hl0i.length if not math.isnan(hl0i.length) else 0.
+		radius_1 = hl1i.length if not math.isnan(hl1i.length) else 0.
+
+		handle_0 = hl0.length if not math.isnan(hl0.length) else 0.
+		handle_1 = hl0.length if not math.isnan(hl1.length) else 0.
+
+		#ratio_0 = ratfrac(hl0.length, radius_0, 1.)
+		#ratio_1 = ratfrac(hl1.length, radius_1, 1.)
+
+		return (radius_0, handle_0), (radius_1, handle_1)
 
 	def solve_hobby(self, curvature=(.9,.9)):
 		'''Calculates and applies John Hobby's mock-curvature-smoothness by given curvature - tuple(float,float) or (float)
