@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Guidelines', '0.40'
+app_name, app_version = 'TypeRig | Guidelines', '0.41'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -177,7 +177,7 @@ class TRDropGuide(QtGui.QGridLayout):
 		for layerName in wLayers:
 			if 'BBox' in self.cmb_select_V.currentText:
 				width = src_glyph.layer(layerName).boundingBox.width()
-				origin = src_glyph.layer(layerName).boundingBox.x()
+				origin = glyph.layer(layerName).boundingBox.x()
 			
 			elif 'Adv' in self.cmb_select_V.currentText:
 				width = src_glyph.getAdvance(layerName)
@@ -209,7 +209,7 @@ class TRDropGuide(QtGui.QGridLayout):
 
 			if 'BBox' in self.cmb_select_H.currentText:
 				height = src_glyph.layer(layerName).boundingBox.height()
-				origin = src_glyph.layer(layerName).boundingBox.y()
+				origin = glyph.layer(layerName).boundingBox.y()
 			
 			elif 'Adv' in self.cmb_select_H.currentText:
 				height = src_glyph.layer(layerName).advanceHeight
