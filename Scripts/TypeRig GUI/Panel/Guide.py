@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Guidelines', '0.36'
+app_name, app_version = 'TypeRig | Guidelines', '0.40'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -58,12 +58,16 @@ class TRDropGuide(QtGui.QGridLayout):
 	def __init__(self):
 		super(TRDropGuide, self).__init__()
 
-		# -- Editi fileds
+		# -- Editing fields
 		self.edt_guideName = QtGui.QLineEdit()
 		self.edt_guideName.setPlaceholderText('New Guideline')
 
 		self.edt_guideTag = TRGLineEdit()
 		self.edt_guideTag.setPlaceholderText('Tag')
+
+		self.edt_sourceName = QtGui.QLineEdit()
+		self.edt_sourceName.setPlaceholderText('Source name / Current')
+		self.edt_sourceName.setToolTip('Source glyph name, or Active Glyph if Blank')
 
 		# -- Combo box
 		self.cmb_select_V = QtGui.QComboBox()
@@ -113,14 +117,17 @@ class TRDropGuide(QtGui.QGridLayout):
 		self.btn_dropFlipY = QtGui.QPushButton('Drop: Flip &Y')
 		self.btn_dropLayer_V = QtGui.QPushButton('Vertical')
 		self.btn_dropLayer_H = QtGui.QPushButton('Horizontal')
+		self.btn_getName = QtGui.QPushButton('Get &Name')
 
 		self.btn_dropGuide.setToolTip('Drop guideline between any two selected nodes.\nIf single node is selected a vertical guide is\ndropped (using the italic angle if present).')
 		self.btn_dropFlipX.setToolTip('Drop flipped guideline between any two selected nodes.')
 		self.btn_dropFlipY.setToolTip('Drop flipped guideline between any two selected nodes.')
+		self.btn_getName.setToolTip('Get the name of the current active glyph')
 		
 		self.btn_dropGuide.clicked.connect(lambda: self.drop_guide_nodes((1,1)))
 		self.btn_dropFlipX.clicked.connect(lambda: self.drop_guide_nodes((-1,1)))
 		self.btn_dropFlipY.clicked.connect(lambda: self.drop_guide_nodes((1,-1)))
+		self.btn_getName.clicked.connect(lambda: self.edt_sourceName.setText(pGlyph().name))
 		self.btn_dropLayer_V.clicked.connect(self.drop_guide_V)
 		self.btn_dropLayer_H.clicked.connect(self.drop_guide_H)
 		
@@ -135,15 +142,17 @@ class TRDropGuide(QtGui.QGridLayout):
 		self.addWidget(self.btn_dropGuide, 						4, 0, 1, 4)
 		self.addWidget(self.btn_dropFlipX, 						4, 4, 1, 4)
 		self.addWidget(self.btn_dropFlipY, 						4, 8, 1, 4)
-		self.addWidget(QtGui.QLabel('Glyph Layer:'), 			5, 0, 1, 9)
-		self.addWidget(self.cmb_select_V, 						6, 0, 1, 4)
-		self.addWidget(self.spb_prc_V, 							6, 4, 1, 2)
-		self.addWidget(self.spb_unit_V, 						6, 6, 1, 2)
-		self.addWidget(self.btn_dropLayer_V, 					6, 8, 1, 4)
-		self.addWidget(self.cmb_select_H, 						7, 0, 1, 4)
-		self.addWidget(self.spb_prc_H, 							7, 4, 1, 2)
-		self.addWidget(self.spb_unit_H, 						7, 6, 1, 2)
-		self.addWidget(self.btn_dropLayer_H, 					7, 8, 1, 4)
+		self.addWidget(QtGui.QLabel('Glyph Layer:'), 			5, 0, 1, 4)
+		self.addWidget(self.edt_sourceName, 					6, 0, 1, 8)
+		self.addWidget(self.btn_getName, 						6, 8, 1, 4)
+		self.addWidget(self.cmb_select_V, 						7, 0, 1, 4)
+		self.addWidget(self.spb_prc_V, 							7, 4, 1, 2)
+		self.addWidget(self.spb_unit_V, 						7, 6, 1, 2)
+		self.addWidget(self.btn_dropLayer_V, 					7, 8, 1, 4)
+		self.addWidget(self.cmb_select_H, 						8, 0, 1, 4)
+		self.addWidget(self.spb_prc_H, 							8, 4, 1, 2)
+		self.addWidget(self.spb_unit_H, 						8, 6, 1, 2)
+		self.addWidget(self.btn_dropLayer_H, 					8, 8, 1, 4)
 
 	# - Procedures
 	def drop_guide_nodes(self, flip):
@@ -153,41 +162,57 @@ class TRDropGuide(QtGui.QGridLayout):
 		glyph.update()
 
 	def drop_guide_V(self):
+		font = pFont()
 		glyph = eGlyph()
+		src_glyph = glyph
+		src_name = self.edt_sourceName.text
+
+		if len(src_name) and font.hasGlyph(src_name):
+			src_glyph = font.glyph(src_name)
+
 		wLayers = glyph._prepareLayers(pLayers)
 		italicAngle = 0 #glyph.package.italicAngle_value
+		guide_name = self.edt_guideName.text if len(self.edt_guideName.text) else '%s:%s:%s%%'%(src_name, self.cmb_select_V.currentText, self.spb_prc_V.value)
 
 		for layerName in wLayers:
 			if 'BBox' in self.cmb_select_V.currentText:
-				width = glyph.layer(layerName).boundingBox.width()
-				origin = glyph.layer(layerName).boundingBox.x()
+				width = src_glyph.layer(layerName).boundingBox.width()
+				origin = src_glyph.layer(layerName).boundingBox.x()
 			
 			elif 'Adv' in self.cmb_select_V.currentText:
-				width = glyph.getAdvance(layerName)
+				width = src_glyph.getAdvance(layerName)
 				origin = 0.
 
 			#print width, origin , width + origin, float(width)*self.spb_prc_V.value/100 + origin
 
 			guidePos = (float(width)*self.spb_prc_V.value/100 + origin + self.spb_unit_V.value, 0)
-			glyph.addGuideline(guidePos, layer=layerName, angle=italicAngle, name=self.edt_guideName.text, tag=self.edt_guideTag.text, color=self.cmb_select_color.currentText)
+			glyph.addGuideline(guidePos, layer=layerName, angle=italicAngle, name=guide_name, tag=self.edt_guideTag.text, color=self.cmb_select_color.currentText)
 			
 		glyph.updateObject(glyph.fl, 'Drop Guide <%s> @ %s.' %(self.edt_guideName.text, '; '.join(glyph._prepareLayers(pLayers))))
 		glyph.update()
 
 	def drop_guide_H(self):
+		font = pFont()
 		glyph = eGlyph()
+		src_glyph = glyph
+		src_name = self.edt_sourceName.text
+		
+		if len(src_name) and font.hasGlyph(src_name):
+			src_glyph = font.glyph(src_name)
+
 		wLayers = glyph._prepareLayers(pLayers)
 		italicAngle = 0 #glyph.package.italicAngle_value
+		guide_name = self.edt_guideName.text if len(self.edt_guideName.text) else '%s:%s:%s%%'%(src_name,self.cmb_select_H.currentText, self.spb_prc_H.value)
 		
 		for layerName in wLayers:
 			metrics = pFontMetrics(glyph.package)
 
 			if 'BBox' in self.cmb_select_H.currentText:
-				height = glyph.layer(layerName).boundingBox.height()
-				origin = glyph.layer(layerName).boundingBox.y()
+				height = src_glyph.layer(layerName).boundingBox.height()
+				origin = src_glyph.layer(layerName).boundingBox.y()
 			
 			elif 'Adv' in self.cmb_select_H.currentText:
-				height = glyph.layer(layerName).advanceHeight
+				height = src_glyph.layer(layerName).advanceHeight
 				origin = 0.
 
 			elif 'X-H' in self.cmb_select_H.currentText:
@@ -207,7 +232,7 @@ class TRDropGuide(QtGui.QGridLayout):
 				origin = 0.		
 
 			guidePos = (0, float(height)*self.spb_prc_H.value/100 + origin + self.spb_unit_H.value)
-			glyph.addGuideline(guidePos, layer=layerName, angle=90, name=self.edt_guideName.text, tag=self.edt_guideTag.text, color=self.cmb_select_color.currentText)
+			glyph.addGuideline(guidePos, layer=layerName, angle=90, name=guide_name, tag=self.edt_guideTag.text, color=self.cmb_select_color.currentText)
 			
 		glyph.updateObject(glyph.fl, 'Drop Guide <%s> @ %s.' %(self.edt_guideName.text, '; '.join(glyph._prepareLayers(pLayers))))
 		glyph.update()
