@@ -13,11 +13,11 @@ Please refer to https://github.com/kateliev/TypeRig/issues
 
 ### Installation
 
-#### Simple
+#### FontLab 7
 
 Run FontLab 7, choose _Scripts > Update / Install Scripts_. Click _OK_ in the dialog, wait until the installation completes. When you see the _TypeRig is up-to-date_ dialog, click _OK_ and restart FontLab 7.
 
-#### Manual
+#### FontLab VI
 
 Unpack files anywhere you want. Then:
 - **TypeRig Module** - Run the provided install in shell using `python install.py`. It will create link/path to Python Site packages. Please note that if you change the location of the installation you should run the script again.
