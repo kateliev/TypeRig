@@ -17,6 +17,8 @@ Please refer to https://github.com/kateliev/TypeRig/issues
 
 Run FontLab 7, choose _Scripts > Update / Install Scripts_. Click _OK_ in the dialog, wait until the installation completes. When you see the _TypeRig is up-to-date_ dialog, click _OK_ and restart FontLab 7.
 
+The _Scripts_ menu should now show the _Delta Machine_ and _TypeRig GUI_ submenus.
+
 #### FontLab VI
 
 Unpack files anywhere you want. Then:
