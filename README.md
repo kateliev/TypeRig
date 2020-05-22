@@ -1,5 +1,5 @@
 # TypeRig
-**TypeRig** (`.\Lib\`) is a Python library aimed at simplifying the current FontLab 6 & 7 API while offering some additional functionality that is heavily biased towards a simultaneous multi-layered workflow.
+**TypeRig** (`.\Lib\`) is a Python library aimed at simplifying the current FontLab VI & 7 API while offering some additional functionality that is heavily biased towards a simultaneous multi-layered workflow.
 
 **TypeRig GUI** (`.\Scripts\TypeRig GUI`) is a collection of GUI centered tools representing functionality found in the library. Currently there reside:
 - **TypeRig Panel** (`typerig-panel.py`) - a floating side panel aimed at  glyph and outlines manipulation;
@@ -12,6 +12,13 @@
 Please refer to https://github.com/kateliev/TypeRig/issues
 
 ### Installation
+
+#### Simple
+
+Run FontLab 7, choose _Scripts > Update / Install Scripts_. Click _OK_ in the dialog, wait until the installation completes. When you see the _TypeRig is up-to-date_ dialog, click _OK_ and restart FontLab 7.
+
+#### Manual
+
 Unpack files anywhere you want. Then:
 - **TypeRig Module** - Run the provided install in shell using `python install.py`. It will create link/path to Python Site packages. Please note that if you change the location of the installation you should run the script again.
 
