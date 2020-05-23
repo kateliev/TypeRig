@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Guidelines', '0.41'
+app_name, app_version = 'TypeRig | Guidelines', '0.42'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -90,24 +90,24 @@ class TRDropGuide(QtGui.QGridLayout):
 
 		# -- SpinBox
 		self.spb_prc_V =  QtGui.QSpinBox()
-		self.spb_prc_V.setMaximum(100)
+		self.spb_prc_V.setMaximum(300)
 		self.spb_prc_V.setSuffix('%')
 		self.spb_prc_V.setMinimumWidth(45)
 
 		self.spb_prc_H =  QtGui.QSpinBox()
-		self.spb_prc_H.setMaximum(100)
+		self.spb_prc_H.setMaximum(300)
 		self.spb_prc_H.setSuffix('%')
 		self.spb_prc_H.setMinimumWidth(45)
 
 		self.spb_unit_V =  QtGui.QSpinBox()
-		self.spb_unit_V.setMaximum(100)
-		self.spb_unit_V.setMinimum(-100)
+		self.spb_unit_V.setMaximum(300)
+		self.spb_unit_V.setMinimum(-300)
 		self.spb_unit_V.setSuffix(' U')
 		self.spb_unit_V.setMinimumWidth(45)
 
 		self.spb_unit_H =  QtGui.QSpinBox()
-		self.spb_unit_H.setMaximum(100)
-		self.spb_unit_H.setMinimum(-100)
+		self.spb_unit_H.setMaximum(300)
+		self.spb_unit_H.setMinimum(-300)
 		self.spb_unit_H.setSuffix(' U')
 		self.spb_unit_H.setMinimumWidth(45)
 

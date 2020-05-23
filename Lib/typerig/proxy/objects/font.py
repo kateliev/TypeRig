@@ -19,12 +19,12 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
-from typerig.core.objects.collection import jsontree, vfj_encoder, vfj_decoder
+from typerig.core.objects.collection import treeDict, jsontree, vfj_encoder, vfj_decoder
 from typerig.proxy.objects.glyph import *
 from typerig.proxy.objects.string import *
 
 # - Init ---------------------------------
-__version__ = '0.26.3'
+__version__ = '0.27.0'
 
 # - Classes -------------------------------
 class pFontMetrics(object):
@@ -145,6 +145,96 @@ class pFontMetrics(object):
 			eval("self.set{}({}, '{}')".format(func, value, layer))
 
 
+class pMaster(treeDict):
+	def __init__(self, *args, **kwargs):
+		super(pMaster, self).__init__(*args)
+		self.name = kwargs.get('name', None)
+
+	def __repr__(self):
+		return '<{} name={}; axes={}>'.format(self.__class__.__name__, self.name, '; '.join(self.keys()).replace('name',''))
+
+
+class pMasters(object):
+# -- Aliasing some master related commands in common group
+	def __init__(self, parent):
+		self.parent = parent
+		self.add = self.parent.fl.addMaster
+		self.clear = self.parent.fl.clearMasters
+		self.container = self.parent.fl.mastersContainer
+		self.count = self.parent.fl.mastersCount
+		self.default = self.parent.fl.defaultMaster
+		self.has = self.parent.fl.hasMaster
+		self.isActive = self.parent.fl.can_interpolate
+		self.location = self.parent.fl.location
+		self.names = self.parent.fl.masters
+		self.remove = self.parent.fl.removeMaster
+		self.rename = self.parent.fl.renameMaster
+		self.setActive = self.parent.fl.set_interpolate
+		self.setLocation = self.parent.fl.setLocation
+		self.setMaster = self.parent.fl.setMaster
+
+	def locate(self, master_name, axes_list=None):
+		axes_list = axes_list if axes_list is not None else self.parent.pDesignSpace.axes_list
+		master_location = self.location(master_name)
+		location_list = []
+
+		for axis in axes_list:
+			location_list.append((axis.tag.lower(), (axis.valueWeight(master_location, 0.), axis.valueWidth(master_location, 0.))))
+
+		return pMaster(location_list, name=master_name)
+
+	def locateAxis(self, master_name, axis_tag, width=False):
+		axes_dict = self.parent.pDesignSpace.axes_dict
+		if not axes_dict.has_key(axis_tag): return
+		selected_axis = axes_dict[axis_tag]
+		
+		master_location = self.location(master_name)
+		master_weight = selected_axis.valueWeight(master_location, 0.)
+		master_width = selected_axis.valueWidth(master_location, 0.)
+
+		master_neighbors = [pMaster([(selected_axis.tag.lower(), (master_weight, master_width))], name=master_name)]
+
+		for name in self.names:
+			if name != master_name:
+				temp_location = self.location(name)
+				temp_weight = selected_axis.valueWeight(temp_location, 0.)
+				temp_width = selected_axis.valueWidth(temp_location, 0.)
+				if (temp_width == master_width, temp_weight == master_weight)[width]:
+					master_neighbors.append(pMaster([(selected_axis.tag.lower(), (temp_weight, temp_width))], name=name))
+
+		return selected_axis, sorted(master_neighbors, key=lambda m: m[axis_tag])
+
+	@property
+	def masters(self):
+		return [self.locate(master_name) for master_name in self.names]
+
+	def __repr__(self):
+		return '<{} masters={}>'.format(self.__class__.__name__, '; '.join(self.names))
+
+
+class pDesignSpace(object):
+# -- Aliasing some axis related commands
+	def __init__(self, parent):
+		self.parent = parent
+		self.add = parent.fl.addAxis
+		self.prepare = parent.fl.prepareAxes
+		
+	def __repr__(self):
+		return '<{} axes={}>'.format(self.__class__.__name__, '; '.join([axis.name for axis in self.axes_list]))
+
+	@property		
+	def axes(self):
+		return treeDict([(axis.tag, axis) for axis in self.axes_list])
+
+	@property
+	def axes_list(self):
+		return self.parent.fl.axes
+
+	@property
+	def axes_dict(self):
+		return {axis.tag: axis for axis in self.parent.fl.axes}
+
+
 class pFont(object):
 	'''
 	A Proxy Font representation of Fonlab fgFont and flPackage.
@@ -180,8 +270,10 @@ class pFont(object):
 		self.__kern_pair_mode = ('glyphMode', 'groupMode')
 		
 		# -- Design space related 
-		self.pMasters = self.pMasters(self)
-		self.pSpace = self.pDesignSpace(self)
+		self.pMastersContainer = pMasters(self)
+		self.pDesignSpace = pDesignSpace(self)
+		self.pMasters = self.pMastersContainer
+		self.pSpace = self.pDesignSpace
 		
 	def __repr__(self):
 		return '<{} name={} glyphs={} path={}>'.format(self.__class__.__name__, self.fg.info.familyName, len(self.fg), self.fg.path)
@@ -217,37 +309,8 @@ class pFont(object):
 		return self.fg.path
 
 	# - Classes -------------------------------------------------
-	class pMasters(object):
-	# -- Aliasing some master related commands in common group
-		def __init__(self, parent):
-			self.add = parent.fl.addMaster
-			self.clear = parent.fl.clearMasters
-			self.container = parent.fl.mastersContainer
-			self.count = parent.fl.mastersCount
-			self.default = parent.fl.defaultMaster
-			self.has = parent.fl.hasMaster
-			self.isActive = parent.fl.can_interpolate
-			self.locate = parent.fl.location
-			self.names = parent.fl.masters
-			self.remove = parent.fl.removeMaster
-			self.rename = parent.fl.renameMaster
-			self.setActive = parent.fl.set_interpolate
-			self.setLocation = parent.fl.setLocation
-			self.setMaster = parent.fl.setMaster
-
-		def __repr__(self):
-			return '<{} masters={}>'.format(self.__class__.__name__, ';'.join(self.names))
-
-	class pDesignSpace(object):
-	# -- Aliasing some axis related commands
-		def __init__(self, parent):
-			self.add = parent.fl.addAxis
-			self.axes = parent.fl.axes
-			self.prepare = parent.fl.prepareAxes
-			
-		def __repr__(self):
-			return '<{} axes={}>'.format(self.__class__.__name__, ';'.join([axis.name for axis in self.axes]))
-
+	
+		
 	# Functions ---------------------------------------------------
 	# - Font Basics -----------------------------------------------
 	def getSelectedIndices(self):

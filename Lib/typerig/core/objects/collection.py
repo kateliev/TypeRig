@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.26.0'
+__version__ = '0.27.0'
 
 # - Dependencies ------------------------
 import json
@@ -73,14 +73,166 @@ class extBiDict(dict):
 
 		super(extBiDict, self).__delitem__(key)
 
-class jsontree(defaultdict):
+class attribdict(defaultdict):
+	'''Default dictionary where keys can be accessed as attributes.'''
+	def __init__(self, *args, **kwdargs):
+		super(attribdict, self).__init__(attribdict, *args, **kwdargs)
+
+	def __getattribute__(self, name):
+		try:
+			return object.__getattribute__(self, name)
+		except AttributeError:
+			try:
+				return self[name]
+			except KeyError:
+				raise AttributeError(name)
+		
+	def __setattr__(self, name, value):
+		if name in self.keys():
+			self[name] = value
+			return value
+		else:
+			object.__setattr__(self, name, value)
+
+	def __delattr__(self, name):
+		try:
+			return object.__delattr__(self, name)
+		except AttributeError:
+			return self.pop(name, None)
+					
+	def __repr__(self):
+		return '<%s: %s>' %(self.__class__.__name__, len(self.keys()))
+
+	def __hash__(self):
+		import copy
+		
+		def hash_helper(obj):
+			if isinstance(obj, (set, tuple, list)):
+				return tuple([hash_helper(element) for element in obj])    
+
+			elif not isinstance(obj, dict):
+				return hash(obj)
+
+			new_obj = {}
+
+			for key, value in obj.items():
+				new_obj[key] = hash_helper(value)
+
+			return hash(tuple(frozenset(sorted(new_obj.items()))))
+
+		return hash_helper(self)
+
+	def dir(self):
+		tree_map = ['   .%s\t%s' %(key, type(value)) for key, value in self.items()]
+		print('Attributes (Keys) map:\n%s' %('\n'.join(tree_map).expandtabs(30)))
+
+	def factory(self, factory_type):
+		self.default_factory = factory_type
+
+	def lock(self):
+		self.default_factory = None
+
+	def extract(self, search):
+		'''Pull all values of specified key (search)
+		
+		Attributes:
+			search (Str): Search string
+
+		Returns:
+			generator
+		'''
+		
+		def extract_helper(obj, search):
+			if isinstance(obj, dict):
+				for key, value in obj.items():
+					if key == search:
+						yield value
+					else:	
+						if isinstance(value, (dict, list)):
+							for result in extract_helper(value, search):
+								yield result
+
+			elif isinstance(obj, list):
+				for item in obj:
+					for result in extract_helper(item, search):
+						yield result
+
+		return extract_helper(self, search)
+
+	def where(self, search, search_type=None):
+		'''Pull all objects that contain values of specified search.
+		
+		Attributes:
+			search (Str): Search string
+			search_type (type) : Value type
+		Returns:
+			generator
+		'''
+		def isisntance_plus(entity, test_type):
+			if test_type is not None:
+				return isinstance(entity, test_type)
+			else:
+				return True
+
+		def where_helper(obj, search):
+			if isinstance(obj, dict):
+				for key, value in obj.items():
+					if key == search and isisntance_plus(value, search_type):
+						yield obj
+					else:	
+						if isinstance(value, (dict, list)):
+							for result in where_helper(value, search):
+								yield result
+
+			elif isinstance(obj, list):
+				for item in obj:
+					for result in where_helper(item, search):
+						yield result
+
+		return where_helper(self, search)
+
+	def contains(self, search, search_type=None):
+		'''Does the object contain ANY value or nested object with given name (search)
+		
+		Attributes:
+			search (Str): Search string
+			search_type (type) : Value type
+
+		Returns:
+			Bool
+		'''
+		def isisntance_plus(entity, test_type):
+			if test_type is not None:
+				return isinstance(entity, test_type)
+			else:
+				return True
+		
+		def contains_helper(obj, search):
+			if isinstance(obj, dict):
+				for key, value in obj.items():
+					if search in key and isisntance_plus(value, search_type):
+						yield True
+					else:
+						if isinstance(value, (dict, list)):
+							for result in contains_helper(value, search):
+								yield result
+
+			elif isinstance(obj, list):
+				for item in obj:
+					for result in contains_helper(item, search):
+						yield result
+			
+			
+		return any(list(contains_helper(self, search)))
+
+class treeDict(defaultdict):
 	'''
-	Default dictionary where keys can be accessed as attributes
+	Default dictionary where keys can be accessed as attributes. Light Version
 	----
 	Adapted from JsonTree by Doug Napoleone: https://github.com/dougn/jsontree
 	'''
-	def __init__(self, *args, **kwdargs):
-		super(jsontree, self).__init__(jsontree, *args, **kwdargs)
+	def __init__(self, *args, **kwargs):
+		super(treeDict, self).__init__(treeDict, *args, **kwargs)
 		
 	def __getattribute__(self, name):
 		try:
@@ -93,7 +245,9 @@ class jsontree(defaultdict):
 		return value
 	
 	def __repr__(self):
-	  return str(self.keys())
+		return str(self.keys())
+
+jsontree = treeDict
 
 class vfj_decoder(json.JSONDecoder):
 	'''

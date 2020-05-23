@@ -19,7 +19,7 @@ from typerig.proxy.objects.base import *
 from typerig.proxy.objects.node import *
 
 # - Init ---------------------------------
-__version__ = '0.26.1'
+__version__ = '0.26.3'
 
 # - Classes -------------------------------
 class pShape(object):
@@ -119,6 +119,11 @@ class pShape(object):
 
 	def nodes(self):
 		return [node for contour in self.contours() for node in contour.nodes()]
+
+	def sortContours(self, criteria='y', ascending=True):
+		criteria_dict = {'x':0, 'y':1, 'width':2, 'height':3}
+		temp_contours = sorted(self.contours, key=lambda contour: contour.bounds[criteria_dict[criteria.lower()]])
+		self.contours = reversed(temp_contours) if ascending else temp_contours
 
 	# - Complex shapes, builders and etc. ---------------------
 	def copyBuilder(self, source):
