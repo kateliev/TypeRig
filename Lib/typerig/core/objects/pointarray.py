@@ -8,86 +8,138 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.25.9'
+# - Dependencies ------------------------
+from __future__ import print_function
+from typerig.core.func.utils import isMultiInstance
+from typerig.core.objects.collection import CustomList
+from typerig.core.objects.point import Point, Void
 
-class coordArray(object):
-	def __init__(self, *argv):
-		multiCheck = lambda t, type: all([isinstance(i, type) for i in t])
+# - Init -------------------------------
+__version__ = '0.26.1'
 
-		if not len(argv):		
-			self.x, self.y = [[],[]]
+# - Classes -----------------------------
+class PointArray(CustomList):
+	def __init__(self, data, useVoid=False):
+		if not isMultiInstance(data, Point):
+			data = [Point(item) for item in data]
 
-		elif len(argv) == 2 and multiCheck(argv, list):
-			self.x, self.y = argv
+		super(PointArray, self).__init__(data)
+		self.__useVoid = useVoid
 
-		elif len(argv) == 1 and len(argv[0]) % 2 == 0: # and isinstance(argv[0], list):
-			split = len(argv[0])/2
-			self.x = argv[0][0:split]
-			self.y = argv[0][split:]
+	# - Internals
+	def __add__(self, other):
+		if isinstance(other, self.__class__):
+			return self.__class__([item[0] + item[1] for item in zip(self.data, other.data)])
+		else:
+			return self.__class__([item + other for item in self.data])
 
-		self.type = []
+	__radd__ = __add__
+	__iadd__ = None
+	
+	def __sub__(self, other):
+		if isinstance(other, self.__class__):
+			return self.__class__([item[0] - item[1] for item in zip(self.data, other.data)])
+		else:
+			return self.__class__([item - other for item in self.data])
 
-	def __getitem__(self, i):
-		return (self.x[i], self.y[i])
+	__rsub__ = __sub__
+	__isub__ = None
+	
+	def __mul__(self, other):
+		if isinstance(other, self.__class__):
+			return self.__class__([item[0] * item[1] for item in zip(self.data, other.data)])
+		else:
+			return self.__class__([item * other for item in self.data])
 
-	def __getslice__(i, j):
-		return self.__class__(self.x[i:j], self.y[i:j])
+	__rmul__ = __mul__
+	__imul__ = None
 
-	def __len__(self):
-		return len(self.x)
+	def __div__(self, other):
+		if isinstance(other, self.__class__):
+			return self.__class__([item[0] / item[1] for item in zip(self.data, other.data)])
+		else:
+			return self.__class__([item / other for item in self.data])
 
-	def __setitem__(self, i, coordTuple):
-		self.x[i], self.y[i] = coordTuple
+	__rdiv__ = __div__
+	__truediv__ = __div__
+	__idiv__ = None
 
-	def __str__(self):
-		return str(zip(self.x, self.y))
+	def __delitem__(self, i): 
+		if self.__useVoid:
+			self.data[i] = Void()
+		else:
+			del self.data[i]
 
 	def __repr__(self):
-		return '<Coordinate Array: Lenght=%s;>' %len(self.x)
+		return '<Point Array: {}>'.format(self.data)
 
-	def append(self, coordTuple, nodeType=-1):
-		x, y = coordTuple
-		self.x.append(x)
-		self.y.append(y)
-		self.type.append(nodeType)
+	# - Properties 
+	@property
+	def tuple(self):
+		return tuple((item.tuple for item in self.data))
+	
+	@property
+	def x_tuple(self):
+		return tuple((item.x for item in self.data))
 
-	def extend(self, coordList):
-		if isinstance(coordList, self.__class__):
-			self.x.extend(coordList.x)
-			self.y.extend(coordList.y)
+	@property
+	def y_tuple(self):
+		return tuple((item.y for item in self.data))
 
-		elif isinstance(coordList, list):
-			self.x.extend(coordList[0])
-			self.y.extend(coordList[1])
+	@property
+	def x(self):
+		return min(self.x_tuple)
 
-	def insert(self, index, coordTuple):
-		x, y = coordTuple
-		self.x.insert(index, x)
-		self.y.insert(index, y)
+	@property
+	def y(self):
+		return min(self.y_tuple)
 
-	def remove(self, coordTuple):
-		x, y = coordTuple
-		self.x.remove(x)
-		self.y.remove(y)
+	@property
+	def height(self):
+		return max(self.y_tuple) - min(self.y_tuple)
 
-	def pop(self, index=None):
-		return (self.x.pop(index), self.y.pop(index))
+	@property
+	def width(self):
+		return max(self.x_tuple) - min(self.x_tuple)
 
-	def reverse(self):
-		self.x.reverse()
-		self.y.reverse()
+	@property
+	def center(self):
+		return (self.width/2 + self.x, self.height/2 + self.y)
 
-	def asPairs(self):
-		return zip(self.x, self.y)
-
-	def asList(self):
-		return [self.x, self.y]
-
-	def flatten(self):
-		return self.x + self.y
-
+	@property
 	def bounds(self):
-		return (min(self.x), min(self.y), max(self.x), max(self.y))
+		return (self.x, self.y, self.width, self.height)
 
-	def items(self):
-		return zip(self.x, self.y, self.type)
+	@property
+	def diffs(self):
+		return [self.data[i].diff_to(self.data[i+1]) for i in range(len(self.data) - 1)]
+
+	@property
+	def angles(self):
+		return [self.data[i].angle_to(self.data[i+1]) for i in range(len(self.data) - 1)]
+
+	def pop(self, i=-1): 
+		if self.__useVoid:
+			ret_item = self.data[i]
+			self.data[i] = Void()
+			return ret_item
+		else:
+			return self.data.pop(i)
+
+	def remove(self, item): 
+		if self.__useVoid:
+			i = self.data.index(item)
+			self.data[i] = Void()
+		else:
+			self.data.remove(item)
+
+	def doTransform(self, transform=None):
+		for item in self.data:
+			item.doTransform(transform)
+		
+
+if __name__ == '__main__':
+	a = PointArray([Point(10,10), Point(740,570), Point(70,50)])
+	b = PointArray(a, True)
+	del b[1]
+	print(a, b + 50)

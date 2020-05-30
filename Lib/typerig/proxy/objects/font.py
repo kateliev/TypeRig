@@ -24,7 +24,7 @@ from typerig.proxy.objects.glyph import *
 from typerig.proxy.objects.string import *
 
 # - Init ---------------------------------
-__version__ = '0.27.0'
+__version__ = '0.27.1'
 
 # - Classes -------------------------------
 class pFontMetrics(object):
@@ -698,10 +698,6 @@ class pFont(object):
 		if options['flg']: new_glyph.setMark(src_glyph.mark) # Copy glyph flag/mark
 
 		return new_glyph
-
-	# - Information -----------------------------------------------
-	def info(self):
-		return self.info
 
 	# - OpenType and features -------------------------------------
 	def getFeatures(self):

@@ -19,7 +19,6 @@ import fontgate as fgt
 import PythonQt as pqt
 
 from typerig.core.objects.point import Point
-from typerig.core.objects.pointarray import coordArray
 from typerig.core.func.math import linInterp
 
 #from typerig.proxy.objects.font import pFont
@@ -27,7 +26,7 @@ from typerig.proxy.application.app import pWorkspace
 from typerig.proxy.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.26.5'
+__version__ = '0.26.7'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -1249,27 +1248,14 @@ class eGlyph(pGlyph):
 	def _compatibleLayers(self, layerName=None):
 		return [layer.isCompatible(self.layer(layerName), True) for layer in self.layers()]
 			
-	def _getCoordArray(self, layer=None):
-		
-		coords = coordArray()
-		for node in self.nodes(layer):
-			
-			# - Followiong will work on Cubic beziers only! Think of better way!
-			nodeType = 0
-			if node.isOn() and node.nextNode().isOn():				
-				nodeType = 2
-			if node.isOn() and not node.nextNode().isOn():				
-				nodeType = 4
+	def _getPointArray(self, layer=None):
+		return [(float(node.x), float(node.y)) for node in self.nodes(layer)]
 
-			coords.append((float(node.x), float(node.y)), nodeType)
-
-		return coords
-
-	def _setCoordArray(self, coordArray, layer=None):
+	def _setPointArray(self, PointArray, layer=None):
 		nodeArray = self.nodes(layer)
-		if len(coordArray) == len(nodeArray):
-			for nid in range(len(coordArray)):
-				nodeArray[nid].x, nodeArray[nid].y = coordArray[nid]
+		if len(PointArray) == len(nodeArray):
+			for nid in range(len(PointArray)):
+				nodeArray[nid].x, nodeArray[nid].y = PointArray[nid]
 		else:
 			print('ERROR:\t Incompatible coordinate array provided.')
 

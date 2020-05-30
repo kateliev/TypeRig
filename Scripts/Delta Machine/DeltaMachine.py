@@ -20,7 +20,7 @@ from typerig.proxy import *
 
 from typerig.core.func.math import linInterp, ratfrac
 from typerig.core.func import transform
-from typerig.core.objects.pointarray import coordArray
+from typerig.core.objects.pointarray import PointArray
 
 from PythonQt import QtCore
 from typerig.gui import QtGui
@@ -28,7 +28,7 @@ from typerig.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRMsgSimple
 
 
 # - Init --------------------------------
-app_version = '0.22'
+app_version = '1.12'
 app_name = 'TypeRig | Delta Machine'
 
 ss_controls = """
@@ -330,7 +330,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		self.pMode = 0
 		self.active_font = pFont()
 		#self.data_glyphs = getProcessGlyphs(self.pMode)
-		self.data_coordArrays = {}
+		self.data_PointArrays = {}
 		self.data_stems = {}
 		self.ratio_source = {}
 		self.ratio_target = {}
@@ -380,7 +380,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		self.btn_pushWidth.clicked.connect(lambda: self.push_ratio(False, False))
 		self.btn_pushHeight.clicked.connect(lambda: self.push_ratio(True, False))
 
-		self.btn_getArrays.clicked.connect(lambda: self.get_coordArrays(None)) 
+		self.btn_getArrays.clicked.connect(lambda: self.get_PointArrays(None)) 
 		self.btn_getVstems.clicked.connect(lambda: self.get_Stems(True))
 		self.btn_getHstems.clicked.connect(lambda: self.get_Stems(False))
 		self.btn_getTx.clicked.connect(lambda: self.get_Stems(True, False))
@@ -538,14 +538,14 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		self.tab_masters.setTable(table_dict)
 		
 	# - Stem operations
-	def get_coordArrays(self, glyph=None):
+	def get_PointArrays(self, glyph=None):
 		if glyph is None: glyph = eGlyph()
-		self.data_coordArrays.update({glyph.name:{master_name:glyph._getCoordArray(master_name) for master_name in self.active_font.masters()}})
+		self.data_PointArrays.update({glyph.name:{master_name:PointArray(glyph._getPointArray(master_name)) for master_name in self.active_font.masters()}})
 		
 		self.cmb_infoArrays.clear()
-		self.cmb_infoArrays.addItems(sorted(self.data_coordArrays.keys()))
+		self.cmb_infoArrays.addItems(sorted(self.data_PointArrays.keys()))
 
-		print 'Done:\t| Delta Machine | Updated CoordArrays.\tGlyph:%s' %glyph.name
+		print 'Done:\t| Delta Machine | Updated PointArrays.\tGlyph:%s' %glyph.name
 
 	def get_Stems(self, vertical=True, source=True):
 		# - Helper
@@ -661,7 +661,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		process_glyphs = getProcessGlyphs(self.pMode)
 		
 		for wGlyph in process_glyphs:
-			if self.pMode != 0: self.get_coordArrays(wGlyph)
+			if self.pMode != 0: self.get_PointArrays(wGlyph)
 			process_out = []
 			
 			for layerIndex in range(self.tab_masters.rowCount):
@@ -676,15 +676,15 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		wGlyph = glyph
 		config_data = self.tab_masters.getRow(layerIndex)
 	
-		if len(self.data_coordArrays.keys()) and wGlyph.name in self.data_coordArrays.keys():
+		if len(self.data_PointArrays.keys()) and wGlyph.name in self.data_PointArrays.keys():
 			# - Backup Metrics
 			if keep_metrics:
 				data_lsb, data_rsb = wGlyph.getLSB(config_data[0]), wGlyph.getRSB(config_data[0])
 				data_lsb_eq, data_rsb_eq = wGlyph.getSBeq(config_data[0])
 
 			# - Axis
-			a = self.data_coordArrays[wGlyph.name][config_data[1]]
-			b = self.data_coordArrays[wGlyph.name][config_data[2]]
+			a = self.data_PointArrays[wGlyph.name][config_data[1]]
+			b = self.data_PointArrays[wGlyph.name][config_data[2]]
 			
 			# - Compensation
 			scmp = float(config_data[11]), float(config_data[12])
@@ -729,15 +729,15 @@ class dlg_DeltaMachine(QtGui.QDialog):
 			#mm_scaler = lambda sx, sy, tx, ty : transform.adaptive_scale_array([a.x, a.y], [b.x, b.y], sx, sy, dx, dy, tx, ty, scmp[0], scmp[1], angle, [sw_dx0, sw_dx1, sw_dy0, sw_dy1])
 			
 			# -- Native
-			joined_array = zip(a.asPairs(), b.asPairs())
+			joined_array = zip(a.tuple, b.tuple)
 			mm_scaler = lambda sx, sy, tx, ty : transform.adaptive_scale_array(joined_array, (sx, sy), (dx, dy), (tx, ty), (scmp[0], scmp[1]), angle, [sw_dx0, sw_dx1, sw_dy0, sw_dy1])
 
 			if anisotropic:
 				# - Dual axis mixer - anisotropic 
-				wGlyph._setCoordArray(mm_scaler(sx, sy, tx, ty), layer=config_data[0])
+				wGlyph._setPointArray(mm_scaler(sx, sy, tx, ty), layer=config_data[0])
 			else:
 				# - Single axis mixer
-				wGlyph._setCoordArray(mm_scaler(sx, sy, tx, tx), layer=config_data[0])
+				wGlyph._setPointArray(mm_scaler(sx, sy, tx, tx), layer=config_data[0])
 			
 			if live_update:
 				wGlyph.update()

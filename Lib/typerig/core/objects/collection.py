@@ -8,14 +8,324 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.27.0'
-
 # - Dependencies ------------------------
+from __future__ import print_function
+from collections import MutableSequence, MutableMapping, defaultdict
 import json
-from collections import defaultdict
+
+# - Init -------------------------------
+__version__ = '0.28.6'
 
 # - Objects ----------------------------
-class biDict(dict):
+# -- Lists -----------------------------
+class CustomList(MutableSequence):
+	'''A more or less complete user-defined wrapper around list objects.
+	Adapted from Source: https://github.com/enthought/Python-2.7.3/blob/master/Lib/UserList.py
+	'''
+	def __init__(self, initlist=None):
+		self.data = []
+		if initlist is not None:
+			# XXX should this accept an arbitrary sequence?
+			if type(initlist) == type(self.data):
+				self.data[:] = initlist
+			elif isinstance(initlist, self.__class__):
+				self.data[:] = initlist.data[:]
+			else:
+				self.data = list(initlist)
+
+	def __repr__(self): 
+		return repr(self.data)
+
+	def __lt__(self, other): 
+		return self.data <  self.__cast(other)
+
+	def __le__(self, other): 
+		return self.data <= self.__cast(other)
+
+	def __eq__(self, other): 
+		return self.data == self.__cast(other)
+
+	def __ne__(self, other): 
+		return self.data != self.__cast(other)
+
+	def __gt__(self, other): 
+		return self.data >  self.__cast(other)
+
+	def __ge__(self, other): 
+		return self.data >= self.__cast(other)
+
+	def __cmp__(self, other):
+		return cmp(self.data, self.__cast(other))
+
+	__hash__ = None # Mutable sequence, so not hashable
+
+	def __contains__(self, item): 
+		return item in self.data
+
+	def __len__(self): 
+		return len(self.data)
+
+	def __getitem__(self, i): 
+		return self.data[i]
+
+	def __setitem__(self, i, item): 
+		self.data[i] = item
+
+	def __delitem__(self, i): 
+		del self.data[i]
+
+	def __getslice__(self, i, j):
+		i = max(i, 0); j = max(j, 0)
+		return self.__class__(self.data[i:j])
+
+	def __setslice__(self, i, j, other):
+		i = max(i, 0); j = max(j, 0)
+		if isinstance(other, self.__class__):
+			self.data[i:j] = other.data
+		elif isinstance(other, type(self.data)):
+			self.data[i:j] = other
+		else:
+			self.data[i:j] = list(other)
+
+	def __delslice__(self, i, j):
+		i = max(i, 0); j = max(j, 0)
+		del self.data[i:j]
+
+	def __add__(self, other):
+		if isinstance(other, self.__class__):
+			return self.__class__(self.data + other.data)
+		elif isinstance(other, type(self.data)):
+			return self.__class__(self.data + other)
+		else:
+			return self.__class__(self.data + list(other))
+
+	def __radd__(self, other):
+		if isinstance(other, self.__class__):
+			return self.__class__(other.data + self.data)
+		elif isinstance(other, type(self.data)):
+			return self.__class__(other + self.data)
+		else:
+			return self.__class__(list(other) + self.data)
+
+	def __iadd__(self, other):
+		if isinstance(other, self.__class__):
+			self.data += other.data
+		elif isinstance(other, type(self.data)):
+			self.data += other
+		else:
+			self.data += list(other)
+		return self
+
+	def __mul__(self, n):
+		return self.__class__(self.data*n)
+
+	__rmul__ = __mul__
+
+	def __imul__(self, n):
+		self.data *= n
+		return self
+
+	def __cast(self, other):
+		if isinstance(other, self.__class__): return other.data
+		else: return other
+
+	def append(self, item): 
+		self.data.append(item)
+
+	def insert(self, i, item): 
+		self.data.insert(i, item)
+
+	def pop(self, i=-1): 
+		return self.data.pop(i)
+
+	def remove(self, item): 
+		self.data.remove(item)
+
+	def count(self, item): 
+		return self.data.count(item)
+
+	def index(self, item, *args): 
+		return self.data.index(item, *args)
+
+	def reverse(self): 
+		self.data.reverse()
+
+	def sort(self, *args, **kwds): 
+		self.data.sort(*args, **kwds)
+
+	def extend(self, other):
+		if isinstance(other, self.__class__):
+			self.data.extend(other.data)
+		else:
+			self.data.extend(other)
+
+class dimList(CustomList):
+	'''Custom list object that supports multiple dimensions
+	Example: 
+		a = dimList([[[1, 2, 3, 4], ['a', 'b', 'c', 'd']], [[5, 6, 7, 8], ['e', 'f', 'g', 'h']]])
+		print(a[0,1,2])
+	'''
+	def __init__(self, *args, **kwargs):
+		super(ndList, self).__init__(*args, **kwargs)
+	
+	def __nest_level(self, obj): # Nesting level of the object
+		if not isinstance(obj, (self.__class__, list, tuple)):
+			return 0
+
+		max_level = 0
+
+		for item in obj:
+			max_level = max(max_level, self.__nest_level(item))
+
+		return max_level + 1
+
+	@property
+	def dim(self): # Dimensions
+		return len(self.data), self.__nest_level(self.data) 
+
+	def __getitem__(self, *args): 
+		if isinstance(args[0], tuple):
+			retrieve = ''
+			
+			for i in args[0]:
+				retrieve += '[{}]'.format(i)
+
+			return eval('self.data{}'.format(retrieve))
+		else:
+			return self.data[args[0]]
+
+	def __setitem__(self, *args): 
+		if isinstance(args[0], tuple):
+			retrieve = ''
+			
+			for i in args[0]:
+				retrieve += '[{}]'.format(i)
+
+			exec('self.data{}=args[1]'.format(retrieve))
+		else:
+			self.data[args[0]] = args[1]
+
+# -- Dicts -----------------------------
+class CustomDict(MutableMapping):
+	'''A more or less complete user-defined wrapper around dictionary objects.
+	Adapted from Source: https://github.com/enthought/Python-2.7.3/blob/master/Lib/self.__class__.py
+	'''
+	def __init__(self, dict=None, **kwargs):
+		self.data = {}
+		if dict is not None:
+			self.update(dict)
+			
+		if len(kwargs):
+			self.update(kwargs)
+
+	def __repr__(self): 
+		return repr(self.data)
+
+	def __cmp__(self, dict):
+		if isinstance(dict, self.__class__):
+			return cmp(self.data, dict.data)
+		else:
+			return cmp(self.data, dict)
+
+	__hash__ = None
+
+	def __len__(self): 
+		return len(self.data)
+
+	def __getitem__(self, key):
+		if key in self.data:
+			return self.data[key]
+		if hasattr(self.__class__, "__missing__"):
+			return self.__class__.__missing__(self, key)
+		raise KeyError(key)
+
+	def __setitem__(self, key, item): 
+		self.data[key] = item
+
+	def __delitem__(self, key): 
+		del self.data[key]
+
+	def __iter__(self):
+		return iter(self.data)
+
+	def clear(self): 
+		self.data.clear()
+
+	def copy(self):
+		if self.__class__ is self.__class__:
+			return self.__class__(self.data.copy())
+		import copy
+		data = self.data
+		try:
+			self.data = {}
+			c = copy.copy(self)
+		finally:
+			self.data = data
+		c.update(self)
+		return c
+
+	def keys(self): 
+		return self.data.keys()
+
+	def items(self): 
+		return self.data.items()
+
+	def iteritems(self): 
+		return self.data.iteritems()
+
+	def iterkeys(self): 
+		return self.data.iterkeys()
+
+	def itervalues(self): 
+		return self.data.itervalues()
+
+	def values(self): 
+		return self.data.values()
+
+	def has_key(self, key): 
+		return key in self.data
+
+	def update(self, dict=None, **kwargs):
+		if dict is None:
+			pass
+		elif isinstance(dict, self.__class__):
+			self.data.update(dict.data)
+		elif isinstance(dict, type({})) or not hasattr(dict, 'items'):
+			self.data.update(dict)
+		else:
+			for k, v in dict.items():
+				self[k] = v
+		if len(kwargs):
+			self.data.update(kwargs)
+
+	def get(self, key, failobj=None):
+		if key not in self:
+			return failobj
+		return self[key]
+
+	def setdefault(self, key, failobj=None):
+		if key not in self:
+			self[key] = failobj
+		return self[key]
+
+	def pop(self, key, *args):
+		return self.data.pop(key, *args)
+
+	def popitem(self):
+		return self.data.popitem()
+
+	def __contains__(self, key):
+		return key in self.data
+
+	@classmethod
+	def fromkeys(cls, iterable, value=None):
+		d = cls()
+		for key in iterable:
+			d[key] = value
+		return d
+
+
+class biDict(CustomDict):
 	'''
 	Bi-directioanl dictionary partly based on Basj answer st:
 	https://stackoverflow.com/questions/3318625/efficient-bidirectional-hash-table-in-python
@@ -43,7 +353,9 @@ class biDict(dict):
 
 		super(biDict, self).__delitem__(key)
 
-class extBiDict(dict):
+
+
+class extBiDict(CustomDict):
 	'''
 	Bi-directioanl dictionary with lists for values
 	'''
@@ -278,3 +590,13 @@ class vfj_encoder(json.JSONEncoder):
 	
 	def default(self, obj):
 		return super(vfj_encoder, self).default(obj)
+
+
+# -- Test --------------------------------------
+if __name__ == '__main__':
+	a = CustomList([1,2,3,4,])
+	b = CustomDict({1:1, 2:2})
+	c = biDict({1:'a', 2:'b'})
+	print(a,b,c,c.inverse['a'])
+	c[1] = '44a'
+	print(c)
