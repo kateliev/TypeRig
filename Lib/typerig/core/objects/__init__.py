@@ -15,6 +15,6 @@ from cubicbezier import *
 from line import *
 from matrix import *
 from point import *
-from pointarray import *
+from array import *
 from transform import *
 from utils import *

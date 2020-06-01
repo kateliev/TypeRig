@@ -19,7 +19,7 @@ from typerig.proxy import *
 
 from typerig.core.func.math import linInterp, ratfrac
 from typerig.core.func import transform
-from typerig.core.objects.pointarray import PointArray
+from typerig.core.objects.array import PointArray
 
 from PythonQt import QtCore
 from typerig.gui import QtGui
