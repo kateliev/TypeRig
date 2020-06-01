@@ -8,10 +8,13 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.26.0'
 
 # - Dependencies ------------------------
+from __future__ import print_function, absolute_import
 import math
+
+# - Init -------------------------------
+__version__ = '0.26.0'
 
 # - Objects ----------------------------------------------------
 # -- Affine transformations ------------------------------------
@@ -108,3 +111,14 @@ class Transform(object):
 
 	def __repr__(self):
 		return '<%s [%s %s %s %s %s %s]>' %((self.__class__.__name__,) + tuple(map(str, self.__affine)))
+
+# -- Adaptive scaling ------------------------------------
+class AdaptiveScale(object):
+	#import typerig.core.func.transform as utils
+	#import typerig.core.objects.array as arrays
+
+	def __init__(self, point_arrays, stem_arrays):
+		pass
+
+if __name__ == '__main__':
+	a = AdaptiveScale((10,10), (10,20))

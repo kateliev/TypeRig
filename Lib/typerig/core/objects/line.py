@@ -130,11 +130,17 @@ class Line(object):
 		
 	def solve_point(self, time):
 		'''Find point on the line at given time'''
-		return self.p0 * (1 - time) + self.p1 * time
+		return self.p0 * (1. - time) + self.p1 * time
 
 	def solve_slice(self, time):
 		'''Slice line at given time'''
 		return self.__class__(self.p0.tuple, self.solve_point(time).tuple), self.__class__(self.solve_point(time).tuple, self.p1.tuple)
+
+	def lerp(self, time):
+		return self.solve_point(time)
+
+	def lerp_xy(self, time_x, time_y)	:
+		return Point(self.p0.x * (1. - time_x) + self.p1.x * time_x, self.p0.y * (1 - time_y) + self.p1.y * time_y)
 
 	def intersect_line(self, other_line):
 		'''Find intersection point (X, Y) for two lines.

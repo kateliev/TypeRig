@@ -9,7 +9,7 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 from collections import Sequence
 
 from typerig.core.func.utils import isMultiInstance
@@ -140,59 +140,3 @@ class PointArray(CustomList):
 	def doTransform(self, transform=None):
 		for item in self.data:
 			item.doTransform(transform)
-		
-# -- Interpolation ------------------------------
-class LerpArray(Sequence):
-	def __init__(self, data):
-		# - Init
-		assert len(data) > 1, 'ERROR:\tNot enough input arrays! Minimum 2 required!'
-		check_data = [len(item) for item in data]
-		assert len(check_data) == check_data.count(min(check_data)), 'ERROR:\tInput arrays dimensions do not match!'
-
-		# - Transpose and form lines
-		self.data = []
-		while len(data[0]):
-			tmp = []
-			
-			for item in data:
-				if len(item):
-					tmp.append(item.pop(0))
-				
-			self.data.append([Line(tmp[i], tmp[i+1]) for i in range(len(tmp)-1)])
-				
-	# - Internals
-	def __getitem__(self, i): 
-		return self.data[i]
-
-	def __len__(self): 
-		return len(self.data)
-
-	def __repr__(self):
-		return '<Lerp Array: {}>'.format(self.data)
-
-	def __call__(self, global_time, extrapolate=False):
-		'''Linear interpolation (LERP)'''
-		index, t = divmod(global_time, len(self.data[0])+1)
-
-		if global_time > len(self.data[0]):
-			index = len(self.data[0]) - 1
-			if not extrapolate:
-				t = 1.
-
-		if global_time < 0:
-			index = 0
-			if extrapolate:
-				return [item[int(index)].doSwap().solve_point(t) for item in self.data]
-			else:
-				t = 0.
-
-		return [item[int(index)].solve_point(t) for item in self.data]
-
-
-if __name__ == '__main__':
-	a = PointArray([Point(10,10), Point(740,570), Point(70,50)])
-	s = [[(10,10), (20,20)],[(30,30),(40,40)],[(50,50),(60,60)]]
-	b = LerpArray(s)
-	print(b)
-	print(b(2.3579412, True))
-	
