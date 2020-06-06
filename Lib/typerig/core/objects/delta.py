@@ -24,6 +24,7 @@ __version__ = '0.10.0'
 # - Objects ------------------------------------
 # -- Interpolation ------------------------------
 class DeltaArray(Sequence):
+	''''''
 	def __init__(self, data):
 		# - Init
 		assert len(data) > 1, 'ERROR:\tNot enough input arrays! Minimum 2 required!'
@@ -49,7 +50,44 @@ class DeltaArray(Sequence):
 		'''Linear interpolation (LERP) with optional extrapolation.
 		Interval (-inf) <-- (0 .. len(array)-1) --> (+inf) (supports negative indexing).
 		'''
+		points = []
+		ln = len(self.data[0])
+		ix, iy, tx, ty = self.timer(global_time, extrapolate)
+			
+		for row in range(ln):
+			x = utils.lerp(self.data[ix].x_tuple[row], self.data[ix+1].x_tuple[row], tx)
+			y = utils.lerp(self.data[iy].y_tuple[row], self.data[iy+1].y_tuple[row], ty)
+			points.append((x,y))
 
+		return PointArray(points)
+
+	def mixer(self, global_time):
+		'''Will return the proper coordinate values for the selected global time.'''
+		if isinstance(global_time, tuple):
+			gx, gy = global_time
+		else:
+			gx = gy = global_time
+
+		p0, p1 = [], []
+		ln = len(self.data)
+		ix = int(divmod(gx, 1)[0])
+		iy = int(divmod(gy, 1)[0])
+
+		if ix >= ln - 1: ix = ln - 2
+		if iy >= ln - 1: iy = ln - 2
+
+		for row in range(len(self.data[0])):
+			x0 = self.data[ix].x_tuple[row]
+			y0 = self.data[iy].y_tuple[row]
+			x1 = self.data[ix+1].x_tuple[row]
+			y1 = self.data[iy+1].y_tuple[row]
+			
+			p0.append((x0, y0))
+			p1.append((x1, y1))
+
+		return PointArray(p0), PointArray(p1)
+
+	def timer(self, global_time, extrapolate=False):
 		if isinstance(global_time, tuple):
 			gx, gy = global_time
 		else:
@@ -75,32 +113,136 @@ class DeltaArray(Sequence):
 		elif iy < 0:
 			ty = iy + 1 + ty if extrapolate else 0.		
 			iy = 0
+
+		return ix, iy, tx, ty
+
+
+class DeltaScale(Sequence):
+	''''''
+	def __init__(self, points, stems):
+		# - Init
+		assert len(points) > 1, 'ERROR:\tNot enough input arrays! Minimum 2 required!'
+		assert len(stems) == len(points), 'ERROR:\tNot enough stems provided!'
+		len_points = [len(item) for item in points]
+		assert len(len_points) == len_points.count(min(len_points)), 'ERROR:\tInput arrays dimensions do not match!'
+
+		self.stems = []
+		self.data = []
+		self.x = []
+		self.y = []
+
+		for i in range(len(points)-1):
+			a,b = [], []
+			p_curr = points[i]
+			p_next = points[i+1]
+			p_c_st = stems[i]*len_points[0]
+			p_n_st = stems[i+1]*len_points[0]
 		
-		points = []
-		for row in range(ln):
-			x = utils.lerp(self.data[ix].x_tuple[row], self.data[ix+1].x_tuple[row], tx)
-			y = utils.lerp(self.data[iy].y_tuple[row], self.data[iy+1].y_tuple[row], ty)
-			points.append((x,y))
+			for n in range(len(p_curr)):
+				a.append((p_curr[n][0], p_next[n][0], p_c_st[n][0], p_n_st[n][0]))
+				b.append((p_curr[n][1], p_next[n][1], p_c_st[n][1], p_n_st[n][1]))
 
-		return PointArray(points)
+			self.x.append(a)
+			self.y.append(b)
+			self.stems.append(((p_c_st[0][0], p_n_st[0][0]), (p_c_st[0][1], p_n_st[0][1])))
+			self.data.append(zip(p_curr, p_next, p_c_st, p_n_st))
+		
+		self.dim = (len(self), len_points[0])
+	
+	def __len__(self):
+		return len(self.data)
+
+	def __getitem__(self, index):
+		if isinstance(index, tuple):
+			return eval('self.data{}'.format(''.join(['[{}]'.format(item) for item in index])))
+		elif isinstance(index, int):
+			return self.data[index]
+
+	__setitem__ = None
+
+	def timer(self, global_time, extrapolate=False):
+		if isinstance(global_time, tuple):
+			gx, gy = global_time
+		else:
+			gx = gy = global_time
+
+		ln = self.dim[1]
+		ix, tx = divmod(gx, 1)
+		iy, ty = divmod(gy, 1)
+
+		ix = int(ix)
+		iy = int(iy)
+
+		if ix > ln - 1:
+			tx = ix - ln + 1 + tx if extrapolate else 1.
+			ix = ln - 1
+		elif ix < 0:
+			tx = ix + tx if extrapolate else 0.
+			ix = 0
+
+		if iy > ln - 1:
+			ty = iy - ln + 1 + ty if extrapolate else 1.
+			iy = ln - 1
+		elif iy < 0:
+			ty = iy + ty if extrapolate else 0.		
+			iy = 0
+
+		return ix, iy, tx, ty
+
+	def mixer(self, tx, ty, extrapolate=False):
+		ix, _iy, ntx, _ty = self.timer(tx, extrapolate)
+		_ix, iy, _tx, nty = self.timer(ty, extrapolate)
+
+		return self.x[ix], self.y[iy], ntx, nty
+
+	def __delta_scale(self, x, y, tx, ty, sx, sy, cx, cy, dx, dy, i):
+		return utils.adaptive_scale(((x[0],y[0]), (x[1],y[1])), (sx, sy), (dx, dy), (tx, ty), (cx,cy), i, (x[2], x[3], y[2], y[3]))
+
+	def scale_by_time(self, time, scale, comp, shift, italic_angle):
+		sx, sy = scale
+		cx, cy = comp
+		dx, dy = shift
+		i = italic_angle
+		a0, a1, ntx, nty = self.mixer(time[0], time[1])
+		process_array = zip(a0, a1)
+		result = map(lambda arr: self.__delta_scale(arr[0], arr[1], ntx, nty, sx, sy, cx, cy, dx, dy, i), process_array)
+		return result
+
+	def scale_by_stem(self, stem, scale, comp, shift, italic_angle):
+		stx, sty = stem
+		sx, sy = scale
+		cx, cy = comp
+		dx, dy = shift
+		i = italic_angle
+
+		tx, ty = 0., 0.
+		for sti in range(len(self.stems)):
+			stx0, stx1 = self.stems[sti][0]
+			sty0, sty1 = self.stems[sti][1]
+			if stx0 <= stx <= stx1 : tx = sti + utils.timer(stx, stx0, stx1, True)
+			if sty0 <= sty <= sty1 : ty = sti + utils.timer(sty, sty0, sty1, True)
 
 
-class AdaptiveScale(object):
-	def __init__(self, point_arrays, stem_arrays):
-		self.points = DeltaArray(point_arrays)
-		self.stems = DeltaArray(stem_arrays)
+		a0, a1, ntx, nty = self.mixer(tx, ty)
+		process_array = zip(a0, a1)
+		result = map(lambda arr: self.__delta_scale(arr[0], arr[1], ntx, nty, sx, sy, cx, cy, dx, dy, i), process_array)
+		return result
 
-	def __compensate(global_time):
-		pass
 
 if __name__ == '__main__':
 	arr = PointArray([Point(10,10), Point(740,570), Point(70,50)])
-	points = [	[Point(10,10), Point(20,20)],
-				[Point(30,30), Point(40,40)],
-				[Point(50,50), Point(60,60)]]
+	points = [	[(10,10), (20,20)],
+				[(30,30), (40,40)],
+				[(50,50), (60,60)]]
 
 	stems = [[(10,20)], [(30,50)], [(80,90)]]
 	arr_lerp = DeltaArray(points)
-	arr_mmx = AdaptiveScale(points, stems)
-	print(arr_lerp(-3, 1))
+	arr_mmx = DeltaScale(points, stems)
+	#print(arr_mmx.stems.mixer((3,1)))
+	vas = DeltaArrayNew(points, stems)
+	#print(vas.scale_by_time((1,3), (1,3), (1.0, 1.0), (0,0), 0))
+	print(vas.scale_by_stem((40,25), (1,3), (1.0, 1.0), (0,0), 0))
+	#print(vas.stems)
+	
+
 

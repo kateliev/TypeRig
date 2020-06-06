@@ -9,7 +9,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 # - Dependencies --------------------------
 from platform import system
@@ -90,10 +90,12 @@ class TRSliderCtrl(QtGui.QGridLayout):
 
 
 	def refreshSlider(self):
+		self.sld_axis.blockSignals(True)
 		self.sld_axis.setMinimum(float(self.edt_0.text.strip()))
 		self.sld_axis.setMaximum(float(self.edt_1.text.strip()))
 		self.sld_axis.setValue(float(self.edt_pos.text.strip()))
 		self.sld_axis.setSingleStep(int(self.spb_step.value))
+		self.sld_axis.blockSignals(False)
 				
 	def reset(self):
 		self.edt_0.setText(self.initValues[0])
