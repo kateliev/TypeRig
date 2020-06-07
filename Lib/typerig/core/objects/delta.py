@@ -19,7 +19,7 @@ from typerig.core.objects.point import Point, Void
 from typerig.core.objects.array import PointArray
 
 # - Init -------------------------------
-__version__ = '0.10.0'
+__version__ = '0.10.2'
 
 # - Objects ------------------------------------
 # -- Interpolation ------------------------------
@@ -119,48 +119,56 @@ class DeltaArray(Sequence):
 
 class DeltaScale(Sequence):
 	''''''
-	def __init__(self, points, stems):
+	def __init__(self, *argv):
 		# - Init
-		assert len(points) > 1, 'ERROR:\tNot enough input arrays! Minimum 2 required!'
-		assert len(stems) == len(points), 'ERROR:\tNot enough stems provided!'
-		len_points = [len(item) for item in points]
-		assert len(len_points) == len_points.count(min(len_points)), 'ERROR:\tInput arrays dimensions do not match!'
-
-		self.stems = []
-		self.data = []
-		self.x = []
-		self.y = []
-
-		for i in range(len(points)-1):
-			a,b = [], []
-			p_curr = points[i]
-			p_next = points[i+1]
-			p_c_st = stems[i]*len_points[0]
-			p_n_st = stems[i+1]*len_points[0]
+		self.x, self.y, self.stems = [], [], []
 		
-			for n in range(len(p_curr)):
-				a.append((p_curr[n][0], p_next[n][0], p_c_st[n][0], p_n_st[n][0]))
-				b.append((p_curr[n][1], p_next[n][1], p_c_st[n][1], p_n_st[n][1]))
-
-			self.x.append(a)
-			self.y.append(b)
-			self.stems.append(((p_c_st[0][0], p_n_st[0][0]), (p_c_st[0][1], p_n_st[0][1])))
-			self.data.append(zip(p_curr, p_next, p_c_st, p_n_st))
+		if len(argv) == 1 and isinstance(argv[0], self.__class__): # Clone
+			self.load(argv[0])
 		
-		self.dim = (len(self), len_points[0])
-	
+		elif len(argv) == 2: # Build
+			points, stems = argv
+			assert len(points) > 1, 'ERROR:\tNot enough input arrays! Minimum 2 required!'
+			assert len(stems) == len(points), 'ERROR:\tNot enough stems provided!'
+			len_points = [len(item) for item in points]
+			assert len(len_points) == len_points.count(min(len_points)), 'ERROR:\tInput arrays dimensions do not match!'
+
+			for i in range(len(points)-1):
+				a,b = [], []
+				p_curr = points[i]
+				p_next = points[i+1]
+				p_c_st = stems[i]*len_points[0]
+				p_n_st = stems[i+1]*len_points[0]
+			
+				for n in range(len(p_curr)):
+					a.append((p_curr[n][0], p_next[n][0], p_c_st[n][0], p_n_st[n][0]))
+					b.append((p_curr[n][1], p_next[n][1], p_c_st[n][1], p_n_st[n][1]))
+
+				self.x.append(a)
+				self.y.append(b)
+				self.stems.append(((p_c_st[0][0], p_n_st[0][0]), (p_c_st[0][1], p_n_st[0][1])))
+		
+	# - Internals ----------------------------------
+	def __repr__(self):
+		return '<Delta Scale Array: {}>'.format(self.dim)
+
 	def __len__(self):
-		return len(self.data)
+		return len(self.x)
 
 	def __getitem__(self, index):
-		if isinstance(index, tuple):
-			return eval('self.data{}'.format(''.join(['[{}]'.format(item) for item in index])))
-		elif isinstance(index, int):
-			return self.data[index]
+		result = []
+		for idx in range(self.dim[1]):
+			result.append(zip(self.x[index][idx], self.y[index][idx]))
+		return result
 
 	__setitem__ = None
 
-	def timer(self, global_time, extrapolate=False):
+	@property
+	def dim(self):
+		return (len(self), len(self.x))	
+
+	# - Special functions ----------------------------------
+	def __timer(self, global_time, extrapolate=False):
 		if isinstance(global_time, tuple):
 			gx, gy = global_time
 		else:
@@ -189,21 +197,32 @@ class DeltaScale(Sequence):
 
 		return ix, iy, tx, ty
 
-	def mixer(self, tx, ty, extrapolate=False):
-		ix, _iy, ntx, _ty = self.timer(tx, extrapolate)
-		_ix, iy, _tx, nty = self.timer(ty, extrapolate)
+	def __mixer(self, tx, ty, extrapolate=False):
+		ix, _iy, ntx, _ty = self.__timer(tx, extrapolate)
+		_ix, iy, _tx, nty = self.__timer(ty, extrapolate)
 
 		return self.x[ix], self.y[iy], ntx, nty
 
 	def __delta_scale(self, x, y, tx, ty, sx, sy, cx, cy, dx, dy, i):
 		return utils.adaptive_scale(((x[0],y[0]), (x[1],y[1])), (sx, sy), (dx, dy), (tx, ty), (cx,cy), i, (x[2], x[3], y[2], y[3]))
 
+	# - IO ---------------------------------------
+	def dump(self):
+		return self.x, self.y, self.stems
+	
+	def load(self, other):
+		if isinstance(other, self.__class__):
+			self.x, self.y, self.stems = other.dump()
+		elif isinstance(other, (tuple, list)) and len(other) == 3:
+			self.x, self.y, self.stems = other
+
+	# - Process ----------------------------------
 	def scale_by_time(self, time, scale, comp, shift, italic_angle):
 		sx, sy = scale
 		cx, cy = comp
 		dx, dy = shift
 		i = italic_angle
-		a0, a1, ntx, nty = self.mixer(time[0], time[1])
+		a0, a1, ntx, nty = self.__mixer(time[0], time[1])
 		process_array = zip(a0, a1)
 		result = map(lambda arr: self.__delta_scale(arr[0], arr[1], ntx, nty, sx, sy, cx, cy, dx, dy, i), process_array)
 		return result
@@ -222,8 +241,7 @@ class DeltaScale(Sequence):
 			if stx0 <= stx <= stx1 : tx = sti + utils.timer(stx, stx0, stx1, True)
 			if sty0 <= sty <= sty1 : ty = sti + utils.timer(sty, sty0, sty1, True)
 
-
-		a0, a1, ntx, nty = self.mixer(tx, ty)
+		a0, a1, ntx, nty = self.__mixer(tx, ty)
 		process_array = zip(a0, a1)
 		result = map(lambda arr: self.__delta_scale(arr[0], arr[1], ntx, nty, sx, sy, cx, cy, dx, dy, i), process_array)
 		return result
@@ -231,18 +249,17 @@ class DeltaScale(Sequence):
 
 if __name__ == '__main__':
 	arr = PointArray([Point(10,10), Point(740,570), Point(70,50)])
-	points = [	[(10,10), (20,20)],
-				[(30,30), (40,40)],
-				[(50,50), (60,60)]]
+	points = [	[(10,10), (20,20),(60,60)],
+				[(30,30), (40,40),(70,70)],
+				[(50,50), (60,60),(80,80)]]
 
 	stems = [[(10,20)], [(30,50)], [(80,90)]]
 	arr_lerp = DeltaArray(points)
-	arr_mmx = DeltaScale(points, stems)
-	#print(arr_mmx.stems.mixer((3,1)))
-	vas = DeltaArrayNew(points, stems)
-	#print(vas.scale_by_time((1,3), (1,3), (1.0, 1.0), (0,0), 0))
-	print(vas.scale_by_stem((40,25), (1,3), (1.0, 1.0), (0,0), 0))
-	#print(vas.stems)
+	a = DeltaScale(points, stems)
+	b = DeltaScale(a)
+	#print(a.scale_by_time((1,1), (1,3), (1.0, 1.0), (0,0), 0))
+	#print(a.scale_by_stem((40,25), (1,3), (1.0, 1.0), (0,0), 0))
+	print(a.x == b.x)
 	
 
 
