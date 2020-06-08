@@ -1,4 +1,4 @@
-#FLM: TypeRig: Panel
+#FLM: TypeRig: Kern
 # ----------------------------------------
 # (C) Vassil Kateliev, 2018-2020 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
@@ -20,11 +20,11 @@ from typerig.gui import QtGui
 from typerig.gui.widgets import getProcessGlyphs, TRVTabWidget
 
 # -- Internals - Load toolpanels 
-import Panel 
+import Kern as Panel 
 
 # - Init --------------------------
-app_version = '0.58'
-app_name = 'TypeRig Panel'
+app_version = '0.10'
+app_name = 'TypeRig Kern'
 ignorePanel = '__'
 
 # -- Global parameters

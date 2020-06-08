@@ -1,6 +1,6 @@
-#FLM: TR: Copy Kerning (TypeRig)
+#FLM: TR: Copy Kerning
 # ----------------------------------------
-# (C) Vassil Kateliev, 2019 (http://www.kateliev.com)
+# (C) Vassil Kateliev, 2019-2020 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
 #-----------------------------------------
 # www.typerig.com
@@ -15,11 +15,10 @@ import fontgate as fgt
 from PythonQt import QtCore, QtGui
 
 from typerig.proxy import pFont
-from typerig.brain import extBiDict
+from typerig.core.objects.collection import extBiDict
 
 # - Init --------------------------------
-app_version = '1.6'
-app_name = 'Copy Kernig'
+app_name, app_version = 'Copy Kernig', '1.60'
 
 # -- Strings 
 str_help = '''
@@ -55,9 +54,9 @@ def json_class_dumb_decoder(jsonData):
 	return retund_dict
 
 # - Dialogs --------------------------------
-class dlg_copyKerning(QtGui.QDialog):
+class tool_tab(QtGui.QWidget):
 	def __init__(self):
-		super(dlg_copyKerning, self).__init__()
+		super(tool_tab, self).__init__()
 	
 		# - Init
 		self.active_font = pFont()
@@ -260,4 +259,10 @@ class dlg_copyKerning(QtGui.QDialog):
 		print 'Done.'
 
 # - RUN ------------------------------
-dialog = dlg_copyKerning()
+if __name__ == '__main__':
+	test = tool_tab()
+	test.setWindowTitle('%s %s' %(app_name, app_version))
+	test.setGeometry(100, 100, 300, 600)
+	test.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
+	
+	test.show()

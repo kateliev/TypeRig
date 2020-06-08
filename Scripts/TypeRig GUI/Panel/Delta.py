@@ -1,4 +1,4 @@
-#FLM: TR: Mixer
+#FLM: TR: Delta
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
@@ -29,7 +29,7 @@ from typerig.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRMsgSimple
 # - Init -------------------------------
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Mixer', '2.2'
+app_name, app_version = 'TypeRig | Delta', '2.20'
 
 
 # - Sub widgets ------------------------
@@ -48,13 +48,13 @@ class mixerHead(QtGui.QGridLayout):
 		self.btn_getVstem = QtGui.QPushButton('Get &V Stems')
 		self.btn_getHstem = QtGui.QPushButton('Get &H Stems')
 
-		self.addWidget(QtGui.QLabel('G:'),			0, 0, 1, 1)
+		self.addWidget(QtGui.QLabel('Glyph:'),		0, 0, 1, 1)
 		self.addWidget(self.edt_glyphName,			0, 1, 1, 6)
 		self.addWidget(self.btn_refresh,			0, 7, 1, 3)
-		self.addWidget(QtGui.QLabel('A:'),			1, 0, 1, 1)
-		self.addWidget(self.btn_set_axis, 			1, 1, 1, 3)
-		self.addWidget(self.btn_getVstem, 			1, 4, 1, 3)
-		self.addWidget(self.btn_getHstem, 			1, 7, 1, 3)
+		self.addWidget(QtGui.QLabel('Axis:'),		1, 0, 1, 1)
+		self.addWidget(self.btn_getVstem, 			1, 1, 1, 3)
+		self.addWidget(self.btn_getHstem, 			1, 4, 1, 3)
+		self.addWidget(self.btn_set_axis, 			1, 7, 1, 3)
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
@@ -125,7 +125,7 @@ class tool_tab(QtGui.QWidget):
 		axis, masters = self.active_font.pMasters.locateAxis(self.glyph.layer().name, 'wght')
 		self.master_names = [master.name for master in masters]
 		
-		self.head.edt_glyphName.setText('{} :: {}'.format(self.glyph.name, '; '.join(self.master_names)))
+		self.head.edt_glyphName.setText('{} = :{}'.format(self.glyph.name, ' :'.join(self.master_names)))
 		self.italic_angle = self.active_font.getItalicAngle()
 
 		self.head.edt_stemV0.setText('1')
@@ -174,7 +174,7 @@ class tool_tab(QtGui.QWidget):
 
 			# - Build
 			self.axis_points = DeltaScale(temp_points, self.axis_stems)
-			self.glyph.updateObject(self.glyph.fl, 'Axis Set @ %s' %self.glyph.layer().name)
+			self.glyph.updateObject(self.glyph.fl, 'Glyph: {} Axis :{} @ {}'.format(self.glyph.name, ' :'.join(self.master_names), self.glyph.layer().name))
 	
 	def execute_scale(self):
 		if len(self.axis_points):
@@ -190,6 +190,7 @@ class tool_tab(QtGui.QWidget):
 			
 			self.glyph.update()
 			fl6.Update(fl6.CurrentGlyph())
+			#fl6.Update(self.glyph.fg)
 
 	
 # - Test ----------------------
