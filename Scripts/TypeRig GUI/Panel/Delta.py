@@ -29,7 +29,7 @@ from typerig.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRMsgSimple
 # - Init -------------------------------
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Delta', '2.20'
+app_name, app_version = 'TypeRig | Delta', '2.21'
 
 
 # - Sub widgets ------------------------
@@ -68,8 +68,8 @@ class tool_tab(QtGui.QWidget):
 		self.head = mixerHead()
 		self.head.btn_refresh.clicked.connect(self.refresh)
 		self.head.btn_set_axis.clicked.connect(self.set_axis)
-		self.head.btn_getVstem.clicked.connect(self.get_stem_y)
-		self.head.btn_getHstem.clicked.connect(self.get_stem_x)
+		self.head.btn_getVstem.clicked.connect(self.get_stem_x)
+		self.head.btn_getHstem.clicked.connect(self.get_stem_y)
 		layoutV.addLayout(self.head)
 		layoutV.addSpacing(15)
 
@@ -158,8 +158,8 @@ class tool_tab(QtGui.QWidget):
 			wt = abs(selection[0].y - selection[-1].y)
 			self.master_stems_y.append(wt)
 
-		self.head.edt_stemV0.setText(self.master_stems_y[0])
-		self.head.edt_stemV1.setText(self.master_stems_y[-1])
+		self.head.edt_stemH0.setText(self.master_stems_y[0])
+		self.head.edt_stemH1.setText(self.master_stems_y[-1])
 
 		self.mixer_dy.edt_0.setText(round(min(self.master_stems_y)))
 		self.mixer_dy.edt_1.setText(round(max(self.master_stems_y)))
