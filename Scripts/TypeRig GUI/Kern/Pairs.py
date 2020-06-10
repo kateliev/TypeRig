@@ -7,22 +7,27 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-# - Dependencies -----------------
+# - Dependencies -------------------------
+import os, warnings
+
 import fontlab as fl6
 import fontgate as fgt
 
 from typerig.proxy import *
+from typerig.core.fileio import cla, krn
 
 from PythonQt import QtCore
 from typerig.gui import QtGui
 
-# - Init
+# - Init --------------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
 
-app_name, app_version = 'TypeRig | Pairs', '0.44'
+app_name, app_version = 'TypeRig | Pairs', '1.20'
+
+# - Strings ------------------------------
 glyphSep = '/'
 pairSep = '|'
 joinOpt = {'Empty':'', 'Newline':'\n'}
@@ -40,6 +45,11 @@ filler_patterns = [	'FL A FR',
 					'FL A | B FR \\n FR B A FL',
 					]
 
+file_formats = {'krn':'DTL Kern Pairs file (*.krn);;',
+				'cla':'DTL Kern Classes file (*.cla);;',
+				'afm':'Adobe Font Metrics file (*.afm);;'
+				}
+
 # - Tabs -------------------------------
 class TRStringGen(QtGui.QGridLayout):
 	def __init__(self):
@@ -49,8 +59,10 @@ class TRStringGen(QtGui.QGridLayout):
 		val_fillerLeft, val_fillerRight = zip(*fillerList)
 		self.defEncoding = 'utf-8'
 		self.glyphNames = baseGlyphset
+		self.font = pFont()
 		
 		# -- Init Interface 
+		# --- Editing fields
 		self.edt_inputA = QtGui.QLineEdit()
 		self.edt_inputB = QtGui.QLineEdit()
 		self.edt_suffixA = QtGui.QLineEdit()
@@ -66,9 +78,7 @@ class TRStringGen(QtGui.QGridLayout):
 		
 		self.edt_sep.setText(glyphSep)
 
-		#self.edt_inputA.setEnabled(False)
-		#self.edt_inputB.setEnabled(False)
-		
+		# --- Combo boxes
 		self.cmb_fillerPattern = QtGui.QComboBox()
 		self.cmb_inputA = QtGui.QComboBox()
 		self.cmb_inputB = QtGui.QComboBox()
@@ -97,32 +107,49 @@ class TRStringGen(QtGui.QGridLayout):
 		self.cmb_fillerLeft.addItems(val_fillerLeft)
 		self.cmb_fillerRight.addItems(val_fillerRight)
 				
-		self.btn_genCopy = QtGui.QPushButton('Generate')
-		self.btn_genUni = QtGui.QPushButton('Unicode')
+		# --- Buttons
 		self.btn_populate = QtGui.QPushButton('&Populate lists')
-		self.btn_clear = QtGui.QPushButton('&Rest')
-		self.btn_kernPairs = QtGui.QPushButton('String')
-		self.btn_kernPairsUni = QtGui.QPushButton('Unicode')
-		self.btn_genAMF = QtGui.QPushButton('AFM string')
-		self.btn_genOTgroups = QtGui.QPushButton('Kern Groups')
+		self.btn_clear = QtGui.QPushButton('&Reset')
 
-		self.btn_genCopy.setToolTip('Generate the pair string using Glyph Names and send it to the clipboard.')
-		self.btn_genUni.setToolTip('Generate the pair string using Unicode Characters and send it to the clipboard.')
-		self.btn_populate.setToolTip('Populate name lists with existing glyph names in active font.')
+		self.btn_generateSTR = QtGui.QPushButton('Generate')
+		self.btn_generateUNI = QtGui.QPushButton('Unicode')
+		self.btn_generateAMF = QtGui.QPushButton('AFM')
+		self.btn_generateKRN = QtGui.QPushButton('KRN')
+
+		self.btn_kernPairsSTR = QtGui.QPushButton('String')
+		self.btn_kernPairsUNI = QtGui.QPushButton('Unicode')
+		self.btn_kernPairsAFM = QtGui.QPushButton('AFM')
+		self.btn_kernPairsKRN = QtGui.QPushButton('KRN')
+
+		self.btn_kernOTGrpSTR = QtGui.QPushButton('Sring')
+		self.btn_kernOTGrpCLA = QtGui.QPushButton('CLA')
+
 		self.btn_clear.setToolTip('Clear all manual input fields.')
-		self.btn_kernPairs.setToolTip('Get string containing pairs from fonts kerning for current layer.\n SHIFT+Click discard filler - pure pairs.')
-		self.btn_kernPairsUni.setToolTip('Get Unicode pairs list from fonts kerning for current layer.\n SHIFT+Click use auto filler.')
+		self.btn_populate.setToolTip('Populate name lists with existing glyph names in active font.')
+
+		self.btn_generateSTR.setToolTip('Generate the pair string using Glyph Names and send it to the clipboard.')
+		self.btn_generateUNI.setToolTip('Generate the pair string using Unicode Characters and send it to the clipboard.')
+
+		self.btn_kernPairsSTR.setToolTip('Get string containing pairs from fonts kerning for current layer.\n SHIFT+Click discard filler - pure pairs.')
+		self.btn_kernPairsUNI.setToolTip('Get Unicode pairs list from fonts kerning for current layer.\n SHIFT+Click use auto filler.')
 
 		self.btn_clear.clicked.connect(self.clear)
 		self.btn_populate.clicked.connect(self.populate)
-		self.btn_genCopy.clicked.connect(self.generate)
-		self.btn_genUni.clicked.connect(self.generateUni)
-		self.btn_genAMF.clicked.connect(self.generateAMF)
-		self.btn_genOTgroups.clicked.connect(self.generateOTGroups)
-		self.btn_kernPairs.clicked.connect(lambda: self.getKerning(False))
-		self.btn_kernPairsUni.clicked.connect(lambda: self.getKerning(True))
+
+		self.btn_generateSTR.clicked.connect(lambda: self.generateSTR(False))
+		self.btn_generateAMF.clicked.connect(lambda: self.generateSTR(True))
+		self.btn_generateUNI.clicked.connect(lambda: self.generateUNI())
+
+		self.btn_kernOTGrpSTR.clicked.connect(lambda: self.generateOTGroups())
+
+		self.btn_kernPairsSTR.clicked.connect(lambda: self.getKerning(False))
+		self.btn_kernPairsUNI.clicked.connect(lambda: self.getKerning(True))
+		self.btn_kernPairsAFM.clicked.connect(lambda: self.getKerningAMF(False))
+		self.btn_kernPairsKRN.clicked.connect(lambda: self.getKerningAMF(True))
 		
 		# - Build
+		self.addWidget(self.btn_populate, 					0, 1, 1, 5)
+		self.addWidget(self.btn_clear, 						0, 6, 1, 3)
 		self.addWidget(QtGui.QLabel('A:'), 					1, 0, 1, 1)
 		self.addWidget(self.cmb_inputA, 					1, 1, 1, 5)
 		self.addWidget(QtGui.QLabel('Suffix:'), 			1, 6, 1, 1)
@@ -138,38 +165,82 @@ class TRStringGen(QtGui.QGridLayout):
 		self.addWidget(self.cmb_fillerLeft, 				6, 1, 1, 8)
 		self.addWidget(QtGui.QLabel('FR:'), 				7, 0, 1, 1)
 		self.addWidget(self.cmb_fillerRight, 				7, 1, 1, 8)
-		self.addWidget(QtGui.QLabel('Pat.:'), 					8, 0, 1, 1)
+		self.addWidget(QtGui.QLabel('Pat.:'), 				8, 0, 1, 1)
 		self.addWidget(self.cmb_fillerPattern, 				8, 1, 1, 8)
 		self.addWidget(QtGui.QLabel('Join:'), 				9, 0, 1, 1)
 		self.addWidget(self.cmb_join, 						9, 1, 1, 5)
 		self.addWidget(QtGui.QLabel('Sep.:'), 				9, 6, 1, 1)
 		self.addWidget(self.edt_sep, 						9, 7, 1, 2)
-		self.addWidget(self.btn_populate, 					10, 0, 1, 6)
-		self.addWidget(self.btn_clear, 						10, 6, 1, 4)
-		self.addWidget(self.btn_genCopy, 					11, 0, 1, 6)
-		self.addWidget(self.btn_genUni, 					11, 6, 1, 4)
-		self.addWidget(QtGui.QLabel('String from pairs in kerning:'), 	12, 0, 1, 9)
-		self.addWidget(self.btn_kernPairs, 					13, 0, 1, 6)
-		self.addWidget(self.btn_kernPairsUni,				13, 6, 1, 4)
-		self.addWidget(QtGui.QLabel('Export pairs:'), 	14, 0, 1, 9)
-		self.addWidget(self.btn_genAMF,						15, 0, 1, 6)
-		self.addWidget(self.btn_genOTgroups,				15, 6, 1, 4)
-		self.addWidget(QtGui.QLabel('Output'), 			16, 0, 1, 9)
-		self.addWidget(self.edt_output, 					17, 0, 12, 9)
+		self.addWidget(self.btn_generateSTR, 				11, 0, 1, 6)
+		self.addWidget(self.btn_generateUNI, 				11, 6, 1, 3)
+		self.addWidget(self.btn_generateAMF,				12, 0, 1, 6)
+		self.addWidget(self.btn_generateKRN,				12, 6, 1, 3)
+		self.addWidget(QtGui.QLabel('Pairs in kerning:'), 	13, 0, 1, 9)
+		self.addWidget(self.btn_kernPairsSTR, 				14, 0, 1, 6)
+		self.addWidget(self.btn_kernPairsUNI,				14, 6, 1, 3)
+		self.addWidget(self.btn_kernPairsAFM,				15, 0, 1, 6)
+		self.addWidget(self.btn_kernPairsKRN,				15, 6, 1, 3)
+		self.addWidget(QtGui.QLabel('Gropus in kerning:'), 	16, 0, 1, 9)
+		self.addWidget(self.btn_kernOTGrpSTR,				17, 0, 1, 6)
+		self.addWidget(self.btn_kernOTGrpCLA,				17, 6, 1, 3)
+		self.addWidget(QtGui.QLabel('Output:'),				18, 0, 1, 9)
+		self.addWidget(self.edt_output, 					19, 0, 12, 9)
 
 		self.setColumnStretch(0, 0)
 		self.setColumnStretch(1, 2)
 		self.setColumnStretch(6, 0)
 		self.setColumnStretch(7, 1)
 				
-	# - Procedures
+	# - Procedures -------------------------------------------------
+	# -- GUI -------------------------------------------------------
+	def clear(self):
+		self.font = pFont()
+		self.glyphNames = baseGlyphset
+		self.edt_inputA.clear()
+		self.edt_inputB.clear()
+		self.cmb_inputA.clear()
+		self.cmb_inputB.clear()
+		self.cmb_inputA.addItems(sorted(self.glyphNames.keys()))
+		self.cmb_inputB.addItems(sorted(self.glyphNames.keys()))
+
+		self.edt_suffixA.clear()
+		self.edt_suffixB.clear()
+		self.edt_output.clear()
+		self.cmb_fillerPattern.clear()
+		self.cmb_fillerPattern.addItems(filler_patterns)
+		self.edt_sep.setText(glyphSep)
+		self.cmb_join.clear()
+		self.cmb_join.addItems(joinOpt.keys())
+
+	def populate(self):
+		# - Init
+		self.glyphNames = self.font.getGlyphNameDict()
+		self.glyphUnicodes = self.font.getGlyphUnicodeDict(self.defEncoding)
+		addon_names = {	'*All Uppercase': self.font.uppercase(True), 
+						'*All Lowercase': self.font.lowercase(True),
+						'*All Figures': self.font.figures(True),
+						'*All Ligatures': self.font.ligatures(True),
+						'*All Alternates': self.font.alternates(True),
+						'*All Symbols': self.font.symbols(True)
+						}
+		self.glyphNames.update(addon_names)
+		
+		# - Reset
+		self.cmb_inputA.clear()
+		self.cmb_inputB.clear()
+		self.cmb_inputA.addItems(sorted(self.glyphNames.keys()))
+		self.cmb_inputB.addItems(sorted(self.glyphNames.keys()))	
+
+		print 'DONE:\t Active font glyph names loaded into generator.'	
+
+	# -- Generators -------------------------------------------------
 	def getKerning(self, getUnicodeString=False):
 		# - Init
-		modifiers = QtGui.QApplication.keyboardModifiers()
+		self.font = pFont()
 		fillerLeft = self.cmb_fillerLeft.currentText
 		fillerRight = self.cmb_fillerRight.currentText
+		modifiers = QtGui.QApplication.keyboardModifiers()
 		
-		self.font = pFont()
 		class_kern_dict = self.font.fl_kerning_groups_to_dict()
 		layer_kernig = self.font.kerning()
 		
@@ -217,45 +288,40 @@ class TRStringGen(QtGui.QGridLayout):
 
 		print 'DONE:\t Generated string sent to clipboard.'
 
-	def clear(self):
-		self.glyphNames = baseGlyphset
-		self.edt_inputA.clear()
-		self.edt_inputB.clear()
-		self.cmb_inputA.clear()
-		self.cmb_inputB.clear()
-		self.cmb_inputA.addItems(sorted(self.glyphNames.keys()))
-		self.cmb_inputB.addItems(sorted(self.glyphNames.keys()))
+	def getKerningAMF(self, toFile=False):
+		class_kern_dict = self.font.fl_kerning_groups_to_dict()
+		layer_kernig = self.font.kerning()
+		string_pairs, save_pairs = [], []	 
 
-		self.edt_suffixA.clear()
-		self.edt_suffixB.clear()
-		self.edt_output.clear()
-		self.cmb_fillerPattern.clear()
-		self.cmb_fillerPattern.addItems(filler_patterns)
-		self.edt_sep.setText(glyphSep)
-		self.cmb_join.clear()
-		self.cmb_join.addItems(joinOpt.keys())
+		for kern_pair in layer_kernig.asDict().keys():
+			current_pair = kern_pair.asTuple()
+			a_tup = current_pair[0].asTuple()
+			b_tup = current_pair[1].asTuple()
 
-	def populate(self):
-		self.font = pFont()
-		self.glyphNames = self.font.getGlyphNameDict()
-		self.glyphUnicodes = self.font.getGlyphUnicodeDict(self.defEncoding)
-		addon_names = {	'*All Uppercase': self.font.uppercase(True), 
-						'*All Lowercase': self.font.lowercase(True),
-						'*All Figures': self.font.figures(True),
-						'*All Ligatures': self.font.ligatures(True),
-						'*All Alternates': self.font.alternates(True),
-						'*All Symbols': self.font.symbols(True)
-						}
-		self.glyphNames.update(addon_names)
+			a = '@{}'.format(a_tup[0]) if a_tup[1] == 'groupMode' else a_tup[0]
+			b = '@{}'.format(b_tup[0]) if b_tup[1] == 'groupMode' else b_tup[0]
+			string_pairs.append('KPX {} {}'.format(a, b))
+			save_pairs.append((a,b))
+			
+		if toFile:
+			font_path = os.path.split(self.font.fg.path)[0]
+			save_path = QtGui.QFileDialog.getSaveFileName(None, 'Load Glyph names from file', font_path, file_formats['krn'])
+			if len(save_path):
+				with krn.KRNparser(save_path, 'w') as writer:
+					writer.dump(sorted(save_pairs), 'Font: {}'.format(self.font.name))
+
+				print 'DONE:\t {} Generated pairs saved! File: {}'.format(len(save_pairs), save_path)
+
+		else:
+			self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(sorted(string_pairs)))
+			clipboard = QtGui.QApplication.clipboard()
+			clipboard.setText(joinOpt[self.cmb_join.currentText].join(sorted(string_pairs)))
+			print 'DONE:\t Generated string sent to clipboard.'
+
 		
-		self.cmb_inputA.clear()
-		self.cmb_inputB.clear()
-		self.cmb_inputA.addItems(sorted(self.glyphNames.keys()))
-		self.cmb_inputB.addItems(sorted(self.glyphNames.keys()))	
+		
 
-		print 'DONE:\t Active font glyph names loaded into generator.'	
-
-	def generate(self):
+	def generateSTR(self, getAMFstring=False):
 		# - Get Values
 		if len(self.edt_inputA.text) > 0:
 			try:
@@ -279,58 +345,19 @@ class TRStringGen(QtGui.QGridLayout):
 		fillerRight = self.cmb_fillerRight.currentText
 
 		# - Generate
-		generatedString = stringGen(inputA, inputB, (fillerLeft, fillerRight), self.cmb_fillerPattern.currentText, (self.edt_suffixA.text, self.edt_suffixB.text), self.edt_sep.text)
-		self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
+		if getAMFstring:
+			generatedString = kpxGen(inputA, inputB, (self.edt_suffixA.text, self.edt_suffixB.text))
+			self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
+		else:
+			generatedString = stringGen(inputA, inputB, (fillerLeft, fillerRight), self.cmb_fillerPattern.currentText, (self.edt_suffixA.text, self.edt_suffixB.text), self.edt_sep.text)
+			self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
 		
 		# - Copy to clipboard
 		clipboard = QtGui.QApplication.clipboard()
 		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
 		print 'DONE:\t Generated string sent to clipboard.\tPairs: {}'.format(len(generatedString))
 
-	def generateAMF(self):
-		# - Get Values
-		if len(self.edt_inputA.text) > 0:
-			try:
-				inputA = [self.font.fl.findUnicode(ord(item)).name for item in self.edt_inputA.text.split(' ')] 
-			except AttributeError:
-				print 'WARN:\t Unicode (Input A) to current font glyph names mapping is not activated! Please populate lists first.'
-				inputA = self.edt_inputA.text.split(' ')
-		else:
-			inputA = sorted(self.glyphNames[self.cmb_inputA.currentText])
-
-		if len(self.edt_inputB.text) > 0:
-			try:
-				inputB = [self.font.fl.findUnicode(ord(item)).name for item in self.edt_inputB.text.split(' ')]  
-			except AttributeError:
-				print 'WARN:\t Unicode (Input B) to current font glyph names mapping is not activated! Please populate lists first.'
-				inputB = self.edt_inputB.text.split(' ')
-		else:
-			inputB = sorted(self.glyphNames[self.cmb_inputB.currentText])
-
-		# - Generate
-		generatedString = kpxGen(inputA, inputB, (self.edt_suffixA.text, self.edt_suffixB.text))
-		self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
-		
-		# - Copy to clipboard
-		clipboard = QtGui.QApplication.clipboard()
-		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
-		print 'DONE:\t Generated string sent to clipboard.\tPairs: {}'.format(len(generatedString))
-
-	def generateOTGroups(self):
-		# - Init
-		gen_pattern = '@{0} = [{1}];'
-		self.font = pFont()
-
-		# - Generate
-		generatedString = [gen_pattern.format(key, ' '.join(value)) for key, value in self.font.fl_kerning_groups_to_dict().items()]
-		self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
-		
-		# - Copy to clipboard
-		clipboard = QtGui.QApplication.clipboard()
-		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
-		print 'DONE:\t Generated string sent to clipboard.\tGroups: {}'.format(len(generatedString))
-
-	def generateUni(self):
+	def generateUNI(self):
 		# - Get Values
 		if len(self.edt_inputA.text) > 0:
 			inputA = self.edt_inputA.text.split(' ')
@@ -353,6 +380,23 @@ class TRStringGen(QtGui.QGridLayout):
 		clipboard = QtGui.QApplication.clipboard()
 		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString).decode(self.defEncoding))
 		print 'DONE:\t Generated string sent to clipboard.\tPairs: {}'.format(len(generatedString))
+
+	
+	def generateOTGroups(self):
+		# - Init
+		gen_pattern = '@{0} = [{1}];'
+		self.font = pFont()
+
+		# - Generate
+		generatedString = [gen_pattern.format(key, ' '.join(value)) for key, value in self.font.fl_kerning_groups_to_dict().items()]
+		self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
+		
+		# - Copy to clipboard
+		clipboard = QtGui.QApplication.clipboard()
+		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
+		print 'DONE:\t Generated string sent to clipboard.\tGroups: {}'.format(len(generatedString))
+
+	
 					
 class tool_tab(QtGui.QWidget):
 	def __init__(self):
