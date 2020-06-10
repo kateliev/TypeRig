@@ -22,7 +22,7 @@ global pMode
 pLayers = None
 pMode = 0
 
-app_name, app_version = 'TypeRig | Pairs', '0.42'
+app_name, app_version = 'TypeRig | Pairs', '0.44'
 glyphSep = '/'
 pairSep = '|'
 joinOpt = {'Empty':'', 'Newline':'\n'}
@@ -239,6 +239,14 @@ class TRStringGen(QtGui.QGridLayout):
 		self.font = pFont()
 		self.glyphNames = self.font.getGlyphNameDict()
 		self.glyphUnicodes = self.font.getGlyphUnicodeDict(self.defEncoding)
+		addon_names = {	'*All Uppercase': self.font.uppercase(True), 
+						'*All Lowercase': self.font.lowercase(True),
+						'*All Figures': self.font.figures(True),
+						'*All Ligatures': self.font.ligatures(True),
+						'*All Alternates': self.font.alternates(True),
+						'*All Symbols': self.font.symbols(True)
+						}
+		self.glyphNames.update(addon_names)
 		
 		self.cmb_inputA.clear()
 		self.cmb_inputB.clear()
@@ -277,7 +285,7 @@ class TRStringGen(QtGui.QGridLayout):
 		# - Copy to clipboard
 		clipboard = QtGui.QApplication.clipboard()
 		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
-		print 'DONE:\t Generated string sent to clipboard.'
+		print 'DONE:\t Generated string sent to clipboard.\tPairs: {}'.format(len(generatedString))
 
 	def generateAMF(self):
 		# - Get Values
@@ -306,7 +314,7 @@ class TRStringGen(QtGui.QGridLayout):
 		# - Copy to clipboard
 		clipboard = QtGui.QApplication.clipboard()
 		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
-		print 'DONE:\t Generated string sent to clipboard.'
+		print 'DONE:\t Generated string sent to clipboard.\tPairs: {}'.format(len(generatedString))
 
 	def generateOTGroups(self):
 		# - Init
@@ -320,7 +328,7 @@ class TRStringGen(QtGui.QGridLayout):
 		# - Copy to clipboard
 		clipboard = QtGui.QApplication.clipboard()
 		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
-		print 'DONE:\t Generated string sent to clipboard.'
+		print 'DONE:\t Generated string sent to clipboard.\tGroups: {}'.format(len(generatedString))
 
 	def generateUni(self):
 		# - Get Values
@@ -344,7 +352,7 @@ class TRStringGen(QtGui.QGridLayout):
 		# - Copy to cliboard
 		clipboard = QtGui.QApplication.clipboard()
 		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString).decode(self.defEncoding))
-		print 'DONE:\t Generated string sent to clipboard.'
+		print 'DONE:\t Generated string sent to clipboard.\tPairs: {}'.format(len(generatedString))
 					
 class tool_tab(QtGui.QWidget):
 	def __init__(self):
