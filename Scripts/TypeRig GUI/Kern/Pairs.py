@@ -9,6 +9,7 @@
 
 # - Dependencies -------------------------
 import os, warnings
+from itertools import product
 
 import fontlab as fl6
 import fontgate as fgt
@@ -25,7 +26,7 @@ global pMode
 pLayers = None
 pMode = 0
 
-app_name, app_version = 'TypeRig | Pairs', '1.20'
+app_name, app_version = 'TypeRig | Pairs', '1.22'
 
 # - Strings ------------------------------
 glyphSep = '/'
@@ -136,11 +137,13 @@ class TRStringGen(QtGui.QGridLayout):
 		self.btn_clear.clicked.connect(self.clear)
 		self.btn_populate.clicked.connect(self.populate)
 
-		self.btn_generateSTR.clicked.connect(lambda: self.generateSTR(False))
-		self.btn_generateAMF.clicked.connect(lambda: self.generateSTR(True))
+		self.btn_generateSTR.clicked.connect(lambda: self.generateSTR(False, False))
+		self.btn_generateAMF.clicked.connect(lambda: self.generateSTR(True, False))
+		self.btn_generateKRN.clicked.connect(lambda: self.generateSTR(False, True))
 		self.btn_generateUNI.clicked.connect(lambda: self.generateUNI())
 
-		self.btn_kernOTGrpSTR.clicked.connect(lambda: self.generateOTGroups())
+		self.btn_kernOTGrpSTR.clicked.connect(lambda: self.generateOTGroups(False))
+		self.btn_kernOTGrpCLA.clicked.connect(lambda: self.generateOTGroups(True))
 
 		self.btn_kernPairsSTR.clicked.connect(lambda: self.getKerning(False))
 		self.btn_kernPairsUNI.clicked.connect(lambda: self.getKerning(True))
@@ -212,6 +215,7 @@ class TRStringGen(QtGui.QGridLayout):
 		self.cmb_join.clear()
 		self.cmb_join.addItems(joinOpt.keys())
 
+	
 	def populate(self):
 		# - Init
 		self.glyphNames = self.font.getGlyphNameDict()
@@ -288,6 +292,7 @@ class TRStringGen(QtGui.QGridLayout):
 
 		print 'DONE:\t Generated string sent to clipboard.'
 
+
 	def getKerningAMF(self, toFile=False):
 		class_kern_dict = self.font.fl_kerning_groups_to_dict()
 		layer_kernig = self.font.kerning()
@@ -305,7 +310,8 @@ class TRStringGen(QtGui.QGridLayout):
 			
 		if toFile:
 			font_path = os.path.split(self.font.fg.path)[0]
-			save_path = QtGui.QFileDialog.getSaveFileName(None, 'Load Glyph names from file', font_path, file_formats['krn'])
+			save_path = QtGui.QFileDialog.getSaveFileName(None, 'Save DTL Kern Pairs file', font_path, file_formats['krn'])
+			
 			if len(save_path):
 				with krn.KRNparser(save_path, 'w') as writer:
 					writer.dump(sorted(save_pairs), 'Font: {}'.format(self.font.name))
@@ -318,10 +324,8 @@ class TRStringGen(QtGui.QGridLayout):
 			clipboard.setText(joinOpt[self.cmb_join.currentText].join(sorted(string_pairs)))
 			print 'DONE:\t Generated string sent to clipboard.'
 
-		
-		
 
-	def generateSTR(self, getAMFstring=False):
+	def generateSTR(self, getAMFstring=False, toFile=False):
 		# - Get Values
 		if len(self.edt_inputA.text) > 0:
 			try:
@@ -348,14 +352,27 @@ class TRStringGen(QtGui.QGridLayout):
 		if getAMFstring:
 			generatedString = kpxGen(inputA, inputB, (self.edt_suffixA.text, self.edt_suffixB.text))
 			self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
+		
+		elif toFile:
+			font_path = os.path.split(self.font.fg.path)[0]
+			save_path = QtGui.QFileDialog.getSaveFileName(None, 'Save DTL Kern Pairs file', font_path, file_formats['krn'])
+			save_pairs = sorted([(item[0] + self.edt_suffixA.text, item[1] + self.edt_suffixB.text) for item in product(inputA, inputB)])
+			
+			if len(save_path):
+				with krn.KRNparser(save_path, 'w') as writer:
+					writer.dump(sorted(save_pairs), 'Font: {}'.format(self.font.name))
+
+				print 'DONE:\t {} Generated pairs saved! File: {}'.format(len(save_pairs), save_path)
 		else:
 			generatedString = stringGen(inputA, inputB, (fillerLeft, fillerRight), self.cmb_fillerPattern.currentText, (self.edt_suffixA.text, self.edt_suffixB.text), self.edt_sep.text)
 			self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
 		
-		# - Copy to clipboard
-		clipboard = QtGui.QApplication.clipboard()
-		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
-		print 'DONE:\t Generated string sent to clipboard.\tPairs: {}'.format(len(generatedString))
+		if not toFile:
+			# - Copy to clipboard
+			clipboard = QtGui.QApplication.clipboard()
+			clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
+			print 'DONE:\t Generated string sent to clipboard.\tPairs: {}'.format(len(generatedString))
+
 
 	def generateUNI(self):
 		# - Get Values
@@ -382,19 +399,31 @@ class TRStringGen(QtGui.QGridLayout):
 		print 'DONE:\t Generated string sent to clipboard.\tPairs: {}'.format(len(generatedString))
 
 	
-	def generateOTGroups(self):
+	def generateOTGroups(self, toFile=False):
 		# - Init
-		gen_pattern = '@{0} = [{1}];'
-		self.font = pFont()
-
-		# - Generate
-		generatedString = [gen_pattern.format(key, ' '.join(value)) for key, value in self.font.fl_kerning_groups_to_dict().items()]
-		self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
+		kern_groups = self.font.fl_kerning_groups_to_dict()
 		
-		# - Copy to clipboard
-		clipboard = QtGui.QApplication.clipboard()
-		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
-		print 'DONE:\t Generated string sent to clipboard.\tGroups: {}'.format(len(generatedString))
+		if toFile:
+			font_path = os.path.split(self.font.fg.path)[0]
+			save_path = QtGui.QFileDialog.getSaveFileName(None, 'Save DTL Kern classes file', font_path, file_formats['cla'])
+			
+			if len(save_path):
+				with cla.CLAparser(save_path, 'w') as writer:
+					writer.dump(sorted(kern_groups.items()), 'Font: {}'.format(self.font.name))
+
+				print 'DONE:\t {} kern classes exported! File: {}'.format(len(kern_groups.keys()), save_path)
+		else:
+			gen_pattern = '@{0} = [{1}];'
+			self.font = pFont()
+
+			# - Generate
+			generatedString = [gen_pattern.format(key, ' '.join(value)) for key, value in kern_groups.items()]
+			self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
+			
+			# - Copy to clipboard
+			clipboard = QtGui.QApplication.clipboard()
+			clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
+			print 'DONE:\t Generated string sent to clipboard.\tGroups: {}'.format(len(generatedString))
 
 	
 					
