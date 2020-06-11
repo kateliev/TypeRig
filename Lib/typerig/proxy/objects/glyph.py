@@ -26,7 +26,7 @@ from typerig.proxy.application.app import pWorkspace
 from typerig.proxy.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.26.7'
+__version__ = '0.26.8'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -1727,5 +1727,25 @@ class eGlyph(pGlyph):
 		for shape, eject in ejected_shapes:
 			self.layer(layer).addShapes(eject)
 			self.layer(layer).removeShape(shape)
+
+	# -- Components --------------------------------------
+	def _components_dump(self):
+		''' For CSV I/O'''
+		comp_collect = []
+				
+		for layer in self.masters():
+			layer_comp_collect = []
+			
+			for shape in layer.shapes:
+				if shape.shapeData.isComponent:
+					sn = shape.shapeData.componentGlyph
+					st =  shape.transform
+					layer_comp_collect.append((sn, layer.name, st.m31(), st.m32(), st.m11(), st.m22(), st.m21()))
+
+			if len(layer_comp_collect):
+				comp_collect.append(tuple(layer_comp_collect))
+
+		return comp_collect
+
 
 
