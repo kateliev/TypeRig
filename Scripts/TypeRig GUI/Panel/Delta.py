@@ -100,7 +100,6 @@ class tool_tab(QtGui.QWidget):
 		layoutV.addLayout(self.scalerY)
 
 		self.__lbl_warn = QtGui.QLabel('')
-		self.__lbl_warn.setStyleSheet('padding: 10; font-size: 10pt; background: lightpink;')
 		layoutV.addWidget(self.__lbl_warn)
 	
 		# -- Initialize
@@ -129,6 +128,7 @@ class tool_tab(QtGui.QWidget):
 		if len(self.active_font.masters()) > 1:
 			# - Activate
 			self.__lbl_warn.setText('')
+			self.__lbl_warn.setStyleSheet('')
 			self.head.btn_set_axis.setEnabled(True)
 			self.head.btn_getVstem.setEnabled(True)
 			self.head.btn_getHstem.setEnabled(True)
@@ -151,6 +151,7 @@ class tool_tab(QtGui.QWidget):
 		else:
 			# - Deactivate
 			self.__lbl_warn.setText('Not enough master layers!\nDelta is currently disabled!')
+			self.__lbl_warn.setStyleSheet('padding: 10; font-size: 10pt; background: lightpink;')
 			self.head.btn_set_axis.setEnabled(False)
 			self.head.btn_getVstem.setEnabled(False)
 			self.head.btn_getHstem.setEnabled(False)
