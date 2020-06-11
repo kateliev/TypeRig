@@ -29,7 +29,7 @@ from typerig.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRMsgSimple
 # - Init -------------------------------
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Delta', '2.21'
+app_name, app_version = 'TypeRig | Delta', '2.22'
 
 
 # - Sub widgets ------------------------
@@ -98,6 +98,10 @@ class tool_tab(QtGui.QWidget):
 		self.scalerY = TRSliderCtrl('1', '200', '100', 1)
 		self.scalerY.sld_axis.valueChanged.connect(self.execute_scale)		
 		layoutV.addLayout(self.scalerY)
+
+		self.__lbl_warn = QtGui.QLabel('')
+		self.__lbl_warn.setStyleSheet('padding: 10; font-size: 10pt; background: lightpink;')
+		layoutV.addWidget(self.__lbl_warn)
 	
 		# -- Initialize
 		self.refresh()
@@ -122,21 +126,35 @@ class tool_tab(QtGui.QWidget):
 		self.glyph = eGlyph()
 		self.active_font = pFont()
 		
-		axis, masters = self.active_font.pMasters.locateAxis(self.glyph.layer().name, 'wght')
-		self.master_names = [master.name for master in masters]
-		
-		self.head.edt_glyphName.setText('{} = :{}'.format(self.glyph.name, ' :'.join(self.master_names)))
-		self.italic_angle = self.active_font.getItalicAngle()
+		if len(self.active_font.masters()) > 1:
+			# - Activate
+			self.__lbl_warn.setText('')
+			self.head.btn_set_axis.setEnabled(True)
+			self.head.btn_getVstem.setEnabled(True)
+			self.head.btn_getHstem.setEnabled(True)
 
-		self.head.edt_stemV0.setText('1')
-		self.head.edt_stemV1.setText('1')
-		self.head.edt_stemH0.setText('1')
-		self.head.edt_stemH1.setText('1')
+			axis, masters = self.active_font.pMasters.locateAxis(self.glyph.layer().name, 'wght')
+			self.master_names = [master.name for master in masters]
+			
+			self.head.edt_glyphName.setText('{} = :{}'.format(self.glyph.name, ' :'.join(self.master_names)))
+			self.italic_angle = self.active_font.getItalicAngle()
 
-		self.mixer_dx.reset()
-		self.mixer_dy.reset()
-		self.scalerX.reset()
-		self.scalerY.reset()
+			self.head.edt_stemV0.setText('1')
+			self.head.edt_stemV1.setText('1')
+			self.head.edt_stemH0.setText('1')
+			self.head.edt_stemH1.setText('1')
+
+			self.mixer_dx.reset()
+			self.mixer_dy.reset()
+			self.scalerX.reset()
+			self.scalerY.reset()
+		else:
+			# - Deactivate
+			self.__lbl_warn.setText('Not enough master layers!\nDelta is currently disabled!')
+			self.head.btn_set_axis.setEnabled(False)
+			self.head.btn_getVstem.setEnabled(False)
+			self.head.btn_getHstem.setEnabled(False)
+
 
 	def get_stem_x(self):
 		for layer_name in self.master_names:
