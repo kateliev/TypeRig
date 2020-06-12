@@ -13,9 +13,14 @@ from __future__ import absolute_import
 import math, random
 
 # - Init --------------------------------
-__version__ = '0.26.1'
+__version__ = '0.26.2'
 
 # -- Units ----------------------------------------------------------------------
+def getFunctionName():
+	'''Return the name of current function (def)'''
+	from inspect import stack
+	return stack()[1][3]
+
 def point2pixel(points):
 	return points*1.333333
 

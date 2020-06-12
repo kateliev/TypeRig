@@ -1728,24 +1728,3 @@ class eGlyph(pGlyph):
 			self.layer(layer).addShapes(eject)
 			self.layer(layer).removeShape(shape)
 
-	# -- Components --------------------------------------
-	def _components_dump(self):
-		''' For CSV I/O'''
-		comp_collect = []
-				
-		for layer in self.masters():
-			layer_comp_collect = []
-			
-			for shape in layer.shapes:
-				if shape.shapeData.isComponent:
-					sn = shape.shapeData.componentGlyph
-					st =  shape.transform
-					layer_comp_collect.append((sn, layer.name, st.m31(), st.m32(), st.m11(), st.m22(), st.m21()))
-
-			if len(layer_comp_collect):
-				comp_collect.append(tuple(layer_comp_collect))
-
-		return comp_collect
-
-
-
