@@ -6,7 +6,7 @@
 - **Typerig Manager** (`typerig-manager.py`) - a set of tools for editing various font related parameters;
 - **Typerig Filter** (`typerig-filter.py`) - assorted outline modifiers.
 
-**Delta Machine** (`.\Scripts\Delta Machine`) - an advanced tool for adaptive outline scaling based on the exceptional work *A Multiple Master based method for scaling glyphs without changing the stroke characteristics* by Tim Ahrens.
+**Delta Machine** (`.\Scripts\Delta Machine`) - an advanced tool for adaptive outline scaling based on the exceptional work *A Multiple Master based method for scaling glyphs without changing the stroke characteristics* by Tim Ahrens. See [Delta Machine Quick Start](https://kateliev.github.io/TypeRig/docs/DeltaMachine)
 
 ### Known issues
 Please refer to https://github.com/kateliev/TypeRig/issues
