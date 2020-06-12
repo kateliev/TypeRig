@@ -19,7 +19,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.26.5'
+__version__ = '0.26.6'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -514,7 +514,7 @@ class CubicBezier(object):
 
 		self.p0 += shift
 
-		return self.__class__(self.p0, self.p1, self.p2, self.p3)
+		return self.__class__(self.p0.tuple, self.p1.tuple, self.p2.tuple, self.p3.tuple)
 
 	def lerp_last(self, shift):
 		diffBase = self.p0 - self.p3
@@ -531,4 +531,4 @@ class CubicBezier(object):
 
 		self.p3 += shift
 
-		return self.__class__(self.p0, self.p1, self.p2, self.p3)
+		return self.__class__(self.p0.tuple, self.p1.tuple, self.p2.tuple, self.p3.tuple)
