@@ -1,4 +1,4 @@
-# MODULE: Typerig / Proxy / Misc Utils
+# MODULE: Typerig / Proxy / Composer (Objects)
 # ------------------------------------------------------
 # (C) Vassil Kateliev, 2017 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 	(http://www.karandash.eu)
@@ -15,7 +15,7 @@ from collections import defaultdict, OrderedDict
 __version__ = '0.0.1'
 
 # - Classes -------------------------------------------------------
-class componentDump(object):
+class dictComposer(object):
 	''' For CSV I/O'''
 	
 	def __init__(self, glyph):

@@ -18,6 +18,8 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
+from fontTools.pens import statisticsPen
+
 from typerig.core.objects.point import Point
 from typerig.core.func.math import linInterp
 
@@ -26,7 +28,7 @@ from typerig.proxy.application.app import pWorkspace
 from typerig.proxy.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.26.8'
+__version__ = '0.26.9'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -1191,10 +1193,27 @@ class pGlyph(object):
 	# - Pens -----------------------------------------------
 	def draw(self, pen, layer=None):
 		''' Utilizes the Pen protocol'''
-			
 		for shape in self.shapes(layer):
 			for contour in shape.contours:
-				contour.convertToFgContour(shape.fl_transform.transform).draw(pen)
+				current_transform = shape.fl_transform.transform
+				temp_contour = contour.convertToFgContour(current_transform)
+				
+				# - Fix mirrored shapes
+				if current_transform.m11() < 0. or current_transform.m22() < 0.:
+					if not (current_transform.m11() < 0. and current_transform.m22() < 0.):
+						temp_contour.reverse()
+				
+				temp_contour.draw(pen)
+
+		'''
+		# - Process
+		for shape in self.shapes(layer):
+			for contour in shape.contours:
+				if use_fg:
+					contour.convertToFgContour(shape.fl_transform.transform).draw(pen)
+				else:
+					contour.draw(pen)
+		'''
 
 		'''
 		for anchor in self.anchors(layer):
@@ -1207,10 +1226,23 @@ class pGlyph(object):
 
 	def drawPoints(self, pen, layer=None):
 		''' Utilizes the PointPen protocol'''
-			
+		for shape in self.shapes(layer):
+			for contour in shape.contours:
+				current_transform = shape.fl_transform.transform
+				temp_contour = contour.convertToFgContour(current_transform)
+				
+				# - Fix mirrored shapes
+				if current_transform.m11() < 0. or current_transform.m22() < 0.:
+					if not (current_transform.m11() < 0. and current_transform.m22() < 0.):
+						temp_contour.reverse()
+				
+				temp_contour.drawPoints(pen)
+
+		'''
 		for shape in self.shapes(layer):
 			for contour in shape.contours:
 				contour.convertToFgContour(shape.fl_transform.transform).drawPoints(pen)
+		'''
 
 
 # -- Exensions -------------------------------------------
@@ -1599,7 +1631,10 @@ class eGlyph(pGlyph):
 		x, y = adjustTuple
 		alignX, alignY = alignTuple
 		old_x, old_y = initPosTuple
-		bbox = self.layer(layer).boundingBox		
+		bbox = self.layer(layer).boundingBox
+
+		stat_pen = statisticsPen.StatisticsPen()
+		self.draw(stat_pen, layer)
 
 		# - Calculate position
 		# -- Precalc all base locations
@@ -1612,12 +1647,14 @@ class eGlyph(pGlyph):
 		x_base_dict['L'] = bbox.x() 							# X: Left
 		x_base_dict['R'] = bbox.width() + bbox.x()				# X: Right
 		x_base_dict['C'] = bbox.width()/2 + bbox.x()			# X: Center
+		x_base_dict['M'] = stat_pen.meanX 						# X: Center of mass
 		x_base_dict['S'] = old_x								# X: Shift
 
 		# --- Y
 		y_base_dict['B'] = bbox.y()								# Y: Bottom
 		y_base_dict['T'] = bbox.height() + bbox.y()				# Y: Top
 		y_base_dict['C'] = bbox.height()/2 + bbox.y()			# Y: Center
+		y_base_dict['W'] = stat_pen.meanY						# Y: Center of mass
 		y_base_dict['S'] = old_y 								# Y: Shift 
 
 		# -- Post calc

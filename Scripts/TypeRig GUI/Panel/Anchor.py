@@ -13,7 +13,7 @@ import fontgate as fgt
 
 from typerig.proxy import *
 
-from PythonQt import QtCore
+import PythonQt as pqt
 from typerig.gui import QtGui
 from typerig.gui.widgets import getProcessGlyphs
 
@@ -24,14 +24,14 @@ global clipboard_glyph_anchors
 pLayers = None
 pMode = 0
 clipboard_glyph_anchors = {}
-app_name, app_version = 'TypeRig | Anchors', '0.20'
+app_name, app_version = 'TypeRig | Anchors', '0.21'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):
 	# - Custom QLine Edit extending the contextual menu with FL6 metric expressions
 	def __init__(self, *args, **kwargs):
 		super(ALineEdit, self).__init__(*args, **kwargs)
-		self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+		self.setContextMenuPolicy(pqt.QtCore.Qt.CustomContextMenu)
 		self.customContextMenuRequested.connect(self.__contextMenu)
 
 	def __contextMenu(self):
@@ -103,8 +103,8 @@ class TRLayerSelect(QtGui.QVBoxLayout):
 			layer_order = 'Layer Order: '+', '.join(self.wLayers)
 			toolTip = 'Anchor present in all selected layers.\n\n' + layer_order if all(checkLayers) else 'Anchor NOT present in all selected layers.\n\n' + layer_order
 
-			currItem.setData(QtCore.Qt.DecorationRole, QtGui.QColor('LimeGreen' if all(checkLayers) else 'Crimson'))
-			currItem.setData(QtCore.Qt.ToolTipRole, toolTip)		
+			currItem.setData(pqt.QtCore.Qt.DecorationRole, QtGui.QColor('LimeGreen' if all(checkLayers) else 'Crimson'))
+			currItem.setData(pqt.QtCore.Qt.ToolTipRole, toolTip)		
 
 	def doCheck(self):
 		if self.glyph.fg.id != fl6.CurrentGlyph().id and self.glyph.fl.name != fl6.CurrentGlyph().name:
@@ -122,10 +122,10 @@ class TRAnchorBasic(QtGui.QVBoxLayout):
 		# - Init
 		self.aux = aux
 		self.types = 'Anchor PinPoint'.split(' ')
-		self.posY = 'Exact,Shift,Above,Below,Center,Baseline'.split(',')
-		self.posX = 'Exact,Shift,Left,Right,Center,Highest,Highest Left,Highest Right,Lowest,Lowest Left,Lowest Right'.split(',')
-		posYvals = (None,'S','T', 'B', 'C', None)
-		posXvals = (None,'S','L', 'R', 'C', 'AT','ATL','ATR','A','AL','AR')
+		self.posY = 'Exact,Shift,Above,Below,Center,Baseline,Center of mass'.split(',')
+		self.posX = 'Exact,Shift,Left,Right,Center,Highest,Highest Left,Highest Right,Lowest,Lowest Left,Lowest Right,Center of mass'.split(',')
+		posYvals = (None,'S','T', 'B', 'C', None, 'W')
+		posXvals = (None,'S','L', 'R', 'C', 'AT','ATL','ATR','A','AL','AR', 'M')
 		self.posYctrl = dict(zip(self.posY, posYvals))
 		self.posXctrl = dict(zip(self.posX, posXvals))
 
@@ -350,6 +350,6 @@ if __name__ == '__main__':
 	test = tool_tab()
 	test.setWindowTitle('%s %s' %(app_name, app_version))
 	test.setGeometry(100, 100, 300, 600)
-	test.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
+	test.setWindowFlags(pqt.QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 	
 	test.show()
