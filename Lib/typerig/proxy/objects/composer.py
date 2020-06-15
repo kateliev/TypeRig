@@ -29,8 +29,6 @@ class dictComposer(object):
 					st =  shape.transform
 					self.data[sn].append((layer.name, self.componentTransform(st.m31(), st.m32(), st.m11(), st.m22(), st.m21())))
 
-
-
 	def  __getitem__(self, comp_name):
 		return OrderedDict(self.data[comp_name])
 

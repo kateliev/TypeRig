@@ -8,6 +8,8 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
+from collections import OrderedDict
+
 import fontlab as fl6
 import fontgate as fgt
 
@@ -24,7 +26,7 @@ global clipboard_glyph_anchors
 pLayers = None
 pMode = 0
 clipboard_glyph_anchors = {}
-app_name, app_version = 'TypeRig | Anchors', '0.21'
+app_name, app_version = 'TypeRig | Anchors', '1.10'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):
@@ -52,12 +54,77 @@ class ALineEdit(QtGui.QLineEdit):
 		menu.addAction(u'ascender', lambda: self.setText('ascender'))
 		menu.addAction(u'descender', lambda: self.setText('descender'))		
 
+class TRtreeWidget(QtGui.QTreeWidget):
+	def __init__(self, data=None, headers=None):
+		super(TRtreeWidget, self).__init__()
+		
+		if data is not None:
+			self.setTree(data, headers)
+
+		self.setSelectionMode(QtGui.QAbstractItemView.MultiSelection)
+		self.expandAll()
+		self.setAlternatingRowColors(True)
+
+	def setTree(self, data, headers):
+		self.blockSignals(True)
+		self.clear()
+		self.setHeaderLabels(headers)
+
+		# - Insert 
+		for key, value in data.iteritems():
+			master = QtGui.QTreeWidgetItem(self, [key])
+
+			for sub in value:
+				new_item = QtGui.QTreeWidgetItem(master, sub)
+				new_item.setFlags(new_item.flags() | pqt.QtCore.Qt.ItemIsEditable)
+
+		# - Fit data
+		for c in range(self.columnCount):
+			self.resizeColumnToContents(c)	
+
+		self.blockSignals(False)
+		self.expandAll()
+
+	def getTree(self):
+		returnDict = OrderedDict()
+		root = self.invisibleRootItem()
+
+		for i in range(root.childCount()):
+			item = root.child(i)
+			returnDict[item.text(0)] = [[item.child(n).text(c) for c in range(item.child(n).columnCount())] for n in range(item.childCount())]
+		
+		return returnDict
+
+	def markDiff(self):
+		#!!! Ineffecient but will do
+		self.blockSignals(True)
+		root = self.invisibleRootItem()
+		init_diff = []
+
+		for i in range(root.childCount()):
+			item = root.child(i)
+			init_diff.append([item.child(n).text(0) for n in range(item.childCount())])
+
+		for i in range(root.childCount()):
+			item = root.child(i)
+			for n in range(item.childCount()):
+				if all([item.child(n).text(0) in test for test in init_diff]):
+					item.child(n).setData(0, pqt.QtCore.Qt.DecorationRole, QtGui.QColor('LimeGreen'))
+				else:
+					item.child(n).setData(0, pqt.QtCore.Qt.DecorationRole, QtGui.QColor('Crimson'))
+
+		self.blockSignals(False)
+	
+
+# - Widgets ------------------------------------------------------------
 class TRLayerSelect(QtGui.QVBoxLayout):
 	# - Split/Break contour 
 	def __init__(self):
 		super(TRLayerSelect, self).__init__()
 
 		# - Init
+		self.header_names = ['Layer/Anchor', 'X', 'Y']
+
 		# -- Head
 		self.lay_head = QtGui.QHBoxLayout()
 		self.edt_glyphName = QtGui.QLineEdit()
@@ -68,50 +135,30 @@ class TRLayerSelect(QtGui.QVBoxLayout):
 		self.lay_head.addWidget(self.edt_glyphName)
 		self.lay_head.addWidget(self.btn_refresh)
 		self.addLayout(self.lay_head)
-
-		# -- Layer List
-		self.lst_anchors = QtGui.QListWidget()
-		self.lst_anchors.setAlternatingRowColors(True)
-		self.lst_anchors.setMinimumHeight(100)
-		self.lst_anchors.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
-		self.addWidget(self.lst_anchors)
+		
+		# -- Tree view
+		self.tree_anchors = TRtreeWidget(OrderedDict([('Refresh',[])]), self.header_names)
+		self.tree_anchors.setMinimumHeight(400)
+		
+		self.addWidget(self.tree_anchors)
 		#self.refresh()
 
 	def refresh(self):
 		# - Init
 		self.glyph = eGlyph()
+		self.edt_glyphName.setText(self.glyph.name)
 		self.wLayers = self.glyph._prepareLayers(pLayers)
 		
-		# - Prepare
-		self.wAnchors = {}
-		self.wAnchorNames = []		
-		for layer in self.wLayers:
-			currAnchors = self.glyph.anchors(layer) 
-			self.wAnchors[layer] = currAnchors
-			self.wAnchorNames.append([anchor.name for anchor in currAnchors])
-		
-		self.edt_glyphName.setText(self.glyph.name)
-		self.lst_anchors.clear()
-					
-		# - Build List and style it
-		self.lst_anchors.addItems(list(set(sum(self.wAnchorNames, []))))		
-
-		for index in range(self.lst_anchors.count):
-			currItem = self.lst_anchors.item(index)
-			
-			checkLayers = [currItem.text() in name for name in self.wAnchorNames]
-			layer_order = 'Layer Order: '+', '.join(self.wLayers)
-			toolTip = 'Anchor present in all selected layers.\n\n' + layer_order if all(checkLayers) else 'Anchor NOT present in all selected layers.\n\n' + layer_order
-
-			currItem.setData(pqt.QtCore.Qt.DecorationRole, QtGui.QColor('LimeGreen' if all(checkLayers) else 'Crimson'))
-			currItem.setData(pqt.QtCore.Qt.ToolTipRole, toolTip)		
+		# - Build Tree and style it
+		data = [((layer.name), [(anchor.name, int(anchor.point.x()), int(anchor.point.y())) for anchor in self.glyph.anchors(layer.name)]) for layer in self.glyph.masters()]
+		self.tree_anchors.setTree(OrderedDict(reversed(data)), self.header_names)
+		self.tree_anchors.markDiff()
 
 	def doCheck(self):
 		if self.glyph.fg.id != fl6.CurrentGlyph().id and self.glyph.fl.name != fl6.CurrentGlyph().name:
 			print '\nERRO:\tGlyph mismatch:\n\tCurrent active glyph: %s\n\tLayers panel glyph: %s' %(fl6.CurrentGlyph(), self.glyph.fg)
 			print 'WARN:\tNo action taken! Forcing refresh!' 
 			self.refresh()
-			#raise Exception('Glyph mismatch')
 			return 0
 		return 1
 
@@ -183,6 +230,7 @@ class TRAnchorBasic(QtGui.QVBoxLayout):
 		self.btn_anchorPaste.clicked.connect(lambda: self.copyAnchors(True))
 		self.btn_anchorSuffix.clicked.connect(lambda: self.renameAnchors(False))
 		self.btn_anchorRename.clicked.connect(lambda: self.renameAnchors(True))
+		self.aux.tree_anchors.itemChanged.connect(self.processChange)
 
 		# - Build layout
 		self.lay_grid.addWidget(QtGui.QLabel('Anchor actions:'), 	0, 0, 1, 4)
@@ -211,6 +259,15 @@ class TRAnchorBasic(QtGui.QVBoxLayout):
 		# - Build
 		self.addLayout(self.lay_grid)
 
+	# -- Procedures --------------------------
+	def processChange(self, item):
+		layer_name = item.parent().text(0)
+		anchor_name = item.text(0)
+		x, y = int(item.text(1)), int(item.text(2))
+		self.aux.glyph.moveAnchor(anchor_name, layer_name, (x, y), (None, None), 5, False)
+		self.aux.glyph.updateObject(self.aux.glyph.fl, 'Move anchors: %s @ %s.' %(anchor_name, layer_name))
+		self.aux.glyph.update()
+		
 	def clearAnchors(self, clearAll=False):
 		if self.aux.doCheck():			
 			if clearAll:
@@ -218,8 +275,8 @@ class TRAnchorBasic(QtGui.QVBoxLayout):
 					self.aux.glyph.clearAnchors(layer)
 
 			else:
-				for item in self.aux.lst_anchors.selectedItems():
-					cAnchorName = item.text()
+				for item in self.aux.tree_anchors.selectedItems():
+					cAnchorName = item.text(0)
 					
 					for layer in self.aux.wLayers:
 						findAnchor = self.aux.glyph.layer(layer).findAnchor(cAnchorName)
@@ -258,9 +315,9 @@ class TRAnchorBasic(QtGui.QVBoxLayout):
 							self.aux.glyph.dropAnchor(self.edt_anchorName.text, layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, self.chk_italic.isChecked())
 							update = True
 					else:
-						cmb_sel = self.aux.lst_anchors.selectedItems()
+						cmb_sel = self.aux.tree_anchors.selectedItems()
 						if len(cmb_sel):
-							self.aux.glyph.moveAnchor(cmb_sel[0].text(), layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, self.chk_italic.isChecked())
+							self.aux.glyph.moveAnchor(cmb_sel[0].text(0), layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, self.chk_italic.isChecked())
 							update = True
 
 			if update:
@@ -279,11 +336,11 @@ class TRAnchorBasic(QtGui.QVBoxLayout):
 				for layer in self.aux.wLayers:
 					clipboard_glyph_anchors[layer] = []
 
-					for anchor_name in self.aux.lst_anchors.selectedItems():
-						anchor_coords = self.aux.glyph.findAnchor(anchor_name.text(), layer)
+					for anchor_name in self.aux.tree_anchors.selectedItems():
+						anchor_coords = self.aux.glyph.findAnchor(anchor_name.text(0), layer)
 						
 						if anchor_coords is not None:
-							clipboard_glyph_anchors[layer].append((anchor_name.text(), (anchor_coords.point.x(), anchor_coords.point.y())))
+							clipboard_glyph_anchors[layer].append((anchor_name.text(0), (anchor_coords.point.x(), anchor_coords.point.y())))
 				print clipboard_glyph_anchors
 			else:
 				if len(clipboard_glyph_anchors.keys()):
@@ -308,8 +365,8 @@ class TRAnchorBasic(QtGui.QVBoxLayout):
 
 			for layer in self.aux.wLayers:
 				
-				for anchor_name in self.aux.lst_anchors.selectedItems():
-					anchor = self.aux.glyph.findAnchor(anchor_name.text(), layer)
+				for anchor_name in self.aux.tree_anchors.selectedItems():
+					anchor = self.aux.glyph.findAnchor(anchor_name.text(0), layer)
 					
 					if anchor is not None:
 						if len(self.edt_anchorName.text):
