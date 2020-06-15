@@ -15,7 +15,7 @@ import fontgate as fgt
 
 from typerig.proxy import *
 
-import PythonQt as pqt
+from PythonQt import QtCore
 from typerig.gui import QtGui
 from typerig.gui.widgets import getProcessGlyphs
 
@@ -33,7 +33,7 @@ class ALineEdit(QtGui.QLineEdit):
 	# - Custom QLine Edit extending the contextual menu with FL6 metric expressions
 	def __init__(self, *args, **kwargs):
 		super(ALineEdit, self).__init__(*args, **kwargs)
-		self.setContextMenuPolicy(pqt.QtCore.Qt.CustomContextMenu)
+		self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
 		self.customContextMenuRequested.connect(self.__contextMenu)
 
 	def __contextMenu(self):
@@ -76,14 +76,14 @@ class TRtreeWidget(QtGui.QTreeWidget):
 
 			for sub in value:
 				new_item = QtGui.QTreeWidgetItem(master, sub)
-				new_item.setFlags(new_item.flags() | pqt.QtCore.Qt.ItemIsEditable)
+				new_item.setFlags(new_item.flags() | QtCore.Qt.ItemIsEditable)
 
 		# - Fit data
 		for c in range(self.columnCount):
 			self.resizeColumnToContents(c)	
 
-		self.blockSignals(False)
 		self.expandAll()
+		self.blockSignals(False)
 
 	def getTree(self):
 		returnDict = OrderedDict()
@@ -109,9 +109,9 @@ class TRtreeWidget(QtGui.QTreeWidget):
 			item = root.child(i)
 			for n in range(item.childCount()):
 				if all([item.child(n).text(0) in test for test in init_diff]):
-					item.child(n).setData(0, pqt.QtCore.Qt.DecorationRole, QtGui.QColor('LimeGreen'))
+					item.child(n).setData(0, QtCore.Qt.DecorationRole, QtGui.QColor('LimeGreen'))
 				else:
-					item.child(n).setData(0, pqt.QtCore.Qt.DecorationRole, QtGui.QColor('Crimson'))
+					item.child(n).setData(0, QtCore.Qt.DecorationRole, QtGui.QColor('Crimson'))
 
 		self.blockSignals(False)
 	
@@ -141,7 +141,6 @@ class TRLayerSelect(QtGui.QVBoxLayout):
 		self.tree_anchors.setMinimumHeight(400)
 		
 		self.addWidget(self.tree_anchors)
-		#self.refresh()
 
 	def refresh(self):
 		# - Init
@@ -177,7 +176,6 @@ class TRAnchorBasic(QtGui.QVBoxLayout):
 		self.posXctrl = dict(zip(self.posX, posXvals))
 
 		# -- Basic Tool buttons
-		self.lay_grid = QtGui.QGridLayout()
 		self.btn_anchorCopy = QtGui.QPushButton('Copy')
 		self.btn_anchorPaste = QtGui.QPushButton('Paste')
 		self.btn_clearSel = QtGui.QPushButton('Clear Selected')
@@ -186,6 +184,11 @@ class TRAnchorBasic(QtGui.QVBoxLayout):
 		self.btn_anchorMov = QtGui.QPushButton('Move')
 		self.btn_anchorRename = QtGui.QPushButton('Rename')
 		self.btn_anchorSuffix = QtGui.QPushButton('Suffix')
+		self.btn_anchorCopy.setToolTip('Copy selected Anchors from layers chosen.')
+		self.btn_anchorPaste.setToolTip('Paste Anchors at layers chosen.')
+		self.btn_anchorRename.setToolTip('Rename selected anchors.')
+		self.btn_anchorSuffix.setToolTip('Extend the name of selected Anchors.')
+		
 		self.chk_italic = QtGui.QCheckBox('Use Italic Angle')
 
 		# -- Edit fields
@@ -193,11 +196,6 @@ class TRAnchorBasic(QtGui.QVBoxLayout):
 		self.edt_simpleX = QtGui.QLineEdit()
 		self.edt_simpleY = QtGui.QLineEdit()
 		self.edt_autoT = QtGui.QLineEdit()
-
-		self.btn_anchorCopy.setToolTip('Copy selected Anchors from layers chosen.')
-		self.btn_anchorPaste.setToolTip('Paste Anchors at layers chosen.')
-		self.btn_anchorRename.setToolTip('Rename selected anchors.')
-		self.btn_anchorSuffix.setToolTip('Extend the name of selected Anchors.')
 
 		self.edt_anchorName.setPlaceholderText('New Anchor')
 		self.edt_simpleX.setText('0')
@@ -233,6 +231,7 @@ class TRAnchorBasic(QtGui.QVBoxLayout):
 		self.aux.tree_anchors.itemChanged.connect(self.processChange)
 
 		# - Build layout
+		self.lay_grid = QtGui.QGridLayout()
 		self.lay_grid.addWidget(QtGui.QLabel('Anchor actions:'), 	0, 0, 1, 4)
 		self.lay_grid.addWidget(self.btn_anchorCopy, 				1, 0, 1, 4) 
 		self.lay_grid.addWidget(self.btn_anchorPaste, 				1, 4, 1, 4)
@@ -407,6 +406,6 @@ if __name__ == '__main__':
 	test = tool_tab()
 	test.setWindowTitle('%s %s' %(app_name, app_version))
 	test.setGeometry(100, 100, 300, 600)
-	test.setWindowFlags(pqt.QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
+	test.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 	
 	test.show()
