@@ -123,7 +123,7 @@ class TRLayerSelect(QtGui.QVBoxLayout):
 		super(TRLayerSelect, self).__init__()
 
 		# - Init
-		self.header_names = ['Layer/Anchor', 'X', 'Y']
+		self.header_names = ['Layer/Anchor'+' '*20, 'X', 'Y']
 
 		# -- Head
 		self.lay_head = QtGui.QHBoxLayout()
