@@ -34,10 +34,10 @@ _Layer row with Selected option clicked_
 **Important note**: Each individual sub-panel that can be run as a standalone app performs its actions **always on all available layers for a single glyph**! If you want to work on single layer, selected layers, multiple glyphs and etc. you need to run a grouping panel that contains your desired sub-panel.
 
 ## Panel tail
-Contains useful information about sub-panel versions and in future will allow activating and deactivating specific panels as well as auto-update options, configuration and etc.
+Is the last tab marked by three dots (...). It contains useful information about sub-panel versions and in future will allow activating and deactivating specific panels as well as auto-update options, configuration and etc.
 
 ![](./img/TR-Masthead-03.png)
-_A grouping panel masthead_
+_A grouping panel tail_
 
 **Panel development notes**
 - Stability: High - no known major issues, but please **run any panel with a font file open!**
