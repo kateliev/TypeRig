@@ -61,7 +61,7 @@ X positioning Using **Highest** setting
 ![](./img/TR-Anchor-Panel-03-B1.png)
 
 X positioning Using **Highest** setting _top_ (green), **Highest Right** _caron_ (yellow) and **Lowest** _bottom_ (blue)
-![](./img/TR-Anchor-Panel-03-B1.png)
+![](./img/TR-Anchor-Panel-03-B2.png)
 
 X positioning Using **Highest** setting with _tolerance_
 ![](./img/TR-Anchor-Panel-03-B3.png)
