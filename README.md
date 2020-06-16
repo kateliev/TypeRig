@@ -8,9 +8,10 @@
 
 **Delta Machine** (`.\Scripts\Delta Machine`) - an advanced tool for adaptive outline scaling based on the exceptional work *A Multiple Master based method for scaling glyphs without changing the stroke characteristics* by Tim Ahrens.
 
+
 ## Documentation
 ### TypeRig API
-_Coming soon_
+_Planned_
 
 ### TypeRig GUI
 - [Basics](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Panel-Basics)
@@ -19,16 +20,17 @@ _Coming soon_
 - [Anchors](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Anchor-Panel)
 
 #### TR Kern
-_Coming soon_
+_Planned_
 
 #### TR Filter
-_Coming soon_
+_Planned_
 
 #### TR Manager
-_Coming soon_
+_Planned_
 
 ### DeltaMachine
 [Delta Machine Quick Start](https://kateliev.github.io/TypeRig/Docs/DeltaMachine/DeltaMachine)
+
 
 ## Known issues
 Please refer to https://github.com/kateliev/TypeRig/issues
@@ -48,6 +50,7 @@ Unpack files anywhere you want. Then:
 - **TypeRig GUI** - Please refer to Fontlab VI manual about ["Scripting Panel" section "Open the List of scripts"](http://help.fontlab.com/fontlab-vi/Scripting-panel/#open-the-list-of-scripts)
 
 *Note: It is possible that you could have two or more Python installations on one machine. Please note which one is set to work with your current Fontlab instalaltion. If it happens that your main Python installation differes from the one supplied with Fontlab, then you should manually copy the library provided as `/typerig/` folder residing in `./Lib/` to your `/FontLab VER/Resources/python/2.7/site-packages/` folder. To test it out, if the library is poperly installed please open your FL6 scripting panel, navigate to and open the console and type `import typerig`. If no error is returned, then the manual isntallation went just fine.*
+
 
 ## Developer
 TypeRig FDK is developed by: **Vassil Kateliev** (2017-2020) and **Adam Twardoch** (2019-2020)
