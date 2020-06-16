@@ -54,11 +54,35 @@ The **X position** box currently offers the following:
 - **Lowest**: Will behave the same way as _Highest_ setting but for the lowest part of the outline;
 - **Lowest Left**: Same as its Highest counterpart but for the lowest part of the outline;
 - **Lowest Right**: Same as its Highest counterpart but for the lowest part of the outline;
-- **Center of mass:** Will make a statistical measurement of the mass distribution of the outline design (positive vs negative space) and return its center accordingly. 
+- **Center of mass:** Will make a statistical measurement of the mass distribution of the outline design (positive vs negative space) and return its [center of mass](https://en.wikipedia.org/wiki/Centroid) accordingly. 
+
+
+X positioning Using **Highest** setting
+![](./img/TR-Anchor-Panel-03-B1.png)
+
+X positioning Using **Highest** setting _top_ (green), **Highest Right** _caron_ (yellow) and **Lowest** _bottom_ (blue)
+![](./img/TR-Anchor-Panel-03-B1.png)
+
+X positioning Using **Highest** setting with _tolerance_
+![](./img/TR-Anchor-Panel-03-B3.png)
+
+The **Y position** box currently offers the following:
+- **Coord**: Will set the Y coordinate of the anchor at exactly the coordinate entered in the editing field next to it;
+- **Keep**: Will keep the current coordinate of the anchor if modifying/moving an existing anchor;
+- **Shift**: Will move the anchor from its current position by (+/-) units entered in the field. _Example: Shift -10_
+- **Above**: Will move the anchor from its current position or create new one to the top of the outline BBox;  Use editing field to add or subtract units (+/-) from that position; _Note: In all of the following modes Editing field behaves as mentioned here! Example: 'Above' 30 will measure 30 units from the top of BBox_
+- **Below**: Will move the anchor from its current position or create new one to the bottom of the outline BBox; 
+- **Center**: Will move the anchor from its current position or create new one to the geometric center of the outline BBox;
+- **Baseline**: Will use the Baseline _(Y = 0)_ as measure;
+- **Center of mass:** Will make a statistical measurement of the mass distribution of the outline design (positive vs negative space) and return its [center of mass](https://en.wikipedia.org/wiki/Centroid) accordingly. 
 
 ![](./img/TR-Anchor-Panel-03-C.png)
 _Y positioning options_
 
+**Add** button will add/create the desired anchor in accordance to current option selected in MH. If anchor with the same name already exists, FL will rename the existing anchor with numeric index as suffix (ex. top.1).
 
+**Move** button will move one or more anchors selected in **Anchor Tree** in accordance to current option selected in MH. _Note that it will not take into consideration on which layer in Anchor Tree the anchor was selected it only takes options of MH. It will only use the name of the anchor!_
 
+**Rename** will rename the selected anchor taking a new name from the name field in accordance to current option selected in MH.
 
+**Suffix** will add suffix to the names of selected anchor(s) taking the suffix string from the name field. This action i processed as well in accordance to current option selected in MH.
