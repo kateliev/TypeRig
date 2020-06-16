@@ -20,10 +20,10 @@ Fields showing anchor position across layers are editable and upon entry **will 
 ![](./img/TR-Anchor-Panel-02.png)
 
 This part represents some basic actions:
-- Copy: Will copy the selected anchors in memory so that they can be pasted/inserted into another glyph. Anchors are organized per layer. The action will not allow copy and pasting anchors between layers;
-- Paste: Will paste the anchors found in memory into another glyph;
-- Remove: Will remove the selected anchors in Anchor tree;
-- Remove All: Will remove all anchors according to panel MH. For example running the action with _Active Glyph_ selected in MH will delete the anchors in the current active layer, while having _Masters_ selected in MH will delete all anchors on all masters.
+- **Copy**: Will copy the selected anchors in memory so that they can be pasted/inserted into another glyph. Anchors are organized per layer. The action will not allow copy and pasting anchors between layers;
+- **Paste**: Will paste the anchors found in memory into another glyph;
+- **Remove**: Will remove the selected anchors in Anchor tree;
+- **Remove All**: Will remove all anchors according to panel MH. For example running the action with _Active Glyph_ selected in MH will delete the anchors in the current active layer, while having _Masters_ selected in MH will delete all anchors on all masters.
 
 #### Add/move/modify anchor
 This part is responsible for creating, moving and renaming anchors.
@@ -42,19 +42,19 @@ Below are two combo boxes that are responsible for the anchor position. Next to 
 _X positioning options_
 
 The **X position** box currently offers the following:
-- Coord: Will set the X coordinate of the anchor at exactly the coordinate entered in the editing field next to it;
-- Keep: Will keep the current coordinate of the anchor if modifying/moving an existing anchor;
-- Shift: Will move the anchor from its current position by (+/-) units entered in the field. _Example: Shift -10_
-- Left: Will move the anchor from its current position or create new one to the left of the outline Bounding box (BBox). Use editing field add or subtract units (+/-) from that position; _Note: In all of the following modes Editing field behaves as mentioned here!_
-- Right: Will move the anchor from its current position or create new one to the right of the outline BBox;
-- Center: Will move the anchor from its current position or create new one to the geometric center of the outline BBox;
-- Highest: This algorithm will measure the topmost flat part of the outline and return it's center. If there is a single node residing there it will return the coordinates of that node (ex. /O, /C, /o, /c /e and etc. ). If there are multiple nodes it will return the middle of that measured section. There is a editing field below named _Tolerance_ that controls what the algorithm considers to be a "flat" part of the outline measured. For instance if you have an inclined apex on /A - _tolerance_ of 0 will return the coordinates of the tompost point of it, while _tolerance_ equal or greater then the height of that design feature will consider it "flat" and return the center of it.
-- Highest Left: Will do as explained above but will return the leftmost coordinate of the feature in question;
-- Highest Right: Will do as explained above but will return the rightmost coordinate of the feature in question;
-- Lowest: Will behave the same way as _Highest_ setting but for the lowest part of the outline;
-- Lowest Left: Same as its Highest counterpart but for the lowest part of the outline;
-- Lowest Right: Same as its Highest counterpart but for the lowest part of the outline;
-- Center of mass: Will make a statistical measurement of the mass distribution of the outline design (positive vs negative space) and return its center accordingly. 
+- **Coord**: Will set the X coordinate of the anchor at exactly the coordinate entered in the editing field next to it;
+- **Keep**: Will keep the current coordinate of the anchor if modifying/moving an existing anchor;
+- **Shift**: Will move the anchor from its current position by (+/-) units entered in the field. _Example: Shift -10_
+- **Left**: Will move the anchor from its current position or create new one to the left of the outline Bounding box (BBox). Use editing field to add or subtract units (+/-) from that position; _Note: In all of the following modes Editing field behaves as mentioned here!_
+- **Right**: Will move the anchor from its current position or create new one to the right of the outline BBox;
+- **Center**: Will move the anchor from its current position or create new one to the geometric center of the outline BBox;
+- **Highest**: This algorithm will measure the topmost flat part of the outline and return it's center. If there is a single node residing there it will return the coordinates of that node (ex. /O, /C, /o, /c /e and etc. ). If there are multiple nodes it will return the middle of that measured section. There is a editing field below named _Tolerance_ that controls what the algorithm considers to be a "flat" part of the outline measured. For instance if you have an inclined apex on /A - _tolerance_ of 0 will return the coordinates of the tompost point of it, while _tolerance_ equal or greater then the height of that design feature will consider it "flat" and return the center of it.
+- **Highest Left**: Will do as explained above but will return the leftmost coordinate of the feature in question;
+- **Highest Right**: Will do as explained above but will return the rightmost coordinate of the feature in question;
+- **Lowest**: Will behave the same way as _Highest_ setting but for the lowest part of the outline;
+- **Lowest Left**: Same as its Highest counterpart but for the lowest part of the outline;
+- **Lowest Right**: Same as its Highest counterpart but for the lowest part of the outline;
+- **Center of mass:** Will make a statistical measurement of the mass distribution of the outline design (positive vs negative space) and return its center accordingly. 
 
 ![](./img/TR-Anchor-Panel-03-C.png)
 _Y positioning options_
