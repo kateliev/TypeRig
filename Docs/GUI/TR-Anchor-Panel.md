@@ -86,3 +86,12 @@ _Y positioning options_
 **Rename** will rename the selected anchor taking a new name from the name field in accordance to current option selected in MH.
 
 **Suffix** will add suffix to the names of selected anchor(s) taking the suffix string from the name field. This action i processed as well in accordance to current option selected in MH.
+
+**Italic** check-box will make all of the above calculations obey the fonts italic angle. For example with given X _'Highest'_ and Y _'Above' 30_ settings will find where is the projection of that point given the italic angle and place the anchor there.
+
+
+
+**Panel development notes**
+- Stability: Hight - no known major issues.
+- Development priority: Very low - not likely to be changed often.
+- Future improvements: Anchor expressions - as soon as they are available in FL Python API - not likely tho happen any time soon.
