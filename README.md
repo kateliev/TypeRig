@@ -22,7 +22,7 @@ _Planned_
 _Planned_
 
 ### DeltaMachine
-[Delta Machine Quick Start](https://kateliev.github.io/TypeRig/Docs/DeltaMachine/DeltaMachine)
+- [Delta Machine Quick Start](https://kateliev.github.io/TypeRig/Docs/DeltaMachine/DeltaMachine)
 
 ## Known issues
 Please refer to https://github.com/kateliev/TypeRig/issues
