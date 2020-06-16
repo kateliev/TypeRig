@@ -3,7 +3,7 @@
 ## TypeRig Panel
 
 ### Anchor Panel
-The Anchor tab/subpanel is a special purpose tool for dealing with anchors on glyph level. It works in Glyph Window (GW) as well as Font Window (FW) and most of its actions are governed by the TypeRig panel masthead (MH) unless specially noted. Use _Refresh button_ when moving onto another glyph. Trying to apply any action onto different glyph than the one shown will discard that action, rise a warning and refresh the panel. The Anchor tab consists of three main sections: anchor tree; anchor tree actions; Add/move/modify anchor;
+The Anchor tab/subpanel is a special purpose tool for dealing with anchors on glyph level. It works in Glyph Window (GW) as well as Font Window (FW) and most of its actions are governed by the [TypeRig panel masthead (MH)](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Panel-Basics.md) unless specially noted. Use _Refresh button_ when moving onto another glyph. Trying to apply any action onto different glyph than the one shown will discard that action, rise a warning and refresh the panel. The Anchor tab consists of three main sections: anchor tree; anchor tree actions; Add/move/modify anchor;
 
 ![](./img/TR-Anchor-Panel-00.png)
 _A typical view of Anchor panel_
