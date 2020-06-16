@@ -26,14 +26,35 @@ This part represents some basic actions:
 - Remove All: Will remove all anchors according to panel MH. For example running the action with _Active Glyph_ selected in MH will delete the anchors in the current active layer, while having _Masters_ selected in MH will delete all anchors on all masters.
 
 #### Add/move/modify anchor
+This part is responsible for creating, moving and renaming anchors.
+
 ![](./img/TR-Anchor-Panel-03.png)
 _An overlook of the Add/move/modify anchor part_
+
+On top left resides an editing field (N:) for entering anchor name. It is used in new anchor creation as well as for renaming or adding suffix to existing ones. It also offers some common naming options upon right click. Right next to it is a combo box that allows switching between Anchors and Pins.
 
 ![](./img/TR-Anchor-Panel-03-A.png)
 _Right click options of the Anchor name-filed_
 
+Below are two combo boxes that are responsible for the anchor position. Next to each combo box is an editing field that offers further adjustment to the algorithm chosen.
+
 ![](./img/TR-Anchor-Panel-03-B.png)
 _X positioning options_
+
+The **X position** box currently offers the following:
+- Coord: Will set the X coordinate of the anchor at exactly the coordinate entered in the editing field next to it;
+- Keep: Will keep the current coordinate of the anchor if modifying/moving an existing anchor;
+- Shift: Will move the anchor from its current position by (+/-) units entered in the field. _Example: Shift -10_
+- Left: Will move the anchor from its current position or create new one to the left of the outline Bounding box (BBox). Use editing field add or subtract units (+/-) from that position; _Note: In all of the following modes Editing field behaves as mentioned here!_
+- Right: Will move the anchor from its current position or create new one to the right of the outline BBox;
+- Center: Will move the anchor from its current position or create new one to the geometric center of the outline BBox;
+- Highest: This algorithm will measure the topmost flat part of the outline and return it's center. If there is a single node residing there it will return the coordinates of that node (ex. /O, /C, /o, /c /e and etc. ). If there are multiple nodes it will return the middle of that measured section. There is a editing field below named _Tolerance_ that controls what the algorithm considers to be a "flat" part of the outline measured. For instance if you have an inclined apex on /A - _tolerance_ of 0 will return the coordinates of the tompost point of it, while _tolerance_ equal or greater then the height of that design feature will consider it "flat" and return the center of it.
+- Highest Left: Will do as explained above but will return the leftmost coordinate of the feature in question;
+- Highest Right: Will do as explained above but will return the rightmost coordinate of the feature in question;
+- Lowest: Will behave the same way as _Highest_ setting but for the lowest part of the outline;
+- Lowest Left: Same as its Highest counterpart but for the lowest part of the outline;
+- Lowest Right: Same as its Highest counterpart but for the lowest part of the outline;
+- Center of mass: Will make a statistical measurement of the mass distribution of the outline design (positive vs negative space) and return its center accordingly. 
 
 ![](./img/TR-Anchor-Panel-03-C.png)
 _Y positioning options_
