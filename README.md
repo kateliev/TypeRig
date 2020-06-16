@@ -6,13 +6,20 @@
 - **Typerig Manager** (`typerig-manager.py`) - a set of tools for editing various font related parameters;
 - **Typerig Filter** (`typerig-filter.py`) - assorted outline modifiers.
 
-**Delta Machine** (`.\Scripts\Delta Machine`) - an advanced tool for adaptive outline scaling based on the exceptional work *A Multiple Master based method for scaling glyphs without changing the stroke characteristics* by Tim Ahrens. See [Delta Machine Quick Start](https://kateliev.github.io/TypeRig/Docs/DeltaMachine/DeltaMachine)
+**Delta Machine** (`.\Scripts\Delta Machine`) - an advanced tool for adaptive outline scaling based on the exceptional work *A Multiple Master based method for scaling glyphs without changing the stroke characteristics* by Tim Ahrens.
+
+### Documentation
+#### TypeRig Gui
+[Basics](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Panel-Basics)
+[Anchors](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Anchor-Panel)
+
+#### DeltaMachine
+[Delta Machine Quick Start](https://kateliev.github.io/TypeRig/Docs/DeltaMachine/DeltaMachine)
 
 ### Known issues
 Please refer to https://github.com/kateliev/TypeRig/issues
 
 ### Installation
-
 #### FontLab 7
 
 Run FontLab 7, choose _Scripts > Update / Install Scripts_. Click _OK_ in the dialog, wait until the installation completes. When you see the _TypeRig is up-to-date_ dialog, click _OK_ and restart FontLab 7.
