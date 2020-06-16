@@ -92,6 +92,6 @@ _Y positioning options_
 
 
 **Panel development notes**
-- Stability: Hight - no known major issues.
+- Stability: High - no known major issues.
 - Development priority: Very low - not likely to be changed often.
 - Future improvements: Anchor expressions - as soon as they are available in FL Python API - not likely tho happen any time soon.

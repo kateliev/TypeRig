@@ -16,7 +16,7 @@ _A grouping panel masthead_
 
 The masthead will show several options. First row is all about the layers that you want to work with and the second represents the glyphs you want to process.
 
-**Layers row** include the following options _(check-boxes)_:
+**Layers row** includes the following options _(check-boxes)_:
 - **Active**: Will perform actions only on layer that is currently active in Glyph window (GW), Font Window (FW) or any other FL window that allows character/glyph to be selected;
 - **Masters**: Will process all of the glyph's masters (Again!... think of glyphs masters and not font masters as a glyph might have more or less masters than the font itself);
 - **Masks**: Will process all of the glyph's mask layers;
@@ -27,7 +27,7 @@ _Layer row with Selected option clicked_
 
 **Glyphs row** includes the following options _(radio buttons)_:
 - **Glyph**: Will perform actions only on a single Glyph that is active or selected in GW, FW or any other FL window that allows character/glyph to be selected;
-- **Window**: Will perform actions in all glyphs in current active Text Window (TW); _Have in mind that any window that offers text to be entered could be considered as TW thus GW is actually an TW._
+- **Window**: Will perform actions in all glyphs in current active Text Window (TW); _Have in mind that any window that offers text to be entered could be considered as TW thus GW is actually a TW._
 - **Selection**: Will take all of the selected glyphs in FW;
 - **Font**: Is self explanatory. _(It is disabled for safety reasons)_
 
@@ -40,6 +40,6 @@ Contains useful information about sub-panel versions and in future will allow ac
 _A grouping panel masthead_
 
 **Panel development notes**
-- Stability: Hight - no known major issues, but please run any panel with a font file open!
+- Stability: High - no known major issues, but please **run any panel with a font file open!**
 - Development priority: Very low - not likely to be changed often.
 - Future improvements: Configuration, auto-update, panel activation/deactivation and etc.
