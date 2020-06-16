@@ -8,33 +8,32 @@
 
 **Delta Machine** (`.\Scripts\Delta Machine`) - an advanced tool for adaptive outline scaling based on the exceptional work *A Multiple Master based method for scaling glyphs without changing the stroke characteristics* by Tim Ahrens.
 
-### Documentation
-#### TypeRig API
+## Documentation
+### TypeRig API
 _Planned_
 
-#### TypeRig GUI
+### TypeRig GUI
 - [Basics](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Panel-Basics)
 
-##### Panel
+#### Panel
 - [Anchors](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Anchor-Panel)
-_More coming soon_
 
-##### Kern
+#### Kern
 _Planned_
 
-##### DeltaMachine
+### DeltaMachine
 [Delta Machine Quick Start](https://kateliev.github.io/TypeRig/Docs/DeltaMachine/DeltaMachine)
 
-### Known issues
+## Known issues
 Please refer to https://github.com/kateliev/TypeRig/issues
 
-### Installation
-#### FontLab 7
+## Installation
+### FontLab 7
 Run FontLab 7, choose _Scripts > Update / Install Scripts_. Click _OK_ in the dialog, wait until the installation completes. When you see the _TypeRig is up-to-date_ dialog, click _OK_ and restart FontLab 7.
 
 The _Scripts_ menu should now show the _Delta Machine_ and _TypeRig GUI_ submenus.
 
-#### FontLab VI
+### FontLab VI
 Unpack files anywhere you want. Then:
 - **TypeRig Module** - Run the provided install in shell using `python install.py`. It will create link/path to Python Site packages. Please note that if you change the location of the installation you should run the script again.
 
@@ -43,7 +42,7 @@ Unpack files anywhere you want. Then:
 *Note: It is possible that you could have two or more Python installations on one machine. Please note which one is set to work with your current Fontlab instalaltion. If it happens that your main Python installation differes from the one supplied with Fontlab, then you should manually copy the library provided as `/typerig/` folder residing in `./Lib/` to your `/FontLab VER/Resources/python/2.7/site-packages/` folder. To test it out, if the library is poperly installed please open your FL6 scripting panel, navigate to and open the console and type `import typerig`. If no error is returned, then the manual isntallation went just fine.*
 
 
-### Developer
+## Developer
 TypeRig FDK is developed by: **Vassil Kateliev** (2017-2020) and **Adam Twardoch** (2019-2020)
 
 For contact and inquiries: vassil(at)kateliev(dot)com
