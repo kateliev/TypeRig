@@ -26,7 +26,7 @@ global clipboard_glyph_anchors
 pLayers = None
 pMode = 0
 clipboard_glyph_anchors = {}
-app_name, app_version = 'TypeRig | Anchors', '1.12'
+app_name, app_version = 'TypeRig | Anchors', '1.14'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):
@@ -124,6 +124,7 @@ class TRLayerSelect(QtGui.QVBoxLayout):
 
 		# - Init
 		self.header_names = ['Layer/Anchor'+' '*20, 'X', 'Y']
+		self.data = OrderedDict([('Refresh',[])])
 
 		# -- Head
 		self.lay_head = QtGui.QHBoxLayout()
@@ -137,7 +138,7 @@ class TRLayerSelect(QtGui.QVBoxLayout):
 		self.addLayout(self.lay_head)
 		
 		# -- Tree view
-		self.tree_anchors = TRtreeWidget(OrderedDict([('Refresh',[])]), self.header_names)
+		self.tree_anchors = TRtreeWidget(self.data, self.header_names)
 		self.tree_anchors.setMinimumHeight(400)
 		
 		self.addWidget(self.tree_anchors)
@@ -148,8 +149,8 @@ class TRLayerSelect(QtGui.QVBoxLayout):
 		self.edt_glyphName.setText(self.glyph.name)
 				
 		# - Build Tree and style it
-		data = [((layer.name), [(anchor.name, int(anchor.point.x()), int(anchor.point.y())) for anchor in self.glyph.anchors(layer.name)]) for layer in self.glyph.masters()]
-		self.tree_anchors.setTree(OrderedDict(reversed(data)), self.header_names)
+		self.data = [((layer.name), [(anchor.name, int(anchor.point.x()), int(anchor.point.y())) for anchor in self.glyph.anchors(layer.name)]) for layer in self.glyph.masters()]
+		self.tree_anchors.setTree(OrderedDict(reversed(self.data)), self.header_names)
 		self.tree_anchors.markDiff()
 
 	def doCheck(self):
@@ -259,12 +260,27 @@ class TRAnchorBasic(QtGui.QVBoxLayout):
 
 	# -- Procedures --------------------------
 	def processChange(self, item):
-		layer_name = item.parent().text(0)
-		anchor_name = item.text(0)
-		x, y = int(item.text(1)), int(item.text(2))
-		self.aux.glyph.moveAnchor(anchor_name, layer_name, (x, y), (None, None), 5, False)
-		self.aux.glyph.updateObject(self.aux.glyph.fl, 'Move anchors: %s @ %s.' %(anchor_name, layer_name))
-		self.aux.glyph.update()
+		update = False
+		parent = item.parent()
+		change_index = parent.indexOfChild(item)
+		data_dict = OrderedDict(reversed(self.aux.data))
+
+		layer_name = parent.text(0)
+		old_name, old_x, old_y = data_dict[layer_name][change_index]
+		anchor_name, x, y = item.text(0), int(item.text(1)), int(item.text(2))
+
+		if anchor_name != old_name:
+			self.aux.glyph.layer(layer_name).findAnchor(old_name).name = anchor_name
+			update = True
+
+		if x != old_x or y != old_y:
+			self.aux.glyph.moveAnchor(anchor_name, layer_name, (x, y), (None, None), 5, False)
+			update = True
+
+		if update:
+			self.aux.glyph.update()
+			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Change anchor: %s @ %s.' %(anchor_name, layer_name))
+			self.aux.refresh()
 		
 	def clearAnchors(self, clearAll=False):
 		wLayers = self.aux.glyph._prepareLayers(pLayers)
