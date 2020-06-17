@@ -17,6 +17,7 @@ _Planned_
 
 #### Panel
 - [Anchors](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Anchor-Panel)
+- [Outline](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Outline-Panel)
 
 #### Kern
 _Planned_
