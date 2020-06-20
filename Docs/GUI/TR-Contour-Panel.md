@@ -28,7 +28,7 @@ _Relocate start point in FontLab Studio 5_
 
 This section offers some contour to contour alignment options that work in accordance to layer options selected in MH. Except explicitly noted, contours that will be aligned should have at least one node selected _(it is not necessary to select whole contours)_. 
 
-![](./img/TR-Contour-Panel-02.png)
+![](./img/TR-Contour-Panel-01.png)
 _Contour alignment modes_
 
 Currently the supported alignment modes  are as follows:
