@@ -19,7 +19,7 @@ from typerig.core.objects.point import Point, Void
 from typerig.core.objects.array import PointArray
 
 # - Init -------------------------------
-__version__ = '0.10.2'
+__version__ = '0.10.3'
 
 # - Objects ------------------------------------
 # -- Interpolation ------------------------------
@@ -217,17 +217,17 @@ class DeltaScale(Sequence):
 			self.x, self.y, self.stems = other
 
 	# - Process ----------------------------------
-	def scale_by_time(self, time, scale, comp, shift, italic_angle):
+	def scale_by_time(self, time, scale, comp, shift, italic_angle, extrapolate=False):
 		sx, sy = scale
 		cx, cy = comp
 		dx, dy = shift
 		i = italic_angle
-		a0, a1, ntx, nty = self.__mixer(time[0], time[1])
+		a0, a1, ntx, nty = self.__mixer(time[0], time[1], extrapolate)
 		process_array = zip(a0, a1)
 		result = map(lambda arr: self.__delta_scale(arr[0], arr[1], ntx, nty, sx, sy, cx, cy, dx, dy, i), process_array)
 		return result
 
-	def scale_by_stem(self, stem, scale, comp, shift, italic_angle):
+	def scale_by_stem(self, stem, scale, comp, shift, italic_angle, extrapolate=False):
 		stx, sty = stem
 		sx, sy = scale
 		cx, cy = comp
@@ -238,10 +238,12 @@ class DeltaScale(Sequence):
 		for sti in range(len(self.stems)):
 			stx0, stx1 = self.stems[sti][0]
 			sty0, sty1 = self.stems[sti][1]
-			if stx0 <= stx <= stx1 : tx = sti + utils.timer(stx, stx0, stx1, True)
-			if sty0 <= sty <= sty1 : ty = sti + utils.timer(sty, sty0, sty1, True)
+			#if stx0 <= stx <= stx1 : tx = sti + utils.timer(stx, stx0, stx1, True)
+			#if sty0 <= sty <= sty1 : ty = sti + utils.timer(sty, sty0, sty1, True)
+			if stx0 <= stx: tx = sti + utils.timer(stx, stx0, stx1, True)
+			if sty0 <= sty: ty = sti + utils.timer(sty, sty0, sty1, True)
 
-		a0, a1, ntx, nty = self.__mixer(tx, ty)
+		a0, a1, ntx, nty = self.__mixer(tx, ty, extrapolate)
 		process_array = zip(a0, a1)
 		result = map(lambda arr: self.__delta_scale(arr[0], arr[1], ntx, nty, sx, sy, cx, cy, dx, dy, i), process_array)
 		return result

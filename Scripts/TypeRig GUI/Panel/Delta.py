@@ -29,7 +29,7 @@ from typerig.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRMsgSimple
 # - Init -------------------------------
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Delta', '2.22'
+app_name, app_version = 'TypeRig | Delta', '2.23'
 
 
 # - Sub widgets ------------------------
@@ -202,10 +202,10 @@ class tool_tab(QtGui.QWidget):
 			curr_sw_dy = float(self.mixer_dy.sld_axis.value)
 
 			# - Scaling
-			sx = 100./float(self.scalerX.edt_1.text) + float(self.scalerX.sld_axis.value)/float(self.scalerX.edt_1.text)
-			sy = 100./float(self.scalerY.edt_1.text) + float(self.scalerY.sld_axis.value)/float(self.scalerY.edt_1.text)
+			sx = float(self.scalerX.sld_axis.value)/100.
+			sy = float(self.scalerY.sld_axis.value)/100.
 			
-			self.glyph._setPointArray(self.axis_points.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), radians(-float(self.italic_angle))))
+			self.glyph._setPointArray(self.axis_points.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), radians(-float(self.italic_angle)), extrapolate=True))
 			
 			self.glyph.update()
 			fl6.Update(fl6.CurrentGlyph())
