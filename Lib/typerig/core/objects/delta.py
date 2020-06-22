@@ -19,7 +19,7 @@ from typerig.core.objects.point import Point, Void
 from typerig.core.objects.array import PointArray
 
 # - Init -------------------------------
-__version__ = '0.10.3'
+__version__ = '0.10.4'
 
 # - Objects ------------------------------------
 # -- Interpolation ------------------------------
@@ -242,6 +242,13 @@ class DeltaScale(Sequence):
 			#if sty0 <= sty <= sty1 : ty = sti + utils.timer(sty, sty0, sty1, True)
 			if stx0 <= stx: tx = sti + utils.timer(stx, stx0, stx1, True)
 			if sty0 <= sty: ty = sti + utils.timer(sty, sty0, sty1, True)
+
+		if extrapolate:
+			stx0, stx1 = self.stems[0][0]
+			sty0, sty1 = self.stems[0][1]
+
+			if tx == 0 and stx < stx0 :	tx = utils.timer(stx, stx0, stx1, True)
+			if ty == 0 and sty < sty0 :	ty = utils.timer(sty, sty0, sty1, True)
 
 		a0, a1, ntx, nty = self.__mixer(tx, ty, extrapolate)
 		process_array = zip(a0, a1)

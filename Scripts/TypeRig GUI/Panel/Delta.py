@@ -29,7 +29,7 @@ from typerig.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRMsgSimple
 # - Init -------------------------------
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Delta', '2.23'
+app_name, app_version = 'TypeRig | Delta', '2.25'
 
 
 # - Sub widgets ------------------------
@@ -47,6 +47,14 @@ class mixerHead(QtGui.QGridLayout):
 		self.btn_set_axis = QtGui.QPushButton('Set &Axis')
 		self.btn_getVstem = QtGui.QPushButton('Get &V Stems')
 		self.btn_getHstem = QtGui.QPushButton('Get &H Stems')
+		
+		self.btn_setExtrapolate = QtGui.QPushButton('Extrapolate')
+		self.btn_setItalic = QtGui.QPushButton('Italic')
+		self.btn_setLayer = QtGui.QPushButton('Layer refresh')
+
+		self.btn_setExtrapolate.setCheckable(True)
+		self.btn_setItalic.setCheckable(True) 
+		self.btn_setLayer.setCheckable(False) 
 
 		self.addWidget(QtGui.QLabel('Glyph:'),		0, 0, 1, 1)
 		self.addWidget(self.edt_glyphName,			0, 1, 1, 6)
@@ -55,6 +63,10 @@ class mixerHead(QtGui.QGridLayout):
 		self.addWidget(self.btn_getVstem, 			1, 1, 1, 3)
 		self.addWidget(self.btn_getHstem, 			1, 4, 1, 3)
 		self.addWidget(self.btn_set_axis, 			1, 7, 1, 3)
+		self.addWidget(QtGui.QLabel('Options:'),	2, 0, 1, 1)
+		self.addWidget(self.btn_setLayer, 			2, 1, 1, 3)
+		self.addWidget(self.btn_setExtrapolate, 	2, 4, 1, 3)
+		self.addWidget(self.btn_setItalic, 			2, 7, 1, 3)
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
@@ -70,6 +82,7 @@ class tool_tab(QtGui.QWidget):
 		self.head.btn_set_axis.clicked.connect(self.set_axis)
 		self.head.btn_getVstem.clicked.connect(self.get_stem_x)
 		self.head.btn_getHstem.clicked.connect(self.get_stem_y)
+		self.head.btn_setLayer.clicked.connect(self.set_current_layer)
 		layoutV.addLayout(self.head)
 		layoutV.addSpacing(15)
 
@@ -168,7 +181,7 @@ class tool_tab(QtGui.QWidget):
 
 		self.mixer_dx.edt_0.setText(round(min(self.master_stems_x)))
 		self.mixer_dx.edt_1.setText(round(max(self.master_stems_x)))
-		self.mixer_dx.edt_pos.setText(round(self.master_stems_x[self.master_names.index(self.glyph.layer().name)]))
+		self.mixer_dx.edt_pos.setText(round(self.master_stems_x[self.__where()]))
 		self.mixer_dx.refreshSlider()
 
 	def get_stem_y(self):
@@ -183,6 +196,12 @@ class tool_tab(QtGui.QWidget):
 		self.mixer_dy.edt_0.setText(round(min(self.master_stems_y)))
 		self.mixer_dy.edt_1.setText(round(max(self.master_stems_y)))
 		self.mixer_dy.edt_pos.setText(round(self.master_stems_y[self.__where()]))
+		self.mixer_dy.refreshSlider()
+
+	def set_current_layer(self):
+		self.mixer_dx.edt_pos.setText(round(self.master_stems_x[self.__where()]))
+		self.mixer_dy.edt_pos.setText(round(self.master_stems_y[self.__where()]))
+		self.mixer_dx.refreshSlider()
 		self.mixer_dy.refreshSlider()
 
 	def set_axis(self):
@@ -205,11 +224,16 @@ class tool_tab(QtGui.QWidget):
 			sx = float(self.scalerX.sld_axis.value)/100.
 			sy = float(self.scalerY.sld_axis.value)/100.
 			
-			self.glyph._setPointArray(self.axis_points.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), radians(-float(self.italic_angle)), extrapolate=True))
+			# - Options
+			opt_extrapolate = self.head.btn_setExtrapolate.isChecked()
+			opt_italic = radians(-float(self.italic_angle)) if self.head.btn_setItalic.isChecked() else 0.
+
+			# - Process
+			self.glyph._setPointArray(self.axis_points.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), opt_italic, extrapolate=opt_extrapolate))
 			
 			self.glyph.update()
-			fl6.Update(fl6.CurrentGlyph())
-			#fl6.Update(self.glyph.fg)
+			#fl6.Update(fl6.CurrentGlyph())
+			fl6.Update(self.glyph.fl)
 
 	
 # - Test ----------------------
