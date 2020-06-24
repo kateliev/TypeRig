@@ -19,7 +19,7 @@ from typerig.proxy.objects.base import *
 from typerig.proxy.objects.node import *
 
 # - Init ---------------------------------
-__version__ = '0.26.3'
+__version__ = '0.26.4'
 
 # - Classes -------------------------------
 class pShape(object):
@@ -205,7 +205,7 @@ class eShape(pShape):
 			alignX, alignY = alignMode.upper()
 
 			# -- Get target for alignment
-			if any([isinstance(entity, item) for item in [fl6.flNode, pNode, Coord, pqt.QPointF]]):
+			if any([isinstance(entity, item) for item in [fl6.flNode, pNode, Coord, pqt.QtCore.QPointF]]):
 				target = Coord(entity.x, entity.y)
 
 			elif any([isinstance(entity, item) for item in [fl6.flShape, pShape, self.__class__]]):
