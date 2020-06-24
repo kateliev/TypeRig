@@ -29,7 +29,7 @@ from typerig.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRMsgSimple
 # - Init -------------------------------
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Delta', '2.25'
+app_name, app_version = 'TypeRig | Delta', '2.26'
 
 
 # - Sub widgets ------------------------
@@ -50,23 +50,23 @@ class mixerHead(QtGui.QGridLayout):
 		
 		self.btn_setExtrapolate = QtGui.QPushButton('Extrapolate')
 		self.btn_setItalic = QtGui.QPushButton('Italic')
-		self.btn_setLayer = QtGui.QPushButton('Layer refresh')
+		self.btn_setLayer = QtGui.QPushButton('Layer changed')
 
 		self.btn_setExtrapolate.setCheckable(True)
 		self.btn_setItalic.setCheckable(True) 
 		self.btn_setLayer.setCheckable(False) 
 
-		self.addWidget(QtGui.QLabel('Glyph:'),		0, 0, 1, 1)
+		self.addWidget(QtGui.QLabel('G:'),			0, 0, 1, 1)
 		self.addWidget(self.edt_glyphName,			0, 1, 1, 6)
 		self.addWidget(self.btn_refresh,			0, 7, 1, 3)
-		self.addWidget(QtGui.QLabel('Axis:'),		1, 0, 1, 1)
-		self.addWidget(self.btn_getVstem, 			1, 1, 1, 3)
-		self.addWidget(self.btn_getHstem, 			1, 4, 1, 3)
-		self.addWidget(self.btn_set_axis, 			1, 7, 1, 3)
-		self.addWidget(QtGui.QLabel('Options:'),	2, 0, 1, 1)
-		self.addWidget(self.btn_setLayer, 			2, 1, 1, 3)
-		self.addWidget(self.btn_setExtrapolate, 	2, 4, 1, 3)
-		self.addWidget(self.btn_setItalic, 			2, 7, 1, 3)
+		self.addWidget(self.btn_setLayer,			1, 1, 1, 9)
+		self.addWidget(QtGui.QLabel('A:'),			2, 0, 1, 1)
+		self.addWidget(self.btn_getVstem, 			2, 1, 1, 3)
+		self.addWidget(self.btn_getHstem, 			2, 4, 1, 3)
+		self.addWidget(self.btn_set_axis, 			2, 7, 1, 3)
+		self.addWidget(QtGui.QLabel('O:'),			3, 0, 1, 1)
+		self.addWidget(self.btn_setExtrapolate, 	3, 1, 1, 6)
+		self.addWidget(self.btn_setItalic, 			3, 7, 1, 3)
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):

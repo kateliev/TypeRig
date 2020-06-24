@@ -204,6 +204,22 @@ class pMasters(object):
 
 		return selected_axis, sorted(master_neighbors, key=lambda m: m[axis_tag])
 
+	def groupByWidth(self, double=0.):
+		master_dict = {}
+		axes_dict = {}
+
+		for axis_name, axis in self.parent.pDesignSpace.axes_dict.items():
+			for name in self.names:
+				temp_location = self.location(name)
+				temp_weight = axis.valueWeight(temp_location, double)
+				temp_width = axis.valueWidth(temp_location, double)
+				#master_storage.append((name, temp_weight, temp_width, temp_location))
+				master_dict.setdefault(temp_width, []).append((name, temp_weight))
+
+			axes_dict[axis_name] = {key:set(sorted(value, key=lambda i:i[1])) for key, value in master_dict.items()}
+
+		return axes_dict
+
 	@property
 	def masters(self):
 		return [self.locate(master_name) for master_name in self.names]
