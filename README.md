@@ -18,6 +18,7 @@ _Planned_
 #### Panel
 - [Anchors](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Anchor-Panel)
 - [Contour](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Contour-Panel)
+- [Curve](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Curve-Panel)
 - [Outline](http://kateliev.github.io/TypeRig/Docs/GUI/TR-Outline-Panel)
 - [Statistics](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Stats-Panel)
 
