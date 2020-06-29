@@ -1,15 +1,8 @@
----
-layout: category-post
-title:  "Contour Panel"
-date:   2020-06-21
-categories: TypeRig Tools
----
-
 # TypeRig GUI 
 
 ## TypeRig Panel
 
-### Contour Panel
+### Outline Panel
 The Contour tab/subpanel is a special purpose tool dealing with some contour operations in Glyph Window (GW). Its actions are governed by the [TypeRig panel masthead (MH)](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Panel-Basics).
 
 ![](./img/TR-Contour-Panel-00.png)

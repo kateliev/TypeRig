@@ -1,10 +1,3 @@
----
-layout: category-post
-title:  "Anchor Panel"
-date:   2020-06-16
-categories: TypeRig Tools
----
-
 # TypeRig GUI 
 
 ## TypeRig Panel

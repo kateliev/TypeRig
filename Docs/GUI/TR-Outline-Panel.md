@@ -1,10 +1,3 @@
----
-layout: category-post
-title:  "Outline Panel"
-date:   2020-06-18
-categories: TypeRig Tools
----
-
 # TypeRig GUI 
 
 ## TypeRig Panel
