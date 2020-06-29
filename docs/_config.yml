@@ -15,8 +15,8 @@
 # in the templates via {{ site.myvariable }}.
 title: TypeRig
 description: A scripting toolkit for FontLab 6 & 7
-baseurl: "/docs" # the subpath of your site, e.g. /blog
-url: "" # the base hostname & protocol for your site, e.g. http://example.com
+baseurl: "" # the subpath of your site, e.g. /blog
+url: "http://typerig.com" # the base hostname & protocol for your site, e.g. http://example.com
 github_repo: TypeRig # the GitHub repo name for your project
 github_username: kateliev
 
