@@ -1,5 +1,5 @@
 ---
-layout: category-post
+layout: page
 title:  "Curve Panel"
 date:   2020-06-27
 categories: TypeRig Tools

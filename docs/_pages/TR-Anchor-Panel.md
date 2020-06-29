@@ -1,5 +1,5 @@
 ---
-layout: category-post
+layout: page
 title:  "Anchor Panel"
 date:   2020-06-16
 categories: TypeRig Tools

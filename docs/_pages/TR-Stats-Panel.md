@@ -1,5 +1,5 @@
 ---
-layout: category-post
+layout: page
 title:  "Statistics Panel"
 date:   2020-06-19
 categories: TypeRig Tools

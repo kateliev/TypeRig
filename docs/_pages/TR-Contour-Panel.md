@@ -1,5 +1,5 @@
 ---
-layout: category-post
+layout: page
 title:  "Contour Panel"
 date:   2020-06-21
 categories: TypeRig Tools
