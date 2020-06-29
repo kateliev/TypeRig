@@ -1,3 +1,10 @@
+---
+layout: category-post
+title:  "Curve Panel"
+date:   2020-06-27
+categories: TypeRig Tools
+---
+
 # TypeRig GUI 
 
 ## TypeRig Panel

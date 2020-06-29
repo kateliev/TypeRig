@@ -1,3 +1,10 @@
+---
+layout: category-post
+title:  "TypeRig Tools - Overview"
+date:   2020-06-01
+categories: TypeRig Tools
+---
+
 # TypeRig GUI 
 
 ## Overview

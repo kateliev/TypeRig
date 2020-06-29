@@ -1,3 +1,9 @@
+---
+layout: category-post
+title:  "Statistics Panel"
+date:   2020-06-19
+categories: TypeRig Tools
+---
 # TypeRig GUI 
 
 ## TypeRig Panel

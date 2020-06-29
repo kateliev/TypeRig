@@ -1,3 +1,10 @@
+---
+layout: category-post
+title:  "Delta Machine"
+date:   2020-06-13
+categories: Delta Machine
+---
+
 # Delta Machine
 
 ## Quick start
