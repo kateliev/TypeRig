@@ -24,7 +24,7 @@ from typerig.proxy.objects.glyph import *
 from typerig.proxy.objects.string import *
 
 # - Init ---------------------------------
-__version__ = '0.27.2'
+__version__ = '0.27.3'
 
 # - Classes -------------------------------
 class pFontMetrics(object):
@@ -788,10 +788,18 @@ class pFont(object):
 	def fl_kerning_groups_to_dict(self, layer=None):
 		return extBiDict({item[1]: item[-1] for item in self.fl_kerning_groups(layer)})
 
-	def kerning_groups_to_dict(self, layer=None):
-		# - Semi working fixup of Build 6927 Bug
+	def kerning_groups_to_dict(self, layer=None, byPosition=False):
+		'''# - Semi working fixup of Build 6927 Bug
 		kerning_groups = self.kerning_groups(layer)
 		return {key: (list(set(kerning_groups[key][0])), kerning_groups[key][1]) for key in kerning_groups.keys()}
+		'''
+		if not byPosition:
+			return self.kerning_groups(layer).asDict()
+		else:
+			sortedByPosition = {}
+			for groupName, groupData in self.kerning_groups(layer).asDict().items():
+				sortedByPosition.setdefault(groupData[-1], []).append((groupName, groupData[0]))
+			return sortedByPosition
 
 	def dict_to_kerning_groups (self, groupDict, layer=None):
 		# - Build Group kerning from dictionary

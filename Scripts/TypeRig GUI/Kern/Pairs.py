@@ -26,7 +26,7 @@ global pMode
 pLayers = None
 pMode = 0
 
-app_name, app_version = 'TypeRig | Pairs', '1.22'
+app_name, app_version = 'TypeRig | Pairs', '1.26'
 
 # - Strings ------------------------------
 glyphSep = '/'
@@ -218,16 +218,37 @@ class TRStringGen(QtGui.QGridLayout):
 	
 	def populate(self):
 		# - Init
+		# -- Glyph names
 		self.glyphNames = self.font.getGlyphNameDict()
 		self.glyphUnicodes = self.font.getGlyphUnicodeDict(self.defEncoding)
+		
+		# -- All font members
 		addon_names = {	'*All Uppercase': self.font.uppercase(True), 
 						'*All Lowercase': self.font.lowercase(True),
 						'*All Figures': self.font.figures(True),
 						'*All Ligatures': self.font.ligatures(True),
 						'*All Alternates': self.font.alternates(True),
 						'*All Symbols': self.font.symbols(True)
-						}
+					}
+		
 		self.glyphNames.update(addon_names)
+
+		# -- Kerning groups / class kerning
+		self.kern_groups = {}
+		temp_groups = self.font.kerning_groups_to_dict(layer=None, byPosition=True)
+		
+		if len(temp_groups.keys()):
+			for key, value in temp_groups.items():
+				self.kern_groups[key] = ['@' + item[0] for item in value] 
+			
+			addon_names = {	'@All 1st classes': self.kern_groups['KernLeft'], 
+							'@All 2nd classes': self.kern_groups['KernRight'],
+							'@All Both classes': self.kern_groups['KernBothSide'],
+							'@All 1st + both': self.kern_groups['KernLeft'] + self.kern_groups['KernBothSide'], 
+							'@All 2nd + both': self.kern_groups['KernRight'] + self.kern_groups['KernBothSide']
+							}
+
+			self.glyphNames.update(addon_names)
 		
 		# - Reset
 		self.cmb_inputA.clear()
@@ -350,13 +371,13 @@ class TRStringGen(QtGui.QGridLayout):
 
 		# - Generate
 		if getAMFstring:
-			generatedString = kpxGen(inputA, inputB, (self.edt_suffixA.text, self.edt_suffixB.text))
+			generatedString = sorted(set(kpxGen(inputA, inputB, (self.edt_suffixA.text, self.edt_suffixB.text))))
 			self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
 		
 		elif toFile:
 			font_path = os.path.split(self.font.fg.path)[0]
 			save_path = QtGui.QFileDialog.getSaveFileName(None, 'Save DTL Kern Pairs file', font_path, file_formats['krn'])
-			save_pairs = sorted([(item[0] + self.edt_suffixA.text, item[1] + self.edt_suffixB.text) for item in product(inputA, inputB)])
+			save_pairs = [(item[0] + self.edt_suffixA.text, item[1] + self.edt_suffixB.text) for item in sorted(set(product(inputA, inputB)))]
 			
 			if len(save_path):
 				with krn.KRNparser(save_path, 'w') as writer:

@@ -12,7 +12,7 @@
 from itertools import product
 
 # - Init --------------------------------
-__version__ = '0.26.1'
+__version__ = '0.26.2'
 
 # - Functions ---------------------------
 # -- Unicode ----------------------------
