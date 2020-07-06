@@ -422,7 +422,8 @@ class TRStringGen(QtGui.QGridLayout):
 	
 	def generateOTGroups(self, toFile=False):
 		# - Init
-		kern_groups = self.font.fl_kerning_groups_to_dict()
+		temp_groups = self.font.kerning_groups_to_dict(layer=None, byPosition=False, sortUnicode=True)
+		kern_groups = {groupName: groupData[0] for groupName, groupData in temp_groups.items()}
 		
 		if toFile:
 			font_path = os.path.split(self.font.fg.path)[0]

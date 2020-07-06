@@ -788,17 +788,21 @@ class pFont(object):
 	def fl_kerning_groups_to_dict(self, layer=None):
 		return extBiDict({item[1]: item[-1] for item in self.fl_kerning_groups(layer)})
 
-	def kerning_groups_to_dict(self, layer=None, byPosition=False):
-		'''# - Semi working fixup of Build 6927 Bug
-		kerning_groups = self.kerning_groups(layer)
-		return {key: (list(set(kerning_groups[key][0])), kerning_groups[key][1]) for key in kerning_groups.keys()}
-		'''
+	def kerning_groups_to_dict(self, layer=None, byPosition=False, sortUnicode=False):
+		kern_groups = self.kerning_groups(layer).asDict()
+		if sortUnicode:
+			temp_groups = {}
+			for groupName, groupData in kern_groups.items():
+				temp_groups[groupName] = (sorted(groupData[0], key=lambda glyph_name: self.glyph(glyph_name).unicode), groupData[1])
+
+			kern_groups = temp_groups
+
 		if not byPosition:
-			return self.kerning_groups(layer).asDict()
+			return kern_groups			
 		else:
 			sortedByPosition = {}
-			for groupName, groupData in self.kerning_groups(layer).asDict().items():
-				sortedByPosition.setdefault(groupData[-1], []).append((groupName, groupData[0]))
+			for groupName, groupData in kern_groups.items():
+				sortedByPosition.setdefault(groupData[1], []).append((groupName, groupData[0]))
 			return sortedByPosition
 
 	def dict_to_kerning_groups (self, groupDict, layer=None):
