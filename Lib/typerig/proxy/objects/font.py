@@ -789,6 +789,15 @@ class pFont(object):
 		return extBiDict({item[1]: item[-1] for item in self.fl_kerning_groups(layer)})
 
 	def kerning_groups_to_dict(self, layer=None, byPosition=False, sortUnicode=False):
+		'''Return dictionary containing kerning groups 
+		Args:
+			layer (None, Int, String): Extract kerning data for layer specified;
+			byPosition (bool): Dictionary by class kerning positions - KernLeft(1st), KernRight(2nd) or KernBothSide(Both);
+			sortUnicode (bool): Sort members of kern group according to their Unicode value.
+		
+		Returns:
+			dict
+		'''
 		kern_groups = self.kerning_groups(layer).asDict()
 		if sortUnicode:
 			temp_groups = {}

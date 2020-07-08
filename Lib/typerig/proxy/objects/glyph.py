@@ -261,6 +261,10 @@ class pGlyph(object):
 		else:
 			return [extend(shape) for shape in self.layer(layer).shapes]
 
+	def getElementNames(self, layer=None):
+		'''Return names of elements references used in glyph.'''
+		return [shape.shapeData.name for shape in self.shapes(layer)]
+
 	def dereference(self, layer=None):
 		'''Remove all shape references but leave components.
 		Args:

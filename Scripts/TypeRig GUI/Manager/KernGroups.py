@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kern Classes', '2.9'
+app_name, app_version = 'TypeRig | Kern Classes', '3.3'
 alt_mark = '.'
 
 # - Dependencies -----------------
@@ -157,19 +157,19 @@ class WKernGroups(QtGui.QWidget):
 		act_data_save = QtGui.QAction('Save TypeRig Classes (JSON)', self)
 		act_data_import = QtGui.QAction('Import FontLab Classes (JSON)', self)
 		act_data_export = QtGui.QAction('Export FontLab Classes (JSON)', self)
-		act_data_import_font = QtGui.QAction('Import Classes from Font', self)
-		act_data_build_composite = QtGui.QAction('Build Classes from References', self)
+		act_data_import_font = QtGui.QAction('Load Classes from Font', self)
+		act_data_build_composite = QtGui.QAction('Auto Build Classes', self)
 		act_data_reset = QtGui.QAction('Reset Font Class Data', self)
 		act_data_write = QtGui.QAction('Write class data to Font', self)
 
+		self.menu_data.addAction(act_data_import_font)
+		self.menu_data.addAction(act_data_build_composite)
+		self.menu_data.addSeparator()
 		self.menu_data.addAction(act_data_open)
 		self.menu_data.addAction(act_data_save)
 		self.menu_data.addSeparator()
 		self.menu_data.addAction(act_data_import)
 		self.menu_data.addAction(act_data_export)
-		self.menu_data.addSeparator()
-		self.menu_data.addAction(act_data_import_font)
-		self.menu_data.addAction(act_data_build_composite)
 		self.menu_data.addSeparator()
 		self.menu_data.addAction(act_data_reset)
 		self.menu_data.addAction(act_data_write)
@@ -547,20 +547,17 @@ class WKernGroups(QtGui.QWidget):
 
 	def from_font(self):
 		temp_dict = {}
-		msg = QtGui.QMessageBox(QtGui.QMessageBox.Warning, 'TypeRig: Warning', 'Due to fatal class kerning bug in FontLab VI (build 6927) the classes cannot be loaded reliably from font.\n\nPress OK to continue loading class information from font without predefined mode (1st, 2nd and etc.)', QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel, self)
-				
-		if msg.exec_() == 1024:
-			for layer in self.active_font.masters():
-				fl_kern_group_dict = self.active_font.fl_kerning_groups_to_dict(layer)
-				temp_dict[layer] = {key: (value, 'UNKNOWN') for key,value in fl_kern_group_dict.iteritems()}
-			
-			self.update_data(temp_dict)
 		
+		for layer in self.active_font.masters():
+			fl_kern_group_dict = self.active_font.kerning_groups_to_dict(layer, False, False)
+			temp_dict[layer] = fl_kern_group_dict
+			
+		self.update_data(temp_dict)
 
 	def from_composites(self):
 		# - Init
-		font_workset_names = [glyph.name for glyph in self.active_font.uppercase()] + [glyph.name for glyph in self.active_font.lowercase()] + [glyph.name for glyph in self.active_font.alternates()]
-		ban_list = ['sups', 'subs', 'ss10', 'ss09', 'ss08', 'dnom', 'numr', 'notdef']
+		font_workset_names = [glyph.name for glyph in self.active_font.uppercase() + self.active_font.lowercase()]# + self.active_font.alternates()]
+		ban_list = ['sups', 'subs', 'dnom', 'numr', 'notdef', 'null']
 		class_dict, temp_dict = {}, {}
 		
 		# - Process
@@ -569,16 +566,18 @@ class WKernGroups(QtGui.QWidget):
 		for glyph in process_glyphs:
 			if all([banned_item not in glyph.name for banned_item in ban_list]):
 				layer = self.cmb_layer.currentText
-				clear_comp = [comp.shapeData.name for comp in glyph.shapes(layer) + glyph.components(layer) if comp.shapeData.name in font_workset_names and comp.shapeData.name != glyph.name]
-				
-				if len(clear_comp) == 1:
-					class_dict.setdefault(clear_comp[0], set([clear_comp[0]])).add(glyph.name)
 
-				if len(clear_comp) == 0 and alt_mark in glyph.name:
-					class_dict.setdefault(glyph.name.split(alt_mark)[0], set([glyph.name.split(alt_mark)[0]])).add(glyph.name)
+				if glyph.layer(layer) is not None:
+					clear_comp = [name for name in glyph.getElementNames(layer) + glyph.getCompositionNames(layer) if name in font_workset_names and name != glyph.name]
+					
+					if len(clear_comp) == 1:
+						class_dict.setdefault(clear_comp[0], set([clear_comp[0]])).add(glyph.name)
 
-				if len(clear_comp) > 1:
-					print 'WARN:\t Glyph: %s; Multiple components: %s' %(glyph.name, clear_comp)
+					if len(clear_comp) == 0 and alt_mark in glyph.name:
+						class_dict.setdefault(glyph.name.split(alt_mark)[0], set([glyph.name.split(alt_mark)[0]])).add(glyph.name)
+
+					if len(clear_comp) > 1:
+						print 'WARN:\t Glyph: %s; Multiple components: %s' %(glyph.name, clear_comp)
 		
 		for key, value in class_dict.iteritems():
 			temp_dict['%s_1' %key] = (sorted(value), 'KernLeft')
