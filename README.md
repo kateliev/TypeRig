@@ -21,7 +21,7 @@ _Planned_
 - [Curve](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Curve-Panel)
 - [Guidelines](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Guide-Panel)
 - [Metrics](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Metrics-Panel)
-- [Nodes](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Nodes-Panel)
+- [Nodes](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Node-Panel)
 - [Outline](http://kateliev.github.io/TypeRig/Docs/GUI/TR-Outline-Panel)
 - [Statistics](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Stats-Panel)
 
