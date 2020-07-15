@@ -9,7 +9,7 @@ The Contour tab/subpanel is a special purpose tool dealing with some contour ope
 _A typical view of Contour panel_
 
 #### Basic operations
-In this section reside are several buttons covering the following basic operations in accordance to layer options selected in MH:
+In this section reside several buttons covering the following basic operations in accordance to layer options selected in MH:
 - **Close**: Will close a selected open contour;
 - **Start**: Will set a selected node as a star node;
 - **CW**: Will set the contour direction to Clockwise _(TrueType direction)_;

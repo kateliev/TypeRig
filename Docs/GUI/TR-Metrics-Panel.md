@@ -54,8 +54,8 @@ _For instance lets imagine that you have an expression in LSB field that reads "
 _Set font metrics tool_
 
 This is a special purpose tool for setting font metrics by data found in the current active glyph. It has two rows:
-- One for choosing the data source, where **Selection** button will take the coordinate value of currently selected node or **Glyph BBox** that will use the outline bounding box as a reference;
-- The second for font metric data that has been set.
+- The **first** for choosing the data source, where **Selection** button will take the coordinate value of currently selected node or **Glyph BBox** that will use the outline bounding box as a reference;
+- The **second** for selecting font metric data that has been set.
 
 _For example imagine the following - you have redrawn a base glyph that would dictate a change of one or more of the font metrics (for example an /n). If you select the node(s) that should be on x-height and click "Selection" + "Xhgt." the font metric in question will be relocated to the node of interest. This is done to all layers selected in MH so metrics on all layers will be changed in accordance to compatible nodes found on the other layers._
 
