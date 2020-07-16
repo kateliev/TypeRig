@@ -12,6 +12,7 @@
 from __future__ import print_function
 
 import fontlab as fl6
+import fontgate as fgt
 import PythonQt as pqt
 
 from typerig.core.objects.collection import extBiDict

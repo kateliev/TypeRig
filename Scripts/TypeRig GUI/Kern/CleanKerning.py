@@ -12,7 +12,8 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Cleanup', '1.1'
+app_name, app_version = 'TypeRig | Cleanup', '1.5'
+temp_group_prefix = '_'
 
 # - Dependencies -----------------
 from os import path
@@ -39,6 +40,8 @@ class TRkernClean(QtGui.QGridLayout):
 		self.cmb_all_fonts = QtGui.QComboBox()
 		self.cmb_layers = QtGui.QComboBox()
 
+		self.chk_exceptions_fix_groups = QtGui.QCheckBox('Fix Group Names')
+
 		self.spn_exceptions_delta = QtGui.QSpinBox()
 		self.spn_exceptions_delta.setValue(5)
 		self.spn_exceptions_delta.setMaximum(1000)
@@ -46,8 +49,8 @@ class TRkernClean(QtGui.QGridLayout):
 		self.btn_exceptions_report.setToolTip('Report exceptions of class kerning within value given')
 		self.btn_exceptions_remove.setToolTip('Remove exceptions of class kerning within value given')
 
-		self.btn_font_refresh.clicked.connect(self.fonts_refresh)
-		self.cmb_all_fonts.currentIndexChanged.connect(self.fonts_changed)
+		self.btn_font_refresh.clicked.connect(lambda:self.fonts_refresh())
+		self.cmb_all_fonts.currentIndexChanged.connect(lambda:self.fonts_changed())
 		self.btn_exceptions_report.clicked.connect(lambda: self.kern_exceptions(False, False))
 		self.btn_exceptions_remove.clicked.connect(lambda: self.kern_exceptions(True, False))
 		self.btn_exceptions_flats.clicked.connect(lambda: self.kern_exceptions(False, True))
@@ -61,8 +64,9 @@ class TRkernClean(QtGui.QGridLayout):
 		self.addWidget(QtGui.QLabel('\nKerning: Clean exceptions'), 4, 0, 1, 6)
 		self.addWidget(QtGui.QLabel('Layer:'), 						5, 0, 1, 1)
 		self.addWidget(self.cmb_layers, 							5, 1, 1, 5)
-		self.addWidget(QtGui.QLabel('Difference:'),					6, 0, 1, 1)
-		self.addWidget(self.spn_exceptions_delta, 					6, 1, 1, 5)
+		self.addWidget(QtGui.QLabel('Delta:'),						6, 0, 1, 1)
+		self.addWidget(self.spn_exceptions_delta, 					6, 1, 1, 2)
+		self.addWidget(self.chk_exceptions_fix_groups, 				6, 3, 1, 3)
 		self.addWidget(self.btn_exceptions_report, 					7, 0, 1, 3)
 		self.addWidget(self.btn_exceptions_remove, 					7, 3, 1, 3)
 
@@ -71,10 +75,13 @@ class TRkernClean(QtGui.QGridLayout):
 
 	def fonts_refresh(self):
 		self.all_fonts = fl6.AllFonts()
-		self.font_files = [path.split(font.path)[1] for font in self.all_fonts]
-		self.cmb_all_fonts.clear()
-		self.cmb_all_fonts.addItems(self.font_files)
-		self.fonts_changed()
+		if len(self.all_fonts):
+			self.font_files = [path.split(font.path)[1] for font in self.all_fonts]
+			self.cmb_all_fonts.blockSignals(True)
+			self.cmb_all_fonts.clear()
+			self.cmb_all_fonts.addItems(self.font_files)
+			self.cmb_all_fonts.blockSignals(False)
+			self.fonts_changed()
 		
 	def fonts_changed(self):
 		currentFont = self.all_fonts[self.font_files.index(self.cmb_all_fonts.currentText)]
@@ -87,12 +94,24 @@ class TRkernClean(QtGui.QGridLayout):
 		# - Init
 		work_layers = self.font.masters() if self.cmb_layers.currentIndex == 0 else [self.cmb_layers.currentText]
 		delete_pairs = []
+		extend_pairs = []
 
 		for layer in work_layers:
-			layer_kerning = pKerning(self.font.kerning(layer))
+			# - Init
+			fg_layer_kerning = self.font.kerning(layer)
+			
+			# - Fix groups
+			if self.chk_exceptions_fix_groups.isChecked():
+				for group_name in fg_layer_kerning.groups.keys():
+					# !!! Fuckin' BUG - keys are in unicode but rename takes only ascii?!?!
+					fg_layer_kerning.groups.rename(group_name.encode('ascii','ignore'), temp_group_prefix + group_name.encode('ascii','ignore'))
+
+			# - Get group data
+			layer_kerning = pKerning(fg_layer_kerning)
 			layer_groups = layer_kerning.groupsBiDict()
 			print '\nFONT: %s;\tLAYER:\t %s\n' %(self.font.PSfullName, layer) + '-'*60 
 
+			# - Process
 			for pair, value in layer_kerning.fg.items():
 				left_in_group = None
 				right_in_group = None
@@ -126,15 +145,30 @@ class TRkernClean(QtGui.QGridLayout):
 								if not clear_exceptions and not report_flats:
 									print 'FOUND:\t Exception: %s|%s %s;\tFrom: %s|%s %s.' %(pair.left.id, pair.right.id, value, left_in_group[0], right_in_group[0], group_value)
 						else:
+							extend_pairs.append((pair.left.id, pair.right.id, left_in_group, right_in_group))
+							
 							if report_flats:
 								print 'WARN:\t Plain pair: %s|%s %s;\tCould be EXTENDED to class kerning: %s|%s.' %(pair.left.id, pair.right.id, value, left_in_group[0], right_in_group[0])
 
 			if clear_exceptions:
+				# - Remove pairs
 				for pair in delete_pairs:
 					layer_kerning.fg.remove(pair)
 
-				print 'DONE:\t Removed exception pairs: %s;\tLayer: %s.\n' %(len(delete_pairs), layer)
+				print '\nDONE:\t Removed exception pairs: %s;\tLayer: %s.\n' %(len(delete_pairs), layer)
+			
+			if not clear_exceptions and not report_flats:
+				print '\nDONE:\t Found exception pairs: %s;\tLayer: %s.\n' %(len(delete_pairs), layer)
 
+			if report_flats:
+				print '\nDONE:\t Found flat pairs that could be extended: %s;\tLayer: %s.\n' %(len(extend_pairs), layer)				
+
+			# - Un-Fix groups
+			if self.chk_exceptions_fix_groups.isChecked():
+				for group_name in layer_kerning.groups().keys():
+					if temp_group_prefix == group_name[0]:
+						layer_kerning.renameGroup(group_name.encode('ascii','ignore'), group_name[1:].encode('ascii','ignore'))
+			
 		if clear_exceptions:
 			self.font.update()
 	
