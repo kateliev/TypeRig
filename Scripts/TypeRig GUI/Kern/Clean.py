@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Cleanup', '0.2'
+app_name, app_version = 'TypeRig | Cleanup', '0.3'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -94,17 +94,20 @@ class TRkernClean(QtGui.QGridLayout):
 					if left_in_group is not None and right_in_group is not None:
 						group_value = layer_kerning.fg[left_in_group[0], right_in_group[0]]
 						
-						if abs(group_value - value) <= self.spn_exceptions_delta.value:
-							delete_pairs.append((pair.left.id, pair.right.id))
-							
-							if not clear:
-								print 'FOUND:\t Exception: %s:%s %s;\tFrom: %s:%s %s.' %(pair.left.id, pair.right.id, value, left_in_group[0], right_in_group[0], group_value)
+						if group_value is not None:
+							if abs(group_value - value) <= self.spn_exceptions_delta.value:
+								delete_pairs.append((pair.left.id, pair.right.id))
+								
+								if not clear:
+									print 'FOUND:\t Exception: %s|%s %s;\tFrom: %s|%s %s.' %(pair.left.id, pair.right.id, value, left_in_group[0], right_in_group[0], group_value)
+						else:
+							print 'WARN:\t Plain pair: %s|%s %s;\tCould be EXTENDED to class kerning: %s|%s.' %(pair.left.id, pair.right.id, value, left_in_group[0], right_in_group[0])
 
 			if clear:
 				for pair in delete_pairs:
 					layer_kerning.fg.remove(pair)
 
-				print 'DONE:\t Removed exception pairs: %s;\tLayer: %s\n' %(len(delete_pairs), layer)
+				print 'DONE:\t Removed exception pairs: %s;\tLayer: %s.\n' %(len(delete_pairs), layer)
 
 		if clear:
 			self.font.update()
