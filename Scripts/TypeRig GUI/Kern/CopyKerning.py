@@ -96,11 +96,7 @@ class tool_tab(QtGui.QWidget):
 
 		# - Set Widget
 		self.setLayout(layoutV)
-		self.setWindowTitle('%s %s' %(app_name, app_version))
-		self.setGeometry(300, 300, 250, 500)
-		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
-		self.show()
-
+		
 	def update_data(self, source):
 		self.class_data, temp_data = {}, {}
 
