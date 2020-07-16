@@ -55,7 +55,22 @@ Alignment options are:
 - **Vertical** _(row)_: Aligns to a percent + adjustment (in units) of measured _BBox_ or _advance width_ of the currently active glyph;
 - **Horizontal** _(row)_: offers the same functionality as explained above, but for _BBox height_, _vertical font metrics_ and _advance height_.
 
+#### Nodes: Channel processing and slopes
+This toolset offers some channel processing instruments as well as various tools for copy/pasting of outlines slopes all synchronized across layers selected in TR Masthead.
 
+![](./img/TR-Node-Panel-04.png)
+_Channel processing and slope tools of Node panel_
+
+- **Lineup Min/Max Y**: Will align all selected nodes on a imaginary straight line that passes between those two of them that have minimum and maximum Y coordinates;
+- **Lineup Min/Max X**: The same as above but for minimum and maximum X coordinates;
+_Usage example: Chanel processing of scanned graphics or noisy outlines. Removing rough (raw) effects from straight lines. Aligning nodes of where horizontal stems meet with inclined ones (like horizontal of an /A). Repairing misaligned nodes after slant and etc._
+- **Copy slope**: Copy the slope between any two selected nodes into memory;
+- **Italic**: Set the slope in memory equal to that of font italic angle;
+- **Min Y**: Will paste the slope in memory to current selection so that all nodes selected will align on an imaginary ray starting from the node with minimum Y coordinate;
+- **Min X**: same as above but from the node with maximum Y coordinate;
+- **Flip Min**: Same as _Min Y_ but with the slope flipped horizontally;
+- **Flip Max**: Same as _Max Y_ but with the slope flipped horizontally;
+_Usage example: Copying the slopes of the left part of an /V and pasting it onto the right. Removing optical corrections of inclined stem outlines and making them parallel for repair (or other) and then back again._
 
 **Panel development notes**
 - Stability: High - no known issues major issues.
