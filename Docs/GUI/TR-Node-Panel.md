@@ -72,6 +72,27 @@ _Usage example: Chanel processing of scanned graphics or noisy outlines. Removin
 - **Flip Max**: Same as _Max Y_ but with the slope flipped horizontally;
 _Usage example: Copying the slopes of the left part of an /V and pasting it onto the right. Removing optical corrections of inclined stem outlines and making them parallel for repair (or other) and then back again._
 
+#### Nodes: Copy/Paste
+Allows copying of contour parts from one place to another. A tool aimed at keeping consistency within glyphs with similar design, but can be used anywhere if applicable as long as you use it with care.
+
+![](./img/TR-Node-Panel-05.png)
+_Copy/paste parts of contour with several positioning potions_
+
+There are two essential sets of commands: _Main actions:_
+- **Copy** : Will copy any set of selected nodes into memory. _Beware that the nodes should reside on the same contour and should be consequential. Contours start points should never be in the middle of selection, but beginning or end are acceptable. Otherwise you might encounter unpredictable results that in most cases are undo-able._
+- **Paste**: Will paste nodes from memory with the following two modes: **Click** (default) requires a selection of nodes equal in count (but not in type) to those in memory; **<ALT> + click** (inject) will inject the nodes in memory behind the last _(or single)_ node in selection;
+
+The nodes in memory can be pasted according the following rules:
+- **Nothing is active**: will just paste on exactly the same location as the source without any transformations;
+- **TL, TR, BL, BR**: Will reposition the source data in respect to destination selection so that it aligns at Top Left (TL), Top Right(TR), Bottom Left (BL), Bottom Right (BR). _For example if you choose TL Pasting algorithm - it will find the lowest, leftmost part of the source as well as the destination bounding boxes and will align the whole pasted contour segment so that they match_
+- **Flip H, Flip V**: Will mirror the source horizontally or vertically;
+- **Reverse**: Will reverse the order of nodes in memory.
+
+
+#### Nodes: Movement
+
+
+
 **Panel development notes**
 - Stability: High - no known issues major issues.
 - Development priority: Low - not likely to be changed often.

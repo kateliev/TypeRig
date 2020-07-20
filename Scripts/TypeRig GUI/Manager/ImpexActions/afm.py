@@ -18,11 +18,11 @@ from PythonQt import QtCore
 from typerig.gui import QtGui
 
 from typerig.proxy import pFont
+from typerig.core.func.math import round2base
 
-# - Init ---------------------------------------------------
-file_formats = {'afm':'Adobe Font Metrics (*.afm)',
-				'svg': 'Scalable Vector Graphics (*.svg)'
-}
+# - Init --------------------------
+app_name, app_version = 'TypeRig | AFM Import & Export', '0.5'
+file_formats = {'afm':'Adobe Font Metrics (*.afm)'}
 
 # - Action Objects ---------------
 class action_import_afm_kerning(QtGui.QWidget):
@@ -37,12 +37,30 @@ class action_import_afm_kerning(QtGui.QWidget):
 		self.btn_file_open = QtGui.QPushButton('Open')
 		self.btn_file_open.clicked.connect(self.afm_import_kerning)
 
-		self.chk_name_replace = QtGui.QCheckBox('Strip Filename')
+		self.chk_name_replace = QtGui.QCheckBox('Strip Filename:')
 		self.chk_kerning_clear = QtGui.QCheckBox('Clear existing kerning')
 		self.chk_kerning_expand = QtGui.QCheckBox('Expand to class kerning after import')
+		self.chk_kerning_round = QtGui.QCheckBox('Round kerning:')
+		self.chk_kerning_posit = QtGui.QCheckBox('Drop Positive pairs above:')
+		self.chk_kerning_negat = QtGui.QCheckBox('Drop Negative pairs below:')
+
+		self.spn_kerning_rbase = QtGui.QSpinBox()
+		self.spn_kerning_posit = QtGui.QSpinBox()
+		self.spn_kerning_negat = QtGui.QSpinBox()
+
+		self.spn_kerning_rbase.setValue(5)
+		self.spn_kerning_rbase.setMaximum(10)
+		self.spn_kerning_posit.setMaximum(1000)
+		self.spn_kerning_negat.setMaximum(1000)
+
+		self.spn_kerning_rbase.setSuffix(' u')
+		self.spn_kerning_posit.setSuffix(' u')
+		self.spn_kerning_negat.setSuffix(' u')
+
 		self.chk_name_replace.setChecked(True)
 		self.chk_kerning_clear.setChecked(True)
 		self.chk_kerning_expand.setChecked(True)
+		self.chk_kerning_round.setChecked(False)
 		
 		self.edt_name_replace = QtGui.QLineEdit()
 		self.edt_name_replace.setPlaceholderText('Drop String')
@@ -52,9 +70,15 @@ class action_import_afm_kerning(QtGui.QWidget):
 		lay_wgt.addWidget(QtGui.QLabel('(AFM) Kerning Import:'),	0, 0, 1, 10)
 		lay_wgt.addWidget(self.chk_name_replace,	1, 0, 1, 2)
 		lay_wgt.addWidget(self.edt_name_replace,	1, 2, 1, 8)
-		lay_wgt.addWidget(self.chk_kerning_clear,	2, 0, 1, 10)
-		lay_wgt.addWidget(self.chk_kerning_expand,	3, 0, 1, 10)
-		lay_wgt.addWidget(self.btn_file_open,		4, 0, 1, 10)
+		lay_wgt.addWidget(self.chk_kerning_round,	2, 0, 1, 5)
+		lay_wgt.addWidget(self.spn_kerning_rbase,	2, 5, 1, 5)
+		lay_wgt.addWidget(self.chk_kerning_posit,	3, 0, 1, 5)
+		lay_wgt.addWidget(self.spn_kerning_posit,	3, 5, 1, 5)
+		lay_wgt.addWidget(self.chk_kerning_negat,	4, 0, 1, 5)
+		lay_wgt.addWidget(self.spn_kerning_negat,	4, 5, 1, 5)
+		lay_wgt.addWidget(self.chk_kerning_clear,	5, 0, 1, 10)
+		lay_wgt.addWidget(self.chk_kerning_expand,	6, 0, 1, 10)
+		lay_wgt.addWidget(self.btn_file_open,		7, 0, 1, 10)
 		
 		self.setLayout(lay_wgt)
 
@@ -88,12 +112,33 @@ class action_import_afm_kerning(QtGui.QWidget):
 				
 				# - Process
 				if len(kerning_afm):
+					# - Init
 					if self.chk_kerning_clear.isChecked():
 						kerning_current.clear()
 
+					# - Modify
+					new_kerning_afm = []
+
+					if any([self.chk_kerning_round.isChecked(), self.chk_kerning_negat.isChecked(), self.chk_kerning_posit.isChecked()]):
+						for pair, value in kerning_afm:
+							if self.chk_kerning_negat.isChecked() and value <= self.spn_kerning_negat.value:
+								continue
+
+							if self.chk_kerning_posit.isChecked() and value >= self.spn_kerning_posit.value:
+								continue
+
+							if self.chk_kerning_round.isChecked():
+								value = round2base(value, self.spn_kerning_rbase.value)
+
+							new_kerning_afm.append((pair, value))
+
+					else:
+						new_kerning_afm = kerning_afm
+
+					# - Set
 					kerning_changed = True
 					kerning_count += 1
-					kerning_current.setPlainPairs(kerning_afm)
+					kerning_current.setPlainPairs(new_kerning_afm)
 					print 'DONE:\t Layer: %s\t Import AFM plain pairs kerning from: %s' %(layer_name, work_file)
 
 		if kerning_changed:
