@@ -12,11 +12,12 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Cleanup', '1.5'
+app_name, app_version = 'TypeRig | Cleanup', '1.8'
 temp_group_prefix = '_'
 
 # - Dependencies -----------------
 from os import path
+from pprint import pprint
 import fontlab as fl6
 import fontgate as fgt
 
@@ -36,6 +37,7 @@ class TRkernClean(QtGui.QGridLayout):
 		self.btn_exceptions_report = QtGui.QPushButton('Report')
 		self.btn_exceptions_remove = QtGui.QPushButton('Clear')
 		self.btn_exceptions_flats = QtGui.QPushButton('Report Extendable Flat Pairs')
+		self.btn_report_mismatch = QtGui.QPushButton('Report Pair Mis-match')
 
 		self.cmb_all_fonts = QtGui.QComboBox()
 		self.cmb_layers = QtGui.QComboBox()
@@ -48,27 +50,30 @@ class TRkernClean(QtGui.QGridLayout):
 		
 		self.btn_exceptions_report.setToolTip('Report exceptions of class kerning within value given')
 		self.btn_exceptions_remove.setToolTip('Remove exceptions of class kerning within value given')
+		self.btn_report_mismatch.setToolTip('Report kerning pairs that are not present in all masters')
 
 		self.btn_font_refresh.clicked.connect(lambda:self.fonts_refresh())
 		self.cmb_all_fonts.currentIndexChanged.connect(lambda:self.fonts_changed())
 		self.btn_exceptions_report.clicked.connect(lambda: self.kern_exceptions(False, False))
 		self.btn_exceptions_remove.clicked.connect(lambda: self.kern_exceptions(True, False))
 		self.btn_exceptions_flats.clicked.connect(lambda: self.kern_exceptions(False, True))
+		self.btn_report_mismatch.clicked.connect(self.report_mismatch)
 
 		# -- Build
 		self.addWidget(QtGui.QLabel('Process Font:'),				0, 0, 1, 6)
 		self.addWidget(self.cmb_all_fonts, 							1, 0, 1, 5)
 		self.addWidget(self.btn_font_refresh, 						1, 5, 1, 1)
-		self.addWidget(QtGui.QLabel('\nKerning: Flat pairs'), 		2, 0, 1, 6)
+		self.addWidget(QtGui.QLabel('\nKerning: Owerview'), 		2, 0, 1, 6)
 		self.addWidget(self.btn_exceptions_flats, 					3, 0, 1, 6)
-		self.addWidget(QtGui.QLabel('\nKerning: Clean exceptions'), 4, 0, 1, 6)
-		self.addWidget(QtGui.QLabel('Layer:'), 						5, 0, 1, 1)
-		self.addWidget(self.cmb_layers, 							5, 1, 1, 5)
-		self.addWidget(QtGui.QLabel('Delta:'),						6, 0, 1, 1)
-		self.addWidget(self.spn_exceptions_delta, 					6, 1, 1, 2)
-		self.addWidget(self.chk_exceptions_fix_groups, 				6, 3, 1, 3)
-		self.addWidget(self.btn_exceptions_report, 					7, 0, 1, 3)
-		self.addWidget(self.btn_exceptions_remove, 					7, 3, 1, 3)
+		self.addWidget(self.btn_report_mismatch, 					4, 0, 1, 6)
+		self.addWidget(QtGui.QLabel('\nKerning: Clean exceptions'), 6, 0, 1, 6)
+		self.addWidget(QtGui.QLabel('Layer:'), 						7, 0, 1, 1)
+		self.addWidget(self.cmb_layers, 							7, 1, 1, 5)
+		self.addWidget(QtGui.QLabel('Delta:'),						8, 0, 1, 1)
+		self.addWidget(self.spn_exceptions_delta, 					8, 1, 1, 2)
+		self.addWidget(self.chk_exceptions_fix_groups, 				8, 3, 1, 3)
+		self.addWidget(self.btn_exceptions_report, 					9, 0, 1, 3)
+		self.addWidget(self.btn_exceptions_remove, 					9, 3, 1, 3)
 
 		# - Init
 		self.fonts_refresh()
@@ -89,6 +94,23 @@ class TRkernClean(QtGui.QGridLayout):
 		self.cmb_layers.clear()
 		self.cmb_layers.addItems(['All masters'] + self.font.masters())
 		print '\nWARN:\t Active font changed to: %s;\t Path: %s' %(self.font.PSfullName, currentFont.path)
+
+	def report_mismatch(self):
+		# - Init
+		font_kerning = []
+
+		# - Process
+		for layer in self.font.masters():
+			layer_kerning = self.font.kerning_dump(layer, pairs_only=True)
+			if len(layer_kerning):
+				font_kerning.append(set(layer_kerning))
+
+
+		mismatch = list(reduce(set.union, font_kerning) - reduce(set.intersection, font_kerning))
+		print '\nFONT: %s;\tPairs not present in all masters:\t %s\n' %(self.font.PSfullName, len(mismatch)) + '-'*60 
+
+		for pair in mismatch:
+			print 'MIS-MATCH: %s | %s' %pair
 
 	def kern_exceptions(self, clear_exceptions=False, report_flats=False):
 		# - Init
@@ -143,12 +165,12 @@ class TRkernClean(QtGui.QGridLayout):
 								delete_pairs.append((pair.left.id, pair.right.id))
 								
 								if not clear_exceptions and not report_flats:
-									print 'FOUND:\t Exception: %s|%s %s;\tFrom: %s|%s %s.' %(pair.left.id, pair.right.id, value, left_in_group[0], right_in_group[0], group_value)
+									print 'FOUND:\t Exception: %s | %s %s;\tFrom: %s | %s %s.' %(pair.left.id, pair.right.id, value, left_in_group[0], right_in_group[0], group_value)
 						else:
 							extend_pairs.append((pair.left.id, pair.right.id, left_in_group, right_in_group))
 							
 							if report_flats:
-								print 'WARN:\t Plain pair: %s|%s %s;\tCould be EXTENDED to class kerning: %s|%s.' %(pair.left.id, pair.right.id, value, left_in_group[0], right_in_group[0])
+								print 'WARN:\t Plain pair: %s | %s %s;\tCould be EXTENDED to class kerning: %s | %s.' %(pair.left.id, pair.right.id, value, left_in_group[0], right_in_group[0])
 
 			if clear_exceptions:
 				# - Remove pairs

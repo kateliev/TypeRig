@@ -24,7 +24,7 @@ from typerig.proxy.objects.glyph import *
 from typerig.proxy.objects.string import *
 
 # - Init ---------------------------------
-__version__ = '0.27.3'
+__version__ = '0.27.4'
 
 # - Classes -------------------------------
 class pFontMetrics(object):
@@ -777,6 +777,35 @@ class pFont(object):
 			kern_list.append([[item.asTuple() for item in key.asTuple()], value])
 
 		return kern_list
+
+	def kerning_dump(self, layer=None, mark_groups='@', pairs_only=False):
+		'''Dump layer kerning to simple tuples.
+		Args:
+			layer (None, Int, String): Extract kerning data for layer specified;
+			mark_groups (String): Mark group kerning with special symbol
+			pairs_only (Bool): Export pairs without value
+		
+		Returns:
+			pairs_only is False:	list(tuple(tuple(str(First), str(Second))), Int(Value)))
+			pairs_only is True:		list(tuple(str(First), str(Second)))
+		'''
+		layer_kernig = self.kerning(layer)
+		save_pairs = []
+
+		for kern_pair, value in layer_kernig.items():
+			current_pair = kern_pair.asTuple()
+			a_tup = current_pair[0].asTuple()
+			b_tup = current_pair[1].asTuple()
+
+			a = mark_groups + a_tup[0] if a_tup[1] == 'groupMode' else a_tup[0]
+			b = mark_groups + b_tup[0] if b_tup[1] == 'groupMode' else b_tup[0]
+			
+			if pairs_only:
+				save_pairs.append((a, b))
+			else:
+				save_pairs.append(((a, b), value))
+
+		return save_pairs
 
 	def kerning_groups(self, layer=None):
 		'''Return the fonts kerning groups object (fgKerningGroups) no matter the reference.'''
