@@ -18,7 +18,7 @@ import PythonQt as pqt
 from typerig.core.objects.collection import extBiDict
 
 # - Init ---------------------------------
-__version__ = '0.26.0'
+__version__ = '0.26.3'
 
 # - Classes -------------------------------
 class pKerning(object):
@@ -50,6 +50,16 @@ class pKerning(object):
 		return '<%s pairs=%s groups=%s external=%s>' % (self.__class__.__name__, len(self.kerning), len(self.groups().keys()), self.useExternalGroupData)
 
 	# - Basic functions -------------------------------------
+	def clear(self):
+		clear_list = []
+		
+		for pair in self.fg.keys():
+			left, right = pair.asTuple()
+			clear_list.append((left.id, right.id))
+
+		for delete_pair in clear_list: # Dumb but safe...
+			self.fg.remove(delete_pair)	
+
 	def groups(self):
 		if not self.useExternalGroupData:
 			return self.fg.groups
@@ -119,6 +129,78 @@ class pKerning(object):
 		'''
 		self.groups()[key] = (glyphNameList, self.__kern_group_type[type.upper()])
 
+	def getPairGroups(self, pairTuple):
+		left_in_group = None
+		right_in_group = None
+		left, right = pairTuple
+		layer_groups = self.groupsBiDict()
+
+		try:
+			left_in_group = layer_groups['KernLeft'].inverse[left][0]
+		except KeyError:
+			try:
+				left_in_group = layer_groups['KernBothSide'].inverse[left][0]
+			except KeyError:
+				left_in_group = left
+
+		try:
+			right_in_group = layer_groups['KernRight'].inverse[right][0]
+		except KeyError:
+			try:
+				right_in_group = layer_groups['KernBothSide'].inverse[right][0]
+			except KeyError:
+				right_in_group = right
+
+		return (left_in_group, right_in_group)
+
+	def setPair(self, pairTuple, modeTuple=(0,0)):
+		pair, value = pairTuple
+		left, right = pair
+		modeLeft, modeRight = modeTuple
+		groupsBiDict = self.groupsBiDict()
+
+		if modeLeft:
+			if len(groupsBiDict.keys()):
+				if groupsBiDict['KernLeft'].inverse.has_key(left):
+					left = groupsBiDict['KernLeft'].inverse[left][0]
+
+				elif groupsBiDict['KernBothSide'].inverse.has_key(left):
+					left = groupsBiDict['KernBothSide'].inverse[left][0]
+
+		if modeRight:
+			if groupsBiDict['KernRight'].inverse.has_key(right):
+				right = groupsBiDict['KernRight'].inverse[right][0]
+
+			elif groupsBiDict['KernBothSide'].inverse.has_key(right):
+				right = groupsBiDict['KernBothSide'].inverse[right][0]
+		
+		self.fg[left, right] = value
+	
+	def setPairs(self, pairTupleList, extend=False):
+		modeLeft, modeRight = (1,1) if extend else (0,0)
+		groupsBiDict = self.groupsBiDict()
+
+		for pairTuple in pairTupleList:
+			pair, value = pairTuple
+			left, right = pair
+			
+			if modeLeft:
+				if len(groupsBiDict.keys()):
+					if groupsBiDict['KernLeft'].inverse.has_key(left):
+						left = groupsBiDict['KernLeft'].inverse[left][0]
+
+					elif groupsBiDict['KernBothSide'].inverse.has_key(left):
+						left = groupsBiDict['KernBothSide'].inverse[left][0]
+
+			if modeRight:
+				if groupsBiDict['KernRight'].inverse.has_key(right):
+					right = groupsBiDict['KernRight'].inverse[right][0]
+
+				elif groupsBiDict['KernBothSide'].inverse.has_key(right):
+					right = groupsBiDict['KernBothSide'].inverse[right][0]
+			
+			self.fg[left, right] = value	
+
 	def getPairObject(self, pairTuple):
 		left, right = pairTuple
 		modeLeft, modeRight = 0, 0
@@ -153,6 +235,7 @@ class pKerning(object):
 
 	def getKerningForLeaders(self, transformLeft=None, transformRight=None):
 		''' Now in FL6 we do not have leaders, but this returns the first glyph name in the group '''
+		# !!! TODO: Add sorting for unicode to get more meaningful results - for instance i want to get /O as group leader not /Odieresis
 		kerning_data = self.fg.items()
 		return_data = []
 

@@ -18,10 +18,11 @@ from PythonQt import QtCore
 from typerig.gui import QtGui
 
 from typerig.proxy import pFont
+from typerig.proxy import pKerning
 from typerig.core.func.math import round2base
 
 # - Init --------------------------
-app_name, app_version = 'TypeRig | AFM Import & Export', '0.5'
+app_name, app_version = 'TypeRig | AFM Import & Export', '0.8'
 file_formats = {'afm':'Adobe Font Metrics (*.afm)'}
 
 # - Action Objects ---------------
@@ -39,7 +40,7 @@ class action_import_afm_kerning(QtGui.QWidget):
 
 		self.chk_name_replace = QtGui.QCheckBox('Strip Filename:')
 		self.chk_kerning_clear = QtGui.QCheckBox('Clear existing kerning')
-		self.chk_kerning_expand = QtGui.QCheckBox('Expand to class kerning after import')
+		self.chk_kerning_extend = QtGui.QCheckBox('Expand to class kerning')
 		self.chk_kerning_round = QtGui.QCheckBox('Round kerning:')
 		self.chk_kerning_posit = QtGui.QCheckBox('Drop Positive pairs above:')
 		self.chk_kerning_negat = QtGui.QCheckBox('Drop Negative pairs below:')
@@ -59,7 +60,7 @@ class action_import_afm_kerning(QtGui.QWidget):
 
 		self.chk_name_replace.setChecked(True)
 		self.chk_kerning_clear.setChecked(True)
-		self.chk_kerning_expand.setChecked(True)
+		self.chk_kerning_extend.setChecked(False)
 		self.chk_kerning_round.setChecked(False)
 		
 		self.edt_name_replace = QtGui.QLineEdit()
@@ -77,7 +78,7 @@ class action_import_afm_kerning(QtGui.QWidget):
 		lay_wgt.addWidget(self.chk_kerning_negat,	4, 0, 1, 5)
 		lay_wgt.addWidget(self.spn_kerning_negat,	4, 5, 1, 5)
 		lay_wgt.addWidget(self.chk_kerning_clear,	5, 0, 1, 10)
-		lay_wgt.addWidget(self.chk_kerning_expand,	6, 0, 1, 10)
+		lay_wgt.addWidget(self.chk_kerning_extend,	6, 0, 1, 10)
 		lay_wgt.addWidget(self.btn_file_open,		7, 0, 1, 10)
 		
 		self.setLayout(lay_wgt)
@@ -108,7 +109,7 @@ class action_import_afm_kerning(QtGui.QWidget):
 				if layer_name in no_whitespace_masters:
 					layer_name = no_whitespace_masters[layer_name]
 
-				kerning_current = active_font.kerning(layer_name)
+				kerning_current = pKerning(active_font.kerning(layer_name))
 				
 				# - Process
 				if len(kerning_afm):
@@ -138,7 +139,10 @@ class action_import_afm_kerning(QtGui.QWidget):
 					# - Set
 					kerning_changed = True
 					kerning_count += 1
-					kerning_current.setPlainPairs(new_kerning_afm)
+					if self.chk_kerning_extend.isChecked():
+						kerning_current.setPairs(new_kerning_afm, True)
+					else:
+						kerning_current.fg.setPlainPairs(new_kerning_afm)
 					print 'DONE:\t Layer: %s\t Import AFM plain pairs kerning from: %s' %(layer_name, work_file)
 
 		if kerning_changed:
