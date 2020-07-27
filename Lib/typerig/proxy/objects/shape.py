@@ -19,7 +19,7 @@ from typerig.proxy.objects.base import *
 from typerig.proxy.objects.node import *
 
 # - Init ---------------------------------
-__version__ = '0.26.4'
+__version__ = '0.26.5'
 
 # - Classes -------------------------------
 class pShape(object):
@@ -181,10 +181,26 @@ class eShape(pShape):
 	def getPrev(self):
 		pass
 
+	# - Contours
+	def contourOrder(self, order=(True,True)):
+		'''Rearrange shape contours:
+		Args:
+			order (tuple(Bool,Bool)): X (Left(True) to Right(False)) and Y (Bottom(True), Top(False)) order or None to sort on single coordinate.
+		Returns:
+			None
+		'''
+		x, y = order
+		if x is not None and y is not None:
+			self.fl.contours = sorted(self.fl.contours, key=lambda c: (c.bounds[0]*(-1,1)[x], c.bounds[1]*(-1,1)[y]))
+		elif x is None and y is not None:
+			self.fl.contours = sorted(self.fl.contours, key=lambda c: c.bounds[1]*(-1,1)[y])
+		elif x is not None and y is None:
+			self.fl.contours = sorted(self.fl.contours, key=lambda c: c.bounds[0]*(-1,1)[x])
+
 	# - Align and distribute
 	def alignTo(self, entity, alignMode='', align=(True,True)):
 		'''Align current contour.
-		Arguments:
+		Args:
 			entity ()
 			alignMode (String) : L(left), R(right), C(center), T(top), B(bottom), E(vertical center) !ORDER MATTERS
 		'''

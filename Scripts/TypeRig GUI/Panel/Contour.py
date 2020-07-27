@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '0.24'
+app_name, app_version = 'TypeRig | Contour', '0.25'
 
 # - Dependencies -----------------
 from collections import OrderedDict
@@ -77,6 +77,8 @@ class basicContour(QtGui.QGridLayout):
 		self.btn_TL = QtGui.QPushButton('T L')
 		self.btn_BR = QtGui.QPushButton('B R')
 		self.btn_TR = QtGui.QPushButton('T R')
+		self.btn_sort_x = QtGui.QPushButton('Sort X')
+		self.btn_sort_y = QtGui.QPushButton('Sort Y')
 		self.btn_close = QtGui.QPushButton('C&lose')
 		self.btn_start = QtGui.QPushButton('&Start')
 		self.btn_CW = QtGui.QPushButton('CW')
@@ -99,6 +101,8 @@ class basicContour(QtGui.QGridLayout):
 		self.btn_TR.setToolTip('Set start point:\nTop Right Node') 
 		self.btn_CW.setToolTip('Set direction:\nClockwise (TT)') 
 		self.btn_CCW.setToolTip('Set direction:\nCounterclockwise (PS)') 
+		self.btn_sort_x.setToolTip('Reorder contours within shapes based on their X coordinate.\nSHIFT+Click reverses order!')
+		self.btn_sort_y.setToolTip('Reorder contours within shapes based on their Y coordinate.\nSHIFT+Click reverses order!')
 		
 		self.btn_start.clicked.connect(lambda : self.setStartSelection())
 		self.btn_BL.clicked.connect(lambda : self.setStart((0,0)))
@@ -108,6 +112,8 @@ class basicContour(QtGui.QGridLayout):
 		self.btn_CW.clicked.connect(lambda : self.setDirection(False))
 		self.btn_CCW.clicked.connect(lambda : self.setDirection(True))
 		self.btn_close.clicked.connect(self.closeContour)
+		self.btn_sort_x.clicked.connect(lambda : self.setOrder(False))
+		self.btn_sort_y.clicked.connect(lambda : self.setOrder(True))
 
 		self.addWidget(self.btn_close, 	0, 0, 1, 1)
 		self.addWidget(self.btn_start, 	0, 1, 1, 1)
@@ -118,6 +124,8 @@ class basicContour(QtGui.QGridLayout):
 		self.addWidget(self.btn_TR, 	0, 3, 1, 1)
 		self.addWidget(self.btn_BL, 	1, 2, 1, 1)
 		self.addWidget(self.btn_BR, 	1, 3, 1, 1)
+		self.addWidget(self.btn_sort_x, 2, 0, 1, 2)
+		self.addWidget(self.btn_sort_y, 2, 2, 1, 2)
 		
 
 	def closeContour(self):
@@ -148,6 +156,25 @@ class basicContour(QtGui.QGridLayout):
 
 			glyph.update()
 			glyph.updateObject(glyph.fl, 'Glyph: %s;\tManual: Set Start Point @ %s.' %(glyph.name, '; '.join(wLayers)))
+
+	def setOrder(self, sort_y=False):
+		process_glyphs = getProcessGlyphs(pMode)
+		modifiers = QtGui.QApplication.keyboardModifiers()
+
+		for glyph in process_glyphs:
+			wLayers = glyph._prepareLayers(pLayers)
+
+			for layerName in wLayers:
+				wShapes = glyph.shapes(layerName, extend=eShape)
+
+				for shape in wShapes:
+					if sort_y:
+						shape.contourOrder((None, not modifiers == QtCore.Qt.ShiftModifier)) # Shift reverses
+					else:
+						shape.contourOrder((True, not modifiers == QtCore.Qt.ShiftModifier))
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Reorder contours @ %s.' %(glyph.name, '; '.join(wLayers)))
 
 	def setStart(self, control=(0,0)):
 		process_glyphs = getProcessGlyphs(pMode)
