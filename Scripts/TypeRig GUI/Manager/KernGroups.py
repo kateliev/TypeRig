@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kern Classes', '3.3'
+app_name, app_version = 'TypeRig | Kern Classes', '3.5'
 alt_mark = '.'
 
 # - Dependencies -----------------
@@ -191,11 +191,13 @@ class WKernGroups(QtGui.QWidget):
 		act_class_merge = QtGui.QAction('Merge classes to new', self)
 		act_class_mdel = QtGui.QAction('Merge and remove classes', self)
 		act_class_del = QtGui.QAction('Remove classes', self)
+		act_class_prefix = QtGui.QAction('Add prefix to class name', self)
 
 		self.menu_class.addAction(act_class_add)
 		self.menu_class.addAction(act_class_find)
 		self.menu_class.addAction(act_class_copy)
 		self.menu_class.addAction(act_class_merge)
+		self.menu_class.addAction(act_class_prefix)
 		self.menu_class.addAction(act_class_mdel)
 		self.menu_class.addAction(act_class_del)
 
@@ -205,6 +207,7 @@ class WKernGroups(QtGui.QWidget):
 		act_class_merge.triggered.connect(lambda: self.class_merge(False))
 		act_class_mdel.triggered.connect(lambda: self.class_merge(True))
 		act_class_del.triggered.connect(lambda: self.class_del())
+		act_class_prefix.triggered.connect(lambda: self.class_prefix())
 		
 		# -- Change class type
 		self.menu_type = QtGui.QMenu('Class Type', self)
@@ -340,6 +343,23 @@ class WKernGroups(QtGui.QWidget):
 
 		self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
 		print 'DONE:\t Search and replace in class names.'
+
+	def class_prefix(self):
+		prefix = QtGui.QInputDialog.getText(self, 'Add Prefix to Class names', 'Please enter prefix for all selected class names:', QtGui.QLineEdit.Normal, '_')
+		mod_keys = [self.tab_groupKern.item(row, 0).text() for row, col in self.tab_groupKern.getSelection()]
+		fg_layer_kerning = self.active_font.kerning(self.cmb_layer.currentText)
+
+		for row in range(self.tab_groupKern.rowCount):
+			currItem = self.tab_groupKern.item(row, 0)
+			
+			if len(mod_keys) and currItem.text() in mod_keys:
+					group_name = currItem.text()
+					currItem.setText(prefix + group_name)
+					fg_layer_kerning.groups.rename(group_name.encode('ascii','ignore'), prefix.encode('ascii','ignore') + group_name.encode('ascii','ignore'))
+
+		self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
+		self.active_font.update()
+		print 'DONE:\t Adding prefix to %s classes!\t Layer: %s updated!' %(len(mod_keys), self.cmb_layer.currentText)
 
 	def class_del(self):
 		temp_data = self.tab_groupKern.getTable()
@@ -510,7 +530,8 @@ class WKernGroups(QtGui.QWidget):
 			self.active_font.dict_to_kerning_groups(self.kern_group_data[active_layer], active_layer)
 			
 			print 'DONE:\t Font: %s - Kerning classes updated.' %self.active_font.name
-			print '\nPlease add a new empty class in FL6 Classes panel to preview changes!'
+			print '\nPlease add a new empty class in FL Classes panel to preview changes!'
+			self.active_font.update()
 
 	def reset_classes(self):
 		self.active_font.reset_kerning_groups(self.cmb_layer.currentText)

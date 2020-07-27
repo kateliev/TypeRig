@@ -164,16 +164,17 @@ class WKernGroups(QtGui.QWidget):
 		self.cmb_select_color.setCurrentIndex(colorNames.index('red'))
 
 		# -- Cell highlighter and search ------
-		self.btn_search_pair_under = QtGui.QPushButton('Current Pair')
 		self.edt_search_pair = QtGui.QLineEdit()
-		self.edt_search_pair.setPlaceholderText('Pair serach example: A|V; @O|@A; Where A|V plain pair and @O|@A classes containing O and A.')
 		self.edt_search_regex = QtGui.QLineEdit()
+		
+		self.edt_search_pair.setPlaceholderText('Pair serach example: A|V; @O|@A; Where A|V plain pair and @O|@A classes containing O and A.')
 		self.edt_search_regex.setPlaceholderText('RegEx search example: .*.O.*.A.*; Note: Pair source is [space] separated!')
 
+		self.btn_search_pair_under = QtGui.QPushButton('Current Pair')
 		self.btn_search_pair = QtGui.QPushButton('Find Pairs')
 		self.btn_search_regex = QtGui.QPushButton('Find RegEx')
-
 		self.btn_search_hide = QtGui.QPushButton('Hide others')
+
 		self.btn_search_hide.setCheckable(True)
 		
 		self.btn_search_hide.clicked.connect(lambda: self.update_table_show_all())
@@ -211,18 +212,29 @@ class WKernGroups(QtGui.QWidget):
 		#act_data_import.triggered.connect(lambda: self.file_load_groups(True))
 		#act_data_export.triggered.connect(lambda: self.file_export_groups(True))
 		act_data_font.triggered.connect(lambda: self.kerning_from_font())
-		#act_data_reset.triggered.connect(lambda: self.reset_classes())
+		act_data_reset.triggered.connect(lambda: self.kerning_reset())
 
-		# -- Main Class actions
-		self.menu_pair = QtGui.QMenu('Pair Management', self)
+		# -- Pairs
+		self.menu_pair = QtGui.QMenu('Pairs', self)
 		act_pair_add = QtGui.QAction('Add new pair', self)
 
 		self.menu_pair.addAction(act_pair_add)
-
 		act_pair_add.triggered.connect(lambda: self.class_add_new())
-		
-		# -- Change class type
-		self.menu_tools = QtGui.QMenu('Management Tools', self)
+
+		# -- Tools
+		self.menu_tools = QtGui.QMenu('Tools', self)
+
+		# -- View
+		self.menu_view = QtGui.QMenu('View', self)
+		act_view_show_all = QtGui.QAction('Show hidden rows', self)
+		act_view_hide_matching = QtGui.QAction('Hide matching pairs', self)
+
+		self.menu_view.addAction(act_view_show_all)
+		self.menu_view.addSeparator()
+		self.menu_view.addAction(act_view_hide_matching)
+
+		act_view_show_all.triggered.connect(lambda: self.update_table_show_all())
+		act_view_hide_matching.triggered.connect(lambda: self.update_table_hide_matching())
 
 		# -- MACOS buttons menu
 		self.btn_mac_data_import = QtGui.QPushButton('Import')
@@ -232,7 +244,6 @@ class WKernGroups(QtGui.QWidget):
 
 		self.btn_mac_data_import.setEnabled(False)
 		self.btn_mac_data_export.setEnabled(False)
-
 
 		self.btn_mac_data_font.clicked.connect(lambda: self.kerning_from_font())
 
@@ -273,12 +284,14 @@ class WKernGroups(QtGui.QWidget):
 	def contextMenuEvent(self, event):
 		# - Init
 		self.tab_fontKerning.menu = QtGui.QMenu(self)
-		self.tab_fontKerning.menu.setTitle('Class Actions:')
+		self.tab_fontKerning.menu.setTitle('Actions:')
 		
 		# - Build menus
 		self.tab_fontKerning.menu.addMenu(self.menu_pair)
 		self.tab_fontKerning.menu.addSeparator()	
 		self.tab_fontKerning.menu.addMenu(self.menu_tools)
+		self.tab_fontKerning.menu.addSeparator()	
+		self.tab_fontKerning.menu.addMenu(self.menu_view)
 
 		self.tab_fontKerning.menu.popup(QtGui.QCursor.pos())				
 
@@ -287,12 +300,7 @@ class WKernGroups(QtGui.QWidget):
 
 	# - Main Procedures --------------------------------------------
 	def update_font(self):
-		'''
-		for item in self.tab_fontKerning.values_changed:
-			item.setForeground(QtGui.QBrush(self.tab_fontKerning.flag_valueDefault))
-		'''
 		self.active_font.update()
-		#self.tab_fontKerning.values_changed = []
 
 	def update_data(self, source, updateTable=True):
 		self.tab_fontKerning_data = source
@@ -398,26 +406,50 @@ class WKernGroups(QtGui.QWidget):
 				else:	
 					self.tab_fontKerning.hideRow(row)
 		
+	def update_table_hide_matching(self):
+		for row in xrange(self.tab_fontKerning.rowCount):
+			self.tab_fontKerning.hideRow(row)
+
+			for col in xrange(self.tab_fontKerning.columnCount):
+				if self.tab_fontKerning.item(row,col).text() == NOVAL:
+					self.tab_fontKerning.showRow(row)
+					break
+
 
 	def update_table_show_all(self):
 		for row in xrange(self.tab_fontKerning.rowCount):
 			self.tab_fontKerning.showRow(row)
 
 	def kerning_reset(self):
-		self.active_font.reset_kerning_groups(self.cmb_layer.currentText)
-		print 'DONE:\t Font: %s - Kerning classes removed.' %self.active_font.name
-		print '\nPlease add a new empty class in FL6 Classes panel to preview changes!'
+		ask_clear_kerning = QtGui.QMessageBox.question(self, 'Clear font Kerning', 'Are you shure you want to delete all kerning pairs for:\n%s'%self.active_font.fg.path, QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
+		
+		if ask_clear_kerning == QtGui.QMessageBox.Yes:
+			for layer in self.active_font.masters():
+				tmp_proxy = pKerning(self.active_font.kerning(layer))
+				tmp_len = len(tmp_proxy.fg)
+				tmp_proxy.clear()
+				print 'DEL:\t Layer: %s;\tPairs: %s' %(layer, tmp_len)
+
+			self.active_font.kerning(layer)
+			self.active_font.update()
+			self.tab_fontKerning.clear()
+			while self.tab_fontKerning.rowCount > 0: self.tab_fontKerning.removeRow(0)
+			print 'DONE:\t Font: %s - Kerning removed!' %self.active_font.fg.path	
 	
-	def kerning_from_font(self):
+	def kerning_from_font(self, ask_user=True):
 		font_kerning = []
 		font_layers = []
 		pair_set = []
+		import_empty = False
 		print 'LOAD:\tPreparing kerning data...'
-		import_empty = QtGui.QMessageBox.question(self, 'Import kerning from font', 'Do you want to import layers with empty/no kerning', QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
 		
+		if ask_user:
+			ask_import_empty = QtGui.QMessageBox.question(self, 'Import kerning from font', 'Do you want to import layers with empty/no kerning', QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
+			import_empty = ask_import_empty == QtGui.QMessageBox.No 
+
 		for layer in self.active_font.masters():
 			current_kerning = self.active_font.kerning(layer)
-			if not len(current_kerning) and import_empty == QtGui.QMessageBox.No: continue
+			if not len(current_kerning) and import_empty: continue
 			
 			temp_set = set()
 			for pair in current_kerning.keys():
@@ -448,6 +480,7 @@ class tool_tab(QtGui.QWidget):
 			self.ActionsMenu.addMenu(self.kernGroups.menu_data)
 			self.ActionsMenu.addMenu(self.kernGroups.menu_pair)
 			self.ActionsMenu.addMenu(self.kernGroups.menu_tools)
+			self.ActionsMenu.addMenu(self.kernGroups.menu_view)
 			layoutV.setMenuBar(self.ActionsMenu)
 		
 		layoutV.addWidget(self.kernGroups)
