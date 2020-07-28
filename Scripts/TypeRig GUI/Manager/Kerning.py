@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kerning Overview', '1.5'
+app_name, app_version = 'TypeRig | Kerning Overview', '1.8'
 alt_mark = '.'
 
 # - Dependencies -----------------
@@ -101,6 +101,8 @@ class KernTableWidget(QtGui.QTableWidget):
 				
 				if kern_value is None:
 					kern_value = NOVAL
+				else:
+					kern_value = int(kern_value)
 
 				new_item = QtGui.QTableWidgetItem(str(kern_value))
 				self.setItem(row, col, new_item)
@@ -117,10 +119,8 @@ class KernTableWidget(QtGui.QTableWidget):
 
 	def kern_value_changed(self, item):
 		current_row, current_col = item.row(), item.column()
-		#current_layer = self.horizontalHeaderItem(current_col).text()
-		#current_pair = tuple(self.verticalHeaderItem(current_col).text().split(pair_delimiter))
-		current_layer = self.aux.tab_fontKerning_data[0][current_col]
-		current_pair = self.aux.tab_fontKerning_data[2][current_row]
+		current_layer = self.aux.data_fontKerning[0][current_col]
+		current_pair = self.aux.data_fontKerning[2][current_row]
 		
 		self.aux.active_font.kerning(current_layer)[current_pair] = int(item.text())
 		item.setForeground(QtGui.QBrush(self.flag_valueChanged))
@@ -138,7 +138,8 @@ class WKernGroups(QtGui.QWidget):
 		self.upper_widget = parentWidget
 		self.active_font = pFont()
 		self.application = pWorkspace()
-		self.tab_fontKerning_data = None
+		self.data_fontKerning = None
+		self.data_clipboard = []
 
 		# - Interface -------------------------
 		# -- Conditional formatting -----------
@@ -167,7 +168,7 @@ class WKernGroups(QtGui.QWidget):
 		self.edt_search_pair = QtGui.QLineEdit()
 		self.edt_search_regex = QtGui.QLineEdit()
 		
-		self.edt_search_pair.setPlaceholderText('Pair serach example: A|V; @O|@A; Where A|V plain pair and @O|@A classes containing O and A.')
+		self.edt_search_pair.setPlaceholderText('Pair search example: A|V; @O|@A; Where A|V plain pair and @O|@A classes containing O and A.')
 		self.edt_search_regex.setPlaceholderText('RegEx search example: .*.O.*.A.*; Note: Pair source is [space] separated!')
 
 		self.btn_search_pair_under = QtGui.QPushButton('Current Pair')
@@ -217,24 +218,76 @@ class WKernGroups(QtGui.QWidget):
 		# -- Pairs
 		self.menu_pair = QtGui.QMenu('Pairs', self)
 		act_pair_add = QtGui.QAction('Add new pair', self)
+		act_pair_del = QtGui.QAction('Remove pair', self)
+		act_pair_copy = QtGui.QAction('Copy value(s)', self)
+		act_pair_paste = QtGui.QAction('Paste value(s)', self)
+		act_pair_copy_string = QtGui.QAction('Copy pair(s) string', self)
+		act_pair_copy_leader = QtGui.QAction('Copy pair(s) string as Glyph Names', self)
 
 		self.menu_pair.addAction(act_pair_add)
-		act_pair_add.triggered.connect(lambda: self.class_add_new())
+		self.menu_pair.addAction(act_pair_del)
+		self.menu_pair.addSeparator()
+		self.menu_pair.addAction(act_pair_copy)
+		self.menu_pair.addAction(act_pair_paste)
+		self.menu_pair.addSeparator()
+		self.menu_pair.addAction(act_pair_copy_string)
+		self.menu_pair.addAction(act_pair_copy_leader)
+
+		act_pair_add.setEnabled(False)
+		
+		#act_pair_add.triggered.connect(lambda: self.pair_add())
+		act_pair_del.triggered.connect(lambda: self.pair_del())
+		act_pair_copy.triggered.connect(lambda: self.pair_copy_paste(False))
+		act_pair_paste.triggered.connect(lambda: self.pair_copy_paste(True))
+		act_pair_copy_string.triggered.connect(lambda: self.pair_copy_string(False))
+		act_pair_copy_leader.triggered.connect(lambda: self.pair_copy_string(True))
 
 		# -- Tools
 		self.menu_tools = QtGui.QMenu('Tools', self)
+		act_tools_fl_extend = QtGui.QAction('Extend Kerning', self)
+		act_tools_fl_match = QtGui.QAction('Match Kerning', self)
+		act_tools_tr_replace = QtGui.QAction('Find && Replace', self)
+		act_tools_tr_round = QtGui.QAction('Quantize', self)
+		act_tools_tr_scale = QtGui.QAction('Scale', self)
+		act_tools_tr_filter = QtGui.QAction('Filter', self) # High-pass, low-pass, band-pass
+		act_tools_tr_clean = QtGui.QAction('Cleanup', self)
+		act_tools_tr_patchboard = QtGui.QAction('Patchboard', self)
+
+		self.menu_tools.addAction(act_tools_fl_extend)
+		self.menu_tools.addAction(act_tools_fl_match)
+		self.menu_tools.addSeparator()
+		self.menu_tools.addAction(act_tools_tr_replace)
+		self.menu_tools.addSeparator()
+		self.menu_tools.addAction(act_tools_tr_round)
+		self.menu_tools.addAction(act_tools_tr_scale)
+		self.menu_tools.addAction(act_tools_tr_filter)
+		self.menu_tools.addAction(act_tools_tr_clean)
+		self.menu_tools.addSeparator()
+		self.menu_tools.addAction(act_tools_tr_patchboard)
+
+		act_tools_fl_extend.setEnabled(False)
+		act_tools_fl_match.setEnabled(False)
+		act_tools_tr_replace.setEnabled(False)
+		act_tools_tr_round.setEnabled(False)
+		act_tools_tr_scale.setEnabled(False)
+		act_tools_tr_filter.setEnabled(False)
+		act_tools_tr_clean.setEnabled(False)
+		act_tools_tr_patchboard.setEnabled(False)
 
 		# -- View
 		self.menu_view = QtGui.QMenu('View', self)
 		act_view_show_all = QtGui.QAction('Show hidden rows', self)
 		act_view_hide_matching = QtGui.QAction('Hide matching pairs', self)
+		act_view_hide_nonmatching = QtGui.QAction('Hide non-matching pairs', self)
 
 		self.menu_view.addAction(act_view_show_all)
 		self.menu_view.addSeparator()
 		self.menu_view.addAction(act_view_hide_matching)
+		self.menu_view.addAction(act_view_hide_nonmatching)
 
 		act_view_show_all.triggered.connect(lambda: self.update_table_show_all())
-		act_view_hide_matching.triggered.connect(lambda: self.update_table_hide_matching())
+		act_view_hide_matching.triggered.connect(lambda: self.update_table_hide_matching(True))
+		act_view_hide_nonmatching.triggered.connect(lambda: self.update_table_hide_matching(False))
 
 		# -- MACOS buttons menu
 		self.btn_mac_data_import = QtGui.QPushButton('Import')
@@ -296,19 +349,103 @@ class WKernGroups(QtGui.QWidget):
 		self.tab_fontKerning.menu.popup(QtGui.QCursor.pos())				
 
 	# -- Actions ---------------------------------------------------
+	def pair_del(self):
+		self.tab_fontKerning.blockSignals(True)
+		selected_rows = set(sorted([item.row() for item in self.tab_fontKerning.selectedItems()]))
+		pairs_removed = []
 
+		for current_row in reversed(list(selected_rows)):
+			# - Find and remove pair
+			current_pair = self.data_fontKerning[2][current_row]
+			pairs_removed.append('|'.join(current_pair))
+			self.data_fontKerning[2].pop(self.data_fontKerning[2].index(current_pair))
+			
+			# - Find and remove actual kern data
+			for kern_obj in self.data_fontKerning[1]:
+				kern_obj.remove(current_pair)
+
+			# - Find and remove rows from table
+			self.tab_fontKerning.removeRow(current_row)
+		
+		print 'DONE:\tPairs removed: {}; Pairs: {}!\nWARN:\tAuto update was disabled during the process! Please update font manually!'.format(len(pairs_removed), ' '.join(pairs_removed))
+		self.tab_fontKerning.blockSignals(False)
+
+	def pair_copy_paste(self, paste_values=False):
+		selected_items = self.tab_fontKerning.selectedItems()
+
+		if not paste_values:
+			self.data_clipboard = [item.text() for item in selected_items]
+			print 'COPY:\tValues: {} to clipboard!'.format(len(self.data_clipboard))
+		else:
+			self.btn_fontKerning_autoupdate.setChecked(False)
+
+			if len(self.data_clipboard) == 1 and len(selected_items):
+				for item in selected_items:
+					item.setText(self.data_clipboard[0])
+
+				print 'PASTE:\tSINGLE value to Pairs: {}\nWARN:\tAuto update was disabled during the process! Please update font manually!'.format(len(selected_items))
+
+			elif len(self.data_clipboard) == len(selected_items):
+				for idx in range(len(selected_items)):
+					selected_items[idx].setText(self.data_clipboard[idx])
+
+				print 'PASTE:\tMULTIPLE values to Pairs: {}\nWARN:\tAuto update was disabled during the process! Please update font manually!'.format(len(selected_items))
+			else:
+				print 'ERROR:\tData in Clipboard and Selection do not match: {}/{}!'.format(len(self.data_clipboard),len(selected_items))
+
+	def pair_copy_string(self, return_leaders=False):
+		selected_pairs = set()
+		all_pairs = self.data_fontKerning[2]
+		groups_dict = self.active_font.kerning_groups_to_dict(byPosition=True,sortUnicode=True)
+
+		for item in self.tab_fontKerning.selectedItems():
+			current_pair = all_pairs[item.row()]
+			
+			if return_leaders:
+				left, right = current_pair
+				left_in_group, right_in_group = current_pair
+
+				try:
+					left_in_group = dict(groups_dict['KernLeft'])[left][0]
+				except KeyError:
+					try:
+						left_in_group = dict(groups_dict['KernBothSide'])[left][0]
+					except KeyError:
+						left_in_group = left
+
+				try:
+					right_in_group = dict(groups_dict['KernRight'])[right][0]
+				except KeyError:
+					try:
+						right_in_group = dict(groups_dict['KernBothSide'])[right][0]
+					except KeyError:
+						right_in_group = right
+
+				current_pair = (left_in_group, right_in_group)
+				current_pair = ''.join(current_pair)
+
+			selected_pairs.add(current_pair)
+
+		clipboard = QtGui.QApplication.clipboard()
+		
+		if return_leaders:
+			clipboard.setText('\n'.join(selected_pairs))
+		else:
+			clipboard.setText(str(list(selected_pairs)))
+
+		print 'DONE:\t Generated string sent to clipboard!\t Pairs: {}'.format(len(selected_pairs))
 
 	# - Main Procedures --------------------------------------------
 	def update_font(self):
 		self.active_font.update()
 
 	def update_data(self, source, updateTable=True):
-		self.tab_fontKerning_data = source
+		self.data_fontKerning = source
 		
 		if updateTable:
 			self.tab_fontKerning.clear()
 			while self.tab_fontKerning.rowCount > 0: self.tab_fontKerning.removeRow(0)
-			self.tab_fontKerning.setTable(self.tab_fontKerning_data)
+			self.tab_fontKerning.setTable(self.data_fontKerning)
 
 	def update_table_format(self, clearTable=False):
 		formattig_list = parser_format(self.edt_formatting.text)
@@ -332,7 +469,7 @@ class WKernGroups(QtGui.QWidget):
 		# !!! TODO: Use direct Vertical/Horizontal header indexing if columns/rows are moved
 		show_items = []
 
-		font_layers, font_kerning, all_pairs = self.tab_fontKerning_data
+		font_layers, font_kerning, all_pairs = self.data_fontKerning
 		col = font_layers.index(pGlyph().layer().name)
 		proxy_kerning = pKerning(font_kerning[col])
 		
@@ -386,7 +523,7 @@ class WKernGroups(QtGui.QWidget):
 		self.tab_fontKerning.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection) # Back to regular selection
 
 	def update_table_regex(self):
-		all_pairs = self.tab_fontKerning_data[2]
+		all_pairs = self.data_fontKerning[2]
 		all_pairs_text = [' '.join(item) for item in all_pairs]
 		results = re.findall(self.edt_search_regex.text, '\n'.join(all_pairs_text), re.UNICODE)
 		show_items = []
@@ -406,15 +543,20 @@ class WKernGroups(QtGui.QWidget):
 				else:	
 					self.tab_fontKerning.hideRow(row)
 		
-	def update_table_hide_matching(self):
+	def update_table_hide_matching(self, hide_matching=True):
 		for row in xrange(self.tab_fontKerning.rowCount):
-			self.tab_fontKerning.hideRow(row)
+			if hide_matching:
+				self.tab_fontKerning.hideRow(row)
+			else:
+				self.tab_fontKerning.showRow(row)
 
 			for col in xrange(self.tab_fontKerning.columnCount):
 				if self.tab_fontKerning.item(row,col).text() == NOVAL:
-					self.tab_fontKerning.showRow(row)
+					if not hide_matching:
+						self.tab_fontKerning.hideRow(row)
+					else:
+						self.tab_fontKerning.showRow(row)
 					break
-
 
 	def update_table_show_all(self):
 		for row in xrange(self.tab_fontKerning.rowCount):
@@ -462,8 +604,8 @@ class WKernGroups(QtGui.QWidget):
 		
 		all_pairs = sorted(list(reduce(set.union, pair_set))) # Get all pairs for all masters
 		
-		self.tab_fontKerning_data = (font_layers, font_kerning, all_pairs)
-		self.update_data(self.tab_fontKerning_data, updateTable=True)
+		self.data_fontKerning = (font_layers, font_kerning, all_pairs)
+		self.update_data(self.data_fontKerning, updateTable=True)
 		print 'LOAD:\tKern table loaded! Font: %s;' %self.active_font.fg.path
 
 
