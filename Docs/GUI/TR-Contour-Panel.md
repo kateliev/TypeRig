@@ -19,10 +19,16 @@ In this section reside several buttons covering the following basic operations i
 - **BL**: Sets the contour start node to the node that has most **Bottom Left** coordinates;
 - **BR**: Sets the contour start node to the node that has most **Bottom Right** coordinates;
 
-Note: Actions performed by **TL, TR, BL, BR** buttons are similar to the _Relocate start points_ command in FontlabStudio 5
-
 ![](./img/TR-Contour-Panel-03.png)
 _Relocate start point in FontLab Studio 5_
+
+Note: Actions performed by **TL, TR, BL, BR** buttons are similar to the _Relocate start points_ command in FontlabStudio 5
+
+![](./img/TR-Contour-Panel-04.png)
+_New in Contour Panel v0.25 - Reorder Contours_
+
+- **Sort X** - Will rearrange the order of contours based on their BBoX X coordinate.
+- **Sort Y** - Will rearrange the order of contours based on their BBoX Y coordinate.
 
 #### Align
 
