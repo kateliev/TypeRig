@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kerning Overview', '1.8'
+app_name, app_version = 'TypeRig | Kerning Overview', '2.1'
 alt_mark = '.'
 
 # - Dependencies -----------------
@@ -22,6 +22,7 @@ import fontgate as fgt
 
 from PythonQt import QtCore
 from typerig.gui import QtGui
+from typerig.gui.widgets import TR2FieldDLG
 
 from typerig.proxy import *
 
@@ -120,7 +121,8 @@ class KernTableWidget(QtGui.QTableWidget):
 	def kern_value_changed(self, item):
 		current_row, current_col = item.row(), item.column()
 		current_layer = self.aux.data_fontKerning[0][current_col]
-		current_pair = self.aux.data_fontKerning[2][current_row]
+		left, right = self.aux.data_fontKerning[2][current_row]
+		current_pair = (left.encode('ascii','ignore'), right.encode('ascii','ignore'))
 		
 		self.aux.active_font.kerning(current_layer)[current_pair] = int(item.text())
 		item.setForeground(QtGui.QBrush(self.flag_valueChanged))
@@ -267,12 +269,13 @@ class WKernGroups(QtGui.QWidget):
 
 		act_tools_fl_extend.setEnabled(False)
 		act_tools_fl_match.setEnabled(False)
-		act_tools_tr_replace.setEnabled(False)
 		act_tools_tr_round.setEnabled(False)
 		act_tools_tr_scale.setEnabled(False)
 		act_tools_tr_filter.setEnabled(False)
 		act_tools_tr_clean.setEnabled(False)
 		act_tools_tr_patchboard.setEnabled(False)
+
+		act_tools_tr_replace.triggered.connect(lambda: self.tools_replace())
 
 		# -- View
 		self.menu_view = QtGui.QMenu('View', self)
@@ -349,6 +352,7 @@ class WKernGroups(QtGui.QWidget):
 		self.tab_fontKerning.menu.popup(QtGui.QCursor.pos())				
 
 	# -- Actions ---------------------------------------------------
+	# --- Pairs ----------------------------------------------------
 	def pair_del(self):
 		self.tab_fontKerning.blockSignals(True)
 		selected_rows = set(sorted([item.row() for item in self.tab_fontKerning.selectedItems()]))
@@ -435,9 +439,29 @@ class WKernGroups(QtGui.QWidget):
 
 		print 'DONE:\t Generated string sent to clipboard!\t Pairs: {}'.format(len(selected_pairs))
 
+	# --- Actions Tools --------------------------------------------
+	def tools_replace(self):
+		search, replace = TR2FieldDLG('Find & Replace', 'Enter kern pair values.', 'Find value:', 'Replace value:').values
+		work_done = 0
+
+		if search is not None and replace is not None:
+			self.btn_fontKerning_autoupdate.setChecked(False)
+
+			for row in xrange(self.tab_fontKerning.rowCount):
+				for col in xrange(self.tab_fontKerning.columnCount):
+					cell_item = self.tab_fontKerning.item(row, col)
+					
+					if cell_item is not None:	
+						if cell_item.text() == search: 
+							cell_item.setText(replace)
+							work_done += 1
+
+			print 'REPLACE:\tKern pairs changed: {}\nWARN:\tAuto update was disabled during the process! Please update font manually!'.format(work_done)
+
 	# - Main Procedures --------------------------------------------
 	def update_font(self):
 		self.active_font.update()
+		print 'DONE:\tKerning updated! Font: %s;' %self.active_font.fg.path
 
 	def update_data(self, source, updateTable=True):
 		self.data_fontKerning = source
