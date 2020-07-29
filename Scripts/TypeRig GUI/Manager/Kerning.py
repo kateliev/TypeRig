@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kerning Overview', '2.1'
+app_name, app_version = 'TypeRig | Kerning Overview', '2.4'
 alt_mark = '.'
 
 # - Dependencies -----------------
@@ -30,6 +30,7 @@ from typerig.proxy import *
 fileFormats = ['TypeRig JSON Raw Kerning (*.json)', 'FontLab JSON Kernign (*.vfm)']
 NOVAL = 'NOVAL'
 pair_delimiter = '|'
+special_rule = '!'
 pair_class = '@'
 command_separator = ';'
 command_operator = '== >= <= != > <'.split()
@@ -43,9 +44,8 @@ def parser_format(parse_string):
 		for operator in command_operator:
 			if operator in item:
 				opi = item.index(operator)
-				color_rule = QtGui.QColor(item[:opi])
-				color_rule.setAlpha(50)
-				return_commands.append((item[opi:], color_rule))
+				format_rule = item[:opi]
+				return_commands.append((item[opi:], format_rule))
 	return return_commands
 
 def parser_highlight(parse_string):
@@ -71,6 +71,7 @@ class KernTableWidget(QtGui.QTableWidget):
 		
 		self.values_changed = []
 		self.itemChanged.connect(self.kern_value_changed)
+		self.selectionModel().selectionChanged.connect(self.selection_status_changed)
 
 
 		# - Styling
@@ -118,11 +119,20 @@ class KernTableWidget(QtGui.QTableWidget):
 	def getTable(self, getNotes=False):
 		pass
 
+	def selection_status_changed(self):
+		selected_items = self.selectedItems()
+		selected_items_len = len(selected_items)
+		if selected_items_len:
+			selected_items_mean = sum([float(item.text()) for item in selected_items])/float(selected_items_len)
+			self.aux.lbl_status_selection_len.setText(selected_items_len)
+			self.aux.lbl_status_selection_med.setText(selected_items_mean)
+
 	def kern_value_changed(self, item):
 		current_row, current_col = item.row(), item.column()
 		current_layer = self.aux.data_fontKerning[0][current_col]
-		left, right = self.aux.data_fontKerning[2][current_row]
-		current_pair = (left.encode('ascii','ignore'), right.encode('ascii','ignore'))
+		current_pair = self.aux.data_fontKerning[2][current_row]
+		#left, right = self.aux.data_fontKerning[2][current_row]
+		#current_pair = (left.encode('ascii','ignore'), right.encode('ascii','ignore'))
 		
 		self.aux.active_font.kerning(current_layer)[current_pair] = int(item.text())
 		item.setForeground(QtGui.QBrush(self.flag_valueChanged))
@@ -146,7 +156,7 @@ class WKernGroups(QtGui.QWidget):
 		# - Interface -------------------------
 		# -- Conditional formatting -----------
 		self.edt_formatting = QtGui.QLineEdit()
-		self.edt_formatting.setPlaceholderText('Conditional formatting string. Example: red==None; green > 0; blue < 0; yellow => 100;')
+		self.edt_formatting.setPlaceholderText('Conditional formatting example: red==None; green > 0; blue < 0; yellow => 100;!hide<-50; !show==30;')
 		
 		self.btn_formatting_apply = QtGui.QPushButton('Format')
 		self.btn_formatting_clear = QtGui.QPushButton('Clear')
@@ -292,6 +302,13 @@ class WKernGroups(QtGui.QWidget):
 		act_view_hide_matching.triggered.connect(lambda: self.update_table_hide_matching(True))
 		act_view_hide_nonmatching.triggered.connect(lambda: self.update_table_hide_matching(False))
 
+		# -- Status bar
+		self.lbl_status_selection_len = QtGui.QLabel('0')
+		self.lbl_status_selection_med = QtGui.QLabel('0')
+		self.lbl_status_pairs_len = QtGui.QLabel('0')
+		self.lbl_status_pairs_hidden = QtGui.QLabel('0')
+		self.lbl_status_masters_len = QtGui.QLabel('0')
+
 		# -- MACOS buttons menu
 		self.btn_mac_data_import = QtGui.QPushButton('Import')
 		self.btn_mac_data_export = QtGui.QPushButton('Export')
@@ -332,6 +349,19 @@ class WKernGroups(QtGui.QWidget):
 		self.lay_grid.addWidget(self.edt_formatting,						36, 6, 1, 24)
 		self.lay_grid.addWidget(self.btn_formatting_apply,					36, 30, 1, 5)
 		self.lay_grid.addWidget(self.btn_formatting_clear,					36, 35, 1, 5)
+		self.lay_grid.addWidget(self.btn_formatting_clear,					36, 35, 1, 5)
+		
+		self.lay_grid.addWidget(QtGui.QLabel('SELECTION:'),					37, 0, 1, 4)
+		self.lay_grid.addWidget(self.lbl_status_selection_len,				37, 4, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('MEAN:'),					37, 8, 1, 4)	
+		self.lay_grid.addWidget(self.lbl_status_selection_med,				37, 12, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('PAIRS:'),						37, 16, 1, 4)	
+		self.lay_grid.addWidget(self.lbl_status_pairs_len,					37, 20, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('HIDDEN:'),					37, 24, 1, 4)	
+		self.lay_grid.addWidget(self.lbl_status_pairs_hidden,				37, 28, 1, 4)
+		self.lay_grid.addWidget(QtGui.QLabel('MASTERS:'),					37, 32, 1, 4)	
+		self.lay_grid.addWidget(self.lbl_status_masters_len,				37, 36, 1, 4)
+
 		
 		self.lay_grid.setSpacing(3)
 		self.setLayout(self.lay_grid)
@@ -372,6 +402,7 @@ class WKernGroups(QtGui.QWidget):
 			self.tab_fontKerning.removeRow(current_row)
 		
 		print 'DONE:\tPairs removed: {}; Pairs: {}!\nWARN:\tAuto update was disabled during the process! Please update font manually!'.format(len(pairs_removed), ' '.join(pairs_removed))
+		self.lbl_status_pairs_len.setText(len(self.data_fontKerning[2]))
 		self.tab_fontKerning.blockSignals(False)
 
 	def pair_copy_paste(self, paste_values=False):
@@ -426,14 +457,14 @@ class WKernGroups(QtGui.QWidget):
 						right_in_group = right
 
 				current_pair = (left_in_group, right_in_group)
-				current_pair = ''.join(current_pair)
+				current_pair = '/'+'/'.join(current_pair)
 
 			selected_pairs.add(current_pair)
 
 		clipboard = QtGui.QApplication.clipboard()
 		
 		if return_leaders:
-			clipboard.setText('\n'.join(selected_pairs))
+			clipboard.setText('/space'.join(selected_pairs))
 		else:
 			clipboard.setText(str(list(selected_pairs)))
 
@@ -465,6 +496,8 @@ class WKernGroups(QtGui.QWidget):
 
 	def update_data(self, source, updateTable=True):
 		self.data_fontKerning = source
+		self.lbl_status_masters_len.setText(len(self.data_fontKerning[0]))
+		self.lbl_status_pairs_len.setText(len(self.data_fontKerning[2]))
 		
 		if updateTable:
 			self.tab_fontKerning.clear()
@@ -472,6 +505,7 @@ class WKernGroups(QtGui.QWidget):
 			self.tab_fontKerning.setTable(self.data_fontKerning)
 
 	def update_table_format(self, clearTable=False):
+		hidden_rows = 0
 		formattig_list = parser_format(self.edt_formatting.text)
 		self.tab_fontKerning.blockSignals(True)
 
@@ -481,17 +515,30 @@ class WKernGroups(QtGui.QWidget):
 				
 				if cell_item is not None:	
 					if not clearTable:
-						for cell_rule, cell_color in formattig_list:
+						for cell_rule, format_rule in formattig_list:
 							if eval(cell_item.text() + cell_rule):
-								cell_item.setBackground(cell_color)
+								if special_rule in format_rule:
+									if format_rule[1:].upper() == 'HIDE':
+										self.tab_fontKerning.hideRow(row)
+										hidden_rows += 1
+										break
+									elif format_rule[1:].upper() == 'SHOW':
+										self.tab_fontKerning.showRow(row)
+										break
+								else:
+									color_rule = QtGui.QColor(format_rule)
+									color_rule.setAlpha(50)
+									cell_item.setBackground(color_rule)
 					else:
-						cell_item.setBackground(QtGui.QColor('white'))
+						cell_item.setBackground(QtGui.QColor('white'))						
 
 		self.tab_fontKerning.blockSignals(False)
+		self.lbl_status_pairs_hidden.setText(hidden_rows)
 			
 	def update_table_hightlights(self, search_field=False, hide_others=False):
 		# !!! TODO: Use direct Vertical/Horizontal header indexing if columns/rows are moved
 		show_items = []
+		hidden_rows = 0
 
 		font_layers, font_kerning, all_pairs = self.data_fontKerning
 		col = font_layers.index(pGlyph().layer().name)
@@ -508,24 +555,7 @@ class WKernGroups(QtGui.QWidget):
 		for pair in pairs_list:
 			if pair is not None:
 				left, right = pair
-				left_is_group, right_is_group = False, False
-				
-				if pair_class in left:
-					left = left.strip(pair_class)
-					left_is_group = True
-
-				if pair_class in right:
-					right = right.strip(pair_class)
-					right_is_group = True
-
-				if not search_field:
-					left_is_group = True
-					right_is_group = True
-
 				new_left, new_right = proxy_kerning.getPairGroups((left, right))
-				new_left = new_left if left_is_group else left
-				new_right = new_right if right_is_group else right
-
 				row = all_pairs.index((new_left, new_right))
 				
 				selected_item = self.tab_fontKerning.item(row, col)
@@ -543,7 +573,9 @@ class WKernGroups(QtGui.QWidget):
 					self.tab_fontKerning.showRow(row)
 				else:	
 					self.tab_fontKerning.hideRow(row)
+					hidden_rows += 1
 
+		self.lbl_status_pairs_hidden.setText(hidden_rows)
 		self.tab_fontKerning.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection) # Back to regular selection
 
 	def update_table_regex(self):
@@ -551,6 +583,7 @@ class WKernGroups(QtGui.QWidget):
 		all_pairs_text = [' '.join(item) for item in all_pairs]
 		results = re.findall(self.edt_search_regex.text, '\n'.join(all_pairs_text), re.UNICODE)
 		show_items = []
+		hidden_rows = 0
 
 		for search_result in results:
 			if search_result in all_pairs_text:
@@ -566,11 +599,17 @@ class WKernGroups(QtGui.QWidget):
 					self.tab_fontKerning.showRow(row)
 				else:	
 					self.tab_fontKerning.hideRow(row)
-		
+					hidden_rows += 1
+
+		self.lbl_status_pairs_hidden.setText(hidden_rows)
+
 	def update_table_hide_matching(self, hide_matching=True):
+		hidden_rows = 0
+
 		for row in xrange(self.tab_fontKerning.rowCount):
 			if hide_matching:
 				self.tab_fontKerning.hideRow(row)
+				hidden_rows += 1
 			else:
 				self.tab_fontKerning.showRow(row)
 
@@ -578,13 +617,18 @@ class WKernGroups(QtGui.QWidget):
 				if self.tab_fontKerning.item(row,col).text() == NOVAL:
 					if not hide_matching:
 						self.tab_fontKerning.hideRow(row)
+						hidden_rows += 1
 					else:
 						self.tab_fontKerning.showRow(row)
 					break
 
+		self.lbl_status_pairs_hidden.setText(hidden_rows)
+
 	def update_table_show_all(self):
 		for row in xrange(self.tab_fontKerning.rowCount):
 			self.tab_fontKerning.showRow(row)
+
+		self.lbl_status_pairs_hidden.setText('0')
 
 	def kerning_reset(self):
 		ask_clear_kerning = QtGui.QMessageBox.question(self, 'Clear font Kerning', 'Are you shure you want to delete all kerning pairs for:\n%s'%self.active_font.fg.path, QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
