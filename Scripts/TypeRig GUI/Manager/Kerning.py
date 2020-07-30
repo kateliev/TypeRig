@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kerning Overview', '2.4'
+app_name, app_version = 'TypeRig | Kerning Overview', '2.8'
 alt_mark = '.'
 
 # - Dependencies -----------------
@@ -120,12 +120,15 @@ class KernTableWidget(QtGui.QTableWidget):
 		pass
 
 	def selection_status_changed(self):
-		selected_items = self.selectedItems()
+		selected_items = [float(item.text()) for item in self.selectedItems() if item.text() != NOVAL]
 		selected_items_len = len(selected_items)
 		if selected_items_len:
-			selected_items_mean = sum([float(item.text()) for item in selected_items])/float(selected_items_len)
+			selected_items_mean = sum(selected_items)/float(selected_items_len)
 			self.aux.lbl_status_selection_len.setText(selected_items_len)
 			self.aux.lbl_status_selection_med.setText(selected_items_mean)
+
+			if self.aux.btn_fontKerning_preview.isChecked():
+				self.aux.pair_preview_string()
 
 	def kern_value_changed(self, item):
 		current_row, current_col = item.row(), item.column()
@@ -197,9 +200,12 @@ class WKernGroups(QtGui.QWidget):
 
 		# -- Table ----------------------------
 		self.btn_fontKerning_autoupdate = QtGui.QPushButton('Auto Update')
-		self.btn_fontKerning_update = QtGui.QPushButton('Update Kerning')
+		self.btn_fontKerning_preview = QtGui.QPushButton('Preview pairs')
+		self.btn_fontKerning_update = QtGui.QPushButton('Update Font')
 		self.tab_fontKerning = KernTableWidget(self)
+		
 		self.btn_fontKerning_autoupdate.setCheckable(True)
+		self.btn_fontKerning_preview.setCheckable(True)
 		self.btn_fontKerning_autoupdate.setChecked(True)
 		self.btn_fontKerning_update.clicked.connect(lambda: self.update_font())
 
@@ -292,12 +298,15 @@ class WKernGroups(QtGui.QWidget):
 		act_view_show_all = QtGui.QAction('Show hidden rows', self)
 		act_view_hide_matching = QtGui.QAction('Hide matching pairs', self)
 		act_view_hide_nonmatching = QtGui.QAction('Hide non-matching pairs', self)
+		act_view_pair_preview = QtGui.QAction('Preview selected pairs', self)
 
 		self.menu_view.addAction(act_view_show_all)
+		self.menu_view.addAction(act_view_pair_preview)
 		self.menu_view.addSeparator()
 		self.menu_view.addAction(act_view_hide_matching)
 		self.menu_view.addAction(act_view_hide_nonmatching)
 
+		act_view_pair_preview.triggered.connect(lambda: self.pair_preview_string())
 		act_view_show_all.triggered.connect(lambda: self.update_table_show_all())
 		act_view_hide_matching.triggered.connect(lambda: self.update_table_hide_matching(True))
 		act_view_hide_nonmatching.triggered.connect(lambda: self.update_table_hide_matching(False))
@@ -334,13 +343,14 @@ class WKernGroups(QtGui.QWidget):
 		self.lay_grid.addWidget(self.edt_search_pair,						1, 0, 1, 20)	
 		self.lay_grid.addWidget(self.btn_search_pair,						1, 20, 1, 5)	
 		self.lay_grid.addWidget(self.btn_search_pair_under,					1, 25, 1, 5)
+		self.lay_grid.addWidget(self.btn_fontKerning_preview,				1, 30, 1, 5)
 		self.lay_grid.addWidget(self.btn_search_hide,						2, 25, 1, 5)
 
 		self.lay_grid.addWidget(self.edt_search_regex,						2, 0, 1, 20)	
 		self.lay_grid.addWidget(self.btn_search_regex,						2, 20, 1, 5)
 		
 		self.lay_grid.addWidget(self.btn_fontKerning_autoupdate,			1, 35, 1, 5)
-		self.lay_grid.addWidget(self.btn_fontKerning_update,				2, 35, 1, 5)
+		self.lay_grid.addWidget(self.btn_fontKerning_update,				2, 30, 1, 10)
 		
 		self.lay_grid.addWidget(self.tab_fontKerning,						4, 0, 32, 40)
 
@@ -380,6 +390,41 @@ class WKernGroups(QtGui.QWidget):
 		self.tab_fontKerning.menu.addMenu(self.menu_view)
 
 		self.tab_fontKerning.menu.popup(QtGui.QCursor.pos())				
+
+	# -- Helpers ---------------------------------------------------
+	def getSelectedPairs(self, return_leaders=False):
+		selected_pairs = set()
+		all_pairs = self.data_fontKerning[2]
+		groups_dict = self.active_font.kerning_groups_to_dict(byPosition=True,sortUnicode=True)
+
+		for item in self.tab_fontKerning.selectedItems():
+			current_pair = all_pairs[item.row()]
+			
+			if return_leaders:
+				left, right = current_pair
+				left_in_group, right_in_group = current_pair
+
+				try:
+					left_in_group = dict(groups_dict['KernLeft'])[left][0]
+				except KeyError:
+					try:
+						left_in_group = dict(groups_dict['KernBothSide'])[left][0]
+					except KeyError:
+						left_in_group = left
+
+				try:
+					right_in_group = dict(groups_dict['KernRight'])[right][0]
+				except KeyError:
+					try:
+						right_in_group = dict(groups_dict['KernBothSide'])[right][0]
+					except KeyError:
+						right_in_group = right
+
+				current_pair = (left_in_group, right_in_group)
+				
+			selected_pairs.add(current_pair)
+
+		return selected_pairs
 
 	# -- Actions ---------------------------------------------------
 	# --- Pairs ----------------------------------------------------
@@ -429,46 +474,21 @@ class WKernGroups(QtGui.QWidget):
 				print 'ERROR:\tData in Clipboard and Selection do not match: {}/{}!'.format(len(self.data_clipboard),len(selected_items))
 
 	def pair_copy_string(self, return_leaders=False):
-		selected_pairs = set()
-		all_pairs = self.data_fontKerning[2]
-		groups_dict = self.active_font.kerning_groups_to_dict(byPosition=True,sortUnicode=True)
-
-		for item in self.tab_fontKerning.selectedItems():
-			current_pair = all_pairs[item.row()]
-			
-			if return_leaders:
-				left, right = current_pair
-				left_in_group, right_in_group = current_pair
-
-				try:
-					left_in_group = dict(groups_dict['KernLeft'])[left][0]
-				except KeyError:
-					try:
-						left_in_group = dict(groups_dict['KernBothSide'])[left][0]
-					except KeyError:
-						left_in_group = left
-
-				try:
-					right_in_group = dict(groups_dict['KernRight'])[right][0]
-				except KeyError:
-					try:
-						right_in_group = dict(groups_dict['KernBothSide'])[right][0]
-					except KeyError:
-						right_in_group = right
-
-				current_pair = (left_in_group, right_in_group)
-				current_pair = '/'+'/'.join(current_pair)
-
-			selected_pairs.add(current_pair)
-
+		selected_pairs = self.getSelectedPairs(return_leaders)
 		clipboard = QtGui.QApplication.clipboard()
 		
 		if return_leaders:
-			clipboard.setText('/space'.join(selected_pairs))
+			clipboard.setText('/space'.join(['/'+'/'.join(current_pair) for current_pair in selected_pairs]))
 		else:
 			clipboard.setText(str(list(selected_pairs)))
 
 		print 'DONE:\t Generated string sent to clipboard!\t Pairs: {}'.format(len(selected_pairs))
+
+	def pair_preview_string(self):
+		selected_pairs = self.getSelectedPairs(True)
+		selected_pairs = sum([[fl6.fgSymbol(item[0]), fl6.fgSymbol(item[1]), fl6.fgSymbol('space')] for item in selected_pairs],[])
+		fg_symbols = fl6.fgSymbolList(selected_pairs)
+		fl6.flItems.requestContent(fg_symbols,1)
 
 	# --- Actions Tools --------------------------------------------
 	def tools_replace(self):

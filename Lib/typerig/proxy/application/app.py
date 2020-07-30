@@ -22,6 +22,23 @@ def openFont(file_path):
 	return fl6.CurrentFont()
 
 # - Classes -------------------------------
+class pItems(object):
+	'''Proxy to flItems object
+
+	Constructor:
+		pItems()
+
+	Attributes:
+		.fl (flItems): Current workspace
+	'''
+	def __init__(self):
+		self.fl = fl6.flItems()
+
+	def outputString(self, string, cursor_location=0):
+		'''Output text to the application'''
+		self.fl.requestContent(fl6.fgSymbolList(string), cursor_location)
+
+
 class pWorkspace(object):
 	'''Proxy to flWorkspace object
 
