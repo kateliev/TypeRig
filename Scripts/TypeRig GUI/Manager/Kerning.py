@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kerning Overview', '2.8'
+app_name, app_version = 'TypeRig | Kerning Overview', '2.9'
 alt_mark = '.'
 
 # - Dependencies -----------------
@@ -237,6 +237,7 @@ class WKernGroups(QtGui.QWidget):
 		self.menu_pair = QtGui.QMenu('Pairs', self)
 		act_pair_add = QtGui.QAction('Add new pair', self)
 		act_pair_del = QtGui.QAction('Remove pair', self)
+		act_pair_update = QtGui.QAction('Update from Font', self)
 		act_pair_copy = QtGui.QAction('Copy value(s)', self)
 		act_pair_paste = QtGui.QAction('Paste value(s)', self)
 		act_pair_copy_string = QtGui.QAction('Copy pair(s) string', self)
@@ -244,6 +245,7 @@ class WKernGroups(QtGui.QWidget):
 
 		self.menu_pair.addAction(act_pair_add)
 		self.menu_pair.addAction(act_pair_del)
+		self.menu_pair.addAction(act_pair_update)
 		self.menu_pair.addSeparator()
 		self.menu_pair.addAction(act_pair_copy)
 		self.menu_pair.addAction(act_pair_paste)
@@ -255,6 +257,7 @@ class WKernGroups(QtGui.QWidget):
 		
 		#act_pair_add.triggered.connect(lambda: self.pair_add())
 		act_pair_del.triggered.connect(lambda: self.pair_del())
+		act_pair_update.triggered.connect(lambda: self.pair_update_from_source())
 		act_pair_copy.triggered.connect(lambda: self.pair_copy_paste(False))
 		act_pair_paste.triggered.connect(lambda: self.pair_copy_paste(True))
 		act_pair_copy_string.triggered.connect(lambda: self.pair_copy_string(False))
@@ -296,6 +299,7 @@ class WKernGroups(QtGui.QWidget):
 		# -- View
 		self.menu_view = QtGui.QMenu('View', self)
 		act_view_show_all = QtGui.QAction('Show hidden rows', self)
+		act_view_hide_selected = QtGui.QAction('Hide selected rows', self)
 		act_view_hide_matching = QtGui.QAction('Hide matching pairs', self)
 		act_view_hide_nonmatching = QtGui.QAction('Hide non-matching pairs', self)
 		act_view_pair_preview = QtGui.QAction('Preview selected pairs', self)
@@ -303,11 +307,13 @@ class WKernGroups(QtGui.QWidget):
 		self.menu_view.addAction(act_view_show_all)
 		self.menu_view.addAction(act_view_pair_preview)
 		self.menu_view.addSeparator()
+		self.menu_view.addAction(act_view_hide_selected)
 		self.menu_view.addAction(act_view_hide_matching)
 		self.menu_view.addAction(act_view_hide_nonmatching)
 
 		act_view_pair_preview.triggered.connect(lambda: self.pair_preview_string())
 		act_view_show_all.triggered.connect(lambda: self.update_table_show_all())
+		act_view_hide_selected.triggered.connect(lambda: self.update_table_hide_selected())
 		act_view_hide_matching.triggered.connect(lambda: self.update_table_hide_matching(True))
 		act_view_hide_nonmatching.triggered.connect(lambda: self.update_table_hide_matching(False))
 
@@ -490,6 +496,20 @@ class WKernGroups(QtGui.QWidget):
 		fg_symbols = fl6.fgSymbolList(selected_pairs)
 		fl6.flItems.requestContent(fg_symbols,1)
 
+	def pair_update_from_source(self):
+		self.tab_fontKerning.blockSignals(True)
+		selected_items = self.tab_fontKerning.selectedItems()
+		
+		for item in selected_items:
+			current_row, current_col = item.row(), item.column()
+			current_layer = self.data_fontKerning[0][current_col]
+			current_pair = self.data_fontKerning[2][current_row]
+			update_value = int(self.active_font.kerning(current_layer)[current_pair])
+			item.setText(update_value)
+
+		self.tab_fontKerning.blockSignals(False)
+		print 'UPDATE:\tPair values updated from source: {}'.format(len(selected_items))
+
 	# --- Actions Tools --------------------------------------------
 	def tools_replace(self):
 		search, replace = TR2FieldDLG('Find & Replace', 'Enter kern pair values.', 'Find value:', 'Replace value:').values
@@ -620,6 +640,16 @@ class WKernGroups(QtGui.QWidget):
 				else:	
 					self.tab_fontKerning.hideRow(row)
 					hidden_rows += 1
+
+		self.lbl_status_pairs_hidden.setText(hidden_rows)
+
+	def update_table_hide_selected(self):
+		hidden_rows = int(self.lbl_status_pairs_hidden.text)
+		rows_to_hide = sorted(list(set([item.row() for item in self.tab_fontKerning.selectedItems()])))
+		hidden_rows += len(rows_to_hide)
+		
+		for row in rows_to_hide:
+			self.tab_fontKerning.hideRow(row)
 
 		self.lbl_status_pairs_hidden.setText(hidden_rows)
 
