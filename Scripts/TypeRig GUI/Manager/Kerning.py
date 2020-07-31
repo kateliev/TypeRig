@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kerning Overview', '2.9'
+app_name, app_version = 'TypeRig | Kerning Overview', '3.0'
 alt_mark = '.'
 
 # - Dependencies -----------------
@@ -128,7 +128,7 @@ class KernTableWidget(QtGui.QTableWidget):
 			self.aux.lbl_status_selection_med.setText(selected_items_mean)
 
 			if self.aux.btn_fontKerning_preview.isChecked():
-				self.aux.pair_preview_string()
+				self.aux.pair_preview_string(self.aux.btn_layer_preview.isChecked())
 
 	def kern_value_changed(self, item):
 		current_row, current_col = item.row(), item.column()
@@ -201,11 +201,13 @@ class WKernGroups(QtGui.QWidget):
 		# -- Table ----------------------------
 		self.btn_fontKerning_autoupdate = QtGui.QPushButton('Auto Update')
 		self.btn_fontKerning_preview = QtGui.QPushButton('Preview pairs')
+		self.btn_layer_preview = QtGui.QPushButton('Preview layers')
 		self.btn_fontKerning_update = QtGui.QPushButton('Update Font')
 		self.tab_fontKerning = KernTableWidget(self)
 		
 		self.btn_fontKerning_autoupdate.setCheckable(True)
 		self.btn_fontKerning_preview.setCheckable(True)
+		self.btn_layer_preview.setCheckable(True)
 		self.btn_fontKerning_autoupdate.setChecked(True)
 		self.btn_fontKerning_update.clicked.connect(lambda: self.update_font())
 
@@ -311,7 +313,7 @@ class WKernGroups(QtGui.QWidget):
 		self.menu_view.addAction(act_view_hide_matching)
 		self.menu_view.addAction(act_view_hide_nonmatching)
 
-		act_view_pair_preview.triggered.connect(lambda: self.pair_preview_string())
+		act_view_pair_preview.triggered.connect(lambda: self.pair_preview_string(self.btn_layer_preview.isChecked()))
 		act_view_show_all.triggered.connect(lambda: self.update_table_show_all())
 		act_view_hide_selected.triggered.connect(lambda: self.update_table_hide_selected())
 		act_view_hide_matching.triggered.connect(lambda: self.update_table_hide_matching(True))
@@ -351,12 +353,13 @@ class WKernGroups(QtGui.QWidget):
 		self.lay_grid.addWidget(self.btn_search_pair_under,					1, 25, 1, 5)
 		self.lay_grid.addWidget(self.btn_fontKerning_preview,				1, 30, 1, 5)
 		self.lay_grid.addWidget(self.btn_search_hide,						2, 25, 1, 5)
+		self.lay_grid.addWidget(self.btn_layer_preview,						2, 30, 1, 5)
 
 		self.lay_grid.addWidget(self.edt_search_regex,						2, 0, 1, 20)	
 		self.lay_grid.addWidget(self.btn_search_regex,						2, 20, 1, 5)
 		
 		self.lay_grid.addWidget(self.btn_fontKerning_autoupdate,			1, 35, 1, 5)
-		self.lay_grid.addWidget(self.btn_fontKerning_update,				2, 30, 1, 10)
+		self.lay_grid.addWidget(self.btn_fontKerning_update,				2, 35, 1, 5)
 		
 		self.lay_grid.addWidget(self.tab_fontKerning,						4, 0, 32, 40)
 
@@ -400,11 +403,13 @@ class WKernGroups(QtGui.QWidget):
 	# -- Helpers ---------------------------------------------------
 	def getSelectedPairs(self, return_leaders=False):
 		selected_pairs = set()
-		all_pairs = self.data_fontKerning[2]
+		selected_layers = set()
+		all_layers, all_pairs = self.data_fontKerning[0], self.data_fontKerning[2]
 		groups_dict = self.active_font.kerning_groups_to_dict(byPosition=True,sortUnicode=True)
 
 		for item in self.tab_fontKerning.selectedItems():
 			current_pair = all_pairs[item.row()]
+			current_layer = all_layers[item.column()]
 			
 			if return_leaders:
 				left, right = current_pair
@@ -429,8 +434,9 @@ class WKernGroups(QtGui.QWidget):
 				current_pair = (left_in_group, right_in_group)
 				
 			selected_pairs.add(current_pair)
+			selected_layers.add(current_layer)
 
-		return selected_pairs
+		return selected_pairs, selected_layers
 
 	# -- Actions ---------------------------------------------------
 	# --- Pairs ----------------------------------------------------
@@ -480,7 +486,7 @@ class WKernGroups(QtGui.QWidget):
 				print 'ERROR:\tData in Clipboard and Selection do not match: {}/{}!'.format(len(self.data_clipboard),len(selected_items))
 
 	def pair_copy_string(self, return_leaders=False):
-		selected_pairs = self.getSelectedPairs(return_leaders)
+		selected_pairs, _discard = self.getSelectedPairs(return_leaders)
 		clipboard = QtGui.QApplication.clipboard()
 		
 		if return_leaders:
@@ -490,11 +496,16 @@ class WKernGroups(QtGui.QWidget):
 
 		print 'DONE:\t Generated string sent to clipboard!\t Pairs: {}'.format(len(selected_pairs))
 
-	def pair_preview_string(self):
-		selected_pairs = self.getSelectedPairs(True)
+	def pair_preview_string(self, use_layer=False):
+		selected_pairs, selected_layers = self.getSelectedPairs(True)
+		selected_pairs = sum([[item[0], item[1], 'space'] for item in selected_pairs], [])
+		'''
 		selected_pairs = sum([[fl6.fgSymbol(item[0]), fl6.fgSymbol(item[1]), fl6.fgSymbol('space')] for item in selected_pairs],[])
 		fg_symbols = fl6.fgSymbolList(selected_pairs)
 		fl6.flItems.requestContent(fg_symbols,1)
+		'''
+		current_layer = list(selected_layers)[:1] if use_layer else ''
+		pItems().outputGlyphNames(selected_pairs, current_layer)
 
 	def pair_update_from_source(self):
 		self.tab_fontKerning.blockSignals(True)

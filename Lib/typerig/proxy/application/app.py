@@ -38,6 +38,27 @@ class pItems(object):
 		'''Output text to the application'''
 		self.fl.requestContent(fl6.fgSymbolList(string), cursor_location)
 
+	def outputGlyphNames(self, glyphNamesList, layerList=[], cursor_location=0):
+		'''Output text string using glyph names and layers specified'''
+		fgSymbols = [fl6.fgSymbol(glyph_name) for glyph_name in glyphNamesList]
+		
+		if not len(layerList):
+			layerList = ['']
+
+		if len(layerList) == len(fgSymbols):
+			pass
+		elif len(layerList) == 1:
+			layerList = layerList*len(fgSymbols)
+		else:
+			layerList = layerList[0]*len(fgSymbols)
+
+		fgSymbol_layer_pair = zip(fgSymbols, layerList)
+
+		for symbol, layer in fgSymbol_layer_pair:
+			symbol.layerName = layer
+
+		self.fl.requestContent(fl6.fgSymbolList(fgSymbols), cursor_location)
+
 
 class pWorkspace(object):
 	'''Proxy to flWorkspace object
