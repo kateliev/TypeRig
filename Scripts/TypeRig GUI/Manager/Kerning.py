@@ -499,11 +499,6 @@ class WKernGroups(QtGui.QWidget):
 	def pair_preview_string(self, use_layer=False):
 		selected_pairs, selected_layers = self.getSelectedPairs(True)
 		selected_pairs = sum([[item[0], item[1], 'space'] for item in selected_pairs], [])
-		'''
-		selected_pairs = sum([[fl6.fgSymbol(item[0]), fl6.fgSymbol(item[1]), fl6.fgSymbol('space')] for item in selected_pairs],[])
-		fg_symbols = fl6.fgSymbolList(selected_pairs)
-		fl6.flItems.requestContent(fg_symbols,1)
-		'''
 		current_layer = list(selected_layers)[:1] if use_layer else ''
 		pItems().outputGlyphNames(selected_pairs, current_layer)
 
