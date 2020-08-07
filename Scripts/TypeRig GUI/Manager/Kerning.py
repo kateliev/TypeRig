@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kerning Overview', '3.0'
+app_name, app_version = 'TypeRig | Kerning Overview', '3.2'
 alt_mark = '.'
 
 # - Dependencies -----------------
@@ -25,9 +25,15 @@ from typerig.gui import QtGui
 from typerig.gui.widgets import TR2FieldDLG
 
 from typerig.proxy import *
+from typerig.core.fileio import cla, krn
 
 # - Strings ------------------------------------------------------------------
-fileFormats = ['TypeRig JSON Raw Kerning (*.json)', 'FontLab JSON Kernign (*.vfm)']
+file_formats = {'trjson': 	'TypeRig JSON Raw Kerning (*.json)',
+				'fljson': 	'FontLab JSON Kernign (*.vfm)',
+				'krn': 		'DTL Kern Pairs file (*.krn);;',
+				'cla': 		'DTL Kern Classes file (*.cla);;',
+				'afm': 		'Adobe Font Metrics file (*.afm);;'
+				}
 NOVAL = 'NOVAL'
 pair_delimiter = '|'
 special_rule = '!'
@@ -242,8 +248,10 @@ class WKernGroups(QtGui.QWidget):
 		act_pair_update = QtGui.QAction('Update from Font', self)
 		act_pair_copy = QtGui.QAction('Copy value(s)', self)
 		act_pair_paste = QtGui.QAction('Paste value(s)', self)
-		act_pair_copy_string = QtGui.QAction('Copy pair(s) string', self)
-		act_pair_copy_leader = QtGui.QAction('Copy pair(s) string as Glyph Names', self)
+		act_pair_copy_string = QtGui.QAction('Copy pairs string', self)
+		act_pair_copy_leader = QtGui.QAction('Copy pairs string as Glyph Names', self)
+		act_pair_save_krn_clas = QtGui.QAction('Save CLASS pairs as KRN...', self)
+		act_pair_save_krn_plain = QtGui.QAction('Save PLAIN pairs as KRN...', self)
 
 		self.menu_pair.addAction(act_pair_add)
 		self.menu_pair.addAction(act_pair_del)
@@ -254,6 +262,9 @@ class WKernGroups(QtGui.QWidget):
 		self.menu_pair.addSeparator()
 		self.menu_pair.addAction(act_pair_copy_string)
 		self.menu_pair.addAction(act_pair_copy_leader)
+		self.menu_pair.addSeparator()
+		self.menu_pair.addAction(act_pair_save_krn_clas)
+		self.menu_pair.addAction(act_pair_save_krn_plain)
 
 		act_pair_add.setEnabled(False)
 		
@@ -264,6 +275,8 @@ class WKernGroups(QtGui.QWidget):
 		act_pair_paste.triggered.connect(lambda: self.pair_copy_paste(True))
 		act_pair_copy_string.triggered.connect(lambda: self.pair_copy_string(False))
 		act_pair_copy_leader.triggered.connect(lambda: self.pair_copy_string(True))
+		act_pair_save_krn_clas.triggered.connect(lambda: self.pair_save_krn(False))
+		act_pair_save_krn_plain.triggered.connect(lambda: self.pair_save_krn(True))
 
 		# -- Tools
 		self.menu_tools = QtGui.QMenu('Tools', self)
@@ -401,7 +414,7 @@ class WKernGroups(QtGui.QWidget):
 		self.tab_fontKerning.menu.popup(QtGui.QCursor.pos())				
 
 	# -- Helpers ---------------------------------------------------
-	def getSelectedPairs(self, return_leaders=False):
+	def getSelectedPairs(self, return_leaders=False, mark_groups=''):
 		selected_pairs = set()
 		selected_layers = set()
 		all_layers, all_pairs = self.data_fontKerning[0], self.data_fontKerning[2]
@@ -433,6 +446,9 @@ class WKernGroups(QtGui.QWidget):
 
 				current_pair = (left_in_group, right_in_group)
 				
+			if len(mark_groups):
+				current_pair = (mark_groups + current_pair[0], mark_groups + current_pair[1])
+
 			selected_pairs.add(current_pair)
 			selected_layers.add(current_layer)
 
@@ -495,6 +511,19 @@ class WKernGroups(QtGui.QWidget):
 			clipboard.setText(str(list(selected_pairs)))
 
 		print 'DONE:\t Generated string sent to clipboard!\t Pairs: {}'.format(len(selected_pairs))
+
+	def pair_save_krn(self, return_leaders=False):
+		mark_groups = '' if return_leaders else pair_class
+		save_pairs, _discard = self.getSelectedPairs(return_leaders, mark_groups)
+
+		font_path = os.path.split(self.active_font.fg.path)[0]
+		save_path = QtGui.QFileDialog.getSaveFileName(None, 'Save DTL Kern Pairs file', font_path, file_formats['krn'])
+		
+		if len(save_path):
+			with krn.KRNparser(save_path, 'w') as writer:
+				writer.dump(sorted(save_pairs), 'Font: {}'.format(self.active_font.name))
+
+			print 'DONE:\t {} Generated pairs saved! File: {}'.format(len(save_pairs), save_path)
 
 	def pair_preview_string(self, use_layer=False):
 		selected_pairs, selected_layers = self.getSelectedPairs(True)
