@@ -18,19 +18,24 @@ from typerig.proxy import pFont
 from typerig.core.objects.collection import extBiDict
 
 # - Init --------------------------------
-app_name, app_version = 'Copy Kernig', '1.60'
+app_name, app_version = 'Copy Kernig', '1.81'
 
 # -- Strings 
 str_help = '''
 Expressions:
- - Only one source pair (colon) separated;
- - Source adjustment is (bar) separated; 
- - Multiple destination pairs (space) separated;
- - Each pair is (colon) separated;
+ - Only one source pair (bar) separated;
+ - Source adjustment is (at) separated; 
+ - Multiple destination pairs (bar) separated;
+ - Each pair is (bar) separated;
  - Group/class kerning is detected on the fly.
 
-Example: Y:A A:Y A:V = V:A'
+Example: Y|A A|Y A|V = V|A'
 '''
+syn_pair = '|'
+syn_adjust = '@'
+syn_comment = '#'
+syn_equal = '='
+
 fileFormats = ['TypeRig JSON Raw Classes (*.json)', 'FontLab VI JSON Classes (*.json)']
 
 # - Functions ----------------------------------------------------------------
@@ -61,20 +66,30 @@ class tool_tab(QtGui.QWidget):
 		# - Init
 		self.active_font = pFont()
 		self.class_data = {}
-		
+				
 		# - Widgets
 		self.cmb_layer = QtGui.QComboBox()
-		self.cmb_layer.addItems(self.active_font.masters() + ['All masters'])
+		self.cmb_layer.addItems(['All masters'] + self.active_font.masters())
 
 		self.btn_loadFile = QtGui.QPushButton('From File')
 		self.btn_loadFont = QtGui.QPushButton('From Font')
 		self.btn_saveExpr = QtGui.QPushButton('Save')
 		self.btn_loadExpr = QtGui.QPushButton('Load')
 		self.btn_exec = QtGui.QPushButton('Execute')
+		self.btn_help = QtGui.QPushButton('Help')
+		self.btn_classKern = QtGui.QPushButton('Class Kerning')
 
-		self.btn_loadFont.setEnabled(False)
+		self.btn_classKern.setCheckable(True)
+		self.btn_loadFile.setCheckable(True)
+		self.btn_loadFont.setCheckable(True)
 		
+		self.btn_loadFile.setChecked(False)
+		self.btn_loadFont.setChecked(False)
+		self.btn_classKern.setChecked(True)
+			
+		self.btn_help.clicked.connect(lambda: QtGui.QMessageBox.information(None, 'Help', str_help))
 		self.btn_loadFile.clicked.connect(self.classes_fromFile)
+		self.btn_loadFont.clicked.connect(self.classes_fromFont)
 		self.btn_exec.clicked.connect(self.process)
 		self.btn_saveExpr.clicked.connect(self.expr_toFile)
 		self.btn_loadExpr.clicked.connect(self.expr_fromFile)
@@ -83,16 +98,17 @@ class tool_tab(QtGui.QWidget):
 		
 		# - Build layouts 
 		layoutV = QtGui.QGridLayout() 
-		layoutV.addWidget(QtGui.QLabel('Load class kerning data:'),	0, 0, 1, 4)
+		layoutV.addWidget(QtGui.QLabel('Class kerning data:'),		0, 0, 1, 4)
 		layoutV.addWidget(self.btn_loadFont, 						1, 0, 1, 2)
 		layoutV.addWidget(self.btn_loadFile, 						1, 2, 1, 2)
-		layoutV.addWidget(QtGui.QLabel('Process font master:'),		2, 0, 1, 2)
-		layoutV.addWidget(self.cmb_layer,							2, 2, 1, 2)
-		layoutV.addWidget(QtGui.QLabel(str_help),					3, 0, 1, 4)
-		layoutV.addWidget(self.txt_editor,							4, 0, 20, 4)
-		layoutV.addWidget(self.btn_saveExpr, 						24, 0, 1, 2)
-		layoutV.addWidget(self.btn_loadExpr, 						24, 2, 1, 2)
-		layoutV.addWidget(self.btn_exec, 							25, 0, 1, 4)
+		layoutV.addWidget(QtGui.QLabel('Process:'),					2, 0, 1, 4)
+		layoutV.addWidget(self.cmb_layer,							3, 0, 1, 2)
+		layoutV.addWidget(self.btn_classKern,						3, 2, 1, 2)
+		layoutV.addWidget(self.txt_editor,							5, 0, 30, 4)
+		layoutV.addWidget(self.btn_saveExpr, 						36, 0, 1, 2)
+		layoutV.addWidget(self.btn_loadExpr, 						36, 2, 1, 2)
+		layoutV.addWidget(self.btn_help,							37, 0, 1, 2)
+		layoutV.addWidget(self.btn_exec, 							37, 2, 1, 2)
 
 		# - Set Widget
 		self.setLayout(layoutV)
@@ -118,7 +134,7 @@ class tool_tab(QtGui.QWidget):
 				self.txt_editor.setPlainText(importFile.read().decode('utf8'))			
 
 			print 'LOAD:\t Font:%s; Group Kerning expressions loaded from: %s.' %(self.active_font.name, fname)
-
+			
 	def expr_toFile(self):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
 		fname = QtGui.QFileDialog.getSaveFileName(self, 'Save kerning expressions from file', fontPath, '*.txt')
@@ -145,6 +161,21 @@ class tool_tab(QtGui.QWidget):
 					self.update_data(source_data)
 					print 'LOAD:\t Font:%s; TypeRig JSON Group Kerning classes loaded from: %s.' %(self.active_font.name, fname)
 
+				self.btn_loadFile.setChecked(True)
+				self.btn_loadFont.setChecked(False)
+
+	def classes_fromFont(self):
+		temp_dict = {}
+		
+		for layer in self.active_font.masters():
+			fl_kern_group_dict = self.active_font.kerning_groups_to_dict(layer, False, False)
+			temp_dict[layer] = fl_kern_group_dict
+			
+		self.update_data(temp_dict)
+		print 'LOAD:\t Font:%s; Kerning classes loaded: %s.' %(self.active_font.name, len(fl_kern_group_dict.keys()))
+		self.btn_loadFile.setChecked(False)
+		self.btn_loadFont.setChecked(True)
+
 	def process(self):
 		# - Init
 		#getUniGlyph = lambda c: self.active_font.fl.findUnicode(ord(c)).name
@@ -159,15 +190,15 @@ class tool_tab(QtGui.QWidget):
 		
 		# - Process
 		for line in self.txt_editor.toPlainText().splitlines():
-			if '=' in line and '#' not in line:
+			if syn_equal in line and syn_comment not in line:
 				for layer in process_layers:
 					dst_pairs, src_pairs = [], []
 
 					if self.class_data.has_key(layer):
-						dst_names, src_names = line.split('=')
+						dst_names, src_names = line.split(syn_equal)
 						
-						dst_names = [item.split(':') for item in dst_names.strip().split(' ')]
-						src_raw = [item.split(':') for item in src_names.strip().split('|')]
+						dst_names = [item.split(syn_pair) for item in dst_names.strip().split(' ')]
+						src_raw = [item.split(syn_pair) for item in src_names.strip().split(syn_adjust)]
 
 						# - Build Destination names from actual glyph names in the font
 						dst_names = [(getUniGlyph(pair[0]), getUniGlyph(pair[1])) for pair in dst_names]
@@ -246,8 +277,14 @@ class tool_tab(QtGui.QWidget):
 										print 'CHANGE:\t Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer)
 
 								else: # Class does not exist, add as plain pair due to FL6 limitation 
-									layer_kerning.setPlainPairs([(work_name, src_value)])
-									print 'ADD:\t Plain Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer)
+									if self.btn_classKern.isChecked():
+										left, right = work_pair.asTuple()
+										work_name = (left.asTuple()[0], right.asTuple()[0])
+										layer_kerning[work_name] = src_value
+										print 'ADD:\t Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer)
+									else:
+										layer_kerning.setPlainPairs([(work_name, src_value)])
+										print 'ADD:\t Plain Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer)
 						
 					else:
 						print 'ERROR:\t Class kering not found for Master: %s' %layer
