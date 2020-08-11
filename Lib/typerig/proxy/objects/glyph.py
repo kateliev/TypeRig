@@ -28,7 +28,7 @@ from typerig.proxy.application.app import pWorkspace
 from typerig.proxy.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.27.0'
+__version__ = '0.27.2'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -82,6 +82,7 @@ class pGlyph(object):
 			self.fl = fl6.flGlyph(glyph, font)
 			
 		self.builders = {}
+		self._guide_types = {'vertical': 16512, 'horizontal': 8193, 'vector': 4224, 'measure': 32}
 
 	def __repr__(self):
 		return '<{} name={} index={} unicode={}>'.format(self.__class__.__name__, self.name, self.index, self.unicode)
@@ -1171,7 +1172,7 @@ class pGlyph(object):
 		'''Return list of guidelines (list[flGuideline]) at given layer (int or str)'''
 		return self.layer(layer).guidelines
 
-	def addGuideline(self, coordTuple, layer=None, angle=0, name='', tag='', color='darkMagenta', style='gsGlyphGuideline'):
+	def addGuideline(self, coordTuple, layer=None, angle=0, name='', tag='', color='darkMagenta', style='gsGlyphGuideline', expression=''):
 		'''Adds named Guideline at given layer
 		Args:
 			coordTuple (tuple(float,float) or tuple(float,float,float,float)): Guideline coordinates X, Y and given angle or two node reference x1,y1 and x2,y2
@@ -1179,7 +1180,7 @@ class pGlyph(object):
 			angle (float): Incline of the guideline
 			layer (int or str): Layer index or name. If None returns ActiveLayer			
 		Returns:
-			None
+			flGuideLine
 		'''
 		if len(coordTuple) == 2:
 			origin = pqt.QtCore.QPointF(0,0)
@@ -1191,12 +1192,23 @@ class pGlyph(object):
 			vector = pqt.QtCore.QLineF(*coordTuple)
 
 		newGuideline = fl6.flGuideLine(vector)
-		newGuideline.name =  name
-		newGuideline.color = pqt.QtGui.QColor(color)
-		newGuideline.style = style
-		newGuideline.tag(tag.replace(' ', '').split(','))
+		
+		if angle == 0:
+			newGuideline.snapFlags = self._guide_types['vertical']
+		elif angle == 90:
+			newGuideline.snapFlags = self._guide_types['horizontal']
+		else:
+			newGuideline.snapFlags = self._guide_types['vector']
+
+		if len(name): newGuideline.name =  name
+		if len(color): newGuideline.color = pqt.QtGui.QColor(color)
+		if len(style): newGuideline.style = style
+		if len(tag): newGuideline.tag(tag.replace(' ', '').split(','))
+		if len(expression): newGuideline.expression = expression
 			
 		self.layer(layer).appendGuidelines([newGuideline])
+		return newGuideline
+
 
 	# - Tags -----------------------------------------------
 	def getTags(self):
