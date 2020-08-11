@@ -28,7 +28,7 @@ from typerig.proxy.application.app import pWorkspace
 from typerig.proxy.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.26.9'
+__version__ = '0.27.0'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -1077,9 +1077,21 @@ class pGlyph(object):
 		'''Set Advance width metric equation on given layer'''
 		self.layer(layer).metricsWidth = equationStr
 
+	def hasSBeq(self, layer=None):
+		'''Returns True if glyph has any SB equation set'''
+		left, right = self.getSBeq(layer)
+		return len(left) or len(right)
+
 	def getSBeq(self, layer=None):
-		'''GET LSB, RSB metric equations on given layer'''
-		return self.layer(layer).metricsLeft, self.layer(layer).metricsRight
+		'''Get LSB, RSB metric equations on given layer'''
+		active_layer = self.layer(layer)
+		return active_layer.metricsLeft, active_layer.metricsRight
+
+	def setSBeq(self, equationTuple, layer=None):
+		'''Set LSB, RSB metric equations on given layer'''
+		active_layer = self.layer(layer)
+		active_layer.metricsLeft = equationTuple[0]		
+		active_layer.metricsRight = equationTuple[1]
 
 	def fontMetricsInfo(self, layer=None):
 		'''Returns Font(layer) metrics no matter the reference.
@@ -1099,16 +1111,16 @@ class pGlyph(object):
 
 	# - Anchors and pins ---------------------------------------
 	def anchors(self, layer=None):
-		# BUGFIX FL7 build 7234
 		'''Return list of anchors (list[flAnchor]) at given layer (int or str)'''
-		# Shouls work but it is not....
-		# return self.layer(layer).anchors 
+		self.layer(layer).anchors
 		
-		# So a workaround:
+		'''
+		# BUGFIX FL7 build 7234
 		work_layer = self.layer(layer)
 		anchor_names = [obj.name for obj in work_layer.anchors]
 		anchors = [work_layer.findAnchor(name) for name in anchor_names]
 		return anchors
+		'''
 
 	def addAnchor(self, coordTuple, name, layer=None, isAnchor=True):
 		'''	Adds named Anchor at given layer.
@@ -1128,7 +1140,13 @@ class pGlyph(object):
 
 	def newAnchor(self, coordTuple, name, anchorType=1):
 		'''	
-		Not working
+		Creates new anchor
+		Args:
+			coordTuple (tuple(float,float)): Anchor coordinates X, Y
+			name (str): Anchor name
+			anchorType: 
+		Returns:
+			flPinPoint
 		'''
 		newAnchor = fl6.flPinPoint(pqt.QtCore.QPointF(*coordTuple), anchorType)
 		newAnchor.name = name
