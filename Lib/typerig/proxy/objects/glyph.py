@@ -28,7 +28,7 @@ from typerig.proxy.application.app import pWorkspace
 from typerig.proxy.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.27.3'
+__version__ = '0.27.4'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -1113,15 +1113,15 @@ class pGlyph(object):
 	# - Anchors and pins ---------------------------------------
 	def anchors(self, layer=None):
 		'''Return list of anchors (list[flAnchor]) at given layer (int or str)'''
-		#return self.layer(layer).anchors
 		
-		#'''
+		'''
 		# BUGFIX FL7 build 7234, 7515
 		work_layer = self.layer(layer)
 		anchor_names = [obj.name for obj in work_layer.anchors]
 		anchors = [work_layer.findAnchor(name) for name in anchor_names]
 		return anchors
-		#'''
+		'''
+		return self.layer(layer).anchors
 
 	def addAnchor(self, coordTuple, name, layer=None, isAnchor=True):
 		'''	Adds named Anchor at given layer.
