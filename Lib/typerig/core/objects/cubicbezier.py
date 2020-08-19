@@ -19,7 +19,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.26.6'
+__version__ = '0.26.7'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -99,13 +99,43 @@ class CubicBezier(object):
 		self.p3.doTransform(transform)
 		
 	# -- Solvers
+	def find_derivative(self):
+		'''Return tuple(points) representing derivative of cubic bezier'''
+		dp0 = (self.p1 - self.p0)*3
+		dp1 = (self.p2 - self.p1)*3
+		dp2 = (self.p3 - self.p2)*3
+		return (dp0, dp1, dp2)
+
+	def find_roots(self):
+		'''Find roots of cubic bezier'''
+		roots = []
+		w0, w1, w2 = [item.tuple for item in self.find_derivative()]
+
+		for i in [0,1]: # for X and Y
+			a = w0[i] - 2*w1[i] + w2[i]
+			b = 2*(w1[i] - w0[i])
+			c = w0[i]
+							
+			if a != 0.0 and b*b - 4*a*c > 0.0:
+				t1 = (-b + math.sqrt(b*b - 4*a*c)) / (2*a)
+			
+				if t1 >= 0.0 and t1 <= 1.0:
+					roots.append(t1)
+
+				t2 = (-b - math.sqrt(b*b - 4*a*c)) / (2*a)
+			
+				if t2 >= 0.0 and t2 <= 1.0:
+					roots.append(t2)
+
+		return roots
+
 	def solve_point(self, time):
 		'''Find point on cubic bezier at given time '''
 		rtime = 1 - time
 		pt = (rtime**3)*self.p0 + 3*(rtime**2)*time*self.p1 + 3*rtime*(time**2)*self.p2 + (time**3)*self.p3
 		return pt
 
-	def solve_derivative(self, time):
+	def solve_derivative_at_time(self, time):
 		'''Returns point of on-curve point at given time and vector of 1st and 2nd derivative.'''
 		a = -self.p0 + 3. * self.p1 - 3. * self.p2 + self.p3
 		b = 3. * self.p0 - 6. * self.p1 + 3. * self.p2
@@ -120,7 +150,7 @@ class CubicBezier(object):
 
 	def solve_curvature(self, time):
 		'''Find Curvature of on-curve point at given time'''
-		pt, d1, d2 = self.solve_derivative(time)
+		pt, d1, d2 = self.solve_derivative_at_time(time)
 		return (d1.x * d2.y - d1.y * d2.x) / (d1.x**2 + d1.y**2)**1.5
 
 
