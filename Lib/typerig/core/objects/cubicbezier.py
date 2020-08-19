@@ -19,7 +19,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.26.7'
+__version__ = '0.26.8'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -99,6 +99,14 @@ class CubicBezier(object):
 		self.p3.doTransform(transform)
 		
 	# -- Solvers
+	def find_coeffs(self):
+		a = -self.p0 + 3. * self.p1 - 3. * self.p2 + self.p3
+		b = 3. * self.p0 - 6. * self.p1 + 3. * self.p2
+		c = -3. * self.p0 + 3. * self.p1
+		d = self.p0
+
+		return (a, b, c, d)
+
 	def find_derivative(self):
 		'''Return tuple(points) representing derivative of cubic bezier'''
 		dp0 = (self.p1 - self.p0)*3
@@ -129,6 +137,68 @@ class CubicBezier(object):
 
 		return roots
 
+	def _cubic_roots(self, data):
+		a, b, c, d = data
+
+		A = b/a
+		B = c/a
+		C = d/a
+
+		Q = (3*B - A**2)/9
+		R = (9*A*B - 27*C - 2*A**3)/54
+		D = Q**3 + R**2
+
+		if D >=0:
+			S = [-1,1][R + math.sqrt(D) >= 0]*(abs(R + math.sqrt(D))**(1./3.))
+			S = [-1,1][R - math.sqrt(D) >= 0]*(abs(R - math.sqrt(D))**(1./3.))
+			t = [-A/3 + (S + T), -A/3 - (S + T)/2, -A/3 - (S + T)/2]
+			
+			Im = abs(math.sqrt(3)*(S-T)/2.)
+			if Im != 0:
+				t[1] = -1
+				t[2] = -1
+
+		else:
+			th = math.acos(R/math.sqrt(-Q**3))
+			t = [2*math.sqrt(-Q)*math.cos(th/3.) - A/3.,
+				 2*math.sqrt(-Q)*math.cos((th + 2*math.pi)/3.) - A/3.,
+				 2*math.sqrt(-Q)*math.cos((th + 4*math.pi)/3.) - A/3.
+				]
+			Im = 0.
+
+		return t
+
+	def intersect_line(self, other_line):
+		intersect_points = []
+
+		A = other_line.p1.y - other_line.p0.y
+		B = other_line.p0.x - other_line.p1.x
+		C = other_line.p1.x*(other_line.p0.y - other_line.p1.y) + other_line.p0.y*(other_line.p1.x - other_line.p0.x)
+
+		b = self.find_coeffs()
+		bx = [item.x for item in b]
+		by = [item.y for item in b]
+
+		P = [A*bx[0]+B*by[0],		
+			 A*bx[1]+B*by[1],		
+			 A*bx[2]+B*by[2],		
+			 A*bx[3]+B*by[3] + C]
+
+		cubic_roots = self._cubic_roots(P)
+
+		for t in cubic_roots:
+			X = Point(bx[0]*t**3 + bx[1]*t**2 + bx[2]*t + bx[3], by[0]*t**2 + by[1]*t**2 + by[2]*t + by[3])
+
+			if other_line.p1.x - other_line.p0.x !=0:
+				s = (X.x - other_line.p0.x)/(other_line.p1.x - other_line.p0.x)
+			else:
+				s = (X.y - other_line.p0.y)/(other_line.p1.y - other_line.p0.y)
+
+			if not any([t < 0, t > 1.0, s < 0, s > 1.0]):
+				intersect_points.append(s)
+
+		return intersect_points	
+
 	def solve_point(self, time):
 		'''Find point on cubic bezier at given time '''
 		rtime = 1 - time
@@ -137,10 +207,7 @@ class CubicBezier(object):
 
 	def solve_derivative_at_time(self, time):
 		'''Returns point of on-curve point at given time and vector of 1st and 2nd derivative.'''
-		a = -self.p0 + 3. * self.p1 - 3. * self.p2 + self.p3
-		b = 3. * self.p0 - 6. * self.p1 + 3. * self.p2
-		c = -3. * self.p0 + 3. * self.p1
-		d = self.p0
+		a, b, c, d = self.find_coeffs()
 
 		pt = a * time**3 + b * time**2 + c * time + d
 		d1 = 3. * a * time**2 + 2. * b * time + c
