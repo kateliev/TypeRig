@@ -13,12 +13,13 @@ from __future__ import print_function
 import math
 
 from typerig.core.func.math import linInterp as lerp
+from typerig.core.func.math import isBetween
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.point import Point, Void
 
 # - Init -------------------------------
-__version__ = '0.26.2'
+__version__ = '0.26.4'
 
 # - Classes -----------------------------
 class Line(object):
@@ -61,6 +62,9 @@ class Line(object):
 
 	def __and__(self, other):
 		return self.intersect_line(other)
+
+	def __len__(self):
+		return len(self.tuple)
 
 	def __repr__(self):
 		return '<Line: {}, {}>'.format(self.p0.tuple, self.p1.tuple)
@@ -126,6 +130,13 @@ class Line(object):
 		'''Get the Y intercept of a line segment'''
 		return self.p0.y - self.slope * self.p0.x if not math.isnan(self.slope) and self.slope != 0 else self.p0.y
 
+	# -- Query
+	def hasPoint(self, other):
+		min_x, min_y = min(self.p0.x, self.p1.x), min(self.p0.y, self.p1.y)
+		max_x, max_y = max(self.p0.x, self.p1.x), max(self.p0.y, self.p1.y)
+
+		return True if isBetween(other.x, min_x, max_x) and isBetween(other.y, min_y, max_y) else False
+
 	# -- Solvers
 	def solve_y(self, x):
 		'''Solve line equation for Y coordinate.'''
@@ -149,20 +160,28 @@ class Line(object):
 	def lerp_xy(self, time_x, time_y)	:
 		return Point(self.p0.x * (1. - time_x) + self.p1.x * time_x, self.p0.y * (1 - time_y) + self.p1.y * time_y)
 
-	def intersect_line(self, other_line):
+	def intersect_line(self, other_line, projection=False):
 		'''Find intersection point (X, Y) for two lines.
-		Returns (None, None) if lines do not intersect.'''
+		Returns Void() point  if lines do not intersect.'''
+		
 		diff_x = Point(self.p0.x - self.p1.x, other_line.p0.x - other_line.p1.x)
 		diff_y = Point(self.p0.y - self.p1.y, other_line.p0.y - other_line.p1.y)
 
 		div = diff_x | diff_y
-		if div == 0: return (None, None)
+		if div == 0: return Void() # (None, None)
 
 		d = Point(self.p0 | self.p1, other_line.p0 | other_line.p1)
 		x = (d | diff_x) / div
 		y = (d | diff_y) / div
-		return (x, y)
-
+		
+		if projection:
+			return Point(x, y)
+		else:
+			if self.hasPoint(Point(x,y)) and other_line.hasPoint(Point(x,y)):
+				return Point(x, y)
+			
+			return Void() # (None, None)
+		
 	def shift(self, dx, dy):
 		'''Shift coordinates by dx, dy'''
 		self.p0.x += dx

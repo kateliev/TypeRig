@@ -12,14 +12,14 @@
 from __future__ import print_function
 import math
 from typerig.core.func.math import linInterp as lerp
-from typerig.core.func.math import ratfrac, isBetween
+from typerig.core.func.math import ratfrac
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.27.0'
+__version__ = '0.27.2'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -61,6 +61,9 @@ class CubicBezier(object):
 
 	def __and__(self, other):
 		return self.intersect_line(other)
+
+	def __len__(self):
+		return len(self.tuple)
 
 	def __repr__(self):
 		return '<Cubic Bezier: {},{},{},{}>'.format(self.p0.tuple, self.p1.tuple, self.p2.tuple, self.p3.tuple)
@@ -210,18 +213,11 @@ class CubicBezier(object):
 		Note: Not working very well - problems with alignment!!!.
 		Adapted from bezier.js library by Pomax : https://github.com/Pomax/bezierjs
 		'''
-		# - Line
-		mx = min(other_line.p0.x, other_line.p1.x)
-		my = min(other_line.p0.y, other_line.p1.y)
-		MX = max(other_line.p0.x, other_line.p1.x)
-		MY = max(other_line.p0.y, other_line.p1.y)
-
-		# - Curve
 		aligned_bezier = self.__class__(self.tuple)
 		aligned_bezier.align(other_line)
 		intersect_times = aligned_bezier.find_roots()
 		intersect_points = [self.solve_point(t) for t in intersect_times]
-		intersect_points = [p for p in intersect_points if isBetween(p.x, mx, MX) and isBetween(p.y, my, MY)]
+		intersect_points = [p for p in intersect_points if other_line.hasPoint(p)]
 		
 		return intersect_points	
 
