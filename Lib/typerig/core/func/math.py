@@ -13,7 +13,9 @@ from __future__ import absolute_import
 import math, random
 
 # - Init --------------------------------
-__version__ = '0.26.1'
+__version__ = '0.26.2'
+
+epsilon = 0.000001
 
 # - Functions ---------------------------
 # -- Math -------------------------------
@@ -65,6 +67,10 @@ def isclose(a, b, abs_tol = 1, rel_tol = 0.0):
 	'''
 	if abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol):
 		return True
+
+def isBetween(x, a, b):
+	'''A broader test if a value is between two others'''
+	return True if a <= x <= b or isclose(x, a, abs_tol=epsilon) or isclose(x, b, abs_tol=epsilon) else False
 
 def round2base(x, base = 5):
 	'''Rounds a value using given base increments'''

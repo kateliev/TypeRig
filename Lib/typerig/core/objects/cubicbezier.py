@@ -12,14 +12,14 @@
 from __future__ import print_function
 import math
 from typerig.core.func.math import linInterp as lerp
-from typerig.core.func.math import ratfrac
+from typerig.core.func.math import ratfrac, isBetween
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.26.8'
+__version__ = '0.27.0'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -32,11 +32,12 @@ class CubicBezier(object):
 				self.p0, self.p1, self.p2, self.p3 = [Point(item) for item in argv[0]]
 
 		if len(argv) == 4:
+			if isMultiInstance(argv, Point):
+				self.p0, self.p1, self.p2, self.p3 = argv
+
 			if isMultiInstance(argv, (tuple, list)):
 				self.p0, self.p1, self.p2, self.p3 = [Point(item) for item in argv]
 
-			if isMultiInstance(argv, Point):
-				self.p0, self.p1, self.p2, self.p3 = argv
 
 		if len(argv) == 8:
 			if isMultiInstance(argv, (float, int)):
@@ -44,6 +45,23 @@ class CubicBezier(object):
 
 		self.transform = Transform()
 								
+	def __add__(self, other):
+		return self.__class__([p + other for p in self.points])
+
+	def __sub__(self, other):
+		return self.__class__([p - other for p in self.points])
+
+	def __mul__(self, other):
+		return self.__class__([p * other for p in self.points])
+
+	__rmul__ = __mul__
+
+	def __div__(self, other):
+		return self.__class__([p / other for p in self.points])	
+
+	def __and__(self, other):
+		return self.intersect_line(other)
+
 	def __repr__(self):
 		return '<Cubic Bezier: {},{},{},{}>'.format(self.p0.tuple, self.p1.tuple, self.p2.tuple, self.p3.tuple)
 
@@ -85,11 +103,20 @@ class CubicBezier(object):
 		return abs(self.y_max - self.y)
 	
 	# -- Modifiers
+	def align(self, other_line):
+		tx = other_line.p0.x
+		ty = other_line.p0.y
+		angle = -math.atan2(other_line.p1.y - ty, other_line.p1.x - tx)
+
+		for p in self.points:
+			p.x = (p.x - tx)*math.cos(angle) - (p.y - ty)*math.sin(angle)
+			p.y = (p.x - tx)*math.sin(angle) + (p.y - ty)*math.cos(angle)
+
 	def asList(self):
 		return 
 
 	def doSwap(self):
-		return self.__class__(self.p3, self.p2, self.p1, self.p0)
+		return self.__class__(self.p3.tuple, self.p2.tuple, self.p1.tuple, self.p0.tuple)
 
 	def doTransform(self, transform=None):
 		if transform is None: transform = self.transform
@@ -107,96 +134,95 @@ class CubicBezier(object):
 
 		return (a, b, c, d)
 
-	def find_derivative(self):
-		'''Return tuple(points) representing derivative of cubic bezier'''
-		dp0 = (self.p1 - self.p0)*3
-		dp1 = (self.p2 - self.p1)*3
-		dp2 = (self.p3 - self.p2)*3
-		return (dp0, dp1, dp2)
-
 	def find_roots(self):
-		'''Find roots of cubic bezier'''
-		roots = []
-		w0, w1, w2 = [item.tuple for item in self.find_derivative()]
+		'''Find roots of cubic bezier.
+		Adapted from bezier.js library by Pomax : https://github.com/Pomax/bezierjs
+		'''
+		
+		# - Helpers
+		def crt(v):
+			# A real-cuberoots-only helper function
+			if v < 0: 
+				return -math.pow(-v, 1./3.)
+  			return math.pow(v, 1./3.)
 
-		for i in [0,1]: # for X and Y
-			a = w0[i] - 2*w1[i] + w2[i]
-			b = 2*(w1[i] - w0[i])
-			c = w0[i]
-							
-			if a != 0.0 and b*b - 4*a*c > 0.0:
-				t1 = (-b + math.sqrt(b*b - 4*a*c)) / (2*a)
-			
-				if t1 >= 0.0 and t1 <= 1.0:
-					roots.append(t1)
+  		def root_dim(a, b, c, d):
+  			# Finds roots in one dimension
+	  		a /= d
+			b /= d
+			c /= d
 
-				t2 = (-b - math.sqrt(b*b - 4*a*c)) / (2*a)
-			
-				if t2 >= 0.0 and t2 <= 1.0:
-					roots.append(t2)
+			p = (3.*b - a*a)/3.
+			p3 = p/3.
+			q = (2.*a*a*a - 9.*a*b + 27.*c) / 27.
+			q2 = q/2.
+			discriminant = q2*q2 + p3*p3*p3
 
-		return roots
+			if discriminant < 0:
+				mp3 = -p/3.
+				mp33 = mp3*mp3*mp3
+				r = math.sqrt(mp33)
+				t = -q/(2*r)
+				
+				if t < -1:
+					cosphi = -1
+				elif t > 1:
+					cosphi = 1
+				else:
+					cosphi = t
 
-	def _cubic_roots(self, data):
-		a, b, c, d = data
+				phi = math.acos(cosphi)
+				crtr = crt(r)
+				
+				t1 = 2.*crtr
+				x1 = t1*math.cos(phi/3.) - a/3.
+				x2 = t1*math.cos((phi + tau)/3.) - a/3.
+				x3 = t1*math.cos((phi + 2.*tau)/3.) - a/3.
+				
+				return [x for x in [x1, x2, x3] if 0 <= x <= 1.]
 
-		A = b/a
-		B = c/a
-		C = d/a
+			elif discriminant == 0:
+				u1 = crt(-q2) if q2 < 0 else -crt(q2)
+				x1 = 2.*u1 - a/3.
+				x2 = -u1 - a/3.
+				
+				return [x for x in [x1, x2] if 0 <= x <= 1.]
 
-		Q = (3*B - A**2)/9
-		R = (9*A*B - 27*C - 2*A**3)/54
-		D = Q**3 + R**2
-
-		if D >=0:
-			S = [-1,1][R + math.sqrt(D) >= 0]*(abs(R + math.sqrt(D))**(1./3.))
-			S = [-1,1][R - math.sqrt(D) >= 0]*(abs(R - math.sqrt(D))**(1./3.))
-			t = [-A/3 + (S + T), -A/3 - (S + T)/2, -A/3 - (S + T)/2]
-			
-			Im = abs(math.sqrt(3)*(S-T)/2.)
-			if Im != 0:
-				t[1] = -1
-				t[2] = -1
-
-		else:
-			th = math.acos(R/math.sqrt(-Q**3))
-			t = [2*math.sqrt(-Q)*math.cos(th/3.) - A/3.,
-				 2*math.sqrt(-Q)*math.cos((th + 2*math.pi)/3.) - A/3.,
-				 2*math.sqrt(-Q)*math.cos((th + 4*math.pi)/3.) - A/3.
-				]
-			Im = 0.
-
-		return t
-
-	def intersect_line(self, other_line):
-		intersect_points = []
-
-		A = other_line.p1.y - other_line.p0.y
-		B = other_line.p0.x - other_line.p1.x
-		C = other_line.p1.x*(other_line.p0.y - other_line.p1.y) + other_line.p0.y*(other_line.p1.x - other_line.p0.x)
-
-		b = self.find_coeffs()
-		bx = [item.x for item in b]
-		by = [item.y for item in b]
-
-		P = [A*bx[0]+B*by[0],		
-			 A*bx[1]+B*by[1],		
-			 A*bx[2]+B*by[2],		
-			 A*bx[3]+B*by[3] + C]
-
-		cubic_roots = self._cubic_roots(P)
-
-		for t in cubic_roots:
-			X = Point(bx[0]*t**3 + bx[1]*t**2 + bx[2]*t + bx[3], by[0]*t**2 + by[1]*t**2 + by[2]*t + by[3])
-
-			if other_line.p1.x - other_line.p0.x !=0:
-				s = (X.x - other_line.p0.x)/(other_line.p1.x - other_line.p0.x)
 			else:
-				s = (X.y - other_line.p0.y)/(other_line.p1.y - other_line.p0.y)
+				sd = math.sqrt(discriminant)
+				u1 = crt(-q2 + sd)
+				v1 = crt(q2 + sd)
+				res = u1 - v1 - a/3
+				
+				return [res] if 0 <= res <= 1. else []
 
-			if not any([t < 0, t > 1.0, s < 0, s > 1.0]):
-				intersect_points.append(s)
+  		# - Init
+  		pi = math.pi
+		tau = 2 * pi
+		d, a, b, c = self.find_coeffs()
 
+		# - Calculate
+		#return root_dim(a.x, b.x, c.x, d.x), root_dim(a.y, b.y, c.y, d.y)
+		return root_dim(a.y, b.y, c.y, d.y)
+		
+	def intersect_line(self, other_line):
+		'''Find Curve and line intersection
+		Note: Not working very well - problems with alignment!!!.
+		Adapted from bezier.js library by Pomax : https://github.com/Pomax/bezierjs
+		'''
+		# - Line
+		mx = min(other_line.p0.x, other_line.p1.x)
+		my = min(other_line.p0.y, other_line.p1.y)
+		MX = max(other_line.p0.x, other_line.p1.x)
+		MY = max(other_line.p0.y, other_line.p1.y)
+
+		# - Curve
+		aligned_bezier = self.__class__(self.tuple)
+		aligned_bezier.align(other_line)
+		intersect_times = aligned_bezier.find_roots()
+		intersect_points = [self.solve_point(t) for t in intersect_times]
+		intersect_points = [p for p in intersect_points if isBetween(p.x, mx, MX) and isBetween(p.y, my, MY)]
+		
 		return intersect_points	
 
 	def solve_point(self, time):
@@ -629,3 +655,11 @@ class CubicBezier(object):
 		self.p3 += shift
 
 		return self.__class__(self.p0.tuple, self.p1.tuple, self.p2.tuple, self.p3.tuple)
+
+
+if __name__ == "__main__":
+	a = Line(((113.73076629638672, 283.6538391113281), (357.96154022216797, 415.3846130371094)))
+	b = CubicBezier((145.7924041748047, 367.8679504394531), (222.71548461914062, 405.3679504394531), (317.9077911376953, 376.5217971801758), (328.48471450805664, 229.40641021728516))
+	
+	c = b.intersect_line(a)
+	print(b.doSwap())

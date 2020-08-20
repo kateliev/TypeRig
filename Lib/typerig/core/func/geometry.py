@@ -13,7 +13,7 @@ from __future__ import absolute_import
 import math
 
 # - Init --------------------------------
-__version__ = '0.26.2'
+__version__ = '0.26.3'
 
 # - Functions ---------------------------
 # -- Point ------------------------------
@@ -70,7 +70,7 @@ def point_in_polygon(point, polygon):
 
 	return point_inside
 
-def point_rotate(center, point, angle):
+def point_rotate(center, point, angle, inDegrees=True):
 	'''Rotate point around center point with angle (in degrees)
 	Args: 
 		center, point -> tuple(x, y); 
@@ -80,8 +80,8 @@ def point_rotate(center, point, angle):
 		new point coordinates -> tuple(x,y)
 	'''
 	px, py = point
-	cx, xy = center
-	rangle = math.radians(angle)
+	cx, cy = center
+	rangle = math.radians(angle) if inDegrees else angle
 
 	nx = math.cos(rangle) * (px - cx) - math.sin(rangle) * (py - cy) + cx
 	ny = math.sin(rangle) * (px - cx) + math.cos(rangle) * (py - cy) + cy

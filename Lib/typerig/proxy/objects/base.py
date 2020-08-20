@@ -70,9 +70,14 @@ class Line(trobj.Line):
 				self.p0 = Coord(argv[0])
 				self.p1 = Coord(argv[1])
 
-		if len(argv) == 1 and isinstance(argv[0], fl6.CurveEx):
-			self.p0 = Coord(argv[0].p0)
-			self.p1 = Coord(argv[0].p1)			
+		if len(argv) == 1:
+			if isinstance(argv[0], fl6.CurveEx):
+				self.p0 = Coord(argv[0].p0)
+				self.p1 = Coord(argv[0].p1)			
+
+			if isMultiInstance(argv[0], fl6.flNode):
+				self.p0 = Coord(argv[0][0])
+				self.p1 = Coord(argv[0][1])
 
 		if isMultiInstance(argv, (pqt.QtCore.QLineF, pqt.QtCore.QLine)) and len(argv) == 1:
 			self.p0 = Coord(argv[0].p1())

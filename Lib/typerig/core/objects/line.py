@@ -18,14 +18,21 @@ from typerig.core.objects.transform import Transform
 from typerig.core.objects.point import Point, Void
 
 # - Init -------------------------------
-__version__ = '0.26.1'
+__version__ = '0.26.2'
 
 # - Classes -----------------------------
 class Line(object):
 	def __init__(self, *argv):
-		if len(argv):
+		if len(argv) == 1:
 			if isinstance(argv[0], self.__class__): # Clone
 				self.p0, self.p1 = argv[0].p0, argv[0].p1
+
+			if isMultiInstance(argv[0], (tuple, list)):
+				self.p0, self.p1 = [Point(item) for item in argv[0]]
+
+		if len(argv) > 1:
+			if isMultiInstance(argv[0], (tuple, list)):
+				self.p0, self.p1 = Point(argv[0]), Point(argv[1])
 
 			if isMultiInstance(argv, Point):
 				self.p0, self.p1 = argv
