@@ -19,7 +19,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.27.2'
+__version__ = '0.27.3'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -151,6 +151,8 @@ class CubicBezier(object):
 
   		def root_dim(a, b, c, d):
   			# Finds roots in one dimension
+  			if d == 0: return []
+
 	  		a /= d
 			b /= d
 			c /= d
@@ -203,7 +205,7 @@ class CubicBezier(object):
   		pi = math.pi
 		tau = 2 * pi
 		d, a, b, c = self.find_coeffs()
-
+		
 		# - Calculate
 		#return root_dim(a.x, b.x, c.x, d.x), root_dim(a.y, b.y, c.y, d.y)
 		return root_dim(a.y, b.y, c.y, d.y)

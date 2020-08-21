@@ -24,7 +24,7 @@ from typerig.proxy.objects.glyph import *
 from typerig.proxy.objects.string import *
 
 # - Init ---------------------------------
-__version__ = '0.27.4'
+__version__ = '0.27.5'
 
 # - Classes -------------------------------
 class pFontMetrics(object):
@@ -60,12 +60,8 @@ class pFontMetrics(object):
 			self.fl.setMaster(layer)
 		return self.fl.lineGap_value
 
-	'''
 	def getUpm (self, layer=None):
-		if layer is not None:
-			self.fl.setMaster(layer)
 		return self.fl.upm
-	'''
 
 	def getXHeight (self, layer=None):
 		if layer is not None:
@@ -112,12 +108,8 @@ class pFontMetrics(object):
 			self.fl.setMaster(layer)
 		self.fl.lineGap_value = value
 
-	'''
-	def setUpm (self, value, layer=None):
-		if layer is not None:
-			self.fl.setMaster(layer)
-		self.fl.upm = value
-	'''
+	def setUpm(self, value, scale=False):
+		self.fl.setUpm(value, scale)
 
 	def setXHeight (self, value, layer=None):
 		if layer is not None:

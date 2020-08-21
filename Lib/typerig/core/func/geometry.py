@@ -13,7 +13,7 @@ from __future__ import absolute_import
 import math
 
 # - Init --------------------------------
-__version__ = '0.26.3'
+__version__ = '0.26.4'
 
 # - Functions ---------------------------
 # -- Point ------------------------------
@@ -226,3 +226,14 @@ def checkInnerOuter(firstAngle, lastAngle):
 
 	if dirAngle > 0:	return True
 	if dirAngle <= 0:	return False
+
+# - Ploygons ----------------------------------------
+def poly_area(vertices):
+	corners = len(vertices) 
+	area = 0.0
+	
+	for i in range(corners):
+		j = (i + 1) % corners
+		area += abs(vertices[i][0]*vertices[j][1] - vertices[j][0]*vertices[i][1])
+
+	return area*0.5
