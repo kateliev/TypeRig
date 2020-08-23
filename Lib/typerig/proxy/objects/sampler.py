@@ -13,8 +13,10 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
-from typerig.proxy import *
+#from typerig.proxy import *
 from typerig.core.objects.point import Point, Void
+from typerig.proxy.objects.base import Line, Curve
+from typerig.core.func.math import linspread
 
 # - Init -----------------------------
 __version__ = '0.1.2'

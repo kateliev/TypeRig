@@ -21,6 +21,7 @@ from glyph import *
 from kern import *
 from node import *
 from shape import *
+from sampler import *
 from string import *
 
 
