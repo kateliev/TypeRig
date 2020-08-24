@@ -19,7 +19,7 @@ from typerig.core.objects.transform import Transform
 from typerig.core.objects.point import Point, Void
 
 # - Init -------------------------------
-__version__ = '0.26.4'
+__version__ = '0.26.5'
 
 # - Classes -----------------------------
 class Line(object):
@@ -32,8 +32,10 @@ class Line(object):
 				self.p0, self.p1 = [Point(item) for item in argv[0]]
 
 		if len(argv) > 1:
+			'''
 			if isMultiInstance(argv[0], (tuple, list)):
 				self.p0, self.p1 = Point(argv[0]), Point(argv[1])
+			'''
 
 			if isMultiInstance(argv, Point):
 				self.p0, self.p1 = argv
