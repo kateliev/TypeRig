@@ -19,7 +19,7 @@ from typerig.proxy.objects.base import Line, Curve
 from typerig.core.func.math import linspread
 
 # - Init -----------------------------
-__version__ = '0.1.3'
+__version__ = '0.1.8'
 
 # - Classes --------------------------
 class GlyphSampler(object):
@@ -265,38 +265,83 @@ class GlyphSampler(object):
 		else:
 			print 'ABORT:\t Draw Area;\t Glyph: %s; Layer: %s;\tGlyphSampler data not found!' %(glyph_name, layer_name)
 
-class SampleAnalyzer(object):
-	def __init__(self, sampler_object, font_metrics_object):
-		self.sampler = sampler_object
-		self.metrics = font_metrics_object
-		self.user_area = 400	
-	
+class MetricSampler(GlyphSampler):
+	'''Metric sampler for automatically generating glyph sidebearings based on negative space area. 
+	Partially based by Huerta Tipografica Letterspacer (https://github.com/huertatipografica/HTLetterspacer)
+	'''
+	def __init__(self, p_font_object):
+		# - Init
+		self.font = p_font_object
+		self.metrics = self.font.fontMetrics()
+		
+		# - Config
+		self.user_area = 400
+		self.depth = 15
+		
+		# - Semi direct adaptation of Huerta Tipografica Letterspacer config file
+		self.magic_table = {(True, False, True, True):	 1.25, 	# Uppercase single letter (/A)
+							(True, False, False, True):  1.25,	# Uppercase multi-letter letter (/Adieresis)
+							(True, False, False, False): 1.,	# Lowercase
+							(False, True, False, False): 1.2,	# Figure (decimal digit)
+							(False, False, False, False):1.4	# Punctuation
+							}
+
+		# - Initialize sampler
+		font_descender_min = min([self.metrics.getDescender(layer) for layer in self.font.masters()])
+		font_ascender_max =  max([self.metrics.getAscender(layer) for layer in self.font.masters()])
+		sample_window = (font_descender_min, font_ascender_max)
+
+		super(MetricSampler, self).__init__(sample_window)
+		self.setDepth()
+
+	# - Functions ----------------------------	
+	# - Modular/static -----------------------
 	@staticmethod
-	def getSB(area_tuple, mistery_mult, user_area, sample_window, x_height, font_upm):
+	def getSB(area_tuple, magic_multiplier, user_area, sample_window, x_height, font_upm):
+		'''Formula adapted from Huerta Tipografica Letterspacer (https://github.com/huertatipografica/HTLetterspacer)'''
 		left, mid, right = area_tuple
 
-		window_height = max(sample_window) - min(sample_window)
+		window_height = max(sample_window) - min(sample_window) 
 		area_UPM = user_area*((font_upm/1000.)**2)
-		area_prop = (100*mistery_mult*window_height*area_UPM)/x_height
+		area_prop = (100*magic_multiplier*window_height*area_UPM)/x_height
 
 		lsb = (area_prop - abs(left))/window_height
 		rsb = (area_prop - abs(right))/window_height
 
 		return lsb, rsb
 
-	def getGlyphSB(self, glyph, layer=None):
+	# - Dynamic --------------------------------
+	def setDepth(self, depth=None, x_height=None):
+		depth = self.depth if depth is None else depth
+		x_height = sum([self.metrics.getXHeight(layer) for layer in self.font.masters()])/float(len(self.font.masters())) if x_height is None else x_height
+		self.cutout_x = (x_height*depth)/100.
+
+	def __getMagicMultiplier(self, glyph):
+		name_test = lambda item: (item.isalpha(), item.isdigit(), item.isupper(), item.istitle())
+		if glyph.unicode is not None:
+			glyph_char = unichr(glyph.unicode)
+			return self.magic_table[name_test(glyph_char)]
+		
+		return 1.
+
+	def getGlyphSB(self, glyph, layer=None, resample=False, draw=False):
 		glyph_name = glyph.name
 
 		try:
-			glyph_areas = self.sampler.data_area[glyph_name][layer]
+			glyph_areas = self.data_area[glyph_name][layer]
 		except KeyError:
-			glyph_areas = self.sampler.sampleGlyphArea(glyph, layer)
+			glyph_areas = self.sampleGlyphArea(glyph, layer, resample, True)
 
-		glyph_window = self.sampler.sample_window
+		if draw:
+			self.drawGlyphArea(glyph, layer)
+
+		glyph_window = self.sample_window
 		glyph_x_height = self.metrics.getXHeight(layer)
 		glyph_upm = self.metrics.getUpm()
+		magic_multiplier = self.__getMagicMultiplier(glyph)
+		print magic_multiplier
 
-		return SampleAnalyzer.getSB(glyph_areas, 0.7, self.user_area, glyph_window, glyph_x_height, glyph_upm)
+		return MetricSampler.getSB(glyph_areas, magic_multiplier, self.user_area, glyph_window, glyph_x_height, glyph_upm)
 
 
 # - Test ----------------------
@@ -304,20 +349,8 @@ if __name__ == '__main__':
 
 	font = pFont()
 	g = eGlyph()
-
-	# - Configure 
-	font_descender = min([font.fontMetrics().getDescender(layer) for layer in font.masters()])
-	font_ascender =  max([font.fontMetrics().getAscender(layer) for layer in font.masters()])
-	font_x_height = max([font.fontMetrics().getXHeight(layer) for layer in font.masters()])
-	font_upm = font.fontMetrics().getUpm()
-
-	# - Prepare GlyphSampler
-	sample_window = (font_descender, font_ascender)
-	gsmp = GlyphSampler(sample_window)
-	gsmp.cutout_x = font_x_height*0.15
-	gsmp.sampleGlyphArea(g)
-	gsmp.drawGlyphArea(g)
-
+	ms = MetricSampler(font)
+	ms.getGlyphSB(g, None, True, True)
 	g.updateObject(g.fl)
 
 	# - Finish ---------------------------
