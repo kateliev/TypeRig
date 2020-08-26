@@ -19,7 +19,7 @@ from typerig.proxy.objects.base import Line, Curve
 from typerig.core.func.math import linspread
 
 # - Init -----------------------------
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 # - Classes --------------------------
 class GlyphSampler(object):
@@ -264,6 +264,40 @@ class GlyphSampler(object):
 			mask_layer.addShape(new_shape)
 		else:
 			print 'ABORT:\t Draw Area;\t Glyph: %s; Layer: %s;\tGlyphSampler data not found!' %(glyph_name, layer_name)
+
+class SampleAnalyzer(object):
+	def __init__(self, sampler_object, font_metrics_object):
+		self.sampler = sampler_object
+		self.metrics = font_metrics_object
+		self.user_area = 400	
+	
+	@staticmethod
+	def getSB(area_tuple, mistery_mult, user_area, sample_window, x_height, font_upm):
+		left, mid, right = area_tuple
+
+		window_height = max(sample_window) - min(sample_window)
+		area_UPM = user_area*((font_upm/1000.)**2)
+		area_prop = (100*mistery_mult*window_height*area_UPM)/x_height
+
+		lsb = (area_prop - abs(left))/window_height
+		rsb = (area_prop - abs(right))/window_height
+
+		return lsb, rsb
+
+	def getGlyphSB(self, glyph, layer=None):
+		glyph_name = glyph.name
+
+		try:
+			glyph_areas = self.sampler.data_area[glyph_name][layer]
+		except KeyError:
+			glyph_areas = self.sampler.sampleGlyphArea(glyph, layer)
+
+		glyph_window = self.sampler.sample_window
+		glyph_x_height = self.metrics.getXHeight(layer)
+		glyph_upm = self.metrics.getUpm()
+
+		return SampleAnalyzer.getSB(glyph_areas, 0.7, self.user_area, glyph_window, glyph_x_height, glyph_upm)
+
 
 # - Test ----------------------
 if __name__ == '__main__':
