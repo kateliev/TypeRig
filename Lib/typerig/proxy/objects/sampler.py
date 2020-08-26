@@ -19,7 +19,7 @@ from typerig.proxy.objects.base import Line, Curve
 from typerig.core.func.math import linspread
 
 # - Init -----------------------------
-__version__ = '0.1.8'
+__version__ = '0.1.9'
 
 # - Classes --------------------------
 class GlyphSampler(object):
@@ -277,6 +277,7 @@ class MetricSampler(GlyphSampler):
 		# - Config
 		self.user_area = 400
 		self.depth = 15
+		self.fallback_magic = 0.7
 		
 		# - Semi direct adaptation of Huerta Tipografica Letterspacer config file
 		self.magic_table = {(True, False, True, True):	 1.25, 	# Uppercase single letter (/A)
@@ -311,18 +312,34 @@ class MetricSampler(GlyphSampler):
 		return lsb, rsb
 
 	# - Dynamic --------------------------------
+	# - The magic stuff ;) 
+	def _getMagicMultiplier(self, glyph):
+		if glyph.unicode is not None:
+			glyph_char = unichr(glyph.unicode)
+			try:
+				return self.magic_table[self._getCharMagicPattern(glyph_char)]
+			except KeyError:
+				return self.fallback_magic
+		
+		return self.fallback_magic
+
+	def _getCharMagicPattern(self, char):
+		return (char.isalpha(), char.isdigit(), char.isupper(), char.istitle())
+
+	def _setMagicValue(self, char, value):
+		self.magic_table[self._getCharMagicPattern(char)] = value
+		return True
+
+	def _setMagicTable(self, char_value_dict):
+		self.magic_table = {self._getCharMagicPattern(char):value for char, value in char_value_dict}
+		return True
+
+	# - ...and the trivial ;)
 	def setDepth(self, depth=None, x_height=None):
 		depth = self.depth if depth is None else depth
 		x_height = sum([self.metrics.getXHeight(layer) for layer in self.font.masters()])/float(len(self.font.masters())) if x_height is None else x_height
 		self.cutout_x = (x_height*depth)/100.
-
-	def __getMagicMultiplier(self, glyph):
-		name_test = lambda item: (item.isalpha(), item.isdigit(), item.isupper(), item.istitle())
-		if glyph.unicode is not None:
-			glyph_char = unichr(glyph.unicode)
-			return self.magic_table[name_test(glyph_char)]
-		
-		return 1.
+		return self.cutout_x
 
 	def getGlyphSB(self, glyph, layer=None, resample=False, draw=False):
 		glyph_name = glyph.name
@@ -338,9 +355,8 @@ class MetricSampler(GlyphSampler):
 		glyph_window = self.sample_window
 		glyph_x_height = self.metrics.getXHeight(layer)
 		glyph_upm = self.metrics.getUpm()
-		magic_multiplier = self.__getMagicMultiplier(glyph)
-		print magic_multiplier
-
+		magic_multiplier = self._getMagicMultiplier(glyph)
+		
 		return MetricSampler.getSB(glyph_areas, magic_multiplier, self.user_area, glyph_window, glyph_x_height, glyph_upm)
 
 
