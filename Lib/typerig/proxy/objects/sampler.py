@@ -19,7 +19,7 @@ from typerig.proxy.objects.base import Line, Curve
 from typerig.core.func.math import linspread
 
 # - Init -----------------------------
-__version__ = '0.1.9'
+__version__ = '0.2.2'
 
 # - Classes --------------------------
 class GlyphSampler(object):
@@ -266,84 +266,57 @@ class GlyphSampler(object):
 			print 'ABORT:\t Draw Area;\t Glyph: %s; Layer: %s;\tGlyphSampler data not found!' %(glyph_name, layer_name)
 
 class MetricSampler(GlyphSampler):
-	'''Metric sampler for automatically generating glyph sidebearings based on negative space area. 
-	Partially based by Huerta Tipografica Letterspacer (https://github.com/huertatipografica/HTLetterspacer)
+	'''Metric sampler for automatically generating glyph side-bearings based on negative space area.
+	Constructor:
+		GlyphSampler(font (pFont))
+
+	Attributes:
+		.data_samples (dict) -> {glyph_name:{layer:(left_samples, mid_samples, right_samples)}}: Cached data of Glyph samples 
+		.data_area (dict) -> {glyph_name:{layer:(left_area, mid_area, right_area)}}: Cached data of Glyph area regions
+
+		.sample_window (list/tuple) -> [min_y, max_y]: Window of scanning
+		.sample_frequency (int) : Sampling frequency
+		.sample_range range(window_min, window_max, sample_frequency): Sampling range
+		.sample_quantas list(int): Quantized sampling rage - the window is split in "sample_frequency" number of regions
+		.use_quantizer (bool): Use Quantized sampling range
+
+		.margin_growth (int): Grow margin outside the glyph BBoX
+		.cutout_x, .cutout_y: Cutout values defining how deep (x) or hight (y) the probing is done
+
+	Methods:
+		.getGlyphSB(glyph (pGlyph), layer (Str), area_mult (Float), resample (Bool), draw (Bool))
 	'''
+
 	def __init__(self, p_font_object):
 		# - Init
 		self.font = p_font_object
 		self.metrics = self.font.fontMetrics()
 		
-		# - Config
-		self.user_area = 400
-		self.depth = 15
-		self.fallback_magic = 0.7
-		
-		# - Semi direct adaptation of Huerta Tipografica Letterspacer config file
-		self.magic_table = {}
-		
-		human_dict = {	'H': 1.1, 	# Uppercase single letter (/A)
-						'n': 0.7,	# Lowercase
-						'0': 1.2,	# Figure (decimal digit)
-						'.': 1.4	# Punctuation
-					}
-		self._setMagicTable(human_dict)
-
 		# - Initialize sampler
 		font_descender_min = min([self.metrics.getDescender(layer) for layer in self.font.masters()])
 		font_ascender_max =  max([self.metrics.getAscender(layer) for layer in self.font.masters()])
 		sample_window = (font_descender_min, font_ascender_max)
 
 		super(MetricSampler, self).__init__(sample_window)
-		self.setDepth()
+
+		self.cutout_x = 100
 
 	# - Functions ----------------------------	
 	# - Modular/static -----------------------
 	@staticmethod
-	def getSB(area_tuple, magic_multiplier, user_area, sample_window, x_height, font_upm):
-		'''Formula adapted from Huerta Tipografica Letterspacer (https://github.com/huertatipografica/HTLetterspacer)'''
+	def getSB(area_tuple, area_mult, sample_window, x_height, font_upm):
 		left, mid, right = area_tuple
 
 		window_height = max(sample_window) - min(sample_window) 
-		area_UPM = user_area*((font_upm/1000.)**2)
-		area_prop = (100*magic_multiplier*window_height*area_UPM)/x_height
+		mid_prop = mid*area_mult
 
-		lsb = (area_prop - abs(left))/window_height
-		rsb = (area_prop - abs(right))/window_height
+		lsb = (mid_prop - abs(left))/window_height
+		rsb = (mid_prop - abs(right))/window_height
 
 		return lsb, rsb
 
 	# - Dynamic --------------------------------
-	# - The magic stuff ;) 
-	def _getMagicMultiplier(self, glyph):
-		if glyph.unicode is not None:
-			glyph_char = unichr(glyph.unicode)
-			try:
-				return self.magic_table[self._getCharMagicPattern(glyph_char)]
-			except KeyError:
-				return self.fallback_magic
-		
-		return self.fallback_magic
-
-	def _getCharMagicPattern(self, char):
-		return (char.isalpha(), char.isdigit(), char.isupper(), char.istitle())
-
-	def _setMagicValue(self, char, value):
-		self.magic_table[self._getCharMagicPattern(char)] = value
-		return True
-
-	def _setMagicTable(self, char_value_dict):
-		self.magic_table = {self._getCharMagicPattern(char):value for char, value in char_value_dict.items()}
-		return True
-
-	# - ...and the trivial ;)
-	def setDepth(self, depth=None, x_height=None):
-		depth = self.depth if depth is None else depth
-		x_height = sum([self.metrics.getXHeight(layer) for layer in self.font.masters()])/float(len(self.font.masters())) if x_height is None else x_height
-		self.cutout_x = (x_height*depth)/100.
-		return self.cutout_x
-
-	def getGlyphSB(self, glyph, layer=None, resample=False, draw=False):
+	def getGlyphSB(self, glyph, layer=None, area_mult=0.5, resample=False, draw=False):
 		glyph_name = glyph.name
 
 		try:
@@ -351,15 +324,13 @@ class MetricSampler(GlyphSampler):
 		except KeyError:
 			glyph_areas = self.sampleGlyphArea(glyph, layer, resample, True)
 
-		if draw:
-			self.drawGlyphArea(glyph, layer)
+		if draw: self.drawGlyphArea(glyph, layer)
 
 		glyph_window = self.sample_window
 		glyph_x_height = self.metrics.getXHeight(layer)
 		glyph_upm = self.metrics.getUpm()
-		magic_multiplier = self._getMagicMultiplier(glyph)
 		
-		return MetricSampler.getSB(glyph_areas, magic_multiplier, self.user_area, glyph_window, glyph_x_height, glyph_upm)
+		return MetricSampler.getSB(glyph_areas, area_mult, glyph_window, glyph_x_height, glyph_upm)
 
 
 # - Test ----------------------
@@ -368,7 +339,7 @@ if __name__ == '__main__':
 	font = pFont()
 	g = eGlyph()
 	ms = MetricSampler(font)
-	ms.getGlyphSB(g, None, True, True)
+	ms.getGlyphSB(g, None, 0.5, True, True)
 	g.updateObject(g.fl)
 
 	# - Finish ---------------------------
