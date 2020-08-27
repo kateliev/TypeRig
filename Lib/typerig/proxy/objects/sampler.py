@@ -280,12 +280,14 @@ class MetricSampler(GlyphSampler):
 		self.fallback_magic = 0.7
 		
 		# - Semi direct adaptation of Huerta Tipografica Letterspacer config file
-		self.magic_table = {(True, False, True, True):	 1.25, 	# Uppercase single letter (/A)
-							(True, False, False, True):  1.25,	# Uppercase multi-letter letter (/Adieresis)
-							(True, False, False, False): 1.,	# Lowercase
-							(False, True, False, False): 1.2,	# Figure (decimal digit)
-							(False, False, False, False):1.4	# Punctuation
-							}
+		self.magic_table = {}
+		
+		human_dict = {	'H': 1.1, 	# Uppercase single letter (/A)
+						'n': 0.7,	# Lowercase
+						'0': 1.2,	# Figure (decimal digit)
+						'.': 1.4	# Punctuation
+					}
+		self._setMagicTable(human_dict)
 
 		# - Initialize sampler
 		font_descender_min = min([self.metrics.getDescender(layer) for layer in self.font.masters()])
@@ -331,7 +333,7 @@ class MetricSampler(GlyphSampler):
 		return True
 
 	def _setMagicTable(self, char_value_dict):
-		self.magic_table = {self._getCharMagicPattern(char):value for char, value in char_value_dict}
+		self.magic_table = {self._getCharMagicPattern(char):value for char, value in char_value_dict.items()}
 		return True
 
 	# - ...and the trivial ;)
