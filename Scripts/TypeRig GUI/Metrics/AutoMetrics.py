@@ -27,7 +27,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Auto Metrics', '0.02'
+app_name, app_version = 'TypeRig | Auto Metrics', '0.5'
 
 # -- Strings
 
@@ -65,9 +65,9 @@ class TRAutoMetrics(QtGui.QVBoxLayout):
 		self.btn_advanced.setChecked(False)
 		self.btn_advanced.setEnabled(False)
 
-		self.btn_get_lsb.clicked.connect(lambda: self.set_sidebearings(0))
-		self.btn_get_rsb.clicked.connect(lambda: self.set_sidebearings(3))
-		self.btn_get_both.clicked.connect(lambda: self.set_sidebearings(1))
+		self.btn_get_lsb.clicked.connect(lambda: self.set_sidebearings('lsb'))
+		self.btn_get_rsb.clicked.connect(lambda: self.set_sidebearings('rsb'))
+		self.btn_get_both.clicked.connect(lambda: self.set_sidebearings('bth'))
 
 		# -- Checkbox
 		self.chk_area_draw = QtGui.QCheckBox('Draw sampled area')
@@ -86,7 +86,12 @@ class TRAutoMetrics(QtGui.QVBoxLayout):
 		self.spb_depth.setMaximum(self.__max_value)
 		self.spb_mul_area.setMaximum(20.)
 		self.spb_mul_area.setMinimum(-20.)
+		
 		self.spb_mul_area.setSingleStep(0.01)
+		
+		self.spb_window_min.setSuffix(' u')
+		self.spb_window_max.setSuffix(' u')
+		self.spb_depth.setSuffix(' u')
 
 		self.spb_window_min.setValue(self.active_sampler.sample_window[0])
 		self.spb_window_max.setValue(self.active_sampler.sample_window[1])
@@ -144,7 +149,7 @@ class TRAutoMetrics(QtGui.QVBoxLayout):
 		self.active_sampler.sample_window[1] = self.spb_window_max.value
 		self.active_sampler.cutout_x = self.spb_depth.value
 
-	def set_sidebearings(self, mode=3):
+	def set_sidebearings(self, mode='bth'):
 		process_glyphs = getProcessGlyphs(pMode)
 
 		for glyph in process_glyphs:
@@ -152,8 +157,8 @@ class TRAutoMetrics(QtGui.QVBoxLayout):
 
 			for layer in wLayers:
 				new_lsb, new_rsb = self.active_sampler.getGlyphSB(glyph, layer, self.spb_mul_area.value, not self.chk_area_cache.isChecked(), self.chk_area_draw.isChecked())
-				if mode != 2: glyph.setLSB(new_lsb, layer)
-				if mode != 1: glyph.setRSB(new_rsb, layer)
+				if mode != 'rsb': glyph.setLSB(int(new_lsb), layer)
+				if mode != 'lsb': glyph.setRSB(int(new_rsb), layer)
 			
 			if len(process_glyphs) == 1:
 				glyph.updateObject(glyph.fl, 'Set Metrics @ %s.' %'; '.join(wLayers))
@@ -232,9 +237,6 @@ class TRAutoMetrics(QtGui.QVBoxLayout):
 			self.last_preset = active_preset_index
 
 		return dict(table_raw[active_preset_index][1][1:])
-
-	# - Basic Corner ------------------------------------------------
-	
 
 
 # - Tabs -------------------------------
