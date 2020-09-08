@@ -28,7 +28,7 @@ from typerig.proxy.application.app import pWorkspace
 from typerig.proxy.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.27.4'
+__version__ = '0.28.0'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -171,22 +171,19 @@ class pGlyph(object):
 		'''
 		return sum([contour.nodes.asList() for contour in self.fg_contours(layer)], [])
 
-	def contours(self, layer=None, deep=True, extend=None):
+	def contours(self, layer=None, deep=False, extend=None):
 		'''Return all contours at given layer.
 		Args:
 			layer (int or str): Layer index or name. If None returns ActiveLayer
 		Returns:
 			list[flContours]
 		'''
-		layer_contours = self.layer(layer).getContours()
 		
-		# - Dig deeper in grouped components and shapebuilders (filters)
-		if deep:
-			#glyph_components = self.components(layer)
-			glyph_components = self.containers(layer)
-
-			if len(glyph_components):
-				layer_contours = [contour for component in glyph_components for contour in component.contours]
+		if deep: # Dig deeper in grouped components and shapebuilders (filters)
+			glyph_shapes = self.shapes(layer, deep=deep)
+			layer_contours = sum([shape.contours for shape in glyph_shapes], [])
+		else:
+			layer_contours = self.layer(layer).getContours()
 
 		if extend is None:
 			return layer_contours
@@ -251,17 +248,19 @@ class pGlyph(object):
 	def fg_hasLayer(self, layerName):
 		return self.fg.fgData().findLayer(layer)
 
-	def shapes(self, layer=None, extend=None):
+	def shapes(self, layer=None, extend=None, deep=False):
 		'''Return all shapes at given layer.
 		Args:
 			layer (int or str): Layer index or name. If None returns ActiveLayer
 		Returns:
 			list[flShapes]
 		'''
+		all_shapes = self.layer(layer).shapes if not deep else sum([shape.includesList for shape in self.containers(layer)], [])
+		
 		if extend is None:
-			return self.layer(layer).shapes
+			return all_shapes
 		else:
-			return [extend(shape) for shape in self.layer(layer).shapes]
+			return [extend(shape) for shape in all_shapes]
 
 	def getElementNames(self, layer=None):
 		'''Return names of elements references used in glyph.'''
@@ -699,13 +698,13 @@ class pGlyph(object):
 		return [self.nodes(layer, extend, deep)[nid] for nid in self.selectedNodeIndices(filterOn, deep)]
 		#return [node for node in self.nodes(layer, extend, deep) if node.selected]
 
-	def selectedContours(self, layer=None, allNodesSelected=False):
+	def selectedContours(self, layer=None, allNodesSelected=False, deep=False):
 		selection_mode = 3 if allNodesSelected else 1
-		return [contour for contour in self.contours(layer) if contour.hasSelected(selection_mode)]
+		return [contour for contour in self.contours(layer, deep=deep) if contour.hasSelected(selection_mode)]
 
-	def selectedShapes(self, layer=None, allNodesSelected=False):
+	def selectedShapes(self, layer=None, allNodesSelected=False, deep=False):
 		selection_mode = 3 if allNodesSelected else 1
-		return [shape for shape in self.shapes(layer) if shape.hasSelected(selection_mode)]
+		return [shape for shape in self.shapes(layer, deep=deep) if shape.hasSelected(selection_mode)]
 
 	def nodesForIndices(self, indices, layer=None, filterOn=False, extend=None, deep=False):
 		return [self.nodes(layer, extend, deep)[nid] for nid in indices]
@@ -719,10 +718,10 @@ class pGlyph(object):
 			list[tuple(int, int)]: [(contourID, nodeID)..()] or 
 			list[tuple(flContour, flNode)]
 		'''
-		allContours = self.contours(layer)
+		all_contours = self.contours(layer, deep=deep)
 		
 		if index:
-			return [(allContours.index(node.contour), node.index) for node in self.selectedNodes(layer, filterOn, deep=deep)]
+			return [(all_contours.index(node.contour), node.index) for node in self.selectedNodes(layer, filterOn, deep=deep)]
 		else:
 			return [(node.contour, node) for node in self.selectedNodes(layer, filterOn, deep=deep)]
 
@@ -737,15 +736,15 @@ class pGlyph(object):
 
 		!TODO: Make it working with layers as selectedAtContours(). This is legacy mode so other scripts would work!
 		'''
-		allContours = self.contours(layer=layer, deep=deep)
-		allShapes = self.shapes(layer) if not deep else self.components(layer)
+		all_contours = self.contours(layer=layer, deep=deep)
+		all_shapes = self.shapes(layer, deep=deep)
 
 		if index:
-			return [(allShapes.index(shape), allContours.index(contour), node.index) for shape in allShapes for contour in shape.contours for node in contour.nodes() if node in self.selectedNodes(layer=layer, filterOn=filterOn, deep=deep)]
+			return [(all_shapes.index(shape), all_contours.index(contour), node.index) for shape in all_shapes for contour in shape.contours for node in contour.nodes() if node in self.selectedNodes(layer=layer, filterOn=filterOn, deep=deep)]
 		else:
-			return [(shape, contour, node) for shape in allShapes for contour in shape.contours for node in contour.nodes() if node in self.selectedNodes(layer=layer, filterOn=filterOn, deep=deep)]
+			return [(shape, contour, node) for shape in all_shapes for contour in shape.contours for node in contour.nodes() if node in self.selectedNodes(layer=layer, filterOn=filterOn, deep=deep)]
 
-	def selectedShapeIndices(self, select_all=False, deep=False):
+	def selectedShapeIndices(self, layer=None, select_all=False, deep=False):
 		'''Return all indices of nodes selected at current layer.
 		Args:
 			select_all (bool): True all nodes on Shape should be selected. False any node will do.
@@ -753,22 +752,22 @@ class pGlyph(object):
 			list[int]
 		'''
 		selection_mode = ['AnyNodeSelected', 'AllContourSelected'][select_all]
-		allShapes = self.shapes() if not deep else self.components()
+		all_shapes = self.shapes(layer, deep=deep)
 
-		return [allShapes.index(shape) for shape in allShapes if shape.hasSelected(selection_mode)]
+		return [all_shapes.index(shape) for shape in all_shapes if shape.hasSelected(selection_mode)]
 		
 	def selectedShapes(self, layer=None, select_all=False, deep=False, extend=None):
 		'''Return all shapes that have a node selected.
 		'''
 		selection_mode = ['AnyNodeSelected', 'AllContourSelected'][select_all]
-		allShapes = self.shapes(layer) if not deep else self.components(layer)
+		all_shapes = self.shapes(layer, deep=deep)
 
 		if extend is None:
-			return [allShapes[sid] for sid in self.selectedShapeIndices(select_all, deep)]
+			return [all_shapes[sid] for sid in self.selectedShapeIndices(layer, select_all=select_all, deep=deep)]
 		else:
-			return [extend(allShapes[sid]) for sid in self.selectedShapeIndices(select_all, deep)]
+			return [extend(all_shapes[sid]) for sid in self.selectedShapeIndices(layer, select_all=select_all, deep=deep)]
 
-	def selectedCoords(self, layer=None, filterOn=False, applyTransform=False):
+	def selectedCoords(self, layer=None, filterOn=False, applyTransform=False, deep=False):
 		'''Return the coordinates of all selected nodes at the current layer or other.
 		Args:
 			layer (int or str): Layer index or name. If None returns ActiveLayer
@@ -780,23 +779,23 @@ class pGlyph(object):
 		pLayer = self.layer(layer)
 		
 		if not applyTransform:
-			nodelist = self.selectedAtContours(filterOn=filterOn, deep=False)
+			nodelist = self.selectedAtContours(filterOn=filterOn, deep=deep)
 			#return [pLayer.getContours()[item[0]].nodes()[item[1]].position for item in nodelist]
-			return [self.contours(layer)[cid].nodes()[nid].position for cid, nid in nodelist]
+			return [self.contours(layer, deep=deep)[cid].nodes()[nid].position for cid, nid in nodelist]
 
 		else:
 			nodelist = self.selectedAtShapes(filterOn=filterOn, deep=False)
 			#return [pLayer.getShapes(1)[item[0]].transform.map(pLayer.getContours()[item[1]].nodes()[item[2]].position) for item in nodelist]
-			return [self.shapes(layer)[sid].transform.map(self.contours(layer)[cid].nodes()[nid].position) for sid, cid, nid in nodelist]
+			return [self.shapes(layer, deep=deep)[sid].transform.map(self.contours(layer, deep=deep)[cid].nodes()[nid].position) for sid, cid, nid in nodelist]
 
-	def selectedSegments(self, layer=None):
+	def selectedSegments(self, layer=None, deep=False):
 		'''Returns list of currently selected segments
 		Args:
 			layer (int or str): Layer index or name. If None returns ActiveLayer
 		Returns:
 			list[CurveEx]
 		'''
-		return [self.contours(layer)[cID].segment(self.mapNodes2Times(layer)[cID][nID]) for cID, nID in self.selectedAtContours()]
+		return [self.contours(layer, deep=deep)[cID].segment(self.mapNodes2Times(layer)[cID][nID]) for cID, nID in self.selectedAtContours(deep=deep)]
 
 	def findNode(self, nodeName, layer=None):
 		'''Find node by name/tag'''
@@ -814,9 +813,9 @@ class pGlyph(object):
 			dict: {contour_index : {True_Node_Index : on_Curve__Node_Index}...}
 		'''
 		contourMap = {}		
-		allContours = self.contours(layer)
+		all_contours = self.contours(layer)
 		
-		for contour in allContours:
+		for contour in all_contours:
 			nodeMap = {}
 			countOn = -1
 
@@ -824,7 +823,7 @@ class pGlyph(object):
 				countOn += node.isOn() # Hack-ish but working
 				nodeMap[node.index] = countOn
 				
-			contourMap[allContours.index(contour)] = nodeMap
+			contourMap[all_contours.index(contour)] = nodeMap
 
 		return contourMap
 
