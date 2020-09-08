@@ -27,7 +27,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Corner', '1.98'
+app_name, app_version = 'TypeRig | Corner', '1.99'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -285,9 +285,9 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 							line_in = node_first.getPrevLine() if node_first.getPrevOn(False) not in selection else node_first.getNextLine()
 							line_out = node_last.getNextLine() if node_last.getNextOn(False) not in selection else node_last.getPrevLine()
 
-							crossing = line_in & line_out
+							crossing = line_in.intersect_line(line_out, True)
 
-							node_first.smartReloc(*crossing)
+							node_first.smartReloc(*crossing.tuple)
 							node_first.parent.removeNodesBetween(node_first.fl, node_last.getNextOn())
 			
 					glyph.update()
@@ -338,7 +338,7 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 				selection_deep = [(item[0], item[2]) for item in glyph.selectedAtShapes(layer=work_layer, index=False, deep=True)]
 				selection_shallow = [(item[0], item[2]) for item in glyph.selectedAtShapes(layer=work_layer, index=False, deep=False)]
 				selection = selection_deep + selection_shallow
-								
+												
 				# - Build note to shape reference
 				nodes_at_shapes[work_layer] = [(shape, [node for shape, node in list(nodes)]) for shape, nodes in groupby(selection, key=itemgetter(0))]
 

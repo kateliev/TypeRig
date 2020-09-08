@@ -182,7 +182,8 @@ class pGlyph(object):
 		
 		# - Dig deeper in grouped components and shapebuilders (filters)
 		if deep:
-			glyph_components = self.components(layer)
+			#glyph_components = self.components(layer)
+			glyph_components = self.containers(layer)
 
 			if len(glyph_components):
 				layer_contours = [contour for component in glyph_components for contour in component.contours]
