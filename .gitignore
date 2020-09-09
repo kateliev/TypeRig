@@ -8,3 +8,4 @@ __pycache__/
 .dmypy.json
 dmypy.json
 .idea/
+*.vfpyc
