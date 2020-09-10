@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '0.25'
+app_name, app_version = 'TypeRig | Contour', '0.26'
 
 # - Dependencies -----------------
 from collections import OrderedDict
@@ -83,6 +83,7 @@ class basicContour(QtGui.QGridLayout):
 		self.btn_start = QtGui.QPushButton('&Start')
 		self.btn_CW = QtGui.QPushButton('CW')
 		self.btn_CCW = QtGui.QPushButton('CCW')
+		self.btn_overlap = QtGui.QPushButton('Remove Overlap')
 
 		self.btn_close.setMinimumWidth(40)
 		self.btn_BL.setMinimumWidth(40)
@@ -112,6 +113,7 @@ class basicContour(QtGui.QGridLayout):
 		self.btn_CW.clicked.connect(lambda : self.setDirection(False))
 		self.btn_CCW.clicked.connect(lambda : self.setDirection(True))
 		self.btn_close.clicked.connect(self.closeContour)
+		self.btn_overlap.clicked.connect(self.removeOverlap)
 		self.btn_sort_x.clicked.connect(lambda : self.setOrder(False))
 		self.btn_sort_y.clicked.connect(lambda : self.setOrder(True))
 
@@ -126,6 +128,7 @@ class basicContour(QtGui.QGridLayout):
 		self.addWidget(self.btn_BR, 	1, 3, 1, 1)
 		self.addWidget(self.btn_sort_x, 2, 0, 1, 2)
 		self.addWidget(self.btn_sort_y, 2, 2, 1, 2)
+		self.addWidget(self.btn_overlap, 3, 0, 1, 4)
 		
 
 	def closeContour(self):
@@ -140,6 +143,38 @@ class basicContour(QtGui.QGridLayout):
 				if not contours[cID].closed: contours[cID].closed = True
 
 		glyph.updateObject(glyph.fl, 'Close Contour @ %s.' %'; '.join(wLayers))
+		glyph.update()
+
+	def removeOverlap(self):
+		glyph = eGlyph()
+		wLayers = glyph._prepareLayers(pLayers)
+		
+		# - Prepare selection
+		tmp = {}
+		selection = glyph.selectedAtShapes()
+
+		for sid, cid, nid in selection:
+			tmp.setdefault(sid,[]).append(cid)
+
+		selection = {key:list(set(value)) for key, value in tmp.items()}
+
+		# - Get contours
+		process_shapes = []
+		
+		for layerName in wLayers:
+			for sid, cid_list in selection.items():
+				process_shapes.append((glyph.shapes(layerName)[sid], [glyph.contours(layerName)[cid] for cid in cid_list]))
+
+		for shape, contours in process_shapes:
+			shape.removeContours(contours)
+			new_shape = fl6.flShape()
+			new_fg_shape = fgt.fgShape()
+			new_shape.contours = contours
+			new_shape.convertToFgShape(new_fg_shape)
+			new_fg_shape.removeOverlap()
+			shape.addContours(fl6.flShape(new_fg_shape).contours, True)
+
+		glyph.updateObject(glyph.fl, 'Remove Overlap @ %s.' %'; '.join(wLayers))
 		glyph.update()
 
 	def setStartSelection(self):

@@ -28,7 +28,7 @@ from typerig.proxy.application.app import pWorkspace
 from typerig.proxy.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.28.0'
+__version__ = '0.28.1'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -255,7 +255,9 @@ class pGlyph(object):
 		Returns:
 			list[flShapes]
 		'''
-		all_shapes = self.layer(layer).shapes if not deep else sum([shape.includesList for shape in self.containers(layer)], [])
+		layer_shapes = self.layer(layer).shapes 
+		deep_shapes = sum([shape.includesList for shape in self.containers(layer)], [])
+		all_shapes = deep_shapes if deep and len(deep_shapes) else layer_shapes # Fallback!
 		
 		if extend is None:
 			return all_shapes
