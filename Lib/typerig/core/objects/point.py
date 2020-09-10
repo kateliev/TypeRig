@@ -16,7 +16,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.transform import Transform
 
 # - Init -------------------------------
-__version__ = '0.26.3'
+__version__ = '0.26.4'
 
 # - Classes -----------------------------
 class Point(object): 
@@ -276,6 +276,21 @@ class Point(object):
 			transform = self.transform
 
 		self.x, self.y = transform.applyTransformation(self.x, self.y)
+
+	# -- Specials
+	@property
+	def string(self):
+		x = int(self.x) if self.x.is_integer() else self.x
+		y = int(self.y) if self.y.is_integer() else self.y
+		return '{0}{2}{1}'.format(x, y, ' ')
+
+	def dumps(self):
+		return self.string
+
+	@staticmethod
+	def loads(string):
+		xs, ys = string.split(' ')
+		return Point(float(xs), float(ys))
 
 class Void(Point):
 	def __init__(self, *argv):
