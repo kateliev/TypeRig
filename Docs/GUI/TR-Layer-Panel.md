@@ -5,7 +5,7 @@
 ### Layer Panel
 The Layer tab/subpanel is a special purpose tool for dealing with layers in Glyph Window (GW) as well as Font Window (FW). All of its actions are independent from [TypeRig panel masthead (MH)](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Panel-Basics) and work only on current active glyph.
 
-![](./img/TR-Node-Layer-00.png)
+![](./img/TR-Layer-Panel-00.png)
 _A typical view of Layer panel_
 
 The Layer panel consists of two planes:
@@ -13,7 +13,7 @@ The Layer panel consists of two planes:
 - **Actions plane**: A collection of tools below that affect one or more layers selected.
 
 #### Basic Tools (Layers selected)
-![](./img/TR-Node-Layer-01.png)
+![](./img/TR-Layer-Panel-01.png)
 _Basic operations for selected layers_
 
 This section offers the following tools:
@@ -25,7 +25,7 @@ This section offers the following tools:
 - **Wireframe**: Will set all selected layers as _Wireframe layers_.
 
 #### Content Tools (Active layer to/from selection)
-![](./img/TR-Node-Layer-02.png)
+![](./img/TR-Layer-Panel-02.png)
 _Content operations for selected layer_
 
 As the name implies this tool offers content interaction between current active layer and a layer selected in the _Layer selector plane_. There are several options (check boxes) indicating the type of interaction: Outline; Guidelines; Anchors; Left side bearing (LSB), Right side bearing (RSB) or Advance width.
@@ -38,14 +38,14 @@ As the name implies this tool offers content interaction between current active 
 - **Expand**: Will expand transformations of all content chosen for all layers selected in _Layer selector plane_ .
 
 #### Layer multi editing (Layers selected)
-![](./img/TR-Node-Layer-03.png)
+![](./img/TR-Layer-Panel-03.png)
 _Tools for editing multiple layers_
 
 Here reside several tools that are different in nature, but are grouped together for convenience:
 - **Unfold layers**: Will modify the LSB + Advance of each layer selected in _Layer selector plane_ so that all of them are arranged one ofter the other along the baseline (in order of selection). This together with _FL's Edit between layers_ option will allow you to edit layers side by side or check them for compatibility;
 - **Fold layers**: Will undo the above side by side arrangement and return LSB + Advance to original values.
 
-![](./img/TR-Node-Layer-03A.png)
+![](./img/TR-Layer-Panel-03A.png)
 _View of a glyph with layers unfolded_
 
 _Please note that the above functions will only work if the glyph does not have linked metrics!_
@@ -60,7 +60,7 @@ The second part grouped under this sub-panel deals with layer affine transformat
 
 
 #### Interpolate/Blend (Selection to Active Layer)
-![](./img/TR-Node-Layer-04.png)
+![](./img/TR-Layer-Panel-04.png)
 _A simple layer blend tool_
 
 This is a simple layer blend tool. It will create a single axis between current active layer and a layer selected in _Layer selector plane_ as if they reside on positions 0 and 1000.
