@@ -21,7 +21,7 @@ from typerig.proxy.objects.base import *
 #from typerig.proxy.objects.node import pNode, eNode
 
 # - Init ---------------------------------
-__version__ = '0.26.3'
+__version__ = '0.26.4'
 
 # - Classes -------------------------------
 class pNode(object):
@@ -384,6 +384,7 @@ class eNode(pNode):
 
 		self.smartShift(*prevShift.tuple)
 		nextNode.smartShift(*nextShift.tuple)
+		nextNode.fl.convertToLine()
 
 		return (self.fl, nextNode.fl)
 

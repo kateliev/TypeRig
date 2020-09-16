@@ -30,6 +30,9 @@ _New in Contour Panel v0.25 - Reorder Contours_
 - **Sort X** - Will rearrange the order of contours based on their BBoX X coordinate.
 - **Sort Y** - Will rearrange the order of contours based on their BBoX Y coordinate.
 
+_New in Contour Panel v0.26 - Remove Overlap_
+- **Remove Overlap** - Will remove overlap for selected contours at lsyers selected in TR Masthead.
+
 #### Align
 
 This section offers some contour to contour alignment options that work in accordance to layer options selected in MH. Except explicitly noted, contours that will be aligned should have at least one node selected _(it is not necessary to select whole contours)_. 

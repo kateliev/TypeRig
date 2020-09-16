@@ -238,7 +238,7 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 									node.cornerMitre(float(active_preset[layer]))
 								else:
 									node.cornerMitre(-float(active_preset[layer]), True)
-					
+								
 					action = 'Mitre Corner' if not doKnot else 'Overlap Corner'
 					glyph.update()
 					glyph.updateObject(glyph.fl, '%s @ %s.' %(action, '; '.join(active_preset.keys())))
@@ -288,7 +288,7 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 							crossing = line_in.intersect_line(line_out, True)
 
 							node_first.smartReloc(*crossing.tuple)
-							node_first.parent.removeNodesBetween(node_first.fl, node_last.getNextOn())
+							node_first.parent.removeNodesBetween(node_first.fl, node_last.getNext())
 			
 					glyph.update()
 					glyph.updateObject(glyph.fl, 'Rebuild corner: %s nodes reduced; At layers: %s' %(len(selection), '; '.join(wLayers)))

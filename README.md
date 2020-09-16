@@ -20,6 +20,7 @@ _Planned_
 - [Contour](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Contour-Panel)
 - [Curve](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Curve-Panel)
 - [Guidelines](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Guide-Panel)
+- [Layers](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Layer-Panel)
 - [Metrics](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Metrics-Panel)
 - [Nodes](https://kateliev.github.io/TypeRig/Docs/GUI/TR-Node-Panel)
 - [Outline](http://kateliev.github.io/TypeRig/Docs/GUI/TR-Outline-Panel)

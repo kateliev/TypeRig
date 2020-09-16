@@ -375,7 +375,7 @@ class typerig_Panel(QtGui.QDialog):
 			self.fr_controller.show()
 			self.btn_unfold.hide()
 			self.adjustSize()
-			self.resize(330, self.sizeHint.height()) # !!! Hotfix FL7 7355 
+			self.resize(width_all, self.sizeHint.height()) # !!! Hotfix FL7 7355 
 			self.repaint()
 			self.flag_fold = False
 
