@@ -19,7 +19,7 @@ from typerig.core.objects.transform import Transform
 from typerig.core.objects.point import Point, Void
 
 # - Init -------------------------------
-__version__ = '0.26.5'
+__version__ = '0.26.6'
 
 # - Classes -----------------------------
 class Line(object):
@@ -128,6 +128,10 @@ class Line(object):
 		return math.degrees(math.atan2(self.diff_y, self.diff_x))
 
 	@property
+	def angler(self):
+		return math.atan2(self.diff_y, self.diff_x)
+
+	@property
 	def y_intercept(self):
 		'''Get the Y intercept of a line segment'''
 		return self.p0.y - self.slope * self.p0.x if not math.isnan(self.slope) and self.slope != 0 else self.p0.y
@@ -151,6 +155,27 @@ class Line(object):
 	def solve_point(self, time):
 		'''Find point on the line at given time'''
 		return self.p0 * (1. - time) + self.p1 * time
+
+	def solve_length(self, length, mode=0):
+		'''Find a indentical line with different length. Solve for anchored p0 (mode = 0), p1 (mode = 1) or center (mode = -1)'''
+		time = length/self.length
+		
+		if mode == 0: # Solve for p0 anchored
+			new_p0 = self.p0
+			new_p1 = self.solve_point(time)
+
+		elif mode == 1: # Solve for p1 anchored
+			new_p0 = self.doSwap().solve_point(time)
+			new_p1 = self.p1
+
+		elif mode == -1: # Solve for mid
+			new_line = self.__class__(self.p0, self.solve_point(time))
+			center_diff = new_line.solve_point(.5) - self.solve_point(.5)
+
+			new_p0 = new_line.p0 - center_diff
+			new_p1 = new_line.p1 - center_diff
+
+		return self.__class__(new_p0, new_p1)
 
 	def solve_slice(self, time):
 		'''Slice line at given time'''
@@ -246,4 +271,7 @@ class Vector(Line):
 	def getAngle(self):
 		return math.degrees(math.atan2(self.diff_y, self.diff_x))
 
-	
+if __name__ == '__main__':
+	a = Line(Point(0,0), Point(4,0))
+	b = a.solve_length(10,-1)
+	print(a.length, b.length, a, b)
