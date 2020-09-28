@@ -17,7 +17,7 @@ import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore
 
-from typerig.proxy import *
+from typerig.proxy.fl import *
 
 from typerig.gui import QtGui
 from typerig.gui.widgets import TRTableView, TRSliderCtrl, getProcessGlyphs

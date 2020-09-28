@@ -18,7 +18,7 @@ app_name, app_version = 'TypeRig | Metrics', '0.30'
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig.proxy import *
+from typerig.proxy.fl import *
 
 from PythonQt import QtCore
 from typerig.gui import QtGui

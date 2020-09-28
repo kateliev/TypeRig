@@ -14,8 +14,8 @@ import warnings
 import fontlab as fl6
 import PythonQt as pqt
 
-from typerig.proxy.objects.base import *
-from typerig.proxy.objects.node import *
+from typerig.proxy.fl.objects.base import *
+from typerig.proxy.fl.objects.node import *
 
 from typerig.core.func.utils import isMultiInstance
 

@@ -15,7 +15,7 @@ from itertools import groupby
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig.proxy import *
+from typerig.proxy.fl import *
 
 from typerig.core.func.math import linInterp as lerp
 

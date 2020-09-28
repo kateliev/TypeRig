@@ -1,6 +1,6 @@
-# MODULE: TypeRig / Proxy
+# MODULE: TypeRig / Glyphs App Proxy / Objects
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2017-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2020 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -14,5 +14,14 @@ from proxy import __version__ as current_ver
 __version__ = current_ver
 '''
 
-from fl.application import *
-from fl.objects import *
+#from contour import *
+#from curve import *
+#from font import *
+from glyph import *
+#from kern import *
+#from node import *
+#from shape import *
+#from sampler import *
+#from string import *
+
+

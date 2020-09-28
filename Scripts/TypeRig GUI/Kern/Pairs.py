@@ -14,7 +14,7 @@ from itertools import product
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig.proxy import *
+from typerig.proxy.fl import *
 from typerig.core.fileio import cla, krn
 
 from PythonQt import QtCore

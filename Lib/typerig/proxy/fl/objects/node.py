@@ -15,10 +15,10 @@ import math
 import fontlab as fl6
 import PythonQt as pqt
 
-from typerig.proxy.objects.base import *
-#from typerig.proxy.objects.curve import eCurveEx
-#from typerig.proxy.objects.contour import pContour
-#from typerig.proxy.objects.node import pNode, eNode
+from typerig.proxy.fl.objects.base import *
+#from typerig.proxy.fl.objects.curve import eCurveEx
+#from typerig.proxy.fl.objects.contour import pContour
+#from typerig.proxy.fl.objects.node import pNode, eNode
 
 # - Init ---------------------------------
 __version__ = '0.26.4'

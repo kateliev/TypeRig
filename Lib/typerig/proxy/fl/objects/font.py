@@ -20,8 +20,8 @@ import fontgate as fgt
 import PythonQt as pqt
 
 from typerig.core.objects.collection import *
-from typerig.proxy.objects.glyph import *
-from typerig.proxy.objects.string import *
+from typerig.proxy.fl.objects.glyph import *
+from typerig.proxy.fl.objects.string import *
 
 # - Init ---------------------------------
 __version__ = '0.27.5'

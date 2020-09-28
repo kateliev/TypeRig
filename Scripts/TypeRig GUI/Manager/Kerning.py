@@ -24,7 +24,7 @@ from PythonQt import QtCore
 from typerig.gui import QtGui
 from typerig.gui.widgets import TR2FieldDLG
 
-from typerig.proxy import *
+from typerig.proxy.fl import *
 from typerig.core.fileio import cla, krn
 
 # - Strings ------------------------------------------------------------------

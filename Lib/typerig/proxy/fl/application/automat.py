@@ -10,7 +10,7 @@
 # Running UI FontLab actions
 
 from collections import OrderedDict
-from typerig.proxy.application.app import pWorkspace
+from typerig.proxy.fl.application.app import pWorkspace
 from typerig.gui.QtGui import QAction
 
 class Automat(object):

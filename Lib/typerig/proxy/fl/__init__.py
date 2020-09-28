@@ -1,4 +1,4 @@
-# MODULE: TypeRig / Proxy
+# MODULE: TypeRig / FontLab Proxy
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2017-2020 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
@@ -14,5 +14,5 @@ from proxy import __version__ as current_ver
 __version__ = current_ver
 '''
 
-from fl.application import *
-from fl.objects import *
+from application import *
+from objects import *

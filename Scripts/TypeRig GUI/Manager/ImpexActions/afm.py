@@ -17,8 +17,8 @@ from fontTools import afmLib
 from PythonQt import QtCore
 from typerig.gui import QtGui
 
-from typerig.proxy import pFont
-from typerig.proxy import pKerning
+from typerig.proxy.fl import pFont
+from typerig.proxy.fl import pKerning
 from typerig.core.func.math import round2base
 
 # - Init --------------------------

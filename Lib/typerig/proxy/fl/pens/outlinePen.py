@@ -22,7 +22,7 @@ from typerig.core.func.math import roundFloat
 from typerig.core.func.geometry import checkSmooth, checkInnerOuter
 from typerig.core.objects import Point, Line, CubicBezier
 
-from typerig.proxy import pGlyph, pFont
+from typerig.proxy.fl import pGlyph, pFont
 
 # - Init ---------------------------------
 __version__ = '0.1.3'

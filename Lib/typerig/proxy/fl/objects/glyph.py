@@ -23,9 +23,9 @@ from fontTools.pens import statisticsPen
 from typerig.core.objects.point import Point
 from typerig.core.func.math import linInterp
 
-#from typerig.proxy.objects.font import pFont
-from typerig.proxy.application.app import pWorkspace
-from typerig.proxy.objects.string import diactiricalMarks
+#from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.application.app import pWorkspace
+from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
 __version__ = '0.28.1'

@@ -15,8 +15,8 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
-from typerig.proxy.objects.base import *
-from typerig.proxy.objects.node import *
+from typerig.proxy.fl.objects.base import *
+from typerig.proxy.fl.objects.node import *
 
 # - Init ---------------------------------
 __version__ = '0.26.5'

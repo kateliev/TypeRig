@@ -10,7 +10,7 @@
 # that you use it at your own risk!
 
 # - Dependancies
-from typerig.proxy import pFont, pGlyph
+from typerig.proxy.fl import pFont, pGlyph
 
 # - Init
 font = pFont()

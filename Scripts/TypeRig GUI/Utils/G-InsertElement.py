@@ -14,7 +14,7 @@ import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore, QtGui
 
-from typerig.proxy import pFont, pGlyph
+from typerig.proxy.fl import pFont, pGlyph
 from typerig.brain import Coord
 
 # - Init --------------------------------

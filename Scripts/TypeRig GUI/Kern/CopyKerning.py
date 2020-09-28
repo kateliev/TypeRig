@@ -14,7 +14,7 @@ import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore, QtGui
 
-from typerig.proxy import pFont
+from typerig.proxy.fl import pFont
 from typerig.core.objects.collection import extBiDict
 
 # - Init --------------------------------

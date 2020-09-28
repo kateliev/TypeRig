@@ -15,8 +15,8 @@ import math
 import fontlab as fl6
 import PythonQt as pqt
 
-from typerig.proxy.objects.base import Coord
-from typerig.proxy.objects.node import pNode
+from typerig.proxy.fl.objects.base import Coord
+from typerig.proxy.fl.objects.node import pNode
 
 # - Init --------------------------------
 __version__ = '0.26.1'
