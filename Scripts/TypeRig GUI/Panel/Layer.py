@@ -28,7 +28,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '1.28'
+app_name, app_version = 'TypeRig | Layers', '1.29'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -777,8 +777,8 @@ class TRNewLayerBlend(QtGui.QVBoxLayout):
 			self.chk_setAxis.setText('Reset Axis')
 			
 			selection = self.aux.lst_layers.getTable()
-			src_array_t0 = self.aux.glyph._getCoordArray(selection[0]).asPairs()
-			src_array_t1 = self.aux.glyph._getCoordArray(selection[1]).asPairs()
+			src_array_t0 = self.aux.glyph._getPointArray(selection[0])
+			src_array_t1 = self.aux.glyph._getPointArray(selection[1])
 			
 			self.process_array = zip(src_array_t0, src_array_t1)
 		
@@ -802,7 +802,7 @@ class TRNewLayerBlend(QtGui.QVBoxLayout):
 			
 			dst_array = [self.lerpXY(item[0], item[1], tx, tx) for item in self.process_array]
 			
-			self.aux.glyph._setCoordArray(dst_array)
+			self.aux.glyph._setPointArray(dst_array)
 			
 			self.aux.glyph.update()
 			fl6.Update(self.aux.glyph.fl)
