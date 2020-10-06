@@ -525,16 +525,7 @@ class TRLayerMultiEdit(QtGui.QVBoxLayout):
 
 		# -- Edit fileds
 		self.tr_trans_ctrl = TRTransformCtrl()
-		self.edt_shift = QtGui.QLineEdit('0.0, 0.0')
-		self.edt_scale = QtGui.QLineEdit('100, 100')
-		self.edt_slant = QtGui.QLineEdit('0.0')
-		self.edt_rotate = QtGui.QLineEdit('0.0')
-
-		self.edt_shift.setToolTip('Translate Layer by X, Y (comma separated)')
-		self.edt_scale.setToolTip('Scale Layer by X percent, Y percent(comma separated)')
-		self.edt_slant.setToolTip('Slant/Shear degrees')
-		self.edt_rotate.setToolTip('Rotate degrees')
-
+		
 		# -- Quick Tool buttons
 		self.lay_buttons = QtGui.QGridLayout()
 		self.btn_unfold = QtGui.QPushButton('Unfold Layers')
@@ -542,7 +533,6 @@ class TRLayerMultiEdit(QtGui.QVBoxLayout):
 		self.btn_copy = QtGui.QPushButton('Copy Outline')
 		self.btn_paste = QtGui.QPushButton('Paste Outline')
 		self.btn_transform = QtGui.QPushButton('Transform Layer')
-		self.btn_transform_shape = QtGui.QPushButton('Transform Elements')
 
 		self.btn_restore.setEnabled(False)
 		self.btn_paste.setEnabled(False)
@@ -558,15 +548,13 @@ class TRLayerMultiEdit(QtGui.QVBoxLayout):
 		self.btn_copy.clicked.connect(self.outline_copy)
 		self.btn_paste.clicked.connect(self.outline_paste)
 		self.btn_transform.clicked.connect(lambda: self.layer_transform(False))
-		self.btn_transform_shape.clicked.connect(lambda: self.layer_transform(True))
 				
 		self.lay_buttons.addWidget(self.btn_unfold,				0, 0, 1, 4)
 		self.lay_buttons.addWidget(self.btn_restore,			0, 4, 1, 4)
 		self.lay_buttons.addWidget(self.btn_copy,				1, 0, 1, 4)
 		self.lay_buttons.addWidget(self.btn_paste,				1, 4, 1, 4)
 		self.lay_buttons.addWidget(self.tr_trans_ctrl, 			2, 0, 2, 8)
-		self.lay_buttons.addWidget(self.btn_transform,			4, 0, 1, 4)
-		self.lay_buttons.addWidget(self.btn_transform_shape,	4, 4, 1, 4)
+		self.lay_buttons.addWidget(self.btn_transform,			4, 0, 1, 8)
 		self.tr_trans_ctrl.lay_controls.setMargin(0)
 		
 		self.addLayout(self.lay_buttons)
@@ -687,39 +675,17 @@ class TRLayerMultiEdit(QtGui.QVBoxLayout):
 			for layer_name in self.aux.lst_layers.getTable():
 				wLayer = wGlyph.layer(layer_name)
 				
-				if not shapes:
-					# - Transform at origin
-					wBBox = wLayer.boundingBox
-					wCenter = (wBBox.width()/2 + wBBox.x(), wBBox.height()/2 + wBBox.y())
-					transform_to_origin = QtGui.QTransform().translate(-wCenter[0], -wCenter[1])
-					transform_from_origin = QtGui.QTransform().translate(*wCenter)
-					
-					# - Transform
-					if wRotate != 0: wLayer.applyTransform(transform_to_origin) # Transform at origin only if we have rotation!
-					wLayer.applyTransform(new_transform)
-					if wRotate != 0: wLayer.applyTransform(transform_from_origin)
-				else:
-					wShapes = wGlyph.shapes(layer_name)
-					
-					for shape in wShapes:
-						'''
-						# - Transform at origin and move to new location according to transformation
-						wBBox = shape.boundingBox
-						wCenter = (wBBox.width()/2 + wBBox.x(), wBBox.height()/2 + wBBox.y())
-						newCenter = new_transform.map(QtCore.QPointF(*wCenter))
-
-						transform_to_origin = QtGui.QTransform().translate(-wCenter[0], -wCenter[1])
-						transform_from_origin = QtGui.QTransform().translate(newCenter.x(), wCenter[1])
-						#transform_from_origin = QtGui.QTransform().translate(*wCenter)
-
-						# - Transform
-						shape.applyTransform(transform_to_origin)
-						shape.applyTransform(new_transform)
-						shape.applyTransform(transform_from_origin)
-						'''
-						edit_transform = shape.transform.scale(wScale_x, wScale_y).rotate(wRotate).shear(wSlant, 0).translate(wSift_x, wSift_y)
-						shape.transform = edit_transform
-						#shape.update()
+				# - Transform at origin
+				wBBox = wLayer.boundingBox
+				wCenter = (wBBox.width()/2 + wBBox.x(), wBBox.height()/2 + wBBox.y())
+				transform_to_origin = QtGui.QTransform().translate(-wCenter[0], -wCenter[1])
+				transform_from_origin = QtGui.QTransform().translate(*wCenter)
+				
+				# - Transform
+				if wRotate != 0: wLayer.applyTransform(transform_to_origin) # Transform at origin only if we have rotation!
+				wLayer.applyTransform(new_transform)
+				if wRotate != 0: wLayer.applyTransform(transform_from_origin)
+				
 
 			self.aux.glyph.updateObject(self.aux.glyph.fl, ' Glyph: %s; Transform Layers: %s' %(self.aux.glyph.fl.name, '; '.join([layer_name for layer_name in self.aux.lst_layers.getTable()])))
 			self.aux.glyph.update()
