@@ -28,7 +28,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '1.30'
+app_name, app_version = 'TypeRig | Layers', '1.31'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -532,7 +532,8 @@ class TRLayerMultiEdit(QtGui.QVBoxLayout):
 		self.btn_restore = QtGui.QPushButton('Fold Layers')
 		self.btn_copy = QtGui.QPushButton('Copy Outline')
 		self.btn_paste = QtGui.QPushButton('Paste Outline')
-		self.btn_transform = QtGui.QPushButton('Transform Layer')
+		self.btn_transform = QtGui.QPushButton('Transform')
+		self.btn_trans_res = QtGui.QPushButton('Reset')
 
 		self.btn_restore.setEnabled(False)
 		self.btn_paste.setEnabled(False)
@@ -542,19 +543,22 @@ class TRLayerMultiEdit(QtGui.QVBoxLayout):
 		self.btn_copy.setToolTip('Copy selected outline to cliboard for each of selected layers.')
 		self.btn_paste.setToolTip('Paste outline from cliboard layer by layer (by name).\nNon existing layers are discarded!\nClick: New Element is created upon Paste.\nSHIFT+Click: Paste inside currently selected Element.')
 		self.btn_transform.setToolTip('Affine transform selected layers.')
+		self.btn_trans_res.setToolTip('Reset transformation fileds.')
 
 		self.btn_unfold.clicked.connect(self.layers_unfold)
 		self.btn_restore.clicked.connect(self.layers_restore)
 		self.btn_copy.clicked.connect(self.outline_copy)
 		self.btn_paste.clicked.connect(self.outline_paste)
-		self.btn_transform.clicked.connect(lambda: self.layer_transform(False))
+		self.btn_transform.clicked.connect(self.layer_transform)
+		self.btn_trans_res.clicked.connect(lambda: self.tr_trans_ctrl.reset())
 				
 		self.lay_buttons.addWidget(self.btn_unfold,				0, 0, 1, 4)
 		self.lay_buttons.addWidget(self.btn_restore,			0, 4, 1, 4)
 		self.lay_buttons.addWidget(self.btn_copy,				1, 0, 1, 4)
 		self.lay_buttons.addWidget(self.btn_paste,				1, 4, 1, 4)
 		self.lay_buttons.addWidget(self.tr_trans_ctrl, 			2, 0, 2, 8)
-		self.lay_buttons.addWidget(self.btn_transform,			4, 0, 1, 8)
+		self.lay_buttons.addWidget(self.btn_trans_res,			4, 0, 1, 4)
+		self.lay_buttons.addWidget(self.btn_transform,			4, 4, 1, 4)
 		self.tr_trans_ctrl.lay_controls.setMargin(0)
 		
 		self.addLayout(self.lay_buttons)
@@ -664,28 +668,19 @@ class TRLayerMultiEdit(QtGui.QVBoxLayout):
 			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Paste outline; Glyph: %s; Layers: %s' %(self.aux.glyph.fl.name, '; '.join([layer_name for layer_name in self.aux.lst_layers.getTable()])))
 			self.aux.glyph.update()
 
-	def layer_transform(self, shapes=False):
+	def layer_transform(self):
 		if self.aux.doCheck() and len(self.aux.lst_layers.getTable()):
 			
 			# - Init
 			wGlyph = self.aux.glyph
-			new_transform = self.tr_trans_ctrl.getTransform()
-			print new_transform
 			
 			for layer_name in self.aux.lst_layers.getTable():
 				wLayer = wGlyph.layer(layer_name)
-				
-				# - Transform at origin
 				wBBox = wLayer.boundingBox
-				wCenter = (wBBox.width()/2 + wBBox.x(), wBBox.height()/2 + wBBox.y())
-				transform_to_origin = QtGui.QTransform().translate(-wCenter[0], -wCenter[1])
-				transform_from_origin = QtGui.QTransform().translate(*wCenter)
-				
-				# - Transform
-				if wRotate != 0: wLayer.applyTransform(transform_to_origin) # Transform at origin only if we have rotation!
+				new_transform, org_transform, rev_transform = self.tr_trans_ctrl.getTransform(wBBox)
+				wLayer.applyTransform(org_transform)
 				wLayer.applyTransform(new_transform)
-				if wRotate != 0: wLayer.applyTransform(transform_from_origin)
-				
+				wLayer.applyTransform(rev_transform)
 
 			self.aux.glyph.updateObject(self.aux.glyph.fl, ' Glyph: %s; Transform Layers: %s' %(self.aux.glyph.fl.name, '; '.join([layer_name for layer_name in self.aux.lst_layers.getTable()])))
 			self.aux.glyph.update()

@@ -9,7 +9,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.6'
+__version__ = '0.0.7'
 
 # - Dependencies --------------------------
 from platform import system
@@ -101,7 +101,15 @@ class TRTransformCtrl(QtGui.QWidget):
 	def __init__(self):
 		super(TRTransformCtrl, self).__init__()
 
-		# - Contorls
+		# - Combos 
+		self.rad_or = QtGui.QRadioButton('ORG')
+		self.rad_bl = QtGui.QRadioButton('BL')
+		self.rad_tl = QtGui.QRadioButton('TL')
+		self.rad_br = QtGui.QRadioButton('BR')
+		self.rad_tr = QtGui.QRadioButton('TR')
+		self.rad_ce = QtGui.QRadioButton('CEN')
+
+		# - Spinboxes
 		self.spb_scale_x = QtGui.QSpinBox()
 		self.spb_scale_y = QtGui.QSpinBox()
 		self.spb_translate_x = QtGui.QSpinBox()
@@ -123,12 +131,7 @@ class TRTransformCtrl(QtGui.QWidget):
 		self.spb_shear.setMaximum(90)
 		self.spb_rotate.setMaximum(360)
 
-		self.spb_scale_x.setValue(100)
-		self.spb_scale_y.setValue(100)
-		self.spb_translate_x.setValue(0)
-		self.spb_translate_y.setValue(0)
-		self.spb_shear.setValue(0)
-		self.spb_rotate.setValue(0)
+		self.reset()
 
 		# - Build
 		self.lay_controls = QtGui.QGridLayout()
@@ -144,28 +147,52 @@ class TRTransformCtrl(QtGui.QWidget):
 		self.lay_controls.addWidget(self.spb_translate_y,				1, 3, 1, 1)
 		self.lay_controls.addWidget(self.spb_shear,						1, 4, 1, 1)
 		self.lay_controls.addWidget(self.spb_rotate,					1, 5, 1, 1)
-		
+		self.lay_controls.addWidget(self.rad_or,						2, 0, 1, 1)
+		self.lay_controls.addWidget(self.rad_bl,						2, 1, 1, 1)
+		self.lay_controls.addWidget(self.rad_tl,						2, 2, 1, 1)
+		self.lay_controls.addWidget(self.rad_br,						2, 3, 1, 1)
+		self.lay_controls.addWidget(self.rad_tr,						2, 4, 1, 1)
+		self.lay_controls.addWidget(self.rad_ce,						2, 5, 1, 2)
+				
 		self.setLayout(self.lay_controls)
 		
-	def getTransform(self):
+	def reset(self):
+		self.spb_scale_x.setValue(100)
+		self.spb_scale_y.setValue(100)
+		self.spb_translate_x.setValue(0)
+		self.spb_translate_y.setValue(0)
+		self.spb_shear.setValue(0)
+		self.spb_rotate.setValue(0)
+		self.rad_or.setChecked(True)
+
+	def getTransform(self, obj_rect=QtCore.QRectF(.0, .0, .0, .0)):
 		# - Init
+		origin_transform = QtGui.QTransform()
+		rev_origin_transform = QtGui.QTransform()
 		return_transform = QtGui.QTransform()
 		
 		m11 = float(self.spb_scale_x.value)/100.
-		m12 = 0.
 		m13 = float(self.spb_translate_x.value)
-		m21 = 0.
-		m22 = float(self.spb_scale_x.value)/100.
-		m23 = float(self.spb_translate_x.value)
-		m31 = 0.
-		m32 = 0.
-		m33 = 1.
+		m22 = float(self.spb_scale_y.value)/100.
+		m23 = float(self.spb_translate_y.value)
 
-		return_transform.setMatrix(m11, m12, m13, m21, m22, m23, m31, m32, m33)
+		# - Transform
+		if self.rad_or.isChecked():	transform_origin = QtCore.QPointF(.0, .0)
+		if self.rad_bl.isChecked():	transform_origin = obj_rect.topLeft()
+		if self.rad_br.isChecked():	transform_origin = obj_rect.topRight()
+		if self.rad_tl.isChecked():	transform_origin = obj_rect.bottomLeft()
+		if self.rad_tr.isChecked():	transform_origin = obj_rect.bottomRight()
+		if self.rad_ce.isChecked():	transform_origin = obj_rect.center()
+		
+		origin_transform.translate(-transform_origin.x(), -transform_origin.y())
+		rev_origin_transform.translate(transform_origin.x(), transform_origin.y())
+
+		return_transform.scale(m11, m22)
 		return_transform.rotate(-float(self.spb_rotate.value))
 		return_transform.shear(radians(float(self.spb_shear.value)), 0.)
+		return_transform.translate(m13, m23)
 
-		return return_transform
+		return return_transform, origin_transform, rev_origin_transform
 
 # -- Sliders ------------------------------
 class TRSliderCtrl(QtGui.QGridLayout):
