@@ -21,14 +21,14 @@ from typerig.core.func.math import linInterp as lerp
 
 from PythonQt import QtCore
 from typerig.gui import QtGui
-from typerig.gui.widgets import getProcessGlyphs, TRSliderCtrl
+from typerig.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRTransformCtrl
 
 # - Init
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '1.29'
+app_name, app_version = 'TypeRig | Layers', '1.30'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -524,6 +524,7 @@ class TRLayerMultiEdit(QtGui.QVBoxLayout):
 		self.contourClipboard = {}
 
 		# -- Edit fileds
+		self.tr_trans_ctrl = TRTransformCtrl()
 		self.edt_shift = QtGui.QLineEdit('0.0, 0.0')
 		self.edt_scale = QtGui.QLineEdit('100, 100')
 		self.edt_slant = QtGui.QLineEdit('0.0')
@@ -563,17 +564,11 @@ class TRLayerMultiEdit(QtGui.QVBoxLayout):
 		self.lay_buttons.addWidget(self.btn_restore,			0, 4, 1, 4)
 		self.lay_buttons.addWidget(self.btn_copy,				1, 0, 1, 4)
 		self.lay_buttons.addWidget(self.btn_paste,				1, 4, 1, 4)
-		self.lay_buttons.addWidget(QtGui.QLabel('Translate:'),	2, 0, 1, 2)
-		self.lay_buttons.addWidget(QtGui.QLabel('Scale:'),		2, 2, 1, 2)
-		self.lay_buttons.addWidget(QtGui.QLabel('Shear:'),		2, 4, 1, 2)
-		self.lay_buttons.addWidget(QtGui.QLabel('Rotate:'),		2, 6, 1, 2)
-		self.lay_buttons.addWidget(self.edt_shift,				3, 0, 1, 2)
-		self.lay_buttons.addWidget(self.edt_scale,				3, 2, 1, 2)
-		self.lay_buttons.addWidget(self.edt_slant,				3, 4, 1, 2)
-		self.lay_buttons.addWidget(self.edt_rotate,				3, 6, 1, 2)
+		self.lay_buttons.addWidget(self.tr_trans_ctrl, 			2, 0, 2, 8)
 		self.lay_buttons.addWidget(self.btn_transform,			4, 0, 1, 4)
 		self.lay_buttons.addWidget(self.btn_transform_shape,	4, 4, 1, 4)
-
+		self.tr_trans_ctrl.lay_controls.setMargin(0)
+		
 		self.addLayout(self.lay_buttons)
 
 	# - Button procedures ---------------------------------------------------
@@ -686,22 +681,8 @@ class TRLayerMultiEdit(QtGui.QVBoxLayout):
 			
 			# - Init
 			wGlyph = self.aux.glyph
-
-			inpShift = self.edt_shift.text.split(',') if len(self.edt_shift.text) and ',' in self.edt_shift.text else '0.0, 0.0'
-			inpScale = self.edt_scale.text.split(',') if len(self.edt_scale.text) and ',' in self.edt_scale.text else '100, 100'
-
-			wSift_x = float(inpShift[0].strip())
-			wSift_y = float(inpShift[1].strip())
-
-			wScale_x = float(inpScale[0].strip())/100
-			wScale_y = float(inpScale[1].strip())/100
-
-			wSlant =  radians(float(self.edt_slant.text.strip())) if len(self.edt_slant.text) else 0.
-			wRotate =  -float(self.edt_rotate.text.strip()) if len(self.edt_rotate.text) else 0.
-			
-			# m11, m12, m13, m21, m22, m23, m31, m32, m33 = 1
-			# ! Note: wrong but will do...
-			new_transform = QtGui.QTransform().scale(wScale_x, wScale_y).rotate(wRotate).shear(wSlant, 0).translate(wSift_x, wSift_y)
+			new_transform = self.tr_trans_ctrl.getTransform()
+			print new_transform
 			
 			for layer_name in self.aux.lst_layers.getTable():
 				wLayer = wGlyph.layer(layer_name)

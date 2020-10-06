@@ -9,10 +9,11 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.5'
+__version__ = '0.0.6'
 
 # - Dependencies --------------------------
 from platform import system
+from math import radians
 
 from PythonQt import QtCore
 import QtGui
@@ -94,6 +95,77 @@ class TR2FieldDLG(QtGui.QDialog):
 	def return_values(self):
 		self.accept()
 		self.values = (self.edt_field_t.text, self.edt_field_b.text)
+
+# -- Transform Controls ------------------
+class TRTransformCtrl(QtGui.QWidget):
+	def __init__(self):
+		super(TRTransformCtrl, self).__init__()
+
+		# - Contorls
+		self.spb_scale_x = QtGui.QSpinBox()
+		self.spb_scale_y = QtGui.QSpinBox()
+		self.spb_translate_x = QtGui.QSpinBox()
+		self.spb_translate_y = QtGui.QSpinBox()
+		self.spb_shear = QtGui.QSpinBox()
+		self.spb_rotate = QtGui.QSpinBox()
+
+		self.spb_scale_x.setMinimum(0)
+		self.spb_scale_y.setMinimum(0)
+		self.spb_translate_x.setMinimum(-9999)
+		self.spb_translate_y.setMinimum(-9999)
+		self.spb_shear.setMinimum(-90)
+		self.spb_rotate.setMinimum(-360)
+
+		self.spb_scale_x.setMaximum(999)
+		self.spb_scale_y.setMaximum(999)
+		self.spb_translate_x.setMaximum(9999)
+		self.spb_translate_y.setMaximum(9999)
+		self.spb_shear.setMaximum(90)
+		self.spb_rotate.setMaximum(360)
+
+		self.spb_scale_x.setValue(100)
+		self.spb_scale_y.setValue(100)
+		self.spb_translate_x.setValue(0)
+		self.spb_translate_y.setValue(0)
+		self.spb_shear.setValue(0)
+		self.spb_rotate.setValue(0)
+
+		# - Build
+		self.lay_controls = QtGui.QGridLayout()
+		self.lay_controls.addWidget(QtGui.QLabel('Scale X:'),			0, 0, 1, 1)
+		self.lay_controls.addWidget(QtGui.QLabel('Scale Y:'),			0, 1, 1, 1)
+		self.lay_controls.addWidget(QtGui.QLabel('Trans. X:'),			0, 2, 1, 1)
+		self.lay_controls.addWidget(QtGui.QLabel('Trans. Y:'),			0, 3, 1, 1)
+		self.lay_controls.addWidget(QtGui.QLabel('Shear:'),				0, 4, 1, 1)
+		self.lay_controls.addWidget(QtGui.QLabel('Rotate:'),			0, 5, 1, 1)
+		self.lay_controls.addWidget(self.spb_scale_x,					1, 0, 1, 1)
+		self.lay_controls.addWidget(self.spb_scale_y,					1, 1, 1, 1)
+		self.lay_controls.addWidget(self.spb_translate_x,				1, 2, 1, 1)
+		self.lay_controls.addWidget(self.spb_translate_y,				1, 3, 1, 1)
+		self.lay_controls.addWidget(self.spb_shear,						1, 4, 1, 1)
+		self.lay_controls.addWidget(self.spb_rotate,					1, 5, 1, 1)
+		
+		self.setLayout(self.lay_controls)
+		
+	def getTransform(self):
+		# - Init
+		return_transform = QtGui.QTransform()
+		
+		m11 = float(self.spb_scale_x.value)/100.
+		m12 = 0.
+		m13 = float(self.spb_translate_x.value)
+		m21 = 0.
+		m22 = float(self.spb_scale_x.value)/100.
+		m23 = float(self.spb_translate_x.value)
+		m31 = 0.
+		m32 = 0.
+		m33 = 1.
+
+		return_transform.setMatrix(m11, m12, m13, m21, m22, m23, m31, m32, m33)
+		return_transform.rotate(-float(self.spb_rotate.value))
+		return_transform.shear(radians(float(self.spb_shear.value)), 0.)
+
+		return return_transform
 
 # -- Sliders ------------------------------
 class TRSliderCtrl(QtGui.QGridLayout):

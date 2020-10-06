@@ -228,6 +228,10 @@ class TRGlyphCopyTools(QtGui.QGridLayout):
 		self.addWidget(self.spb_duplicate, 				5, 2, 1, 1)
 		self.addWidget(self.btn_duplicate, 				5, 3, 1, 1)
 		
+	def glyph_copy(self, slot):
+		pass
+
+
 	def glyph_duplicate(self):
 		copy_options = {'out': self.chk_outline.isChecked(),
 		 				'gui': self.chk_guides.isChecked(),
