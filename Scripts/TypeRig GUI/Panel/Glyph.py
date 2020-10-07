@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Glyph', '0.13'
+app_name, app_version = 'TypeRig | Glyph', '0.14'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -22,7 +22,7 @@ from typerig.proxy.fl import *
 
 from PythonQt import QtCore
 from typerig.gui import QtGui
-from typerig.gui.widgets import getProcessGlyphs, TRGLineEdit
+from typerig.gui.widgets import getProcessGlyphs, TRGLineEdit, TRTransformCtrl
 
 # - Init -------------------------------
 number_token = '#'
@@ -145,11 +145,11 @@ class TRGlyphCopyTools(QtGui.QGridLayout):
 		self.chk_slot04.setCheckable(True)
 
 		self.btn_insert = QtGui.QPushButton('Insert')
-		self.btn_insert.setToolTip('Copy contents of source glyph and insert them to current glyph(s)')
+		self.btn_insert.setToolTip('Copy contents of source glyph and insert them to current active glyph(s)')
 		self.btn_insert.clicked.connect(lambda: self.glyph_insert(False))
 
 		self.btn_insert_mask = QtGui.QPushButton('Mask')
-		self.btn_insert_mask.setToolTip('Copy contents of source glyph and insert them as MASK to current glyph(s)')
+		self.btn_insert_mask.setToolTip('Copy contents of source glyph and insert them as MASK to current active glyph(s)')
 		self.btn_insert_mask.clicked.connect(lambda: self.glyph_insert(True))
 
 		self.btn_duplicate.setToolTip(help_duplicate)
@@ -183,9 +183,12 @@ class TRGlyphCopyTools(QtGui.QGridLayout):
 		self.chk_links.setCheckState(QtCore.Qt.Checked)
 		self.chk_tags.setCheckState(QtCore.Qt.Checked)
 		self.chk_flag.setCheckState(QtCore.Qt.Checked)
+
+		# -- Custom controls
+		self.tr_trans_ctrl = TRTransformCtrl()
 	
 		# -- Build
-		self.addWidget(QtGui.QLabel('Glyph Copy & Duplicate Options:'), 	0, 0, 1, 4)
+		self.addWidget(QtGui.QLabel('\nCopy and Duplicate Glyph(s) (Options): '), 	0, 0, 1, 4)
 		#self.addWidget(self.chk_slot01, 				1, 0, 1, 1)
 		#self.addWidget(self.chk_slot02, 				1, 1, 1, 1)
 		#self.addWidget(self.chk_slot03, 				1, 2, 1, 1)
@@ -200,14 +203,17 @@ class TRGlyphCopyTools(QtGui.QGridLayout):
 		self.addWidget(self.chk_guides, 				4, 1, 1, 1)
 		self.addWidget(self.chk_tags, 					4, 2, 1, 1)
 		self.addWidget(self.chk_flag, 					4, 3, 1, 1)
-		self.addWidget(QtGui.QLabel('Duplicate Glyph(s) with suffix:'), 	5, 0, 1, 4)
-		self.addWidget(self.edt_glyphsuffix, 			6, 0, 1, 2)
-		self.addWidget(self.spb_duplicate, 				6, 2, 1, 1)
-		self.addWidget(self.btn_duplicate, 				6, 3, 1, 1)
-		self.addWidget(QtGui.QLabel('Copy glyph from source:'), 	7, 0, 1, 4)
-		self.addWidget(self.edt_sourceName, 			8, 0, 1, 2)
-		self.addWidget(self.btn_insert, 				8, 2, 1, 1)
-		self.addWidget(self.btn_insert_mask, 			8, 3, 1, 1)
+		self.addWidget(self.tr_trans_ctrl,				5, 0, 1, 4)
+		self.addWidget(QtGui.QLabel('\nDuplicate Glyph(s) with suffix:'), 	6, 0, 1, 4)
+		self.addWidget(self.edt_glyphsuffix, 			7, 0, 1, 2)
+		self.addWidget(self.spb_duplicate, 				7, 2, 1, 1)
+		self.addWidget(self.btn_duplicate, 				7, 3, 1, 1)
+		self.addWidget(QtGui.QLabel('\nInsert contents from glyph source:'), 	8, 0, 1, 4)
+		self.addWidget(self.edt_sourceName, 			9, 0, 1, 2)
+		self.addWidget(self.btn_insert, 				9, 2, 1, 1)
+		self.addWidget(self.btn_insert_mask, 			9, 3, 1, 1)
+
+		self.tr_trans_ctrl.lay_controls.setMargin(0)
 		
 	def __getOptions(self):
 		copy_options = {'out': self.chk_outline.isChecked(),
@@ -239,7 +245,11 @@ class TRGlyphCopyTools(QtGui.QGridLayout):
 					src_layer_name = src_layer.name
 					
 					if '#' not in src_layer_name:
-						dst_glyph.importLayer(src_glyph, src_layer_name, src_layer_name, copy_options, True, False, True, ('insert', 'mask')[asMask])
+						new_layer = dst_glyph.importLayer(src_glyph, src_layer_name, src_layer_name, copy_options, True, False, True, ('insert', 'mask')[asMask])
+						new_transform, org_transform, rev_transform = self.tr_trans_ctrl.getTransform(new_layer.boundingBox)
+						new_layer.applyTransform(org_transform)
+						new_layer.applyTransform(new_transform)
+						new_layer.applyTransform(rev_transform)
 
 				processed_glyphs.append(dst_glyph.name)
 
@@ -269,7 +279,14 @@ class TRGlyphCopyTools(QtGui.QGridLayout):
 				if font.hasGlyph(new_name):
 					new_name = '%s.%s' %(new_name, str(n))
 
-				font.duplicateGlyph(glyp_name, new_name, dst_unicode=None, options=copy_options)						
+				new_glyph = font.duplicateGlyph(glyp_name, new_name, dst_unicode=None, options=copy_options)
+				
+				for layer in new_glyph.layers():
+					new_transform, org_transform, rev_transform = self.tr_trans_ctrl.getTransform(layer.boundingBox)
+					layer.applyTransform(org_transform)
+					layer.applyTransform(new_transform)
+					layer.applyTransform(rev_transform)
+
 				processed_glyphs.append(new_name)
 
 		'''

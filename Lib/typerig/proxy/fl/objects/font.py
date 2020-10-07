@@ -695,7 +695,7 @@ class pFont(object):
 		prepared_layers = []
 
 		for layer in src_glyph.layers():
-			new_layer = src_glyph.copyLayer(layer.name, layer.name + '.duplicate', options, False, False)
+			new_layer = src_glyph.copyLayer(layer.name, layer.name + '.duplicate', options, False, False, True)
 			new_layer.name = new_layer.name.replace('.duplicate', '')
 			prepared_layers.append(new_layer)
 

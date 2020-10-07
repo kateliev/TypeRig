@@ -28,7 +28,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.28.1'
+__version__ = '0.28.2'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -535,7 +535,7 @@ class pGlyph(object):
 		options = {'out': True, 'gui': True, 'anc': True, 'lsb': True, 'adv': True, 'rsb': True, 'lnk': True, 'ref': references}
 		self.copyLayer(layer, newLayerName, options, True, True)
 
-	def copyLayer(self, srcLayerName, dstLayerName, options = {'out': True, 'gui': True, 'anc': True, 'lsb': True, 'adv': True, 'rsb': True, 'lnk': True, 'ref': True}, addLayer=False, cleanDST=True, toBack=True):
+	def copyLayer(self, srcLayerName, dstLayerName, options, addLayer, cleanDST, toBack):
 		return self.importLayer(self, srcLayerName, dstLayerName, options, addLayer, cleanDST, toBack, mode='new')
 
 	def importLayer(self, srcGlyph, srcLayerName, dstLayerName, options = {'out': True, 'gui': True, 'anc': True, 'lsb': True, 'adv': True, 'rsb': True, 'lnk': True, 'ref': True}, addLayer=False, cleanDST=True, toBack=True, mode='new'):

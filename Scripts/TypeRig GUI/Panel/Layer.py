@@ -523,7 +523,7 @@ class TRLayerMultiEdit(QtGui.QVBoxLayout):
 		self.backup = {}
 		self.contourClipboard = {}
 
-		# -- Edit fileds
+		# -- Custom controls
 		self.tr_trans_ctrl = TRTransformCtrl()
 		
 		# -- Quick Tool buttons
@@ -559,6 +559,7 @@ class TRLayerMultiEdit(QtGui.QVBoxLayout):
 		self.lay_buttons.addWidget(self.tr_trans_ctrl, 			2, 0, 2, 8)
 		self.lay_buttons.addWidget(self.btn_trans_res,			4, 0, 1, 4)
 		self.lay_buttons.addWidget(self.btn_transform,			4, 4, 1, 4)
+		
 		self.tr_trans_ctrl.lay_controls.setMargin(0)
 		
 		self.addLayout(self.lay_buttons)
