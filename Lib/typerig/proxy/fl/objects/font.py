@@ -24,7 +24,7 @@ from typerig.proxy.fl.objects.glyph import *
 from typerig.proxy.fl.objects.string import *
 
 # - Init ---------------------------------
-__version__ = '0.27.5'
+__version__ = '0.27.6'
 
 # - Classes -------------------------------
 class pFontMetrics(object):
@@ -702,8 +702,8 @@ class pFont(object):
 		new_glyph = self.newGlyph(dst_name, prepared_layers, dst_unicode)
 
 		# - Copy Glyph specific stuff
-		if options['tag']: new_glyph.setTags(src_glyph.tags) # Copy tags
-		if options['flg']: new_glyph.setMark(src_glyph.mark) # Copy glyph flag/mark
+		if options['tag']: new_glyph.tags = src_glyph.tags # Copy tags
+		if options['flg']: new_glyph.mark = src_glyph.mark # Copy glyph flag/mark
 
 		return new_glyph
 

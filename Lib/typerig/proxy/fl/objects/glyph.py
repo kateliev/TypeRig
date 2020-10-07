@@ -93,6 +93,10 @@ class pGlyph(object):
 	def name(self):
 		return self.fg.name
 
+	@name.setter
+	def name(self, name):
+		self.fg.name = name
+
 	@property
 	def index(self):
 		return self.fg.index
@@ -105,17 +109,33 @@ class pGlyph(object):
 	def mark(self):
 		return self.fl.mark
 
+	@mark.setter
+	def mark(self, mark):
+		self.fl.mark = mark
+
 	@property
 	def tags(self):
 		return self.fl.tags
+
+	@tags.setter
+	def tags(self, tags):
+		self.fl.tags = tags
 
 	@property
 	def unicode(self):
 		return self.fg.unicode
 
+	@unicode.setter
+	def unicode(self, unicode):
+		self.fg.unicode = unicode
+
 	@property
 	def unicodes(self):
 		return self.fg.unicodes
+
+	@unicodes.setter
+	def unicodes(self, unicodes):
+		self.fg.unicodes = unicodes
 
 	@property
 	def package(self):
@@ -516,38 +536,65 @@ class pGlyph(object):
 		self.copyLayer(layer, newLayerName, options, True, True)
 
 	def copyLayer(self, srcLayerName, dstLayerName, options = {'out': True, 'gui': True, 'anc': True, 'lsb': True, 'adv': True, 'rsb': True, 'lnk': True, 'ref': True}, addLayer=False, cleanDST=True, toBack=True):
-		'''Copies a layer within the glyph.
+		return self.importLayer(self, srcLayerName, dstLayerName, options, addLayer, cleanDST, toBack, mode='new')
+
+	def importLayer(self, srcGlyph, srcLayerName, dstLayerName, options = {'out': True, 'gui': True, 'anc': True, 'lsb': True, 'adv': True, 'rsb': True, 'lnk': True, 'ref': True}, addLayer=False, cleanDST=True, toBack=True, mode='new'):
+		'''Copies (imports) a layer from another glyph.
 		Args:
+			srcGlyph (pGlyph): Source glyph
 			srcLayerName, dstLayerName (string): Source and destination layer names
 			options (dict): Copy Options as follows {'out': Outline, 'gui': Guidelines, 'anc': Anchors, 'lsb': LSB, 'adv': Advance, 'rsb': RSB, 'lnk': Linked metrics, 'ref': References}, addLayer=False):
 			addLayer (bool): Create a new layer
 			cleanDST (bool): Clean destination layer
 			toBack (bool): Add layer to back of the layer stack
+			mode (string): 'new' - creates new layer; 'insert' - inserts into existing layer; 'mask' - creates and inserts into a mask layer;
 		Returns:
 			flLayer
 		'''
+		# !!! UGLY CODE - REFACTOR !!!!!!
+
+		def __addNewLayer():
+			# -- Create new layer
+			newLayer = fl6.flLayer()
+			newLayer.name = dstLayerName
+
+			# -- Assign same styling
+			newLayer.advanceHeight = srcLayer.advanceHeight
+			newLayer.advanceWidth = srcLayer.advanceWidth
+			newLayer.wireframeColor = srcLayer.wireframeColor
+			newLayer.mark = srcLayer.mark
+			newLayer.assignStyle(srcLayer)
+			
+			# -- Add to glyph
+			self.addLayer(newLayer, toBack)
+
+			return newLayer
+
 		# - Init
-		srcLayer = self.layer(srcLayerName)
-		dstLayerName = str(dstLayerName) if self.layer(dstLayerName) is None else str(dstLayerName) + '.copy'
+		srcLayer = srcGlyph.layer(srcLayerName)
+		layer_names = [layer.name for layer in self.layers()]
+		
+		if mode == 'new':
+			dstLayerName = dstLayerName if dstLayerName not in layer_names else str(dstLayerName) + '.copy'
+			newLayer = __addNewLayer()
 
-		# -- Create new layer
-		newLayer = fl6.flLayer()
-		newLayer.name = dstLayerName
+		elif mode == 'insert':
+			if dstLayerName not in layer_names:
+				newLayer = __addNewLayer()
+			else:
+				newLayer = self.layer(dstLayerName)
 
-		# -- Assign same styling
-		newLayer.advanceHeight = srcLayer.advanceHeight
-		newLayer.advanceWidth = srcLayer.advanceWidth
-		newLayer.wireframeColor = srcLayer.wireframeColor
-		newLayer.mark = srcLayer.mark
-		newLayer.assignStyle(srcLayer)
+		elif mode == 'mask':
+			if dstLayerName not in layer_names:
+				newLayer = __addNewLayer()
 
-		# -- Add to glyph
-		self.addLayer(newLayer, toBack)
+			newLayer = self.layer(dstLayerName).getMaskLayer(True)
+			dstLayerName = newLayer.name
 
 		# -- Outline
 		if options['out']:
 			# --- Get shapes
-			srcShapes = self.shapes(srcLayerName)
+			srcShapes = srcGlyph.shapes(srcLayerName)
 
 			# --- Cleanup destination layers
 			if cleanDST:
@@ -562,24 +609,24 @@ class pGlyph(object):
 		
 		# -- Metrics
 		if options['lsb']: 
-			self.setLSB(self.getLSB(srcLayerName), dstLayerName)
+			self.setLSB(srcGlyph.getLSB(srcLayerName), dstLayerName)
 		
 		if options['adv']: 
-			self.setAdvance(self.getAdvance(srcLayerName), dstLayerName)
+			self.setAdvance(srcGlyph.getAdvance(srcLayerName), dstLayerName)
 		
 		if options['rsb']: 
-			self.setRSB(self.getRSB(srcLayerName), dstLayerName)
+			self.setRSB(srcGlyph.getRSB(srcLayerName), dstLayerName)
 
 		if options['lnk']:
-			self.setLSBeq(self.getSBeq(srcLayerName)[0], dstLayerName)
-			self.setRSBeq(self.getSBeq(srcLayerName)[1], dstLayerName)
+			self.setLSBeq(srcGlyph.getSBeq(srcLayerName)[0], dstLayerName)
+			self.setRSBeq(srcGlyph.getSBeq(srcLayerName)[1], dstLayerName)
 
 		# -- Anchors
 		if options['anc']:
 			if cleanDST:
 				self.clearAnchors(dstLayerName)
 
-			for src_anchor in self.anchors(srcLayerName):
+			for src_anchor in srcGlyph.anchors(srcLayerName):
 				self.addAnchor((src_anchor.point.x(), src_anchor.point.y()), src_anchor.name, dstLayerName)
 
 		if not addLayer:

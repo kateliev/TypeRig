@@ -9,7 +9,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.7'
+__version__ = '0.0.8'
 
 # - Dependencies --------------------------
 from platform import system
@@ -95,6 +95,42 @@ class TR2FieldDLG(QtGui.QDialog):
 	def return_values(self):
 		self.accept()
 		self.values = (self.edt_field_t.text, self.edt_field_b.text)
+
+# - Line Edit ----------------------------
+class TRGLineEdit(QtGui.QLineEdit):
+	# - Custom QLine Edit extending the contextual menu with FL6 metric expressions
+	def __init__(self, *args, **kwargs):
+		
+		super(TRGLineEdit, self).__init__(*args, **kwargs)
+		self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+		self.customContextMenuRequested.connect(self.__contextMenu)
+
+	def __contextMenu(self):
+		self._normalMenu = self.createStandardContextMenu()
+		self._addCustomMenuItems(self._normalMenu)
+		self._normalMenu.exec_(QtGui.QCursor.pos())
+
+	def _addCustomMenuItems(self, menu):
+		curret_glyph = eGlyph()
+		menu.addSeparator()
+		menu.addAction(u'Get {Glyph Name}', lambda: self.setText(curret_glyph.name))
+		menu.addAction(u'Get {Glyph Unicodes}', lambda: self.setText(' '.join(map(str,curret_glyph.unicodes))))
+		menu.addAction(u'Get {Glyph Tags}', lambda: self.setText(' '.join(map(str,curret_glyph.tags))))
+		menu.addSeparator()
+		menu.addAction(u'To Lowercase', lambda: self.setText(self.text.lower()))
+		menu.addAction(u'To Uppercase', lambda: self.setText(self.text.upper()))
+		menu.addAction(u'To Titlecase', lambda: self.setText(self.text.title()))
+		menu.addSeparator()
+		menu.addAction(u'.salt', lambda: self.setText('%s.salt' %self.text))
+		menu.addAction(u'.calt', lambda: self.setText('%s.calt' %self.text))
+		menu.addAction(u'.ss0', lambda: self.setText('%s.ss0' %self.text))
+		menu.addAction(u'.locl', lambda: self.setText('%s.locl' %self.text))
+		menu.addAction(u'.smcp', lambda: self.setText('%s.smcp' %self.text))
+		menu.addAction(u'.cscp', lambda: self.setText('%s.cscp' %self.text))
+		menu.addAction(u'.onum', lambda: self.setText('%s.onum' %self.text))
+		menu.addAction(u'.pnum', lambda: self.setText('%s.pnum' %self.text))
+		menu.addAction(u'.tnum', lambda: self.setText('%s.tnum' %self.text))
+		menu.addAction(u'.bak', lambda: self.setText('%s.bak' %self.text))
 
 # -- Transform Controls ------------------
 class TRTransformCtrl(QtGui.QWidget):

@@ -21,14 +21,14 @@ from typerig.core.func.math import linInterp as lerp
 
 from PythonQt import QtCore
 from typerig.gui import QtGui
-from typerig.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRTransformCtrl
+from typerig.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRTransformCtrl, TRGLineEdit
 
 # - Init
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '1.31'
+app_name, app_version = 'TypeRig | Layers', '1.32'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -194,7 +194,7 @@ class TRLayerBasic(QtGui.QVBoxLayout):
 		self.btn_setServ.setToolTip('Set selected layers as Service')
 		self.btn_setWire.setToolTip('Set selected layers as Wireframe')
 
-		self.edt_name = QtGui.QLineEdit('New')
+		self.edt_name = TRGLineEdit('New')
 		self.edt_name.setToolTip('Name or suffix')
 	
 		self.btn_add.clicked.connect(self.addLayer)
@@ -304,8 +304,8 @@ class TRLayerTools(QtGui.QVBoxLayout):
 		# -- Quick Tool buttons
 		self.lay_buttons = QtGui.QGridLayout()
 		self.btn_swap = QtGui.QPushButton('Swap')
-		self.btn_copy = QtGui.QPushButton('Copy')
-		self.btn_paste = QtGui.QPushButton('Paste')
+		self.btn_pull = QtGui.QPushButton('Pull')
+		self.btn_push = QtGui.QPushButton('Push')
 		self.btn_clean = QtGui.QPushButton('Empty')
 		self.btn_unlock = QtGui.QPushButton('Unlock')
 		self.btn_expand = QtGui.QPushButton('Expand')
@@ -314,22 +314,22 @@ class TRLayerTools(QtGui.QVBoxLayout):
 		self.btn_expand.setEnabled(False)
 		
 		self.btn_swap.setToolTip('Swap Selected Layer with Active Layer')
-		self.btn_copy.setToolTip('Copy Active Layer to Selected Layer')
-		self.btn_paste.setToolTip('Paste Selected Layer to Active Layer')
+		self.btn_pull.setToolTip('Push Active Layer contents to Selected Layer')
+		self.btn_push.setToolTip('Pull contents of Selected Layer to Active Layer')
 		self.btn_clean.setToolTip('Remove contents from selected layers')
 		self.btn_unlock.setToolTip('Unlock all locked references.\nSHIFT+Click will lock all references.')
 		self.btn_expand.setToolTip('Expand transformations for selected layers')
 
 		self.btn_swap.clicked.connect(self.layer_swap)
-		self.btn_copy.clicked.connect(self.layer_copy)
-		self.btn_paste.clicked.connect(self.layer_paste)
+		self.btn_pull.clicked.connect(self.layer_pull)
+		self.btn_push.clicked.connect(self.layer_push)
 		self.btn_clean.clicked.connect(self.layer_clean)
 		self.btn_unlock.clicked.connect(self.layer_unlock)
 		#self.btn_expand.clicked.connect(self.expand)
 				
 		self.lay_buttons.addWidget(self.btn_swap,	0, 0, 1, 1)
-		self.lay_buttons.addWidget(self.btn_copy,	0, 1, 1, 1)
-		self.lay_buttons.addWidget(self.btn_paste,	0, 2, 1, 1)
+		self.lay_buttons.addWidget(self.btn_pull,	0, 1, 1, 1)
+		self.lay_buttons.addWidget(self.btn_push,	0, 2, 1, 1)
 		self.lay_buttons.addWidget(self.btn_clean,	1, 0, 1, 1)
 		self.lay_buttons.addWidget(self.btn_unlock,	1, 1, 1, 1)
 		self.lay_buttons.addWidget(self.btn_expand,	1, 2, 1, 1)
@@ -453,7 +453,7 @@ class TRLayerTools(QtGui.QVBoxLayout):
 			self.aux.glyph.update()
 
 
-	def layer_copy(self):
+	def layer_pull(self):
 		if self.aux.doCheck():
 			if self.chk_outline.isChecked():
 				self.Copy_Paste_Layer_Shapes(self.aux.glyph, self.aux.lst_layers.currentItem().text(), True)
@@ -476,7 +476,7 @@ class TRLayerTools(QtGui.QVBoxLayout):
 			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Copy Layer | %s <- %s.' %(self.aux.glyph.activeLayer().name, self.aux.lst_layers.currentItem().text()))
 			self.aux.glyph.update()
 
-	def layer_paste(self):
+	def layer_push(self):
 		if self.aux.doCheck():	
 			if self.chk_outline.isChecked():
 				self.Copy_Paste_Layer_Shapes(self.aux.glyph, self.aux.lst_layers.currentItem().text(), False)
@@ -530,32 +530,32 @@ class TRLayerMultiEdit(QtGui.QVBoxLayout):
 		self.lay_buttons = QtGui.QGridLayout()
 		self.btn_unfold = QtGui.QPushButton('Unfold Layers')
 		self.btn_restore = QtGui.QPushButton('Fold Layers')
-		self.btn_copy = QtGui.QPushButton('Copy Outline')
-		self.btn_paste = QtGui.QPushButton('Paste Outline')
+		self.btn_pull = QtGui.QPushButton('Copy Outline')
+		self.btn_push = QtGui.QPushButton('Paste Outline')
 		self.btn_transform = QtGui.QPushButton('Transform')
 		self.btn_trans_res = QtGui.QPushButton('Reset')
 
 		self.btn_restore.setEnabled(False)
-		self.btn_paste.setEnabled(False)
+		self.btn_push.setEnabled(False)
 		
 		self.btn_unfold.setToolTip('Reposition selected layers side by side. Selection order does matter!')
 		self.btn_restore.setToolTip('Restore Layer Metrics.')
-		self.btn_copy.setToolTip('Copy selected outline to cliboard for each of selected layers.')
-		self.btn_paste.setToolTip('Paste outline from cliboard layer by layer (by name).\nNon existing layers are discarded!\nClick: New Element is created upon Paste.\nSHIFT+Click: Paste inside currently selected Element.')
+		self.btn_pull.setToolTip('Copy selected outline to cliboard for each of selected layers.')
+		self.btn_push.setToolTip('Paste outline from cliboard layer by layer (by name).\nNon existing layers are discarded!\nClick: New Element is created upon Paste.\nSHIFT+Click: Paste inside currently selected Element.')
 		self.btn_transform.setToolTip('Affine transform selected layers.')
 		self.btn_trans_res.setToolTip('Reset transformation fileds.')
 
 		self.btn_unfold.clicked.connect(self.layers_unfold)
 		self.btn_restore.clicked.connect(self.layers_restore)
-		self.btn_copy.clicked.connect(self.outline_copy)
-		self.btn_paste.clicked.connect(self.outline_paste)
+		self.btn_pull.clicked.connect(self.outline_copy)
+		self.btn_push.clicked.connect(self.outline_paste)
 		self.btn_transform.clicked.connect(self.layer_transform)
 		self.btn_trans_res.clicked.connect(lambda: self.tr_trans_ctrl.reset())
 				
 		self.lay_buttons.addWidget(self.btn_unfold,				0, 0, 1, 4)
 		self.lay_buttons.addWidget(self.btn_restore,			0, 4, 1, 4)
-		self.lay_buttons.addWidget(self.btn_copy,				1, 0, 1, 4)
-		self.lay_buttons.addWidget(self.btn_paste,				1, 4, 1, 4)
+		self.lay_buttons.addWidget(self.btn_pull,				1, 0, 1, 4)
+		self.lay_buttons.addWidget(self.btn_push,				1, 4, 1, 4)
 		self.lay_buttons.addWidget(self.tr_trans_ctrl, 			2, 0, 2, 8)
 		self.lay_buttons.addWidget(self.btn_trans_res,			4, 0, 1, 4)
 		self.lay_buttons.addWidget(self.btn_transform,			4, 4, 1, 4)
@@ -620,7 +620,7 @@ class TRLayerMultiEdit(QtGui.QVBoxLayout):
 
 		# - Process
 		if len(selection.keys()):
-			self.btn_paste.setEnabled(True)
+			self.btn_push.setEnabled(True)
 						
 			for layer_name in self.aux.lst_layers.getTable():
 				wLayer = layer_name
