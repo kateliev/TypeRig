@@ -1187,6 +1187,7 @@ class pGlyph(object):
 		newAnchor.anchor = isAnchor
 		
 		self.layer(layer).addAnchor(newAnchor)
+		
 		return newAnchor
 
 	def newAnchor(self, coordTuple, name, anchorType=1):
@@ -1781,7 +1782,7 @@ class eGlyph(pGlyph):
 		'''
 		# - Init
 		x, y = self.getNewBaseCoords(layer, coordTuple, alignTuple, tolerance, italic)
-		self.addAnchor((x, y), name, layer)
+		return self.addAnchor((x, y), name, layer)
 
 	def moveAnchor(self, name, layer, coordTuple=(0,0), alignTuple=(None,None), tolerance=5, italic=False):
 		'''Move anchor at given layer
@@ -1797,7 +1798,7 @@ class eGlyph(pGlyph):
 			- width - (L) Left; (R) Right; (A) Auto Bottom with tolerance; (AT) Auto Top with tolerance; (C) Center;
 			- height - (T) Top; (B) Bottom; (C) Center;
 		Returns:
-			None
+			flPinPoint
 		'''
 		# - Init
 		anchor = self.layer(layer).findAnchor(name)
@@ -1805,6 +1806,28 @@ class eGlyph(pGlyph):
 		if anchor is not None:
 			x, y = self.getNewBaseCoords(layer, coordTuple, alignTuple, tolerance, italic, (anchor.point.x(), anchor.point.y()))
 			anchor.point = pqt.QtCore.QPointF(x,y)
+
+		return anchor
+
+	def exprAnchor(self, name, layer, expression_x=None, expression_y=None):
+		'''Set anchor expressions at given layer
+		Args:
+			name (str): Anchor Name
+			layer (int or str): Layer index or name, works with both
+			expression_x (str): Expression for evaluating anchors X coordinate
+			expression_Y (str): Expression for evaluating anchors Y coordinate
+
+		Returns:
+			flPinPoint
+		'''
+		# - Init
+		anchor = self.layer(layer).findAnchor(name)
+
+		if anchor is not None:
+			if expression_x is not None: anchor.expressionX = expression_x
+			if expression_y is not None: anchor.expressionY = expression_y
+
+		return anchor
 
 	# - Shapes (Elements) ---------------------------------------
 	def reorder_shapes(self, layer=None, mode=(0,0)):
