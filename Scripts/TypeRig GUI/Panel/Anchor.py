@@ -335,7 +335,7 @@ class TRAnchorBasic(QtGui.QVBoxLayout):
 					if len(self.edt_anchorName.text):
 						self.aux.glyph.dropAnchor(self.edt_anchorName.text, layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, self.chk_italic.isChecked())
 					
-					if self.cmb_posX.currentText == 'Expression' or self.cmb_posX.currentText == 'Expression':
+					if self.cmb_posX.currentText == 'Expression' or self.cmb_posY.currentText == 'Expression':
 						self.aux.glyph.exprAnchor(self.edt_anchorName.text, layer, x_coord[wLayers.index(layer)], y_coord[wLayers.index(layer)])
 					
 						update = True
