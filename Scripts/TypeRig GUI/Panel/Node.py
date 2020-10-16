@@ -12,17 +12,30 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '1.15'
+app_name, app_version = 'TypeRig | Nodes', '1.20'
 
 # - Dependencies -----------------
 import fontlab as fl6
 import fontgate as fgt
 
 from typerig.proxy.fl import *
+from typerig.core.func.collection import groupConsecutives
 
 from PythonQt import QtCore
 from typerig.gui import QtGui
 from typerig.gui.widgets import getProcessGlyphs
+
+# - Helpers ----------------------------
+def filter_consecutive(selection):
+	'''Group the results of selectedAtContours and filter out consecutive nodes.'''
+	selection_dict = {}
+	map_dict = {}
+				
+	for cID, nID in selection:
+		selection_dict.setdefault(cID,[]).append(nID)
+		map_dict.setdefault(cID, []).append(nID - 1 in selection_dict[cID])
+
+	return {key: [value[i] for i in range(len(value)) if not map_dict[key][i]] for key, value in selection_dict.items()}
 
 # - Sub widgets ------------------------
 class basicOps(QtGui.QGridLayout):
@@ -84,7 +97,6 @@ class basicOps(QtGui.QGridLayout):
 		self.addWidget(self.edt_trap,		2, 2, 1, 1)
 		self.addWidget(self.btn_rebuild,	2, 3, 1, 1)
 
-
 	def insertNode(self):
 		glyph = eGlyph()
 		selection = glyph.selectedAtContours(True)
@@ -92,9 +104,12 @@ class basicOps(QtGui.QGridLayout):
 
 		for layer in wLayers:
 			nodeMap = glyph._mapOn(layer)
-			
-			for cID, nID in reversed(selection):
-				glyph.insertNodeAt(cID, nodeMap[cID][nID] + float(self.edt_time.text), layer)
+			selection_dict = filter_consecutive(selection)
+			print selection, selection_dict
+				
+			for cID, nID_list in selection_dict.items():
+				for nID in reversed(nID_list):
+					glyph.insertNodeAt(cID, nodeMap[cID][nID] + float(self.edt_time.text), layer)
 
 		glyph.updateObject(glyph.fl, 'Insert Node @ %s.' %'; '.join(wLayers))
 		glyph.update()
@@ -103,36 +118,7 @@ class basicOps(QtGui.QGridLayout):
 		glyph = eGlyph()
 		wLayers = glyph._prepareLayers(pLayers)
 
-		'''
-		selection = glyph.selectedAtContours()
-		for layer in wLayers:
-			for cID, nID in reversed(selection):
-				glyph.removeNodeAt(cID, nID, layer)
-				glyph.contours(layer)[cID].updateIndices()
-
-				#glyph.contours()[cID].clearNodes()
-		'''
-		
-		# Kind of working
-		for layer in wLayers:
-			selection = glyph.selectedAtContours(False, layer)
-
-			for contour, node in reversed(selection):
-				prevNode, nextNode = node.prevNode(), node.nextNode()
-				
-				if not prevNode.isOn:
-					contour.removeOne(prevNode)
-			
-				if not nextNode.isOn:
-					contour.removeOne(nextNode)
-
-				contour.removeOne(node)	
-				contour.updateIndices()
-		
-		'''
-		# - Not Working Again!
-		from typerig.utils import groupConsecutives		
-		selection = glyph.selectedAtContours()
+		selection = glyph.selectedAtContours(filterOn=True)
 		tempDict = {}
 
 		for cID, nID in selection:
@@ -143,13 +129,11 @@ class basicOps(QtGui.QGridLayout):
 				nidList = groupConsecutives(nIDlist)
 
 				for pair in reversed(nidList):
-					
-					nodeA = eNode(glyph.contours(layer)[cID].nodes()[pair[-1] if len(pair) > 1 else pair[0]]).getNextOn()
-					nodeB = eNode(glyph.contours(layer)[cID].nodes()[pair[0]]).getPrevOn()
+					if pair[-1] != 0 and pair[0] != 0: # !!! Will skip the first node for safety - Find solution
+						nodeA = eNode(glyph.contours(layer)[cID].nodes()[pair[-1] if len(pair) > 1 else pair[0]]).getNextOn()
+						nodeB = eNode(glyph.contours(layer)[cID].nodes()[pair[0]]).getPrevOn()
+						glyph.contours(layer)[cID].removeNodesBetween(nodeB, nodeA)
 
-					glyph.contours(layer)[cID].removeNodesBetween(nodeB, nodeA)
-									
-		'''
 		glyph.update()
 		glyph.updateObject(glyph.fl, 'Delete Node @ %s.' %'; '.join(wLayers))
 
