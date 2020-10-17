@@ -13,8 +13,8 @@ _A typical view of Node panel_
 _Basic operations section of Node panel_
 
 This section offers the following tools:
-- **Insert**: Will insert a node after the currently selected one at time **T**_(set in the editing field next to the button)_;
-- **Remove**: Will remove a the currently selected node;
+- **Insert**: Will insert a node between any two selected nodes at given time **T**_(set in the editing field next to the button)_;
+- **Remove**: Will remove a the currently selected node(s);
 - **Mitre**: Will create a corner miter at the currently selected node with length **X** _(set in the editing field next to the button)_;
 - **Overlap**: Will create a corner overlap (knot) at selected node with length **X** _(set in the editing field before to the button)_;
 - **Trap**: Will create an ink-trap at the currently selected node with parameters **P** - a comma separated list containing incision into glyphs flesh, side depth and trap bottom size;
