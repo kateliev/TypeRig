@@ -19,7 +19,7 @@ from typerig.proxy.fl.objects.base import Coord
 from typerig.proxy.fl.objects.node import pNode
 
 # - Init --------------------------------
-__version__ = '0.26.1'
+__version__ = '0.26.2'
 
 # - Classes -----------------------------
 class pContour(object):
@@ -61,6 +61,11 @@ class pContour(object):
 
 	def __repr__(self):
 		return '<{} ({}, {}) nodes={} ccw={} closed={}>'.format(self.__class__.__name__, self.x(), self.y(), len(self.nodes()), self.isCCW(), self.closed)
+
+	# - Functions ------------------------------------------------
+	def indexOn(self):
+		'''Return list of indexes of all on curve points'''
+		return [node.index for node in self.nodes() if node.isOn()]
 
 	def reverse(self):
 		self.fl.reverse()

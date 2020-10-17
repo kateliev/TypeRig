@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '1.20'
+app_name, app_version = 'TypeRig | Nodes', '1.22'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -102,12 +102,30 @@ class basicOps(QtGui.QGridLayout):
 		selection = glyph.selectedAtContours(True)
 		wLayers = glyph._prepareLayers(pLayers)
 
+		# - Get selected nodes. 
+		# - NOTE: Only the fist node in every selected segment is important, so we filter for that
+		selection = glyph.selectedAtContours(True, filterOn=True)
+		selection_dict, selection_filtered = {}, {}
+				
+		for cID, nID in selection:
+			selection_dict.setdefault(cID,[]).append(nID)
+
+		for cID, sNodes in selection_dict.items():
+			onNodes = glyph.contours(extend=pContour)[cID].indexOn()
+			segments = zip(onNodes, onNodes[1:] + [onNodes[0]]) # Shift and zip so that we have the last segment working
+			onSelected = []
+
+			for pair in segments:
+				if pair[0] in sNodes and pair[1] in sNodes:
+					onSelected.append(pair[0] )
+
+			selection_filtered[cID] = onSelected
+
+		# - Process
 		for layer in wLayers:
 			nodeMap = glyph._mapOn(layer)
-			selection_dict = filter_consecutive(selection)
-			print selection, selection_dict
-				
-			for cID, nID_list in selection_dict.items():
+							
+			for cID, nID_list in selection_filtered.items():
 				for nID in reversed(nID_list):
 					glyph.insertNodeAt(cID, nodeMap[cID][nID] + float(self.edt_time.text), layer)
 
@@ -125,17 +143,14 @@ class basicOps(QtGui.QGridLayout):
 			tempDict.setdefault(cID, []).append(nID)
 
 		for layer in wLayers:
-			for cID, nIDlist in tempDict.iteritems():
-				nidList = groupConsecutives(nIDlist)
-
-				for pair in reversed(nidList):
-					if pair[-1] != 0 and pair[0] != 0: # !!! Will skip the first node for safety - Find solution
-						nodeA = eNode(glyph.contours(layer)[cID].nodes()[pair[-1] if len(pair) > 1 else pair[0]]).getNextOn()
-						nodeB = eNode(glyph.contours(layer)[cID].nodes()[pair[0]]).getPrevOn()
-						glyph.contours(layer)[cID].removeNodesBetween(nodeB, nodeA)
+			for cID, nidList in tempDict.iteritems():
+				for nID in reversed(nidList):
+					nodeA = eNode(glyph.contours(layer)[cID].nodes()[nID]).getNextOn()
+					nodeB = eNode(glyph.contours(layer)[cID].nodes()[nID]).getPrevOn()
+					glyph.contours(layer)[cID].removeNodesBetween(nodeB, nodeA)
 
 		glyph.update()
-		glyph.updateObject(glyph.fl, 'Delete Node @ %s.' %'; '.join(wLayers))
+		glyph.updateObject(glyph.fl, 'Remove Node @ %s.' %'; '.join(wLayers))
 
 	def cornerMitre(self, doKnot=False):
 		glyph = eGlyph()
