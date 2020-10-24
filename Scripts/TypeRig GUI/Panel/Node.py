@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '1.22'
+app_name, app_version = 'TypeRig | Nodes', '1.30'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -187,10 +187,9 @@ class basicOps(QtGui.QGridLayout):
 	def cornerRebuild(self):
 		glyph = eGlyph()
 		wLayers = glyph._prepareLayers(pLayers)
-		
-		for layer in wLayers:
-			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
-			
+		selection_layers = {layer:glyph.selectedNodes(layer, filterOn=True, extend=eNode) for layer in wLayers}
+
+		for layer, selection in selection_layers.items():			
 			if len(selection) > 1:
 				node_first = selection[0]
 				node_last = selection[-1]

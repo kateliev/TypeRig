@@ -27,7 +27,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Corner', '1.99'
+app_name, app_version = 'TypeRig | Corner', '2.00'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -274,10 +274,9 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 			for glyph in process_glyphs:
 				if glyph is not None:
 					wLayers = glyph._prepareLayers(pLayers)
-		
-					for layer in wLayers:
-						selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode, deep=True)
-						
+					selection_layers = {layer:glyph.selectedNodes(layer, filterOn=True, extend=eNode) for layer in wLayers}
+
+					for layer, selection in selection_layers.items():			
 						if len(selection) > 1:
 							node_first = selection[0]
 							node_last = selection[-1]
@@ -288,8 +287,8 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 							crossing = line_in.intersect_line(line_out, True)
 
 							node_first.smartReloc(*crossing.tuple)
-							node_first.parent.removeNodesBetween(node_first.fl, node_last.getNext())
-			
+							node_first.parent.removeNodesBetween(node_first.fl, node_last.getNextOn())
+
 					glyph.update()
 					glyph.updateObject(glyph.fl, 'Rebuild corner: %s nodes reduced; At layers: %s' %(len(selection), '; '.join(wLayers)))
 
