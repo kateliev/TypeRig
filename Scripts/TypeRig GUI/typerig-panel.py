@@ -130,6 +130,7 @@ class dlg_LayerSelect(QtGui.QDialog):
 		self.btn_tableCheckMasters = QtGui.QPushButton('Masters')
 		self.btn_tableCheckMasks = QtGui.QPushButton('Masks')
 		self.btn_tableCheckServices = QtGui.QPushButton('Services')
+		self.btn_tableRefresh = QtGui.QPushButton('Refresh')
 
 		self.btn_tableCheck.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
 		self.btn_tableCheckMasters.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
@@ -145,6 +146,7 @@ class dlg_LayerSelect(QtGui.QDialog):
 		self.btn_tableCheckMasters.clicked.connect(lambda: self.table_check_all('Master'))
 		self.btn_tableCheckMasks.clicked.connect(lambda: self.table_check_all('Mask'))
 		self.btn_tableCheckServices.clicked.connect(lambda: self.table_check_all('Service'))
+		self.btn_tableCheck.clicked.connect(lambda: self.table_populate(0))
 
 		# - Build layout
 		layoutV = QtGui.QGridLayout() 
@@ -153,7 +155,7 @@ class dlg_LayerSelect(QtGui.QDialog):
 		layoutV.addWidget(self.btn_tableCheckMasks, 		1, 0, 1, 2)
 		layoutV.addWidget(self.btn_tableCheckServices, 		1, 2, 1, 2)
 		layoutV.addWidget(self.tab_masters, 				2, 0, 20, 4)
-
+		
 		# - Set Widget
 		self.setLayout(layoutV)
 		self.setWindowTitle('%s %s | Select Layers' %(app_name, app_version))
