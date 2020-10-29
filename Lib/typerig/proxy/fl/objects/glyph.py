@@ -28,7 +28,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.28.3'
+__version__ = '0.28.4'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -666,15 +666,10 @@ class pGlyph(object):
 		return [(layerA.name, layerB.name, layerA.isCompatible(layerB, strong)) for layerA, layerB in combinations(self.layers(), 2)]
 
 	# - Update ----------------------------------------------
-	def update(self, fl=True, fg=False):
-		'''Updates the glyph and sends notification to the editor.
-		Args:
-			fl (bool): Update the flGlyph
-			fg (bool): Update the fgGlyph
-		'''
-		# !TODO: Undo?
-		if fl:self.fl.update()
-		if fg:self.fg.update()
+	def update(self):
+		'''Updates the glyph and sends notification to the editor.	'''
+		for contour in self.contours():
+			contour.changed()
 	
 	def updateObject(self, flObject, undoMessage='TypeRig', verbose=True):
 		'''Updates a flObject sends notification to the editor as well as undo/history item.

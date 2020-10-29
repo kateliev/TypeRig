@@ -29,7 +29,7 @@ from typerig.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRMsgSimple
 # - Init -------------------------------
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Delta', '2.26'
+app_name, app_version = 'TypeRig | Delta', '2.27'
 
 
 # - Sub widgets ------------------------
@@ -137,7 +137,9 @@ class tool_tab(QtGui.QWidget):
 
 		self.glyph = eGlyph()
 		self.active_font = pFont()
-		
+		self.active_workspace = pWorkspace()
+		self.active_canvas = self.active_workspace.getCanvas(True)
+				
 		if len(self.active_font.masters()) > 1:
 			# - Activate
 			self.__lbl_warn.setText('')
@@ -232,8 +234,7 @@ class tool_tab(QtGui.QWidget):
 			self.glyph._setPointArray(self.axis_points.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), opt_italic, extrapolate=opt_extrapolate))
 			
 			self.glyph.update()
-			#fl6.Update(fl6.CurrentGlyph())
-			fl6.Update(self.glyph.fl)
+			self.active_canvas.updateAll()
 
 	
 # - Test ----------------------
