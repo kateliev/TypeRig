@@ -29,7 +29,7 @@ from typerig.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRMsgSimple
 # - Init -------------------------------
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Delta', '2.27'
+app_name, app_version = 'TypeRig | Delta', '2.28'
 
 
 # - Sub widgets ------------------------
@@ -234,7 +234,7 @@ class tool_tab(QtGui.QWidget):
 			self.glyph._setPointArray(self.axis_points.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), opt_italic, extrapolate=opt_extrapolate))
 			
 			self.glyph.update()
-			self.active_canvas.updateAll()
+			self.active_canvas.refreshAll()
 
 	
 # - Test ----------------------
