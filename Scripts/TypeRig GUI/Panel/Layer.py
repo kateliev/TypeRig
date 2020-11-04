@@ -21,14 +21,14 @@ from typerig.core.func.math import linInterp as lerp
 
 from PythonQt import QtCore
 from typerig.gui import QtGui
-from typerig.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRTransformCtrl, TRGLineEdit
+from typerig.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRTransformCtrl, TRGLineEdit, TRCollapsibleBox
 
 # - Init
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '1.32'
+app_name, app_version = 'TypeRig | Layers', '1.40'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -102,7 +102,8 @@ class TRWLayerSelect(QtGui.QVBoxLayout):
 class TRWMasterTableView(QtGui.QTableWidget):
 	def __init__(self, data):
 		super(TRWMasterTableView, self).__init__()
-		self.setMaximumHeight(200)
+		#self.setMaximumHeight(600)
+		#self.setMinimumHeight(400)
 		
 		# - Init
 		self.setColumnCount(max(map(len, data.values())))
@@ -760,6 +761,7 @@ class tool_tab(QtGui.QWidget):
 
 		#self.layerSelector = TRLayerSelect()
 		self.layerSelector = TRWLayerSelect()
+
 		self.quickTools = TRLayerTools(self.layerSelector)
 		#self.blendTools = QlayerBlend(self.layerSelector)
 		self.blendTools = TRNewLayerBlend(self.layerSelector)
@@ -767,14 +769,31 @@ class tool_tab(QtGui.QWidget):
 		self.unfoldLayers = TRLayerMultiEdit(self.layerSelector)
 
 		layoutV.addLayout(self.layerSelector)
-		layoutV.addWidget(QtGui.QLabel('Basic Tools (Layers selected)'))
-		layoutV.addLayout(self.basicTools)
-		layoutV.addWidget(QtGui.QLabel('Content Tools (Active Layer to selection)'))
-		layoutV.addLayout(self.quickTools)
-		layoutV.addWidget(QtGui.QLabel('Layer Multi-editing (Layers selected)'))
-		layoutV.addLayout(self.unfoldLayers)
-		layoutV.addWidget(QtGui.QLabel('Interpolate/Blend (Selection to Active Layer)'))
-		layoutV.addLayout(self.blendTools)
+		
+		#layoutV.addWidget(QtGui.QLabel('Basic Tools (Layers selected)'))
+		#layoutV.addLayout(self.basicTools)
+		self.tools_basic = TRCollapsibleBox('Basic Tools (Layers selected)')
+		self.tools_basic.setContentLayout(self.basicTools)
+		layoutV.addWidget(self.tools_basic)
+		
+		#layoutV.addWidget(QtGui.QLabel('Content Tools (Active Layer to selection)'))
+		#layoutV.addLayout(self.quickTools)
+		self.tools_content = TRCollapsibleBox('Content Tools (Active Layer to selection)')
+		self.tools_content.setContentLayout(self.quickTools)
+		layoutV.addWidget(self.tools_content)
+
+		#layoutV.addWidget(QtGui.QLabel('Layer Multi-editing (Layers selected)'))
+		#layoutV.addLayout(self.unfoldLayers)
+		self.tools_multiedit = TRCollapsibleBox('Layer Multi-editing (Layers selected)')
+		self.tools_multiedit.setContentLayout(self.unfoldLayers)
+		layoutV.addWidget(self.tools_multiedit)
+
+		#layoutV.addWidget(QtGui.QLabel('Interpolate/Blend (Selection to Active Layer)'))
+		#layoutV.addLayout(self.blendTools)
+		self.tools_blend = TRCollapsibleBox('Interpolate/Blend (Selection to Active Layer)')
+		self.tools_blend.setContentLayout(self.blendTools)
+		layoutV.addWidget(self.tools_blend)
+		#layoutV.addStretch()
 
 
 		# - Build ---------------------------
