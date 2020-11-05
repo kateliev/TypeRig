@@ -73,6 +73,10 @@ class NAMimportWarning(UserWarning):
 class NAMdataMissing(UserWarning):
 	pass
 
+# -- Panel Warning -----------------
+class TRPanelWarning(UserWarning):
+	pass
+
 # - Setup ----------------------------
 warnings.formatwarning = warning_custom
 
