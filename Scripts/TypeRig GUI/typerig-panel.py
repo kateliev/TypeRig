@@ -9,6 +9,7 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
+#import os
 from collections import OrderedDict
 
 import fontlab as fl6
@@ -312,6 +313,8 @@ class typerig_Panel(QtGui.QDialog):
 		self.btn_unfold.hide()
 
 		# - Set Widget -------------------------------
+		#scriptDir = os.path.dirname(os.path.realpath(__file__))
+		#self.setWindowIcon(QtGui.QIcon(scriptDir + os.path.sep + 'Resource' + os.path.sep + 'typerig-icon-small.svg'))
 		self.setLayout(layoutV)
 		self.setWindowTitle('%s %s' %(app_name, app_version))
 		self.setGeometry(100, 100, 300, 600)

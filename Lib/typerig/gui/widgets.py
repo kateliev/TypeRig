@@ -9,7 +9,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.9'
+__version__ = '0.0.10'
 
 # - Dependencies --------------------------
 from platform import system
@@ -360,10 +360,11 @@ class TRCollapsibleBox(QtGui.QWidget):
 		self.toggle_button = QtGui.QToolButton()
 		self.toggle_button.text = title
 		self.toggle_button.checkable = True
-		self.toggle_button.checked = False
+		self.toggle_button.checked = True
 		self.toggle_button.setStyleSheet("QToolButton { border: none; }")
 		self.toggle_button.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
 		self.toggle_button.setArrowType(QtCore.Qt.RightArrow)
+		self.toggle_button.setIconSize(QtCore.QSize(5,5))
 		self.toggle_button.clicked.connect(self.on_pressed)
 
 		self.toggle_animation = QtCore.QParallelAnimationGroup(self)
@@ -385,7 +386,6 @@ class TRCollapsibleBox(QtGui.QWidget):
 		self.toggle_animation.addAnimation(QtCore.QPropertyAnimation(self, b"maximumHeight"))
 		self.toggle_animation.addAnimation(QtCore.QPropertyAnimation(self.content_area, b"maximumHeight"))
 
-	#@QtCore.pyqtSlot()
 	def on_pressed(self):
 		checked = self.toggle_button.isChecked()
 		

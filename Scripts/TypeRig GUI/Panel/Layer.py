@@ -8,6 +8,7 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
+import os
 from math import radians
 from collections import OrderedDict
 from itertools import groupby
@@ -797,6 +798,8 @@ class tool_tab(QtGui.QWidget):
 
 
 		# - Build ---------------------------
+		scriptDir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+		self.setWindowIcon(QtGui.QIcon(scriptDir + os.path.sep + 'Resource' + os.path.sep + 'typerig-icon.svg'))
 		self.setLayout(layoutV)
 
 		# !!! Hotfix FL7 7355 
