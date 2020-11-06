@@ -59,9 +59,9 @@ class ALineEdit(QtGui.QLineEdit):
 		menu.addAction(u'descender', lambda: self.setText('descender'))
 		menu.addAction(u'small_caps', lambda: self.setText('small_caps'))
 
-class TRtreeWidget(QtGui.QTreeWidget):
+class TRWAnchorTree(QtGui.QTreeWidget):
 	def __init__(self, data=None, headers=None):
-		super(TRtreeWidget, self).__init__()
+		super(TRWAnchorTree, self).__init__()
 		
 		if data is not None:
 			self.setTree(data, headers)
@@ -143,7 +143,7 @@ class TRLayerSelect(QtGui.QVBoxLayout):
 		self.addLayout(self.lay_head)
 		
 		# -- Tree view
-		self.tree_anchors = TRtreeWidget(self.data, self.header_names)
+		self.tree_anchors = TRWAnchorTree(self.data, self.header_names)
 		self.tree_anchors.setMinimumHeight(400)
 		
 		self.addWidget(self.tree_anchors)
