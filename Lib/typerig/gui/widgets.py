@@ -9,7 +9,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.11'
+__version__ = '0.0.12'
 
 # - Dependencies --------------------------
 from platform import system
@@ -394,10 +394,10 @@ class TRCollapsibleBox(QtGui.QWidget):
 		super(TRCollapsibleBox, self).__init__(parent)
 
 		self.toggle_button = QtGui.QToolButton()
-		self.toggle_button.text = title
+		self.toggle_button.text = '  ' + title
 		self.toggle_button.checkable = True
 		self.toggle_button.checked = True
-		self.toggle_button.setStyleSheet("QToolButton { border: none; }")
+		self.toggle_button.setStyleSheet("QToolButton { border: none; font-weight: bold; color: #505050; vertical-align: middle }")
 		self.toggle_button.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
 		self.toggle_button.setArrowType(QtCore.Qt.RightArrow)
 		self.toggle_button.setIconSize(QtCore.QSize(5,5))

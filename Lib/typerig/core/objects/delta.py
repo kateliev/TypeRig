@@ -19,7 +19,7 @@ from typerig.core.objects.point import Point, Void
 from typerig.core.objects.array import PointArray
 
 # - Init -------------------------------
-__version__ = '0.10.4'
+__version__ = '0.10.5'
 
 # - Objects ------------------------------------
 # -- Interpolation ------------------------------
@@ -203,6 +203,24 @@ class DeltaScale(Sequence):
 
 		return self.x[ix], self.y[iy], ntx, nty
 
+	def __confine(self, w, h, t, d, st):
+		tx, ty = t 							# Interpolate time tx, ty
+		dx, dy = d 							# Translation dx, dy
+		stx0, stx1, sty0, sty1 = st 		# Stem Values
+
+		w0, w1 = diff(v0, 0), diff(v1, 0) 	# Widths
+		h0, h1 = diff(v0, 1), diff(v1, 1) 	# Heights
+
+		bx = float(stx1)/stx0				# Stem ratio X
+		by = float(sty1)/sty0				# Stem ratio Y
+		wtx = lerp(w0, w1, tx)				# Interpolated width
+		hty = lerp(h0, h1, ty)				# Interpolated height
+		
+		spx = (w*(1 - bx) - dx*(1 + bx) + w1 - wtx)/(w1 - bx*wtx)
+		spy = (h*(1 - by) - dy*(1 + by) + h1 - hty)/(h1 - by*hty)
+		
+		return spx, spy
+
 	def __delta_scale(self, x, y, tx, ty, sx, sy, cx, cy, dx, dy, i):
 		return utils.adaptive_scale(((x[0],y[0]), (x[1],y[1])), (sx, sy), (dx, dy), (tx, ty), (cx,cy), i, (x[2], x[3], y[2], y[3]))
 
@@ -217,9 +235,9 @@ class DeltaScale(Sequence):
 			self.x, self.y, self.stems = other
 
 	# - Process ----------------------------------
-	def scale_by_time(self, time, scale, comp, shift, italic_angle, extrapolate=False):
+	def scale_by_time(self, time, scale, compensation, shift, italic_angle, extrapolate=False):
 		sx, sy = scale
-		cx, cy = comp
+		cx, cy = compensation
 		dx, dy = shift
 		i = italic_angle
 		a0, a1, ntx, nty = self.__mixer(time[0], time[1], extrapolate)
@@ -227,10 +245,9 @@ class DeltaScale(Sequence):
 		result = map(lambda arr: self.__delta_scale(arr[0], arr[1], ntx, nty, sx, sy, cx, cy, dx, dy, i), process_array)
 		return result
 
-	def scale_by_stem(self, stem, scale, comp, shift, italic_angle, extrapolate=False):
+	def scale_by_stem(self, stem, scale_or_dimension, compensation, shift, italic_angle, extrapolate=False, confine=False):
 		stx, sty = stem
-		sx, sy = scale
-		cx, cy = comp
+		cx, cy = compensation
 		dx, dy = shift
 		i = italic_angle
 
@@ -252,6 +269,25 @@ class DeltaScale(Sequence):
 
 		a0, a1, ntx, nty = self.__mixer(tx, ty, extrapolate)
 		process_array = zip(a0, a1)
+
+		if not confine:
+			sx, sy = scale_or_dimension
+		else:
+			# !!! Not working again?! Why?! Wrong data input somewhere!
+			w, h = scale_or_dimension
+			w0 = max(a0[0]) - min(a0[0])
+			w1 = max(a1[0]) - min(a1[0])
+			h0 = max(a0[1]) - min(a0[1])
+			h1 = max(a1[1]) - min(a1[1])
+
+			bx = float(stx1)/stx0
+			by = float(sty1)/sty0
+			wtx = utils.lerp(w0, w1, ntx)
+			hty = utils.lerp(h0, h1, nty)
+			
+			sx = (w*(1. - bx) - dx*(1. + bx) + w1 - wtx)/(w1 - bx*wtx)
+			sy = (h*(1. - by) - dy*(1. + by) + h1 - hty)/(h1 - by*hty)
+		
 		result = map(lambda arr: self.__delta_scale(arr[0], arr[1], ntx, nty, sx, sy, cx, cy, dx, dy, i), process_array)
 		return result
 

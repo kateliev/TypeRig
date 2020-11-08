@@ -28,7 +28,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.28.4'
+__version__ = '0.28.5'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -1370,6 +1370,29 @@ class eGlyph(pGlyph):
 				nodeArray[nid].x, nodeArray[nid].y = PointArray[nid]
 		else:
 			print('ERROR:\t Incompatible coordinate array provided.')
+
+	def _getServiceArray(self, layer=None):
+		layer_advance = [(float(self.layer(layer).advanceWidth), float(self.layer(layer).advanceHeight))]
+		layer_anchors = [(float(anchor.point.x()), float(anchor.point.y())) for anchor in self.anchors(layer)]
+		return layer_advance + layer_anchors
+
+	def _setServiceArray(self, PointArray, layer=None, set_metrics=True, set_anchors=True):
+		if len(PointArray) > 2:
+			
+			if set_metrics:
+				layer_advance = PointArray[0]
+				self.setAdvance(layer_advance[0], layer)
+
+			if set_anchors:
+				layer_anchors = PointArray[1:]
+				anchorArray = self.anchors(layer)
+
+				if len(layer_anchors) == len(anchorArray):
+					for aid in range(len(layer_anchors)):
+						anchorArray[aid].point = pqt.QtCore.QPointF(*layer_anchors[aid])
+			else:
+				print('ERROR:\t Incompatible coordinate array provided.')
+
 
 	# - Nodes ----------------------------------------------
 	def breakContour(self, contourId, nodeId, layer=None, expand=0):

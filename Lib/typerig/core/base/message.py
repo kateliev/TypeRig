@@ -77,6 +77,16 @@ class NAMdataMissing(UserWarning):
 class TRPanelWarning(UserWarning):
 	pass
 
+# -- Delta Warning ----------------
+class TRDeltaAxisWarning(UserWarning):
+	pass
+
+class TRDeltaStemWarning(UserWarning):
+	pass
+
+class TRDeltaArrayWarning(UserWarning):
+	pass
+
 # - Setup ----------------------------
 warnings.formatwarning = warning_custom
 
