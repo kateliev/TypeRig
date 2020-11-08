@@ -203,24 +203,6 @@ class DeltaScale(Sequence):
 
 		return self.x[ix], self.y[iy], ntx, nty
 
-	def __confine(self, w, h, t, d, st):
-		tx, ty = t 							# Interpolate time tx, ty
-		dx, dy = d 							# Translation dx, dy
-		stx0, stx1, sty0, sty1 = st 		# Stem Values
-
-		w0, w1 = diff(v0, 0), diff(v1, 0) 	# Widths
-		h0, h1 = diff(v0, 1), diff(v1, 1) 	# Heights
-
-		bx = float(stx1)/stx0				# Stem ratio X
-		by = float(sty1)/sty0				# Stem ratio Y
-		wtx = lerp(w0, w1, tx)				# Interpolated width
-		hty = lerp(h0, h1, ty)				# Interpolated height
-		
-		spx = (w*(1 - bx) - dx*(1 + bx) + w1 - wtx)/(w1 - bx*wtx)
-		spy = (h*(1 - by) - dy*(1 + by) + h1 - hty)/(h1 - by*hty)
-		
-		return spx, spy
-
 	def __delta_scale(self, x, y, tx, ty, sx, sy, cx, cy, dx, dy, i):
 		return utils.adaptive_scale(((x[0],y[0]), (x[1],y[1])), (sx, sy), (dx, dy), (tx, ty), (cx,cy), i, (x[2], x[3], y[2], y[3]))
 
