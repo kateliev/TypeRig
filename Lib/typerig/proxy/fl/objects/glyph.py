@@ -634,6 +634,10 @@ class pGlyph(object):
 
 		return newLayer
 
+	def isEmpty(self, strong=True):
+		if strong: return all([layer.shapesCount == 0  for layer in self.layers()])
+		return any([layer.shapesCount == 0  for layer in self.layers()])
+
 	def isCompatible(self, strong=False):
 		'''Test if glyph is ready for interpolation - all master layers are compatible.'''
 		glyph_masters = self.masters()
