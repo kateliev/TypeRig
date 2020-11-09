@@ -19,7 +19,7 @@ from typerig.core.objects.point import Point, Void
 from typerig.core.objects.array import PointArray
 
 # - Init -------------------------------
-__version__ = '0.10.5'
+__version__ = '0.10.8'
 
 # - Objects ------------------------------------
 # -- Interpolation ------------------------------
@@ -217,17 +217,26 @@ class DeltaScale(Sequence):
 			self.x, self.y, self.stems = other
 
 	# - Process ----------------------------------
-	def scale_by_time(self, time, scale, compensation, shift, italic_angle, extrapolate=False):
-		sx, sy = scale
+	def scale_by_time(self, time, scale_or_dimension, compensation, shift, italic_angle, extrapolate=False, to_dimension=False):
 		cx, cy = compensation
 		dx, dy = shift
 		i = italic_angle
 		a0, a1, ntx, nty = self.__mixer(time[0], time[1], extrapolate)
 		process_array = zip(a0, a1)
+
+		if not to_dimension:
+			sx, sy = scale_or_dimension
+		else:
+			w0 = max(a0, key= lambda i: i[0])[0] - min(a0, key= lambda i: i[0])[0]
+			w1 = max(a0, key= lambda i: i[1])[1] - min(a0, key= lambda i: i[1])[1]
+			h0 = max(a1, key= lambda i: i[0])[0] - min(a0, key= lambda i: i[0])[0]
+			h1 = max(a1, key= lambda i: i[1])[1] - min(a0, key= lambda i: i[1])[1]
+			sx, sy = utils.adjuster(((w0, w1), (h0, h1)), scale_or_dimension, (ntx, nty), (dx, dy), (a0[0][2], a0[0][3], a1[0][2], a1[0][3]))
+
 		result = map(lambda arr: self.__delta_scale(arr[0], arr[1], ntx, nty, sx, sy, cx, cy, dx, dy, i), process_array)
 		return result
 
-	def scale_by_stem(self, stem, scale_or_dimension, compensation, shift, italic_angle, extrapolate=False, confine=False):
+	def scale_by_stem(self, stem, scale_or_dimension, compensation, shift, italic_angle, extrapolate=False, to_dimension=False):
 		stx, sty = stem
 		cx, cy = compensation
 		dx, dy = shift
@@ -252,23 +261,14 @@ class DeltaScale(Sequence):
 		a0, a1, ntx, nty = self.__mixer(tx, ty, extrapolate)
 		process_array = zip(a0, a1)
 
-		if not confine:
+		if not to_dimension:
 			sx, sy = scale_or_dimension
 		else:
-			# !!! Not working again?! Why?! Wrong data input somewhere!
-			w, h = scale_or_dimension
-			w0 = max(a0[0]) - min(a0[0])
-			w1 = max(a1[0]) - min(a1[0])
-			h0 = max(a0[1]) - min(a0[1])
-			h1 = max(a1[1]) - min(a1[1])
-
-			bx = float(stx1)/stx0
-			by = float(sty1)/sty0
-			wtx = utils.lerp(w0, w1, ntx)
-			hty = utils.lerp(h0, h1, nty)
-			
-			sx = (w*(1. - bx) - dx*(1. + bx) + w1 - wtx)/(w1 - bx*wtx)
-			sy = (h*(1. - by) - dy*(1. + by) + h1 - hty)/(h1 - by*hty)
+			w0 = max(a0, key= lambda i: i[0])[0] - min(a0, key= lambda i: i[0])[0]
+			w1 = max(a0, key= lambda i: i[1])[1] - min(a0, key= lambda i: i[1])[1]
+			h0 = max(a1, key= lambda i: i[0])[0] - min(a0, key= lambda i: i[0])[0]
+			h1 = max(a1, key= lambda i: i[1])[1] - min(a0, key= lambda i: i[1])[1]
+			sx, sy = utils.adjuster(((w0, w1), (h0, h1)), scale_or_dimension, (ntx, nty), (dx, dy), (a0[0][2], a0[0][3], a1[0][2], a1[0][3]))
 		
 		result = map(lambda arr: self.__delta_scale(arr[0], arr[1], ntx, nty, sx, sy, cx, cy, dx, dy, i), process_array)
 		return result

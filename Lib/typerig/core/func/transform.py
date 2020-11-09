@@ -13,7 +13,7 @@ from __future__ import absolute_import
 import math
 
 # - Init --------------------------------
-__version__ = '0.26.1'
+__version__ = '0.26.5'
 
 # - Functions ---------------------------
 def lerp(t0, t1, t):
@@ -44,11 +44,41 @@ def timer(sw_c, sw_0, sw_1, fix_boundry=False):
 
 	return t
 
-def adjuster(v, w, h, t, d, st):
+def adjuster(s, r, t, d, st):
+	''' Readjust scale factor based on interpolation time
+	Args:
+		s -> tuple(tuple((float(width0), float(width1)), (float(height0), float(height1))) : Joined BBox dimensions
+		r -> tuple(float(width), float(height) -> Float: Target Width and Height
+		t(tx, ty) -> tuple((float, float) : Interpolation times (anisotropic X, Y) 
+		d(dx, dy) -> tuple((float, float) : Translation X, Y
+		st(stx0, stx1, sty0, sty1) -> tuple((float, float, float, float) : Stems widths for weights t0, t1
+
+	Returns:
+		tuple(float, float): Readjusted scale factors
+	'''
+	tx, ty = t 							# Interpolate time tx, ty
+	dx, dy = d 							# Translation dx, dy
+	stx0, stx1, sty0, sty1 = st 		# Stem Values
+	w, h = r 							# Target Width and Height
+
+	w0, w1 = s[0] 						# Widths
+	h0, h1 = s[1] 						# Heights
+
+	bx = float(stx1)/stx0				# Stem ratio X
+	by = float(sty1)/sty0				# Stem ratio Y
+	wtx = lerp(w0, w1, tx)				# Interpolated width
+	hty = lerp(h0, h1, ty)				# Interpolated height
+	
+	spx = (w*(1 - bx) - dx*(1 + bx) + w1 - wtx)/(w1 - bx*wtx)
+	spy = (h*(1 - by) - dy*(1 + by) + h1 - hty)/(h1 - by*hty)
+	
+	return spx, spy
+
+def adjuster_array(v, r, t, d, st):
 	''' Readjust scale factor based on interpolation time
 	Args:
 		v(t0, t1) -> list(tuple((float, float), (float, float))...) : Joined coordinate arrays for both weights
-		w, h -> Float: Target Width and Height
+		r -> tuple(float(width), float(height) -> Float: Target Width and Height
 		t(tx, ty) -> tuple((float, float) : Interpolation times (anisotropic X, Y) 
 		d(dx, dy) -> tuple((float, float) : Translation X, Y
 		st(stx0, stx1, sty0, sty1) -> tuple((float, float, float, float) : Stems widths for weights t0, t1
@@ -66,22 +96,10 @@ def adjuster(v, w, h, t, d, st):
 		v0.append(i[0])
 		v1.append(i[1])
 
-	tx, ty = t 							# Interpolate time tx, ty
-	dx, dy = d 							# Translation dx, dy
-	stx0, stx1, sty0, sty1 = st 		# Stem Values
-
 	w0, w1 = diff(v0, 0), diff(v1, 0) 	# Widths
 	h0, h1 = diff(v0, 1), diff(v1, 1) 	# Heights
 
-	bx = float(stx1)/stx0				# Stem ratio X
-	by = float(sty1)/sty0				# Stem ratio Y
-	wtx = lerp(w0, w1, tx)				# Interpolated width
-	hty = lerp(h0, h1, ty)				# Interpolated height
-	
-	spx = (w*(1 - bx) - dx*(1 + bx) + w1 - wtx)/(w1 - bx*wtx)
-	spy = (h*(1 - by) - dy*(1 + by) + h1 - hty)/(h1 - by*hty)
-	
-	return spx, spy
+	return adjuster(((w0, w1), (h0, h1)), r, t, d, st)
 
 # -- Adaptive scaling --------------------------------------------
 # Based on: A Multiple Master based method for scaling glyphs without changing the stroke characteristics
@@ -126,7 +144,6 @@ def adaptive_scale(v, s, d, t, c, i, st):
 
 	return (rx, ry)
 
-
 def adaptive_scale_array(a, s, d, t, c, i, st):
 	'''Perform adaptive scaling by keeping the stem/stroke weights
 	Args:
@@ -141,5 +158,21 @@ def adaptive_scale_array(a, s, d, t, c, i, st):
 	Returns:
 		list(tuple(float, float)): Transformed coordinate data
 	'''
-	#print s, t, adjuster(a, s, t, st)
 	return list(map(lambda a_i: adaptive_scale(a_i, s, d, t, c, i, st), a))
+
+def target_scale_array(a, w, h, d, t, c, i, st):
+	'''Perform adaptive scaling by keeping the stem/stroke weights
+	Args:
+		a(t0, t1) -> list(tuple(float, float), (float, float)) : Joined coordinate arrays for both weights
+		s(sx, sy) -> tuple((float, float) : Scale factors (X, Y)
+		d(dx, dy) -> tuple((float, float) : Translate values (X, Y) 
+		t(tx, ty) -> tuple((float, float) : Interpolation times (anisotropic X, Y) 
+		c(cx, cy) -> tuple((float, float) : Compensation factor 0.0 (no compensation) to 1.0 (full compensation) (X,Y)
+		i -> (radians) : Angle of sharing (for italic designs)  
+		st(stx0, stx1, sty0, sty1) -> tuple((float, float, float, float) : Stems widths for weights t0, t1
+
+	Returns:
+		list(tuple(float, float)): Transformed coordinate data
+	'''
+	spx, spy = adjuster_array(a, (w, h), t, d, st)
+	return list(map(lambda a_i: adaptive_scale(a_i, (spx, spy), d, t, c, i, st), a))
