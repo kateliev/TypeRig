@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '2.02'
+app_name, app_version = 'TypeRig | Layers', '2.03'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -242,31 +242,34 @@ class TRLayerActionCollector(object):
 			if parent.chk_rsb.isChecked():
 				TRLayerActionCollector.layer_copy_metrics(parent.glyph, parent.lst_layers.currentItem().text(), True, 'RSB')
 				
-			parent.glyph.updateObject(parent.glyph.fl, 'Copy Layer | %s <- %s.' %(parent.glyph.activeLayer().name, parent.lst_layers.currentItem().text()))
+			parent.glyph.updateObject(parent.glyph.fl, 'Pull Layer | %s <- %s.' %(parent.glyph.activeLayer().name, parent.lst_layers.currentItem().text()))
 
 
 	@staticmethod
 	def layer_push(parent):
 		if parent.doCheck():	
-			if parent.chk_outline.isChecked():
-				TRLayerActionCollector.layer_copy_shapes(parent.glyph, parent.lst_layers.currentItem().text(), False)
-				
-			if parent.chk_guides.isChecked():
-				TRLayerActionCollector.layer_copy_guides(parent.glyph, parent.lst_layers.currentItem().text(), False)
+			selected_layers = parent.lst_layers.getTable()
+			for layer_name in selected_layers:
 
-			if parent.chk_anchors.isChecked():
-				TRLayerActionCollector.layer_copy_anchors(parent.glyph, parent.lst_layers.currentItem().text(), False)
+				if parent.chk_outline.isChecked():
+					TRLayerActionCollector.layer_copy_shapes(parent.glyph, layer_name, False)
+					
+				if parent.chk_guides.isChecked():
+					TRLayerActionCollector.layer_copy_guides(parent.glyph, layer_name, False)
 
-			if parent.chk_lsb.isChecked():
-				TRLayerActionCollector.layer_copy_metrics(parent.glyph, parent.lst_layers.currentItem().text(), False, 'LSB')
+				if parent.chk_anchors.isChecked():
+					TRLayerActionCollector.layer_copy_anchors(parent.glyph, layer_name, False)
+
+				if parent.chk_lsb.isChecked():
+					TRLayerActionCollector.layer_copy_metrics(parent.glyph, layer_name, False, 'LSB')
+					
+				if parent.chk_adv.isChecked():
+					TRLayerActionCollector.layer_copy_metrics(parent.glyph, layer_name, False, 'ADV')
+					
+				if parent.chk_rsb.isChecked():
+					TRLayerActionCollector.layer_copy_metrics(parent.glyph, layer_name, False, 'RSB')
 				
-			if parent.chk_adv.isChecked():
-				TRLayerActionCollector.layer_copy_metrics(parent.glyph, parent.lst_layers.currentItem().text(), False, 'ADV')
-				
-			if parent.chk_rsb.isChecked():
-				TRLayerActionCollector.layer_copy_metrics(parent.glyph, parent.lst_layers.currentItem().text(), False, 'RSB')
-				
-			parent.glyph.updateObject(parent.glyph.fl, 'Paste Layer | %s -> %s.' %(parent.glyph.activeLayer().name, parent.lst_layers.currentItem().text()))
+			parent.glyph.updateObject(parent.glyph.fl, 'Push Layer | %s -> %s.' %(parent.glyph.activeLayer().name, '; '.join(selected_layers)))
 
 	@staticmethod
 	def layer_clean(parent):
