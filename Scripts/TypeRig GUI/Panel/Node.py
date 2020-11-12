@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '1.30'
+app_name, app_version = 'TypeRig | Nodes', '1.31'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -483,6 +483,7 @@ class alignNodes(QtGui.QGridLayout):
 			for layer in wLayers:
 				extend_nodes = None if self.chk_relations.isChecked() else eNode
 				selection = glyph.selectedNodes(layer, extend=extend_nodes)
+				italicAngle = glyph.package.italicAngle_value
 
 				if mode == 'L':
 					target = min(selection, key=lambda item: item.x)
@@ -493,11 +494,17 @@ class alignNodes(QtGui.QGridLayout):
 					control = (True, False)
 				
 				elif mode == 'T':
-					target = max(selection, key=lambda item: item.y)
+					temp_target = max(selection, key=lambda item: item.y)
+					newX = temp_target.x
+					newY = temp_target.y
+					toMaxY = True if modifiers == QtCore.Qt.ShiftModifier else False 
 					control = (False, True)
 				
 				elif mode == 'B':
-					target = min(selection, key=lambda item: item.y)
+					temp_target = min(selection, key=lambda item: item.y)
+					newX = temp_target.x
+					newY = temp_target.y
+					toMaxY = False if modifiers == QtCore.Qt.ShiftModifier else True 
 					control = (False, True)
 				
 				elif mode == 'C':
@@ -640,7 +647,7 @@ class alignNodes(QtGui.QGridLayout):
 
 				else:
 					for node in selection:
-						if 'FontMetrics' in mode:
+						if 'FontMetrics' in mode or mode == 'T' or mode == 'B':
 							if italicAngle != 0 and not self.chk_intercept.isChecked():
 								tempTarget = Coord(node.fl)
 								tempTarget.setAngle(italicAngle)
