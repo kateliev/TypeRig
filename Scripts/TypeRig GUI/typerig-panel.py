@@ -127,7 +127,7 @@ class dlg_LayerSelect(QtGui.QDialog):
 		self.tab_masters.cellChanged.connect(lambda: self.parent_widget.layers_refresh())
 
 		# -- Buttons
-		self.btn_tableCheck = QtGui.QPushButton('Select All')
+		self.btn_tableCheck = QtGui.QPushButton('Refresh')
 		self.btn_tableCheckMasters = QtGui.QPushButton('Masters')
 		self.btn_tableCheckMasks = QtGui.QPushButton('Masks')
 		self.btn_tableCheckServices = QtGui.QPushButton('Services')
@@ -143,7 +143,7 @@ class dlg_LayerSelect(QtGui.QDialog):
 			self.btn_tableCheckMasks.setEnabled(False)
 			self.btn_tableCheckServices.setEnabled(False)
 		
-		self.btn_tableCheck.clicked.connect(lambda: self.table_check_all())
+		#self.btn_tableCheck.clicked.connect(lambda: self.table_check_all())
 		self.btn_tableCheckMasters.clicked.connect(lambda: self.table_check_all('Master'))
 		self.btn_tableCheckMasks.clicked.connect(lambda: self.table_check_all('Mask'))
 		self.btn_tableCheckServices.clicked.connect(lambda: self.table_check_all('Service'))
@@ -166,7 +166,7 @@ class dlg_LayerSelect(QtGui.QDialog):
 
 	# - Table operations
 	def table_check_all(self, layer_type=None):
-		modifiers = QtGui.QApplication.keyboardModifiers() # Listen to Shift - reverses the ratio
+		modifiers = QtGui.QApplication.keyboardModifiers() 
 
 		for row in range(self.tab_masters.rowCount):
 			if modifiers == QtCore.Qt.AltModifier:
