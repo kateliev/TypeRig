@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '1.31'
+app_name, app_version = 'TypeRig | Nodes', '1.32'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -58,7 +58,7 @@ class basicOps(QtGui.QGridLayout):
 		self.btn_trapA.setMinimumWidth(80)
 		self.btn_rebuild.setMinimumWidth(80)
 
-		self.btn_insert.setToolTip('Insert Node after Selection\nat given time T.')
+		self.btn_insert.setToolTip('Insert Node:\n- Click - Insert between selected nodes at given time T;\n- Click + ALT - Insert after each node in selection at given time T.')
 		self.btn_remove.setToolTip('Remove Selected Nodes!\nFor proper curve node deletion\nalso select the associated handles!')
 		self.btn_mitre.setToolTip('Mitre corner using size X.')
 		self.btn_knot.setToolTip('Overlap corner using radius -X.')
@@ -101,25 +101,29 @@ class basicOps(QtGui.QGridLayout):
 		glyph = eGlyph()
 		selection = glyph.selectedAtContours(True)
 		wLayers = glyph._prepareLayers(pLayers)
+		modifiers = QtGui.QApplication.keyboardModifiers()
 
 		# - Get selected nodes. 
 		# - NOTE: Only the fist node in every selected segment is important, so we filter for that
 		selection = glyph.selectedAtContours(True, filterOn=True)
 		selection_dict, selection_filtered = {}, {}
-				
+		
 		for cID, nID in selection:
 			selection_dict.setdefault(cID,[]).append(nID)
+				
+		if modifiers != QtCore.Qt.AltModifier: 
+			for cID, sNodes in selection_dict.items():
+				onNodes = glyph.contours(extend=pContour)[cID].indexOn()
+				segments = zip(onNodes, onNodes[1:] + [onNodes[0]]) # Shift and zip so that we have the last segment working
+				onSelected = []
 
-		for cID, sNodes in selection_dict.items():
-			onNodes = glyph.contours(extend=pContour)[cID].indexOn()
-			segments = zip(onNodes, onNodes[1:] + [onNodes[0]]) # Shift and zip so that we have the last segment working
-			onSelected = []
+				for pair in segments:
+					if pair[0] in sNodes and pair[1] in sNodes:
+						onSelected.append(pair[0] )
 
-			for pair in segments:
-				if pair[0] in sNodes and pair[1] in sNodes:
-					onSelected.append(pair[0] )
-
-			selection_filtered[cID] = onSelected
+				selection_filtered[cID] = onSelected
+		else:
+			selection_filtered = selection_dict
 
 		# - Process
 		for layer in wLayers:
