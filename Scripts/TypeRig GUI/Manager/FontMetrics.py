@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Font Metrics', '0.15'
+app_name, app_version = 'TypeRig | Font Metrics', '0.16'
 
 # - Dependencies -----------------
 import os, json
@@ -52,7 +52,8 @@ class WFontMetrics(QtGui.QWidget):
 		self.grid = QtGui.QGridLayout()
 		self.upperWidget = parentWidget
 		self.activeFont = pFont()
-		self.metricData = {layer:self.activeFont.fontMetrics().asDict(layer) for layer in self.activeFont.masters()}
+		self.metricData = {}
+		self.refresh()
 
 		# - Interface
 		self.btn_apply = QtGui.QPushButton('Apply Changes')
@@ -82,6 +83,12 @@ class WFontMetrics(QtGui.QWidget):
 
 		self.setLayout(self.grid)
 	
+	def refresh(self):
+		for layer in self.activeFont.masters():
+			temp_metrics = self.activeFont.fontMetrics().asDict(layer)
+			temp_metrics.pop('Upm', None)
+			self.metricData[layer] = temp_metrics
+
 	def applyChanges(self):
 		oldMetricData = self.activeFont.fontMetrics()
 		newMetricData = self.tab_fontMetrics.getTable()
