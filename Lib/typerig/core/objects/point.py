@@ -16,7 +16,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.transform import Transform
 
 # - Init -------------------------------
-__version__ = '0.26.4'
+__version__ = '0.26.5'
 
 # - Classes -----------------------------
 class Point(object): 
@@ -200,6 +200,10 @@ class Point(object):
 
 	def __len__(self):
 		return 1
+
+	def __iter__(self):
+		for value in self.tuple:
+			yield value
 
 	# -- Properties
 	@property

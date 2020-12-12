@@ -25,7 +25,7 @@ from typerig.core.objects import Point, Line, CubicBezier
 from typerig.proxy.fl import pGlyph, pFont
 
 # - Init ---------------------------------
-__version__ = '0.1.3'
+__version__ = '0.1.5'
 
 # - Classes ------------------------------
 class altPoint(Point):
@@ -44,11 +44,7 @@ class altPoint(Point):
 
 	def __getitem__(self, index):
 		return self.tuple[index]
-
-	def __iter__(self):
-		for value in self.tuple:
-			yield value
-
+	
 	@property
 	def fgPoint(self):
 		return fgt.fgPoint(self.x, self.y)
@@ -224,7 +220,7 @@ class OutlinePen(BasePen):
 		
 		l00 = Line(self.prevPoint, self.prevPoint + self.pointClass(math.cos(a1), math.sin(a1)) * 100)
 		l01 = Line(p3, p3 + self.pointClass(math.cos(a2), math.sin(a2)) * 100)
-		intersectPoint = self.pointClass(l00.intersect_line(l01))
+		intersectPoint = self.pointClass(l00.intersect_line(l01, True))
 
 		self.innerCurrentPoint = self.prevPoint - self.pointClass(math.cos(a1), math.sin(a1)) * tickness1
 		self.outerCurrentPoint = self.prevPoint + self.pointClass(math.cos(a1), math.sin(a1)) * tickness1
@@ -246,7 +242,7 @@ class OutlinePen(BasePen):
 		if intersectPoint is not None:
 			l10 = Line(self.innerCurrentPoint, self.innerCurrentPoint + self.pointClass(math.cos(a1bis), math.sin(a1bis)) * tickness1)
 			l11 = Line(intersectPoint, p1)
-			h1 = self.pointClass(l10.intersect_line(l11))
+			h1 = self.pointClass(l10.intersect_line(l11, True))
 		
 		if h1 is None:
 			h1 = p1 - self.pointClass(math.cos(a1), math.sin(a1)) * tickness1
@@ -257,7 +253,7 @@ class OutlinePen(BasePen):
 		if intersectPoint is not None:
 			l20 = Line(self.innerCurrentPoint, self.innerCurrentPoint + self.pointClass(math.cos(a2bis), math.sin(a2bis)) * tickness2)
 			l21 = Line(intersectPoint, p2)
-			h2 = self.pointClass(l20.intersect_line(l21))
+			h2 = self.pointClass(l20.intersect_line(l21, True))
 		
 		if h2 is None:
 			h2 = p2 - self.pointClass(math.cos(a1), math.sin(a1)) * tickness1
@@ -270,7 +266,7 @@ class OutlinePen(BasePen):
 		if intersectPoint is not None:
 			l30 = Line(self.outerCurrentPoint, self.outerCurrentPoint + self.pointClass(math.cos(a1bis), math.sin(a1bis)) * tickness1)
 			l31 = Line(intersectPoint, p1)
-			h1 = self.pointClass(l30.intersect_line(l31))
+			h1 = self.pointClass(l30.intersect_line(l31, True))
 
 		if h1 is None:
 			h1 = p1 + self.pointClass(math.cos(a1), math.sin(a1)) * tickness1
@@ -281,7 +277,7 @@ class OutlinePen(BasePen):
 		if intersectPoint is not None:
 			l40 = Line(self.outerCurrentPoint, self.outerCurrentPoint + self.pointClass(math.cos(a2bis), math.sin(a2bis)) * tickness2)
 			l41 = Line(intersectPoint, p2)
-			h2 = self.pointClass(l40.intersect_line(l41))
+			h2 = self.pointClass(l40.intersect_line(l41, True))
 		
 		if h2 is None:
 			h2 = p2 + self.pointClass(math.cos(a1), math.sin(a1)) * tickness1
@@ -374,7 +370,7 @@ class OutlinePen(BasePen):
 
 		l0 = Line(first, tempFirst)
 		l1 = Line(last, tempLast)
-		newPoint = self.pointClass(l0.intersect_line(l1))
+		newPoint = self.pointClass(l0.intersect_line(l1,True))
 
 		if newPoint is not None:
 
@@ -397,7 +393,7 @@ class OutlinePen(BasePen):
 		l0 = Line(first, tempFirst)
 		l1 = Line(last, tempLast)
 
-		centerPoint = self.pointClass(l0.intersect_line(l1))
+		centerPoint = self.pointClass(l0.intersect_line(l1, True))
 
 		if centerPoint is None:
 			# the lines are parallel, let's just take the middle

@@ -19,7 +19,7 @@ from typerig.proxy.fl.objects.base import *
 from typerig.proxy.fl.objects.node import *
 
 # - Init ---------------------------------
-__version__ = '0.26.5'
+__version__ = '0.26.6'
 
 # - Classes -------------------------------
 class pShape(object):
@@ -111,6 +111,10 @@ class pShape(object):
 		return False
 
 	# - Contours, Segmets, Nodes ------------------------------
+	def pointInShape(self, point):
+		'''Performs point in shape test for given point (QPointF)'''
+		return self.fl.contains(point)
+		
 	def segments(self):
 		return self.data().segments
 

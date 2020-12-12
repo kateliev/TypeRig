@@ -13,13 +13,14 @@ from __future__ import print_function
 import math 
 
 import fontlab as fl6
+import fontgate as fgt
 import PythonQt as pqt
 
 from typerig.proxy.fl.objects.base import Coord
 from typerig.proxy.fl.objects.node import pNode
 
 # - Init --------------------------------
-__version__ = '0.26.2'
+__version__ = '0.26.3'
 
 # - Classes -----------------------------
 class pContour(object):
@@ -44,13 +45,7 @@ class pContour(object):
 		self.reversed = self.fl.reversed
 		self.transform = self.fl.transform
 
-		# - Functions
-		self.bounds = lambda : self.fl.bounds # (xMin, yMin, xMax, yMax)
-		self.x = lambda : self.bounds()[0]
-		self.y = lambda : self.bounds()[1]
-		self.width = lambda : self.bounds()[2] - self.bounds()[0]
-		self.height  = lambda : self.bounds()[3] - self.bounds()[1]
-
+		# - Functions/ properties !!! OLD convert to properties!
 		self.selection = lambda : self.fl.selection
 		self.setStart = self.fl.setStartPoint
 		self.segments = self.fl.segments
@@ -60,8 +55,45 @@ class pContour(object):
 		self.shift = lambda dx, dy: self.fl.move(pqt.QtCore.QPointF(dx, dy))
 
 	def __repr__(self):
-		return '<{} ({}, {}) nodes={} ccw={} closed={}>'.format(self.__class__.__name__, self.x(), self.y(), len(self.nodes()), self.isCCW(), self.closed)
+		return '<{} ({}, {}) nodes={} ccw={} closed={}>'.format(self.__class__.__name__, self.x, self.y, len(self.nodes()), self.isCCW(), self.closed)
 
+	# - Properties -----------------------------------------------
+	@property
+	def bounds(self):
+		return self.fl.bounds
+
+	@property
+	def rect(self):
+		return self.fl.boundingBox()
+
+	@property
+	def x(self):
+		return self.bounds[0]
+	
+	@property
+	def y(self):
+		return self.bounds[1]
+
+	@property
+	def width(self):
+		return self.rect.width()
+
+	@property
+	def height(self):
+		return self.rect.height()	
+	
+	@property
+	def center(self):
+		return self.rect.center()
+
+	@property
+	def fg(self):
+		return self.fl.convertToFgContour(self.fl.transform)
+
+	@property
+	def area(self):
+		return self.fg.area()
+	
 	# - Functions ------------------------------------------------
 	def indexOn(self):
 		'''Return list of indexes of all on curve points'''
@@ -102,6 +134,20 @@ class pContour(object):
 	def rotate(self, deg):
 		self.fl.transform = self.fl.transform.rotate(math.tan(math.radians((deg))))
 		self.fl.applyTransform()
+
+	def pointInPolygon(self, point, use_fg=False, winding=False):
+		''' Performs point in polygon test for given point (QPointF)'''
+		if not use_fg:
+			return self.fl.pointInside(point)
+		else:
+			return self.fg.contains(fgt.fgPoint(point.x(), point.y()), winding)
+
+	def contains(self, other):
+		''' Performs point in polygon and polygon in polygon test for given entity (QPointF or flContour)'''
+		if isinstance(other, self.__class__):
+			other = other.fl
+
+		return self.fl.contains(other)
 
 	def draw(self, pen, transform=None):
 		''' Utilizes the Pen protocol'''
