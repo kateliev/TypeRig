@@ -16,6 +16,7 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
+from typerig.core.func.math import linspread
 from typerig.proxy.fl.objects.base import Coord
 from typerig.proxy.fl.objects.node import pNode
 
@@ -172,7 +173,25 @@ class eContour(pContour):
 	def getPrev(self):
 		pass
 
-	# - Align and distribute
+	# - Procedures ----------------------
+	# -- Nodes --------------------------
+	def randomize(self, cx, cy, bleed_mode=0):
+		'''Randomizes the contour node coordinates within given contrains cx and cy.
+		Bleed control trough bleed_mode parameter: 0 - any; 1 - positive bleed; 2 - negative bleed;
+		'''
+		for node in self.nodes():
+			wNode = pNode(node)
+			wNode.randomize(cx, cy, bleed_mode)
+
+	def fragmentize(self, nodes_count, length_threshold):
+		for node in reversed(self.nodes()):
+			wNode = pNode(node)
+			
+			if wNode.distanceToPrev() > length_threshold:
+				for insert in linspread(0,1,nodes_count):
+					self.fl.insertNodeTo(wNode.index - 1 + insert)
+
+	# -- Align and distribute -----------
 	def alignTo(self, entity, alignMode='', align=(True,True)):
 		'''Align current contour.
 		Arguments:

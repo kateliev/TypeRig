@@ -15,13 +15,15 @@ import math
 import fontlab as fl6
 import PythonQt as pqt
 
+from typerig.core.func.math import randomize
+from typerig.core.func.geometry import ccw
 from typerig.proxy.fl.objects.base import *
 #from typerig.proxy.fl.objects.curve import eCurveEx
 #from typerig.proxy.fl.objects.contour import pContour
 #from typerig.proxy.fl.objects.node import pNode, eNode
 
 # - Init ---------------------------------
-__version__ = '0.26.4'
+__version__ = '0.27.0'
 
 # - Classes -------------------------------
 class pNode(object):
@@ -37,18 +39,79 @@ class pNode(object):
 	'''
 	def __init__(self, node):
 		self.fl = node
-		self.parent = self.contour = self.fl.contour
-		self.name = self.fl.name
-		self.index = self.fl.index
-		self.selected = self.fl.selected
 		self.id = self.fl.id
-		self.isOn = self.fl.isOn()
-		self.type = self.fl.type
-		self.x, self.y = float(self.fl.x), float(self.fl.y)
-		self.angle = float(self.fl.angle)
-
+		
 	def __repr__(self):
 		return '<{} ({}, {}) index={} time={} on={}>'.format(self.__class__.__name__, self.x, self.y, self.index, self.getTime(), self.isOn)
+	
+	# - Properties -------------------------------------------
+	@property
+	def parent(self):
+		return self.fl.contour
+
+	@property
+	def contour(self):
+		return self.fl.contour
+
+	@property
+	def name(self):
+		return self.fl.name
+
+	@name.setter
+	def name(self, value):
+		self.fl.name = str(value)
+
+	@property
+	def index(self):
+		return self.fl.index
+
+	@index.setter
+	def index(self, value):
+		self.fl.index = int(value)
+
+	@property
+	def type(self):
+		return self.fl.type
+
+	@type.setter
+	def type(self, value):
+		self.fl.type = value
+
+	@property
+	def x(self):
+		return float(self.fl.x)
+	
+	@x.setter
+	def x(self, value):
+		self.fl.x = value
+
+	@property
+	def y(self):
+		return float(self.fl.y)
+
+	@y.setter
+	def y(self, value):
+		self.fl.y = value
+
+	@property
+	def angle(self):
+		return float(self.fl.angle)
+
+	@property
+	def tuple(self):
+		return (self.x, self.y)
+	
+	@property
+	def selected(self):
+		return self.fl.selected
+
+	@property
+	def isOn(self):
+		return self.fl.isOn()
+
+	@property
+	def ccw(self):
+		return ccw(self.getPrevOn(False).tuple, self.tuple, self.getNextOn(False).tuple)
 	
 	# - Basics -----------------------------------------------
 	def getTime(self):
@@ -187,6 +250,17 @@ class pNode(object):
 				if mode: node.shift(deltaX, deltaY)
 		else:
 			self.shift(deltaX, deltaY)
+
+	def randomize(self, cx, cy, bleed_mode=0):
+		'''Randomizes the node coordinates within given contrains cx and cy.
+		Bleed control trough bleed_mode parameter: 0 - any; 1 - positive bleed; 2 - negative bleed;
+		'''
+		shiftX, shiftY = randomize(0, cx), randomize(0, cy)
+		self.smartShift(shiftX, shiftY)
+		
+		if bleed_mode > 0:
+			if (bleed_mode == 2 and not self.ccw) or (bleed_mode == 1 and self.ccw):
+				self.smartShift(-shiftX, -shiftY)		
 
 	# - Effects --------------------------------
 	def getSmartAngle(self):
