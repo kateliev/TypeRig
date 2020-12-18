@@ -42,7 +42,7 @@ class pNode(object):
 		self.id = self.fl.id
 		
 	def __repr__(self):
-		return '<{} ({}, {}) index={} time={} on={}>'.format(self.__class__.__name__, self.x, self.y, self.index, self.getTime(), self.isOn)
+		return '<{} ({}, {}) index={} time={} on={}>'.format(self.__class__.__name__, self.x, self.y, self.index, self.time, self.isOn)
 	
 	# - Properties -------------------------------------------
 	@property
@@ -61,6 +61,10 @@ class pNode(object):
 	def name(self, value):
 		self.fl.name = str(value)
 
+	@property
+	def time(self):
+		return self.getTime()
+	
 	@property
 	def index(self):
 		return self.fl.index

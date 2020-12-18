@@ -21,7 +21,7 @@ from typerig.proxy.fl.objects.base import Coord
 from typerig.proxy.fl.objects.node import pNode
 
 # - Init --------------------------------
-__version__ = '0.26.3'
+__version__ = '0.26.8'
 
 # - Classes -----------------------------
 class pContour(object):
@@ -175,21 +175,52 @@ class eContour(pContour):
 
 	# - Procedures ----------------------
 	# -- Nodes --------------------------
-	def randomize(self, cx, cy, bleed_mode=0):
+	def randomize(self, cx, cy, bleedMode=0):
 		'''Randomizes the contour node coordinates within given contrains cx and cy.
-		Bleed control trough bleed_mode parameter: 0 - any; 1 - positive bleed; 2 - negative bleed;
+		Bleed control trough bleedMode parameter: 0 - any; 1 - positive bleed; 2 - negative bleed;
 		'''
 		for node in self.nodes():
 			wNode = pNode(node)
-			wNode.randomize(cx, cy, bleed_mode)
+			wNode.randomize(cx, cy, bleedMode)
 
-	def fragmentize(self, nodes_count, length_threshold):
-		for node in reversed(self.nodes()):
-			wNode = pNode(node)
+	def fragmentize(self, countOrLength, lengthThreshold, lengthMode=False, processIndexes=[]):
+		'''Split contour in multiple fragments:
+		Args:
+			countOrLength (int): Number of nodes to insert or length of the resulting segment.
+			lengthThreshold (int/float): Minimum distances threshold for processing. Segments below will be skipped.
+			lengthMode (bool): Controls countOrLength. False = insert a specified number of nodes; True = split into segments of specified length.
+			processIndexes (list(int)): Specify node indexes to be processed. If empty - process whole contour.
+
+		Returns:
+			None
+		'''
+		if len(processIndexes):
+			process_nodes = [pNode(self.nodes()[nid]) for nid in processIndexes]
+		else:
+			process_nodes = [pNode(node) for node in self.nodes() if node.isOn()]
+
+		while len(process_nodes):
+			wNode = process_nodes.pop(0)
+			distance_to_next = wNode.distanceTo(wNode.getNextOn())
 			
-			if wNode.distanceToPrev() > length_threshold:
-				for insert in linspread(0,1,nodes_count):
-					self.fl.insertNodeTo(wNode.index - 1 + insert)
+			if distance_to_next > lengthThreshold:
+				if lengthMode:
+					insertNodesCount = int(distance_to_next/float(countOrLength))
+				else:
+					insertNodesCount = countOrLength
+
+				for insert in range(insertNodesCount):
+					self.fl.insertNodeTo(1 + wNode.time - 1/float(insertNodesCount - insert + 1))
+
+	def linearize(self):
+		'''Convert curves to lines'''
+		for node in self.nodes():
+			node.convertToLine()
+
+	def curverize(self, smooth=True):
+		'''Convert curves to lines'''
+		for node in self.nodes():
+			node.convertToCurve(smooth)
 
 	# -- Align and distribute -----------
 	def alignTo(self, entity, alignMode='', align=(True,True)):
