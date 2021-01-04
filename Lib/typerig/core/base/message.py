@@ -19,6 +19,7 @@ import os, warnings
 __version__ = '0.0.2'
 
 # - Strings --------------------------
+# --------------> 	0		1		2		3		4		5		6		7		8		9
 output_types = ['DONE', 'WARN', 'ERROR', 'ABORT', 'ADD', 'DEL', 'LOAD', 'SAVE', 'IMPORT', 'EXPORT']
 
 # - Functions ------------------------
@@ -31,6 +32,9 @@ def warning_custom(message, category, filename, lineno, file=None, line=None):
 # - Warnings -------------------------
 # -- Font related --------------------
 class NodeWarning(UserWarning):
+	pass
+
+class ElementWarning(UserWarning):
 	pass
 
 class ContourWarning(UserWarning):

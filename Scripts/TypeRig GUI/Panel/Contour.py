@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '0.26'
+app_name, app_version = 'TypeRig | Contour', '0.28'
 
 # - Dependencies -----------------
 from collections import OrderedDict
@@ -21,6 +21,7 @@ import fontlab as fl6
 import fontgate as fgt
 
 from typerig.proxy.fl import *
+from typerig.core.base.message import *
 
 from PythonQt import QtCore
 from typerig.gui import QtGui
@@ -270,7 +271,16 @@ class alignContours(QtGui.QGridLayout):
 		# - Init
 		self.align_x = OrderedDict([('Left','L'), ('Right','R'), ('Center','C'), ('Keep','K')])
 		self.align_y = OrderedDict([('Top','T'), ('Bottom','B'), ('Center','E'), ('Keep','X')])
-		self.align_mode = OrderedDict([('Layer','CL'), ('Contour to Contour','CC'), ('Contour to Contour (REV)','RC'), ('Contour to Node','CN'), ('Contour to Node (REV)','RN')])
+		self.align_mode = OrderedDict([	('Layer','CL'), 
+										('Base to X-Height','CMX'),
+										('Base to Caps','CMC'),
+										('Base Ascender','CMA'),
+										('Descender to Base','CMD'),
+										('Contour to Contour','CC'),
+										('Contour to Contour (REV)','RC'),
+										('Contour to Node','CN'),
+										('Contour to Node (REV)','RN')
+									])
 		
 		# !!! To be implemented
 		#self.align_mode = OrderedDict([('Layer','CL'), ('Contour to Contour','CC'), ('Contour to Contour (REV)','RC'), ('Contour to Node','CN'),('Node to Node','NN')])
@@ -333,16 +343,7 @@ class alignContours(QtGui.QGridLayout):
 				glyph_contours = glyph.contours(layerName, extend=eContour)
 				work_contours = [glyph_contours[index] for index in list(set([item[0] for item in selection]))]
 				
-				if user_mode == 'CL': # Align all contours in given Layer
-					layer_bounds = glyph.getBounds(layerName)
-					cont_bounds = (layer_bounds.x(), layer_bounds.y(), layer_bounds.x() + layer_bounds.width(), layer_bounds.y() + layer_bounds.height())
-					align_type = getAlignDict(cont_bounds)
-					target = Coord(align_type[user_x], align_type[user_y])
-
-					for contour in glyph_contours:
-						contour.alignTo(target, user_x + user_y, (keep_x, keep_y))					
-
-				elif user_mode =='CC': # Align contours to contours
+				if user_mode =='CC': # Align contours to contours
 					if 1 < len(work_contours) < 3:
 						c1, c2 = work_contours
 						c1.alignTo(c2, user_x + user_y, (keep_x, keep_y))
@@ -387,6 +388,35 @@ class alignContours(QtGui.QGridLayout):
 
 				elif user_mode == 'NN': # Align a node on contour to node on another
 					pass
+
+				else:
+					metrics = pFontMetrics(glyph.package)
+					layer_bounds = glyph.getBounds(layerName)
+
+					if user_mode == 'CL': # Align all contours in given Layer
+						cont_bounds = (layer_bounds.x(), layer_bounds.y(), layer_bounds.x() + layer_bounds.width(), layer_bounds.y() + layer_bounds.height())
+					
+					elif user_mode == 'CMX': # Align all contours to X height
+						height = metrics.getXHeight(layerName)
+						cont_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
+
+					elif user_mode == 'CMC': # Align all contours to Caps height
+						height = metrics.getCapsHeight(layerName)
+						cont_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
+
+					elif user_mode == 'CMA': # Align all contours to Ascender height
+						height = metrics.getAscender(layerName)
+						cont_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
+
+					elif user_mode == 'CMD': # Align all contours to Ascender height
+						height = metrics.getDescender(layerName)
+						cont_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
+
+					align_type = getAlignDict(cont_bounds)
+					target = Coord(align_type[user_x], align_type[user_y])					
+
+					for contour in work_contours:
+						contour.alignTo(target, user_x + user_y, (keep_x, keep_y))
 
 			glyph.update()
 			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Align Contours @ %s.' %(glyph.name, '; '.join(wLayers)))

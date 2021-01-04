@@ -21,7 +21,7 @@ from typerig.proxy.fl.objects.base import Coord
 from typerig.proxy.fl.objects.node import pNode
 
 # - Init --------------------------------
-__version__ = '0.26.8'
+__version__ = '0.26.9'
 
 # - Classes -----------------------------
 class pContour(object):
@@ -231,12 +231,12 @@ class eContour(pContour):
 		'''
 		# - Helper
 		def getAlignDict(item):
-			align_dict = {	'L': item.x(), 
-							'R': item.x() + item.width(), 
-							'C': item.x() + item.width()/2,
-							'B': item.y(), 
-							'T': item.y() + item.height(), 
-							'E': item.y() + item.height()/2
+			align_dict = {	'L': item.x, 
+							'R': item.x + item.width, 
+							'C': item.x + item.width/2,
+							'B': item.y, 
+							'T': item.y + item.height, 
+							'E': item.y + item.height/2
 						}
 
 			return align_dict

@@ -16,6 +16,7 @@ import fontlab as fl6
 import fontgate as fgt
 
 from typerig.proxy.fl import *
+from typerig.core.base.message import *
 
 from PythonQt import QtCore
 from typerig.gui import QtGui
@@ -45,7 +46,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '0.32'
+app_name, app_version = 'TypeRig | Elements', '0.34'
 
 # - Strings ------------------------------
 str_help = '''Examples:
@@ -255,7 +256,6 @@ class basicOps(QtGui.QGridLayout):
 			process_layers = glyph._prepareLayers(pLayers)
 
 			for layer in process_layers:
-				#print glyph.selectedAtShapes(index=False, layer=layer, deep=False)
 				wShape = pShape(glyph.selectedAtShapes(index=False, layer=layer, deep=False)[0][0])
 				wShape.setName(self.edt_shapeName.text)
 
@@ -299,7 +299,13 @@ class alignShapes(QtGui.QGridLayout):
 		# - Init
 		self.align_x = OrderedDict([('Left','L'), ('Right','R'), ('Center','C'), ('Keep','K')])
 		self.align_y = OrderedDict([('Top','T'), ('Bottom','B'), ('Center','E'), ('Keep','X')])
-		self.align_mode = OrderedDict([('Layer','CL'), ('Shape to Shape','CC'), ('Shape to Shape (REV)','RC')])
+		self.align_mode = OrderedDict([	('Layer','CL'), 
+										('Base to X-Height','CMX'),
+										('Base to Caps','CMC'),
+										('Base Ascender','CMA'),
+										('Descender to Base','CMD'),
+										('Shape to Shape','CC'), 
+										('Shape to Shape (REV)','RC')])
 		
 		# !!! To be implemented
 		#self.align_mode = OrderedDict([('Layer','CL'), ('Shape to Shape','CC'), ('Shape to Shape (REV)','RC'), ('Shape to Node','CN'),('Node to Node','NN')])
@@ -362,16 +368,7 @@ class alignShapes(QtGui.QGridLayout):
 				glyph_shapes = glyph.shapes(layerName, extend=eShape)
 				work_shapes = [glyph_shapes[index] for index in list(set([item[0] for item in selection]))]
 				
-				if user_mode == 'CL': # Align all shapes in given Layer
-					layer_bounds = glyph.getBounds(layerName)
-					shape_bounds = (layer_bounds.x(), layer_bounds.y(), layer_bounds.x() + layer_bounds.width(), layer_bounds.y() + layer_bounds.height())
-					align_type = getAlignDict(shape_bounds)
-					target = Coord(align_type[user_x], align_type[user_y])
-
-					for shape in glyph_shapes:
-						shape.alignTo(target, user_x + user_y, (keep_x, keep_y))					
-
-				elif user_mode =='CC': # Align shapes to shapes
+				if user_mode =='CC': # Align shapes to shapes
 					if 1 < len(work_shapes) < 3:
 						sh1, sh2 = work_shapes
 						sh1.alignTo(sh2, user_x + user_y, (keep_x, keep_y))
@@ -403,6 +400,35 @@ class alignShapes(QtGui.QGridLayout):
 
 				elif user_mode == 'NN': # Align a node on shape to node on another
 					pass
+
+				else:
+					metrics = pFontMetrics(glyph.package)
+					layer_bounds = glyph.getBounds(layerName)
+					
+					if user_mode == 'CL': # Align all shapes in given Layer
+						shape_bounds = (layer_bounds.x(), layer_bounds.y(), layer_bounds.x() + layer_bounds.width(), layer_bounds.y() + layer_bounds.height())
+					
+					elif user_mode == 'CMX': # Align all shapes to X height
+						height = metrics.getXHeight(layerName)
+						shape_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
+
+					elif user_mode == 'CMC': # Align all shapes to Caps height
+						height = metrics.getCapsHeight(layerName)
+						shape_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
+
+					elif user_mode == 'CMA': # Align all shapes to Ascender height
+						height = metrics.getAscender(layerName)
+						shape_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
+
+					elif user_mode == 'CMD': # Align all shapes to Ascender height
+						height = metrics.getDescender(layerName)
+						shape_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
+
+					align_type = getAlignDict(shape_bounds)
+					target = Coord(align_type[user_x], align_type[user_y])
+
+					for shape in glyph_shapes:
+						shape.alignTo(target, user_x + user_y, (keep_x, keep_y))	
 
 			glyph.update()
 			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Align Shapes @ %s.' %(glyph.name, '; '.join(wLayers)))
@@ -458,7 +484,7 @@ class glyphComposer(QtGui.QGridLayout):
 			with open(fname, 'r') as importFile:
 				self.txt_editor.setPlainText(importFile.read().decode('utf8'))			
 
-			print 'LOAD:\t Font:%s; Expressions loaded from: %s.' %(self.active_font.name, fname)
+			output(6, app_name, 'Font:%s; Expressions loaded from: %s.' %(self.active_font.name, fname))
 
 	def expr_toFile(self):
 		self.active_font = pFont()
@@ -469,7 +495,7 @@ class glyphComposer(QtGui.QGridLayout):
 			with open(fname, 'w') as importFile:
 				importFile.writelines(self.txt_editor.toPlainText().encode('utf-8'))
 
-			print 'SAVE:\t Font:%s; Expressions saved to: %s.' %(self.active_font.name, fname)
+			output(7, app_name, 'Font:%s; Expressions saved to: %s.' %(self.active_font.name, fname))
 
 	def populate_shapes(self):
 		self.active_font = pFont()
@@ -495,7 +521,7 @@ class glyphComposer(QtGui.QGridLayout):
 				if insert_shape is not None:
 					glyph.addShape(insert_shape, layer)
 				else:
-					print 'ERROR:\t Glyph: %s\tElement: %s not found @Layer: %s' %(glyph.name, insert_shape_name,layer)
+					output(2, app_name, 'Glyph: %s\tElement: %s not found @Layer: %s' %(glyph.name, insert_shape_name,layer))
 
 			glyph.update()
 			glyph.updateObject(glyph.fl, 'Glyph: %s;\tInsert Element:%s @ %s.' %(glyph.name, insert_shape_name,'; '.join(process_layers)))
@@ -516,7 +542,7 @@ class glyphComposer(QtGui.QGridLayout):
 					if replace_shape is not None:
 						process_shapes_dict[layer] = (selected_shape, replace_shape, selected_shape.transform)
 					else:
-						print 'ERROR:\t Glyph: %s\tElement: %s not found @Layer: %s' %(glyph.name, replace_shape_name,layer)
+						output(2, app_name, 'Glyph: %s\tElement: %s not found @Layer: %s' %(glyph.name, insert_shape_name,layer))
 
 			for layer, shape_triple in process_shapes_dict.items():
 					replace_shape.transform =  shape_triple[2] # Apply transform
@@ -549,7 +575,7 @@ class glyphComposer(QtGui.QGridLayout):
 					w_layer = w_layer.strip()
 				
 				else: 
-					print 'ERROR:\tInvalid syntax! Skipping Line: %s\n' %line
+					output(2, app_name, 'Invalid syntax! Skipping Line: %s\n' %line)
 					continue
 
 				# - Set basics
@@ -609,7 +635,7 @@ class glyphComposer(QtGui.QGridLayout):
 										w_shape = self.active_font.findShape(insert_name, layer)
 										insert_origin = Coord(0,0)
 								else:
-									print 'ERROR:\tInvalid command! Skipping insertion command: %s\n' %insert
+									output(2, app_name, 'Invalid command! Skipping insertion command: %s\n' %insert)
 									continue
 
 								# -- In-glyph positioning
@@ -652,7 +678,7 @@ class glyphComposer(QtGui.QGridLayout):
 											insert_correction = Coord((0,0))
 
 									if insert_position is None: 
-										print 'ERROR:\tInvalid positional tags! Skipping insertion command: %s\n' %insert
+										output(2, app_name, 'Invalid positional tags! Skipping insertion command: %s\n' %insert)
 										continue
 
 									# - Set insertion coordinates	
@@ -673,15 +699,12 @@ class glyphComposer(QtGui.QGridLayout):
 								new_shape.transform = new_transform
 								
 								w_glyph.update()
-								#print 'New: %s; Insert: %s; Origin: %s' %(new_position, insert_coord, insert_origin)
 
 					# - Finish
 					w_glyph.updateObject(w_glyph.fl, 'Shapes inserted to glyph: %s' %w_glyph.name)
 
-			print 'DONE:\t Glyphs processed: %s' %' '.join(dst_store)
+			output(0, app_name, 'Glyphs processed: %s' %' '.join(dst_store))
 				
-		print 'Done.'
-
 class shapeMovement(QtGui.QVBoxLayout):
 	def __init__(self):
 		super(shapeMovement, self).__init__()
