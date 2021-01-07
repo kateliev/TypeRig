@@ -14,10 +14,12 @@ import fontlab as fl6
 import fontgate as fgt
 
 from typerig.proxy.fl import *
+from typerig.core.base.message import *
 
 from PythonQt import QtCore
 from typerig.gui import QtGui
-from typerig.gui.widgets import getProcessGlyphs
+from typerig.gui.widgets import getProcessGlyphs, TRCollapsibleBox
+
 
 # - Init
 global pLayers
@@ -26,7 +28,7 @@ global clipboard_glyph_anchors
 pLayers = None
 pMode = 0
 clipboard_glyph_anchors = {}
-app_name, app_version = 'TypeRig | Anchors', '1.20'
+app_name, app_version = 'TypeRig | Anchors', '2.00'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):
@@ -144,8 +146,6 @@ class TRLayerSelect(QtGui.QVBoxLayout):
 		
 		# -- Tree view
 		self.tree_anchors = TRWAnchorTree(self.data, self.header_names)
-		self.tree_anchors.setMinimumHeight(400)
-		
 		self.addWidget(self.tree_anchors)
 
 	def refresh(self):
@@ -160,18 +160,18 @@ class TRLayerSelect(QtGui.QVBoxLayout):
 
 	def doCheck(self):
 		if self.glyph.fg.id != fl6.CurrentGlyph().id and self.glyph.fl.name != fl6.CurrentGlyph().name:
-			print '\nERRO:\tGlyph mismatch:\n\tCurrent active glyph: %s\n\tLayers panel glyph: %s' %(fl6.CurrentGlyph(), self.glyph.fg)
-			print 'WARN:\tNo action taken! Forcing refresh!' 
+			warnings.warn('Glyph mismatch! No action taken! Forcing refresh!', GlyphWarning)
 			self.refresh()
 			return 0
 		return 1
 
-class TRAnchorBasic(QtGui.QVBoxLayout):
-	def __init__(self, aux):
-		super(TRAnchorBasic, self).__init__()
+class tool_tab(QtGui.QWidget):
+	def __init__(self):
+		super(tool_tab, self).__init__()
 
 		# - Init
-		self.aux = aux
+		self.anchorSelector = TRLayerSelect()
+
 		self.types = 'Anchor PinPoint'.split(' ')
 		self.posY = 'Coord, Expression, Keep, Shift, Above, Below, Center, Baseline, Center of mass'.split(', ')
 		self.posX = 'Coord, Expression, Keep, Shift, Left, Right, Center, Highest, Highest Left, Highest Right, Lowest, Lowest Left, Lowest Right, Center of mass'.split(', ')
@@ -233,91 +233,104 @@ class TRAnchorBasic(QtGui.QVBoxLayout):
 		self.btn_anchorPaste.clicked.connect(lambda: self.copyAnchors(True))
 		self.btn_anchorSuffix.clicked.connect(lambda: self.renameAnchors(False))
 		self.btn_anchorRename.clicked.connect(lambda: self.renameAnchors(True))
-		self.aux.tree_anchors.itemChanged.connect(self.processChange)
+		self.anchorSelector.tree_anchors.itemChanged.connect(self.processChange)
 
 		# - Build layout
-		self.lay_grid = QtGui.QGridLayout()
-		self.lay_grid.addWidget(QtGui.QLabel('Anchor tree actions:'), 	0, 0, 1, 4)
-		self.lay_grid.addWidget(self.btn_anchorCopy, 				1, 0, 1, 4) 
-		self.lay_grid.addWidget(self.btn_anchorPaste, 				1, 4, 1, 4)
-		self.lay_grid.addWidget(self.btn_clearSel, 					2, 0, 1, 4) 
-		self.lay_grid.addWidget(self.btn_clearAll, 					2, 4, 1, 4)
-		self.lay_grid.addWidget(QtGui.QLabel('\nAdd/move anchor:'),	3, 0, 1, 4)
-		self.lay_grid.addWidget(QtGui.QLabel('N:'),					4, 0, 1, 1)
-		self.lay_grid.addWidget(self.edt_anchorName, 				4, 1, 1, 3)
-		self.lay_grid.addWidget(self.cmb_type, 						4, 4, 1, 4)
-		self.lay_grid.addWidget(QtGui.QLabel('X:'),					5, 0, 1, 1)
-		self.lay_grid.addWidget(self.cmb_posX, 						5, 1, 1, 3)
-		self.lay_grid.addWidget(self.edt_simpleX, 					5, 4, 1, 4)
-		self.lay_grid.addWidget(QtGui.QLabel('Y:'),					6, 0, 1, 1)
-		self.lay_grid.addWidget(self.cmb_posY,						6, 1, 1, 3)
-		self.lay_grid.addWidget(self.edt_simpleY, 					6, 4, 1, 4)
-		self.lay_grid.addWidget(QtGui.QLabel('Tolerance:'),			7, 1, 1, 2)
-		self.lay_grid.addWidget(self.edt_autoT, 					7, 3, 1, 1)
-		self.lay_grid.addWidget(self.chk_italic,					7, 4, 1, 1)		
-		self.lay_grid.addWidget(self.btn_anchorAdd, 				8, 0, 1, 4)
-		self.lay_grid.addWidget(self.btn_anchorMov, 				8, 4, 1, 4)
-		self.lay_grid.addWidget(self.btn_anchorRename, 				9, 0, 1, 4)
-		self.lay_grid.addWidget(self.btn_anchorSuffix, 				9, 4, 1, 4)
+		layoutV = QtGui.QVBoxLayout()
+		layoutV.addLayout(self.anchorSelector)
 
-		# - Build
-		self.addLayout(self.lay_grid)
+		self.fld_actions = TRCollapsibleBox('Anchor actions:')
+		lay_actions = QtGui.QGridLayout()
+		
+		lay_actions.addWidget(self.btn_anchorCopy, 				0, 0, 1, 4) 
+		lay_actions.addWidget(self.btn_anchorPaste, 			0, 4, 1, 4)
+		lay_actions.addWidget(self.btn_clearSel, 				1, 0, 1, 4) 
+		lay_actions.addWidget(self.btn_clearAll, 				1, 4, 1, 4)
+
+		self.fld_actions.setContentLayout(lay_actions)
+		layoutV.addWidget(self.fld_actions)
+
+		self.fld_addmod = TRCollapsibleBox('Add/Move anchor:')
+		lay_addmod = QtGui.QGridLayout()
+		
+		lay_addmod.addWidget(QtGui.QLabel('N:'),				0, 0, 1, 1)
+		lay_addmod.addWidget(self.edt_anchorName, 				0, 1, 1, 3)
+		lay_addmod.addWidget(self.cmb_type, 					0, 4, 1, 4)
+		lay_addmod.addWidget(QtGui.QLabel('X:'),				1, 0, 1, 1)
+		lay_addmod.addWidget(self.cmb_posX, 					1, 1, 1, 3)
+		lay_addmod.addWidget(self.edt_simpleX, 					1, 4, 1, 4)
+		lay_addmod.addWidget(QtGui.QLabel('Y:'),				2, 0, 1, 1)
+		lay_addmod.addWidget(self.cmb_posY,						2, 1, 1, 3)
+		lay_addmod.addWidget(self.edt_simpleY, 					2, 4, 1, 4)
+		lay_addmod.addWidget(QtGui.QLabel('Tolerance:'),		3, 1, 1, 2)
+		lay_addmod.addWidget(self.edt_autoT, 					3, 3, 1, 1)
+		lay_addmod.addWidget(self.chk_italic,					3, 4, 1, 1)		
+		lay_addmod.addWidget(self.btn_anchorAdd, 				4, 0, 1, 4)
+		lay_addmod.addWidget(self.btn_anchorMov, 				4, 4, 1, 4)
+		lay_addmod.addWidget(self.btn_anchorRename, 			5, 0, 1, 4)
+		lay_addmod.addWidget(self.btn_anchorSuffix, 			5, 4, 1, 4)
+
+		self.fld_addmod.setContentLayout(lay_addmod)
+		layoutV.addWidget(self.fld_addmod)
+
+		# - Finish
+		self.setLayout(layoutV)
+		self.setMinimumSize(300, self.sizeHint.height())
 
 	# -- Procedures --------------------------
 	def processChange(self, item):
 		update = False
 		parent = item.parent()
 		change_index = parent.indexOfChild(item)
-		data_dict = OrderedDict(reversed(self.aux.data))
+		data_dict = OrderedDict(reversed(self.anchorSelector.data))
 
 		layer_name = parent.text(0)
 		old_name, old_x, old_y, old_x_expr, old_y_expr = data_dict[layer_name][change_index]
 		anchor_name, x, y, x_expr, y_expr = item.text(0), int(item.text(1)), int(item.text(2)), item.text(3), item.text(4)
 
 		if anchor_name != old_name:
-			self.aux.glyph.layer(layer_name).findAnchor(old_name).name = anchor_name
+			self.anchorSelector.glyph.layer(layer_name).findAnchor(old_name).name = anchor_name
 			update = True
 
 		if x != old_x or y != old_y:
-			self.aux.glyph.moveAnchor(anchor_name, layer_name, (x, y), (None, None), 5, False)
+			self.anchorSelector.glyph.moveAnchor(anchor_name, layer_name, (x, y), (None, None), 5, False)
 			update = True
 
 		if x_expr != old_x_expr or y_expr != old_y_expr:
-			self.aux.glyph.exprAnchor(anchor_name, layer_name, x_expr, y_expr)
+			self.anchorSelector.glyph.exprAnchor(anchor_name, layer_name, x_expr, y_expr)
 			update = True
 
 		if update:
-			self.aux.glyph.update()
-			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Change anchor: %s @ %s.' %(anchor_name, layer_name))
-			self.aux.refresh()
+			self.anchorSelector.glyph.update()
+			self.anchorSelector.glyph.updateObject(self.anchorSelector.glyph.fl, 'Change anchor: %s @ %s.' %(anchor_name, layer_name))
+			self.anchorSelector.refresh()
 		
 	def clearAnchors(self, clearAll=False):
-		wLayers = self.aux.glyph._prepareLayers(pLayers)
+		wLayers = self.anchorSelector.glyph._prepareLayers(pLayers)
 
-		if self.aux.doCheck():			
+		if self.anchorSelector.doCheck():			
 			if clearAll:
 				for layer in wLayers:
-					self.aux.glyph.clearAnchors(layer)
+					self.anchorSelector.glyph.clearAnchors(layer)
 
 			else:
-				for item in self.aux.tree_anchors.selectedItems():
+				for item in self.anchorSelector.tree_anchors.selectedItems():
 					cAnchorName = item.text(0)
 					cLayerName = item.parent().text(0)
 					
-					findAnchor = self.aux.glyph.layer(cLayerName).findAnchor(cAnchorName)
+					findAnchor = self.anchorSelector.glyph.layer(cLayerName).findAnchor(cAnchorName)
 										
 					if findAnchor is not None:
-						 self.aux.glyph.layer(cLayerName).removeAnchor(findAnchor)
+						 self.anchorSelector.glyph.layer(cLayerName).removeAnchor(findAnchor)
 
-
-			self.aux.glyph.updateObject(self.aux.glyph.fl, 'Clear anchors: %s.' %'; '.join(wLayers))
-			self.aux.glyph.update()
-			self.aux.refresh()
+			self.anchorSelector.glyph.updateObject(self.anchorSelector.glyph.fl, 'Clear anchors: %s.' %'; '.join(wLayers))
+			self.anchorSelector.glyph.update()
+			self.anchorSelector.refresh()
 
 	def addAnchors(self, move=False):
-		wLayers = self.aux.glyph._prepareLayers(pLayers)
+		wLayers = self.anchorSelector.glyph._prepareLayers(pLayers)
 
-		if self.aux.doCheck():			
+		if self.anchorSelector.doCheck():			
 			update = False
 
 			# - Build coordinates for every layer
@@ -328,39 +341,43 @@ class TRAnchorBasic(QtGui.QVBoxLayout):
 			autoTolerance = int(self.edt_autoT.text)
 
 			for layer in wLayers:
-				offsetX = int(x_coord[wLayers.index(layer)]) if self.cmb_posX.currentText != 'Expression' else 0
-				offsetY = int(y_coord[wLayers.index(layer)]) if self.cmb_posY.currentText != 'Expression' else 0
+				try:
+					offsetX = int(x_coord[wLayers.index(layer)]) if self.cmb_posX.currentText != 'Expression' else 0
+					offsetY = int(y_coord[wLayers.index(layer)]) if self.cmb_posY.currentText != 'Expression' else 0
+				
+				except ValueError:
+					offsetX = 0
+					offsetY = 0
 
 				if not move:
 					if len(self.edt_anchorName.text):
-						self.aux.glyph.dropAnchor(self.edt_anchorName.text, layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, self.chk_italic.isChecked())
+						self.anchorSelector.glyph.dropAnchor(self.edt_anchorName.text, layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, self.chk_italic.isChecked())
 					
 					if self.cmb_posX.currentText == 'Expression' or self.cmb_posY.currentText == 'Expression':
-						self.aux.glyph.exprAnchor(self.edt_anchorName.text, layer, x_coord[wLayers.index(layer)], y_coord[wLayers.index(layer)])
+						self.anchorSelector.glyph.exprAnchor(self.edt_anchorName.text, layer, x_coord[wLayers.index(layer)], y_coord[wLayers.index(layer)])
 					
 						update = True
 				else:
-					cmb_sel = self.aux.tree_anchors.selectedItems()
+					cmb_sel = self.anchorSelector.tree_anchors.selectedItems()
 
 					if len(cmb_sel):
-						self.aux.glyph.moveAnchor(cmb_sel[0].text(0), layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, self.chk_italic.isChecked())
+						self.anchorSelector.glyph.moveAnchor(cmb_sel[0].text(0), layer, (offsetX, offsetY), (self.posXctrl[self.cmb_posX.currentText], self.posYctrl[self.cmb_posY.currentText]), autoTolerance, self.chk_italic.isChecked())
 						
 						if self.cmb_posX.currentText == 'Expression' or self.cmb_posX.currentText == 'Expression':
-							self.aux.glyph.exprAnchor(cmb_sel[0].text(0), layer, x_coord[wLayers.index(layer)], y_coord[wLayers.index(layer)])
+							self.anchorSelector.glyph.exprAnchor(cmb_sel[0].text(0), layer, x_coord[wLayers.index(layer)], y_coord[wLayers.index(layer)])
 
 						update = True
 
-
 			if update:
-				self.aux.glyph.updateObject(self.aux.glyph.fl, '%s anchors: %s.' %('Add' if not move else 'Move', '; '.join(wLayers)))
-				self.aux.glyph.update()
-				self.aux.refresh()
+				self.anchorSelector.glyph.updateObject(self.anchorSelector.glyph.fl, '%s anchors: %s.' %('Add' if not move else 'Move', '; '.join(wLayers)))
+				self.anchorSelector.glyph.update()
+				self.anchorSelector.refresh()
 
 	def copyAnchors(self, paste=False):
 		global clipboard_glyph_anchors
-		wLayers = self.aux.glyph._prepareLayers(pLayers)
+		wLayers = self.anchorSelector.glyph._prepareLayers(pLayers)
 
-		if self.aux.doCheck():			
+		if self.anchorSelector.doCheck():			
 			if not paste:
 				update = False
 				clipboard_glyph_anchors = {}
@@ -368,12 +385,12 @@ class TRAnchorBasic(QtGui.QVBoxLayout):
 				for layer in wLayers:
 					clipboard_glyph_anchors[layer] = []
 
-					for anchor_name in self.aux.tree_anchors.selectedItems():
-						anchor_obj = self.aux.glyph.findAnchor(anchor_name.text(0), layer)
+					for anchor_name in self.anchorSelector.tree_anchors.selectedItems():
+						anchor_obj = self.anchorSelector.glyph.findAnchor(anchor_name.text(0), layer)
 
 						if anchor_obj is not None:
 							clipboard_glyph_anchors[layer].append((anchor_name.text(0), (anchor_obj.point.x(), anchor_obj.point.y()), (anchor_obj.expressionX, anchor_obj.expressionY)))
-				print clipboard_glyph_anchors
+				
 			else:
 				if len(clipboard_glyph_anchors.keys()):
 					update = True
@@ -381,62 +398,40 @@ class TRAnchorBasic(QtGui.QVBoxLayout):
 					for layer, layer_anchors in clipboard_glyph_anchors.iteritems():
 
 						for anchor_name, anchor_coords, anchor_expression in layer_anchors:
-							if self.aux.glyph.findAnchor(anchor_name, layer) is None:
-								self.aux.glyph.dropAnchor(anchor_name, layer, anchor_coords)
+							if self.anchorSelector.glyph.findAnchor(anchor_name, layer) is None:
+								self.anchorSelector.glyph.dropAnchor(anchor_name, layer, anchor_coords)
 							else:
-								self.aux.glyph.moveAnchor(anchor_name, layer, anchor_coords)
+								self.anchorSelector.glyph.moveAnchor(anchor_name, layer, anchor_coords)
 							
-							self.aux.glyph.exprAnchor(anchor_name, layer, anchor_expression[0], anchor_expression[1])
+							self.anchorSelector.glyph.exprAnchor(anchor_name, layer, anchor_expression[0], anchor_expression[1])
 			
 			if update:
-				self.aux.glyph.updateObject(self.aux.glyph.fl, '%s anchors: %s.' %('Copy' if not paste else 'Paste', '; '.join(wLayers)))
-				self.aux.glyph.update()
-				self.aux.refresh()
+				self.anchorSelector.glyph.updateObject(self.anchorSelector.glyph.fl, '%s anchors: %s.' %('Copy' if not paste else 'Paste', '; '.join(wLayers)))
+				self.anchorSelector.glyph.update()
+				self.anchorSelector.refresh()
 
 	def renameAnchors(self, rename=True):
-		wLayers = self.aux.glyph._prepareLayers(pLayers)
+		wLayers = self.anchorSelector.glyph._prepareLayers(pLayers)
 
-		if self.aux.doCheck():	
+		if self.anchorSelector.doCheck():	
 			update = False		
 
 			for layer in wLayers:
 				
-				for anchor_name in self.aux.tree_anchors.selectedItems():
-					anchor = self.aux.glyph.findAnchor(anchor_name.text(0), layer)
+				for anchor_name in self.anchorSelector.tree_anchors.selectedItems():
+					anchor = self.anchorSelector.glyph.findAnchor(anchor_name.text(0), layer)
 					
 					if anchor is not None:
 						if len(self.edt_anchorName.text):
 							anchor.name = self.edt_anchorName.text if rename else anchor.name + self.edt_anchorName.text
 							update = True
 						else:
-							print 'ERROR:\t No input string given for anchor %s.' %anchor.name
+							output(2,app_name, 'No input string given for anchor %s.' %anchor.name)
 		
 			if update:
-				self.aux.glyph.updateObject(self.aux.glyph.fl, '%s anchors: %s.' %('Rename' if rename else 'Extend name of', '; '.join(wLayers)))
-				self.aux.glyph.update()
-				self.aux.refresh()
-
-		
-# - Tabs -------------------------------
-class tool_tab(QtGui.QWidget):
-	def __init__(self):
-		super(tool_tab, self).__init__()
-
-		# - Init
-		layoutV = QtGui.QVBoxLayout()
-
-		self.anchorSelector = TRLayerSelect()
-		self.basicTools = TRAnchorBasic(self.anchorSelector)
-		
-		layoutV.addLayout(self.anchorSelector)
-		layoutV.addLayout(self.basicTools)
-		
-		# - Build ---------------------------
-		layoutV.addStretch()
-		self.setLayout(layoutV)
-
-		# !!! Hotfix FL7 7355 
-		self.setMinimumSize(300,self.sizeHint.height())
+				self.anchorSelector.glyph.updateObject(self.anchorSelector.glyph.fl, '%s anchors: %s.' %('Rename' if rename else 'Extend name of', '; '.join(wLayers)))
+				self.anchorSelector.glyph.update()
+				self.anchorSelector.refresh()
 
 # - Test ----------------------
 if __name__ == '__main__':
