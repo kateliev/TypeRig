@@ -33,7 +33,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Delta', '3.15'
+app_name, app_version = 'TypeRig | Delta', '3.17'
 
 # -- Strings
 column_names = ('Layer'+' '*45,'V St.', 'H St.')
@@ -141,6 +141,27 @@ class tool_tab(QtGui.QWidget):
 		# -- Layer selector
 		self.layer_selector = TRWLayerTree()
 		
+		# -- Actions (Context Menu)
+		self.layer_selector.menu = QtGui.QMenu(self)
+		self.layer_selector.menu.setTitle('Actions:')
+
+		act_setAxis = QtGui.QAction('Set Axis', self)
+		act_resetAxis = QtGui.QAction('Reset Axis', self)
+		act_getVstem = QtGui.QAction('Get Vertical Stems', self)
+		act_getHstem = QtGui.QAction('Get Horizontal Stems', self)
+
+		self.layer_selector.menu.addAction(act_getVstem)
+		self.layer_selector.menu.addAction(act_getHstem)
+		self.layer_selector.menu.addSeparator()	
+		self.layer_selector.menu.addAction(act_setAxis)
+		self.layer_selector.menu.addAction(act_resetAxis)
+
+		act_setAxis.triggered.connect(self.set_axis)
+		act_resetAxis.triggered.connect(self.reset_axis)
+		act_getVstem.triggered.connect(lambda: self.get_stem(False))
+		act_getHstem.triggered.connect(lambda: self.get_stem(True))
+
+		
 		# - Build Layout
 		layoutV = QtGui.QVBoxLayout()
 
@@ -226,6 +247,12 @@ class tool_tab(QtGui.QWidget):
 		self.setLayout(layoutV)
 		self.setMinimumSize(300, self.sizeHint.height())
 		
+	# - Functions -----------------------------------------
+	# -- Internal
+	def contextMenuEvent(self, event):
+		self.layer_selector.menu.popup(QtGui.QCursor.pos())	
+
+	# -- Special
 	def __where(self, data, search, ret=1):
 		for item in data:
 			if search == item[0]: return item[ret]
@@ -246,6 +273,7 @@ class tool_tab(QtGui.QWidget):
 			return 0
 		return 1
 
+	# -- Operation
 	def refresh(self):
 		# - Init
 		self.axis_points = []
@@ -293,12 +321,16 @@ class tool_tab(QtGui.QWidget):
 
 			for group, data in self.masters_data.items():
 				for layer_data in data:
-					selection = self.active_glyph.selectedNodes(layer_data[0], True)
-					
-					if get_y:
-						layer_data[2] = abs(selection[0].y - selection[-1].y)
-					else:
-						layer_data[1] = abs(selection[0].x - selection[-1].x)
+					try:
+						selection = self.active_glyph.selectedNodes(layer_data[0], True)
+						
+						if get_y:
+							layer_data[2] = abs(selection[0].y - selection[-1].y)
+						else:
+							layer_data[1] = abs(selection[0].x - selection[-1].x)
+					except IndexError:
+						warnings.warn('Missing or incompatible layer: %s!' %layer_data[0], LayerWarning)
+						continue
 
 			self.layer_selector.setTree(OrderedDict(self.masters_data), column_names)
 	
