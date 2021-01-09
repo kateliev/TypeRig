@@ -24,7 +24,7 @@ from typerig.proxy.fl.objects.glyph import *
 from typerig.proxy.fl.objects.string import *
 
 # - Init ---------------------------------
-__version__ = '0.27.6'
+__version__ = '0.27.7'
 
 # - Classes -------------------------------
 class pFontMetrics(object):
@@ -298,7 +298,7 @@ class pFont(object):
 	
 	@property
 	def familyName(self):
-		return self.info.familyName
+		return self.fl.tfn
 	
 	@property
 	def name(self):

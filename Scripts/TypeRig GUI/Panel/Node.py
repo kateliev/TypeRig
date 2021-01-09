@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '1.32'
+app_name, app_version = 'TypeRig | Nodes', '1.33'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -299,8 +299,8 @@ class alignNodes(QtGui.QGridLayout):
 		# - Spin Boxes
 		self.edt_toYpos = QtGui.QSpinBox()
 		self.edt_toYpos.setToolTip('Destination Y Coordinate')
-		self.edt_toYpos.setMaximum(1500)
-		self.edt_toYpos.setMinimum(-1500)
+		self.edt_toYpos.setMaximum(3000)
+		self.edt_toYpos.setMinimum(-3000)
 
 		self.spb_prc_V =  QtGui.QSpinBox()
 		self.spb_prc_V.setMaximum(100)
