@@ -28,7 +28,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.28.5'
+__version__ = '0.28.6'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -1367,11 +1367,27 @@ class eGlyph(pGlyph):
 	def _getPointArray(self, layer=None):
 		return [(float(node.x), float(node.y)) for node in self.nodes(layer)]
 
-	def _setPointArray(self, PointArray, layer=None):
+	def _setPointArray(self, PointArray, layer=None, keep_center=False):
 		nodeArray = self.nodes(layer)
+		
+		if keep_center:
+			layer_BBox = self.getBounds(layer)
+			array_BBox = (	min(PointArray, key= lambda t: t[0])[0], 
+							min(PointArray, key= lambda t: t[1])[1],
+							max(PointArray, key= lambda t: t[0])[0], 
+							max(PointArray, key= lambda t: t[1])[1])
+
+			layer_center = layer_BBox.center()
+			center_array = pqt.QtCore.QPointF((array_BBox[0] + array_BBox[2])/2., (array_BBox[1] + array_BBox[3])/2)
+			recenter_shift = layer_center - center_array
+
 		if len(PointArray) == len(nodeArray):
 			for nid in range(len(PointArray)):
-				nodeArray[nid].x, nodeArray[nid].y = PointArray[nid]
+				if keep_center:
+					nodeArray[nid].x = PointArray[nid][0] + recenter_shift.x()
+					nodeArray[nid].y = PointArray[nid][1] + recenter_shift.y()
+				else:
+					nodeArray[nid].x, nodeArray[nid].y = PointArray[nid]
 		else:
 			print('ERROR:\t Incompatible coordinate array provided.')
 
