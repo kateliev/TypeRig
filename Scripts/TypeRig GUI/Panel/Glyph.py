@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Glyph', '0.14'
+app_name, app_version = 'TypeRig | Glyph', '0.15'
 
 # - Dependencies -----------------
 import fontlab as fl6
@@ -64,6 +64,14 @@ class TRGlyphBasic(QtGui.QGridLayout):
 
 		self.btn_setName.setToolTip(help_setName)
 
+		# -- Hinting & Stems (Move to other panel later!)
+		self.cmb_select_stem =  QtGui.QComboBox()
+		self.cmb_select_stem.addItems(['PostScript', 'TrueType'])
+		self.btn_setStemV = QtGui.QPushButton('Set &V-Stem')
+		self.btn_setStemH = QtGui.QPushButton('Set &H-Stem')
+		self.btn_setStemV.clicked.connect(lambda: self.setStem(False))
+		self.btn_setStemH.clicked.connect(lambda: self.setStem(True))
+
 		# -- Combo box
 		#fontMarkColors = [(QtGui.QColor(name).hue(), name) for name in QtGui.QColor.fontMarkColors()]
 		self.cmb_select_color = QtGui.QComboBox()
@@ -90,6 +98,11 @@ class TRGlyphBasic(QtGui.QGridLayout):
 		self.addWidget(QtGui.QLabel('Uni:'), 					4, 0, 1, 1)
 		self.addWidget(self.edt_glyphUnis, 						4, 1, 1, 5)
 		self.addWidget(self.btn_setUnis, 						4, 6, 1, 2)
+		self.addWidget(QtGui.QLabel('\nGlyph selection to Font Stems (Hinting):'),	5, 0, 1, 8)
+		self.addWidget(QtGui.QLabel('Type:'), 					6, 0, 1, 1)
+		self.addWidget(self.cmb_select_stem, 					6, 1, 1, 3)
+		self.addWidget(self.btn_setStemV, 						6, 4, 1, 2)
+		self.addWidget(self.btn_setStemH, 						6, 6, 1, 2)
 
 	def glyph_setBasics(self, mode):
 		font = pFont()
@@ -119,6 +132,23 @@ class TRGlyphBasic(QtGui.QGridLayout):
 			processed_glyphs.append(glyph.name)
 
 		font.updateObject(font.fl, 'Set Glyph(s) %s | %s' %(mode, ', '.join(processed_glyphs)))
+
+	def setStem(self, horizontal=False):
+		font = pFont()
+		active_glyph = pGlyph()
+		selection = active_glyph.selectedNodes(None, True)
+
+		if horizontal:
+			stem_width = int(abs(selection[0].y - selection[-1].y))
+		else:
+			stem_width = int(abs(selection[0].x - selection[-1].x))
+		
+		stem_name = '{}.{}:{}'.format(['V','H'][horizontal], active_glyph.name, stem_width)
+		stem_type = self.cmb_select_stem.currentIndex
+
+		font.setStem(stem_width, stem_name, horizontal, stem_type)
+
+		font.updateObject(font.fl, 'Set Stem(s): {}; {}; {}.'.format(stem_name, stem_width, self.cmb_select_stem.currentText))
 
 class TRGlyphCopyTools(QtGui.QGridLayout):
 	def __init__(self):

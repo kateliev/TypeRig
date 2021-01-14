@@ -24,7 +24,7 @@ from typerig.proxy.fl.objects.glyph import *
 from typerig.proxy.fl.objects.string import *
 
 # - Init ---------------------------------
-__version__ = '0.27.7'
+__version__ = '0.27.8'
 
 # - Classes -------------------------------
 class pFontMetrics(object):
@@ -316,9 +316,15 @@ class pFont(object):
 	def path(self):
 		return self.fg.path
 
-	# - Classes -------------------------------------------------
+	@property
+	def ps_stems(self):
+		return self.fl.stems(0, True)
+
+	@property
+	def tt_stems(self):
+		return self.fl.stems(1, True)
 	
-		
+
 	# Functions ---------------------------------------------------
 	# - Font Basics -----------------------------------------------
 	def getSelectedIndices(self):
@@ -420,6 +426,35 @@ class pFont(object):
 
 	def update(self):
 		self.updateObject(self.fl, verbose=False)
+
+	# - Hinting --------------------------------------------------------
+	def setStem(self, stem_value, stem_name='', stem_is_horizontal=False, stem_type_TT=False):
+		new_stem = fl6.flStem(stem_value, stem_name)
+		
+		if stem_type_TT:
+			if stem_is_horizontal:
+				self.fl.tt_stemsH = self.fl.tt_stemsH + [new_stem]
+			else:
+				self.fl.tt_stemsV = self.fl.tt_stemsV + [new_stem]
+		else:
+			if stem_is_horizontal:
+				self.fl.ps_stemsH = self.fl.ps_stemsH + [new_stem]
+			else:
+				self.fl.ps_stemsV = self.fl.ps_stemsV + [new_stem]
+
+		return new_stem
+
+	def resetStems(self, stems_horizontal=False, type_TT=False):
+		if type_TT:
+			if stems_horizontal:
+				self.fl.tt_stemsH = []
+			else:
+				self.fl.tt_stemsV = []
+		else:
+			if stems_horizontal:
+				self.fl.ps_stemsH = []
+			else:
+				self.fl.ps_stemsV = []
 
 	# - Axes and MM ----------------------------------------------------
 	def axes(self):
