@@ -10,9 +10,10 @@
 
 # - Dependencies ------------------------
 from __future__ import absolute_import
+from itertools import islice
 
 # - Init --------------------------------
-__version__ = '0.26.1'
+__version__ = '0.26.2'
 
 # - Functions ---------------------------
 # -- Dictionary -------------------------
@@ -70,3 +71,18 @@ def groupConsecutives(listItems, step = 1):
 		expectedValue = value + step
 	
 	return groupList
+
+
+def sliding_window(sequence, window_size=2):
+	'''Returns a sliding window (of window_size) over data from the iterable.
+	Example: s -> (s0, s1, ... s[n-1]), (s1, s2, ... , sn), ... '''
+	
+	iterator = iter(sequence)
+	result = tuple(islice(iterator, window_size))
+	
+	if len(result) == window_size:
+		yield result
+	
+	for element in iterator:
+		result = result[1:] + (element,)
+		yield result
