@@ -9,10 +9,12 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
+from __future__ import absolute_import, print_function, division, unicode_literals
+
 from itertools import product
 
 # - Init --------------------------------
-__version__ = '0.26.2'
+__version__ = '0.26.3'
 
 # - Functions ---------------------------
 # -- Unicode ----------------------------
@@ -24,25 +26,28 @@ def getUppercaseInt(uniocdeInt):
 	''' Based on given Lowercase Uniocde (Integer) returns coresponding Uppercase Unicode (Integer) '''
 	return ord(unicode(unichr(uniocdeInt)).upper())
 
-def getLowercaseCodepoint(unicodeName):
-	''' Based on given Uppercase Unicode Name (String) returns coresponding Lowercase Unicode Name! Names are in Adobe uniXXXX format'''
-	if 'uni' in unicodeName:
-		return 'uni' + unichr(ord(('\u' + unicodeName.replace('uni','')).decode("unicode_escape"))).lower().encode("unicode_escape").strip('\u').upper()
-	else:
-		if unicodeName.isupper() or unicodeName.istitle():
-			return unicodeName.lower() # not encoded in Adobe uniXXXX format (output for mixed lists)
-		else:
-			return unicodeName
-
-def getUppercaseCodepoint(unicodeName):
-	''' Based on given Uppercase Unicode Name (String) returns coresponding Uppercase Unicode Name! Names are in Adobe uniXXXX format'''
-	if 'uni' in unicodeName:
-		return 'uni' + unichr(ord(('\u' + unicodeName.replace('uni','')).decode("unicode_escape"))).upper().encode("unicode_escape").strip('\u').upper()
-	else:
-		if unicodeName.islower():
-			return unicodeName.title() # not encoded in Adobe uniXXXX format, capitalize fisrt letter (output for mixed lists)! Note: use .upper() for all upercase
-		else:
-			return unicodeName
+#####
+# Py3: Unicode problems
+#
+#def getLowercaseCodepoint(unicodeName):
+#	''' Based on given Uppercase Unicode Name (String) returns coresponding Lowercase Unicode Name! Names are in Adobe uniXXXX format'''
+#	if 'uni' in unicodeName:
+#		return 'uni' + unichr(ord((r'\u' + unicodeName.replace('uni','')).decode("unicode_escape"))).lower().encode("unicode_escape").strip(r'\u').upper()
+#	else:
+#		if unicodeName.isupper() or unicodeName.istitle():
+#			return unicodeName.lower() # not encoded in Adobe uniXXXX format (output for mixed lists)
+#		else:
+#			return unicodeName
+#
+#def getUppercaseCodepoint(unicodeName):
+#	''' Based on given Uppercase Unicode Name (String) returns coresponding Uppercase Unicode Name! Names are in Adobe uniXXXX format'''
+#	if 'uni' in unicodeName:
+#		return 'uni' + unichr(ord((r'\u' + unicodeName.replace('uni','')).decode("unicode_escape"))).upper().encode("unicode_escape").strip(r'\u').upper()
+#	else:
+#		if unicodeName.islower():
+#			return unicodeName.title() # not encoded in Adobe uniXXXX format, capitalize fisrt letter (output for mixed lists)! Note: use .upper() for all upercase
+#		else:
+#			return unicodeName
 
 # -- Generators ----------------------
 def kpxGen(inputA, inputB, suffix=('','')):
@@ -103,18 +108,18 @@ def str2lst(stringItems, separator):
 def lstcln(listItems, discard):
 	'''	Cleans a [listItems] by removing [discard]
 	Example: lstcln([List], '/space') '''
-	return [n for n in listItems if n is not discard]
+	return [n for n in listItems if n != discard]
 
 def strRepDict(stringItems, replacementDicionary, method = 'replace'):
 	'''	Replaces every instance of [stringItems] according to [replacementDicionary] using 'replace' ('r') or 'consecutive' replacement ('c') [method]s
 	Example: strRepDict('12', {'1':'/one', '2':'/two'}, 'r') '''
-	if method is 'replace' or method is 'r':
+	if method == 'replace' or method == 'r':
 		for key, value in replacementDicionary.iteritems():
 			stringItems = stringItems.replace(key, value)
 		return stringItems
 
-	elif method is 'consecutive' or method is 'c':
+	elif method == 'consecutive' or method == 'c':
 		return lst2str([replacementDicionary[item] if item in replacementDicionary.keys() else item for item in stringItems], '')
 
-	elif method is 'unicodeinteger' or method is 'i':
+	elif method == 'unicodeinteger' or method == 'i':
 		return lst2str([replacementDicionary[ord(item)] for item in unicode(stringItems) if ord(item) in replacementDicionary.keys()], ' ')

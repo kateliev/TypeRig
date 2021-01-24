@@ -9,11 +9,11 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import
+from __future__ import absolute_import, print_function, division, unicode_literals
 import math, random
 
 # - Init --------------------------------
-__version__ = '0.26.2'
+__version__ = '0.26.3'
 
 # -- Units ----------------------------------------------------------------------
 def getFunctionName():

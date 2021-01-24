@@ -9,7 +9,7 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import print_function
+from __future__ import absolute_import, print_function, division
 import math
 
 from typerig.core.func.math import linInterp as lerp
@@ -19,7 +19,7 @@ from typerig.core.objects.transform import Transform
 from typerig.core.objects.point import Point, Void
 
 # - Init -------------------------------
-__version__ = '0.26.6'
+__version__ = '0.26.7'
 
 # - Classes -----------------------------
 class Line(object):

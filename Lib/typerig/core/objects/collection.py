@@ -9,12 +9,12 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import print_function
+from __future__ import absolute_import, print_function, division
 from collections import MutableSequence, MutableMapping, defaultdict
 import json
 
 # - Init -------------------------------
-__version__ = '0.28.6'
+__version__ = '0.28.7'
 
 # - Objects ----------------------------
 # -- Lists -----------------------------

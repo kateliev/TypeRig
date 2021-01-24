@@ -9,7 +9,8 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import print_function
+from __future__ import absolute_import, print_function, division
+
 import math
 from typerig.core.func.math import linInterp as lerp
 from typerig.core.func.math import ratfrac
@@ -19,7 +20,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.27.3'
+__version__ = '0.27.4'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -147,13 +148,13 @@ class CubicBezier(object):
 			# A real-cuberoots-only helper function
 			if v < 0: 
 				return -math.pow(-v, 1./3.)
-  			return math.pow(v, 1./3.)
+			return math.pow(v, 1./3.)
 
-  		def root_dim(a, b, c, d):
-  			# Finds roots in one dimension
-  			if d == 0: return []
+		def root_dim(a, b, c, d):
+			# Finds roots in one dimension
+			if d == 0: return []
 
-	  		a /= d
+			a /= d
 			b /= d
 			c /= d
 
@@ -201,8 +202,8 @@ class CubicBezier(object):
 				
 				return [res] if 0 <= res <= 1. else []
 
-  		# - Init
-  		pi = math.pi
+		# - Init
+		pi = math.pi
 		tau = 2 * pi
 		d, a, b, c = self.find_coeffs()
 		

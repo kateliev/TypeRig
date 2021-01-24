@@ -8,8 +8,14 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
+
+# - Dependencies ---------------------
+from __future__ import absolute_import, print_function, division
+
+# - Init -----------------------------
 __version__ = '0.26.0'
 
+# - Classes --------------------------
 class fontFamilly():
 	'''Font familly class:
 	*   generates weight stems [.wt_stems] and MM weight instances [.wt_instances]

@@ -8,11 +8,13 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.26.0'
+__version__ = '0.27.0'
 
-from collection import *
-from geometry import *
-from math import *
-from string import *
-from transform import *
-from utils import *
+
+from typerig.core.func.collection import *
+from typerig.core.func.geometry import *
+from typerig.core.func.math import *
+from typerig.core.func.string import *
+from typerig.core.func.transform import *
+from typerig.core.func.utils import *
+

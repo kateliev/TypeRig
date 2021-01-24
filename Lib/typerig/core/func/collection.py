@@ -9,11 +9,11 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import
+from __future__ import absolute_import, print_function, division
 from itertools import islice
 
 # - Init --------------------------------
-__version__ = '0.26.2'
+__version__ = '0.26.3'
 
 # - Functions ---------------------------
 # -- Dictionary -------------------------
@@ -48,9 +48,9 @@ def combineReccuringItems(listItems):
 
 	for indexA, valueA in enumerate(temp) :
 		for indexB, valueB in enumerateWithStart(temp[indexA+1 :], indexA+1): # REMOVE and REPLACE with enumerate(item,start) if using  Python 2.6 or above
-		   if valueA & valueB:
-			  temp[indexA] = valueA.union(temp.pop(indexB))
-			  return combineReccuringItems(temp)
+			if valueA & valueB:
+				temp[indexA] = valueA.union(temp.pop(indexB))
+				return combineReccuringItems(temp)
 
 	return [tuple(item) for item in temp]
 

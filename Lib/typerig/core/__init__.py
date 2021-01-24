@@ -8,7 +8,8 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.26.0'
+__version__ = '0.27.0'
 
-from func import *
-from objects import *
+from typerig.core.base import *
+from typerig.core.func import *
+from typerig.core.objects import *

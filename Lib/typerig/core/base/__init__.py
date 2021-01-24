@@ -8,3 +8,6 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
+__version__ = '0.27.0'
+
+from typerig.core.base.message import *

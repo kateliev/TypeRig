@@ -9,10 +9,11 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.2'
+__version__ = '0.0.3'
 
 # - Dependencies ------------------------
 #import collections.abc
+from __future__ import absolute_import, print_function, division
 
 # - Objects ----------------------------
 class Member(object):

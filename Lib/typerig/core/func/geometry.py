@@ -9,11 +9,11 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import
+from __future__ import absolute_import, print_function, division
 import math
 
 # - Init --------------------------------
-__version__ = '0.26.4'
+__version__ = '0.26.3'
 
 # - Functions ---------------------------
 # -- Point ------------------------------

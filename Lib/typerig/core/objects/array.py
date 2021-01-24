@@ -9,7 +9,7 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import print_function, absolute_import
+from __future__ import absolute_import, print_function, division
 from collections import Sequence
 
 from typerig.core.func.utils import isMultiInstance
@@ -18,7 +18,7 @@ from typerig.core.objects.point import Point, Void
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.26.5'
+__version__ = '0.26.6'
 
 # - Classes -----------------------------
 # -- Point Collections ------------------
