@@ -16,7 +16,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.transform import Transform
 
 # - Init -------------------------------
-__version__ = '0.26.6'
+__version__ = '0.26.7'
 
 # - Classes -----------------------------
 class Point(object): 
@@ -299,3 +299,9 @@ class Point(object):
 class Void(Point):
 	def __init__(self, *argv):
 		super(Void, self).__init__(float('nan'), float('nan'))
+
+if __name__ == '__main__':
+	p = Point(10,10)
+	t = Transform()
+	p.doTransform(t.shift(10,10))
+	print(p)

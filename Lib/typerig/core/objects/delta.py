@@ -13,7 +13,11 @@
 from __future__ import absolute_import, print_function, division
 
 import math
-from collections.abc import Sequence
+
+try: #Py3+
+	from collections.abc import Sequence
+except ImportError: #Py2+
+	from collections import Sequence
 
 import typerig.core.func.transform as utils
 from typerig.core.objects.point import Point, Void

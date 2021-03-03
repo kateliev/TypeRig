@@ -10,12 +10,16 @@
 
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
-from collections.abc import MutableSequence, MutableMapping
 from collections import defaultdict
 import json
 
+try: #Py3+ 
+	from collections.abc import MutableSequence, MutableMapping
+except ImportError: #Py2+
+	from collections import MutableSequence, MutableMapping
+
 # - Init -------------------------------
-__version__ = '0.28.8'
+__version__ = '0.28.9'
 
 # - Objects ----------------------------
 # -- Lists -----------------------------

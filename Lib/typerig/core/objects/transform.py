@@ -14,14 +14,14 @@ from __future__ import absolute_import, print_function, division
 import math
 
 # - Init -------------------------------
-__version__ = '0.26.1'
+__version__ = '0.26.3'
 
 # - Objects ----------------------------------------------------
 # -- Affine transformations ------------------------------------
 class Transform(object):
 	'''Affine transformations (Object)'''
 	def __init__(self, xx=1.0, xy=0.0, yx=0.0, yy=1.0, dx=0.0, dy=0.0):
-		self.__affine = map(float, (xx, xy, yx, yy, dx, dy))
+		self.__affine = list(map(float, (xx, xy, yx, yy, dx, dy)))
 
 	def __normSinCos(self, v):
 		EPSILON = 1e-15
@@ -38,7 +38,7 @@ class Transform(object):
 
 	def applyTransformation(self, x, y):
 		x, y = float(x), float(y)
-		xx, xy, yx, yy, dx, dy = map(float, self.__affine)
+		xx, xy, yx, yy, dx, dy = list(map(float, self.__affine))
 		return (xx * x + yx * y + dx, xy * x + yy * y + dy)
 
 	def translate(self, dx, dy):
@@ -59,8 +59,8 @@ class Transform(object):
 		return self.transform((1.0, math.tan(math.radians(ay)), math.tan(math.radians(ax)), 1.0, 0.0, 0.0))
 
 	def transform(self, other):
-		xx1, xy1, yx1, yy1, dx1, dy1 = map(float, other)
-		xx2, xy2, yx2, yy2, dx2, dy2 = map(float, self.__affine)
+		xx1, xy1, yx1, yy1, dx1, dy1 = list(map(float, other))
+		xx2, xy2, yx2, yy2, dx2, dy2 = list(map(float, self.__affine))
 		return self.__class__(
 				xx1 * xx2 + xy1 * yx2,
 				xx1 * xy2 + xy1 * yy2,
@@ -70,8 +70,8 @@ class Transform(object):
 				xy2 * dx1 + yy2 * dy1 + dy2)
 
 	def reverseTransform(self, other):
-		xx1, xy1, yx1, yy1, dx1, dy1 = map(float, self.__affine)
-		xx2, xy2, yx2, yy2, dx2, dy2 = map(float, other)
+		xx1, xy1, yx1, yy1, dx1, dy1 = list(map(float, self.__affine))
+		xx2, xy2, yx2, yy2, dx2, dy2 = list(map(float, other))
 		return self.__class__(
 				xx1 * xx2 + xy1 * yx2,
 				xx1 * xy2 + xy1 * yy2,
@@ -102,8 +102,8 @@ class Transform(object):
 		return self.__affine[i:j]
 
 	def __cmp__(self, other):
-		xx1, xy1, yx1, yy1, dx1, dy1 = map(float(self.__affine))
-		xx2, xy2, yx2, yy2, dx2, dy2 = map(float(other))
+		xx1, xy1, yx1, yy1, dx1, dy1 = list(map(float(self.__affine)))
+		xx2, xy2, yx2, yy2, dx2, dy2 = list(map(float(other)))
 		return cmp((xx1, xy1, yx1, yy1, dx1, dy1), (xx2, xy2, yx2, yy2, dx2, dy2))
 
 	def __hash__(self):

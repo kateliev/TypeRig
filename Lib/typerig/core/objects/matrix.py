@@ -12,8 +12,12 @@
 # - Dependencies ------------------------
 from __future__ import print_function, division
 from functools import reduce
-from collections import MutableSequence
 import operator, math, random
+
+try: #Py3+
+	from collections.abc import MutableSequence
+except ImportError: #Py2+
+	from collections import MutableSequence
 
 # - Init --------------------------------
 __version__ = '0.1.5'

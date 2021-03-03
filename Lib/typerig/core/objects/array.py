@@ -10,7 +10,11 @@
 
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
-from collections.abc import Sequence
+
+try: # Py3+
+	from collections.abc import Sequence
+except ImportError: # Py2+
+	from collections import Sequence
 
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.collection import CustomList
@@ -18,7 +22,7 @@ from typerig.core.objects.point import Point, Void
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.26.7'
+__version__ = '0.26.8'
 
 # - Classes -----------------------------
 # -- Point Collections ------------------
