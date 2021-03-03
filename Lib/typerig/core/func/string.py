@@ -10,44 +10,49 @@
 
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division, unicode_literals
-
 from itertools import product
 
 # - Init --------------------------------
-__version__ = '0.26.3'
+__version__ = '0.26.4'
+
 
 # - Functions ---------------------------
+# -- Compatibility to Py 2.7+ 
+try: unichr
+except NameError: unichr = chr
+
+try: unicode
+except NameError: unicode = str
+
 # -- Unicode ----------------------------
-def getLowercaseInt(uniocdeInt):
+def getLowercaseInt(unicodeInt):
 	''' Based on given Uppercase Unicode (Integer) returns coresponding Lowercase Unicode (Integer) '''
-	return ord(unicode(unichr(uniocdeInt)).lower())
+	return ord(unicode(unichr(unicodeInt)).lower())
 
-def getUppercaseInt(uniocdeInt):
+def getUppercaseInt(unicodeInt):
 	''' Based on given Lowercase Uniocde (Integer) returns coresponding Uppercase Unicode (Integer) '''
-	return ord(unicode(unichr(uniocdeInt)).upper())
+	return ord(unicode(unichr(unicodeInt)).upper())
 
-#####
-# Py3: Unicode problems
-#
-#def getLowercaseCodepoint(unicodeName):
-#	''' Based on given Uppercase Unicode Name (String) returns coresponding Lowercase Unicode Name! Names are in Adobe uniXXXX format'''
-#	if 'uni' in unicodeName:
-#		return 'uni' + unichr(ord((r'\u' + unicodeName.replace('uni','')).decode("unicode_escape"))).lower().encode("unicode_escape").strip(r'\u').upper()
-#	else:
-#		if unicodeName.isupper() or unicodeName.istitle():
-#			return unicodeName.lower() # not encoded in Adobe uniXXXX format (output for mixed lists)
-#		else:
-#			return unicodeName
-#
-#def getUppercaseCodepoint(unicodeName):
-#	''' Based on given Uppercase Unicode Name (String) returns coresponding Uppercase Unicode Name! Names are in Adobe uniXXXX format'''
-#	if 'uni' in unicodeName:
-#		return 'uni' + unichr(ord((r'\u' + unicodeName.replace('uni','')).decode("unicode_escape"))).upper().encode("unicode_escape").strip(r'\u').upper()
-#	else:
-#		if unicodeName.islower():
-#			return unicodeName.title() # not encoded in Adobe uniXXXX format, capitalize fisrt letter (output for mixed lists)! Note: use .upper() for all upercase
-#		else:
-#			return unicodeName
+
+def getLowercaseCodepoint(unicodeName):
+	''' Based on given Uppercase Unicode Name (String) returns coresponding Lowercase Unicode Name! Names are in Adobe uniXXXX format'''
+	if 'uni' in unicodeName:
+		return 'uni0%X' %ord(unichr(int(unicodeName.replace('uni','0x'), 16)).lower())
+	else:
+		if unicodeName.isupper() or unicodeName.istitle():
+			return unicodeName.lower() # not encoded in Adobe uniXXXX format (output for mixed lists)
+		else:
+			return unicodeName
+
+def getUppercaseCodepoint(unicodeName):
+	''' Based on given Uppercase Unicode Name (String) returns coresponding Uppercase Unicode Name! Names are in Adobe uniXXXX format'''
+	if 'uni' in unicodeName:
+		return 'uni0%X' %ord(unichr(int(unicodeName.replace('uni','0x'), 16)).upper())
+	else:
+		if unicodeName.islower():
+			return unicodeName.title() # not encoded in Adobe uniXXXX format, capitalize fisrt letter (output for mixed lists)! Note: use .upper() for all upercase
+		else:
+			return unicodeName
 
 # -- Generators ----------------------
 def kpxGen(inputA, inputB, suffix=('','')):
@@ -114,7 +119,7 @@ def strRepDict(stringItems, replacementDicionary, method = 'replace'):
 	'''	Replaces every instance of [stringItems] according to [replacementDicionary] using 'replace' ('r') or 'consecutive' replacement ('c') [method]s
 	Example: strRepDict('12', {'1':'/one', '2':'/two'}, 'r') '''
 	if method == 'replace' or method == 'r':
-		for key, value in replacementDicionary.iteritems():
+		for key, value in replacementDicionary.items():
 			stringItems = stringItems.replace(key, value)
 		return stringItems
 
@@ -123,3 +128,24 @@ def strRepDict(stringItems, replacementDicionary, method = 'replace'):
 
 	elif method == 'unicodeinteger' or method == 'i':
 		return lst2str([replacementDicionary[ord(item)] for item in unicode(stringItems) if ord(item) in replacementDicionary.keys()], ' ')
+
+if __name__ == '__main__':
+	ch = ord('E')
+	uni_zhe_uc = 'uni0416'
+	uni_zhe_lc = 'uni0436'
+	inputA = 'ABC'
+	inputB = 'DEF'
+	pairs_input = zip('a b c d'.split(), 'e f g h'.split())
+
+	print(chr(getLowercaseInt(ch)))
+	print(chr(getUppercaseInt(getLowercaseInt(ch))))
+	print(getLowercaseCodepoint(uni_zhe_uc) == uni_zhe_lc) 
+	print(getUppercaseCodepoint(uni_zhe_lc) == uni_zhe_uc)
+	print(kpxGen(inputA, inputB, suffix=('','')))
+	print(stringGen(inputA, inputB, filler=('HH','HH'), genPattern = 'FL A B A FR', suffix=('',''), sep='/'))
+	print(stringGenPairs(pairs_input, filler=('HH','HH'), genPattern = 'FL A B A FR', suffix=('',''), sep='/'))
+	print(strNormSpace('a     f g   g r 1'))
+	#print(lst2str(listItems, separator))
+	#print(str2lst(stringItems, separator))
+	#print(lstcln(listItems, discard))
+	#print(strRepDict(stringItems, replacementDicionary, method = 'replace'))

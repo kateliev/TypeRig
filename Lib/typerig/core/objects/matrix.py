@@ -1,10 +1,10 @@
 # MODULE: TypeRig / Core / Matrix (Object)
 # ----------------------------------------------------------
-# A slight adaptation of...
+# A Python 3 adaptation of...
 # "Basic Table, Matrix and Vector functions for Python 2+"
 # (C) Raymond Hettinger, 2002
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2017-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2017-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -12,10 +12,11 @@
 # - Dependencies ------------------------
 from __future__ import print_function, division
 from functools import reduce
+from collections import MutableSequence
 import operator, math, random
 
 # - Init --------------------------------
-__version__ = '0.0.3'
+__version__ = '0.1.5'
 NPRE, NPOST = 0, 0 # Disables pre and post condition checks
 
 # - Helpers ------------------------------
@@ -40,70 +41,199 @@ def getconj(z):
 	except AttributeError:
 		return z
 
-separator = [ '', '\t', '\n', '\n----------\n', '\n===========\n' ]
-
 # - Classes ------------------------------
-class Table(list):
+class Table(MutableSequence):
+	'''Table - A matrix/vector prototype'''
+	
+	# - Init -----------------------------------
 	dim = 1
-	concat = list.__add__      # A substitute for the overridden __add__ method
+
+	def __init__(self, initlist=None):
+		self.data = []
+
+		if initlist is not None:
+			if isinstance(initlist, (map, filter)):
+				initlist = list(initlist)
+
+			if type(initlist) == type(self.data):
+				self.data[:] = initlist
+
+			elif isinstance(initlist, self.__class__):
+				self.data[:] = initlist.data[:]
+
+			else:
+				self.data = list(initlist)
+
+		if len(initlist) and hasattr(initlist[0], 'dim'): 
+			self.dim = initlist[0].dim + 1
+	
+	# -- Basics ----------------------------------
+	def __lt__(self, other): 
+		return self.data <  self.__cast(other)
+
+	def __le__(self, other): 
+		return self.data <= self.__cast(other)
+
+	def __eq__(self, other): 
+		return self.data == self.__cast(other)
+
+	def __ne__(self, other): 
+		return self.data != self.__cast(other)
+
+	def __gt__(self, other): 
+		return self.data >  self.__cast(other)
+
+	def __ge__(self, other): 
+		return self.data >= self.__cast(other)
+
+	def __cmp__(self, other):
+		return cmp(self.data, self.__cast(other))
+
+	def __contains__(self, item): 
+		return item in self.data
+
+	def __len__(self): 
+		return len(self.data)
+
+	def __getitem__(self, i):
+		ret_val = self.data[i]
+
+		if isinstance(ret_val, type(self.data)):
+			ret_val = self.__class__(ret_val)
+		
+		return ret_val
+
+	def __setitem__(self, i, item): 
+		self.data[i] = item
+
+	def __delitem__(self, i): 
+		del self.data[i]
 
 	def __getslice__(self, i, j):
-		return self.__class__(list.__getslice__(self,i,j))
+		i = max(i, 0); j = max(j, 0)
+		return self.__class__(self.data[i:j])
 
-	def __init__(self, elems):
-		list.__init__(self, elems)
-		if len(elems) and hasattr(elems[0], 'dim'): 
-			self.dim = elems[0].dim + 1
+	def __setslice__(self, i, j, other):
+		i = max(i, 0); j = max(j, 0)
+		
+		if isinstance(other, self.__class__):
+			self.data[i:j] = other.data
+
+		elif isinstance(other, type(self.data)):
+			self.data[i:j] = other
+
+		else:
+			self.data[i:j] = list(other)
+
+	def __delslice__(self, i, j):
+		i = max(i, 0); j = max(j, 0)
+		del self.data[i:j]
+
+	def __repr__(self): 
+		return repr(self.data)
 
 	def __str__(self):
-		return separator[self.dim].join(list(map(str, self)))
+		separator = ['', '\t', '\n', '\n----------\n', '\n===========\n']
+		return separator[self.dim].join(map(str, self))
 
-	def map(self, op, rhs=None):
-		'''Apply a unary operator to every element in the matrix or a binary operator to corresponding
-		elements in two arrays.  If the dimensions are different, broadcast the smaller dimension over
-		the larger (i.e. match a scalar to every element in a vector or a vector to a matrix).'''
-		if rhs is None:                                                 # Unary case
-			return self.dim==1 and self.__class__(list(map(op, self))) or self.__class__([elem.map(op) for elem in self])
-		elif not hasattr(rhs,'dim'):                                    # List / Scalar op
-			return self.__class__([op(e,rhs) for e in self])
-		elif self.dim == rhs.dim:                                       # Same level Vec / Vec or Matrix / Matrix
-			assert NPRE or len(self) == len(rhs), 'Table operation requires len sizes to agree'
-			return self.__class__(list(map(op, self, rhs)))
-		elif self.dim < rhs.dim:                                        # Vec / Matrix
-			return self.__class__([op(self,e) for e in rhs] )
-		return self.__class__([op(e,rhs) for e in self])         # Matrix / Vec
+	__hash__ = None
 
-	def __mul__(self, rhs):
-		return self.map(operator.mul, rhs)
+	def concat(self, other):
+		# A substitute for the overridden __add__ method
+		if isinstance(other, self.__class__):
+			return self.__class__(self.data + other.data)
 
-	def __div__(self, rhs):
-		return self.map(operator.truediv, rhs)
+		elif isinstance(other, type(self.data)):
+			return self.__class__(self.data + other)
+
+		else:
+			return self.__class__(self.data + list(other))
+
+	def append(self, item): 
+		self.data.append(item)
+
+	def insert(self, i, item): 
+		self.data.insert(i, item)
+
+	def pop(self, i=-1): 
+		return self.data.pop(i)
+
+	def remove(self, item): 
+		self.data.remove(item)
+
+	def count(self, item): 
+		return self.data.count(item)
+
+	def index(self, item, *args): 
+		return self.data.index(item, *args)
+	
+	# -- Matrix / Vec -----------------------------------
+	def __mul__(self, other):
+		return self.map(operator.mul, other)
+
+	def __div__(self, other):
+		return self.map(operator.truediv, other)
 
 	__truediv__ = __floordiv__ = __div__
 
-	def __sub__(self, rhs):
-		return self.map(operator.sub, rhs)
+	def __sub__(self, other):
+		return self.map(operator.sub, other)
 
-	def __add__(self, rhs):
-		return self.map(operator.add, rhs)
+	def __add__(self, other):
+		return self.map(operator.add, other)
 
 	def __rmul__(self, lhs):
-		return self*lhs
+		return self * lhs
 
 	def __rdiv__(self, lhs):
-		return self*(1.0/lhs)
+		return self * (1.0 / lhs)
 
 	def __rsub__(self, lhs):
-		return -(self-lhs)
+		return -(self - lhs)
 
 	def __radd__(self, lhs):
-		return self+lhs
+		return self + lhs
 
 	def __abs__(self):
 		return self.map(abs)
 
 	def __neg__(self):
 		return self.map(operator.neg)
+
+	def __eq__(self, other):
+		return (self - other).forall(iszero)
+
+	# - Special -----------------------------------------
+	def __cast(self, other):
+		if isinstance(other, self.__class__):
+			return other.data
+
+		else: 
+			return other
+
+	def map(self, op, other=None):
+		'''Apply a unary operator to every element in the matrix or a binary operator to corresponding
+		elements in two arrays.  If the dimensions are different, broadcast the smaller dimension over
+		the larger (i.e. match a scalar to every element in a vector or a vector to a matrix).'''
+
+		# - Unary case
+		if other is None:                                                 
+			return self.dim == 1 and self.__class__(map(op, self)) or self.__class__([elem.map(op) for elem in self])
+
+		# - List / Scalar op
+		elif not hasattr(other,'dim'):                                    
+			return self.__class__([op(e,other) for e in self])
+
+		# - Same level Vec / Vec or Matrix / Matrix
+		elif self.dim == other.dim:                                       
+			assert NPRE or len(self) == len(other), 'Table operation requires len sizes to agree'
+			return self.__class__(list(map(op, self, other)))
+
+		# - Vec / Matrix
+		elif self.dim < other.dim:                                        
+			return self.__class__([op(self,e) for e in other] )
+
+		return self.__class__([op(e,other) for e in self])        
 
 	def conjugate(self):
 		return self.map(getconj)
@@ -115,7 +245,9 @@ class Table(list):
 		return self.map(getimag)
 
 	def flatten(self):
-		if self.dim == 1: return self
+		if self.dim == 1: 
+			return self
+
 		return reduce(lambda cum, e: e.flatten().concat(cum), self, [])
 
 	def prod(self):
@@ -128,20 +260,22 @@ class Table(list):
 		for elem in self.flatten():
 			if predicate(elem):
 				return 1
+
 		return 0
 
 	def forall(self, predicate):
 		for elem in self.flatten():
 			if not predicate(elem):
 				return 0
+
 		return 1
-	
-	def __eq__(self, rhs):
-		return (self - rhs).forall(iszero)
+
 
 class Vec(Table):
+	''' Vector '''
+
 	def dot(self, otherVec):
-		return reduce(operator.add, list(map(operator.mul, self, otherVec)), 0.0)
+		return reduce(operator.add, map(operator.mul, self, otherVec), 0.0)
 
 	def norm(self):
 		return math.sqrt(abs(self.dot(self.conjugate())))
@@ -153,80 +287,97 @@ class Vec(Table):
 		return Mat([otherVec*x for x in self])
 
 	def cross(self, otherVec):
-		'Compute a Vector or Cross Product with another vector'
+		'''Compute a Vector or Cross Product with another vector'''
 		assert len(self) == len(otherVec) == 3, 'Cross product only defined for 3-D vectors'
 		u, v = self, otherVec
-		return Vec([ u[1]*v[2]-u[2]*v[1], u[2]*v[0]-u[0]*v[2], u[0]*v[1]-u[1]*v[0] ])
+
+		return Vec([u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0] ])
 
 	def house(self, index):
-		'Compute a Householder vector which zeroes all but the index element after a reflection'
-		v = Vec(Table([0]*index).concat(self[index:])).normalize()
+		'''Compute a Householder vector which zeroes all but the index element after a reflection'''
+		v = Vec(Table([0] * index).concat(self[index:])).normalize()
 		t = v[index]
 		sigma = 1.0 - t**2
 
 		if sigma != 0.0:
-			t = v[index] = t<=0 and t-1.0 or -sigma / (t + 1.0)
+			t = v[index] = t <= 0 and t - 1.0 or -sigma / (t + 1.0)
 			v /= t
+
 		return v, 2.0 * t**2 / (sigma + t**2)
 
 	def polyval(self, x):
-		'Vec([6,3,4]).polyval(5) evaluates to 6*x**2 + 3*x + 4 at x=5'
-		return reduce(lambda cum,c: cum*x+c, self, 0.0)
+		'''Vec([6,3,4]).polyval(5) evaluates to 6*x**2 + 3*x + 4 at x=5'''
+		return reduce(lambda cum, c: cum * x + c, self, 0.0)
 
 	def ratval(self, x):
-		'Vec([10,20,30,40,50]).ratfit(5) evaluates to (10*x**2 + 20*x + 30) / (40*x**2 + 50*x + 1) at x=5.'
+		'''Vec([10,20,30,40,50]).ratfit(5) evaluates to (10*x**2 + 20*x + 30) / (40*x**2 + 50*x + 1) at x=5.'''
 		degree = len(self) / 2
-		num, den = self[:degree+1], self[degree+1:] + [1]
+		num, den = self[:degree + 1], self[degree + 1:] + [1]
+
 		return num.polyval(x) / den.polyval(x)
 
 class Matrix(Table):
+	''' Matrix '''
+
 	__slots__ = ['size', 'rows', 'cols']
 
 	def __init__(self, elems):
-		'Form a matrix from a list of lists or a list of Vecs'
-		Table.__init__(self, hasattr(elems[0], 'dot') and elems or list(map(Vec,map(tuple,elems))))
+		'''Form a matrix from a list of lists or a list of Vecs'''
+		super(Matrix, self).__init__(hasattr(elems[0], 'dot') and elems or map(Vec, map(tuple, elems)))
 		self.size = self.rows, self.cols = len(elems), len(elems[0])
 
 	def tr(self):
-		'Tranpose elements so that Transposed[i][j] = Original[j][i]'
+		'''Tranpose elements so that Transposed[i][j] = Original[j][i]'''
 		return Mat(list(zip(*self)))
 
 	def star(self):
-		'Return the Hermetian adjoint so that Star[i][j] = Original[j][i].conjugate()'
+		'''Return the Hermetian adjoint so that Star[i][j] = Original[j][i].conjugate()'''
 		return self.tr().conjugate()
 
 	def diag(self):
-		'Return a vector composed of elements on the matrix diagonal'
+		'''Return a vector composed of elements on the matrix diagonal'''
 		return Vec([self[i][i] for i in range(min(self.size))])
 
 	def trace(self): 
 		return self.diag().sum()
 
 	def mmul(self, other):
-		'Matrix multiply by another matrix or a column vector '
-		if other.dim==2: return Mat(list(map(self.mmul, other.tr()))).tr()
+		'''Matrix multiply by another matrix or a column vector '''
+		if other.dim == 2: 
+			return Mat(list(map(self.mmul, other.tr()))).tr()
+		
 		assert NPRE or self.cols == len(other)
 		return Vec(list(map(other.dot, self)))
 
 	def augment(self, otherMat):
-		'Make a new matrix with the two original matrices laid side by side'
+		'''Make a new matrix with the two original matrices laid side by side'''
 		assert self.rows == otherMat.rows, 'Size mismatch: {} * {}'.format(repr(self.size), repr(otherMat.size))
 		return Mat(list(map(Table.concat, self, otherMat)))
 
 	def qr(self, ROnly=0):
-		'QR decomposition using Householder reflections: Q*R==self, Q.tr()*Q==I(n), R upper triangular'
+		'''QR decomposition using Householder reflections: Q*R==self, Q.tr()*Q==I(n), R upper triangular'''
 		R = self
 		m, n = R.size
+
 		for i in range(min(m,n)):
 			v, beta = R.tr()[i].house(i)
-			R -= v.outer(R.tr().mmul(v)*beta)
-		for i in range(1,min(n,m)): R[i][:i] = [0] * i
+			R -= v.outer(R.tr().mmul(v) * beta)
+		
+		for i in range(1, min(n, m)): 
+			R[i][:i] = [0] * i
+
 		R = Mat(R[:n])
-		if ROnly: return R
+
+		if ROnly: 
+			return R
+
 		Q = R.tr().solve(self.tr()).tr()       # Rt Qt = At    nn  nm  = nm
-		self.qr = lambda r=0, c=repr(self): not r and c==repr(self) and (Q,R) or Matrix.qr(self,r) #Cache result
-		assert NPOST or m>=n and Q.size==(m,n) and isinstance(R,UpperTri) or m<n and Q.size==(m,m) and R.size==(m,n)
-		assert NPOST or Q.mmul(R)==self and Q.tr().mmul(Q)==eye(min(m,n))
+
+		self.qr = lambda r = 0, c = repr(self): not r and c==repr(self) and (Q,R) or Matrix.qr(self, r) # Cache result
+
+		assert NPOST or m >= n and Q.size == (m, n) and isinstance(R, UpperTri) or m < n and Q.size==(m, m) and R.size==(m, n)
+		assert NPOST or Q.mmul(R) == self and Q.tr().mmul(Q) == eye(min(m, n))
+
 		return Q, R
 
 	def _solve(self, b):
@@ -236,44 +387,57 @@ class Matrix(Table):
 		return R.solve(Q.tr().mmul(b))
 
 	def solve(self, b):
-		'Divide matrix into a column vector or matrix and iterate to improve the solution'
-		if b.dim==2: return Mat(list(map(self.solve, b.tr()))).tr()
+		'''Divide matrix into a column vector or matrix and iterate to improve the solution'''
+		if b.dim == 2:
+			return Mat(list(map(self.solve, b.tr()))).tr()
+
 		assert NPRE or self.rows == len(b), 'Matrix row count {} must match vector length {}'.format(self.rows, len(b))
+
 		x = self._solve(b)
 		diff = b - self.mmul(x)
 		maxdiff = diff.dot(diff)
+		
 		for i in range(10):
 			xnew = x + self._solve(diff)
 			diffnew = b - self.mmul(xnew)
 			maxdiffnew = diffnew.dot(diffnew)
+
 			if maxdiffnew >= maxdiff:  break
+
 			x, diff, maxdiff = xnew, diffnew, maxdiffnew
-			#print >> sys.stderr, i+1, maxdiff
-		assert NPOST or self.rows!=self.cols or self.mmul(x) == b
+			
+		assert NPOST or self.rows != self.cols or self.mmul(x) == b
 		return x
 
 	def rank(self):
-		return Vec([ not row.forall(iszero) for row in self.qr(ROnly=1) ]).sum()
+		return Vec([ not row.forall(iszero) for row in self.qr(ROnly = 1) ]).sum()
 
 class Square(Matrix):
 	def lu(self):
-		'Factor a square matrix into lower and upper triangular form such that L.mmul(U)==A'
+		'''Factor a square matrix into lower and upper triangular form such that L.mmul(U)==A'''
 		n = self.rows
 		L, U = eye(n), Mat(self[:])
+
 		for i in range(n):
-			for j in range(i+1,U.rows):
+			for j in range(i + 1, U.rows):
+		
 				assert U[i][i] != 0.0, 'LU requires non-zero elements on the diagonal'
+		
 				L[j][i] = m = 1.0 * U[j][i] / U[i][i]
 				U[j] -= U[i] * m
+		
 		assert NPOST or isinstance(L,LowerTri) and isinstance(U,UpperTri) and L*U==self
 		return L, U
 
 	def __pow__(self, exp):
-		'Raise a square matrix to an integer power (i.e. A**3 is the same as A.mmul(A.mmul(A))'
+		'''Raise a square matrix to an integer power (i.e. A**3 is the same as A.mmul(A.mmul(A))'''
 		assert NPRE or exp==int(exp) and exp>0, 'Matrix powers only defined for positive integers not {}'.format(exp)
+		
 		if exp == 1: return self
 		if exp % 2: return self.mmul(self ** (exp-1))
+		
 		sqrme = self ** (exp/2)
+		
 		return sqrme.mmul(sqrme)
 
 	def det(self):
@@ -285,27 +449,33 @@ class Square(Matrix):
 	def hessenberg(self):
 		'''Householder reduction to Hessenberg Form (zeroes below the diagonal)
 		while keeping the same eigenvalues as self.'''
-		for i in range(self.cols-2):
-			v, beta = self.tr()[i].house(i+1)
-			self -= v.outer(self.tr().mmul(v)*beta)
-			self -= self.mmul(v).outer(v*beta)
+		for i in range(self.cols - 2):
+			v, beta = self.tr()[i].house(i + 1)
+			self -= v.outer(self.tr().mmul(v) * beta)
+			self -= self.mmul(v).outer(v * beta)
+
 		return self
 
 	def eigs(self):
-		'Estimate principal eigenvalues using the QR with shifts method'
+		'''Estimate principal eigenvalues using the QR with shifts method'''
 		origTrace, origDet = self.trace(), self.det()
 		self = self.hessenberg()
 		eigvals = Vec([])
-		for i in range(self.rows-1,0,-1):
+
+		for i in range(self.rows - 1, 0, -1):
 			while not self[i][:i].forall(iszero):
-				shift = eye(i+1) * self[i][i]
+				shift = eye(i + 1) * self[i][i]
 				q, r = (self - shift).qr()
 				self = r.mmul(q) + shift
+		
 			eigvals.append(self[i][i])
 			self = Mat([self[r][:i] for r in range(i)])
+		
 		eigvals.append(self[0][0])
+		
 		assert NPOST or iszero((abs(origDet) - abs(eigvals.prod())) / 1000.0)
 		assert NPOST or iszero(origTrace - eigvals.sum())
+		
 		return Vec(eigvals)
 
 class Triangular(Square):
@@ -317,38 +487,44 @@ class Triangular(Square):
 
 class UpperTri(Triangular):
 	def _solve(self, b):
-		'Solve an upper triangular matrix using backward substitution'
+		'''Solve an upper triangular matrix using backward substitution'''
 		x = Vec([])
-		for i in range(self.rows-1, -1, -1):
+
+		for i in range(self.rows  -1, -1, -1):
 			assert NPRE or self[i][i], 'Backsub requires non-zero elements on the diagonal'
-			x.insert(0, (b[i] - x.dot(self[i][i+1:])) / self[i][i])
+			x.insert(0, (b[i] - x.dot(self[i][i + 1:])) / self[i][i])
+		
 		return x
 
 class LowerTri(Triangular):
 	def _solve(self, b):
-		'Solve a lower triangular matrix using forward substitution'
+		'''Solve a lower triangular matrix using forward substitution'''
 		x = Vec([])
+		
 		for i in range(self.rows):
 			assert NPRE or self[i][i], 'Forward sub requires non-zero elements on the diagonal'
 			x.append((b[i] - x.dot(self[i][:i])) / self[i][i])
+		
 		return x
 
 def Mat(elems):
-	'Factory function to create a new matrix.'
+	'''Factory function to create a new matrix.'''
 	m, n = len(elems), len(elems[0])
 
 	if m != n: return Matrix(elems)
 	if n <= 1: return Square(elems)
 
 	for i in range(1, len(elems)):
-		if not iszero(max(list(map(abs, elems[i][:i])))):
+		if not iszero(max(map(abs, elems[i][:i]))):
 			break
+
 	else:
 		return UpperTri(elems)
 
 	for i in range(0, len(elems)-1):
-		if not iszero(max(list(map(abs, elems[i][i+1:])))):
+		if not iszero(max(map(abs, elems[i][i + 1:]))):
 			return Square(elems)
+
 	return LowerTri(elems)
 
 
@@ -357,47 +533,50 @@ def funToVec(tgtfun, low=-1, high=1, steps=40, EqualSpacing=0):
 	at evenly spaces points or with Chebyshev abscissa spacing (default) '''
 	if EqualSpacing:
 		h = (0.0+high-low)/steps
-		xvec = [low+h/2.0+h*i for i in range(steps)]
+		xvec = [low + h / 2.0 + h * i for i in range(steps)]
+
 	else:
-		scale, base = (0.0+high-low)/2.0, (0.0+high+low)/2.0
-		xvec = [base+scale*math.cos(((2*steps-1-2*i)*math.pi)/(2*steps)) for i in range(steps)]
-	yvec = list(map(tgtfun, xvec))
+		scale, base = (0.0 + high - low)/2.0, (0.0 + high + low)/2.0
+		xvec = [base + scale * math.cos(((2 * steps - 1 - 2 * i) * math.pi)/(2 * steps)) for i in range(steps)]
+	
+	yvec = map(tgtfun, xvec)
+
 	return Mat([xvec, yvec])
 
 def funfit(vec, basisfuns):
-	'Solves design matrix for approximating to basis functions'
+	'''Solves design matrix for approximating to basis functions'''
 	xvec, yvec = vec
-	return Mat([list(map(form,xvec)) for form in basisfuns]).tr().solve(Vec(yvec))
+	return Mat([list(map(form, xvec)) for form in basisfuns]).tr().solve(Vec(yvec))
 
 def polyfit(vec, degree=2):
-	'Solves Vandermonde design matrix for approximating polynomial coefficients'
+	'''Solves Vandermonde design matrix for approximating polynomial coefficients'''
 	xvec, yvec = vec
-	return Mat([ [x**n for n in range(degree,-1,-1)] for x in xvec ]).solve(Vec(yvec))
+	return Mat([ [x**n for n in range(degree, -1, -1)] for x in xvec ]).solve(Vec(yvec))
 
 def ratfit(vec, degree=2):
-	'Solves design matrix for approximating rational polynomial coefficients (a*x**2 + b*x + c)/(d*x**2 + e*x + 1)'
+	'''Solves design matrix for approximating rational polynomial coefficients (a*x**2 + b*x + c)/(d*x**2 + e*x + 1)'''
 	xvec, yvec = vec
-	return Mat([[x**n for n in range(degree,-1,-1)]+[-y*x**n for n in range(degree,0,-1)] for x,y in zip(xvec,yvec)]).solve(Vec(yvec))
+	return Mat([[x**n for n in range(degree, -1, -1)] + [-y * x**n for n in range(degree, 0, -1)] for x, y in zip(xvec, yvec)]).solve(Vec(yvec))
 
 def genmat(m, n, func):
-	if not n: n=m
-	return Mat([ [func(i,j) for i in range(n)] for j in range(m) ])
+	if not n: n = m
+	return Mat([ [func(i, j) for i in range(n)] for j in range(m) ])
 
 def zeroes(m=1, n=None):
-	'Zero matrix with side length m-by-m or m-by-n.'
-	return genmat(m,n, lambda i,j: 0)
+	'''Zero matrix with side length m-by-m or m-by-n.'''
+	return genmat(m, n, lambda i, j: 0)
 
 def eye(m=1, n=None):
-	'Identity matrix with side length m-by-m or m-by-n'
-	return genmat(m,n, lambda i,j: i==j)
+	'''Identity matrix with side length m-by-m or m-by-n'''
+	return genmat(m, n, lambda i, j: i==j)
 
 def hilb(m=1, n=None):
-	'Hilbert matrix with side length m-by-m or m-by-n.  Elem[i][j]=1/(i+j+1)'
-	return genmat(m,n, lambda i,j: 1.0/(i+j+1.0))
+	'''Hilbert matrix with side length m-by-m or m-by-n.  Elem[i][j]=1/(i+j+1)'''
+	return genmat(m, n, lambda i, j: 1.0/(i + j + 1.0))
 
 def rand(m=1, n=None):
-	'Random matrix with side length m-by-m or m-by-n'
-	return genmat(m,n, lambda i,j: random.random())
+	'''Random matrix with side length m-by-m or m-by-n'''
+	return genmat(m, n, lambda i, j: random.random())
 
 if __name__ == '__main__':
 	import cmath

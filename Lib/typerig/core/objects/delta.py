@@ -12,8 +12,8 @@
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
 
-from collections import Sequence
 import math
+from collections.abc import Sequence
 
 import typerig.core.func.transform as utils
 from typerig.core.objects.point import Point, Void

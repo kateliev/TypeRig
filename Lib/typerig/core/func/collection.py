@@ -13,7 +13,7 @@ from __future__ import absolute_import, print_function, division
 from itertools import islice
 
 # - Init --------------------------------
-__version__ = '0.26.3'
+__version__ = '0.26.4'
 
 # - Functions ---------------------------
 # -- Dictionary -------------------------
@@ -22,7 +22,7 @@ def mergeDicts(d1, d2, merge = lambda x, y : y):
 	--------
 	Example: merge(d1, d2, lambda x,y: x+y) -> {'a': 2, 'c': 6, 'b': 4}	'''
 	mergeDict = dict(d1)
-	for key, value in d2.iteritems():
+	for key, value in d2.items():
 		
 		if key in mergeDict:
 			mergeDict[key] = merge(mergeDict[key], value)
@@ -31,7 +31,7 @@ def mergeDicts(d1, d2, merge = lambda x, y : y):
 
 	return mergeDict
 # -- Lists ------------------------------
-def unpack(listItems):
+def flatten(listItems):
 	'''	Unpacks all items form [listItems] containing other lists, sets and etc. '''
 	from itertools import chain
 	return list(chain(*listItems))
@@ -47,7 +47,7 @@ def combineReccuringItems(listItems):
 	temp = [set(item) for item in listItems if item]
 
 	for indexA, valueA in enumerate(temp) :
-		for indexB, valueB in enumerateWithStart(temp[indexA+1 :], indexA+1): # REMOVE and REPLACE with enumerate(item,start) if using  Python 2.6 or above
+		for indexB, valueB in enumerate(temp[indexA + 1 :], indexA + 1): 
 			if valueA & valueB:
 				temp[indexA] = valueA.union(temp.pop(indexB))
 				return combineReccuringItems(temp)
@@ -86,3 +86,16 @@ def sliding_window(sequence, window_size=2):
 	for element in iterator:
 		result = result[1:] + (element,)
 		yield result
+
+
+if __name__ == '__main__':
+	d1 = {i:i+3 for i in range(10)}
+	d2 = {i:i*3 for i in range(10)}
+	print(mergeDicts(d1, d2, merge = lambda x, y : '%s+%s'%(x,y)))
+
+	a = ((3, 4), (4, 5), (67, 12), (899, 234, 2345, 2, 3), (4, 5, 7))
+	print(flatten(a))
+	print(list(enumerateWithStart(a, start = 0)))
+	print(combineReccuringItems(a))
+	print(groupConsecutives(flatten(a), step = 1))
+	print(list(sliding_window(flatten(a), window_size=2)))

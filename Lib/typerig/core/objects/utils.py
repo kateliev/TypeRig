@@ -11,6 +11,7 @@
 
 # - Dependencies ---------------------
 from __future__ import absolute_import, print_function, division
+from typerig.core.func.math import linspread, geospread, ratfrac
 
 # - Init -----------------------------
 __version__ = '0.26.0'
@@ -70,8 +71,6 @@ class linAxis(object):
 		self.update()			
 
 	def update(self):
-		from typerig.brain import linspread, geospread, ratfrac
-
 		minAxisStem, maxAxisStem = min(self.masters.values()), max(self.masters.values())
 		minAxisPos, maxAxisPos = min(self.masters.keys()), max(self.masters.keys())
 		

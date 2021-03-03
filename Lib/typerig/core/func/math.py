@@ -13,15 +13,12 @@ from __future__ import absolute_import, print_function, division
 import math, random
 
 # - Init --------------------------------
-__version__ = '0.26.3'
+__version__ = '0.26.4'
 
 epsilon = 0.000001
 
 # - Functions ---------------------------
 # -- Math -------------------------------
-def roundFloat(f, error=1000000.):
-	return round(f*error)/error
-
 def normalize2max(values):
 	'''Normalize all values to the maximum value in a given list. 
 	
@@ -65,12 +62,15 @@ def isclose(a, b, abs_tol = 1, rel_tol = 0.0):
 	to set a tolerance of 5%, pass tol=0.05. The default tolerance is 1e-9, which assures that the
 	two values are the same within about9 decimal digits. rel_tol must be greater than 0.0
 	'''
-	if abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol):
-		return True
+	if abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol):	return True
+	return False
 
 def isBetween(x, a, b):
 	'''A broader test if a value is between two others'''
 	return True if a <= x <= b or isclose(x, a, abs_tol=epsilon) or isclose(x, b, abs_tol=epsilon) else False
+
+def roundFloat(f, error=1000000.):
+	return round(f*error)/error
 
 def round2base(x, base = 5):
 	'''Rounds a value using given base increments'''
@@ -146,3 +146,25 @@ def bilinInterp(x, y, points):
 			q22 * (x - x1) * (y - y1)
 		   ) / ((x2 - x1) * (y2 - y1) + 0.0)
 	
+
+if __name__ == '__main__':
+	r = range(105,415,10)
+	a = 0.5
+	b = 0.7
+	x = 8.0000008
+	points = [(10, 4, 100), (20, 4, 200), (10, 6, 150), (20, 6, 300)]
+
+	print(normalize2max(r))
+	print(normalize2sum(r))
+	print(renormalize(r, (20,500), oldRange=None))
+	print(isclose(a, b, abs_tol = 0.1, rel_tol = 0.0))
+	print(isBetween(0.67, a, b))
+	print(roundFloat(x, error=1000000.))
+	print(round2base(x, base = 5))
+	print(ratfrac(a, b, fraction = 100))
+	print(list(linspread(100, 700, 11)))
+	print(list(geospread(100, 700, 11)))
+	print(randomize(a, 2))
+	print(linInterp(10, 20, .5))
+	print(bilinInterp(12, 5.5, points))
+

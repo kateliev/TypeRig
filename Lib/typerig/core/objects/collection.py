@@ -10,11 +10,12 @@
 
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
-from collections import MutableSequence, MutableMapping, defaultdict
+from collections.abc import MutableSequence, MutableMapping
+from collections import defaultdict
 import json
 
 # - Init -------------------------------
-__version__ = '0.28.7'
+__version__ = '0.28.8'
 
 # - Objects ----------------------------
 # -- Lists -----------------------------
@@ -271,7 +272,7 @@ class CustomDict(MutableMapping):
 		return self.data.items()
 
 	def iteritems(self): 
-		return self.data.iteritems()
+		return self.data.items()
 
 	def iterkeys(self): 
 		return self.data.iterkeys()
