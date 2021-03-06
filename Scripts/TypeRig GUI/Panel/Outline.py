@@ -16,8 +16,8 @@ import fontgate as fgt
 from typerig.proxy.fl import *
 
 from PythonQt import QtCore
-from typerig.gui import QtGui
-from typerig.gui.widgets import getProcessGlyphs, TRTableView
+from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRTableView
 
 # - Init
 global pLayers

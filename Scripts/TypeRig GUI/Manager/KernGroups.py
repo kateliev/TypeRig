@@ -21,7 +21,7 @@ import fontlab as fl6
 import fontgate as fgt
 
 from PythonQt import QtCore
-from typerig.gui import QtGui
+from typerig.proxy.fl.gui import QtGui
 
 from typerig.proxy.fl import *
 from typerig.core.func.string import getUppercaseCodepoint, getLowercaseCodepoint

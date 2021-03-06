@@ -22,8 +22,8 @@ from typerig.core.base.message import *
 from typerig.core.func.math import linInterp as lerp
 
 from PythonQt import QtCore
-from typerig.gui import QtGui
-from typerig.gui.widgets import *
+from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import *
 
 # - Init
 global pLayers

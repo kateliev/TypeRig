@@ -16,8 +16,8 @@ from typerig.proxy.fl import *
 from typerig.core.func.math import ratfrac
 
 from PythonQt import QtCore
-from typerig.gui import QtGui
-from typerig.gui.widgets import getProcessGlyphs, TRTableView
+from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRTableView
 
 
 # - Init

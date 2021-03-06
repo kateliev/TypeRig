@@ -25,8 +25,8 @@ from typerig.core.objects.array import PointArray
 from typerig.core.objects.delta import DeltaArray, DeltaScale
 
 from PythonQt import QtCore
-from typerig.gui import QtGui
-from typerig.gui.widgets import *
+from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import *
 
 # - Init -------------------------------
 global pLayers

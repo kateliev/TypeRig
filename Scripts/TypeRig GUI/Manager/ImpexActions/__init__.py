@@ -10,7 +10,7 @@
 
 # - Dependencies -----------------
 from PythonQt import QtCore
-from typerig.gui import QtGui
+from typerig.proxy.fl.gui import QtGui
 
 # - Imports ----------------------
 import afm

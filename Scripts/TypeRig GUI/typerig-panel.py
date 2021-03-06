@@ -17,8 +17,8 @@ from PythonQt import QtCore
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import pGlyph
 
-from typerig.gui import QtGui
-from typerig.gui.widgets import getProcessGlyphs, TRVTabWidget
+from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRVTabWidget
 
 # -- Internals - Load toolpanels 
 import Panel 

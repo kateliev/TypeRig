@@ -22,8 +22,8 @@ from typerig.proxy.fl import *
 from typerig.core.func.collection import groupConsecutives
 
 from PythonQt import QtCore
-from typerig.gui import QtGui
-from typerig.gui.widgets import getProcessGlyphs
+from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 
 # - Helpers ----------------------------
 def filter_consecutive(selection):
