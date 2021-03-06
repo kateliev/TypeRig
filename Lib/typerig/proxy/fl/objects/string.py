@@ -9,7 +9,7 @@
 # that you use it at your own risk!
 
 # - Dependancies --------------------------------------------
-from typerig.core.func.string import *
+#from typerig.core.func.string import *
 
 # - Init ----------------------------------------------------
 __version__ = '0.18.3'

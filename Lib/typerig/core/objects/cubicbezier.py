@@ -1,6 +1,6 @@
 # MODULE: TypeRig / Core / Cubic Bezier (Object)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2016-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2016-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com

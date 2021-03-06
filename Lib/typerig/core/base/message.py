@@ -1,6 +1,6 @@
 # MODULE: Typerig / Base / Messages (Objects)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2020 		(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2020-2021	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com

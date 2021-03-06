@@ -1,6 +1,6 @@
 # MODULE: TypeRig / Core / Analytic geometry (Functions)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2015-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2015-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com

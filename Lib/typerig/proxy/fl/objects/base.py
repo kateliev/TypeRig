@@ -13,8 +13,6 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
-from typerig.core.func.math import *
-from typerig.core.func.collection import *
 from typerig.core.func.utils import isMultiInstance
 
 import typerig.core.objects as trobj
@@ -22,7 +20,7 @@ from typerig.core.objects.utils import bounds
 
 
 # - Init ----------------------------------------------------
-__version__ = '0.26.0'
+__version__ = '0.26.2'
 
 # - FL Proxy model -------------------------------------------
 class Coord(trobj.Point): # Dumb Name but avoids name collision with FL Point object

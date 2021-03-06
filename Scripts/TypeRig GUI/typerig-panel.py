@@ -9,14 +9,14 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
-#import os
 from collections import OrderedDict
 
 import fontlab as fl6
-
-from typerig.proxy.fl import *
-
 from PythonQt import QtCore
+
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.glyph import pGlyph
+
 from typerig.gui import QtGui
 from typerig.gui.widgets import getProcessGlyphs, TRVTabWidget
 
@@ -24,7 +24,7 @@ from typerig.gui.widgets import getProcessGlyphs, TRVTabWidget
 import Panel 
 
 # - Init --------------------------
-app_version = '0.58'
+app_version = '0.59'
 app_name = 'TypeRig Panel'
 ignorePanel = '__'
 
