@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '0.28'
+app_name, app_version = 'TypeRig | Contour', '0.30'
 
 # - Dependencies -----------------
 from collections import OrderedDict
@@ -20,8 +20,13 @@ from collections import OrderedDict
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig.proxy.fl import *
 from typerig.core.base.message import *
+from typerig.proxy.fl.objects.base import Coord
+from typerig.proxy.fl.objects.glyph import eGlyph
+from typerig.proxy.fl.objects.shape import eShape
+from typerig.proxy.fl.objects.contour import eContour
+from typerig.proxy.fl.objects.font import pFontMetrics
+
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
@@ -250,9 +255,9 @@ class basicContour(QtGui.QGridLayout):
 				all_contours = glyph.contours(layerName)
 
 				if len(selection):
-					process_contours = [pContour(all_contours[item[0]]) for item in selection]
+					process_contours = [eContour(all_contours[item[0]]) for item in selection]
 				else:
-					process_contours = [pContour(contour) for contour in all_contours]
+					process_contours = [eContour(contour) for contour in all_contours]
 
 				for contour in process_contours:
 					if ccw:

@@ -14,7 +14,7 @@ import warnings
 import fontlab as fl6
 import PythonQt as pqt
 
-from typerig.proxy.fl.objects.base import Coord, Curve
+from typerig.proxy.fl.objects.base import *
 from typerig.proxy.fl.objects.node import eNode
 
 from typerig.core.func.utils import isMultiInstance

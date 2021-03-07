@@ -13,8 +13,8 @@ from collections import OrderedDict
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig.proxy.fl import *
 from typerig.core.base.message import *
+from typerig.proxy.fl.objects.glyph import eGlyph
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
@@ -28,7 +28,7 @@ global clipboard_glyph_anchors
 pLayers = None
 pMode = 0
 clipboard_glyph_anchors = {}
-app_name, app_version = 'TypeRig | Anchors', '2.00'
+app_name, app_version = 'TypeRig | Anchors', '2.01'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):

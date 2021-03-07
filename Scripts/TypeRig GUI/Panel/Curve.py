@@ -18,7 +18,11 @@ app_name, app_version = 'TypeRig | Curves', '0.15'
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig.proxy.fl import *
+from typerig.proxy.fl.objects.base import *
+from typerig.proxy.fl.objects.node import eNode
+from typerig.proxy.fl.objects.glyph import eGlyph
+from typerig.proxy.fl.objects.curve import eCurveEx
+from typerig.proxy.fl.objects.contour import pContour
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
