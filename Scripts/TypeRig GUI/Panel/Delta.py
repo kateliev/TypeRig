@@ -1,6 +1,6 @@
 #FLM: TR: Delta
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2020-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 
@@ -9,7 +9,7 @@
 
 # - Dependencies -----------------
 import warnings
-import os, json
+import os, json, random
 from math import radians
 from collections import OrderedDict
 
@@ -33,12 +33,22 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Delta', '3.17'
+app_name, app_version = 'TypeRig | Delta', '4.43'
 
 # -- Strings
-column_names = ('Layer'+' '*45,'V St.', 'H St.')
-masters_group_name = 'Glyph Masters'
-axis_group_name = 'Virtual Axis'
+tree_column_names = ('Layer','X', 'Y', 'Width', 'Height', 'Color')
+tree_masters_group_name = 'Master Layers'
+tree_axis_group_name = 'Virtual Axis'
+tree_axis_target_name = 'Target Layers'
+fileFormats = 'TypeRig Delta Panel Target (*.json);;'
+
+default_sx = '100.'
+default_sy = '100.'
+
+# - Helpers ----------------------------
+def _rand_hex():
+	rand_color = lambda: random.randint(0,255)
+	return '#%02X%02X%02X' %(rand_color(), rand_color(), rand_color())
 
 # - Sub widgets ------------------------
 class TRWLayerTree(QtGui.QTreeWidget):
@@ -47,14 +57,66 @@ class TRWLayerTree(QtGui.QTreeWidget):
 		
 		if data is not None: self.setTree(data, headers)
 
-	  	self.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+		self.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
 		self.setDragDropMode(self.InternalMove)
 		#self.setDragDropMode(self.DragDrop)
 		self.setDragEnabled(True)
 		self.setDropIndicatorShown(True)
 
+		self.itemChanged.connect(self._redecorateItem)
+
 		self.expandAll()
 		self.setAlternatingRowColors(True)
+
+	# - Internals --------------------------
+	def _removeItems(self):
+		root = self.invisibleRootItem()
+		
+		for item in self.selectedItems():
+			(item.parent() or root).removeChild(item)
+
+	def _addItem(self, data=None):
+		new_item_data = ['New', '', '', default_sx, default_sy, _rand_hex()] if data is None else data
+
+		root = self.selectedItems()[0].parent() if len(self.selectedItems()) else self.invisibleRootItem()
+		new_item = QtGui.QTreeWidgetItem(root, new_item_data)
+		color_decorator = QtGui.QColor(new_item_data[-1])
+		new_item.setData(0, QtCore.Qt.DecorationRole, color_decorator)
+		new_item.setFlags(new_item.flags() & ~QtCore.Qt.ItemIsDropEnabled | QtCore.Qt.ItemIsEditable)
+
+	def _duplicateItems(self):
+		root = self.invisibleRootItem()
+		
+		for item in self.selectedItems():
+			data = [item.text(c) for c in range(item.columnCount())]
+			self._addItem(data)
+		
+	def _unnestItem(self):
+		root = self.invisibleRootItem()
+		
+		for item in reversed(self.selectedItems()):
+			old_parent = item.parent()
+			new_parent = old_parent.parent()
+			ix = old_parent.indexOfChild(item)
+			item_without_parent = old_parent.takeChild(ix)
+			root.addChild(item_without_parent)
+
+	def _setItemData(self, data, column, position=1, strip=False):
+		for item in self.selectedItems():
+			old_text = item.text(column)
+
+			if position == 1:
+				item.setText(column, data if not strip else old_text.strip(data))
+			if position == 0:
+				item.setText(column, data + old_text)
+			if position == -1:
+				item.setText(column, old_text + data)
+
+	def _redecorateItem(self, item):
+		color_decorator = QtGui.QColor(item.text(item.columnCount()-1))
+		item.setData(0, QtCore.Qt.DecorationRole, color_decorator)
+		#item.setFlags(item.flags() & ~QtCore.Qt.ItemIsDropEnabled | QtCore.Qt.ItemIsEditable)
+
 
 	# - Getter/Setter -----------------------
 	def setTree(self, data, headers):
@@ -78,6 +140,7 @@ class TRWLayerTree(QtGui.QTreeWidget):
 
 		self.invisibleRootItem().setFlags(self.invisibleRootItem().flags() & ~QtCore.Qt.ItemIsDropEnabled)
 		self.expandAll()
+		#self.hideColumn(5)
 		self.blockSignals(False)
 
 	def getTree(self):
@@ -98,82 +161,123 @@ class tool_tab(QtGui.QWidget):
 		# - Init
 
 		# - Widgets
-		# -- Buttons
-		self.edt_glyphName = QtGui.QLineEdit()
+		# - Glyph list
+		self.lst_glyphName = QtGui.QListWidget()
+		self.lst_glyphName.setMinimumHeight(50)
+		self.lst_glyphName.setAlternatingRowColors(True)
 		
+		# -- Buttons
 		self.btn_refresh = QtGui.QPushButton('&Refresh')
 		self.btn_setAxis = QtGui.QPushButton('Set &Axis')
+		self.btn_setAxis_c = QtGui.QPushButton('Set &Axis')
 		self.btn_resetAxis = QtGui.QPushButton('Reset Axis')
 		self.btn_getVstem = QtGui.QPushButton('Get &Vertical Stems')
 		self.btn_getHstem = QtGui.QPushButton('Get &Horizontal Stems')
 		self.btn_setLayer = QtGui.QPushButton('Layer changed')
 		self.btn_execute = QtGui.QPushButton('Execute')
+		self.btn_file_load_patchboard = QtGui.QPushButton('Load')
+		self.btn_file_save_patchboard = QtGui.QPushButton('Save')
 		
 		# -- Options
 		self.btn_opt_extrapolate = QtGui.QPushButton('Extrapolate')
 		self.btn_opt_italic = QtGui.QPushButton('Italic')
 		self.btn_opt_update_preview = QtGui.QPushButton('Live preview')
-		self.btn_opt_update_layer = QtGui.QPushButton('Auto Layer')
+		self.btn_opt_keep_center = QtGui.QPushButton('Keep Center')
 		self.btn_opt_metrics = QtGui.QPushButton('Metrics')
 		self.btn_opt_anchors = QtGui.QPushButton('Anchors')
+		self.btn_opt_target = QtGui.QPushButton('Use Target')		
 
 		self.btn_opt_extrapolate.setCheckable(True)
 		self.btn_opt_italic.setCheckable(True) 
 		self.btn_opt_update_preview.setCheckable(True)
-		self.btn_opt_update_layer.setCheckable(True)
+		self.btn_opt_keep_center.setCheckable(True)
 		self.btn_opt_metrics.setCheckable(True)
 		self.btn_opt_anchors.setCheckable(True)
+		self.btn_opt_target.setCheckable(True)
 
-		self.btn_opt_update_layer.setEnabled(False)
-
-		self.btn_opt_update_preview.setChecked(True)
-		self.btn_opt_metrics.setChecked(True)
-		self.btn_opt_anchors.setChecked(True)
+		#self.btn_opt_extrapolate.setChecked(True)
+		#self.btn_opt_keep_center.setChecked(True)
+		#self.btn_opt_target.setChecked(True)
 
 		self.btn_refresh.clicked.connect(self.refresh)
 		self.btn_setAxis.clicked.connect(self.set_axis)
+		self.btn_setAxis_c.clicked.connect(self.set_axis)
 		self.btn_resetAxis.clicked.connect(self.reset_axis)
 		self.btn_getVstem.clicked.connect(lambda: self.get_stem(False))
 		self.btn_getHstem.clicked.connect(lambda: self.get_stem(True))
 		self.btn_setLayer.clicked.connect(self.set_current_layer)
 		self.btn_execute.clicked.connect(lambda: self.execute_scale(True))
 
+		self.btn_file_save_patchboard.clicked.connect(self.file_save_patchboard)
+		self.btn_file_load_patchboard.clicked.connect(self.file_load_patchboard)
+
 		# -- Layer selector
-		self.layer_selector = TRWLayerTree()
-		
+		self.tree_layer = TRWLayerTree()
+
 		# -- Actions (Context Menu)
-		self.layer_selector.menu = QtGui.QMenu(self)
-		self.layer_selector.menu.setTitle('Actions:')
+		self.tree_layer.menu = QtGui.QMenu(self)
+		self.tree_layer.menu.setTitle('Actions:')
+
+		act_addItem = QtGui.QAction('Add', self)
+		act_delItem = QtGui.QAction('Remove', self)
+		act_dupItem = QtGui.QAction('Duplicate', self)
+		act_uneItem = QtGui.QAction('Unnest', self)
+
+		act_setItem_mask = QtGui.QAction('Set mask', self)
+		act_setItem_unmask = QtGui.QAction('Remove mask', self)
+		act_setItem_value = QtGui.QAction('Set value', self)
 
 		act_setAxis = QtGui.QAction('Set Axis', self)
 		act_resetAxis = QtGui.QAction('Reset Axis', self)
 		act_getVstem = QtGui.QAction('Get Vertical Stems', self)
 		act_getHstem = QtGui.QAction('Get Horizontal Stems', self)
 
-		self.layer_selector.menu.addAction(act_getVstem)
-		self.layer_selector.menu.addAction(act_getHstem)
-		self.layer_selector.menu.addSeparator()	
-		self.layer_selector.menu.addAction(act_setAxis)
-		self.layer_selector.menu.addAction(act_resetAxis)
+		self.tree_layer.menu.addAction(act_addItem)
+		self.tree_layer.menu.addAction(act_dupItem)
+		self.tree_layer.menu.addAction(act_uneItem)
+		self.tree_layer.menu.addAction(act_delItem)
+		self.tree_layer.menu.addSeparator()	
+		self.tree_layer.menu.addAction(act_setItem_mask )
+		self.tree_layer.menu.addAction(act_setItem_unmask )
+		self.tree_layer.menu.addAction(act_setItem_value )
+		self.tree_layer.menu.addSeparator()	
+		self.tree_layer.menu.addAction(act_getVstem)
+		self.tree_layer.menu.addAction(act_getHstem)
+		self.tree_layer.menu.addSeparator()	
+		self.tree_layer.menu.addAction(act_setAxis)
+		self.tree_layer.menu.addAction(act_resetAxis)
 
-		act_setAxis.triggered.connect(self.set_axis)
-		act_resetAxis.triggered.connect(self.reset_axis)
+		act_addItem.triggered.connect(lambda: self.tree_layer._addItem())
+		act_dupItem.triggered.connect(lambda: self.tree_layer._duplicateItems())
+		act_uneItem.triggered.connect(lambda: self.tree_layer._unnestItem())
+		act_delItem.triggered.connect(lambda: self.tree_layer._removeItems())
+		
+		act_setItem_mask.triggered.connect(lambda: self.tree_layer._setItemData('mask.', 0, 0, False))
+		act_setItem_unmask.triggered.connect(lambda: self.tree_layer._setItemData('mask.', 0, 1, True))
+		act_setItem_value.triggered.connect(lambda: self.tree_layer._setItemData(*TR2ComboDLG('Delta Setup', 'Please enter new value for selected columns', 'Value:', 'Column:', tree_column_names).values))
+		
+		act_setAxis.triggered.connect(lambda: self.set_axis())
+		act_resetAxis.triggered.connect(lambda: self.reset_axis())
+		
 		act_getVstem.triggered.connect(lambda: self.get_stem(False))
 		act_getHstem.triggered.connect(lambda: self.get_stem(True))
-
 		
 		# - Build Layout
 		layoutV = QtGui.QVBoxLayout()
 
-		# -- Head
-		layoutH = QtGui.QGridLayout()
-		layoutH.addWidget(QtGui.QLabel('G:'),			0, 0, 1, 1)
-		layoutH.addWidget(self.edt_glyphName,			0, 1, 1, 6)
-		layoutH.addWidget(self.btn_refresh,				0, 7, 1, 3)
-		layoutV.addLayout(layoutH)
-
 		# -- Layer selector
-		layoutV.addWidget(self.layer_selector)
+		layoutV.addWidget(self.tree_layer)
+
+		# -- Set Glyph list
+		self.fld_glyphs = TRCollapsibleBox('Process Glyphs')
+		lay_glyphs = QtGui.QVBoxLayout()
+		lay_glyphs_b = QtGui.QHBoxLayout()
+		lay_glyphs.addWidget(self.lst_glyphName)
+		lay_glyphs_b.addWidget(self.btn_refresh)
+		lay_glyphs_b.addWidget(self.btn_setAxis_c)
+		lay_glyphs.addLayout(lay_glyphs_b)
+		self.fld_glyphs.setContentLayout(lay_glyphs)
+		layoutV.addWidget(self.fld_glyphs)
 		
 		# -- Delta Setup controls
 		self.fld_setup = TRCollapsibleBox('Delta Setup') 
@@ -183,14 +287,17 @@ class tool_tab(QtGui.QWidget):
 		layoutG.addWidget(self.btn_getHstem, 				1, 5, 1, 5)
 		layoutG.addWidget(self.btn_resetAxis, 				2, 0, 1, 5)
 		layoutG.addWidget(self.btn_setAxis, 				2, 5, 1, 5)
+		layoutG.addWidget(self.btn_file_save_patchboard,	3, 0, 1, 5)
+		layoutG.addWidget(self.btn_file_load_patchboard,	3, 5, 1, 5)
 
-		layoutG.addWidget(QtGui.QLabel('Options:'),			3, 0, 1, 10)
-		layoutG.addWidget(self.btn_opt_extrapolate, 		4, 0, 1, 5)
-		layoutG.addWidget(self.btn_opt_italic, 				4, 5, 1, 5)
-		layoutG.addWidget(self.btn_opt_anchors, 			5, 0, 1, 5)
-		layoutG.addWidget(self.btn_opt_metrics, 			5, 5, 1, 5)
-		layoutG.addWidget(self.btn_opt_update_preview, 		7, 0, 1, 5)
-		layoutG.addWidget(self.btn_opt_update_layer, 		7, 5, 1, 5)
+		layoutG.addWidget(QtGui.QLabel('Options:'),			4, 0, 1, 10)
+		layoutG.addWidget(self.btn_opt_extrapolate, 		5, 0, 1, 5)
+		layoutG.addWidget(self.btn_opt_italic, 				5, 5, 1, 5)
+		layoutG.addWidget(self.btn_opt_anchors, 			6, 0, 1, 5)
+		layoutG.addWidget(self.btn_opt_metrics, 			6, 5, 1, 5)
+		layoutG.addWidget(self.btn_opt_target, 				8, 0, 1, 5)
+		layoutG.addWidget(self.btn_opt_keep_center, 		8, 5, 1, 5)
+		layoutG.addWidget(self.btn_opt_update_preview, 		9, 0, 1, 10)
 		
 		self.fld_setup.setContentLayout(layoutG)
 		layoutV.addWidget(self.fld_setup)
@@ -231,7 +338,7 @@ class tool_tab(QtGui.QWidget):
 
 		self.fld_scale.setContentLayout(lay_scale)
 		layoutV.addWidget(self.fld_scale)
-		
+
 		# -- Tail 
 		layoutE = QtGui.QHBoxLayout()
 		layoutE.addWidget(self.btn_setLayer)
@@ -244,29 +351,54 @@ class tool_tab(QtGui.QWidget):
 
 		# -- Finish
 		self.refresh()
+		self.tree_layer.setTree(self.__init_tree(), tree_column_names)
 		self.setLayout(layoutV)
 		self.setMinimumSize(300, self.sizeHint.height())
 		
 	# - Functions -----------------------------------------
 	# -- Internal
 	def contextMenuEvent(self, event):
-		self.layer_selector.menu.popup(QtGui.QCursor.pos())	
+		self.tree_layer.menu.popup(QtGui.QCursor.pos())	
+
+	# - File operations
+	def file_save_patchboard(self):
+		fontPath = os.path.split(self.active_font.fg.path)[0]
+		fname = QtGui.QFileDialog.getSaveFileName(self, 'Save Axis Patch-board to file', fontPath, fileFormats)
+
+		if fname != None:
+			with open(fname, 'w') as exportFile:
+				json.dump(self.tree_layer.getTree(), exportFile)
+				output(7, app_name, 'Font: %s; Patch-board saved to: %s.' %(self.active_font.name, fname))
+				
+	def file_load_patchboard(self):
+		fontPath = os.path.split(self.active_font.fg.path)[0]
+		fname = QtGui.QFileDialog.getOpenFileName(self, 'Load Axis Patch-board from file', fontPath, fileFormats)
+			
+		if fname != None:
+			with open(fname, 'r') as importFile:
+				imported_data = json.load(importFile)
+								
+				self.masters_data = imported_data
+				self.tree_layer.setTree(self.masters_data, tree_column_names)
+				output(6, app_name, 'Font: %s; Patch-board loaded from: %s.' %(self.active_font.name, fname))
 
 	# -- Special
 	def __where(self, data, search, ret=1):
 		for item in data:
 			if search == item[0]: return item[ret]
 		
-		warnings.warn('Axis missing layer: %s!' %search, TRDeltaAxisWarning)
+		warnings.warn('Axis/target missing layer: %s!' %search, TRDeltaAxisWarning)
 		return 0
 
-	def __get_layers(self, glyph):
+	def __init_tree(self):
 		return_data = []
-		return_data.append((masters_group_name, [(layer.name, '', '', layer.wireframeColor) for layer in reversed(glyph.masters())]))
-		return_data.append((axis_group_name,[]))
+		return_data.append((tree_masters_group_name, [(layer, '', '', default_sx, default_sy, _rand_hex()) for layer in reversed(self.active_font.masters())]))
+		return_data.append((tree_axis_group_name,[]))
+		return_data.append((tree_axis_target_name,[]))
 		return OrderedDict(return_data)
 
 	def __doCheck(self):
+		if pMode > 0: return 1
 		if self.active_glyph.fg.id != fl6.CurrentGlyph().id and self.active_glyph.fl.name != fl6.CurrentGlyph().name:
 			warnings.warn('Glyph mismatch! No action taken! Forcing refresh!', GlyphWarning)
 			self.refresh()
@@ -288,8 +420,9 @@ class tool_tab(QtGui.QWidget):
 		self.active_workspace = pWorkspace()
 		self.active_canvas = self.active_workspace.getCanvas(True)
 
-		self.working_names = '; '.join([glyph.name for glyph in self.data_glyphs]) if len(self.data_glyphs) > 1 else self.active_glyph.name
-		self.edt_glyphName.setText(self.working_names)
+		self.working_names = [glyph.name for glyph in self.data_glyphs] if len(self.data_glyphs) > 1 else [self.active_glyph.name]
+		self.lst_glyphName.clear()
+		self.lst_glyphName.addItems(self.working_names)
 				
 		if len(self.active_font.masters()) > 1:
 			# - Activate
@@ -312,12 +445,10 @@ class tool_tab(QtGui.QWidget):
 			self.btn_getVstem.setEnabled(False)
 			self.btn_getHstem.setEnabled(False)
 
-		self.masters_data = self.__get_layers(self.active_glyph)
-		self.layer_selector.setTree(self.masters_data, column_names)
-
 	def get_stem(self, get_y=False):
 		if self.__doCheck():
-			self.masters_data = self.layer_selector.getTree()
+			self.masters_data = self.tree_layer.getTree()
+			self.active_glyph = eGlyph()
 
 			for group, data in self.masters_data.items():
 				for layer_data in data:
@@ -332,23 +463,47 @@ class tool_tab(QtGui.QWidget):
 						warnings.warn('Missing or incompatible layer: %s!' %layer_data[0], LayerWarning)
 						continue
 
-			self.layer_selector.setTree(OrderedDict(self.masters_data), column_names)
+			self.tree_layer.setTree(OrderedDict(self.masters_data), tree_column_names)
 	
 	def set_current_layer(self):
-		self.mixer_dx.edt_pos.setText(round(float(self.__where(self.axis_data, self.active_glyph.layer().name, 1))))
-		self.mixer_dy.edt_pos.setText(round(float(self.__where(self.axis_data, self.active_glyph.layer().name, 2))))
-		self.mixer_dx.refreshSlider()
-		self.mixer_dy.refreshSlider()
+		try:
+			if not self.btn_opt_target.isChecked():
+				max_dx = max(self.axis_data, key=lambda i: float(i[1]))[1]
+				max_dy = max(self.axis_data, key=lambda i: float(i[2]))[2]
+				min_dx = min(self.axis_data, key=lambda i: float(i[1]))[1]
+				min_dy = min(self.axis_data, key=lambda i: float(i[2]))[2]
+				self.mixer_dx.edt_pos.setText(round(float(self.__where(self.axis_data, self.active_glyph.layer().name, 1))))
+				self.mixer_dy.edt_pos.setText(round(float(self.__where(self.axis_data, self.active_glyph.layer().name, 2))))
+			else:
+				max_dx = max(self.masters_data[tree_axis_target_name], key=lambda i: float(i[1]))[1]
+				max_dy = max(self.masters_data[tree_axis_target_name], key=lambda i: float(i[2]))[2]
+				min_dx = min(self.masters_data[tree_axis_target_name], key=lambda i: float(i[1]))[1]
+				min_dy = min(self.masters_data[tree_axis_target_name], key=lambda i: float(i[2]))[2]
+				self.mixer_dx.edt_pos.setText(round(float(self.__where(self.masters_data[tree_axis_target_name], self.active_glyph.layer().name, 1))))
+				self.mixer_dy.edt_pos.setText(round(float(self.__where(self.masters_data[tree_axis_target_name], self.active_glyph.layer().name, 2))))
+		
+		
+			self.mixer_dx.edt_1.setText(min_dx)
+			self.mixer_dy.edt_1.setText(min_dy)
+			self.mixer_dx.edt_1.setText(max_dx)
+			self.mixer_dy.edt_1.setText(max_dy)
+
+			self.mixer_dx.refreshSlider()
+			self.mixer_dy.refreshSlider()
+		
+		except ValueError, IndexError:
+			warnings.warn('Invalid Axis/Target or Axis/Target not set!', TRDeltaAxisWarning)
 
 	def reset_axis(self):
-		self.masters_data = self.layer_selector.getTree()
-		self.masters_data[masters_group_name] += self.masters_data[axis_group_name]
-		self.masters_data[axis_group_name] = []
-		self.layer_selector.setTree(self.masters_data, column_names)
+		self.masters_data = self.tree_layer.getTree()
+		#self.masters_data[tree_masters_group_name] += self.masters_data[tree_axis_group_name]
+		self.masters_data[tree_axis_group_name] = []
+		self.masters_data[tree_axis_target_name] = []
+		self.tree_layer.setTree(self.masters_data, tree_column_names)
 
 	def set_axis(self):
-		self.masters_data = self.layer_selector.getTree()
-		self.axis_data = self.masters_data[axis_group_name]
+		self.masters_data = self.tree_layer.getTree()
+		self.axis_data = self.masters_data[tree_axis_group_name]
 
 		if len(self.axis_data):
 			# - Init
@@ -381,7 +536,7 @@ class tool_tab(QtGui.QWidget):
 			self.mixer_dy.refreshSlider()
 
 			# - Build
-			self.active_font.updateObject(self.active_font.fl, 'Glyph(s): {} Axis :{} @ {}'.format(self.working_names, ' :'.join([item[0] for item in self.axis_data]), self.active_glyph.layer().name))
+			self.active_font.updateObject(self.active_font.fl, 'Glyph(s): {} Axis :{} @ {}'.format('; '.join(self.working_names), ' :'.join([item[0] for item in self.axis_data]), self.active_glyph.layer().name))
 	
 	def execute_scale(self, force_preview=False):
 		if len(self.glyph_arrays.keys()):
@@ -402,16 +557,46 @@ class tool_tab(QtGui.QWidget):
 
 				# - Process
 				for wGlyph in self.data_glyphs:
-					
-					outline_scale = self.glyph_arrays[wGlyph.name].scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), opt_italic, extrapolate=opt_extrapolate)
-					wGlyph._setPointArray(outline_scale)
+					if self.btn_opt_target.isChecked():
+						process_target = self.masters_data[tree_axis_target_name]
 						
-					service_scale = self.glyph_arrays_service[wGlyph.name].scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), opt_italic, extrapolate=opt_extrapolate)
-					wGlyph._setServiceArray(service_scale, set_metrics=opt_metrics, set_anchors=opt_anchors)
+						if len(process_target):
+							for process_layer_data in process_target:
+								layer_name, layer_dx, layer_dy, layer_width, layer_height, _color = process_layer_data
+
+								if not self.btn_opt_update_preview.isChecked():
+									# - Stems
+									curr_sw_dx = float(layer_dx)
+									curr_sw_dy = float(layer_dy)
+
+									# - Scaling
+									sx = float(layer_width)/100.
+									sy = float(layer_height)/100.
+								
+								outline_scale = self.glyph_arrays[wGlyph.name].scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), opt_italic, extrapolate=opt_extrapolate)
+								wGlyph._setPointArray(outline_scale, layer_name, keep_center=self.btn_opt_keep_center.isChecked())
+						
+								service_scale = self.glyph_arrays_service[wGlyph.name].scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), opt_italic, extrapolate=opt_extrapolate)
+								wGlyph._setServiceArray(service_scale, layer_name, opt_metrics, opt_anchors)
+
+							if not self.btn_opt_update_preview.isChecked():
+								output(0, app_name, 'Processed: %s' %wGlyph.name)
+
+						else:
+							warnings.warn('Empty/Invalid Target Table provided! No action taken!', GlyphWarning)
+					else:
+						outline_scale = self.glyph_arrays[wGlyph.name].scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), opt_italic, extrapolate=opt_extrapolate)
+						wGlyph._setPointArray(outline_scale, keep_center=self.btn_opt_keep_center.isChecked())
+						
+						service_scale = self.glyph_arrays_service[wGlyph.name].scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), opt_italic, extrapolate=opt_extrapolate)
+						wGlyph._setServiceArray(service_scale, set_metrics=opt_metrics, set_anchors=opt_anchors)
 						
 					wGlyph.update()
 					
-					self.active_canvas.refreshAll()
+					try:
+						self.active_canvas.refreshAll()
+					except:
+						pass
 				
 				if opt_metrics: self.active_font.fl.changed()
 
