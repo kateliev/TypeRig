@@ -12,7 +12,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '0.30'
+app_name, app_version = 'TypeRig | Contour', '0.31'
 
 # - Dependencies -----------------
 from collections import OrderedDict
@@ -255,9 +255,9 @@ class basicContour(QtGui.QGridLayout):
 				all_contours = glyph.contours(layerName)
 
 				if len(selection):
-					process_contours = [eContour(all_contours[item[0]]) for item in selection]
+					process_contours = [pContour(all_contours[item[0]]) for item in selection]
 				else:
-					process_contours = [eContour(contour) for contour in all_contours]
+					process_contours = [pContour(contour) for contour in all_contours]
 
 				for contour in process_contours:
 					if ccw:
@@ -396,7 +396,9 @@ class alignContours(QtGui.QGridLayout):
 
 				else:
 					metrics = pFontMetrics(glyph.package)
-					layer_bounds = glyph.getBounds(layerName)
+					max_layer_y = max([metrics.getXHeight(layerName), metrics.getCapsHeight(layerName), metrics.getAscender(layerName)])
+					min_layer_y = min([0, metrics.getDescender(layerName)])
+					layer_bounds = QtCore.QRect(0, 0, glyph.getAdvance(layerName), abs(max_layer_y) + abs(min_layer_y))
 
 					if user_mode == 'CL': # Align all contours in given Layer
 						cont_bounds = (layer_bounds.x(), layer_bounds.y(), layer_bounds.x() + layer_bounds.width(), layer_bounds.y() + layer_bounds.height())

@@ -22,6 +22,13 @@ from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 
+# - Init ------------------------------
+global pLayers
+global pMode
+pLayers = None
+pMode = 0
+app_name, app_version = 'TypeRig | Elements', '0.36'
+
 # - Syntax -------------------------------
 syn_comment = '#'
 syn_insert = '->'
@@ -40,13 +47,6 @@ syn_bboxTR = syn_label + 'TR'
 syn_bboxBL = syn_label + 'BL'
 syn_bboxBR = syn_label + 'BR'
 syn_passlayer = syn_label + 'passlayer'
-
-# - Init ------------------------------
-global pLayers
-global pMode
-pLayers = None
-pMode = 0
-app_name, app_version = 'TypeRig | Elements', '0.34'
 
 # - Strings ------------------------------
 str_help = '''Examples:
@@ -403,7 +403,9 @@ class alignShapes(QtGui.QGridLayout):
 
 				else:
 					metrics = pFontMetrics(glyph.package)
-					layer_bounds = glyph.getBounds(layerName)
+					max_layer_y = max([metrics.getXHeight(layerName), metrics.getCapsHeight(layerName), metrics.getAscender(layerName)])
+					min_layer_y = min([0, metrics.getDescender(layerName)])
+					layer_bounds = QtCore.QRect(0, 0, glyph.getAdvance(layerName), abs(max_layer_y) + abs(min_layer_y))
 					
 					if user_mode == 'CL': # Align all shapes in given Layer
 						shape_bounds = (layer_bounds.x(), layer_bounds.y(), layer_bounds.x() + layer_bounds.width(), layer_bounds.y() + layer_bounds.height())
