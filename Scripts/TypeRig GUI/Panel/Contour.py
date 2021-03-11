@@ -7,14 +7,8 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-# - Init
-global pLayers
-global pMode
-pLayers = None
-pMode = 0
-app_name, app_version = 'TypeRig | Contour', '0.31'
-
 # - Dependencies -----------------
+from __future__ import absolute_import, print_function
 from collections import OrderedDict
 
 import fontlab as fl6
@@ -27,10 +21,16 @@ from typerig.proxy.fl.objects.shape import eShape
 from typerig.proxy.fl.objects.contour import eContour
 from typerig.proxy.fl.objects.font import pFontMetrics
 
-
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs
+
+# - Init -------------------------
+global pLayers
+global pMode
+pLayers = None
+pMode = 0
+app_name, app_version = 'TypeRig | Contour', '0.32'
 
 # - Sub widgets ------------------------
 class breakContour(QtGui.QGridLayout):

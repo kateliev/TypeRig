@@ -8,6 +8,7 @@
 # that you use it at your own risk!
 
 # - Dependencies -------------------------
+from __future__ import absolute_import, print_function
 import os
 from math import radians
 from collections import OrderedDict
@@ -15,7 +16,9 @@ from collections import OrderedDict
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig.proxy.fl import *
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
+from typerig.proxy.fl.objects.shape import pShape
 from typerig.core.base.message import *
 
 from PythonQt import QtCore
@@ -27,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '0.36'
+app_name, app_version = 'TypeRig | Elements', '0.37'
 
 # - Syntax -------------------------------
 syn_comment = '#'

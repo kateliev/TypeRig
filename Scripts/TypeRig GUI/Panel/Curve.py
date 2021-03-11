@@ -7,14 +7,9 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-# - Init
-global pLayers
-global pMode
-pLayers = None
-pMode = 0
-app_name, app_version = 'TypeRig | Curves', '0.15'
-
 # - Dependencies -----------------
+from __future__ import absolute_import, print_function
+
 import fontlab as fl6
 import fontgate as fgt
 
@@ -27,6 +22,13 @@ from typerig.proxy.fl.objects.contour import pContour
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs
+
+# - Init -------------------------
+global pLayers
+global pMode
+pLayers = None
+pMode = 0
+app_name, app_version = 'TypeRig | Curves', '0.16'
 
 # - Sub widgets ------------------------
 class curveEq(QtGui.QGridLayout):

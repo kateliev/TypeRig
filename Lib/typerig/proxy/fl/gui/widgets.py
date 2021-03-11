@@ -9,18 +9,48 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.14'
-
 # - Dependencies --------------------------
+from __future__ import absolute_import
 from platform import system
 from math import radians
 
 from PythonQt import QtCore
-import QtGui
+from typerig.proxy.fl.gui import QtGui
 
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
+
+# - Init ----------------------------------
+__version__ = '0.2.5'
+
+# -- Colors ------------------------------
+# Fontlab Name, Fontlab Value, QtColor Name
+fontMarkColors = [
+					(u'white', 0, u'white'),
+					(u'red', 1, u'red'),
+					(u'coral', 16, u'coral'),
+					(u'sienna', 20, u'sienna'),
+					(u'bisque', 37, u'bisque'),
+					(u'gold', 50, u'gold'),
+					(u'yellow', 61, u'yellow'),
+					(u'yellow green', 79, u'yellowgreen'),
+					(u'sulu', 90, u'chartreuse'),
+					(u'green', 121, u'green'),
+					(u'spring green', 145, u'springgreen'),
+					(u'aquamarine', 151, u'aquamarine'),
+					(u'turquoise', 174, u'turquoise'),
+					(u'cyan', 181, u'cyan'),
+					(u'skyblue', 195, u'skyblue'),
+					(u'maya blue', 210, u'cornflowerblue'),
+					(u'blue', 241, u'blue'),
+					(u'heliotrope', 271, u'blueviolet'),
+					(u'indigo', 274, u'indigo'),
+					(u'magenta', 301, u'magenta'),
+					(u'rose', 330, u'hotpink'),
+					(u'pink', 350, u'pink'),
+					(u'gray', 361, u'lightgray')
+					]
 
 # - Functions --------------------------
 def getProcessGlyphs(mode=0, font=None, workspace=None):

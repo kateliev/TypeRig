@@ -8,6 +8,7 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
+from __future__ import absolute_import, print_function
 from collections import OrderedDict
 
 import fontlab as fl6
@@ -21,14 +22,14 @@ from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRCollapsibleBox
 
 
-# - Init
+# - Init -------------------------
 global pLayers
 global pMode
 global clipboard_glyph_anchors
 pLayers = None
 pMode = 0
 clipboard_glyph_anchors = {}
-app_name, app_version = 'TypeRig | Anchors', '2.01'
+app_name, app_version = 'TypeRig | Anchors', '2.02'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):

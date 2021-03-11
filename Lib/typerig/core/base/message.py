@@ -12,11 +12,11 @@
 # that you use it at your own risk!
 
 # - Dependencies -------------------------
-from __future__ import absolute_import, print_function, division
+from __future__ import absolute_import
 import os, warnings
 
 # - Init -----------------------------
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 # - Strings --------------------------
 # --------------> 	0		1		2		3		4		5		6		7		8		9
