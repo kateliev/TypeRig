@@ -17,10 +17,11 @@ import PythonQt as pqt
 
 from typerig.core.func.math import randomize
 from typerig.core.func.geometry import ccw
+from typerig.core.objects.utils import bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 # - Init ---------------------------------
-__version__ = '0.27.1'
+__version__ = '0.27.2'
 
 # - Classes -------------------------------
 class pNode(object):
