@@ -1,6 +1,6 @@
 #FLM: TR: Metrics
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2017-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2017-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 

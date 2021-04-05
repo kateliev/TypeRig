@@ -1,6 +1,6 @@
 #FLM: TR: Glyph
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2019-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2019-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 

@@ -1,6 +1,6 @@
 #FLM: TR: Outline
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2018-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 
@@ -8,23 +8,26 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
+from __future__ import absolute_import, print_function
+import warnings
 from collections import OrderedDict
 
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig.proxy.fl import *
+from typerig.proxy.fl.objects.glyph import eGlyph
+from typerig.proxy.fl.objects.node import eNode
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRTableView
 
-# - Init
+# - Init --------------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Outline', '0.06'
+app_name, app_version = 'TypeRig | Outline', '2.00'
 
 # - Sub widgets ------------------------
 class TRContourSelect(QtGui.QVBoxLayout):
@@ -35,7 +38,6 @@ class TRContourSelect(QtGui.QVBoxLayout):
 		# -- Init
 		self.table_dict = {0:{0:None}} # Empty table
 		self.layer_names = [] # Empty layer list
-		#self.table_columns = 'N,Shape,Contour,X,Y,Type,Relative'.split(',')
 		self.table_columns = 'N,Sh,Cn,X,Y,Type,Rel'.split(',')
 
 		# -- Widgets
@@ -59,9 +61,7 @@ class TRContourSelect(QtGui.QVBoxLayout):
 
 		# -- Node List Table
 		self.tab_nodes = TRTableView(self.table_dict)
-
 		self.addWidget(self.tab_nodes)
-		#self.refresh() # Build Table
 
 		self.btn_refresh.clicked.connect(lambda: self.refresh())
 		self.cmb_layer.currentIndexChanged.connect(lambda: self.changeLayer())
@@ -109,8 +109,7 @@ class TRContourSelect(QtGui.QVBoxLayout):
 		
 	def doCheck(self):
 		if self.glyph.fg.id != fl6.CurrentGlyph().id and self.glyph.fl.name != fl6.CurrentGlyph().name:
-			print '\nERRO:\tGlyph mismatch:\n\tCurrent active glyph: %s\n\tOutline panel glyph: %s' %(fl6.CurrentGlyph(), self.glyph.fg)
-			print 'WARN:\tNo action taken! Forcing refresh!' 
+			warnings.warn('Glyph mismatch! No action taken! Forcing refresh!', GlyphWarning)
 			self.refresh()
 			return 0
 		return 1
@@ -127,7 +126,6 @@ class TRContourSelect(QtGui.QVBoxLayout):
 
 				# - Process
 				for cel_coords in self.tab_nodes.selectionModel().selectedIndexes:
-					#print self.tab_nodes.item(cel_coords.row(), cel_coords.column()).text()
 					selected_nid = int(self.tab_nodes.item(cel_coords.row(), 0).text())
 					self.glyph.nodes(self.cmb_layer.currentText)[selected_nid].selected = True
 				
@@ -136,7 +134,6 @@ class TRContourSelect(QtGui.QVBoxLayout):
 
 	def valueChanged(self, item):
 		if self.doCheck():
-			#print item.text(), item.row()
 			try: # Dirty Quick Fix - Solve later
 				# - Init
 				x_col, y_col = self.table_columns.index('X'), self.table_columns.index('Y')
