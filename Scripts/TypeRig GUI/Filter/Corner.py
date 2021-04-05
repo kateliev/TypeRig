@@ -1,6 +1,6 @@
 #FLM: TR: Corner Filter
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2019-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2019-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 
@@ -8,7 +8,8 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
-import os, json
+from __future__ import absolute_import, print_function
+import os, json, warnings
 from itertools import groupby
 from operator import itemgetter
 from collections import OrderedDict
@@ -17,17 +18,21 @@ import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore
 
-from typerig.proxy.fl import *
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.glyph import eGlyph
+from typerig.proxy.fl.objects.node import eNode
+from typerig.proxy.fl.application.app import pWorkspace
+from typerig.core.base.message import *
 
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import TRTableView, TRSliderCtrl, getProcessGlyphs
 
-# - Init
+# - Init ---------------------------
 global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Corner', '2.00'
+app_name, app_version = 'TypeRig | Corner', '2.32'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -164,7 +169,6 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 		if delete:
 			for selection in self.tab_presets.selectionModel().selectedIndexes:
 				table_rawList.pop(selection.row())
-				print selection.row()
 
 		new_entry = OrderedDict()
 		
@@ -188,7 +192,7 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 				new_data[key] = OrderedDict(data)
 
 			self.tab_presets.setTable(new_data, sortData=(False, False))
-			print 'LOAD:\t Font:%s; Presets loaded from: %s.' %(self.active_font.name, fname)
+			output(6, app_name, 'Font:%s; Presets loaded from: %s.' %(self.active_font.name, fname))
 
 	def preset_save(self):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
@@ -198,30 +202,29 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 			with open(fname, 'w') as exportFile:
 				json.dump(self.tab_presets.getTable(raw=True), exportFile)
 
-			print 'SAVE:\t Font:%s; Presets saved to: %s.' %(self.active_font.name, fname)
+			output(7, app_name, 'Font:%s; Presets saved to: %s.' %(self.active_font.name, fname))
 
 	def getPreset(self):
 		table_raw = self.tab_presets.getTable(raw=True)
-		'''
 		try:
 			active_preset_index = self.tab_presets.selectionModel().selectedIndexes[0].row()
+
+			if active_preset_index is None: 
+				active_preset_index = self.last_preset
+			else:
+				self.last_preset = active_preset_index
+
+			return dict(table_raw[active_preset_index][1][1:])
+
 		except IndexError:
-			active_preset_index = None
-		'''
-		active_preset_index = self.tab_presets.selectionModel().selectedIndexes[0].row()
-
-		if active_preset_index is None: 
-			active_preset_index = self.last_preset
-		else:
-			self.last_preset = active_preset_index
-
-		return dict(table_raw[active_preset_index][1][1:])
+			warnings.warn('No filter preset selected! No action taken!', TRPanelWarning)
 
 	# - Basic Corner ------------------------------------------------
 	def apply_mitre(self, doKnot=False):
 		# - Init
 		process_glyphs = getProcessGlyphs(pMode)
-		active_preset = self.getPreset()	
+		active_preset = self.getPreset()
+		if active_preset is None: return
 
 		# - Process
 		if len(process_glyphs):
@@ -246,7 +249,8 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 	def apply_trap(self):
 		# - Init
 		process_glyphs = getProcessGlyphs(pMode)
-		active_preset = self.getPreset()	
+		active_preset = self.getPreset()
+		if active_preset is None: return	
 
 		# - Process
 		if len(process_glyphs):
@@ -356,7 +360,7 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 
 
 				# - Process the nodes
-				process_nodes = [pNode(node) for shape, node_list in nodes_at_shapes[work_layer] for node in node_list]
+				process_nodes = [eNode(node) for shape, node_list in nodes_at_shapes[work_layer] for node in node_list]
 				
 				for work_node in process_nodes:
 					angle_value = preset[work_layer]
@@ -375,6 +379,7 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 			# - Init
 			process_glyphs = getProcessGlyphs(pMode)
 			active_preset = self.getPreset()
+			if active_preset is None: return
 
 			if remove: # Build a special preset that deletes
 				active_preset = {key:'DEL' for key in active_preset.keys()} 
@@ -386,16 +391,17 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 						self.process_smartCorner(work_glyph, active_preset)
 						
 				self.update_glyphs(process_glyphs, True)
-				print 'DONE:\t Filter: Smart Corner; Glyphs: %s' %'; '.join([g.name for g in process_glyphs])
+				output(0, app_name, 'Smart Corner; Glyphs: %s' %'; '.join([g.name for g in process_glyphs]))
 
 		else:
-			print 'ERROR:\t Please specify a Glyph with suitable Shape Builder (Smart corner) first!'
+			warnings.warn('Glyph with Smart corner (shape builder) not specified!', GlyphWarning)
 
 	def remove_SmartCorner(self):
 		# Finds active preset in glyphs smart corners and removes them
 		# - Init
 		process_glyphs = getProcessGlyphs(pMode)
 		active_preset = self.getPreset()
+		if active_preset is None: return
 
 		# - Process
 		if len(process_glyphs):
@@ -418,7 +424,7 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 									wNode.delSmartAngle()
 
 			self.update_glyphs(process_glyphs, True)
-			print 'DONE:\t Filter: Remove Smart Corner; Glyphs: %s' %'; '.join([g.name for g in process_glyphs])
+			output(0, app_name, 'Remove Smart Corner; Glyphs: %s' %'; '.join([g.name for g in process_glyphs]))
 
 	def update_glyphs(self, glyphs, complete=False):
 		for glyph in glyphs:
@@ -499,7 +505,8 @@ class TRCornerControl(QtGui.QVBoxLayout):
 			else: # Full update - with undo snapshot
 				glyph.updateObject(glyph.fl, verbose=False)
 
-		if complete: print 'DONE:\t Update/Snapshot for glyphs: %s' %'; '.join([g.name for g in glyphs])
+		if complete: 
+			output(0, app_name, 'Update/Snapshot for glyphs: %s' %'; '.join([g.name for g in glyphs]))
 
 	def capture(self):
 		# - Init
@@ -521,9 +528,9 @@ class TRCornerControl(QtGui.QVBoxLayout):
 			for glyph in self.process_glyphs:
 				#wLayers = glyph._prepareLayers(pLayers)
 				layer = None
-				pNodes = glyph.nodes(layer=layer, extend=pNode)
+				eNodes = glyph.nodes(layer=layer, extend=eNode)
 				
-				for node in pNodes:
+				for node in eNodes:
 					smart_angle = node.getSmartAngle()
 					
 					if smart_angle[0]:
