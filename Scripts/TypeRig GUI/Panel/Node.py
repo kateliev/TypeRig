@@ -7,8 +7,6 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-
-
 # - Dependencies -----------------
 from __future__ import absolute_import, print_function
 

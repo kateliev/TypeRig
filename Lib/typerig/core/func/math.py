@@ -13,12 +13,12 @@ from __future__ import absolute_import, print_function, division
 import math, random
 
 # - Init --------------------------------
-__version__ = '0.26.4'
+__version__ = '0.26.5'
 
 epsilon = 0.000001
 
 # - Functions ---------------------------
-# -- Math -------------------------------
+# -- Data sets --------------------------
 def normalize2max(values):
 	'''Normalize all values to the maximum value in a given list. 
 	
@@ -55,6 +55,43 @@ def renormalize(values, newRange, oldRange=None):
 	else:
 		return sorted([(max(newRange) - min(newRange))*item + min(newRange) for item in [float(item - min(values))/(max(values) - min(values)) for item in values]])
 
+def maploc(axis_range, map_value):
+	''' Return mapped location over specified axis by piecewise interpolation brtween neighboring location.
+	Args:
+		axis_range list(tuple(user_space, design_space)) : Given axis range
+		map_value int : Desired location to be mapped
+	Returns:
+		int : new user location value
+	Example: 
+		axis_range = [(100, 28), (200, 40), (300, 60), (400, 80), (500, 91), (600, 106), (700, 126), (746, 140)]
+		
+		maploc(axis_range, 140)
+		>>> 746
+		
+		maploc(axis_range, 150)
+		>>> 778
+	''' 
+	def remapper(low, high, value):
+		normal = (high[0] - low[0], high[1] - low[1])
+		return int(low[0] + normal[0]*(float(value - low[1])/float(normal[1])))
+
+	if len(axis_range) >= 2:
+		sorted_axis = sorted(axis_range, key=lambda n: n[0])
+		min_axis, max_axis = sorted_axis[0], sorted_axis[-1]
+		
+		if map_value < min_axis[1]:
+			return remapper(sorted_axis[0], sorted_axis[1], map_value)
+
+		elif map_value > max_axis[1]:
+			return remapper(sorted_axis[-2], sorted_axis[-1], map_value)
+
+		else:
+			for i in range(len(sorted_axis)-1):
+				low, high = sorted_axis[i], sorted_axis[i+1]
+				if low[1] <= map_value <= high[1]:
+					return remapper(low, high, map_value)
+
+# -- Misc -------------------------------
 def isclose(a, b, abs_tol = 1, rel_tol = 0.0):
 	'''Tests approximate equality for values [a] and [b] within relative [rel_tol*] and/or absolute tolerance [abs_tol]
 
@@ -153,6 +190,7 @@ if __name__ == '__main__':
 	b = 0.7
 	x = 8.0000008
 	points = [(10, 4, 100), (20, 4, 200), (10, 6, 150), (20, 6, 300)]
+	axis_range = [(100, 28), (200, 40), (300, 60), (400, 80), (500, 91), (600, 106), (700, 126), (746, 140)]
 
 	print(normalize2max(r))
 	print(normalize2sum(r))
@@ -167,4 +205,5 @@ if __name__ == '__main__':
 	print(randomize(a, 2))
 	print(linInterp(10, 20, .5))
 	print(bilinInterp(12, 5.5, points))
+	print(maploc(axis_range, 140))
 
