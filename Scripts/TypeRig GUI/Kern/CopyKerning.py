@@ -1,6 +1,6 @@
 #FLM: TR: Copy Kerning
 # ----------------------------------------
-# (C) Vassil Kateliev, 2019-2020 (http://www.kateliev.com)
+# (C) Vassil Kateliev, 2019-2021 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
 #-----------------------------------------
 # www.typerig.com
@@ -9,16 +9,21 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
-import os, json
+from __future__ import absolute_import, print_function
+import os, json, warnings
+
 import fontlab as fl6
 import fontgate as fgt
-from PythonQt import QtCore, QtGui
 
-from typerig.proxy.fl import pFont
+from typerig.proxy.fl.objects.font import pFont
 from typerig.core.objects.collection import extBiDict
+from typerig.core.base.message import *
+
+from PythonQt import QtCore
+from typerig.proxy.fl.gui import QtGui
 
 # - Init --------------------------------
-app_name, app_version = 'Copy Kernig', '1.81'
+app_name, app_version = 'Copy Kernig', '2.0'
 
 # -- Strings 
 str_help = '''
@@ -29,14 +34,14 @@ Expressions:
  - Each pair is (bar) separated;
  - Group/class kerning is detected on the fly.
 
-Example: Y|A A|Y A|V = V|A'
+Example: Y|A A|Y A|V = V|A
 '''
 syn_pair = '|'
 syn_adjust = '@'
 syn_comment = '#'
 syn_equal = '='
 
-fileFormats = ['TypeRig JSON Raw Classes (*.json)', 'FontLab VI JSON Classes (*.json)']
+fileFormats = ['TypeRig JSON Raw Classes (*.json)', 'FontLab JSON Classes (*.json)']
 
 # - Functions ----------------------------------------------------------------
 def json_class_dumb_decoder(jsonData):
@@ -123,7 +128,7 @@ class tool_tab(QtGui.QWidget):
 
 				self.class_data[layer] = {key:extBiDict(value) for key, value in temp_data.iteritems()}
 			else:
-				print 'ERROR:\t Class kering not found for Master: %s' %layer
+				warnings.warn('Class kering not found for Master: %s' %layer, KernClassWarning)
 
 	def expr_fromFile(self):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
@@ -133,7 +138,7 @@ class tool_tab(QtGui.QWidget):
 			with open(fname, 'r') as importFile:
 				self.txt_editor.setPlainText(importFile.read().decode('utf8'))			
 
-			print 'LOAD:\t Font:%s; Group Kerning expressions loaded from: %s.' %(self.active_font.name, fname)
+			output(6, app_name, 'Font:%s; Class Kerning expressions loaded from: %s.' %(self.active_font.name, fname))
 			
 	def expr_toFile(self):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
@@ -143,7 +148,7 @@ class tool_tab(QtGui.QWidget):
 			with open(fname, 'w') as importFile:
 				importFile.writelines(self.txt_editor.toPlainText().encode('utf-8'))
 
-			print 'SAVE:\t Font:%s; Group Kerning expressions saved to: %s.' %(self.active_font.name, fname)
+			output(7, app_name, 'Font:%s; Class Kerning expressions saved to: %s.' %(self.active_font.name, fname))
 
 	def classes_fromFile(self):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
@@ -155,11 +160,11 @@ class tool_tab(QtGui.QWidget):
 
 				if source_data.has_key('masters'): # A Fontlab JSON Class kerning file
 					self.update_data(json_class_dumb_decoder(source_data))
-					print 'LOAD:\t Font:%s; Fontlab VI JSON Group Kerning classes loaded from: %s.' %(self.active_font.name, fname)
-					
+					output(6, app_name, 'Font:%s; Fontlab JSON Kerning classes loaded from: %s.' %(self.active_font.name, fname))
+
 				else: # A TypeRig JSON Class kerning file
 					self.update_data(source_data)
-					print 'LOAD:\t Font:%s; TypeRig JSON Group Kerning classes loaded from: %s.' %(self.active_font.name, fname)
+					output(6, app_name, 'Font:%s; TypeRig JSON Kerning classes loaded from: %s.' %(self.active_font.name, fname))
 
 				self.btn_loadFile.setChecked(True)
 				self.btn_loadFont.setChecked(False)
@@ -172,14 +177,12 @@ class tool_tab(QtGui.QWidget):
 			temp_dict[layer] = fl_kern_group_dict
 			
 		self.update_data(temp_dict)
-		print 'LOAD:\t Font:%s; Kerning classes loaded: %s.' %(self.active_font.name, len(fl_kern_group_dict.keys()))
+		output(6, app_name, 'Font:%s; Kerning classes loaded: %s.' %(self.active_font.name, len(fl_kern_group_dict.keys())))
 		self.btn_loadFile.setChecked(False)
 		self.btn_loadFont.setChecked(True)
 
 	def process(self):
 		# - Init
-		#getUniGlyph = lambda c: self.active_font.fl.findUnicode(ord(c)).name
-		
 		def getUniGlyph(char):
 			if '/' in char and char != '//':
 				return char.replace('/','')
@@ -274,22 +277,20 @@ class tool_tab(QtGui.QWidget):
 								if work_pair in layer_kerning.keys():
 									if layer_kerning[layer_kerning.keys().index(work_pair)] != src_value:
 										layer_kerning[layer_kerning.keys().index(work_pair)] = src_value
-										print 'CHANGE:\t Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer)
+										output(1, app_name,'Existing Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer))
 
 								else: # Class does not exist, add as plain pair due to FL6 limitation 
 									if self.btn_classKern.isChecked():
 										left, right = work_pair.asTuple()
 										work_name = (left.asTuple()[0], right.asTuple()[0])
 										layer_kerning[work_name] = src_value
-										print 'ADD:\t Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer)
+										output(4, app_name, 'Class Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer))
 									else:
 										layer_kerning.setPlainPairs([(work_name, src_value)])
-										print 'ADD:\t Plain Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer)
+										output(4, app_name, 'Plain Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer))
 						
 					else:
-						print 'ERROR:\t Class kering not found for Master: %s' %layer
-				
-		print 'Done.'
+						warnings.warn('Class kering not found for Master: %s' %layer, KernClassWarning)
 
 # - RUN ------------------------------
 if __name__ == '__main__':

@@ -21,7 +21,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.base import Line, Vector
 
-from typerig.core.func.collection import groupConsecutives
+from typerig.core.func.collection import group_consecutive
 from typerig.core.base.message import *
 
 from PythonQt import QtCore
@@ -33,7 +33,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '2.05'
+app_name, app_version = 'TypeRig | Nodes', '2.06'
 
 # - Helpers ----------------------------
 def filter_consecutive(selection):

@@ -9,13 +9,15 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
+from __future__ import absolute_import, print_function
 from collections import OrderedDict
 
 import fontlab as fl6
-
-from typerig.proxy.fl import *
-
 from PythonQt import QtCore
+
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.glyph import pGlyph
+
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRVTabWidget
 
@@ -23,7 +25,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRVTabWidget
 import Kern as Panel 
 
 # - Init --------------------------
-app_version = '0.10'
+app_version = '1.10'
 app_name = 'TypeRig Kern'
 ignorePanel = '__'
 

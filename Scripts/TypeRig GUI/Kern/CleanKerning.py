@@ -1,31 +1,34 @@
 #FLM: TR: Kerning cleanup
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2018-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-# - Init
-global pLayers
-global pMode
-pLayers = None
-pMode = 0
-app_name, app_version = 'TypeRig | Cleanup', '1.8'
-temp_group_prefix = '_'
-
 # - Dependencies -----------------
-from os import path
-from pprint import pprint
+from __future__ import absolute_import, print_function
+import os, warnings
+
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig.proxy.fl import *
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.kern import pKerning
+from typerig.core.base.message import *
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs
+
+# - Init ------------------------
+global pLayers
+global pMode
+pLayers = None
+pMode = 0
+app_name, app_version = 'TypeRig | Cleanup', '1.9'
+temp_group_prefix = '_'
 
 # - Sub widgets ------------------------
 class TRkernClean(QtGui.QGridLayout):
@@ -81,7 +84,7 @@ class TRkernClean(QtGui.QGridLayout):
 	def fonts_refresh(self):
 		self.all_fonts = fl6.AllFonts()
 		if len(self.all_fonts):
-			self.font_files = [path.split(font.path)[1] for font in self.all_fonts]
+			self.font_files = [os.path.split(font.path)[1] for font in self.all_fonts]
 			self.cmb_all_fonts.blockSignals(True)
 			self.cmb_all_fonts.clear()
 			self.cmb_all_fonts.addItems(self.font_files)
@@ -93,7 +96,7 @@ class TRkernClean(QtGui.QGridLayout):
 		self.font = pFont(currentFont)
 		self.cmb_layers.clear()
 		self.cmb_layers.addItems(['All masters'] + self.font.masters())
-		print '\nWARN:\t Active font changed to: %s;\t Path: %s' %(self.font.PSfullName, currentFont.path)
+		warnings.warn('Active font changed to: %s;\t Path: %s' %(self.font.PSfullName, currentFont.path), FontWarning)
 
 	def report_mismatch(self):
 		# - Init
@@ -107,10 +110,10 @@ class TRkernClean(QtGui.QGridLayout):
 
 
 		mismatch = list(reduce(set.union, font_kerning) - reduce(set.intersection, font_kerning))
-		print '\nFONT: %s;\tPairs not present in all masters:\t %s\n' %(self.font.PSfullName, len(mismatch)) + '-'*60 
+		print('\nFONT: %s;\tPairs not present in all masters:\t %s\n' %(self.font.PSfullName, len(mismatch)) + '-'*60)
 
 		for pair in mismatch:
-			print 'MIS-MATCH: %s | %s' %pair
+			print('MIS-MATCH: %s | %s' %pair)
 
 	def kern_exceptions(self, clear_exceptions=False, report_flats=False):
 		# - Init
@@ -131,7 +134,7 @@ class TRkernClean(QtGui.QGridLayout):
 			# - Get group data
 			layer_kerning = pKerning(fg_layer_kerning)
 			layer_groups = layer_kerning.groupsBiDict()
-			print '\nFONT: %s;\tLAYER:\t %s\n' %(self.font.PSfullName, layer) + '-'*60 
+			print('\nFONT: %s;\tLAYER:\t %s\n' %(self.font.PSfullName, layer) + '-'*60)
 
 			# - Process
 			for pair, value in layer_kerning.fg.items():
@@ -165,25 +168,25 @@ class TRkernClean(QtGui.QGridLayout):
 								delete_pairs.append((pair.left.id, pair.right.id))
 								
 								if not clear_exceptions and not report_flats:
-									print 'FOUND:\t Exception: %s | %s %s;\tFrom: %s | %s %s.' %(pair.left.id, pair.right.id, value, left_in_group[0], right_in_group[0], group_value)
+									print('FOUND:\t Exception: %s | %s %s;\tFrom: %s | %s %s.' %(pair.left.id, pair.right.id, value, left_in_group[0], right_in_group[0], group_value))
 						else:
 							extend_pairs.append((pair.left.id, pair.right.id, left_in_group, right_in_group))
 							
 							if report_flats:
-								print 'WARN:\t Plain pair: %s | %s %s;\tCould be EXTENDED to class kerning: %s | %s.' %(pair.left.id, pair.right.id, value, left_in_group[0], right_in_group[0])
+								print('WARN:\t Plain pair: %s | %s %s;\tCould be EXTENDED to class kerning: %s | %s.' %(pair.left.id, pair.right.id, value, left_in_group[0], right_in_group[0]))
 
 			if clear_exceptions:
 				# - Remove pairs
 				for pair in delete_pairs:
 					layer_kerning.fg.remove(pair)
 
-				print '\nDONE:\t Removed exception pairs: %s;\tLayer: %s.\n' %(len(delete_pairs), layer)
+				output(0, app_name, 'Removed exception pairs: %s;\tLayer: %s.\n' %(len(delete_pairs), layer))
 			
 			if not clear_exceptions and not report_flats:
-				print '\nDONE:\t Found exception pairs: %s;\tLayer: %s.\n' %(len(delete_pairs), layer)
+				output(0, app_name, 'Found exception pairs: %s;\tLayer: %s.\n' %(len(delete_pairs), layer))
 
 			if report_flats:
-				print '\nDONE:\t Found flat pairs that could be extended: %s;\tLayer: %s.\n' %(len(extend_pairs), layer)				
+				output(0, app_name, 'Found flat pairs that could be extended: %s;\tLayer: %s.\n' %(len(extend_pairs), layer))				
 
 			# - Un-Fix groups
 			if self.chk_exceptions_fix_groups.isChecked():

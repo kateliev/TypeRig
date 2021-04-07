@@ -8,14 +8,19 @@
 # that you use it at your own risk!
 
 # - Dependencies -------------------------
+from __future__ import absolute_import, print_function, unicode_literals
 import os, warnings
 from itertools import product
 
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig.proxy.fl import *
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.string import *
+
 from typerig.core.fileio import cla, krn
+from typerig.core.func.string import *
+from typerig.core.base.message import *
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
@@ -26,7 +31,7 @@ global pMode
 pLayers = None
 pMode = 0
 
-app_name, app_version = 'TypeRig | Pairs', '1.26'
+app_name, app_version = 'TypeRig | Pairs', '2.01'
 
 # - Strings ------------------------------
 glyphSep = '/'
@@ -124,6 +129,10 @@ class TRStringGen(QtGui.QGridLayout):
 
 		self.btn_kernOTGrpSTR = QtGui.QPushButton('Sring')
 		self.btn_kernOTGrpCLA = QtGui.QPushButton('CLA')
+
+		# Disabled until solution is found - Unicode problems between Py27 and 3+
+		self.btn_generateUNI.setEnabled(False)
+		self.btn_kernPairsUNI.setEnabled(False)
 
 		self.btn_clear.setToolTip('Clear all manual input fields.')
 		self.btn_populate.setToolTip('Populate name lists with existing glyph names in active font.')
@@ -256,7 +265,7 @@ class TRStringGen(QtGui.QGridLayout):
 		self.cmb_inputA.addItems(sorted(self.glyphNames.keys()))
 		self.cmb_inputB.addItems(sorted(self.glyphNames.keys()))	
 
-		print 'DONE:\t Active font glyph names loaded into generator.'	
+		output(0, app_name, 'Active font glyph names loaded into generator.')
 
 	# -- Generators -------------------------------------------------
 	def getKerning(self, getUnicodeString=False):
@@ -309,9 +318,9 @@ class TRStringGen(QtGui.QGridLayout):
 		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
 		
 		if len(drop_list):
-			print 'WARN:\t %s Non-Unicode pairs dropped from string.' %len(drop_list)
+			output(1, app_name, '%s Non-Unicode pairs dropped from string.' %len(drop_list))
 
-		print 'DONE:\t Generated string sent to clipboard.'
+		output(0, app_name, 'Generated string sent to clipboard.')
 
 
 	def getKerningAMF(self, toFile=False):
@@ -337,13 +346,13 @@ class TRStringGen(QtGui.QGridLayout):
 				with krn.KRNparser(save_path, 'w') as writer:
 					writer.dump(sorted(save_pairs), 'Font: {}'.format(self.font.name))
 
-				print 'DONE:\t {} Generated pairs saved! File: {}'.format(len(save_pairs), save_path)
+				output(0, app_name, '{} Generated pairs saved! File: {}'.format(len(save_pairs), save_path))
 
 		else:
 			self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(sorted(string_pairs)))
 			clipboard = QtGui.QApplication.clipboard()
 			clipboard.setText(joinOpt[self.cmb_join.currentText].join(sorted(string_pairs)))
-			print 'DONE:\t Generated string sent to clipboard.'
+			output(0, app_name, 'Generated string sent to clipboard.')
 
 
 	def generateSTR(self, getAMFstring=False, toFile=False):
@@ -352,7 +361,7 @@ class TRStringGen(QtGui.QGridLayout):
 			try:
 				inputA = [self.font.fl.findUnicode(ord(item)).name for item in self.edt_inputA.text.split(' ')] 
 			except AttributeError:
-				print 'WARN:\t Unicode (Input A) to current font glyph names mapping is not activated! Please populate lists first.'
+				output(1, app_name, 'Unicode (Input A) to current font glyph names mapping is not activated! Please populate lists first.')
 				inputA = self.edt_inputA.text.split(' ')
 		else:
 			inputA = sorted(self.glyphNames[self.cmb_inputA.currentText])
@@ -361,7 +370,7 @@ class TRStringGen(QtGui.QGridLayout):
 			try:
 				inputB = [self.font.fl.findUnicode(ord(item)).name for item in self.edt_inputB.text.split(' ')]  
 			except AttributeError:
-				print 'WARN:\t Unicode (Input B) to current font glyph names mapping is not activated! Please populate lists first.'
+				output(1, app_name, 'Unicode (Input B) to current font glyph names mapping is not activated! Please populate lists first.')
 				inputB = self.edt_inputB.text.split(' ')
 		else:
 			inputB = sorted(self.glyphNames[self.cmb_inputB.currentText])
@@ -383,7 +392,7 @@ class TRStringGen(QtGui.QGridLayout):
 				with krn.KRNparser(save_path, 'w') as writer:
 					writer.dump(sorted(save_pairs), 'Font: {}'.format(self.font.name))
 
-				print 'DONE:\t {} Generated pairs saved! File: {}'.format(len(save_pairs), save_path)
+				output(0, app_name, '{} Generated pairs saved! File: {}'.format(len(save_pairs), save_path))
 		else:
 			generatedString = stringGen(inputA, inputB, (fillerLeft, fillerRight), self.cmb_fillerPattern.currentText, (self.edt_suffixA.text, self.edt_suffixB.text), self.edt_sep.text)
 			self.edt_output.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
@@ -392,7 +401,7 @@ class TRStringGen(QtGui.QGridLayout):
 			# - Copy to clipboard
 			clipboard = QtGui.QApplication.clipboard()
 			clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
-			print 'DONE:\t Generated string sent to clipboard.\tPairs: {}'.format(len(generatedString))
+			output(0, app_name, 'Generated string sent to clipboard.\tPairs: {}'.format(len(generatedString)))
 
 
 	def generateUNI(self):
@@ -417,7 +426,7 @@ class TRStringGen(QtGui.QGridLayout):
 		# - Copy to cliboard
 		clipboard = QtGui.QApplication.clipboard()
 		clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString).decode(self.defEncoding))
-		print 'DONE:\t Generated string sent to clipboard.\tPairs: {}'.format(len(generatedString))
+		output(0, app_name, 'Generated string sent to clipboard.\tPairs: {}'.format(len(generatedString)))
 
 	
 	def generateOTGroups(self, toFile=False):
@@ -433,7 +442,7 @@ class TRStringGen(QtGui.QGridLayout):
 				with cla.CLAparser(save_path, 'w') as writer:
 					writer.dump(sorted(kern_groups.items()), 'Font: {}'.format(self.font.name))
 
-				print 'DONE:\t {} kern classes exported! File: {}'.format(len(kern_groups.keys()), save_path)
+				output(0, app_name, '{} kern classes exported! File: {}'.format(len(kern_groups.keys()), save_path))
 		else:
 			gen_pattern = '@{0} = [{1}];'
 			self.font = pFont()
@@ -445,7 +454,7 @@ class TRStringGen(QtGui.QGridLayout):
 			# - Copy to clipboard
 			clipboard = QtGui.QApplication.clipboard()
 			clipboard.setText(joinOpt[self.cmb_join.currentText].join(generatedString))
-			print 'DONE:\t Generated string sent to clipboard.\tGroups: {}'.format(len(generatedString))
+			output(0, app_name, 'Generated string sent to clipboard.\tGroups: {}'.format(len(generatedString)))
 
 	
 					

@@ -20,10 +20,11 @@ import fontgate as fgt
 import PythonQt as pqt
 
 from typerig.core.objects.collection import treeDict
+from typerig.core.objects.collection import extBiDict
 from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
 
 # - Init ---------------------------------
-__version__ = '0.27.9'
+__version__ = '0.28.0'
 
 # - Classes -------------------------------
 class pFontMetrics(object):
