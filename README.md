@@ -5,7 +5,7 @@
 If you are experiencing any trouble running your scripts after April 2021 please refer to our [latest Py2.7 release](https://github.com/kateliev/TypeRig/releases/tag/v1.5.0-py27). It is a snapshot before switching the TR core to Py3+ and refactoring most scripts to be both Py2.7 and Py3+ compatible. 
 
 ## Documentation
-Please refer to the following [work in progress document](https://kateliev.github.io/TypeRig/Docs/README).
+Please refer to the following [work in progress document](https://kateliev.github.io/TypeRig/Docs/).
 
 ## Known issues
 Please refer to our [issues tracker](https://github.com/kateliev/TypeRig/issues).
