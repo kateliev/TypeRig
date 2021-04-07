@@ -31,9 +31,6 @@ _Planned_
 ### DeltaMachine
 - [Delta Machine Quick Start](https://kateliev.github.io/TypeRig/Docs/DeltaMachine/DeltaMachine)
 
-## Known issues
-Please refer to https://github.com/kateliev/TypeRig/issues
-
 ## Installation
 ### FontLab 7 - Manual installation from GitHub
 Download the archived (.zip) package provided from this repository or clone it. Run FontLab 7 and drag the installation file provided in the root folder caleld `install.vfpy` to the application _(as if it was a font)_. The _Output window_ should report if the installation was successful. The **TypeRig library** should now be installed.
