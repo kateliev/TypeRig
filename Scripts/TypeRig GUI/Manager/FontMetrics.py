@@ -1,31 +1,34 @@
 #FLM: TR: Font Metrics
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2018-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-# - Init
-global pLayers
-pLayers = None
-app_name, app_version = 'TypeRig | Font Metrics', '0.16'
-
 # - Dependencies -----------------
-import os, json
+from __future__ import absolute_import, print_function
+import os, json, warnings
+
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig.proxy.fl import *
+from typerig.proxy.fl.objects.font import pFont
+from typerig.core.base.message import *
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import TRTableView
 
+# - Init ----------------------------
+global pLayers
+pLayers = None
+app_name, app_version = 'TypeRig | Font Metrics', '1.16'
+
 # - Sub widgets ------------------------
 class TRZLineEdit(QtGui.QLineEdit):
-	# - Custom QLine Edit extending the contextual menu with FL6 metric expressions
+	# - Custom QLine Edit extending the contextual menu with metric expressions
 	def __init__(self, *args, **kwargs):
 		super(TRZLineEdit, self).__init__(*args, **kwargs)
 		self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -101,7 +104,7 @@ class WFontMetrics(QtGui.QWidget):
 
 	def resetChanges(self):
 		self.tab_fontMetrics.setTable(self.metricData, True)
-		print 'DONE:\t Font:%s; Font Metrics realoaded.' %self.activeFont.name
+		output(0, app_name, 'Font:%s; Font Metrics realoaded.' %self.activeFont.name)
 
 	def exportMetrics(self):
 		fontPath = os.path.split(self.activeFont.fg.path)[0]
@@ -111,7 +114,7 @@ class WFontMetrics(QtGui.QWidget):
 			with open(fname, 'w') as exportFile:
 				json.dump(self.metricData, exportFile)
 
-			print 'SAVE:\t Font:%s; Font Metrics saved to %s.' %(self.activeFont.name, fname)
+			output(7, app_name, 'Font:%s; Font Metrics saved to %s.' %(self.activeFont.name, fname))
 
 	def importMetrics(self):
 		fontPath = os.path.split(self.activeFont.fg.path)[0]
@@ -123,8 +126,8 @@ class WFontMetrics(QtGui.QWidget):
 
 			self.tab_fontMetrics.setTable(loadedData)
 
-			print 'LOAD:\t Font:%s; Font Metrics loaded from %s.' %(self.activeFont.name, fname)
-			print 'NOTE:\t Use < Apply > to apply loaded metrics to active Font!'
+			output(6,app_name, 'Font:%s; Font Metrics loaded from %s.' %(self.activeFont.name, fname))
+			output(1,app_name, 'Use < Apply > to apply loaded metrics to active Font!')
 
 # - Font Zones -------------------------------------------------------
 class WTreeWidget(QtGui.QTreeWidget):
@@ -235,11 +238,11 @@ class WFontZones(QtGui.QWidget):
 			self.activeFont.zonesFromTuples(zones, layer, True)
 
 		self.zoneData = {master:self.activeFont.zonesToTuples() for master in self.activeFont.masters()}
-		print 'DONE:\t Font:%s; Font Zones data Updated!.' %self.activeFont.name
+		output(0, app_name, 'Font:%s; Font Zones data Updated!.' %self.activeFont.name)
 
 	def resetChanges(self):
 		self.tree_fontZones.setTree(self.zoneData, True)
-		print 'DONE:\t Font:%s; Font Zones data reloaded.' %self.activeFont.name
+		output(0, app_name, 'Font:%s; Font Zones data reloaded.' %self.activeFont.name)
 
 	def addZone(self):
 		import copy
@@ -261,8 +264,8 @@ class WFontZones(QtGui.QWidget):
 		self.tree_fontZones.setTree(self.newZoneData)
 		self.tree_fontZones.expandAll()
 		
-		print 'ADD:\t Font:%s;  New zone added for %s.' %(self.activeFont.name, self.cmb_layer.currentText)
-		print 'NOTE:\t Use < Apply > to apply modified zones to active Font!'
+		output(4, app_name, 'Font:%s;  New zone added for %s.' %(self.activeFont.name, self.cmb_layer.currentText))
+		output(1, app_name, 'Use < Apply > to apply modified zones to active Font!')
 
 	def delZone(self):
 		root = self.tree_fontZones.invisibleRootItem()
@@ -278,7 +281,7 @@ class WFontZones(QtGui.QWidget):
 			with open(fname, 'w') as exportFile:
 				json.dump(self.zoneData, exportFile)
 
-			print 'SAVE:\t Font:%s; Font Zones saved to %s.' %(self.activeFont.name, fname)
+			output(7, app_name, 'Font:%s; Font Zones saved to %s.' %(self.activeFont.name, fname))
 
 	def importZones(self):
 		fontPath = os.path.split(self.activeFont.fg.path)[0]
@@ -291,8 +294,8 @@ class WFontZones(QtGui.QWidget):
 			self.tree_fontZones.setTree(loadedData)
 			self.tree_fontZones.expandAll()
 
-			print 'LOAD:\t Font:%s; Font Zones loaded from %s.' %(self.activeFont.name, fname)
-			print 'NOTE:\t Use < Apply > to apply loaded zones to active Font!'
+			output(6, app_name, 'Font:%s; Font Zones loaded from %s.' %(self.activeFont.name, fname))
+			output(1, app_name, 'NOTE:\t Use < Apply > to apply loaded zones to active Font!')
 
 
 # - Tabs -------------------------------
@@ -300,18 +303,8 @@ class tool_tab(QtGui.QWidget):
 	def __init__(self):
 		super(tool_tab, self).__init__()
 		
-		# - Build
-		'''
-		main = QtGui.QVBoxLayout()
-		scroll = QtGui.QScrollArea()
-		scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
-		scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-		scroll.setWidgetResizable(True)
-		
-		'''
 		layoutV = QtGui.QVBoxLayout()
 		splitter = QtGui.QSplitter(QtCore.Qt.Vertical)
-		#splitter.setHandleWidth(1)
 		
 		self.fontMetrics = WFontMetrics(self)
 		self.fontZones = WFontZones(self)
@@ -323,12 +316,6 @@ class tool_tab(QtGui.QWidget):
 		splitter.setStretchFactor(1,2)
 
 		layoutV.addWidget(splitter)
-
-						
-		# - Build ---------------------------
-		#layoutV.addStretch()
-		#scroll.setLayout(layoutV)
-		#main.addWidget(scroll)
 		self.setLayout(layoutV)
 
 # - Test ----------------------
