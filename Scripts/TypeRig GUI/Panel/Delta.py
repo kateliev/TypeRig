@@ -8,32 +8,33 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
-import warnings
-import os, json, random
+from __future__ import absolute_import, print_function
+import warnings, os, json, random
 from math import radians
 from collections import OrderedDict
 
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig.proxy.fl import *
-from typerig.core.base.message import *
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.glyph import eGlyph
 
+from typerig.core.base.message import *
 from typerig.core.func.math import linInterp, ratfrac
 from typerig.core.func import transform
 from typerig.core.objects.array import PointArray
 from typerig.core.objects.delta import DeltaArray, DeltaScale
 
 from PythonQt import QtCore
-from typerig.gui import QtGui
-from typerig.gui.widgets import *
+from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import * 
 
 # - Init -------------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Delta', '4.40'
+app_name, app_version = 'TypeRig | Delta', '4.45'
 
 # -- Strings
 tree_column_names = ('Layer','X', 'Y', 'Width', 'Height', 'Color')

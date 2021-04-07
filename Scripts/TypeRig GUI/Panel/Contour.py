@@ -1,31 +1,36 @@
 #FLM: TR: Contour
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2018-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-# - Init
-global pLayers
-global pMode
-pLayers = None
-pMode = 0
-app_name, app_version = 'TypeRig | Contour', '0.29'
-
 # - Dependencies -----------------
+from __future__ import absolute_import, print_function
 from collections import OrderedDict
 
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig.proxy.fl import *
 from typerig.core.base.message import *
+from typerig.proxy.fl.objects.base import Coord
+from typerig.proxy.fl.objects.glyph import eGlyph
+from typerig.proxy.fl.objects.shape import eShape
+from typerig.proxy.fl.objects.contour import eContour
+from typerig.proxy.fl.objects.font import pFontMetrics
 
 from PythonQt import QtCore
-from typerig.gui import QtGui
-from typerig.gui.widgets import getProcessGlyphs
+from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs
+
+# - Init -------------------------
+global pLayers
+global pMode
+pLayers = None
+pMode = 0
+app_name, app_version = 'TypeRig | Contour', '0.32'
 
 # - Sub widgets ------------------------
 class breakContour(QtGui.QGridLayout):

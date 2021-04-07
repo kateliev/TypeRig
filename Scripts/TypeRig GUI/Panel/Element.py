@@ -1,6 +1,6 @@
 #FLM: TR: Elements
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2018-2021	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 
@@ -8,6 +8,7 @@
 # that you use it at your own risk!
 
 # - Dependencies -------------------------
+from __future__ import absolute_import, print_function
 import os
 from math import radians
 from collections import OrderedDict
@@ -15,12 +16,21 @@ from collections import OrderedDict
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig.proxy.fl import *
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
+from typerig.proxy.fl.objects.shape import pShape
 from typerig.core.base.message import *
 
 from PythonQt import QtCore
-from typerig.gui import QtGui
-from typerig.gui.widgets import getProcessGlyphs
+from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs
+
+# - Init ------------------------------
+global pLayers
+global pMode
+pLayers = None
+pMode = 0
+app_name, app_version = 'TypeRig | Elements', '0.37'
 
 # - Syntax -------------------------------
 syn_comment = '#'
@@ -40,13 +50,6 @@ syn_bboxTR = syn_label + 'TR'
 syn_bboxBL = syn_label + 'BL'
 syn_bboxBR = syn_label + 'BR'
 syn_passlayer = syn_label + 'passlayer'
-
-# - Init ------------------------------
-global pLayers
-global pMode
-pLayers = None
-pMode = 0
-app_name, app_version = 'TypeRig | Elements', '0.35'
 
 # - Strings ------------------------------
 str_help = '''Examples:
