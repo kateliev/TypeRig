@@ -1,6 +1,6 @@
 # MODULE: TypeRig / Core / Collection (Functions)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2017-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2017-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -9,11 +9,11 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import
+from __future__ import absolute_import, print_function, division
 from itertools import islice
 
 # - Init --------------------------------
-__version__ = '0.26.2'
+__version__ = '0.26.7'
 
 # - Functions ---------------------------
 # -- Dictionary -------------------------
@@ -22,7 +22,7 @@ def mergeDicts(d1, d2, merge = lambda x, y : y):
 	--------
 	Example: merge(d1, d2, lambda x,y: x+y) -> {'a': 2, 'c': 6, 'b': 4}	'''
 	mergeDict = dict(d1)
-	for key, value in d2.iteritems():
+	for key, value in d2.items():
 		
 		if key in mergeDict:
 			mergeDict[key] = merge(mergeDict[key], value)
@@ -31,30 +31,24 @@ def mergeDicts(d1, d2, merge = lambda x, y : y):
 
 	return mergeDict
 # -- Lists ------------------------------
-def unpack(listItems):
+def flatten(listItems):
 	'''	Unpacks all items form [listItems] containing other lists, sets and etc. '''
 	from itertools import chain
 	return list(chain(*listItems))
 
-def enumerateWithStart(sequence, start = 0):
-	'''	Performs [enumerate] of a [sequence] with added [start] functionality (available in Python 2.6)	'''
-	for element in sequence:
-		yield start, element
-		start += 1
-
-def combineReccuringItems(listItems):
+def group_recurring(listItems):
 	'''	Combines recurring items in [listItems] and returns a list containing sets of grouped items	'''
 	temp = [set(item) for item in listItems if item]
 
 	for indexA, valueA in enumerate(temp) :
-		for indexB, valueB in enumerateWithStart(temp[indexA+1 :], indexA+1): # REMOVE and REPLACE with enumerate(item,start) if using  Python 2.6 or above
-		   if valueA & valueB:
-			  temp[indexA] = valueA.union(temp.pop(indexB))
-			  return combineReccuringItems(temp)
+		for indexB, valueB in enumerate(temp[indexA + 1 :], indexA + 1): 
+			if valueA & valueB:
+				temp[indexA] = valueA.union(temp.pop(indexB))
+				return group_recurring(temp)
 
 	return [tuple(item) for item in temp]
 
-def groupConsecutives(listItems, step = 1):
+def group_consecutive(listItems, step = 1):
 	'''	Build a list of lists containig consecutive numbers from [listItems] (number list) within [step] '''
 	tempList = []
 	groupList = [tempList]
@@ -72,6 +66,31 @@ def groupConsecutives(listItems, step = 1):
 	
 	return groupList
 
+def group_conditional(iterable, condition):
+	'''Takes a sorted iterable and groups items according to condition and operator given
+	Args: 
+		iterable	list() or tuple(): Any iterable object
+		condition 	lambda x: A function to check condition
+	Returns:
+		generator object
+
+	Example:
+		l = [123, 124, 128, 160, 167, 213, 215, 230, 245, 255, 257, 400, 401, 402, 430]
+		g = grouper(l, lambda x: x <= 15)
+		dict(enumerate(g))
+		>>> {1: [123, 124, 128], 2: [160, 167], 3: [213, 215, 230, 245, 255, 257],....}
+	'''
+	prev = None
+	group = []
+	for item in iterable:
+		if prev is None or condition(abs(item - prev)):
+			group.append(item)
+		else:
+			yield group
+			group = [item]
+		prev = item
+	if group:
+		yield group
 
 def sliding_window(sequence, window_size=2):
 	'''Returns a sliding window (of window_size) over data from the iterable.
@@ -86,3 +105,17 @@ def sliding_window(sequence, window_size=2):
 	for element in iterator:
 		result = result[1:] + (element,)
 		yield result
+
+
+if __name__ == '__main__':
+	d1 = {i:i+3 for i in range(10)}
+	d2 = {i:i*3 for i in range(10)}
+	print(mergeDicts(d1, d2, merge = lambda x, y : '%s+%s'%(x,y)))
+
+	a = ((3, 4), (4, 5), (67, 12), (899, 234, 2345, 2, 3), (4, 5, 7))
+	b = [123, 124, 128, 160, 167, 213, 215, 230, 245, 255, 257, 400, 401, 402, 430]
+	print(flatten(a))
+	print(group_recurring(a))
+	print(group_consecutive(flatten(a), step = 1))
+	print(list(sliding_window(flatten(a), window_size=2)))
+	print(list(group_conditional(b, lambda x: x <= 15)))

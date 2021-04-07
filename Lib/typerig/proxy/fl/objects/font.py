@@ -19,12 +19,11 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
-from typerig.core.objects.collection import *
-from typerig.proxy.fl.objects.glyph import *
-from typerig.proxy.fl.objects.string import *
+from typerig.core.objects.collection import treeDict
+from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
 
 # - Init ---------------------------------
-__version__ = '0.27.8'
+__version__ = '0.27.9'
 
 # - Classes -------------------------------
 class pFontMetrics(object):

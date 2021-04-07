@@ -1,6 +1,6 @@
 #FLM: TypeRig: Panel
 # ----------------------------------------
-# (C) Vassil Kateliev, 2018-2020 (http://www.kateliev.com)
+# (C) Vassil Kateliev, 2018-2021 (http://www.kateliev.com)
 # (C) Karandash Type Foundry (http://www.karandash.eu)
 #-----------------------------------------
 # www.typerig.com
@@ -9,22 +9,23 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
-#import os
+from __future__ import absolute_import, print_function
 from collections import OrderedDict
 
 import fontlab as fl6
-
-from typerig.proxy.fl import *
-
 from PythonQt import QtCore
-from typerig.gui import QtGui
-from typerig.gui.widgets import getProcessGlyphs, TRVTabWidget
 
-# -- Internals - Load toolpanels 
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.glyph import pGlyph
+
+from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRVTabWidget
+
+# -- Internals - Load tool panels 
 import Panel 
 
 # - Init --------------------------
-app_version = '0.58'
+app_version = '2.60'
 app_name = 'TypeRig Panel'
 ignorePanel = '__'
 

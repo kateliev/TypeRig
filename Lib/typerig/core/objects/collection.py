@@ -1,6 +1,6 @@
 # MODULE: TypeRig / Core / Collection (Objects)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2018-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -9,12 +9,17 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import print_function
-from collections import MutableSequence, MutableMapping, defaultdict
+from __future__ import absolute_import, print_function, division
+from collections import defaultdict
 import json
 
+try: #Py3+ 
+	from collections.abc import MutableSequence, MutableMapping
+except ImportError: #Py2+
+	from collections import MutableSequence, MutableMapping
+
 # - Init -------------------------------
-__version__ = '0.28.6'
+__version__ = '0.28.9'
 
 # - Objects ----------------------------
 # -- Lists -----------------------------
@@ -271,7 +276,7 @@ class CustomDict(MutableMapping):
 		return self.data.items()
 
 	def iteritems(self): 
-		return self.data.iteritems()
+		return self.data.items()
 
 	def iterkeys(self): 
 		return self.data.iterkeys()

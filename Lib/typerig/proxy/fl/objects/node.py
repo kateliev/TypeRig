@@ -17,13 +17,11 @@ import PythonQt as pqt
 
 from typerig.core.func.math import randomize
 from typerig.core.func.geometry import ccw
-from typerig.proxy.fl.objects.base import *
-#from typerig.proxy.fl.objects.curve import eCurveEx
-#from typerig.proxy.fl.objects.contour import pContour
-#from typerig.proxy.fl.objects.node import pNode, eNode
+from typerig.core.objects.utils import bounds
+from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 # - Init ---------------------------------
-__version__ = '0.27.0'
+__version__ = '0.27.2'
 
 # - Classes -------------------------------
 class pNode(object):

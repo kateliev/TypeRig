@@ -15,12 +15,12 @@ import fontlab as fl6
 import PythonQt as pqt
 
 from typerig.proxy.fl.objects.base import *
-from typerig.proxy.fl.objects.node import *
+from typerig.proxy.fl.objects.node import eNode
 
 from typerig.core.func.utils import isMultiInstance
 
 # - Init -----------------------------------
-__version__ = '0.3.7'
+__version__ = '0.3.9'
 
 # - Classes ---------------------------------
 class eCurveEx(object):

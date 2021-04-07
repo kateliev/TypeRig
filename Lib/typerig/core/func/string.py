@@ -1,6 +1,6 @@
 # MODULE: TypeRig / Core / String (Functions)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2015-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2015-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -9,25 +9,35 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
+from __future__ import absolute_import, print_function, division, unicode_literals
 from itertools import product
 
 # - Init --------------------------------
-__version__ = '0.26.2'
+__version__ = '0.26.4'
+
 
 # - Functions ---------------------------
-# -- Unicode ----------------------------
-def getLowercaseInt(uniocdeInt):
-	''' Based on given Uppercase Unicode (Integer) returns coresponding Lowercase Unicode (Integer) '''
-	return ord(unicode(unichr(uniocdeInt)).lower())
+# -- Compatibility to Py 2.7+ 
+try: unichr
+except NameError: unichr = chr
 
-def getUppercaseInt(uniocdeInt):
+try: unicode
+except NameError: unicode = str
+
+# -- Unicode ----------------------------
+def getLowercaseInt(unicodeInt):
+	''' Based on given Uppercase Unicode (Integer) returns coresponding Lowercase Unicode (Integer) '''
+	return ord(unicode(unichr(unicodeInt)).lower())
+
+def getUppercaseInt(unicodeInt):
 	''' Based on given Lowercase Uniocde (Integer) returns coresponding Uppercase Unicode (Integer) '''
-	return ord(unicode(unichr(uniocdeInt)).upper())
+	return ord(unicode(unichr(unicodeInt)).upper())
+
 
 def getLowercaseCodepoint(unicodeName):
 	''' Based on given Uppercase Unicode Name (String) returns coresponding Lowercase Unicode Name! Names are in Adobe uniXXXX format'''
 	if 'uni' in unicodeName:
-		return 'uni' + unichr(ord(('\u' + unicodeName.replace('uni','')).decode("unicode_escape"))).lower().encode("unicode_escape").strip('\u').upper()
+		return 'uni0%X' %ord(unichr(int(unicodeName.replace('uni','0x'), 16)).lower())
 	else:
 		if unicodeName.isupper() or unicodeName.istitle():
 			return unicodeName.lower() # not encoded in Adobe uniXXXX format (output for mixed lists)
@@ -37,7 +47,7 @@ def getLowercaseCodepoint(unicodeName):
 def getUppercaseCodepoint(unicodeName):
 	''' Based on given Uppercase Unicode Name (String) returns coresponding Uppercase Unicode Name! Names are in Adobe uniXXXX format'''
 	if 'uni' in unicodeName:
-		return 'uni' + unichr(ord(('\u' + unicodeName.replace('uni','')).decode("unicode_escape"))).upper().encode("unicode_escape").strip('\u').upper()
+		return 'uni0%X' %ord(unichr(int(unicodeName.replace('uni','0x'), 16)).upper())
 	else:
 		if unicodeName.islower():
 			return unicodeName.title() # not encoded in Adobe uniXXXX format, capitalize fisrt letter (output for mixed lists)! Note: use .upper() for all upercase
@@ -103,18 +113,39 @@ def str2lst(stringItems, separator):
 def lstcln(listItems, discard):
 	'''	Cleans a [listItems] by removing [discard]
 	Example: lstcln([List], '/space') '''
-	return [n for n in listItems if n is not discard]
+	return [n for n in listItems if n != discard]
 
 def strRepDict(stringItems, replacementDicionary, method = 'replace'):
 	'''	Replaces every instance of [stringItems] according to [replacementDicionary] using 'replace' ('r') or 'consecutive' replacement ('c') [method]s
 	Example: strRepDict('12', {'1':'/one', '2':'/two'}, 'r') '''
-	if method is 'replace' or method is 'r':
-		for key, value in replacementDicionary.iteritems():
+	if method == 'replace' or method == 'r':
+		for key, value in replacementDicionary.items():
 			stringItems = stringItems.replace(key, value)
 		return stringItems
 
-	elif method is 'consecutive' or method is 'c':
+	elif method == 'consecutive' or method == 'c':
 		return lst2str([replacementDicionary[item] if item in replacementDicionary.keys() else item for item in stringItems], '')
 
-	elif method is 'unicodeinteger' or method is 'i':
+	elif method == 'unicodeinteger' or method == 'i':
 		return lst2str([replacementDicionary[ord(item)] for item in unicode(stringItems) if ord(item) in replacementDicionary.keys()], ' ')
+
+if __name__ == '__main__':
+	ch = ord('E')
+	uni_zhe_uc = 'uni0416'
+	uni_zhe_lc = 'uni0436'
+	inputA = 'ABC'
+	inputB = 'DEF'
+	pairs_input = zip('a b c d'.split(), 'e f g h'.split())
+
+	print(chr(getLowercaseInt(ch)))
+	print(chr(getUppercaseInt(getLowercaseInt(ch))))
+	print(getLowercaseCodepoint(uni_zhe_uc) == uni_zhe_lc) 
+	print(getUppercaseCodepoint(uni_zhe_lc) == uni_zhe_uc)
+	print(kpxGen(inputA, inputB, suffix=('','')))
+	print(stringGen(inputA, inputB, filler=('HH','HH'), genPattern = 'FL A B A FR', suffix=('',''), sep='/'))
+	print(stringGenPairs(pairs_input, filler=('HH','HH'), genPattern = 'FL A B A FR', suffix=('',''), sep='/'))
+	print(strNormSpace('a     f g   g r 1'))
+	#print(lst2str(listItems, separator))
+	#print(str2lst(stringItems, separator))
+	#print(lstcln(listItems, discard))
+	#print(strRepDict(stringItems, replacementDicionary, method = 'replace'))

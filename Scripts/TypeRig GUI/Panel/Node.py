@@ -1,29 +1,39 @@
 #FLM: TR: Nodes
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2017-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2017-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-# - Init
+# - Dependencies -----------------
+from __future__ import absolute_import, print_function
+
+import warnings
+
+import fontlab as fl6
+import fontgate as fgt
+
+from typerig.proxy.fl.objects.node import eNode, eNodesContainer
+from typerig.proxy.fl.objects.contour import pContour
+from typerig.proxy.fl.objects.glyph import eGlyph
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.base import Line, Vector
+
+from typerig.core.func.collection import groupConsecutives
+from typerig.core.base.message import *
+
+from PythonQt import QtCore
+from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs
+
+# - Init -------------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '1.33'
-
-# - Dependencies -----------------
-import fontlab as fl6
-import fontgate as fgt
-
-from typerig.proxy.fl import *
-from typerig.core.func.collection import groupConsecutives
-
-from PythonQt import QtCore
-from typerig.gui import QtGui
-from typerig.gui.widgets import getProcessGlyphs
+app_name, app_version = 'TypeRig | Nodes', '2.05'
 
 # - Helpers ----------------------------
 def filter_consecutive(selection):
@@ -422,7 +432,6 @@ class alignNodes(QtGui.QGridLayout):
 			for layer in wLayers:
 				selection = glyph.selectedNodes(layer)
 				self.copyLine[layer] = Vector(selection[0], selection[-1])
-				#print self.copyLine[layer].angle, self.copyLine[layer].slope
 		else:
 			self.chk_copy.setText('Copy Slope')
 			self.chk_italic.setChecked(False)
@@ -860,7 +869,7 @@ class copyNodes(QtGui.QGridLayout):
 									update_flag = True
 								else:
 									update_flag = False
-									print 'ERROR:\t Layer: %s;\tCount Mismatch: Selected nodes [%s]; Source nodes [%s].' %(layer,len(dst_container), len(src_countainer))
+									warnings.warn('Layer: {};\tCount Mismatch: Selected nodes [{}]; Source nodes [{}].'.format(layer, len(dst_container), len(src_countainer)), NodeWarning)
 							
 				# - Done							
 				if update_flag:	
@@ -995,7 +1004,7 @@ class advMovement(QtGui.QVBoxLayout):
 						for node in selectedNodes:
 							node.slantShift(offset_x, offset_y, -90 + self.aux.copyLine[current_layer].angle)				
 					else:
-						print 'ERROR:\tNo slope information for layer found!\nNOTE:\tPlease <<Copy Slope>> first using TypeRig Node align toolbox.'
+						warnings.warn('No slope information for layer found!\nNOTE:\tPlease <<Copy Slope>> first using TypeRig Node align toolbox.', LayerWarning)
 
 			# - Finish it
 			glyph.update()

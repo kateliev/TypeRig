@@ -1,6 +1,6 @@
 # MODULE: TypeRig / Core / Utilities (Objects)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2017-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2017-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -8,8 +8,15 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
+
+# - Dependencies ---------------------
+from __future__ import absolute_import, print_function, division
+from typerig.core.func.math import linspread, geospread, ratfrac
+
+# - Init -----------------------------
 __version__ = '0.26.0'
 
+# - Classes --------------------------
 class fontFamilly():
 	'''Font familly class:
 	*   generates weight stems [.wt_stems] and MM weight instances [.wt_instances]
@@ -64,8 +71,6 @@ class linAxis(object):
 		self.update()			
 
 	def update(self):
-		from typerig.brain import linspread, geospread, ratfrac
-
 		minAxisStem, maxAxisStem = min(self.masters.values()), max(self.masters.values())
 		minAxisPos, maxAxisPos = min(self.masters.keys()), max(self.masters.keys())
 		

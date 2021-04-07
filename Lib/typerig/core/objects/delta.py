@@ -1,6 +1,6 @@
 # MODULE: TypeRig / Core / Delta (Objects)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2018-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -10,9 +10,14 @@
 
 
 # - Dependencies ------------------------
-from __future__ import print_function, absolute_import
-from collections import Sequence
+from __future__ import absolute_import, print_function, division
+
 import math
+
+try: #Py3+
+	from collections.abc import Sequence
+except ImportError: #Py2+
+	from collections import Sequence
 
 import typerig.core.func.transform as utils
 from typerig.core.objects.point import Point, Void

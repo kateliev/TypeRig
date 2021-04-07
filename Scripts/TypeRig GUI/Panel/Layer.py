@@ -1,6 +1,6 @@
 #FLM: TR: Layers
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2018-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 
@@ -8,29 +8,31 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
-import os
+from __future__ import absolute_import, print_function
+
+import os, warnings
 from math import radians
 from collections import OrderedDict
 from itertools import groupby
-import warnings
 
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig.proxy.fl import *
-from typerig.core.base.message import *
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
 from typerig.core.func.math import linInterp as lerp
+from typerig.core.base.message import *
 
 from PythonQt import QtCore
-from typerig.gui import QtGui
-from typerig.gui.widgets import *
+from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import *
 
-# - Init
+# - Init --------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '2.04'
+app_name, app_version = 'TypeRig | Layers', '2.05'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -233,7 +235,7 @@ class TRLayerActionCollector(object):
 	@staticmethod
 	def layer_pull(parent):
 		if parent.doCheck():
-			print parent.glyph
+			
 			if parent.chk_outline.isChecked():
 				TRLayerActionCollector.layer_copy_shapes(parent.glyph, parent.lst_layers.currentItem().text(), True)
 				

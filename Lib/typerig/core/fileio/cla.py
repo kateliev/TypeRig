@@ -86,10 +86,10 @@ class CLAparser(object):
 # - Test -----------------------------
 if __name__ == '__main__':
 	root_dir = os.path.dirname(os.path.dirname(__file__))
-	krn_filename = '1.cla'
-	krn_filename_out = 'test.cla'
-	krn_file = os.path.join(root_dir, krn_filename)
-	krn_file_out = os.path.join(root_dir, krn_filename_out)
+	guz_siti = '1.cla'
+	guz_siti_out = 'test.cla'
+	guz_file = os.path.join(root_dir, krn_siti)
+	guz_file_out = os.path.join(root_dir, krn_filename_out)
 
 	append_glyphs = []
 	with CLAparser(krn_file) as reader:

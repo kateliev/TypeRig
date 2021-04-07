@@ -1,4 +1,4 @@
-# MODULE: TypeRig / Proxy / Fontlab / Objects
+# MODULE: TypeRig / Proxy / Fontlab / GUI
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2017-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)

@@ -13,19 +13,20 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
-from typerig.core.func.math import *
-from typerig.core.func.collection import *
 from typerig.core.func.utils import isMultiInstance
 
-import typerig.core.objects as trobj
+from typerig.core.objects.point import Point as trPoint
+from typerig.core.objects.line import Line, Vector
+from typerig.core.objects.cubicbezier import CubicBezier
+
 from typerig.core.objects.utils import bounds
 
 
 # - Init ----------------------------------------------------
-__version__ = '0.26.0'
+__version__ = '0.26.3'
 
 # - FL Proxy model -------------------------------------------
-class Coord(trobj.Point): # Dumb Name but avoids name collision with FL Point object
+class Coord(trPoint): # Dumb Name but avoids name collision with FL Point object
 	def __init__(self, *argv):
 		super(Coord, self).__init__(0., 0.)
 
@@ -55,7 +56,7 @@ class Coord(trobj.Point): # Dumb Name but avoids name collision with FL Point ob
 	def asQPoint(self):
 		return pqt.QtCore.QPointF(*self.tuple)
 
-class Line(trobj.Line):
+class Line(Line):
 	def __init__(self, *argv):
 		super(Line, self).__init__((0., 0.), (0., 0.))
 
@@ -91,7 +92,7 @@ class Line(trobj.Line):
 	def asQPoint(self):
 		return pqt.QtCore.QPointF(*self.tuple)
 
-class Vector(trobj.Vector):
+class Vector(Vector):
 	def __init__(self, *argv):
 		temp_line = Line(*argv)
 		super(Vector, self).__init__(*temp_line.tuple)	
@@ -104,7 +105,7 @@ class Vector(trobj.Vector):
 	def asQPoint(self):
 		return pqt.QtCore.QPointF(*self.tuple)
 
-class Curve(trobj.CubicBezier):
+class Curve(CubicBezier):
 	def __init__(self, *argv):
 		points = []
 

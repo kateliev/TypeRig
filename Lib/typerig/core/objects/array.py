@@ -1,6 +1,6 @@
 # MODULE: TypeRig / Core / Array (Objects)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2018-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -9,8 +9,12 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import print_function, absolute_import
-from collections import Sequence
+from __future__ import absolute_import, print_function, division
+
+try: # Py3+
+	from collections.abc import Sequence
+except ImportError: # Py2+
+	from collections import Sequence
 
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.collection import CustomList
@@ -18,7 +22,7 @@ from typerig.core.objects.point import Point, Void
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.26.5'
+__version__ = '0.26.8'
 
 # - Classes -----------------------------
 # -- Point Collections ------------------

@@ -1,6 +1,6 @@
 # MODULE: TypeRig / Core / Node (Object)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2017-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2017-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -9,12 +9,12 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import
+from __future__ import absolute_import, print_function, division
 
 from typerig.core.objects.point import Point
 
 # - Init -------------------------------
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 node_types = ['move', 'line', 'offcurve', 'curve', 'qcurve']
 
 # - Classes -----------------------------
@@ -75,4 +75,4 @@ class Node(Point):
 
 if __name__ == '__main__':
 	n = Node.loads('10 20 s g2')
-	print n.dumps()
+	print(n.dumps())

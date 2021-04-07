@@ -23,8 +23,8 @@ from typerig.core.func import transform
 from typerig.core.objects.array import PointArray
 
 from PythonQt import QtCore
-from typerig.gui import QtGui
-from typerig.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRMsgSimple
+from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRMsgSimple
 
 
 # - Init --------------------------------

@@ -1,7 +1,7 @@
 # MODULE: TypeRig / Core / Atom (Objects)
 # NOTE: Assorted atomic, generic objects
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2020 		(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2020-2021	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -9,10 +9,12 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.2'
-
 # - Dependencies ------------------------
 #import collections.abc
+from __future__ import absolute_import, print_function, division
+
+# - Init -------------------------------
+__version__ = '0.0.4'
 
 # - Objects ----------------------------
 class Member(object):

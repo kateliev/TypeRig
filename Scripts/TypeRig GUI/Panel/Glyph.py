@@ -1,30 +1,32 @@
 #FLM: TR: Glyph
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2019-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2019-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-# - Init
+# - Dependencies -----------------
+from __future__ import absolute_import, print_function
+
+import fontlab as fl6
+import fontgate as fgt
+
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.glyph import pGlyph
+
+from PythonQt import QtCore
+from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRGLineEdit, TRTransformCtrl, fontMarkColors
+
+# - Init --------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Glyph', '0.15'
+app_name, app_version = 'TypeRig | Glyph', '0.17'
 
-# - Dependencies -----------------
-import fontlab as fl6
-import fontgate as fgt
-
-from typerig.proxy.fl import *
-
-from PythonQt import QtCore
-from typerig.gui import QtGui
-from typerig.gui.widgets import getProcessGlyphs, TRGLineEdit, TRTransformCtrl
-
-# - Init -------------------------------
 number_token = '#'
 
 # - String -----------------------------
@@ -285,7 +287,7 @@ class TRGlyphCopyTools(QtGui.QGridLayout):
 
 			font.updateObject(font.fl, 'Insert Glyph: %s --> %s;' %(src_glyph_name, ', '.join(processed_glyphs)))
 		else:
-			print 'ERROR:\t Glyph: %s;\t Source Glyph not found!' %(None, src_glyph_name)[1 if len(src_glyph_name) else 0]
+			warnings.warn('Glyph not found: %s;' %(None, src_glyph_name)[1 if len(src_glyph_name) else 0], GlyphWarning)
 
 
 	def glyph_duplicate(self):

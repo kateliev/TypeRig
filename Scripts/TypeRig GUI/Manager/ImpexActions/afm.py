@@ -15,7 +15,7 @@ import fontgate as fgt
 from fontTools import afmLib
 
 from PythonQt import QtCore
-from typerig.gui import QtGui
+from typerig.proxy.fl.gui import QtGui
 
 from typerig.proxy.fl import pFont
 from typerig.proxy.fl import pKerning

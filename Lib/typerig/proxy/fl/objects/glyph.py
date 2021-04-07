@@ -23,7 +23,6 @@ from fontTools.pens import statisticsPen
 from typerig.core.objects.point import Point
 from typerig.core.func.math import linInterp
 
-#from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 

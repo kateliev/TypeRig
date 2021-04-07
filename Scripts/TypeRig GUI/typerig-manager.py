@@ -13,8 +13,8 @@
 #import fontgate as fgt
 
 from PythonQt import QtCore
-from typerig.gui import QtGui
-from typerig.gui.widgets import getProcessGlyphs, TRHTabWidget
+from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRHTabWidget
 
 # -- Internals - Load toolpanels 
 import Manager

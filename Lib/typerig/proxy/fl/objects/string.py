@@ -9,11 +9,10 @@
 # that you use it at your own risk!
 
 # - Dependancies --------------------------------------------
-from typerig.core.func.string import *
+#from typerig.core.func.string import *
 
 # - Init ----------------------------------------------------
-__version__ = '0.18.3'
-
+__version__ = '0.18.4'
 
 # - Collections (Static)
 # -- Values
@@ -40,34 +39,6 @@ fillerList = [('nn','nn'), ('oo','oo'), ('HH','HH'), ('OO','OO'), ('HOII', 'IIOH
 
 # -- Dicts
 combiningMarks = {'uni030B': 'hungarumlaut', 'uni030C': 'caron', 'uni030A': 'ring', 'acutecomb': 'acute', 'uni0306': 'breve', 'uni0307': 'dotaccent', 'uni0304': 'macron', 'uni0302': 'circumflex', 'gravecomb': 'grave', 'tildecomb': 'tilde', 'uni0308': 'dieresis'}
-
-# -- Colors
-# Fontlab Name, Fontlab Value, QtColor Name
-fontMarkColors = [
-					(u'white', 0, u'white'),
-					(u'red', 1, u'red'),
-					(u'coral', 16, u'coral'),
-					(u'sienna', 20, u'sienna'),
-					(u'bisque', 37, u'bisque'),
-					(u'gold', 50, u'gold'),
-					(u'yellow', 61, u'yellow'),
-					(u'yellow green', 79, u'yellowgreen'),
-					(u'sulu', 90, u'chartreuse'),
-					(u'green', 121, u'green'),
-					(u'spring green', 145, u'springgreen'),
-					(u'aquamarine', 151, u'aquamarine'),
-					(u'turquoise', 174, u'turquoise'),
-					(u'cyan', 181, u'cyan'),
-					(u'skyblue', 195, u'skyblue'),
-					(u'maya blue', 210, u'cornflowerblue'),
-					(u'blue', 241, u'blue'),
-					(u'heliotrope', 271, u'blueviolet'),
-					(u'indigo', 274, u'indigo'),
-					(u'magenta', 301, u'magenta'),
-					(u'rose', 330, u'hotpink'),
-					(u'pink', 350, u'pink'),
-					(u'gray', 361, u'lightgray')
-					]
 
 # - Classes --------------------------------------------------
 class OTGen(object):

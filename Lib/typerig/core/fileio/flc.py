@@ -14,7 +14,7 @@
 from collections import defaultdict
 
 # - Init ---------------------------------
-__version__ = '0.2.4'
+__version__ = '0.2.5'
 
 # - Classes -------------------------------------------------------
 class fontClassesFromFile(object):
@@ -70,9 +70,9 @@ class fontClassesFromFile(object):
 			findLeader = [item for item in value if "'" in item]
 			self.classLeader[key] = findLeader[0].replace("'", '') if len(findLeader) else value[0]
 
-			if key[0] is '.':
+			if key[0] == '.':
 				self.metricClasses[key] = value
-			elif key[0] is '_':
+			elif key[0] == '_':
 				self.kernClasses[key] = value
 			else:
 				self.otClasses[key] = value

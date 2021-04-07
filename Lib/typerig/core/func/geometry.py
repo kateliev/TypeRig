@@ -1,6 +1,6 @@
 # MODULE: TypeRig / Core / Analytic geometry (Functions)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2015-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2015-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -9,15 +9,15 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import
+from __future__ import absolute_import, print_function, division
 import math
 
 # - Init --------------------------------
-__version__ = '0.26.4'
+__version__ = '0.26.3'
 
 # - Functions ---------------------------
 # -- Point ------------------------------
-def get_angle(x,y, degrees=True):
+def get_angle(x, y, degrees=True):
 	'''Return angle for given X,Y displacement from origin'''
 	angle = math.atan2(float(x), float(y))
 	return math.degrees(angle) if degrees else angle
@@ -39,8 +39,8 @@ def point_in_triangle(point, triangle):
 	Returns:
 		Bool
 	'''
-	trinagle_list = list(triangle) + triangle[0]
-	return all([ccw(p, trinagle_list[i], trinagle_list[i+1]) for i in range(3)])
+	trinagle_list = list(triangle) + [triangle[0]]
+	return all([ccw(point, trinagle_list[i], trinagle_list[i+1]) for i in range(3)])
 
 def point_in_polygon(point, polygon):
 	'''Point in Polygon test
@@ -237,3 +237,21 @@ def poly_area(vertices):
 		area += abs(vertices[i][0]*vertices[j][1] - vertices[j][0]*vertices[i][1])
 
 	return area*0.5
+
+if __name__ == '__main__':
+	A = (0,0); B = (0,200); C = (200,200); D = (200,0)
+	print(get_angle(10, 35, degrees=True))
+	print(ccw(A, B, C))
+	print(intersect(A,B,C,D))
+	print(point_in_triangle(D, (A, B, C)))
+	print(point_in_polygon(D, (A, B, C, D)))
+	print(point_rotate(A, A, 30, inDegrees=True))
+	print(line_slope(A, C))
+	print(line_angle(A, B, degrees=True))
+	print(line_y_intercept(A, C))
+	print(line_solve_y(A, B, 0))
+	print(line_solve_x(A, B, 0))
+	print(line_intersect(A, C, B, D))
+	print(checkSmooth(90, 91, error=4))
+	print(checkInnerOuter(90, 92))
+	print(poly_area((A, B, C, D)))

@@ -13,13 +13,12 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
-#from typerig.proxy.fl import *
 from typerig.core.objects.point import Point, Void
 from typerig.proxy.fl.objects.base import Line, Curve
 from typerig.core.func.math import linspread
 
 # - Init -----------------------------
-__version__ = '0.2.2'
+__version__ = '0.2.3'
 
 # - Classes --------------------------
 class GlyphSampler(object):

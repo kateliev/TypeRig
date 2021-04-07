@@ -16,7 +16,7 @@ import fontgate as fgt
 from typerig.proxy.fl import *
 
 from PythonQt import QtCore
-from typerig.gui import QtGui
+from typerig.proxy.fl.gui import QtGui
 
 # - Init --------------------------------
 global pLayers

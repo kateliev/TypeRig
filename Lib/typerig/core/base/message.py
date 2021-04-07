@@ -1,6 +1,6 @@
 # MODULE: Typerig / Base / Messages (Objects)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2020 		(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2020-2021	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -12,11 +12,11 @@
 # that you use it at your own risk!
 
 # - Dependencies -------------------------
-from __future__ import print_function
+from __future__ import absolute_import
 import os, warnings
 
 # - Init -----------------------------
-__version__ = '0.0.2'
+__version__ = '0.0.4'
 
 # - Strings --------------------------
 # --------------> 	0		1		2		3		4		5		6		7		8		9

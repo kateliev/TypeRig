@@ -1,6 +1,6 @@
 # MODULE: TypeRig / Core / Utility (Functions)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2018-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2018-2021 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -9,11 +9,11 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import
+from __future__ import absolute_import, print_function, division, unicode_literals
 import math, random
 
 # - Init --------------------------------
-__version__ = '0.26.2'
+__version__ = '0.26.3'
 
 # -- Units ----------------------------------------------------------------------
 def getFunctionName():

@@ -19,8 +19,8 @@ from PythonQt import QtCore
 
 from typerig.proxy.fl import *
 
-from typerig.gui import QtGui
-from typerig.gui.widgets import TRTableView, TRSliderCtrl, getProcessGlyphs
+from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import TRTableView, TRSliderCtrl, getProcessGlyphs
 
 # - Init
 global pLayers
