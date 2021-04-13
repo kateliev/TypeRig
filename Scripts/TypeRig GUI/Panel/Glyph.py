@@ -10,6 +10,8 @@
 # - Dependencies -----------------
 from __future__ import absolute_import, print_function
 
+import warnings
+
 import fontlab as fl6
 import fontgate as fgt
 
@@ -25,7 +27,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Glyph', '0.17'
+app_name, app_version = 'TypeRig | Glyph', '0.18'
 
 number_token = '#'
 
