@@ -19,7 +19,7 @@ except ImportError: #Py2+
 	from collections import MutableSequence, MutableMapping
 
 # - Init -------------------------------
-__version__ = '0.28.9'
+__version__ = '0.29.0'
 
 # - Objects ----------------------------
 # -- Lists -----------------------------
@@ -164,10 +164,10 @@ class CustomList(MutableSequence):
 		else:
 			self.data.extend(other)
 
-class dimList(CustomList):
+class ndList(CustomList):
 	'''Custom list object that supports multiple dimensions
 	Example: 
-		a = dimList([[[1, 2, 3, 4], ['a', 'b', 'c', 'd']], [[5, 6, 7, 8], ['e', 'f', 'g', 'h']]])
+		a = ndList([[[1, 2, 3, 4], ['a', 'b', 'c', 'd']], [[5, 6, 7, 8], ['e', 'f', 'g', 'h']]])
 		print(a[0,1,2])
 	'''
 	def __init__(self, *args, **kwargs):
@@ -599,9 +599,11 @@ class vfj_encoder(json.JSONEncoder):
 
 # -- Test --------------------------------------
 if __name__ == '__main__':
-	a = CustomList([1,2,3,4,])
+	a = CustomList([1,2,3,4])
 	b = CustomDict({1:1, 2:2})
 	c = biDict({1:'a', 2:'b'})
+	d = ndList([[1,2,3,4],[4,6,7]])
+	print(d.dim)
 	print(a,b,c,c.inverse['a'])
 	c[1] = '44a'
 	print(c)

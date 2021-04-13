@@ -14,7 +14,7 @@
 from __future__ import absolute_import, print_function, division
 
 # - Init -------------------------------
-__version__ = '0.0.4'
+__version__ = '0.0.5'
 
 # - Objects ----------------------------
 class Member(object):
@@ -25,6 +25,9 @@ class Member(object):
 
 	def __repr__(self):
 		return self.data
+
+	def __str__(self):
+		return str(self.data)
 
 	# - Properties -----------------------
 	@property
@@ -92,4 +95,19 @@ class Linker(object):
 			
 			curr_link = curr_link.next
 
-		
+if __name__ == "__main__":
+	from operator import add
+
+	p = []
+	am = Member((10,10), parent=p)
+	bm = Member((20,10), parent=p)
+	p.append(am)
+	p.append(bm)
+	print(am.next)
+
+	a = Linker((10,10))
+	b = Linker((20,10))
+	c = Linker((30,10))
+	a + b + c
+	print(a.next)
+
