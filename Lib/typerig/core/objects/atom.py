@@ -23,12 +23,6 @@ class Member(object):
 		self.data = data
 		self.parent = kwargs.get('parent', None)
 
-	def __repr__(self):
-		return self.data
-
-	def __str__(self):
-		return str(self.data)
-
 	# - Properties -----------------------
 	@property
 	def next(self):

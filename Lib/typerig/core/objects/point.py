@@ -16,7 +16,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.transform import Transform
 
 # - Init -------------------------------
-__version__ = '0.26.7'
+__version__ = '0.26.8'
 
 # - Classes -----------------------------
 class Point(object): 
@@ -195,7 +195,7 @@ class Point(object):
 	def __neg__(self):
 		return self.__class__(-self.x, -self.y)
 
-	def __repr__(self):
+	def __str__(self):
 		return '<Point: {}, {}>'.format(self.x, self.y)
 
 	def __len__(self):
