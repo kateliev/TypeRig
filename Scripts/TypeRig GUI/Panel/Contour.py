@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '0.32'
+app_name, app_version = 'TypeRig | Contour', '0.33'
 
 # - Sub widgets ------------------------
 class breakContour(QtGui.QGridLayout):
@@ -255,9 +255,9 @@ class basicContour(QtGui.QGridLayout):
 				all_contours = glyph.contours(layerName)
 
 				if len(selection):
-					process_contours = [pContour(all_contours[item[0]]) for item in selection]
+					process_contours = [eContour(all_contours[item[0]]) for item in selection]
 				else:
-					process_contours = [pContour(contour) for contour in all_contours]
+					process_contours = [eContour(contour) for contour in all_contours]
 
 				for contour in process_contours:
 					if ccw:
