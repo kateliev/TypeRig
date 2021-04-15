@@ -21,7 +21,7 @@ from typerig.core.objects.utils import bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 # - Init ---------------------------------
-__version__ = '0.27.2'
+__version__ = '0.27.3'
 
 # - Classes -------------------------------
 class pNode(object):
@@ -719,7 +719,7 @@ class eNode(pNode):
 		#self.fl.smartSetXY(pqt.QtCore.QPointF(newX, self.y + shift_y))
 		self.smartReloc(newX, self.y + shift_y)
 
-	def alignTo(self, entity, align=(True, True)):
+	def alignTo(self, entity, align=(True, True), smart=True):
 		'''Align current node to a node or line given.
 		Arguments:
 			entity (flNode, pNode, eNode or Line)
@@ -729,15 +729,19 @@ class eNode(pNode):
 			newX = entity.x if align[0] else self.fl.x
 			newY = entity.y if align[1] else self.fl.y
 				
-			#self.fl.smartSetXY(pqt.QtCore.QPointF(newX, newY))
-			self.smartReloc(newX, newY)
+			if smart:
+				self.smartReloc(newX, newY)
+			else:
+				self.reloc(newX, newY)
 
 		elif isinstance(entity, (Line, Vector)):
 			newX = entity.solve_x(self.fl.y) if align[0] else self.fl.x
 			newY = entity.solve_y(self.fl.x) if align[1] else self.fl.y
 
-			#self.fl.smartSetXY(pqt.QtCore.QPointF(newX, newY))
-			self.smartReloc(newX, newY)
+			if smart:
+				self.smartReloc(newX, newY)
+			else:
+				self.reloc(newX, newY)
 
 
 class eNodesContainer(pNodesContainer):

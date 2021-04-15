@@ -33,7 +33,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '2.06'
+app_name, app_version = 'TypeRig | Nodes', '2.10'
 
 # - Helpers ----------------------------
 def filter_consecutive(selection):
@@ -261,11 +261,13 @@ class alignNodes(QtGui.QGridLayout):
 		self.chk_relations = QtGui.QPushButton('Keep Relations')
 		self.chk_copy = QtGui.QPushButton('Copy Slope')
 		self.chk_italic = QtGui.QPushButton('Italic')
+		self.chk_smartShift = QtGui.QPushButton('Smart shift')
 		
 		self.chk_copy.setCheckable(True)
 		self.chk_italic.setCheckable(True)
 		self.chk_intercept.setCheckable(True)
 		self.chk_relations.setCheckable(True)
+		self.chk_smartShift.setCheckable(True)
 		
 		# - Help 
 		self.btn_left.setToolTip('Align nodes LEFT.')
@@ -276,6 +278,7 @@ class alignNodes(QtGui.QGridLayout):
 		self.btn_bottom.setToolTip('Align nodes BOTTOM.')
 		self.chk_intercept.setToolTip('Find intersections of selected font metric\nwith slopes on which selected nodes resign.')
 		self.chk_relations.setToolTip('Keep relations between selected nodes.')
+		self.chk_smartShift.setToolTip('Move OFF-curve points together with ON-curve points.')
 
 		self.btn_solveY.setToolTip('Channel Process selected nodes according to Y values')
 		self.btn_solveX.setToolTip('Channel Process selected nodes according to X values')
@@ -388,38 +391,39 @@ class alignNodes(QtGui.QGridLayout):
 		self.addWidget(self.btn_bboxCenterY,	2, 2, 1, 2)
 		self.addWidget(self.btn_peerCenterX,	3, 0, 1, 2)
 		self.addWidget(self.btn_peerCenterY,	3, 2, 1, 2)
+		self.addWidget(self.chk_smartShift,		4, 0, 1, 4)
 		
-		self.addWidget(QtGui.QLabel('Nodes: Align to Font and Glyph metrics'), 4, 0, 1, 4)
-		self.addWidget(self.btn_toAscender,		5, 0, 1, 1)
-		self.addWidget(self.btn_toCapsHeight,	5, 1, 1, 1)
-		self.addWidget(self.btn_toDescender,	5, 2, 1, 1)
-		self.addWidget(self.btn_toXHeight,		5, 3, 1, 1)
-		self.addWidget(self.btn_toBaseline,		6, 0, 1, 1)
-		self.addWidget(self.edt_toYpos,			6, 1, 1, 1)
-		self.addWidget(self.btn_toYpos,			6, 2, 1, 1)
-		self.addWidget(self.btn_toMpos, 		6, 3, 1, 1)
-		self.addWidget(self.chk_relations, 		7, 0, 1, 2)
-		self.addWidget(self.chk_intercept, 		7, 2, 1, 2)
+		self.addWidget(QtGui.QLabel('Nodes: Align to Font and Glyph metrics'), 5, 0, 1, 4)
+		self.addWidget(self.btn_toAscender,		6, 0, 1, 1)
+		self.addWidget(self.btn_toCapsHeight,	6, 1, 1, 1)
+		self.addWidget(self.btn_toDescender,	6, 2, 1, 1)
+		self.addWidget(self.btn_toXHeight,		6, 3, 1, 1)
+		self.addWidget(self.btn_toBaseline,		7, 0, 1, 1)
+		self.addWidget(self.edt_toYpos,			7, 1, 1, 1)
+		self.addWidget(self.btn_toYpos,			7, 2, 1, 1)
+		self.addWidget(self.btn_toMpos, 		7, 3, 1, 1)
+		self.addWidget(self.chk_relations, 		8, 0, 1, 2)
+		self.addWidget(self.chk_intercept, 		8, 2, 1, 2)
 
 		#self.addWidget(QtGui.QLabel('Align to Glyph Layer'), 	6, 0, 1, 4)
-		self.addWidget(self.cmb_select_V, 		8, 0, 1, 1)
-		self.addWidget(self.spb_prc_V, 			8, 1, 1, 1)
-		self.addWidget(self.spb_unit_V, 		8, 2, 1, 1)
-		self.addWidget(self.btn_alignLayer_V, 	8, 3, 1, 1)
-		self.addWidget(self.cmb_select_H, 		9, 0, 1, 1)
-		self.addWidget(self.spb_prc_H, 			9, 1, 1, 1)
-		self.addWidget(self.spb_unit_H, 		9, 2, 1, 1)
-		self.addWidget(self.btn_alignLayer_H, 	9, 3, 1, 1)
+		self.addWidget(self.cmb_select_V, 		9, 0, 1, 1)
+		self.addWidget(self.spb_prc_V, 			9, 1, 1, 1)
+		self.addWidget(self.spb_unit_V, 		9, 2, 1, 1)
+		self.addWidget(self.btn_alignLayer_V, 	9, 3, 1, 1)
+		self.addWidget(self.cmb_select_H, 		10, 0, 1, 1)
+		self.addWidget(self.spb_prc_H, 			10, 1, 1, 1)
+		self.addWidget(self.spb_unit_H, 		10, 2, 1, 1)
+		self.addWidget(self.btn_alignLayer_H, 	10, 3, 1, 1)
 		
-		self.addWidget(QtGui.QLabel('Nodes: Channel processing and slopes'), 10,0,1,4)
-		self.addWidget(self.btn_solveY, 		11, 0, 1, 2)
-		self.addWidget(self.btn_solveX, 		11, 2, 1, 2)
-		self.addWidget(self.chk_copy,			12, 0, 1, 3)
-		self.addWidget(self.chk_italic,			12, 3, 1, 1)
-		self.addWidget(self.btn_pasteMinY,		13, 0, 1, 1)
-		self.addWidget(self.btn_pasteMaxY,		13, 1, 1, 1)
-		self.addWidget(self.btn_pasteFMinY,		13, 2, 1, 1)
-		self.addWidget(self.btn_pasteFMaxY,		13, 3, 1, 1)
+		self.addWidget(QtGui.QLabel('Nodes: Channel processing and slopes'), 11,0,1,4)
+		self.addWidget(self.btn_solveY, 		12, 0, 1, 2)
+		self.addWidget(self.btn_solveX, 		12, 2, 1, 2)
+		self.addWidget(self.chk_copy,			13, 0, 1, 3)
+		self.addWidget(self.chk_italic,			13, 3, 1, 1)
+		self.addWidget(self.btn_pasteMinY,		14, 0, 1, 1)
+		self.addWidget(self.btn_pasteMaxY,		14, 1, 1, 1)
+		self.addWidget(self.btn_pasteFMinY,		14, 2, 1, 1)
+		self.addWidget(self.btn_pasteFMaxY,		14, 3, 1, 1)
 
 	def copySlope(self):
 		if self.chk_copy.isChecked():
@@ -695,7 +699,7 @@ class alignNodes(QtGui.QGridLayout):
 							control = (False, True)
 
 						# - Execute Align ----------
-						node.alignTo(target, control)
+						node.alignTo(target, control, self.chk_smartShift.isChecked())
 
 			glyph.updateObject(glyph.fl, 'Align Nodes @ %s.' %'; '.join(wLayers))
 			glyph.update()
