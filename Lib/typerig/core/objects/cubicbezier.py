@@ -20,7 +20,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.27.4'
+__version__ = '0.27.5'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -67,7 +67,7 @@ class CubicBezier(object):
 		return len(self.tuple)
 
 	def __repr__(self):
-		return '<Cubic Bezier: {},{},{},{}>'.format(self.p0.tuple, self.p1.tuple, self.p2.tuple, self.p3.tuple)
+		return '<{}: {},{},{},{}>'.format(self.__class__.__name__, self.p0.tuple, self.p1.tuple, self.p2.tuple, self.p3.tuple)
 
 	# -- Properties
 	@property

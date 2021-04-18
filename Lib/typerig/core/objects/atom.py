@@ -13,14 +13,15 @@
 #import collections.abc
 from __future__ import absolute_import, print_function, division
 
+from typerig.core.objects.collection import CustomList
+
 # - Init -------------------------------
-__version__ = '0.0.5'
+__version__ = '0.0.7'
 
 # - Objects ----------------------------
 class Member(object):
-	''' Node primitive that is a member of a sequence. '''
-	def __init__(self, data, **kwargs):
-		self.data = data
+	''' A primitive that is a member of a sequence. '''
+	def __init__(self, *args, **kwargs):
 		self.parent = kwargs.get('parent', None)
 
 	# - Properties -----------------------
@@ -38,8 +39,42 @@ class Member(object):
 		except (IndexError, AttributeError) as error:
 			return None
 
+class Container(CustomList, Member):
+	''' A primitive that is a member of a sequence and seqence of its own. '''
+	def __init__(self, data=None, **kwargs):
+		self.data = []
+		self.parent = kwargs.get('parent', None)
+		self.locked = kwargs.get('locked', False)
+		self.__subclass__ = kwargs.get('default_factory', self.__class__)
+
+		if data is not None:
+			if type(data) == type(self.data):
+				self.data[:] = data
+			elif isinstance(data, self.__class__):
+				self.data[:] = data.data[:]
+			else:
+				self.data = list(data)
+
+		if len(self.data):
+			for idx in range(len(self.data)):
+				if isinstance(self.data[idx], self.__subclass__):
+					self.data[idx].parent = self
+				
+				elif isinstance(self.data[idx], (tuple, list)):
+					self.data[idx] = self.__subclass__(self.data[idx], parent=self)
+
+	# - Methods ------------------------
+	def append(self, item):
+		if not self.locked:
+			if isinstance(item, self.__subclass__):
+				item.parent = self
+			else:
+				item = self.__subclass__(item, parent=self)
+
+			self.data.append(item)
+
 class Linker(object):
-	''' Doubly-linked-list/node primitive. '''
+	''' Doubly-linked-list primitive. '''
 	def __init__(self, data, **kwargs):
 		self.data = data
 		self.parent = kwargs.get('parent', None)
@@ -104,4 +139,13 @@ if __name__ == "__main__":
 	c = Linker((30,10))
 	a + b + c
 	print(a.next)
+
+	ac = Container((10,10))
+	bc = Container((20,10))
+	cc = Container((30,10))
+	dc = Container([ac, bc, cc, (20,30)])
+	print(ac.next.next)
+
+	for i in am:
+		print(i)
 

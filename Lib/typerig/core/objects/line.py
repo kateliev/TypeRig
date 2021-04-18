@@ -19,7 +19,7 @@ from typerig.core.objects.transform import Transform
 from typerig.core.objects.point import Point, Void
 
 # - Init -------------------------------
-__version__ = '0.26.7'
+__version__ = '0.26.8'
 
 # - Classes -----------------------------
 class Line(object):
@@ -69,7 +69,7 @@ class Line(object):
 		return len(self.tuple)
 
 	def __repr__(self):
-		return '<Line: {}, {}>'.format(self.p0.tuple, self.p1.tuple)
+		return '<{}: {}, {}>'.format(self.__class__.__name__, self.p0.tuple, self.p1.tuple)
 
 	# -- Properties
 	@property

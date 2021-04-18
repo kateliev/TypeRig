@@ -16,21 +16,21 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.transform import Transform
 
 # - Init -------------------------------
-__version__ = '0.26.8'
+__version__ = '0.26.9'
 
 # - Classes -----------------------------
 class Point(object): 
-	def __init__(self, *argv):
-		if len(argv) == 1:
-			if isinstance(argv[0], self.__class__): # Clone
-				self.x, self.y = argv[0].x, argv[0].y
+	def __init__(self, *args):
+		if len(args) == 1:
+			if isinstance(args[0], self.__class__): # Clone
+				self.x, self.y = args[0].x, args[0].y
 
-			if isinstance(argv[0], (tuple, list)):
-				self.x, self.y = argv[0]
+			if isinstance(args[0], (tuple, list)):
+				self.x, self.y = args[0]
 
-		elif len(argv) == 2:
-			if isMultiInstance(argv, (float, int)):
-				self.x, self.y = float(argv[0]), float(argv[1])
+		elif len(args) == 2:
+			if isMultiInstance(args, (float, int)):
+				self.x, self.y = float(args[0]), float(args[1])
 		
 		else:
 			self.x, self.y = 0., 0.
@@ -196,7 +196,7 @@ class Point(object):
 		return self.__class__(-self.x, -self.y)
 
 	def __str__(self):
-		return '<Point: {}, {}>'.format(self.x, self.y)
+		return '<{}: {}, {}>'.format(self.__class__.__name__, self.x, self.y)
 
 	def __len__(self):
 		return 1
