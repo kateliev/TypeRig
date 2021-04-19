@@ -13,7 +13,9 @@ import os, json
 import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore, QtGui
-from typerig.proxy.fl import pFont, pGlyph
+
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.glyph import pGlyph
 
 # - Init --------------------------------
 app_version = '0.04'
