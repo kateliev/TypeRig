@@ -16,11 +16,11 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.transform import Transform
 
 # - Init -------------------------------
-__version__ = '0.26.9'
+__version__ = '0.27.0'
 
 # - Classes -----------------------------
 class Point(object): 
-	def __init__(self, *args):
+	def __init__(self, *args, **kwargs):
 		if len(args) == 1:
 			if isinstance(args[0], self.__class__): # Clone
 				self.x, self.y = args[0].x, args[0].y
@@ -35,9 +35,9 @@ class Point(object):
 		else:
 			self.x, self.y = 0., 0.
 
-		self.angle = 0
-		self.transform = Transform()
-		self.complex_math = True
+		self.angle = kwargs.get('angle', 0)
+		self.transform = kwargs.get('transform', Transform())
+		self.complex_math = kwargs.get('complex', True)
 
 	# -- Operators
 	def __add__(self, other):
@@ -284,8 +284,8 @@ class Point(object):
 	# -- Specials
 	@property
 	def string(self):
-		x = int(self.x) if self.x.is_integer() else self.x
-		y = int(self.y) if self.y.is_integer() else self.y
+		x = int(self.x) if isinstance(self.x, float) and self.x.is_integer() else self.x
+		y = int(self.y) if isinstance(self.y, float) and self.y.is_integer() else self.y
 		return '{0}{2}{1}'.format(x, y, ' ')
 
 	def dumps(self):

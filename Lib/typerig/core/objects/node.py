@@ -10,26 +10,27 @@
 
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
+import copy
 
 from typerig.core.objects.point import Point
+from typerig.core.objects.transform import Transform
+
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.0.8'
+__version__ = '0.1.0'
 node_types = ['move', 'line', 'offcurve', 'curve', 'qcurve']
 
 # - Classes -----------------------------
 class Node(Member): 
 	def __init__(self, *args, **kwargs):
 		super(Node, self).__init__(**kwargs)
-		cloned = False
 
 		if len(args) == 1:
 			if isinstance(args[0], self.__class__): # Clone
-				self.x, self.y, self.type, self.smooth, self.name, self.identifier, self.g2 = args[0].tuple
-				self.parent = args[0].parent
-				cloned = True
+				self.__dict__ = copy.deepcopy(args[0].__dict__)
+				return
 
 			if isinstance(args[0], (tuple, list)):
 				self.x, self.y = args[0]
@@ -41,41 +42,32 @@ class Node(Member):
 		else:
 			self.x, self.y = 0., 0.
 
-		if not cloned:
-			self.type = kwargs.get('type','line')
-			self.smooth = kwargs.get('smooth', False)
-			self.name = kwargs.get('name', None)
-			self.identifier = kwargs.get('identifier', None)
-			self.g2 = kwargs.get('g2', False)
+		self.type = kwargs.get('type', node_types[0])
+		self.smooth = kwargs.get('smooth', False)
+		self.name = kwargs.get('name', None)
+		self.identifier = kwargs.get('identifier', None)
+		self.g2 = kwargs.get('g2', False)
+		self.transform = kwargs.get('transform', Transform())
 
 	def __repr__(self):
 		return '<{}: x={}, y={}, type={}>'.format(self.__class__.__name__, self.x, self.y, self.type)
 
-	# -- Properties
-	@property
-	def tuple(self):
-		return (self.x, self.y, self.type, self.smooth, self.name, self.identifier, self.g2)
-
+	# -- Properties -----------------------------
 	@property
 	def point(self):
-		return Point(self.x, self.y)
+		return Point(self.x, self.y, transform = self.transform)
 
 	@point.setter
 	def point(self, other):
 		new_point = Point(other)
 		self.x, self.y = new_point.tuple
 
-	# -- IO Format
+	# -- IO Format ------------------------------
 	def toVFJ(self):
 		node_config = []
-		x = int(self.x) if isinstance(self.x, float) and self.x.is_integer() else self.x
-		y = int(self.y) if isinstance(self.y , float) and self.y.is_integer() else self.y
-		
-		node_config.append(str(x))
-		node_config.append(str(y))
-
+		node_config.append(self.point.string)
 		if self.smooth: node_config.append('s')
-		#if self.type == 'offcurve': node_config.append('o')
+		if self.type == 'offcurve': node_config.append('o')
 		if self.g2: node_config.append('g2')
 
 		return ' '.join(node_config)
@@ -94,11 +86,11 @@ class Node(Member):
 if __name__ == '__main__':
 	n0 = Node.fromVFJ('10 20 s g2')
 	n1 = Node.fromVFJ('20 30 s')
-	n2 = Node(35, 55)
-	n3 = Node(44, 67)
+	n2 = Node(35, 55.65)
+	n3 = Node(44, 67, type='smooth')
 	n4 = Node(n3)
 	
-	print(n3)
+	print(n3, n4)
 	n3.point = Point(34,88)
 	n3.point += 30
 	print(n3.toVFJ())
@@ -107,7 +99,5 @@ if __name__ == '__main__':
 	c.append((99,99))
 
 	print(n0.next.next.toVFJ())
-	print(type(n0.parent))
+	print(n4.next.next.index)
 	
-	for n in c:
-		print(n.toVFJ())

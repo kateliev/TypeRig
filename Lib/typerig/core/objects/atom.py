@@ -16,7 +16,7 @@ from __future__ import absolute_import, print_function, division
 from typerig.core.objects.collection import CustomList
 
 # - Init -------------------------------
-__version__ = '0.0.7'
+__version__ = '0.0.8'
 
 # - Objects ----------------------------
 class Member(object):
@@ -26,17 +26,29 @@ class Member(object):
 
 	# - Properties -----------------------
 	@property
+	def index(self):
+		return self.parent.index(self)
+	
+	@property
 	def next(self):
 		try:
-			return self.parent[self.parent.index(self) + 1]
+			return self.parent[self.index + 1]
+		
 		except (IndexError, AttributeError) as error:
+			if self.index == len(self.parent) - 1:
+				return self.parent[0]
+
 			return None
 	
 	@property
 	def prev(self):
 		try:
-			return self.parent[self.parent.index(self) - 1]
+			return self.parent[self.index - 1]
+		
 		except (IndexError, AttributeError) as error:
+			if self.index == 0:
+				return self.parent[-1]
+
 			return None
 
 class Container(CustomList, Member):
@@ -132,6 +144,7 @@ if __name__ == "__main__":
 	bm = Member((20,10), parent=p)
 	p.append(am)
 	p.append(bm)
+	print(am.index)
 	print(am.next)
 
 	a = Linker((10,10))
@@ -144,8 +157,6 @@ if __name__ == "__main__":
 	bc = Container((20,10))
 	cc = Container((30,10))
 	dc = Container([ac, bc, cc, (20,30)])
-	print(ac.next.next)
+	print(cc.next.next)
 
-	for i in am:
-		print(i)
 
