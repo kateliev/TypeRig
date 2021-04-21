@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kerning Overview', '3.2'
+app_name, app_version = 'TypeRig | Kerning Overview', '3.6'
 alt_mark = '.'
 
 # - Dependencies -----------------
@@ -24,8 +24,12 @@ from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import TR2FieldDLG
 
-from typerig.proxy.fl import *
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.glyph import pGlyph
+from typerig.proxy.fl.objects.kern import pKerning
+from typerig.proxy.fl.application.app import pWorkspace, pItems
 from typerig.core.fileio import cla, krn
+from typerig.core.base.message import *
 
 # - Strings ------------------------------------------------------------------
 file_formats = {'trjson': 	'TypeRig JSON Raw Kerning (*.json)',
