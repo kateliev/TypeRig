@@ -14,7 +14,7 @@ from __future__ import absolute_import, print_function, division
 from typerig.core.func.math import linspread, geospread, ratfrac
 
 # - Init -----------------------------
-__version__ = '0.26.0'
+__version__ = '0.26.1'
 
 # - Classes --------------------------
 class fontFamilly():
@@ -102,12 +102,15 @@ class geoAxis(object):
 		self.instances = sorted(self.data.keys())
 					
 # - Bounding box object ----------------------------------
-class bounds(object):
+class Bounds(object):
 	def __init__(self, tupleList):
 		self.x, self.xmax = 0, 0
 		self.y, self.ymax = 0, 0
 		self.width, self.height = 0, 0
 		self.refresh(tupleList)
+
+	def __str__(self):
+		return '<{}: x={}, y={}, width={}, height={}>'.format(self.__class__.__name__, self.x, self.y, self.width, self.height)
 
 	def recalc(self, tupleList):
 		from operator import itemgetter

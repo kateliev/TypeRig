@@ -62,12 +62,16 @@ class Node(Member):
 		new_point = Point(other)
 		self.x, self.y = new_point.tuple
 
+	@property
+	def isOn(self):
+		return not self.type == 'offcurve'
+	
 	# -- IO Format ------------------------------
 	def toVFJ(self):
 		node_config = []
 		node_config.append(self.point.string)
 		if self.smooth: node_config.append('s')
-		if self.type == 'offcurve': node_config.append('o')
+		if not self.isOn: node_config.append('o')
 		if self.g2: node_config.append('g2')
 
 		return ' '.join(node_config)
@@ -99,5 +103,5 @@ if __name__ == '__main__':
 	c.append((99,99))
 
 	print(n0.next.next.toVFJ())
-	print(n4.next.next.index)
+	print(n4.next.next.isOn)
 	
