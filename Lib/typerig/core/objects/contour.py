@@ -54,7 +54,8 @@ class Contour(Container):
 		if self.closed: contour_nodes.append(contour_nodes[0])
 
 		while len(contour_nodes):
-			node = contour_nodes.pop(0)
+			node = contour_nodes[0]
+			contour_nodes= contour_nodes[1:]
 			segment = [node.point if asPoint else node]
 
 			for node in contour_nodes:
@@ -80,7 +81,8 @@ if __name__ == '__main__':
 	from typerig.core.objects.line import Line
 	from typerig.core.objects.cubicbezier import CubicBezier
 
-	# - Test initialization 
+	section = lambda s: '\n{0}\n{1}\n{0}'.format('-'*50, s)
+
 	test = [Node(200.0, 280.0, type='on'),
 			Node(760.0, 280.0, type='on'),
 			Node(804.0, 280.0, type='curve'),
@@ -99,12 +101,15 @@ if __name__ == '__main__':
 			Node(156.0, 280.0, type='curve')]
 
 	c = Contour(test, closed=True)
+	print(section('Contour'))
+	pprint(c)
 	
 	# - Test segments
-	print(c.segments)
-	print(c.getSegments(True))
+	print(section('Segments Nodes'))
+	pprint(c.segments)
+	print(section('Segments Points'))
+	pprint(c.getSegments(True))
 
-	# - Test segment creation
 	obj_segments = []
 	for segment in c.getSegments(True):
 		if len(segment) == 2:
@@ -112,7 +117,17 @@ if __name__ == '__main__':
 		if len(segment) == 4:
 			obj_segments.append(CubicBezier(*segment))
 
-	print(obj_segments)
+	print(section('Object Segments'))
+	pprint(obj_segments)
+
+	print(section('Truth tests'))
+	print(c[0].point == c.segments[0][0].point == obj_segments[0].p0)
+
+	print(section('Value assignment'))
+	tl = obj_segments[0]
+	tl.p0.x = 999.999999999
+	print(tl)
+	print(c[0])
 
 
 

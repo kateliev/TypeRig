@@ -19,7 +19,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.1.1'
+__version__ = '0.1.5'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -33,34 +33,50 @@ class Node(Member):
 				return
 
 			if isinstance(args[0], (tuple, list)):
-				self.x, self.y = args[0]
+				x, y = args[0]
 
 		elif len(args) == 2:
 			if isMultiInstance(args, (float, int)):
-				self.x, self.y = float(args[0]), float(args[1])
+				x, y = float(args[0]), float(args[1])
 		
 		else:
-			self.x, self.y = 0., 0.
+			x, y = 0., 0.
 
+		# - Point
+		transform = kwargs.get('transform', Transform())
+		self.point = Point(x, y, transform=transform)
+
+		# - Metadata
 		self.type = kwargs.get('type', node_types['on'])
 		self.smooth = kwargs.get('smooth', False)
 		self.name = kwargs.get('name', None)
 		self.identifier = kwargs.get('identifier', None)
 		self.g2 = kwargs.get('g2', False)
-		self.transform = kwargs.get('transform', Transform())
 
+	# -- Internals ------------------------------
 	def __repr__(self):
 		return '<{}: x={}, y={}, type={}>'.format(self.__class__.__name__, self.x, self.y, self.type)
 
 	# -- Properties -----------------------------
 	@property
-	def point(self):
-		return Point(self.x, self.y, transform = self.transform)
+	def x(self):
+		return self.point.x
 
-	@point.setter
-	def point(self, other):
-		new_point = Point(other)
-		self.x, self.y = new_point.tuple
+	@x.setter
+	def x(self, value):
+		self.point.x = value
+
+	@property
+	def y(self):
+		return self.point.y
+
+	@y.setter
+	def y(self, value):
+		self.point.x = value
+
+	@property
+	def transform(self):
+		return self.point.transform
 
 	@property
 	def isOn(self):
