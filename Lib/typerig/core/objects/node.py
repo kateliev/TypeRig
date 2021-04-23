@@ -19,32 +19,13 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.1.5'
+__version__ = '0.1.7'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
-class Node(Member): 
+class Node(Point, Member): 
 	def __init__(self, *args, **kwargs):
-		super(Node, self).__init__(**kwargs)
-
-		if len(args) == 1:
-			if isinstance(args[0], self.__class__): # Clone
-				self.__dict__ = copy.deepcopy(args[0].__dict__)
-				return
-
-			if isinstance(args[0], (tuple, list)):
-				x, y = args[0]
-
-		elif len(args) == 2:
-			if isMultiInstance(args, (float, int)):
-				x, y = float(args[0]), float(args[1])
-		
-		else:
-			x, y = 0., 0.
-
-		# - Point
-		transform = kwargs.get('transform', Transform())
-		self.point = Point(x, y, transform=transform)
+		super(Node, self).__init__(*args, **kwargs)
 
 		# - Metadata
 		self.type = kwargs.get('type', node_types['on'])
@@ -59,33 +40,13 @@ class Node(Member):
 
 	# -- Properties -----------------------------
 	@property
-	def x(self):
-		return self.point.x
-
-	@x.setter
-	def x(self, value):
-		self.point.x = value
-
-	@property
-	def y(self):
-		return self.point.y
-
-	@y.setter
-	def y(self, value):
-		self.point.x = value
-
-	@property
-	def transform(self):
-		return self.point.transform
-
-	@property
 	def isOn(self):
 		return self.type == node_types['on']
 	
 	# -- IO Format ------------------------------
 	def toVFJ(self):
 		node_config = []
-		node_config.append(self.point.string)
+		node_config.append(self.string)
 		if self.smooth: node_config.append('s')
 		if not self.isOn: node_config.append('o')
 		if self.g2: node_config.append('g2')
@@ -101,7 +62,14 @@ class Node(Member):
 
 		return Node(float(string_list[0]), float(string_list[1]), type=node_type, smooth=node_smooth, g2=node_g2, name=None, identifier=None)
 
-	#!!!TODO: .xml, .toXML(), .fromXML() for UFO support
+	@staticmethod
+	def toXML(self):
+		raise NotImplementedError
+
+	@staticmethod
+	def fromXML(string):
+		raise NotImplementedError
+
 
 if __name__ == '__main__':
 	# - Test initialization, normal and rom VFJ

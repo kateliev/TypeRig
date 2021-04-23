@@ -10,7 +10,6 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-#import collections.abc
 from __future__ import absolute_import, print_function, division
 
 from typerig.core.objects.collection import CustomList

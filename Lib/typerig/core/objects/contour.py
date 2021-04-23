@@ -13,15 +13,17 @@ from __future__ import absolute_import, print_function, division
 import copy
 
 from typerig.core.objects.point import Point
-from typerig.core.objects.transform import Transform
 from typerig.core.objects.node import Node
+from typerig.core.objects.line import Line
+from typerig.core.objects.cubicbezier import CubicBezier
+from typerig.core.objects.transform import Transform
 from typerig.core.objects.utils import Bounds
 
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.0.5'
+__version__ = '0.1.1'
 
 # - Classes -----------------------------
 class Contour(Container): 
@@ -40,14 +42,35 @@ class Contour(Container):
 	@property
 	def bounds(self):
 		assert len(self.data) > 0, 'Cannot return bounds for contour with length {}'.format(len(self.data))
-		return Bounds([node.point.tuple for node in self.data])
+		return Bounds([node.tuple for node in self.data])
+
+	@property
+	def nodeSegments(self):
+		return self.getSegments()
 
 	@property
 	def segments(self):
-		return self.getSegments(False)
+		obj_segments = []
+
+		for segment in self.getSegments():
+			if len(segment) == 2:
+				obj_segments.append(Line(*segment))
+
+			elif len(segment) == 3:
+				# Placeholder for simple TT curves
+				raise NotImplementedError
+
+			elif len(segment) == 4:
+				obj_segments.append(CubicBezier(*segment))
+
+			else:
+				# Placeholder for complex TT curves
+				raise NotImplementedError
+
+		return obj_segments
 		
 	# -- Functions ------------------------------
-	def getSegments(self, asPoint=False):
+	def getSegments(self):
 		assert len(self.data) > 1, 'Cannot return segments for contour with length {}'.format(len(self.data))
 		contour_segments = []
 		contour_nodes = self.data
@@ -56,10 +79,10 @@ class Contour(Container):
 		while len(contour_nodes):
 			node = contour_nodes[0]
 			contour_nodes= contour_nodes[1:]
-			segment = [node.point if asPoint else node]
+			segment = [node]
 
 			for node in contour_nodes:
-				segment.append(node.point if asPoint else node)
+				segment.append(node)
 				if node.isOn: break
 
 			contour_segments.append(segment)
@@ -67,21 +90,26 @@ class Contour(Container):
 
 		return contour_segments[:-1]
 
-
 	# -- IO Format ------------------------------
 	def toVFJ(self):
-		pass
+		raise NotImplementedError
 
 	@staticmethod
 	def fromVFJ(string):
-		pass
+		raise NotImplementedError
+
+	@staticmethod
+	def toXML(self):
+		raise NotImplementedError
+
+	@staticmethod
+	def fromXML(string):
+		raise NotImplementedError
+
 
 if __name__ == '__main__':
 	from pprint import pprint
-	from typerig.core.objects.line import Line
-	from typerig.core.objects.cubicbezier import CubicBezier
-
-	section = lambda s: '\n{0}\n{1}\n{0}'.format('-'*50, s)
+	section = lambda s: '\n+{0}\n+ {1}\n+{0}'.format('-'*30, s)
 
 	test = [Node(200.0, 280.0, type='on'),
 			Node(760.0, 280.0, type='on'),
@@ -106,28 +134,19 @@ if __name__ == '__main__':
 	
 	# - Test segments
 	print(section('Segments Nodes'))
-	pprint(c.segments)
-	print(section('Segments Points'))
-	pprint(c.getSegments(True))
-
-	obj_segments = []
-	for segment in c.getSegments(True):
-		if len(segment) == 2:
-			obj_segments.append(Line(*segment))
-		if len(segment) == 4:
-			obj_segments.append(CubicBezier(*segment))
+	pprint(c.nodeSegments)
 
 	print(section('Object Segments'))
-	pprint(obj_segments)
+	pprint(c.segments)
 
 	print(section('Truth tests'))
-	print(c[0].point == c.segments[0][0].point == obj_segments[0].p0)
+	print(c[0] == c.nodeSegments[0][0] == c.segments[0].p0)
 
 	print(section('Value assignment'))
-	tl = obj_segments[0]
+	tl = c.segments[0]
 	tl.p0.x = 999.999999999
-	print(tl)
-	print(c[0])
+	print(tl, c[0])
+
 
 
 
