@@ -17,11 +17,11 @@ import PythonQt as pqt
 
 from typerig.core.func.math import randomize
 from typerig.core.func.geometry import ccw
-from typerig.core.objects.utils import bounds
+from typerig.core.objects.utils import Bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 # - Init ---------------------------------
-__version__ = '0.27.3'
+__version__ = '0.27.4'
 
 # - Classes -------------------------------
 class pNode(object):
@@ -345,7 +345,7 @@ class pNodesContainer(object):
 		return [Coord(node) for node in self.nodes]
 
 	def getBounds(self):
-		return bounds(self.getPosition())
+		return Bounds(self.getPosition())
 
 	def shift(self, dx, dy):
 		for node in self.nodes:

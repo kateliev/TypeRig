@@ -24,7 +24,7 @@ class Member(object):
 	def __init__(self, *args, **kwargs):
 		self.parent = kwargs.get('parent', None)
 
-	# - Properties -----------------------
+	# - Properties -----------------------	
 	@property
 	def index(self):
 		return self.parent.index(self)

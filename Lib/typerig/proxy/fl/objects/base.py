@@ -19,11 +19,8 @@ from typerig.core.objects.point import Point as trPoint
 from typerig.core.objects.line import Line, Vector
 from typerig.core.objects.cubicbezier import CubicBezier
 
-from typerig.core.objects.utils import bounds
-
-
 # - Init ----------------------------------------------------
-__version__ = '0.26.3'
+__version__ = '0.26.4'
 
 # - FL Proxy model -------------------------------------------
 class Coord(trPoint): # Dumb Name but avoids name collision with FL Point object
