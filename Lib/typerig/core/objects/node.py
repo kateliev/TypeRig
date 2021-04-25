@@ -19,7 +19,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.1.7'
+__version__ = '0.1.8'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -39,6 +39,19 @@ class Node(Point, Member):
 		return '<{}: x={}, y={}, type={}>'.format(self.__class__.__name__, self.x, self.y, self.type)
 
 	# -- Properties -----------------------------
+	@property
+	def point(self):
+		return Point(self.x, self.y, angle=self.angle, transform=self.transform, complex=self.complex_math)
+
+	@point.setter
+	def point(self, other):
+		if isinstance(other, (self.__class__, Point)):
+			self.x = other.x 
+			self.y = other.y 
+			self.angle = other.angle 
+			self.transform = other.transform 
+			self.complex_math = other.complex_math 
+	
 	@property
 	def isOn(self):
 		return self.type == node_types['on']

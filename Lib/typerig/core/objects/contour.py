@@ -147,6 +147,11 @@ if __name__ == '__main__':
 	tl.p0.x = 999.999999999
 	print(tl, c[0])
 
+	print(section('Change assignment'))
+	pprint(c)
+	c[0].point -= 900
+	print(c)
+
 
 
 

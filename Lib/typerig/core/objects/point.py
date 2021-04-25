@@ -17,7 +17,7 @@ from typerig.core.objects.transform import Transform
 from typerig.core.objects.atom import Atom
 
 # - Init -------------------------------
-__version__ = '0.27.0'
+__version__ = '0.27.1'
 
 # - Classes -----------------------------
 class Point(object): 
@@ -238,6 +238,10 @@ class Point(object):
 	@property
 	def tuple(self):
 		return (self.x, self.y)
+
+	@tuple.setter
+	def tuple(self, other):
+		self.x, self.y = other
 
 	# -- Solvers
 	def solve_width(self, y=0):
