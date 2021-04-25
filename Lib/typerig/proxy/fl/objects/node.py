@@ -20,6 +20,8 @@ from typerig.core.func.geometry import ccw
 from typerig.core.objects.utils import Bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
+from typerig.core.objects.node import Node
+
 # - Init ---------------------------------
 __version__ = '0.27.4'
 
@@ -801,3 +803,18 @@ class eNodesContainer(pNodesContainer):
 
 		else:
 			print('ERROR:\t Invalid Align Mode: {}'.format(alignMode))
+
+# - Test TR Core Node proxy -----------------------------
+class trNode(Node):
+	def __init__(self, node):
+		self.fl = node
+		super(trNode, self).__init__(self.fl.x, self.fl.y, type=self.fl.type)
+
+		meta = {'x':'x',
+				'y':'y',
+				'type':'type'
+				}
+		
+		for key, value in meta.items()
+			setattr(self.__class__, '{dst}', eval("property(lambda self: self.fl.__getattribute__('{src}'), lambda self, value: self.fl.__setattr__('{src}', value))".format(src=value, dst=key)))
+		

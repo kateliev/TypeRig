@@ -15,10 +15,14 @@ from __future__ import absolute_import, print_function, division
 from typerig.core.objects.collection import CustomList
 
 # - Init -------------------------------
-__version__ = '0.0.8'
+__version__ = '0.0.9'
 
 # - Objects ----------------------------
-class Member(object):
+class Atom(object):
+	def __init__(self, *args, **kwargs): 
+		pass
+
+class Member(Atom):
 	''' A primitive that is a member of a sequence. '''
 	def __init__(self, *args, **kwargs):
 		self.parent = kwargs.get('parent', None)

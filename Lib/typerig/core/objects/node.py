@@ -26,7 +26,7 @@ node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 class Node(Point, Member): 
 	def __init__(self, *args, **kwargs):
 		super(Node, self).__init__(*args, **kwargs)
-
+		
 		# - Metadata
 		self.type = kwargs.get('type', node_types['on'])
 		self.smooth = kwargs.get('smooth', False)
