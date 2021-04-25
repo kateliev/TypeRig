@@ -1,4 +1,4 @@
-# MODULE: Typerig / Proxy / Node (Obejcts)
+# MODULE: Typerig / Proxy / Node (Objects)
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2017-2020 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
@@ -23,7 +23,7 @@ from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 from typerig.core.objects.node import Node
 
 # - Init ---------------------------------
-__version__ = '0.27.4'
+__version__ = '0.27.5'
 
 # - Classes -------------------------------
 class pNode(object):
@@ -256,7 +256,7 @@ class pNode(object):
 			self.shift(deltaX, deltaY)
 
 	def randomize(self, cx, cy, bleed_mode=0):
-		'''Randomizes the node coordinates within given contrains cx and cy.
+		'''Randomizes the node coordinates within given constrains cx and cy.
 		Bleed control trough bleed_mode parameter: 0 - any; 1 - positive bleed; 2 - negative bleed;
 		'''
 		shiftX, shiftY = randomize(0, cx), randomize(0, cy)
@@ -803,18 +803,3 @@ class eNodesContainer(pNodesContainer):
 
 		else:
 			print('ERROR:\t Invalid Align Mode: {}'.format(alignMode))
-
-# - Test TR Core Node proxy -----------------------------
-class trNode(Node):
-	def __init__(self, node):
-		self.fl = node
-		super(trNode, self).__init__(self.fl.x, self.fl.y, type=self.fl.type)
-
-		meta = {'x':'x',
-				'y':'y',
-				'type':'type'
-				}
-		
-		for key, value in meta.items()
-			setattr(self.__class__, '{dst}', eval("property(lambda self: self.fl.__getattribute__('{src}'), lambda self, value: self.fl.__setattr__('{src}', value))".format(src=value, dst=key)))
-		

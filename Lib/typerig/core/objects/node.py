@@ -55,7 +55,27 @@ class Node(Point, Member):
 	@property
 	def isOn(self):
 		return self.type == node_types['on']
-	
+
+	@property
+	def nextOn(self):
+		assert self.parent is not None, 'Orphan Node: Cannot find Next on-curve node!'
+		currentNode = self.next
+		
+		while currentNode is not None and not currentNode.isOn:
+			currentNode = currentNode.next
+		
+		return currentNode
+
+	@property
+	def prevOn(self):
+		assert self.parent is not None, 'Orphan Node: Cannot find Previous on-curve node!'
+		currentNode = self.prev
+		
+		while currentNode is not None and not currentNode.isOn:
+			currentNode = currentNode.prev
+		
+		return currentNode
+
 	# -- IO Format ------------------------------
 	def toVFJ(self):
 		node_config = []

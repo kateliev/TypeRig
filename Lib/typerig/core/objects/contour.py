@@ -150,7 +150,9 @@ if __name__ == '__main__':
 	print(section('Change assignment'))
 	pprint(c)
 	c[0].point -= 900
-	print(c)
+
+	print(section('Next and previous on curve finder'))
+	print(c[1],c[1].nextOn.prevOn)
 
 
 
