@@ -23,12 +23,14 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 
 # - Classes -----------------------------
 class Contour(Container): 
 	def __init__(self, data=None, **kwargs):
-		super(Contour, self).__init__(data, default_factory=Node, **kwargs)
+		factory = kwargs.pop('default_factory', Node)
+		super(Contour, self).__init__(data, default_factory=factory, **kwargs)
+		
 		self.name = kwargs.get('name', None)
 		self.transform = kwargs.get('transform', Transform())
 		self.identifier = kwargs.get('identifier', None)

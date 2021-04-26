@@ -19,14 +19,15 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.1.8'
+__version__ = '0.1.9'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
 class Node(Point, Member): 
 	def __init__(self, *args, **kwargs):
 		super(Node, self).__init__(*args, **kwargs)
-		
+		self.parent = kwargs.get('parent', None)
+
 		# - Metadata
 		self.type = kwargs.get('type', node_types['on'])
 		self.smooth = kwargs.get('smooth', False)

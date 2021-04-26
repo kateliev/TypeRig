@@ -14,31 +14,34 @@ from __future__ import print_function
 
 import fontlab as fl6
 from typerig.core.objects.node import Node
-from typerig.proxy.tr.objects.meta import Meta
 
 # - Init ---------------------------------
-__version__ = '0.0.6'
+__version__ = '0.0.8'
 	
 # - Classes -------------------------------
 class trNode(Node):
-	
-	# - Metadata and proxy model
-	__getter__ = '__getattribute__'
-	__setter__ = '__setattr__'
-	__host__ = 'self.host'
-	__meta__ = {'x':'x',
-				'y':'y',
-				'type':'type'
-				}
+	'''Proxy to flNode object
 
-	# - Build and connect to host dynamically	
-	for key, value in __meta__.items():
-		exec("{dst} = property(lambda self: {host}.{get}('{src}'), lambda self, value: {host}.{set}('{src}', value))".format(host = __host__, src=value, dst=key, get=__getter__, set=__setter__))
+	Constructor:
+		trNode(flNode)
+
+	Attributes:
+		.host (flNode): Original flNode 
+		.parent (trContour): parent contour
+		.contour (trContour): parent contour
+	'''
+
+	# - Metadata and proxy model
+	__meta__ = {'x':'x', 'y':'y', 'type':'type', 'g2':'g2', 'smooth':'smooth', 'name':'name'}
+
+	# - Connect to host dynamically	
+	for src, dst in __meta__.items():
+		exec("{1} = property(lambda self: self.host.__getattribute__('{0}'), lambda self, value: self.host.__setattr__('{1}', value))".format(src, dst))
 		
 	# - Initialize 
-	def __init__(self, node):
+	def __init__(self, node, **kwargs):
 		self.host = node
-		super(trNode, self).__init__(self.host.x, self.host.y, type=self.host.type)
+		super(trNode, self).__init__(self.host.x, self.host.y, type=self.host.type, **kwargs)
 
 	
 	
