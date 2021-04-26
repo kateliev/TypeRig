@@ -14,23 +14,32 @@ from __future__ import print_function
 
 import fontlab as fl6
 from typerig.core.objects.node import Node
+from typerig.proxy.tr.objects.meta import Meta
 
 # - Init ---------------------------------
-__version__ = '0.0.4'
-
+__version__ = '0.0.6'
+	
 # - Classes -------------------------------
 class trNode(Node):
+	
+	# - Metadata and proxy model
+	__getter__ = '__getattribute__'
+	__setter__ = '__setattr__'
+	__host__ = 'self.host'
+	__meta__ = {'x':'x',
+				'y':'y',
+				'type':'type'
+				}
+
+	# - Build and connect to host dynamically	
+	for key, value in __meta__.items():
+		exec("{dst} = property(lambda self: {host}.{get}('{src}'), lambda self, value: {host}.{set}('{src}', value))".format(host = __host__, src=value, dst=key, get=__getter__, set=__setter__))
+		
+	# - Initialize 
 	def __init__(self, node):
 		self.host = node
 		super(trNode, self).__init__(self.host.x, self.host.y, type=self.host.type)
 
-	# - Metadata and proxy model ---------
-	meta = {'x':'x',
-			'y':'y',
-			'type':'type'
-			}
 	
-	# -- Build and connect to host dynamically	
-	for key, value in meta.items():
-		exec("{dst} = property(lambda self: self.host.__getattribute__('{src}'), lambda self, value: self.host.__setattr__('{src}', value))".format(src=value, dst=key))
-		
+	
+	

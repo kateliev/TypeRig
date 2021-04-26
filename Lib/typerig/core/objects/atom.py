@@ -15,7 +15,7 @@ from __future__ import absolute_import, print_function, division
 from typerig.core.objects.collection import CustomList
 
 # - Init -------------------------------
-__version__ = '0.0.9'
+__version__ = '0.1.0'
 
 # - Objects ----------------------------
 class Atom(object):
@@ -59,7 +59,8 @@ class Container(CustomList, Member):
 	def __init__(self, data=None, **kwargs):
 		self.data = []
 		self.parent = kwargs.get('parent', None)
-		self.locked = kwargs.get('locked', False)
+		self.__locked = kwargs.get('locked', False)
+		self.__cached = kwargs.get('cached', False) # True cache to __subclass__; False on demand casting, but will reduce overheat.
 		self.__subclass__ = kwargs.get('default_factory', self.__class__)
 
 		if data is not None:
@@ -70,7 +71,7 @@ class Container(CustomList, Member):
 			else:
 				self.data = list(data)
 
-		if len(self.data):
+		if self.__cached and len(self.data):
 			for idx in range(len(self.data)):
 				if isinstance(self.data[idx], self.__subclass__):
 					self.data[idx].parent = self
@@ -78,9 +79,26 @@ class Container(CustomList, Member):
 				elif isinstance(self.data[idx], (tuple, list)):
 					self.data[idx] = self.__subclass__(self.data[idx], parent=self)
 
+	# - Internals ----------------------
+	def __getitem__(self, i):
+		get_item = self.data[i]
+		
+		if not self.__cached and isinstance(get_item, self.__subclass__):
+			return self.__subclass__(get_item, parent=self)
+		
+		return get_item
+
+	def __setitem__(self, i, item): 
+		set_item = item
+
+		if self.__cached and not isinstance(set_item, self.__subclass__):
+			set_item = self.__subclass__(set_item, parent=self)
+
+		self.data[i] = set_item
+
 	# - Methods ------------------------
 	def append(self, item):
-		if not self.locked:
+		if not self.__locked:
 			if isinstance(item, self.__subclass__):
 				item.parent = self
 			else:
