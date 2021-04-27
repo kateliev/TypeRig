@@ -23,7 +23,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.1.4'
+__version__ = '0.1.6'
 
 # - Classes -----------------------------
 class Contour(Container): 
@@ -44,8 +44,8 @@ class Contour(Container):
 	# -- Properties -----------------------------
 	@property
 	def bounds(self):
-		assert len(self.data) > 0, 'Cannot return bounds for contour with length {}'.format(len(self.data))
-		return Bounds([node.tuple for node in self.data])
+		assert len(self.data) > 0, 'Cannot return bounds for <{}> with length {}'.format(self.__class__.__name__, len(self.data))
+		return Bounds([node.point.tuple for node in self.data])
 
 	@property
 	def nodeSegments(self):
@@ -160,6 +160,9 @@ if __name__ == '__main__':
 
 	print(section('Next and previous on curve finder'))
 	print(c[1],c[1].nextOn.prevOn)
+
+	print(section('Bounds'))
+	print(c.bounds)
 
 
 

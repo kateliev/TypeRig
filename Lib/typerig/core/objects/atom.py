@@ -11,11 +11,12 @@
 
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
+import copy
 
 from typerig.core.objects.collection import CustomList
 
 # - Init -------------------------------
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 # -- Fix Python 2.7 compatibility 
 if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
@@ -57,6 +58,10 @@ class Member(Atom):
 				return self.parent[-1]
 
 			return None
+
+	# - Functions ----------------------
+	def clone(self):
+		return copy.deepcopy(self)
 
 class Container(CustomList, Member):
 	''' A primitive that is a member of a sequence and seqence of its own. '''
