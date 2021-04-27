@@ -19,14 +19,33 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.2.0'
+__version__ = '0.2.1'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
-class Node(Point, Member): 
+class Node(Member): 
 	def __init__(self, *args, **kwargs):
 		super(Node, self).__init__(*args, **kwargs)
 		self.parent = kwargs.get('parent', None)
+
+		# - Basics
+		if len(args) == 1:
+			if isinstance(args[0], self.__class__): # Clone
+				self.x, self.y = args[0].x, args[0].y
+
+			if isinstance(args[0], (tuple, list)):
+				self.x, self.y = args[0]
+
+		elif len(args) == 2:
+			if isMultiInstance(args, (float, int)):
+				self.x, self.y = float(args[0]), float(args[1])
+		
+		else:
+			self.x, self.y = 0., 0.
+
+		self.angle = kwargs.get('angle', 0)
+		self.transform = kwargs.get('transform', Transform())
+		self.complex_math = kwargs.get('complex', True)
 
 		# - Metadata
 		self.type = kwargs.get('type', node_types['on'])
@@ -82,6 +101,12 @@ class Node(Point, Member):
 		return currentNode
 
 	# -- IO Format ------------------------------
+	@property
+	def string(self):
+		x = int(self.x) if isinstance(self.x, float) and self.x.is_integer() else self.x
+		y = int(self.y) if isinstance(self.y, float) and self.y.is_integer() else self.y
+		return '{0}{2}{1}'.format(x, y, ' ')
+
 	def toVFJ(self):
 		node_config = []
 		node_config.append(self.string)

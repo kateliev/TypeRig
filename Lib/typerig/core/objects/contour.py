@@ -23,7 +23,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.1.3'
+__version__ = '0.1.4'
 
 # - Classes -----------------------------
 class Contour(Container): 
@@ -49,13 +49,17 @@ class Contour(Container):
 
 	@property
 	def nodeSegments(self):
-		return self.getSegments()
+		return self.getSegments(getPoints=False)
+
+	@property
+	def pointSegments(self):
+		return self.getSegments(getPoints=True)
 
 	@property
 	def segments(self):
 		obj_segments = []
 
-		for segment in self.getSegments():
+		for segment in self.pointSegments:
 			if len(segment) == 2:
 				obj_segments.append(Line(*segment))
 
@@ -73,7 +77,7 @@ class Contour(Container):
 		return obj_segments
 		
 	# -- Functions ------------------------------
-	def getSegments(self):
+	def getSegments(self, getPoints=False):
 		assert len(self.data) > 1, 'Cannot return segments for contour with length {}'.format(len(self.data))
 		contour_segments = []
 		contour_nodes = self.data
@@ -82,10 +86,10 @@ class Contour(Container):
 		while len(contour_nodes):
 			node = contour_nodes[0]
 			contour_nodes= contour_nodes[1:]
-			segment = [node]
+			segment = [node.point] if getPoints else [node]
 
 			for node in contour_nodes:
-				segment.append(node)
+				segment.append(node.point if getPoints else node)
 				if node.isOn: break
 
 			contour_segments.append(segment)

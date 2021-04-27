@@ -285,21 +285,6 @@ class Point(object):
 
 		self.x, self.y = transform.applyTransformation(self.x, self.y)
 
-	# -- Specials
-	@property
-	def string(self):
-		x = int(self.x) if isinstance(self.x, float) and self.x.is_integer() else self.x
-		y = int(self.y) if isinstance(self.y, float) and self.y.is_integer() else self.y
-		return '{0}{2}{1}'.format(x, y, ' ')
-
-	def dumps(self):
-		return self.string
-
-	@staticmethod
-	def loads(string):
-		xs, ys = string.split(' ')
-		return Point(float(xs), float(ys))
-
 class Void(Point):
 	def __init__(self, *argv):
 		super(Void, self).__init__(float('nan'), float('nan'))
