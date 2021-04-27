@@ -19,7 +19,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.2.1'
+__version__ = '0.2.2'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -50,7 +50,7 @@ class Node(Member):
 		# - Metadata
 		self.type = kwargs.get('type', node_types['on'])
 		self.smooth = kwargs.get('smooth', False)
-		self.name = kwargs.get('name', None)
+		self.name = kwargs.get('name', '')
 		self.identifier = kwargs.get('identifier', None)
 		self.g2 = kwargs.get('g2', False)
 
