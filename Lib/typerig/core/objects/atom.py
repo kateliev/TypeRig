@@ -15,11 +15,15 @@ from __future__ import absolute_import, print_function, division
 from typerig.core.objects.collection import CustomList
 
 # - Init -------------------------------
-__version__ = '0.1.1'
+__version__ = '0.1.2'
+
+# -- Fix Python 2.7 compatibility 
+if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
 
 # - Objects ----------------------------
 class Atom(object):
-	def __init__(self, *args, **kwargs): 
+	'''Sentinel'''
+	def __init__(self, *args, **kwargs):
 		pass
 
 class Member(Atom):
@@ -29,16 +33,16 @@ class Member(Atom):
 
 	# - Properties -----------------------	
 	@property
-	def index(self):
+	def idx(self):
 		return self.parent.index(self)
 	
 	@property
 	def next(self):
 		try:
-			return self.parent[self.index + 1]
+			return self.parent[self.idx + 1]
 		
 		except (IndexError, AttributeError) as error:
-			if self.index == len(self.parent) - 1:
+			if self.idx == len(self.parent) - 1:
 				return self.parent[0]
 
 			return None
@@ -46,10 +50,10 @@ class Member(Atom):
 	@property
 	def prev(self):
 		try:
-			return self.parent[self.index - 1]
+			return self.parent[self.idx - 1]
 		
 		except (IndexError, AttributeError) as error:
-			if self.index == 0:
+			if self.idx == 0:
 				return self.parent[-1]
 
 			return None
@@ -57,36 +61,26 @@ class Member(Atom):
 class Container(CustomList, Member):
 	''' A primitive that is a member of a sequence and seqence of its own. '''
 	def __init__(self, data=None, **kwargs):
-		self.data = []
+		super(Container, self).__init__(data, **kwargs)
+
 		self.parent = kwargs.get('parent', None)
 		self.__locked = kwargs.get('locked', False)
 		self.__subclass__ = kwargs.get('default_factory', self.__class__)
-		
-
-		if data is not None:
-			if type(data) == type(self.data):
-				self.data[:] = data
-			elif isinstance(data, self.__class__):
-				self.data[:] = data.data[:]
-			else:
-				self.data = list(data)
 
 		# - Cache to __subclass__ or on demand casting (might will reduce overheat).
-		cached = kwargs.get('cached', False) 
-
-		if cached and len(self.data):
+		if len(self.data):
 			for idx in range(len(self.data)):
 				if isinstance(self.data[idx], self.__subclass__):
 					self.data[idx].parent = self
 				
-				elif isinstance(self.data[idx], (tuple, list)):
+				elif not isinstance(self.data[idx], (int, float, basestring)):
 					self.data[idx] = self.__subclass__(self.data[idx], parent=self)
 
 	# - Internals ----------------------
 	def __getitem__(self, i):
 		if not isinstance(self.data[i], self.__subclass__):
 			self.data[i] = self.__subclass__(self.data[i], parent=self)
-		
+
 		return self.data[i]
 
 	def __setitem__(self, i, item): 
@@ -94,6 +88,9 @@ class Container(CustomList, Member):
 			item = self.__subclass__(item, parent=self)
 
 		self.data[i] = item
+
+	def __repr__(self):
+		return '<{}: {}>'.format(self.__class__.__name__, repr(self.data))
 
 	# - Methods ------------------------
 	def append(self, item):
@@ -164,7 +161,7 @@ if __name__ == "__main__":
 	bm = Member((20,10), parent=p)
 	p.append(am)
 	p.append(bm)
-	print(am.index)
+	print(am.idx)
 	print(am.next)
 
 	a = Linker((10,10))

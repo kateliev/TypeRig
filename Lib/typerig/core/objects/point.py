@@ -14,10 +14,9 @@ import math
 
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.transform import Transform
-from typerig.core.objects.atom import Atom
 
 # - Init -------------------------------
-__version__ = '0.27.1'
+__version__ = '0.27.2'
 
 # - Classes -----------------------------
 class Point(object): 

@@ -19,7 +19,7 @@ except ImportError: #Py2+
 	from collections import MutableSequence, MutableMapping
 
 # - Init -------------------------------
-__version__ = '0.29.0'
+__version__ = '0.29.1'
 
 # - Objects ----------------------------
 # -- Lists -----------------------------
@@ -27,16 +27,17 @@ class CustomList(MutableSequence):
 	'''A more or less complete user-defined wrapper around list objects.
 	Adapted from Source: https://github.com/enthought/Python-2.7.3/blob/master/Lib/UserList.py
 	'''
-	def __init__(self, initlist=None):
+	def __init__(self, data=None, **kwargs):
 		self.data = []
-		if initlist is not None:
+
+		if data is not None:
 			# XXX should this accept an arbitrary sequence?
-			if type(initlist) == type(self.data):
-				self.data[:] = initlist
-			elif isinstance(initlist, self.__class__):
-				self.data[:] = initlist.data[:]
+			if type(data) == type(self.data):
+				self.data[:] = data
+			elif isinstance(data, self.__class__):
+				self.data[:] = data.data[:]
 			else:
-				self.data = list(initlist)
+				self.data = list(data)
 
 	def __repr__(self): 
 		return repr(self.data)

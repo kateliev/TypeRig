@@ -19,7 +19,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.1.9'
+__version__ = '0.2.0'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -40,6 +40,10 @@ class Node(Point, Member):
 		return '<{}: x={}, y={}, type={}>'.format(self.__class__.__name__, self.x, self.y, self.type)
 
 	# -- Properties -----------------------------
+	@property
+	def index(self):
+		return self.idx
+
 	@property
 	def point(self):
 		return Point(self.x, self.y, angle=self.angle, transform=self.transform, complex=self.complex_math)
@@ -91,7 +95,7 @@ class Node(Point, Member):
 	def fromVFJ(string):
 		string_list = string.split(' ')
 		node_smooth = True if len(string_list) >= 3 and 's' in string_list else False
-		node_type = node_types['off'] if len(string_list) >= 3 and 'o' in string_list else None
+		node_type = node_types['off'] if len(string_list) >= 3 and 'o' in string_list else node_types['on']
 		node_g2 = True if len(string_list) >= 3 and 'g2' in string_list else False
 
 		return Node(float(string_list[0]), float(string_list[1]), type=node_type, smooth=node_smooth, g2=node_g2, name=None, identifier=None)
@@ -122,5 +126,5 @@ if __name__ == '__main__':
 	# - Test Containers and VFJ export 
 	c = Container([n0, n1, n2, n3, n4], default_factory=Node)
 	c.append((99,99))
-	print(n0.next.next.toVFJ())
+	print(n0.next)
 	
