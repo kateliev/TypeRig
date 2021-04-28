@@ -33,7 +33,7 @@ class Layer(Container):
 	
 	# -- Internals ------------------------------
 	def __repr__(self):
-		return '<{}: Name={}, Shapes={}>'.format(self.__class__.__name__, self.name, repr(self.data))
+		return '<{}: Name={}, Shapes={}>'.format(self.__class__.__name__, self.name, len(self.data))
 
 	# -- Properties -----------------------------
 	@property
