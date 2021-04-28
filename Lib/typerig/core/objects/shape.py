@@ -18,18 +18,18 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.contour import Contour
 
 # - Init -------------------------------
-__version__ = '0.0.4'
+__version__ = '0.0.5'
 
 # - Classes -----------------------------
 class Shape(Container): 
 	def __init__(self, data=None, **kwargs):
-		# - Metadata
-		self.name = kwargs.pop('name', None)
-		self.transform = kwargs.pop('transform', Transform())
-		self.identifier = kwargs.pop('identifier', None)
-		
 		factory = kwargs.pop('default_factory', Contour)
 		super(Shape, self).__init__(data, default_factory=factory, **kwargs)
+		
+		# - Metadata
+		self.name = kwargs.pop('name', '')
+		self.transform = kwargs.pop('transform', Transform())
+		self.identifier = kwargs.pop('identifier', None)
 	
 	# -- Internals ------------------------------
 	def __repr__(self):

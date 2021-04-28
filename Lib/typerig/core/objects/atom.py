@@ -11,12 +11,12 @@
 
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
-import copy
+import copy, uuid
 
 from typerig.core.objects.collection import CustomList
 
 # - Init -------------------------------
-__version__ = '0.1.3'
+__version__ = '0.1.5'
 
 # -- Fix Python 2.7 compatibility 
 if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
@@ -30,7 +30,12 @@ class Atom(object):
 class Member(Atom):
 	''' A primitive that is a member of a sequence. '''
 	def __init__(self, *args, **kwargs):
+		self.uid = uuid.uuid4()
 		self.parent = kwargs.get('parent', None)
+
+	# - Internals -----------------------
+	def __hash__(self):
+		return hash(self.uid)
 
 	# - Properties -----------------------	
 	@property
@@ -68,6 +73,7 @@ class Container(CustomList, Member):
 	def __init__(self, data=None, **kwargs):
 		super(Container, self).__init__(data, **kwargs)
 
+		self.uid = uuid.uuid4()
 		self.parent = kwargs.get('parent', None)
 		self._lock = kwargs.get('locked', False)
 		self.__subclass__ = kwargs.get('default_factory', self.__class__)
@@ -82,6 +88,9 @@ class Container(CustomList, Member):
 					self.data[idx] = self.__subclass__(self.data[idx], parent=self)
 
 	# - Internals ----------------------
+	def __hash__(self):
+		return hash(self.uid)
+
 	def __getitem__(self, i):
 		if not isinstance(self.data[i], self.__subclass__):
 			self.data[i] = self.__subclass__(self.data[i], parent=self)
@@ -102,7 +111,8 @@ class Container(CustomList, Member):
 		if not self._lock:
 			if isinstance(item, self.__subclass__):
 				item.parent = self
-			else:
+			
+			elif not isinstance(item, (int, float, basestring)):
 				item = self.__subclass__(item, parent=self)
 
 			self.data.append(item)
@@ -167,13 +177,14 @@ if __name__ == "__main__":
 	p.append(am)
 	p.append(bm)
 	print(am.idx)
+	print(am.uid)
 	print(am.next)
 
 	a = Linker((10,10))
 	b = Linker((20,10))
 	c = Linker((30,10))
 	a + b + c
-	print(a.next)
+	print(hash(b), hash(a))
 
 	ac = Container((10,10))
 	bc = Container((20,10))

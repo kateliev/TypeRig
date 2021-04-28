@@ -18,18 +18,18 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.shape import Shape
 
 # - Init -------------------------------
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 
 # - Classes -----------------------------
 class Layer(Container): 
 	def __init__(self, data=None, **kwargs):
-		# - Metadata
-		self.name = kwargs.pop('name', None)
-		self.transform = kwargs.pop('transform', Transform())
-		self.identifier = kwargs.pop('identifier', None)
-		
 		factory = kwargs.pop('default_factory', Shape)
 		super(Layer, self).__init__(data, default_factory=factory, **kwargs)
+		
+		# - Metadata
+		self.name = kwargs.pop('name', hash(self))
+		self.transform = kwargs.pop('transform', Transform())
+		self.identifier = kwargs.pop('identifier', None)
 	
 	# -- Internals ------------------------------
 	def __repr__(self):

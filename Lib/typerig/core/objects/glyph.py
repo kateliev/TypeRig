@@ -18,27 +18,51 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.layer import Layer
 
 # - Init -------------------------------
-__version__ = '0.0.1'
+__version__ = '0.0.4'
 
 # - Classes -----------------------------
 class Glyph(Container): 
 	def __init__(self, data=None, **kwargs):
-		# - Metadata
-		self.name = kwargs.pop('name', None)
-		self.transform = kwargs.pop('transform', Transform())
-		self.identifier = kwargs.pop('identifier', None)
-		
 		factory = kwargs.pop('default_factory', Layer)
 		super(Glyph, self).__init__(data, default_factory=factory, **kwargs)
+		
+		# - Metadata
+		self.name = kwargs.pop('name', hash(self))
+		self.unicodes = kwargs.pop('unicodes', [])
+		self.transform = kwargs.pop('transform', Transform())
+		self.identifier = kwargs.pop('identifier', None)
 	
 	# -- Internals ------------------------------
 	def __repr__(self):
-		return '<{}: Name={}, Layers={}>'.format(self.__class__.__name__, self.name, repr(self.data))
+		return '<{}: Name={}, Unicode={}, Layers={}>'.format(self.__class__.__name__,self.name, self.unicode, repr(self.data))
+
+	# -- Functions ------------------------------
+	def layer(self, layer_name):
+		for layer in self.layers:
+			if layer.name == layer_name: return layer
+
+		return
+
+	def nodes(self, layer_name):
+		layer_nodes = []
+
+		for layer in self.layers:
+			if layer.name == layer_name:
+				for shape in layer.shapes:
+					for contour in shape.contours:
+						layer_nodes += contour.nodes
+
+
+		return layer_nodes
 
 	# -- Properties -----------------------------
 	@property
 	def layers(self):
 		return self.data
+
+	@property
+	def unicode(self):
+		return self.unicodes[0] if len(self.unicodes) else None
 
 	# -- IO Format ------------------------------
 	def toVFJ(self):
@@ -78,12 +102,13 @@ if __name__ == '__main__':
 			(120.0, 316.0),
 			(156.0, 280.0)]
 
-	g = Glyph([[[test]]])
+	l = Layer([[test]], name='Regular')
+	g = Glyph([l], name='Vassil')
 	print(section('Segments'))
 	print(g.layers[0].shapes[0].contours[0].segments)
 		
 	print(section('Glyph Layers'))
-	pprint(g)
+	pprint(g.nodes('Regular'))
 
 	
 
