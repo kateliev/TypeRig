@@ -23,25 +23,26 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.1.6'
+__version__ = '0.1.7'
 
 # - Classes -----------------------------
 class Contour(Container): 
 	def __init__(self, data=None, **kwargs):
-		factory = kwargs.pop('default_factory', Node)
-		super(Contour, self).__init__(data, default_factory=factory, **kwargs)
-
 		# - Metadata
 		self.name = kwargs.pop('name', None)
 		self.transform = kwargs.pop('transform', Transform())
 		self.identifier = kwargs.pop('identifier', None)
 		self.closed = kwargs.pop('closed', False)
 		self.ccw = kwargs.pop('ccw', False)
-
-	def __repr__(self):
-		return '<{}: {}>'.format(self.__class__.__name__, self.data)
+		
+		factory = kwargs.pop('default_factory', Node)
+		super(Contour, self).__init__(data, default_factory=factory, **kwargs)
 	
 	# -- Properties -----------------------------
+	@property
+	def nodes(self):
+		return self.data
+	
 	@property
 	def bounds(self):
 		assert len(self.data) > 0, 'Cannot return bounds for <{}> with length {}'.format(self.__class__.__name__, len(self.data))

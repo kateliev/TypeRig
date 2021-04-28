@@ -49,9 +49,9 @@ class Node(Member):
 
 		# - Metadata
 		self.type = kwargs.get('type', node_types['on'])
-		self.smooth = kwargs.get('smooth', False)
 		self.name = kwargs.get('name', '')
 		self.identifier = kwargs.get('identifier', None)
+		self.smooth = kwargs.get('smooth', False)
 		self.g2 = kwargs.get('g2', False)
 
 	# -- Internals ------------------------------

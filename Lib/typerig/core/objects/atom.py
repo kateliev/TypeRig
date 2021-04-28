@@ -69,7 +69,7 @@ class Container(CustomList, Member):
 		super(Container, self).__init__(data, **kwargs)
 
 		self.parent = kwargs.get('parent', None)
-		self.__locked = kwargs.get('locked', False)
+		self._lock = kwargs.get('locked', False)
 		self.__subclass__ = kwargs.get('default_factory', self.__class__)
 
 		# - Cache to __subclass__ or on demand casting (might will reduce overheat).
@@ -77,7 +77,7 @@ class Container(CustomList, Member):
 			for idx in range(len(self.data)):
 				if isinstance(self.data[idx], self.__subclass__):
 					self.data[idx].parent = self
-				
+
 				elif not isinstance(self.data[idx], (int, float, basestring)):
 					self.data[idx] = self.__subclass__(self.data[idx], parent=self)
 
@@ -99,7 +99,7 @@ class Container(CustomList, Member):
 
 	# - Methods ------------------------
 	def append(self, item):
-		if not self.__locked:
+		if not self._lock:
 			if isinstance(item, self.__subclass__):
 				item.parent = self
 			else:

@@ -12,9 +12,10 @@
 # - Dependencies ---------------------
 from __future__ import absolute_import, print_function, division
 from typerig.core.func.math import linspread, geospread, ratfrac
+from typerig.core.objects.point import Point
 
 # - Init -----------------------------
-__version__ = '0.26.1'
+__version__ = '0.26.3'
 
 # - Classes --------------------------
 class fontFamilly():
@@ -109,9 +110,37 @@ class Bounds(object):
 		self.width, self.height = 0, 0
 		self.refresh(tupleList)
 
-	def __str__(self):
+	# - Internals ----------------
+	def __repr__(self):
 		return '<{}: x={}, y={}, width={}, height={}>'.format(self.__class__.__name__, self.x, self.y, self.width, self.height)
 
+	# - Properties ---------------
+	@property
+	def min_point(self):
+		return Point(self.x, self.y)
+
+	@property
+	def max_point(self):
+		return Point(self.xmax, self.ymax)
+
+	@property
+	def center_point(self):
+		return (self.min_point + self.max_point)/2.
+
+	@property
+	def align_matrix(self):
+		# Where T(top), B(bottom), L(left), R(right), M(middle), C(center)
+		x, y = self.x, self.y
+		mx, my = self.xmax, self.ymax
+		h = lambda a, b: (a+b)/2.
+
+		return_matrix = {	'TL': (x, my), 		'TM': (h(x,y), my), 	'TR': (mx, my),
+							'LM': (x, h(y, my)),'C':(h(x,mx), h(y,my)),	'RM': (mx, h(y, my)),
+							'BL': (x, y),		'BM':(h(x,mx), y),		'BR': (mx, y)}
+		
+		return return_matrix
+
+	# - Functions ----------------
 	def recalc(self, tupleList):
 		from operator import itemgetter
 		min_x_tup = min(tupleList,key=itemgetter(0))
