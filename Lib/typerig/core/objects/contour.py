@@ -134,8 +134,8 @@ if __name__ == '__main__':
 			Node(840.0, 360.0, type='on'),
 			Node(840.0, 600.0, type='on'),
 			Node(840.0, 644.0, type='curve'),
-			Node(804.0, 680.0, type='curve', selected=True),
-			Node(760.0, 680.0, type='on'),
+			Node(804.0, 680.0, type='curve'),
+			Node(760.0, 680.0, type='on', selected=True),
 			Node(200.0, 680.0, type='on'),
 			Node(156.0, 680.0, type='curve'),
 			Node(120.0, 644.0, type='curve'),
@@ -172,6 +172,14 @@ if __name__ == '__main__':
 
 	print(section('Bounds'))
 	print(c.bounds)
+
+	print(section('Node operations'))
+	print(c.selected_nodes[0].clockwise)
+
+	print(section('Node operations'))
+	print(c.selected_nodes[0].triad)
+	c.selected_nodes[0].smart_shift(10,10)
+	print(c.selected_nodes[0].triad)
 
 
 

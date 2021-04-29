@@ -16,7 +16,7 @@ import copy, uuid
 from typerig.core.objects.collection import CustomList
 
 # - Init -------------------------------
-__version__ = '0.1.6'
+__version__ = '0.1.7'
 
 # -- Fix Python 2.7 compatibility 
 if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
@@ -110,6 +110,23 @@ class Container(CustomList, Member):
 		return '<{}: {}>'.format(self.__class__.__name__, repr(self.data))
 
 	# - Methods ------------------------
+	def insert(self, i, item):
+		if not self._lock:
+			if isinstance(item, self.__subclass):
+				item.parent = self
+			
+			elif not isinstance(item, (int, float, basestring)):
+				item = self.__subclass(item, parent=self) 
+
+		self.data.insert(i, item)
+
+	def pop(self, i=-1): 
+		if not self._lock:
+			if isinstance(item, self.__subclass):
+				item.parent = None
+
+		return self.data.pop(i)
+
 	def append(self, item):
 		if not self._lock:
 			if isinstance(item, self.__subclass):
