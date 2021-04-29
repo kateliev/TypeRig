@@ -69,37 +69,58 @@ class Member(Atom):
 		return copy.deepcopy(self)
 
 class Container(CustomList, Member):
-	''' A primitive that is a member of a sequence and seqence of its own. '''
+	''' A primitive that is a member of a sequence and sequence of its own. '''
 	def __init__(self, data=None, **kwargs):
 		super(Container, self).__init__(data, **kwargs)
 
+		# - Init
 		self.uid = uuid.uuid4()
 		self.parent = kwargs.get('parent', None)
 		self._lock = kwargs.get('locked', False)
-		self.__subclass__ = kwargs.get('default_factory', self.__class__)
+		self.__subclass = kwargs.get('default_factory', self.__class__)
 
-		# - Cache to __subclass__ or on demand casting (might will reduce overheat).
+		# - A cached view of the underlying data (might will reduce overheat):
+		#   Propagate a large flattened array of all underlying data, so that
+		#   topmost parent object has a view into it all, thus eliminating the
+		#   need to iterate over all of its underlying structures. Useful for
+		#   examining or modifying data in situ, but not for adding new one!
+		#	(It is not dynamic and is not refreshed!)
+		#   Example: Layer(Shape(Contour(Node..n)..n)..n) -> Layer._cache_pool
+		self._use_cache_pool = kwargs.get('cache', False)
+		self._cache_pool = []
+
+		# - Process data
 		if len(self.data):
 			for idx in range(len(self.data)):
-				if isinstance(self.data[idx], self.__subclass__):
+				# -- Set parent
+				if isinstance(self.data[idx], self.__subclass):
 					self.data[idx].parent = self
 
+				# -- Cache to __subclass or on demand casting (might will reduce overheat).
 				elif not isinstance(self.data[idx], (int, float, basestring)):
-					self.data[idx] = self.__subclass__(self.data[idx], parent=self)
+					self.data[idx] = self.__subclass(self.data[idx], parent=self)
+				
+				# -- Populate pool
+				if self._use_cache_pool:
+					if hasattr(self.data[idx], '_cache_pool') and isinstance(self.data[idx]._cache_pool, list) and len(self.data[idx]._cache_pool):
+						self._cache_pool += self.data[idx]._cache_pool
+
+					elif hasattr(self.data[idx], 'data') and isinstance(self.data[idx].data, list):
+						self._cache_pool += self.data[idx].data
 
 	# - Internals ----------------------
 	def __hash__(self):
 		return hash(self.uid)
 
 	def __getitem__(self, i):
-		if not isinstance(self.data[i], self.__subclass__):
-			self.data[i] = self.__subclass__(self.data[i], parent=self)
+		if not isinstance(self.data[i], self.__subclass):
+			self.data[i] = self.__subclass(self.data[i], parent=self)
 
 		return self.data[i]
 
 	def __setitem__(self, i, item): 
-		if not isinstance(item, self.__subclass__):
-			item = self.__subclass__(item, parent=self)
+		if not isinstance(item, self.__subclass):
+			item = self.__subclass(item, parent=self)
 
 		self.data[i] = item
 
@@ -109,11 +130,11 @@ class Container(CustomList, Member):
 	# - Methods ------------------------
 	def append(self, item):
 		if not self._lock:
-			if isinstance(item, self.__subclass__):
+			if isinstance(item, self.__subclass):
 				item.parent = self
 			
 			elif not isinstance(item, (int, float, basestring)):
-				item = self.__subclass__(item, parent=self)
+				item = self.__subclass(item, parent=self)
 
 			self.data.append(item)
 

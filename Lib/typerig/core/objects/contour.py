@@ -42,6 +42,10 @@ class Contour(Container):
 	@property
 	def nodes(self):
 		return self.data
+
+	@property
+	def selectedNodes(self):
+		return [node for node in self.nodes if node.selected]
 	
 	@property
 	def bounds(self):
@@ -126,7 +130,7 @@ if __name__ == '__main__':
 			Node(840.0, 360.0, type='on'),
 			Node(840.0, 600.0, type='on'),
 			Node(840.0, 644.0, type='curve'),
-			Node(804.0, 680.0, type='curve'),
+			Node(804.0, 680.0, type='curve', selected=True),
 			Node(760.0, 680.0, type='on'),
 			Node(200.0, 680.0, type='on'),
 			Node(156.0, 680.0, type='curve'),

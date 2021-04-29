@@ -40,20 +40,13 @@ class Glyph(Container):
 	def layer(self, layer_name):
 		for layer in self.layers:
 			if layer.name == layer_name: return layer
-
 		return
 
 	def nodes(self, layer_name):
-		layer_nodes = []
+		return self.layer(layer_name).nodes
 
-		for layer in self.layers:
-			if layer.name == layer_name:
-				for shape in layer.shapes:
-					for contour in shape.contours:
-						layer_nodes += contour.nodes
-
-
-		return layer_nodes
+	def selectedNodes(self, layer_name):
+		return self.layer(layer_name).selectedNodes
 
 	# -- Properties -----------------------------
 	@property
@@ -102,13 +95,16 @@ if __name__ == '__main__':
 			(120.0, 316.0),
 			(156.0, 280.0)]
 
-	l = Layer([[test]], name='Regular')
-	g = Glyph([l], name='Vassil')
+	l = Layer([[test]], name='Regular', cache=True)
+	g = Glyph([l, [[test]]], name='Vassil', cache=True)
 	print(section('Segments'))
 	print(g.layers[0].shapes[0].contours[0].segments)
 		
 	print(section('Glyph Layers'))
 	pprint(g.nodes('Regular'))
+	print(g.nodes('Regular'))
+	print(section('Chache Pool'))
+	print(g.layers[0]._cache_pool)
 
 	
 

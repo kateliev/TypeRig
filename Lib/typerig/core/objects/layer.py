@@ -39,7 +39,29 @@ class Layer(Container):
 	@property
 	def shapes(self):
 		return self.data
-	
+
+	@property
+	def nodes(self):
+		if self._use_cache_pool and len(self._cache_pool):
+			return self._cache_pool
+
+		layer_nodes = []
+		for shape in self.shapes:
+			layer_nodes += shape.nodes
+
+		return layer_nodes
+
+	@property
+	def selectedNodes(self):
+		if self._use_cache_pool and len(self._cache_pool):
+			return [node for node in self._cache_pool if node.selected]
+			
+		selection = []
+		for shape in self.shapes:
+			selection += shape.selectedNodes
+
+		return selection
+
 	@property
 	def bounds(self):
 		assert len(self.data) > 0, 'Cannot return bounds for <{}> with length {}'.format(self.__class__.__name__, len(self.data))
@@ -85,12 +107,12 @@ if __name__ == '__main__':
 			(120.0, 316.0),
 			(156.0, 280.0)]
 
-	s = Layer([[test]])
+	l = Layer([[test]])
 	print(section('Layer'))
-	pprint(s)
+	pprint(l)
 		
 	print(section('Layer Bounds'))
-	pprint(s.bounds)
+	pprint(l.bounds)
 
 	
 

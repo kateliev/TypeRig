@@ -53,6 +53,7 @@ class Node(Member):
 		self.identifier = kwargs.get('identifier', None)
 		self.smooth = kwargs.get('smooth', False)
 		self.g2 = kwargs.get('g2', False)
+		self.selected = kwargs.get('selected', False)
 
 	# -- Internals ------------------------------
 	def __repr__(self):

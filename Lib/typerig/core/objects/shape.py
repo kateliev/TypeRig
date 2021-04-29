@@ -39,6 +39,28 @@ class Shape(Container):
 	@property
 	def contours(self):
 		return self.data
+
+	@property
+	def nodes(self):
+		if self._use_cache_pool and len(self._cache_pool):
+			return self._cache_pool
+
+		shape_nodes = []
+		for contour in self.contours:
+			shape_nodes += contour.nodes
+
+		return shape_nodes
+
+	@property
+	def selectedNodes(self):
+		if self._use_cache_pool and len(self._cache_pool):
+			return [node for node in self._cache_pool if node.selected]
+			
+		selection = []
+		for contour in self.contours:
+			selection += contour.selectedNodes
+
+		return selection
 	
 	@property
 	def bounds(self):
@@ -101,6 +123,10 @@ if __name__ == '__main__':
 
 	print(section('Shape Contour'))
 	pprint(s[0].next)
+
+	print(section('Shape Nodes'))
+	print(s.nodes)
+
 	
 
 

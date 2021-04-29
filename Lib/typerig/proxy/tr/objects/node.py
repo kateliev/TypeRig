@@ -32,7 +32,7 @@ class trNode(Node):
 	'''
 
 	# - Metadata and proxy model
-	__meta__ = {'x':'x', 'y':'y', 'type':'type', 'g2':'g2', 'smooth':'smooth', 'name':'name'}
+	__meta__ = {'x':'x', 'y':'y', 'type':'type', 'g2':'g2', 'smooth':'smooth', 'name':'name', 'selected':'selected'}
 
 	# - Connect to host dynamically	
 	for src, dst in __meta__.items():
