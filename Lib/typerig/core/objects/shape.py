@@ -18,7 +18,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.contour import Contour
 
 # - Init -------------------------------
-__version__ = '0.0.6'
+__version__ = '0.1.0'
 
 # - Classes -----------------------------
 class Shape(Container): 
@@ -49,18 +49,18 @@ class Shape(Container):
 		return shape_nodes
 
 	@property
-	def selectedNodes(self):
+	def selected_nodes(self):
 		selection = []
 		for contour in self.contours:
-			selection += contour.selectedNodes
+			selection += contour.selected_nodes
 
 		return selection
 
 	@property
-	def selectedIndices(self):
+	def selected_indices(self):
 		selection = []
 		for contour in self.contours:
-			selection += contour.selectedIndices
+			selection += contour.selected_indices
 
 		return selection
 	
@@ -72,19 +72,19 @@ class Shape(Container):
 		return Bounds(bounds)
 
 	# -- IO Format ------------------------------
-	def toVFJ(self):
+	def to_VFJ(self):
 		raise NotImplementedError
 
 	@staticmethod
-	def fromVFJ(string):
+	def from_VFJ(string):
 		raise NotImplementedError
 
 	@staticmethod
-	def toXML(self):
+	def to_XML(self):
 		raise NotImplementedError
 
 	@staticmethod
-	def fromXML(string):
+	def from_XML(string):
 		raise NotImplementedError
 
 

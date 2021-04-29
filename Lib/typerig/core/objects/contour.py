@@ -23,7 +23,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.1.9'
+__version__ = '0.2.0'
 
 # - Classes -----------------------------
 class Contour(Container): 
@@ -44,11 +44,11 @@ class Contour(Container):
 		return self.data
 
 	@property
-	def selectedNodes(self):
+	def selected_nodes(self):
 		return [node for node in self.nodes if node.selected]
 
 	@property
-	def selectedIndices(self):
+	def selected_indices(self):
 		return [idx for idx in range(len(self.nodes)) if self.nodes[idx].selected]
 	
 	@property
@@ -57,18 +57,18 @@ class Contour(Container):
 		return Bounds([node.point.tuple for node in self.data])
 
 	@property
-	def nodeSegments(self):
-		return self.getSegments(getPoints=False)
+	def node_segments(self):
+		return self.get_segments(get_point=False)
 
 	@property
-	def pointSegments(self):
-		return self.getSegments(getPoints=True)
+	def point_segments(self):
+		return self.get_segments(get_point=True)
 
 	@property
 	def segments(self):
 		obj_segments = []
 
-		for segment in self.pointSegments:
+		for segment in self.point_segments:
 			if len(segment) == 2:
 				obj_segments.append(Line(*segment))
 
@@ -86,7 +86,7 @@ class Contour(Container):
 		return obj_segments
 		
 	# -- Functions ------------------------------
-	def getSegments(self, getPoints=False):
+	def get_segments(self, get_point=False):
 		assert len(self.data) > 1, 'Cannot return segments for contour with length {}'.format(len(self.data))
 		contour_segments = []
 		contour_nodes = self.data
@@ -95,11 +95,11 @@ class Contour(Container):
 		while len(contour_nodes):
 			node = contour_nodes[0]
 			contour_nodes= contour_nodes[1:]
-			segment = [node.point] if getPoints else [node]
+			segment = [node.point] if get_point else [node]
 
 			for node in contour_nodes:
-				segment.append(node.point if getPoints else node)
-				if node.isOn: break
+				segment.append(node.point if get_point else node)
+				if node.is_on: break
 
 			contour_segments.append(segment)
 			contour_nodes = contour_nodes[len(segment)-2:]
@@ -107,19 +107,19 @@ class Contour(Container):
 		return contour_segments[:-1]
 
 	# -- IO Format ------------------------------
-	def toVFJ(self):
+	def to_VFJ(self):
 		raise NotImplementedError
 
 	@staticmethod
-	def fromVFJ(string):
+	def from_VFJ(string):
 		raise NotImplementedError
 
 	@staticmethod
-	def toXML(self):
+	def to_XML(self):
 		raise NotImplementedError
 
 	@staticmethod
-	def fromXML(string):
+	def from_XML(string):
 		raise NotImplementedError
 
 
@@ -150,13 +150,13 @@ if __name__ == '__main__':
 	
 	# - Test segments
 	print(section('Segments Nodes'))
-	pprint(c.nodeSegments)
+	pprint(c.node_segments)
 
 	print(section('Object Segments'))
 	pprint(c.segments)
 
 	print(section('Truth tests'))
-	print(c[0] == c.nodeSegments[0][0] == c.segments[0].p0)
+	print(c[0] == c.node_segments[0][0] == c.segments[0].p0)
 
 	print(section('Value assignment'))
 	tl = c.segments[0]
@@ -168,7 +168,7 @@ if __name__ == '__main__':
 	c[0].point -= 900
 
 	print(section('Next and previous on curve finder'))
-	print(c[1],c[1].nextOn.prevOn)
+	print(c[1],c[1].next_on.prev_on)
 
 	print(section('Bounds'))
 	print(c.bounds)

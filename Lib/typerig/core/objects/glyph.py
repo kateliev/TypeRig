@@ -18,7 +18,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.layer import Layer
 
 # - Init -------------------------------
-__version__ = '0.0.5'
+__version__ = '0.1.2'
 
 # - Classes -----------------------------
 class Glyph(Container): 
@@ -31,22 +31,25 @@ class Glyph(Container):
 		self.unicodes = kwargs.pop('unicodes', [])
 		self.transform = kwargs.pop('transform', Transform())
 		self.identifier = kwargs.pop('identifier', None)
-		self.activeLayer = kwargs.pop('active_layer', None)
-	
+		#self.active_layer = kwargs.pop('active_layer', None)
+		
 	# -- Internals ------------------------------
 	def __repr__(self):
 		return '<{}: Name={}, Unicode={}, Layers={}>'.format(self.__class__.__name__,self.name, self.unicode, repr(self.data))
 
 	# -- Functions ------------------------------
-	def layer(self, layer_name):
+	def layer(self, layer_name=None):
+		if layer_name is None and hasattr(self, 'active_layer'): 
+			layer_name = self.active_layer 
+
 		for layer in self.layers:
 			if layer.name == layer_name: return layer
 		return
 
-	def nodes(self, layer_name):
+	def nodes(self, layer_name=None):
 		return self.layer(layer_name).nodes
 
-	def selectedNodes(self, layer_name):
+	def selectedNodes(self, layer_name=None):
 		return self.layer(layer_name).selectedNodes
 
 	# -- Properties -----------------------------
@@ -59,19 +62,19 @@ class Glyph(Container):
 		return self.unicodes[0] if len(self.unicodes) else None
 
 	# -- IO Format ------------------------------
-	def toVFJ(self):
+	def to_VFJ(self):
 		raise NotImplementedError
 
 	@staticmethod
-	def fromVFJ(string):
+	def from_VFJ(string):
 		raise NotImplementedError
 
 	@staticmethod
-	def toXML(self):
+	def to_XML(self):
 		raise NotImplementedError
 
 	@staticmethod
-	def fromXML(string):
+	def from_XML(string):
 		raise NotImplementedError
 
 
@@ -102,7 +105,7 @@ if __name__ == '__main__':
 	print(g.layers[0].shapes[0].contours[0].segments)
 		
 	print(section('Glyph Layers'))
-	print(g.nodes('Regular'))
+	print(g.nodes())
 
 
 	
