@@ -16,7 +16,7 @@ import copy, uuid
 from typerig.core.objects.collection import CustomList
 
 # - Init -------------------------------
-__version__ = '0.1.5'
+__version__ = '0.1.6'
 
 # -- Fix Python 2.7 compatibility 
 if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
@@ -79,16 +79,6 @@ class Container(CustomList, Member):
 		self._lock = kwargs.get('locked', False)
 		self.__subclass = kwargs.get('default_factory', self.__class__)
 
-		# - A cached view of the underlying data (might will reduce overheat):
-		#   Propagate a large flattened array of all underlying data, so that
-		#   topmost parent object has a view into it all, thus eliminating the
-		#   need to iterate over all of its underlying structures. Useful for
-		#   examining or modifying data in situ, but not for adding new one!
-		#	(It is not dynamic and is not refreshed!)
-		#   Example: Layer(Shape(Contour(Node..n)..n)..n) -> Layer._cache_pool
-		self._use_cache_pool = kwargs.get('cache', False)
-		self._cache_pool = []
-
 		# - Process data
 		if len(self.data):
 			for idx in range(len(self.data)):
@@ -100,14 +90,6 @@ class Container(CustomList, Member):
 				elif not isinstance(self.data[idx], (int, float, basestring)):
 					self.data[idx] = self.__subclass(self.data[idx], parent=self)
 				
-				# -- Populate pool
-				if self._use_cache_pool:
-					if hasattr(self.data[idx], '_cache_pool') and isinstance(self.data[idx]._cache_pool, list) and len(self.data[idx]._cache_pool):
-						self._cache_pool += self.data[idx]._cache_pool
-
-					elif hasattr(self.data[idx], 'data') and isinstance(self.data[idx].data, list):
-						self._cache_pool += self.data[idx].data
-
 	# - Internals ----------------------
 	def __hash__(self):
 		return hash(self.uid)

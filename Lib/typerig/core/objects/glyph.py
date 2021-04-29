@@ -18,7 +18,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.layer import Layer
 
 # - Init -------------------------------
-__version__ = '0.0.4'
+__version__ = '0.0.5'
 
 # - Classes -----------------------------
 class Glyph(Container): 
@@ -31,6 +31,7 @@ class Glyph(Container):
 		self.unicodes = kwargs.pop('unicodes', [])
 		self.transform = kwargs.pop('transform', Transform())
 		self.identifier = kwargs.pop('identifier', None)
+		self.activeLayer = kwargs.pop('active_layer', None)
 	
 	# -- Internals ------------------------------
 	def __repr__(self):
@@ -95,16 +96,14 @@ if __name__ == '__main__':
 			(120.0, 316.0),
 			(156.0, 280.0)]
 
-	l = Layer([[test]], name='Regular', cache=True)
-	g = Glyph([l, [[test]]], name='Vassil', cache=True)
+	l = Layer([[test]], name='Regular')
+	g = Glyph([l, [[test]]], name='Vassil')
 	print(section('Segments'))
 	print(g.layers[0].shapes[0].contours[0].segments)
 		
 	print(section('Glyph Layers'))
-	pprint(g.nodes('Regular'))
 	print(g.nodes('Regular'))
-	print(section('Chache Pool'))
-	print(g.layers[0]._cache_pool)
+
 
 	
 

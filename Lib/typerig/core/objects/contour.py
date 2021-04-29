@@ -23,7 +23,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.1.8'
+__version__ = '0.1.9'
 
 # - Classes -----------------------------
 class Contour(Container): 
@@ -46,6 +46,10 @@ class Contour(Container):
 	@property
 	def selectedNodes(self):
 		return [node for node in self.nodes if node.selected]
+
+	@property
+	def selectedIndices(self):
+		return [idx for idx in range(len(self.nodes)) if self.nodes[idx].selected]
 	
 	@property
 	def bounds(self):

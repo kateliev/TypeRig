@@ -18,7 +18,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.shape import Shape
 
 # - Init -------------------------------
-__version__ = '0.0.2'
+__version__ = '0.0.3'
 
 # - Classes -----------------------------
 class Layer(Container): 
@@ -42,9 +42,6 @@ class Layer(Container):
 
 	@property
 	def nodes(self):
-		if self._use_cache_pool and len(self._cache_pool):
-			return self._cache_pool
-
 		layer_nodes = []
 		for shape in self.shapes:
 			layer_nodes += shape.nodes
@@ -53,12 +50,17 @@ class Layer(Container):
 
 	@property
 	def selectedNodes(self):
-		if self._use_cache_pool and len(self._cache_pool):
-			return [node for node in self._cache_pool if node.selected]
-			
 		selection = []
 		for shape in self.shapes:
 			selection += shape.selectedNodes
+
+		return selection
+
+	@property
+	def selectedIndices(self):
+		selection = []
+		for shape in self.shapes:
+			selection += shape.selectedIndices
 
 		return selection
 

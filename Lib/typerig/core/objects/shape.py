@@ -18,7 +18,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.contour import Contour
 
 # - Init -------------------------------
-__version__ = '0.0.5'
+__version__ = '0.0.6'
 
 # - Classes -----------------------------
 class Shape(Container): 
@@ -42,9 +42,6 @@ class Shape(Container):
 
 	@property
 	def nodes(self):
-		if self._use_cache_pool and len(self._cache_pool):
-			return self._cache_pool
-
 		shape_nodes = []
 		for contour in self.contours:
 			shape_nodes += contour.nodes
@@ -53,12 +50,17 @@ class Shape(Container):
 
 	@property
 	def selectedNodes(self):
-		if self._use_cache_pool and len(self._cache_pool):
-			return [node for node in self._cache_pool if node.selected]
-			
 		selection = []
 		for contour in self.contours:
 			selection += contour.selectedNodes
+
+		return selection
+
+	@property
+	def selectedIndices(self):
+		selection = []
+		for contour in self.contours:
+			selection += contour.selectedIndices
 
 		return selection
 	
