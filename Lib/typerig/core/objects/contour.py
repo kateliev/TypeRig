@@ -89,7 +89,7 @@ class Contour(Container):
 	def get_segments(self, get_point=False):
 		assert len(self.data) > 1, 'Cannot return segments for contour with length {}'.format(len(self.data))
 		contour_segments = []
-		contour_nodes = self.data
+		contour_nodes = self.data[:]
 		if self.closed: contour_nodes.append(contour_nodes[0])
 
 		while len(contour_nodes):
@@ -127,39 +127,62 @@ if __name__ == '__main__':
 	from pprint import pprint
 	section = lambda s: '\n+{0}\n+ {1}\n+{0}'.format('-'*30, s)
 
-	test = [Node(200.0, 280.0, type='on'),
-			Node(760.0, 280.0, type='on'),
-			Node(804.0, 280.0, type='curve'),
-			Node(840.0, 316.0, type='curve'),
-			Node(840.0, 360.0, type='on'),
-			Node(840.0, 600.0, type='on'),
-			Node(840.0, 644.0, type='curve'),
-			Node(804.0, 680.0, type='curve'),
-			Node(760.0, 680.0, type='on', selected=True),
-			Node(200.0, 680.0, type='on'),
-			Node(156.0, 680.0, type='curve'),
-			Node(120.0, 644.0, type='curve'),
-			Node(120.0, 600.0, type='on'),
-			Node(120.0, 360.0, type='on'),
-			Node(120.0, 316.0, type='curve'),
-			Node(156.0, 280.0, type='curve')]
+	# - Test Sources
+	src_frame = [	Node(200.0, 280.0, type='on'),
+					Node(760.0, 280.0, type='on'),
+					Node(804.0, 280.0, type='curve'),
+					Node(840.0, 316.0, type='curve'),
+					Node(840.0, 360.0, type='on'),
+					Node(840.0, 600.0, type='on'),
+					Node(840.0, 644.0, type='curve'),
+					Node(804.0, 680.0, type='curve'),
+					Node(760.0, 680.0, type='on', selected=True),
+					Node(200.0, 680.0, type='on'),
+					Node(156.0, 680.0, type='curve'),
+					Node(120.0, 644.0, type='curve'),
+					Node(120.0, 600.0, type='on'),
+					Node(120.0, 360.0, type='on'),
+					Node(120.0, 316.0, type='curve'),
+					Node(156.0, 280.0, type='curve')]
 
-	c = Contour(test, closed=True)
+	src_square = [	Node(200.0, 280.0, type='on'),
+					Node(280.0, 280.0, type='on', selected=True),
+					Node(280.0, 200.0, type='on'),
+					Node(200.0, 200.0, type='on')]
+
+	src_circle = [	Node(161.0, 567.0, type='on'),
+					Node(161.0, 435.0, type='curve'),
+					Node(268.0, 328.0, type='curve'),
+					Node(400.0, 328.0, type='on', selected=True),
+					Node(531.0, 328.0, type='curve'),
+					Node(638.0, 435.0, type='curve'),
+					Node(638.0, 567.0, type='on'),
+					Node(638.0, 698.0, type='curve'),
+					Node(531.0, 805.0, type='curve'),
+					Node(400.0, 805.0, type='on'),
+					Node(268.0, 805.0, type='curve'),
+					Node(161.0, 698.0, type='curve')]
+
+	# - Tests
+	frame = Contour(src_frame, closed=True)
+	square = Contour(src_square, closed=True)
+	circle = Contour(src_circle, closed=True)
 	print(section('Contour'))
-	pprint(c)
+	pprint(frame)
 	
-	# - Test segments
+	# - rounded_frame segments
 	print(section('Segments Nodes'))
-	pprint(c.node_segments)
+	pprint(frame.node_segments)
 
 	print(section('Object Segments'))
-	pprint(c.segments)
+	pprint(frame.segments)
 
-	print(section('Truth tests'))
-	print(c[0] == c.node_segments[0][0] == c.segments[0].p0)
+	print(section('Truth rounded_frames'))
+	print(frame[0] == frame.node_segments[0][0] == frame.segments[0].p0)
 
+	'''
 	print(section('Value assignment'))
-	tl = c.segments[0]
+	tl = frame.segments[0]
 	tl.p0.x = 999.999999999
 	print(tl, c[0])
 
@@ -169,21 +192,36 @@ if __name__ == '__main__':
 
 	print(section('Next and previous on curve finder'))
 	print(c[1],c[1].next_on.prev_on)
+	'''
 
 	print(section('Bounds'))
-	print(c.bounds)
+	print(frame.bounds)
 
 	print(section('Node operations'))
-	print(c.selected_nodes[0].clockwise)
+	print(frame.selected_nodes[0].clockwise)
+	print(frame.selected_nodes[0].segment)
 
+	'''
 	print(section('Node operations'))
 	print(c.selected_nodes[0].triad)
 	c.selected_nodes[0].smart_shift(10,10)
 	print(c.selected_nodes[0].triad)
+	'''
+	'''
+	print(section('Corner Mitre'))
+	pprint(c.nodes)
+	print(c.selected_nodes[0].corner_mitre(10))
+	pprint(c.nodes)
 
-
-
-
+	print(section('Corner Round'))
+	pprint(square.nodes)
+	ss = square.selected_nodes[0].corner_round(10, proportion=.5)
+	pprint(square.nodes)
+	'''
+	print(section('Insert After'))
+	pprint(circle.nodes)
+	ss = circle.selected_nodes[0].insert_after(.5)
+	pprint(circle.nodes)
 
 	
 	

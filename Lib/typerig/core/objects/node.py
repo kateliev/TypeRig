@@ -10,19 +10,22 @@
 
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
+import math
 import copy
 
 from typerig.core.func.geometry import ccw
 from typerig.core.func.math import ratfrac, randomize
 
 from typerig.core.objects.point import Point
+from typerig.core.objects.line import Line
+from typerig.core.objects.cubicbezier import CubicBezier
 from typerig.core.objects.transform import Transform
 
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.3.0'
+__version__ = '0.3.5'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -113,6 +116,18 @@ class Node(Member):
 		return currentNode
 
 	@property
+	def segment_nodes(self):
+		for segment in self.parent.node_segments:
+			if self in segment[:1]: return segment
+		return
+	
+	@property
+	def segment(self):
+		for si in range(len(self.parent.node_segments)):
+			if self in self.parent.node_segments[si][:1]: return self.parent.segments[si]
+		return
+
+	@property
 	def triad(self):
 		return (self.prev, self, self.next)
 
@@ -177,28 +192,45 @@ class Node(Member):
 		time = float(time)
 
 		if time == 0.:
-			mew_node = self.clone
+			new_node = self.clone()
+			self.parent.insert(self.idx + 1, new_node)
+			return (new_node)
+
 		elif time == 1.:
-			mew_node = self.next_on.clone
-		# TODO find interpolated node at time on Line or CubicBezier
-			
-		self.parent.insert(self.idx + 1, mew_node)
-		return new.node
+			new_node = self.next_on.clone()
+			self.parent.insert(self.idx + 1, new_node)
+			return (new_node)
+
+		elif 0. < time < 1.:
+			segment = self.segment
+			if isinstance(segment, Line):
+				new_node = self.__class__(self.segment.solve_point(time).tuple, type=node_types['on'])
+				self.parent.insert(self.idx + 1, new_node)
+				return (new_node)
+
+			if isinstance(segment, CubicBezier):
+				slices = self.segment.solve_slice(time)
+				curve_types = ('on', 'curve', 'curve', 'on')
+
+				curve_first = [self.__class__(coord, type=node_type) for coord, node_type in zip(slices[0].tuple, curve_types)]
+				curve_second = [self.__class__(coord, type=node_type) for coord, node_type in zip(slices[1].tuple, curve_types)]
+
+				nodes_to_insert = curve_first[1:] + curve_second[1:]
+				for i in range(len(nodes_to_insert)):
+					self.parent.insert(self.idx + i + 1, nodes_to_insert[i])
+				
+				return tuple(nodes_to_insert)	
+		return
 
 	def insert_before(self, time):
-		if time == 1.:
-			mew_node = self.clone
-		elif time == 0.:
-			mew_node = self.next_on.clone
-		# TODO find interpolated node at time on Line or CubicBezier
-			
-		self.parent.insert(self.idx - 1, mew_node)
-		return new.node
+		return self.prev_on.insert_after(time)
 
-	def insert_after_distance(self, distance):
+	def insert_after_distance(self, distance): 
+		# Note distance is linear only (for now... for Cubic use .solve_distance_start())
 		return self.insert_after(ratfrac(distance, self.distance_to_next_on, 1.))
 
 	def insert_before_distance(self, distance):
+		# Note distance is linear only (for now... for Cubic use .solve_distance_start())
 		return self.insert_before(1. - ratfrac(distance, self.distance_to_prev_on, 1.))
 
 	def remove(self):
@@ -240,7 +272,53 @@ class Node(Member):
 			if (bleed_mode == 2 and not self.clockwise) or (bleed_mode == 1 and self.clockwise):
 				self.smartShift(-shift_x, -shift_y)		
 
-	
+	# - Special ---------------------------------
+	def corner_mitre(self, mitre_size=5, is_radius=False):
+		# - Calculate unit vectors and shifts
+		next_unit = (self.next_on.point - self.point).unit
+		prev_unit = (self.prev_on.point - self.point).unit
+		
+		if not is_radius:
+			angle = math.atan2(next_unit | prev_unit, next_unit & prev_unit)
+			radius = abs((float(mitre_size)/2.)/math.sin(angle/2.))
+		else:
+			radius = mitre_size
+
+		next_shift = next_unit * radius
+		prev_shift = prev_unit * radius
+
+		# - Insert Node and process
+		next_node = self.insert_after(0.) 
+		self.shift(*prev_shift.tuple)
+		next_node.shift(*next_shift.tuple)
+
+		return (self, next_node)
+
+	def corner_round(self, rounding_size=5, proportion=None, curvature=None, is_radius=False):
+		curr_node, next_node = self.corner_mitre(rounding_size, is_radius)
+		
+		# -- Make round corner
+		bcp_out = curr_node.insert_after(0.)
+		bcp_in = next_node.insert_before(0.)
+		bcp_out.type = node_types['curve']
+		bcp_in.type = node_types['curve']
+
+		# -- Curvature and handle length 
+		segment = (curr_node, bcp_out, bcp_in, next_node)
+		curve = CubicBezier(*[node.point for node in segment])
+
+		if proportion is not None: 
+			new_curve = curve.solve_proportional_handles(proportion)
+			bcp_out.point = new_curve.p1
+			bcp_in.point = new_curve.p2
+								
+		if curvature is not None: 
+			new_curve = curve.solve_hobby(curvature)
+			bcp_out.point = new_curve.p1
+			bcp_in.point = new_curve.p2
+			
+		return segment
+
 	# -- IO Format ------------------------------
 	@property
 	def string(self):
