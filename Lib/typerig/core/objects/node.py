@@ -25,7 +25,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.3.5'
+__version__ = '0.3.6'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -250,16 +250,45 @@ class Node(Member):
 
 	def smart_reloc(self, new_x, new_y):
 		'''Relocate the node and adjacent BCPs to new coordinates'''
-		self.smartShift(new_x - self.x, new_y - self.y)
+		self.smart_shift(new_x - self.x, new_y - self.y)
 
 	def smart_shift(self, delta_x, delta_y):
 		'''Shift the node and adjacent BCPs by given amout'''
 		
 		if self.is_on:	
 			for node, test in [(self.prev, not self.prev.is_on), (self, self.is_on), (self.next, not self.next.is_on)]:
-				if test: node.shift(delta_x, delta_x)
+				if test: node.shift(delta_x, delta_y)
 		else:
-			self.shift(delta_x, delta_x)
+			self.shift(delta_x, delta_y)
+
+	def lerp_shift(self, delta_x, delta_y):
+		'''Interpolated shift aka Interpolated Nudge.
+		
+		Arguments:
+			shift_x, shift_y (float)
+		'''
+		if self.is_on:
+			# - Init 
+			shift = Point(delta_x, delta_y)
+			curr_segmet_nodes,  curr_segment = self.segment_nodes, self.segment
+			prev_segment_nodes, prev_segment = self.prev_on.segment_nodes, self.prev_on.segment
+
+			# - Process segments
+			if isinstance(curr_segment, CubicBezier):
+				new_curr = curr_segment.lerp_first(shift)
+				
+				for node, point in zip(curr_segmet_nodes, new_curr.tuple):
+					node.smart_reloc(*point)
+				
+			# - Process segments
+			if isinstance(prev_segment, CubicBezier):
+				new_prev = prev_segment.lerp_last(shift)
+				
+				for node, point in zip(prev_segment_nodes, new_prev.tuple):
+					node.smart_reloc(*point)
+
+			if isinstance(curr_segment, Line) and isinstance(prev_segment, Line):
+				self.smartShift(*shift.tuple)
 
 	def randomize(self, cx, cy, bleed_mode=0):
 		'''Randomizes the node coordinates within given constrains cx and cy.
@@ -273,6 +302,8 @@ class Node(Member):
 				self.smartShift(-shift_x, -shift_y)		
 
 	# - Special ---------------------------------
+	
+
 	def corner_mitre(self, mitre_size=5, is_radius=False):
 		# - Calculate unit vectors and shifts
 		next_unit = (self.next_on.point - self.point).unit

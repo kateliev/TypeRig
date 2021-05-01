@@ -41,7 +41,13 @@ class trNode(Node):
 	# - Initialize 
 	def __init__(self, node, **kwargs):
 		self.host = node
-		super(trNode, self).__init__(self.host.x, self.host.y, type=self.host.type, **kwargs)
+		super(trNode, self).__init__(self.host.x, 
+									 self.host.y,
+									 type=self.host.type,
+									 smooth=self.host.smooth,
+									 g2=self.host.g2,
+									 selected=self.host.selected,
+									 **kwargs)
 
 	
 	

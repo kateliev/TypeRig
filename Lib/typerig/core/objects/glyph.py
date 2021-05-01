@@ -49,8 +49,8 @@ class Glyph(Container):
 	def nodes(self, layer_name=None):
 		return self.layer(layer_name).nodes
 
-	def selectedNodes(self, layer_name=None):
-		return self.layer(layer_name).selectedNodes
+	def selected_nodes(self, layer_name=None):
+		return self.layer(layer_name).selected_nodes
 
 	# -- Properties -----------------------------
 	@property
