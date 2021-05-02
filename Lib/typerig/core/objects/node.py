@@ -25,11 +25,13 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.3.6'
+__version__ = '0.3.7'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
 class Node(Member): 
+	#__slots__ = ('x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'complex_math')
+
 	def __init__(self, *args, **kwargs):
 		super(Node, self).__init__(*args, **kwargs)
 		self.parent = kwargs.get('parent', None)
@@ -56,7 +58,6 @@ class Node(Member):
 		# - Metadata
 		self.type = kwargs.get('type', node_types['on'])
 		self.name = kwargs.get('name', '')
-		self.identifier = kwargs.get('identifier', None)
 		self.smooth = kwargs.get('smooth', False)
 		self.g2 = kwargs.get('g2', False)
 		self.selected = kwargs.get('selected', False)
@@ -192,14 +193,18 @@ class Node(Member):
 		time = float(time)
 
 		if time == 0.:
-			new_node = self.clone()
+			new_node = self.__class__(	self.x, 
+										self.y, 
+										type=self.type,
+										smooth=self.smooth, 
+										g2=self.g2, 
+										transform=self.transform)
+
 			self.parent.insert(self.idx + 1, new_node)
 			return (new_node)
 
 		elif time == 1.:
-			new_node = self.next_on.clone()
-			self.parent.insert(self.idx + 1, new_node)
-			return (new_node)
+			return (self.next_on.insert_after(0.))
 
 		elif 0. < time < 1.:
 			segment = self.segment
@@ -210,16 +215,18 @@ class Node(Member):
 
 			if isinstance(segment, CubicBezier):
 				slices = self.segment.solve_slice(time)
-				curve_types = ('on', 'curve', 'curve', 'on')
 
-				curve_first = [self.__class__(coord, type=node_type) for coord, node_type in zip(slices[0].tuple, curve_types)]
-				curve_second = [self.__class__(coord, type=node_type) for coord, node_type in zip(slices[1].tuple, curve_types)]
+				self.next.point = slices[0].p1
+				new_curve_in = self.__class__(slices[0].p2.tuple, type=node_types['curve'])
+				new_on = self.__class__(slices[1].p0.tuple, type=node_types['on'], smooth=True)
+				new_curve_out = self.__class__(slices[1].p1.tuple, type=node_types['curve'])
+				self.next.next.point = slices[1].p2
 
-				nodes_to_insert = curve_first[1:] + curve_second[1:]
-				for i in range(len(nodes_to_insert)):
-					self.parent.insert(self.idx + i + 1, nodes_to_insert[i])
+				self.parent.insert(self.idx + 2, new_curve_in)
+				self.parent.insert(self.idx + 3, new_on)
+				self.parent.insert(self.idx + 4, new_curve_out)
 				
-				return tuple(nodes_to_insert)	
+				#return (self.segment, self.next_on.segment)	
 		return
 
 	def insert_before(self, time):
@@ -302,8 +309,6 @@ class Node(Member):
 				self.smartShift(-shift_x, -shift_y)		
 
 	# - Special ---------------------------------
-	
-
 	def corner_mitre(self, mitre_size=5, is_radius=False):
 		# - Calculate unit vectors and shifts
 		next_unit = (self.next_on.point - self.point).unit

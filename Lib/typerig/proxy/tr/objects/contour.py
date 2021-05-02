@@ -20,7 +20,7 @@ from typerig.proxy.tr.objects.node import trNode
 from typerig.core.objects.contour import Contour
 
 # - Init --------------------------------
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 # - Classes -----------------------------
 class trContour(Contour):
@@ -46,3 +46,18 @@ class trContour(Contour):
 										default_factory=trNode,
 										closed=self.host.closed,
 										**kwargs)
+	# - Functions
+	def insert(self, i, item):
+		if not self._lock:
+			if isinstance(item, self._subclass):
+				item.parent = self
+			
+			elif not isinstance(item, (int, float, basestring)):
+				item = self._subclass(item, parent=self) 
+
+			if not hasattr(item, 'host'):
+				item.host = fl6.flNode(item.x, item.y, nodeType=item.type)
+				item.host.smooth = item.smooth
+
+			self.data.insert(i, item)
+			self.host.insert(i, item.host)

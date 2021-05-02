@@ -16,7 +16,7 @@ import copy, uuid
 from typerig.core.objects.collection import CustomList
 
 # - Init -------------------------------
-__version__ = '0.1.7'
+__version__ = '0.1.8'
 
 # -- Fix Python 2.7 compatibility 
 if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
@@ -24,14 +24,17 @@ if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
 # - Objects ----------------------------
 class Atom(object):
 	'''Sentinel'''
+	
 	def __init__(self, *args, **kwargs):
 		pass
 
 class Member(Atom):
+
 	''' A primitive that is a member of a sequence. '''
 	def __init__(self, *args, **kwargs):
 		self.uid = uuid.uuid4()
 		self.parent = kwargs.get('parent', None)
+		self.identifier = kwargs.get('identifier', None)
 
 	# - Internals -----------------------
 	def __hash__(self):
@@ -66,10 +69,12 @@ class Member(Atom):
 
 	# - Functions ----------------------
 	def clone(self):
-		return copy.deepcopy(self)
+		#return copy.deepcopy(self)
+		raise NotImplementedError
 
 class Container(CustomList, Member):
 	''' A primitive that is a member of a sequence and sequence of its own. '''
+
 	def __init__(self, data=None, **kwargs):
 		super(Container, self).__init__(data, **kwargs)
 
@@ -77,32 +82,32 @@ class Container(CustomList, Member):
 		self.uid = uuid.uuid4()
 		self.parent = kwargs.get('parent', None)
 		self._lock = kwargs.get('locked', False)
-		self.__subclass = kwargs.get('default_factory', self.__class__)
+		self._subclass = kwargs.get('default_factory', self.__class__)
 
 		# - Process data
 		if len(self.data):
 			for idx in range(len(self.data)):
 				# -- Set parent
-				if isinstance(self.data[idx], self.__subclass):
+				if isinstance(self.data[idx], self._subclass):
 					self.data[idx].parent = self
 
-				# -- Cache to __subclass or on demand casting (might will reduce overheat).
+				# -- Cache to _subclass or on demand casting (might will reduce overheat).
 				elif not isinstance(self.data[idx], (int, float, basestring)):
-					self.data[idx] = self.__subclass(self.data[idx], parent=self)
+					self.data[idx] = self._subclass(self.data[idx], parent=self)
 				
 	# - Internals ----------------------
 	def __hash__(self):
 		return hash(self.uid)
 
 	def __getitem__(self, i):
-		if not isinstance(self.data[i], self.__subclass):
-			self.data[i] = self.__subclass(self.data[i], parent=self)
+		if not isinstance(self.data[i], self._subclass):
+			self.data[i] = self._subclass(self.data[i], parent=self)
 
 		return self.data[i]
 
 	def __setitem__(self, i, item): 
-		if not isinstance(item, self.__subclass):
-			item = self.__subclass(item, parent=self)
+		if not isinstance(item, self._subclass):
+			item = self._subclass(item, parent=self)
 
 		self.data[i] = item
 
@@ -112,28 +117,28 @@ class Container(CustomList, Member):
 	# - Methods ------------------------
 	def insert(self, i, item):
 		if not self._lock:
-			if isinstance(item, self.__subclass):
+			if isinstance(item, self._subclass):
 				item.parent = self
 			
 			elif not isinstance(item, (int, float, basestring)):
-				item = self.__subclass(item, parent=self) 
+				item = self._subclass(item, parent=self) 
 
-		self.data.insert(i, item)
+			self.data.insert(i, item)
 
 	def pop(self, i=-1): 
 		if not self._lock:
-			if isinstance(item, self.__subclass):
+			if isinstance(item, self._subclass):
 				item.parent = None
 
 		return self.data.pop(i)
 
 	def append(self, item):
 		if not self._lock:
-			if isinstance(item, self.__subclass):
+			if isinstance(item, self._subclass):
 				item.parent = self
 			
 			elif not isinstance(item, (int, float, basestring)):
-				item = self.__subclass(item, parent=self)
+				item = self._subclass(item, parent=self)
 
 			self.data.append(item)
 

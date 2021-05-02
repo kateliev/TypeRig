@@ -14,9 +14,10 @@ from __future__ import print_function
 
 import fontlab as fl6
 from typerig.core.objects.node import Node
+from typerig.core.func.utils import isMultiInstance
 
 # - Init ---------------------------------
-__version__ = '0.0.8'
+__version__ = '0.0.9'
 	
 # - Classes -------------------------------
 class trNode(Node):
@@ -39,15 +40,42 @@ class trNode(Node):
 		exec("{1} = property(lambda self: self.host.__getattribute__('{0}'), lambda self, value: self.host.__setattr__('{1}', value))".format(src, dst))
 		
 	# - Initialize 
-	def __init__(self, node, **kwargs):
-		self.host = node
-		super(trNode, self).__init__(self.host.x, 
-									 self.host.y,
-									 type=self.host.type,
-									 smooth=self.host.smooth,
-									 g2=self.host.g2,
-									 selected=self.host.selected,
-									 **kwargs)
+	def __init__(self, *args, **kwargs):
+		init_dict = kwargs if kwargs is not None else {}
+
+		if len(args) == 1:
+			if isinstance(args[0], self.__class__): # Clone
+				self.host = fl6.flNode(args[0].host)
+				x, y = self.host.x, self.host.y, 
+				add_dict = {'type':self.host.type, 
+							'smooth':self.host.smooth, 
+							'g2':self.host.g2, 
+							'selected':self.host.selected}
+
+				init_dict.update(add_dict)
+				
+			if isinstance(args[0], fl6.flNode):
+				self.host = args[0]
+				x, y = self.host.x, self.host.y, 
+				add_dict = {'type':self.host.type, 
+							'smooth':self.host.smooth, 
+							'g2':self.host.g2, 
+							'selected':self.host.selected}
+
+				init_dict.update(add_dict)
+
+			if isinstance(args[0], (tuple, list)):
+				x, y = args[0]
+				node_type = kwargs.get('type', 'on')
+				self.host = fl6.flNode(x, y, nodeType=node_type)
+
+		elif len(args) == 2:
+			if isMultiInstance(args, (float, int)):
+				x, y = float(args[0]), float(args[1])
+				node_type = kwargs.get('type', 'on')
+				self.host = fl6.flNode(x, y, nodeType=node_type)
+
+		super(trNode, self).__init__(x, y, **init_dict)
 
 	
 	
