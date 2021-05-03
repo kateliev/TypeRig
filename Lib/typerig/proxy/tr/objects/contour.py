@@ -10,7 +10,6 @@
 
 # - Dependencies -------------------------
 from __future__ import print_function
-import math 
 
 import fontlab as fl6
 import fontgate as fgt
@@ -20,7 +19,7 @@ from typerig.proxy.tr.objects.node import trNode
 from typerig.core.objects.contour import Contour
 
 # - Init --------------------------------
-__version__ = '0.0.4'
+__version__ = '0.0.5'
 
 # - Classes -----------------------------
 class trContour(Contour):
@@ -61,3 +60,7 @@ class trContour(Contour):
 
 			self.data.insert(i, item)
 			self.host.insert(i, item.host)
+
+	def clone(self):
+		new_contour = self.host.clone()
+		return self.__class__(new_contour)

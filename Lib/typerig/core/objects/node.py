@@ -10,14 +10,13 @@
 
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
-import math
-import copy
+import math, copy
 
 from typerig.core.func.geometry import ccw
 from typerig.core.func.math import ratfrac, randomize
 
 from typerig.core.objects.point import Point
-from typerig.core.objects.line import Line
+from typerig.core.objects.line import Line, Vector
 from typerig.core.objects.cubicbezier import CubicBezier
 from typerig.core.objects.transform import Transform
 
@@ -25,7 +24,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.3.7'
+__version__ = '0.3.8'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -193,13 +192,7 @@ class Node(Member):
 		time = float(time)
 
 		if time == 0.:
-			new_node = self.__class__(	self.x, 
-										self.y, 
-										type=self.type,
-										smooth=self.smooth, 
-										g2=self.g2, 
-										transform=self.transform)
-
+			new_node = self.clone()
 			self.parent.insert(self.idx + 1, new_node)
 			return (new_node)
 
@@ -226,7 +219,7 @@ class Node(Member):
 				self.parent.insert(self.idx + 3, new_on)
 				self.parent.insert(self.idx + 4, new_curve_out)
 				
-				#return (self.segment, self.next_on.segment)	
+				return (self.segment, self.next_on.segment)	
 		return
 
 	def insert_before(self, time):
@@ -308,6 +301,31 @@ class Node(Member):
 			if (bleed_mode == 2 and not self.clockwise) or (bleed_mode == 1 and self.clockwise):
 				self.smartShift(-shift_x, -shift_y)		
 
+
+	def align_to(self, entity, align=(True, True), smart=True):
+		'''Align current node to a node or line given.
+		Arguments:
+			entity (flNode, pNode, eNode or Line)
+			align (tuple(Align_X (bool), Align_Y (bool)) 
+		'''
+		if isinstance(entity, self.__class__):
+			new_x = entity.x if align[0] else self.x
+			new_y = entity.y if align[1] else self.y
+				
+			if smart:
+				self.smart_reloc(new_x, new_y)
+			else:
+				self.reloc(new_x, new_y)
+
+		elif isinstance(entity, (Line, Vector)):
+			new_x = entity.solve_x(self.y) if align[0] else self.x
+			new_y = entity.solve_y(self.x) if align[1] else self.y
+
+			if smart:
+				self.smart_reloc(new_x, new_y)
+			else:
+				self.reloc(new_x, new_y)
+
 	# - Special ---------------------------------
 	def corner_mitre(self, mitre_size=5, is_radius=False):
 		# - Calculate unit vectors and shifts
@@ -354,6 +372,145 @@ class Node(Member):
 			bcp_in.point = new_curve.p2
 			
 		return segment
+
+	def corner_trap(self, aperture=10, depth=20, trap=2):
+		'''Trap a corner by given aperture.
+
+		Arguments:
+			aperture (float): Width of the traps mouth (opening);
+			depth (float): Length of the traps sides;
+			trap (float): Width of the traps bottom.
+
+		Returns:
+			tuple(flNode, flNode, flNode, flNode)
+		'''
+		# - Init
+		adjust = float(aperture - trap)/2
+
+		# - Calculate for aperture postision and structure
+		next_unit = (self.next_on.point - self.point).unit
+		prev_unit = (self.prev_on.point - self.point).unit
+
+		angle = math.atan2(next_unit | prev_unit, next_unit & prev_unit)
+		radius = abs((float(aperture)/2.)/math.sin(angle/2.))
+		
+		b_point = self.point + (next_unit * -radius)
+		c_point = self.point + (prev_unit * -radius)
+
+		a_point = self.point + (prev_unit * radius)
+		d_point = self.point + (next_unit * radius)
+
+		# - Calculate for depth
+		ab_unit = (a_point - b_point).unit
+		dc_unit = (d_point - c_point).unit
+
+		b_point = a_point + ab_unit*-depth
+		c_point = d_point + dc_unit*-depth
+
+		# - Calculate for trap (size)
+		bc_unit = (b_point - c_point).unit
+		cb_unit = (c_point - b_point).unit
+
+		b_point += bc_unit*-adjust
+		c_point += cb_unit*-adjust
+
+		# - Insert Nodes and cleanup
+		b = self.insert_after(0.)
+		c = b.insert_after(0.)
+		d = c.insert_after(0.)
+
+		# - Position nodes
+		self.smart_reloc(*a_point.tuple)
+		b.smart_reloc(*b_point.tuple)
+		d.smart_reloc(*d_point.tuple)
+		c.smart_reloc(*c_point.tuple)
+
+		return (self, b, c, d)
+
+	def corner_trap_inc(self, incision=10, depth=50, trap=2, smooth=True):
+		'''Trap a corner by given incision into the glyph flesh.
+		
+		Arguments:
+			incision (float): How much to cut into glyphs flesh based from that corner inward;
+			depth (float): Length of the traps sides;
+			trap (float): Width of the traps bottom;
+			smooth (bool): Creates a smooth trap.
+
+		Returns:
+			tuple(flNode, flNode, flNode, flNode) four base (ON) nodes of the trap.
+		'''
+		# - Init
+		remains = depth - incision
+		base_coord = self.point
+
+		# - Calculate for aperture postision and structure
+		next_unit = (self.next_on.point - self.point).unit
+		prev_unit = (self.prev_on.point - self.point).unit
+
+		angle = math.atan2(next_unit | prev_unit, next_unit & prev_unit)
+		aperture = abs(2*(remains/math.sin(math.radians(90) - angle/2)*math.sin(angle/2)))
+		adjust = float(aperture - trap)/2
+		radius = abs((float(aperture)/2)/math.sin(angle/2))
+		
+		b_point = self.point + (next_unit * -radius)
+		c_point = self.point + (prev_unit * -radius)
+
+		a_point = self.point + (prev_unit * radius)
+		d_point = self.point + (next_unit * radius)
+
+		# - Calculate for depth
+		ab_unit = (a_point - b_point).unit
+		dc_unit = (d_point - c_point).unit
+
+		b_point = a_point + ab_unit*-depth
+		c_point = d_point + dc_unit*-depth
+
+		# - Calculate for trap (size)
+		bc_unit = (b_point - c_point).unit
+		cb_unit = (c_point - b_point).unit
+
+		b_point += bc_unit*-adjust
+		c_point += cb_unit*-adjust
+
+		# - Insert Nodes and cleanup
+		b = self.insert_after(0.)
+		c = b.insert_after(0.)
+		d = c.insert_after(0.)
+
+		# - Position nodes
+		self.smart_reloc(*a_point.tuple)
+		b.smart_reloc(*b_point.tuple)
+		d.smart_reloc(*d_point.tuple)
+		c.smart_reloc(*c_point.tuple)
+
+		# - Make smooth trap transition
+		if smooth: 
+			# -- Create bpcs
+			bpc_a = self.insert_after(.6)
+			bpc_b = b.insert_before(0)
+			bpc_c = c.insert_after(0)
+			bpc_d = d.insert_before(.6)
+
+			bpc_a.type = node_types['curve']
+			bpc_a.smooth = True
+			bpc_c.type = node_types['curve']
+			bpc_c.smooth = True
+			bpc_b.type = node_types['curve']
+			bpc_b.smooth = True
+			bpc_d.type = node_types['curve']
+			bpc_d.smooth = True
+
+			# -- Align bpc-s to the virtual lines connection sides of the trap with the original base node
+			side_ab = Line(self.point, base_coord)
+			side_cd = Line(base_coord, d.point)
+			control = (True, False)
+			
+			#bpc_a.align_to(side_ab, control)
+			#bpc_b.align_to(side_ab, control)
+			#bpc_c.align_to(side_cd, control)
+			#bpc_d.align_to(side_cd, control)
+			
+		return (self, b, c, d)
 
 	# -- IO Format ------------------------------
 	@property

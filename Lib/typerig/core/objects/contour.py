@@ -10,7 +10,6 @@
 
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
-import copy
 
 from typerig.core.objects.point import Point
 from typerig.core.objects.node import Node
@@ -23,7 +22,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.2.2'
+__version__ = '0.2.3'
 
 # - Classes -----------------------------
 class Contour(Container): 
@@ -221,7 +220,7 @@ if __name__ == '__main__':
 	'''
 	print(section('Insert After'))
 	pprint(circle.nodes)
-	ss = circle.selected_nodes[0].insert_after(.5)
+	ss = circle.selected_nodes[0].corner_trap_inc()
 	pprint(circle.nodes)
 
 	

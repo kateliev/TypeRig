@@ -16,7 +16,7 @@ import copy, uuid
 from typerig.core.objects.collection import CustomList
 
 # - Init -------------------------------
-__version__ = '0.1.8'
+__version__ = '0.1.9'
 
 # -- Fix Python 2.7 compatibility 
 if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
@@ -24,12 +24,10 @@ if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
 # - Objects ----------------------------
 class Atom(object):
 	'''Sentinel'''
-	
 	def __init__(self, *args, **kwargs):
 		pass
 
 class Member(Atom):
-
 	''' A primitive that is a member of a sequence. '''
 	def __init__(self, *args, **kwargs):
 		self.uid = uuid.uuid4()
@@ -69,8 +67,7 @@ class Member(Atom):
 
 	# - Functions ----------------------
 	def clone(self):
-		#return copy.deepcopy(self)
-		raise NotImplementedError
+		return copy.deepcopy(self)
 
 class Container(CustomList, Member):
 	''' A primitive that is a member of a sequence and sequence of its own. '''

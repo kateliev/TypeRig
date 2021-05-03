@@ -11,13 +11,14 @@
 
 # - Dependencies -------------------------
 from __future__ import print_function
+import copy
 
 import fontlab as fl6
 from typerig.core.objects.node import Node
 from typerig.core.func.utils import isMultiInstance
 
 # - Init ---------------------------------
-__version__ = '0.0.9'
+__version__ = '0.1.9'
 	
 # - Classes -------------------------------
 class trNode(Node):
@@ -68,14 +69,21 @@ class trNode(Node):
 				x, y = args[0]
 				node_type = kwargs.get('type', 'on')
 				self.host = fl6.flNode(x, y, nodeType=node_type)
+				self.smooth = self.host.smooth
 
 		elif len(args) == 2:
 			if isMultiInstance(args, (float, int)):
 				x, y = float(args[0]), float(args[1])
 				node_type = kwargs.get('type', 'on')
 				self.host = fl6.flNode(x, y, nodeType=node_type)
+				self.smooth = self.host.smooth
 
 		super(trNode, self).__init__(x, y, **init_dict)
+
+	def clone(self):
+		new_node = self.host.clone()
+		return self.__class__(new_node)
+
 
 	
 	
