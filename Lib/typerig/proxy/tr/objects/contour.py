@@ -32,7 +32,8 @@ class trContour(Contour):
 		.host (flContour): Original flContour 
 	'''
 	# - Metadata and proxy model
-	__meta__ = {'closed':'closed'}
+	__slots__ = ('host', 'name', 'closed', 'cw', 'transform')
+	__meta__ = {'closed':'closed', 'cw':'clockwise', 'name':'name'}
 
 	# - Connect to host dynamically	
 	for src, dst in __meta__.items():
@@ -60,6 +61,10 @@ class trContour(Contour):
 
 			self.data.insert(i, item)
 			self.host.insert(i, item.host)
+
+	def reverse(self):
+		self.host.reverse()
+		self.data = list(reversed(self.data))
 
 	def clone(self):
 		new_contour = self.host.clone()

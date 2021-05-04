@@ -24,11 +24,15 @@ if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
 # - Objects ----------------------------
 class Atom(object):
 	'''Sentinel'''
+	__slots__ = ()
+
 	def __init__(self, *args, **kwargs):
 		pass
 
 class Member(Atom):
 	''' A primitive that is a member of a sequence. '''
+	__slots__ = ('uid', 'parent', 'identifier')
+
 	def __init__(self, *args, **kwargs):
 		self.uid = uuid.uuid4()
 		self.parent = kwargs.get('parent', None)
@@ -69,8 +73,9 @@ class Member(Atom):
 	def clone(self):
 		return copy.deepcopy(self)
 
-class Container(CustomList, Member):
+class Container(CustomList):
 	''' A primitive that is a member of a sequence and sequence of its own. '''
+	__slots__ = ('data', 'uid', 'parent', 'identifier', '_lock', '_subclass')
 
 	def __init__(self, data=None, **kwargs):
 		super(Container, self).__init__(data, **kwargs)
@@ -111,6 +116,33 @@ class Container(CustomList, Member):
 	def __repr__(self):
 		return '<{}: {}>'.format(self.__class__.__name__, repr(self.data))
 
+	# - Properties -----------------------	
+	@property
+	def idx(self):
+		return self.parent.index(self)
+	
+	@property
+	def next(self):
+		try:
+			return self.parent[self.idx + 1]
+		
+		except (IndexError, AttributeError) as error:
+			if self.idx == len(self.parent) - 1:
+				return self.parent[0]
+
+			return None
+	
+	@property
+	def prev(self):
+		try:
+			return self.parent[self.idx - 1]
+		
+		except (IndexError, AttributeError) as error:
+			if self.idx == 0:
+				return self.parent[-1]
+
+			return None
+
 	# - Methods ------------------------
 	def insert(self, i, item):
 		if not self._lock:
@@ -138,6 +170,10 @@ class Container(CustomList, Member):
 				item = self._subclass(item, parent=self)
 
 			self.data.append(item)
+
+	# - Functions ----------------------
+	def clone(self):
+		return copy.deepcopy(self)
 
 class Linker(object):
 	''' Doubly-linked-list primitive. '''

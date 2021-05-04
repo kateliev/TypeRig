@@ -22,11 +22,11 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.2.3'
+__version__ = '0.2.4'
 
 # - Classes -----------------------------
 class Contour(Container): 
-	#__slots__ = ('name', 'closed', 'ccw', 'transform')
+	__slots__ = ('name', 'closed', 'cw', 'transform')
 
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Node)
@@ -35,7 +35,7 @@ class Contour(Container):
 		# - Metadata
 		self.name = kwargs.pop('name', '')
 		self.closed = kwargs.pop('closed', False)
-		self.ccw = kwargs.pop('ccw', False)
+		self.cw = kwargs.pop('cw', False)
 		self.transform = kwargs.pop('transform', Transform())
 
 	# -- Properties -----------------------------
@@ -105,6 +105,11 @@ class Contour(Container):
 			contour_nodes = contour_nodes[len(segment)-2:]
 
 		return contour_segments[:-1]
+
+
+	def reverse(self):
+		self.data = list(reversed(self.data))
+		self.cw = not self.cw
 
 	# -- IO Format ------------------------------
 	def to_VFJ(self):
@@ -220,8 +225,8 @@ if __name__ == '__main__':
 	'''
 	print(section('Insert After'))
 	pprint(circle.nodes)
-	ss = circle.selected_nodes[0].corner_trap_inc()
-	pprint(circle.nodes)
+	print(circle.__dict__)
+	
 
 	
 	
