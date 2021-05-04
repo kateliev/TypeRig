@@ -24,7 +24,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.3.8'
+__version__ = '0.4.0'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -197,7 +197,9 @@ class Node(Member):
 			return (new_node)
 
 		elif time == 1.:
-			return (self.next_on.insert_after(0.))
+			new_node = self.next_on.clone()
+			self.parent.insert(self.idx + 1, new_node)
+			return (new_node)
 
 		elif 0. < time < 1.:
 			segment = self.segment
@@ -290,6 +292,21 @@ class Node(Member):
 			if isinstance(curr_segment, Line) and isinstance(prev_segment, Line):
 				self.smartShift(*shift.tuple)
 
+	def slant_shift(self, shift_x, shift_y, angle):
+		'''Slanted move - move a node (in inclined space) according to Y coordinate slanted at given angle.
+		
+		Arguments:
+			shift_x, shift_y (float)
+			angle (float): Angle in degrees
+		'''
+		# - Init
+		new_point = Point((self.x + shift_x, self.y))
+		new_point.angle = angle
+		
+		# - Calculate & set
+		new_x = new_point.solve_width(new_point.y + shift_y)
+		self.smart_reloc(new_x, self.y + shift_y)
+
 	def randomize(self, cx, cy, bleed_mode=0):
 		'''Randomizes the node coordinates within given constrains cx and cy.
 		Bleed control trough bleed_mode parameter: 0 - any; 1 - positive bleed; 2 - negative bleed;
@@ -373,85 +390,32 @@ class Node(Member):
 			
 		return segment
 
-	def corner_trap(self, aperture=10, depth=20, trap=2):
-		'''Trap a corner by given aperture.
-
-		Arguments:
-			aperture (float): Width of the traps mouth (opening);
-			depth (float): Length of the traps sides;
-			trap (float): Width of the traps bottom.
-
-		Returns:
-			tuple(flNode, flNode, flNode, flNode)
-		'''
-		# - Init
-		adjust = float(aperture - trap)/2
-
-		# - Calculate for aperture postision and structure
-		next_unit = (self.next_on.point - self.point).unit
-		prev_unit = (self.prev_on.point - self.point).unit
-
-		angle = math.atan2(next_unit | prev_unit, next_unit & prev_unit)
-		radius = abs((float(aperture)/2.)/math.sin(angle/2.))
-		
-		b_point = self.point + (next_unit * -radius)
-		c_point = self.point + (prev_unit * -radius)
-
-		a_point = self.point + (prev_unit * radius)
-		d_point = self.point + (next_unit * radius)
-
-		# - Calculate for depth
-		ab_unit = (a_point - b_point).unit
-		dc_unit = (d_point - c_point).unit
-
-		b_point = a_point + ab_unit*-depth
-		c_point = d_point + dc_unit*-depth
-
-		# - Calculate for trap (size)
-		bc_unit = (b_point - c_point).unit
-		cb_unit = (c_point - b_point).unit
-
-		b_point += bc_unit*-adjust
-		c_point += cb_unit*-adjust
-
-		# - Insert Nodes and cleanup
-		b = self.insert_after(0.)
-		c = b.insert_after(0.)
-		d = c.insert_after(0.)
-
-		# - Position nodes
-		self.smart_reloc(*a_point.tuple)
-		b.smart_reloc(*b_point.tuple)
-		d.smart_reloc(*d_point.tuple)
-		c.smart_reloc(*c_point.tuple)
-
-		return (self, b, c, d)
-
-	def corner_trap_inc(self, incision=10, depth=50, trap=2, smooth=True):
+	def corner_trap(self, parameter=10, depth=50, trap=2, smooth=True, incision=True):
 		'''Trap a corner by given incision into the glyph flesh.
 		
 		Arguments:
-			incision (float): How much to cut into glyphs flesh based from that corner inward;
+			parameter (float): If (incision==False) Width of the traps mouth (opening);
+							   If (incision==True) How much to cut into glyphs flesh based from that corner inward;
 			depth (float): Length of the traps sides;
 			trap (float): Width of the traps bottom;
-			smooth (bool): Creates a smooth trap.
+			smooth (bool): Creates a smooth trap;
+			incision (bool): Trapping algorithm control.
 
 		Returns:
-			tuple(flNode, flNode, flNode, flNode) four base (ON) nodes of the trap.
+			tuple(Node) Ink-trap nodes.
 		'''
-		# - Init
-		remains = depth - incision
-		base_coord = self.point
-
 		# - Calculate for aperture postision and structure
 		next_unit = (self.next_on.point - self.point).unit
 		prev_unit = (self.prev_on.point - self.point).unit
-
-		angle = math.atan2(next_unit | prev_unit, next_unit & prev_unit)
-		aperture = abs(2*(remains/math.sin(math.radians(90) - angle/2)*math.sin(angle/2)))
-		adjust = float(aperture - trap)/2
-		radius = abs((float(aperture)/2)/math.sin(angle/2))
 		
+		angle = math.atan2(next_unit | prev_unit, next_unit & prev_unit)
+		remains = depth - parameter
+		aperture = abs(2*(remains/math.sin(math.radians(90) - angle/2)*math.sin(angle/2))) if incision else parameter
+
+		adjust = float(aperture - trap)/2
+		radius = abs((float(aperture)/2.)/math.sin(angle/2.))
+		
+		# - Calculate points
 		b_point = self.point + (next_unit * -radius)
 		c_point = self.point + (prev_unit * -radius)
 
@@ -487,28 +451,17 @@ class Node(Member):
 		if smooth: 
 			# -- Create bpcs
 			bpc_a = self.insert_after(.6)
-			bpc_b = b.insert_before(0)
-			bpc_c = c.insert_after(0)
-			bpc_d = d.insert_before(.6)
+			bpc_b = b.insert_before(1.)
+			bpc_c = c.insert_after(0.)
+			bpc_d = d.insert_before(.4)
 
 			bpc_a.type = node_types['curve']
-			bpc_a.smooth = True
 			bpc_c.type = node_types['curve']
-			bpc_c.smooth = True
 			bpc_b.type = node_types['curve']
-			bpc_b.smooth = True
 			bpc_d.type = node_types['curve']
-			bpc_d.smooth = True
-
-			# -- Align bpc-s to the virtual lines connection sides of the trap with the original base node
-			side_ab = Line(self.point, base_coord)
-			side_cd = Line(base_coord, d.point)
-			control = (True, False)
-			
-			#bpc_a.align_to(side_ab, control)
-			#bpc_b.align_to(side_ab, control)
-			#bpc_c.align_to(side_cd, control)
-			#bpc_d.align_to(side_cd, control)
+			self.smooth = True
+			d.smooth = True
+			return (self, bpc_a, bpc_b, b, c, bpc_c, bpc_d, d)
 			
 		return (self, b, c, d)
 

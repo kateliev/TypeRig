@@ -18,7 +18,7 @@ from typerig.core.objects.node import Node
 from typerig.core.func.utils import isMultiInstance
 
 # - Init ---------------------------------
-__version__ = '0.1.9'
+__version__ = '0.2.0'
 	
 # - Classes -------------------------------
 class trNode(Node):
@@ -80,9 +80,27 @@ class trNode(Node):
 
 		super(trNode, self).__init__(x, y, **init_dict)
 
+	# - Basics ---------------------------------
 	def clone(self):
 		new_node = self.host.clone()
 		return self.__class__(new_node)
+
+	# - Effects --------------------------------
+	def getSmartAngle(self):
+		return (self.host.isSmartAngle(), self.host.smartAngleR)
+
+	def setSmartAngle(self, radius):
+		self.host.smartAngleR = radius
+		return self.host.setSmartAngleEnbl(True)
+
+	def delSmartAngle(self):
+		return self.host.setSmartAngleEnbl(False)
+
+	def setSmartAngleRadius(self, radius):
+		self.host.smartAngleR = radius
+
+	def getSmartAngleRadius(self):
+		return self.host.smartAngleR
 
 
 	
