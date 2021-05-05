@@ -22,15 +22,18 @@ __version__ = '0.1.2'
 
 # - Classes -----------------------------
 class Glyph(Container): 
+	__slots__ = ('name', 'unicodes', 'identifier', 'parent')
+
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Layer)
 		super(Glyph, self).__init__(data, default_factory=factory, **kwargs)
 		
 		# - Metadata
-		self.name = kwargs.pop('name', hash(self))
-		self.unicodes = kwargs.pop('unicodes', [])
-		self.transform = kwargs.pop('transform', Transform())
-		self.identifier = kwargs.pop('identifier', None)
+		if not kwargs.pop('proxy', False): # Initialize in proxy mode
+			self.name = kwargs.pop('name', hash(self))
+			self.unicodes = kwargs.pop('unicodes', [])
+			self.identifier = kwargs.pop('identifier', None)
+
 		#self.active_layer = kwargs.pop('active_layer', None)
 		
 	# -- Internals ------------------------------
@@ -105,7 +108,7 @@ if __name__ == '__main__':
 	print(g.layers[0].shapes[0].contours[0].segments)
 		
 	print(section('Glyph Layers'))
-	print(g.nodes())
+	print(g.nodes('Regular'))
 
 
 	

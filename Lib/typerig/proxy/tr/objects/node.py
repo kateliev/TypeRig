@@ -33,12 +33,12 @@ class trNode(Node):
 		.contour (trContour): parent contour
 	'''
 	# - Metadata and proxy model
-	__slots__ = ('host', 'x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'complex_math')
+	__slots__ = ('host', 'x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'identifier','complex_math', 'parent')
 	__meta__ = {'x':'x', 'y':'y', 'type':'type', 'g2':'g2', 'smooth':'smooth', 'name':'name', 'selected':'selected'}
 
 	# - Connect to host dynamically	
 	for src, dst in __meta__.items():
-		exec("{1} = property(lambda self: self.host.__getattribute__('{0}'), lambda self, value: self.host.__setattr__('{1}', value))".format(src, dst))
+		exec("{0} = property(lambda self: self.host.__getattribute__('{1}'), lambda self, value: self.host.__setattr__('{1}', value))".format(src, dst))
 		
 	# - Initialize 
 	def __init__(self, *args, **kwargs):
@@ -48,37 +48,21 @@ class trNode(Node):
 			if isinstance(args[0], self.__class__): # Clone
 				self.host = fl6.flNode(args[0].host)
 				x, y = self.host.x, self.host.y, 
-				add_dict = {'type':self.host.type, 
-							'smooth':self.host.smooth, 
-							'g2':self.host.g2, 
-							'selected':self.host.selected}
-
-				init_dict.update(add_dict)
 				
 			if isinstance(args[0], fl6.flNode):
 				self.host = args[0]
 				x, y = self.host.x, self.host.y, 
-				add_dict = {'type':self.host.type, 
-							'smooth':self.host.smooth, 
-							'g2':self.host.g2, 
-							'selected':self.host.selected}
-
-				init_dict.update(add_dict)
 
 			if isinstance(args[0], (tuple, list)):
 				x, y = args[0]
 				node_type = kwargs.get('type', 'on')
-				self.host = fl6.flNode(x, y, nodeType=node_type)
-				self.smooth = self.host.smooth
-
+				
 		elif len(args) == 2:
 			if isMultiInstance(args, (float, int)):
 				x, y = float(args[0]), float(args[1])
 				node_type = kwargs.get('type', 'on')
-				self.host = fl6.flNode(x, y, nodeType=node_type)
-				self.smooth = self.host.smooth
 
-		super(trNode, self).__init__(x, y, **init_dict)
+		super(trNode, self).__init__(x, y, proxy=True)
 
 	# - Basics ---------------------------------
 	def clone(self):

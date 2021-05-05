@@ -33,13 +33,14 @@ class trShape(Shape):
 		.host (flShape): Original flShape 
 	'''
 	# - Metadata and proxy model
+	__slots__ = ('host', 'name', 'transform', 'identifier', 'parent')
 	__meta__ = {'name':'name'}
 
 	# - Connect to host dynamically	
 	for src, dst in __meta__.items():
-		exec("{1} = property(lambda self: self.host.__getattribute__('{0}'), lambda self, value: self.host.__setattr__('{1}', value))".format(src, dst))
+		exec("{0} = property(lambda self: self.host.__getattribute__('{1}'), lambda self, value: self.host.__setattr__('{1}', value))".format(src, dst))
 		
 	# - Initialize 
 	def __init__(self, shape, **kwargs):
 		self.host = shape
-		super(trShape, self).__init__(self.host.contours, name=self.host.name, default_factory=trContour, **kwargs)
+		super(trShape, self).__init__(self.host.contours, default_factory=trContour, proxy=True)

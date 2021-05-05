@@ -32,20 +32,18 @@ class trContour(Contour):
 		.host (flContour): Original flContour 
 	'''
 	# - Metadata and proxy model
-	__slots__ = ('host', 'name', 'closed', 'cw', 'transform')
+	__slots__ = ('host', 'name', 'closed', 'cw', 'transform', 'parent')
 	__meta__ = {'closed':'closed', 'cw':'clockwise', 'name':'name'}
 
 	# - Connect to host dynamically	
 	for src, dst in __meta__.items():
-		exec("{1} = property(lambda self: self.host.__getattribute__('{0}'), lambda self, value: self.host.__setattr__('{1}', value))".format(src, dst))
+		exec("{0} = property(lambda self: self.host.__getattribute__('{1}'), lambda self, value: self.host.__setattr__('{1}', value))".format(src, dst))
 		
 	# - Initialize 
 	def __init__(self, contour, **kwargs):
 		self.host = contour
-		super(trContour, self).__init__(self.host.nodes(),
-										default_factory=trNode,
-										closed=self.host.closed,
-										**kwargs)
+		super(trContour, self).__init__(self.host.nodes(), default_factory=trNode, proxy=True)
+	
 	# - Functions
 	def insert(self, i, item):
 		if not self._lock:

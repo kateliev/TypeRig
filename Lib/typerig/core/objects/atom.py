@@ -73,7 +73,7 @@ class Member(Atom):
 	def clone(self):
 		return copy.deepcopy(self)
 
-class Container(CustomList):
+class Container(CustomList, Atom):
 	''' A primitive that is a member of a sequence and sequence of its own. '''
 	__slots__ = ('data', 'uid', 'parent', 'identifier', '_lock', '_subclass')
 

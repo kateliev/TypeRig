@@ -33,6 +33,7 @@ class trLayer(Layer):
 		.host (flLayer): Original flLayer 
 	'''
 	# - Metadata and proxy model
+	__slots__ = ('name', 'transform', 'identifier', 'parent')
 	__meta__ = {'name':'name'}
 
 	# - Connect to host dynamically	
@@ -42,4 +43,4 @@ class trLayer(Layer):
 	# - Initialize 
 	def __init__(self, layer, **kwargs):
 		self.host = layer
-		super(trLayer, self).__init__(self.host.shapes, name=self.host.name, default_factory=trShape, **kwargs)
+		super(trLayer, self).__init__(self.host.shapes, default_factory=trShape, proxy=True)

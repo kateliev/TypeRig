@@ -26,17 +26,19 @@ __version__ = '0.2.4'
 
 # - Classes -----------------------------
 class Contour(Container): 
-	__slots__ = ('name', 'closed', 'cw', 'transform')
+	__slots__ = ('name', 'closed', 'cw', 'transform', 'parent')
 
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Node)
 		super(Contour, self).__init__(data, default_factory=factory, **kwargs)
 		
-		# - Metadata
-		self.name = kwargs.pop('name', '')
-		self.closed = kwargs.pop('closed', False)
-		self.cw = kwargs.pop('cw', False)
 		self.transform = kwargs.pop('transform', Transform())
+		
+		# - Metadata
+		if not kwargs.pop('proxy', False): # Initialize in proxy mode
+			self.name = kwargs.pop('name', '')
+			self.closed = kwargs.pop('closed', False)
+			self.cw = kwargs.pop('cw', False)
 
 	# -- Properties -----------------------------
 	@property
@@ -224,8 +226,8 @@ if __name__ == '__main__':
 	pprint(square.nodes)
 	'''
 	print(section('Insert After'))
-	pprint(circle.nodes)
-	print(circle.__dict__)
+	#pprint(circle.nodes)
+	print(circle[0].next)
 	
 
 	

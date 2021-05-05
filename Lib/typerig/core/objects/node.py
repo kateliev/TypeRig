@@ -29,7 +29,7 @@ node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
 class Node(Member): 
-	__slots__ = ('x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'complex_math')
+	__slots__ = ('x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'identifier','complex_math', 'parent')
 
 	def __init__(self, *args, **kwargs):
 		super(Node, self).__init__(*args, **kwargs)
@@ -55,11 +55,13 @@ class Node(Member):
 		self.complex_math = kwargs.get('complex', True)
 
 		# - Metadata
-		self.type = kwargs.get('type', node_types['on'])
-		self.name = kwargs.get('name', '')
-		self.smooth = kwargs.get('smooth', False)
-		self.g2 = kwargs.get('g2', False)
-		self.selected = kwargs.get('selected', False)
+		if not kwargs.pop('proxy', False): # Initialize in proxy mode
+			self.type = kwargs.get('type', node_types['on'])
+			self.name = kwargs.get('name', '')
+			self.identifier = kwargs.get('identifier', False)
+			self.smooth = kwargs.get('smooth', False)
+			self.selected = kwargs.get('selected', False)
+			self.g2 = kwargs.get('g2', False)
 
 	# -- Internals ------------------------------
 	def __repr__(self):

@@ -22,14 +22,18 @@ __version__ = '0.1.0'
 
 # - Classes -----------------------------
 class Layer(Container): 
+	__slots__ = ('name', 'transform', 'identifier', 'parent')
+	
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Shape)
 		super(Layer, self).__init__(data, default_factory=factory, **kwargs)
 		
-		# - Metadata
-		self.name = kwargs.pop('name', hash(self))
 		self.transform = kwargs.pop('transform', Transform())
-		self.identifier = kwargs.pop('identifier', None)
+		
+		# - Metadata
+		if not kwargs.pop('proxy', False): # Initialize in proxy mode
+			self.name = kwargs.pop('name', hash(self))
+			self.identifier = kwargs.pop('identifier', None)
 	
 	# -- Internals ------------------------------
 	def __repr__(self):
