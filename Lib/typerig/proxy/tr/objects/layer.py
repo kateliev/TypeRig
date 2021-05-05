@@ -43,4 +43,4 @@ class trLayer(Layer):
 	# - Initialize 
 	def __init__(self, layer, **kwargs):
 		self.host = layer
-		super(trLayer, self).__init__(self.host.shapes, default_factory=trShape, proxy=True)
+		super(trLayer, self).__init__(self.host.shapes, default_factory=trShape, proxy=True, **kwargs)

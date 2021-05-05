@@ -42,7 +42,7 @@ class trContour(Contour):
 	# - Initialize 
 	def __init__(self, contour, **kwargs):
 		self.host = contour
-		super(trContour, self).__init__(self.host.nodes(), default_factory=trNode, proxy=True)
+		super(trContour, self).__init__(self.host.nodes(), default_factory=trNode, proxy=True, **kwargs)
 	
 	# - Functions
 	def insert(self, i, item):

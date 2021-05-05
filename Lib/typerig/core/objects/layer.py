@@ -118,7 +118,7 @@ if __name__ == '__main__':
 	pprint(l)
 		
 	print(section('Layer Bounds'))
-	pprint(l.bounds)
+	pprint(l)
 
 	
 

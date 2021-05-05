@@ -61,5 +61,10 @@ class trGlyph(Glyph):
 			glyph, font = argv
 			self.host = fl6.flGlyph(glyph, font)
 
-		super(trGlyph, self).__init__(self.host.layers, name=self.host.name, default_factory=trLayer, proxy=True)
+		super(trGlyph, self).__init__(self.host.layers, default_factory=trLayer, proxy=True, **kwargs)
+	
+	# - Properties
+	@property
+	def unicodes(self):
+		return self.host.fgGlyph.unicodes
 	

@@ -108,7 +108,7 @@ if __name__ == '__main__':
 	print(g.layers[0].shapes[0].contours[0].segments)
 		
 	print(section('Glyph Layers'))
-	print(g.nodes('Regular'))
+	print(g.nodes('Regular')[0].parent)
 
 
 	

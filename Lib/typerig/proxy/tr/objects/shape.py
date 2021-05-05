@@ -43,4 +43,4 @@ class trShape(Shape):
 	# - Initialize 
 	def __init__(self, shape, **kwargs):
 		self.host = shape
-		super(trShape, self).__init__(self.host.contours, default_factory=trContour, proxy=True)
+		super(trShape, self).__init__(self.host.contours, default_factory=trContour, proxy=True, **kwargs)

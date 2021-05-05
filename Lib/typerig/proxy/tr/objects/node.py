@@ -62,7 +62,7 @@ class trNode(Node):
 				x, y = float(args[0]), float(args[1])
 				node_type = kwargs.get('type', 'on')
 
-		super(trNode, self).__init__(x, y, proxy=True)
+		super(trNode, self).__init__(x, y, proxy=True, **kwargs)
 
 	# - Basics ---------------------------------
 	def clone(self):
