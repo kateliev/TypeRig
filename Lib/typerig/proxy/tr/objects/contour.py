@@ -19,7 +19,7 @@ from typerig.proxy.tr.objects.node import trNode
 from typerig.core.objects.contour import Contour
 
 # - Init --------------------------------
-__version__ = '0.0.5'
+__version__ = '0.0.6'
 
 # - Classes -----------------------------
 class trContour(Contour):
@@ -32,8 +32,8 @@ class trContour(Contour):
 		.host (flContour): Original flContour 
 	'''
 	# - Metadata and proxy model
-	__slots__ = ('host', 'name', 'closed', 'cw', 'transform', 'parent')
-	__meta__ = {'closed':'closed', 'cw':'clockwise', 'name':'name'}
+	__slots__ = ('host', 'name', 'closed', 'clockwise', 'transform', 'parent')
+	__meta__ = {'closed':'closed', 'clockwise':'clockwise', 'name':'name'}
 
 	# - Connect to host dynamically	
 	for src, dst in __meta__.items():

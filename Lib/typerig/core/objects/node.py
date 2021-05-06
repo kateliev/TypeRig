@@ -91,7 +91,7 @@ class Node(Member):
 	
 	@property
 	def clockwise(self):
-		return ccw(self.prev.point.tuple, self.point.tuple, self.next.point.tuple)
+		return not ccw(self.prev.point.tuple, self.point.tuple, self.next.point.tuple)
 		
 	@property
 	def is_on(self):

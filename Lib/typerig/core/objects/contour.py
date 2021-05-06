@@ -22,11 +22,11 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.2.4'
+__version__ = '0.2.5'
 
 # - Classes -----------------------------
 class Contour(Container): 
-	__slots__ = ('name', 'closed', 'cw', 'transform', 'parent')
+	__slots__ = ('name', 'closed', 'clockwise', 'transform', 'parent')
 
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Node)
@@ -38,7 +38,7 @@ class Contour(Container):
 		if not kwargs.pop('proxy', False): # Initialize in proxy mode
 			self.name = kwargs.pop('name', '')
 			self.closed = kwargs.pop('closed', False)
-			self.cw = kwargs.pop('cw', False)
+			self.clockwise = kwargs.pop('clockwise', self.get_winding())
 
 	# -- Properties -----------------------------
 	@property
@@ -88,6 +88,22 @@ class Contour(Container):
 		return obj_segments
 		
 	# -- Functions ------------------------------
+	def get_winding(self):
+		'''Check if contour has clockwise winding direction'''
+		return self.get_on_area() > 0
+
+	def get_on_area(self):
+		'''Get contour area using on curve points only'''
+		if not self.closed: return
+		polygon_area = []
+
+		for node in self.nodes:
+			edge_sum = (node.next_on.x - node.x)*(node.next_on.y + node.y)
+			polygon_area.append(edge_sum)
+
+		return sum(polygon_area)*0.5
+
+
 	def get_segments(self, get_point=False):
 		assert len(self.data) > 1, 'Cannot return segments for contour with length {}'.format(len(self.data))
 		contour_segments = []
@@ -108,10 +124,9 @@ class Contour(Container):
 
 		return contour_segments[:-1]
 
-
 	def reverse(self):
 		self.data = list(reversed(self.data))
-		self.cw = not self.cw
+		self.clockwise = self.get_winding()
 
 	# -- IO Format ------------------------------
 	def to_VFJ(self):
@@ -228,6 +243,13 @@ if __name__ == '__main__':
 	print(section('Insert After'))
 	#pprint(circle.nodes)
 	print(circle[0].next)
+
+	print(section('Contour winding'))
+	print(frame)
+	print(frame.clockwise)
+	frame.reverse()
+	print(frame.clockwise)
+	print(frame)
 	
 
 	
