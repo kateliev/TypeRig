@@ -32,7 +32,7 @@ class trContour(Contour):
 		.host (flContour): Original flContour 
 	'''
 	# - Metadata and proxy model
-	__slots__ = ('host', 'name', 'closed', 'clockwise', 'transform', 'parent')
+	__slots__ = ('host', 'name', 'closed', 'clockwise', 'transform', 'parent', 'lib')
 	__meta__ = {'closed':'closed', 'clockwise':'clockwise', 'name':'name'}
 
 	# - Connect to host dynamically	

@@ -29,7 +29,7 @@ node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
 class Node(Member): 
-	__slots__ = ('x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'identifier','complex_math', 'parent')
+	__slots__ = ('x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'identifier','complex_math', 'parent', 'lib')
 
 	def __init__(self, *args, **kwargs):
 		super(Node, self).__init__(*args, **kwargs)
@@ -320,14 +320,13 @@ class Node(Member):
 			if (bleed_mode == 2 and not self.clockwise) or (bleed_mode == 1 and self.clockwise):
 				self.smartShift(-shift_x, -shift_y)		
 
-
 	def align_to(self, entity, align=(True, True), smart=True):
 		'''Align current node to a node or line given.
 		Arguments:
-			entity (flNode, pNode, eNode or Line)
+			entity (Node, Point or Line)
 			align (tuple(Align_X (bool), Align_Y (bool)) 
 		'''
-		if isinstance(entity, self.__class__):
+		if isinstance(entity, (self.__class__, Point)):
 			new_x = entity.x if align[0] else self.x
 			new_y = entity.y if align[1] else self.y
 				

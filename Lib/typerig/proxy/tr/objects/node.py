@@ -33,7 +33,7 @@ class trNode(Node):
 		.contour (trContour): parent contour
 	'''
 	# - Metadata and proxy model
-	__slots__ = ('host', 'x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'identifier','complex_math', 'parent')
+	__slots__ = ('host', 'x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'identifier','complex_math', 'parent', 'lib')
 	__meta__ = {'x':'x', 'y':'y', 'type':'type', 'g2':'g2', 'smooth':'smooth', 'name':'name', 'selected':'selected'}
 
 	# - Connect to host dynamically	

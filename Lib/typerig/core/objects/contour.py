@@ -22,11 +22,11 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.2.5'
+__version__ = '0.2.6'
 
 # - Classes -----------------------------
 class Contour(Container): 
-	__slots__ = ('name', 'closed', 'clockwise', 'transform', 'parent')
+	__slots__ = ('name', 'closed', 'clockwise', 'transform', 'parent', 'lib')
 
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Node)
@@ -103,7 +103,6 @@ class Contour(Container):
 
 		return sum(polygon_area)*0.5
 
-
 	def get_segments(self, get_point=False):
 		assert len(self.data) > 1, 'Cannot return segments for contour with length {}'.format(len(self.data))
 		contour_segments = []
@@ -126,7 +125,38 @@ class Contour(Container):
 
 	def reverse(self):
 		self.data = list(reversed(self.data))
-		self.clockwise = self.get_winding()
+		#self.clockwise = self.get_winding()
+		self.clockwise = not self.clockwise
+	
+	# - Transformation --------------------------
+	def shift(self, delta_x, delta_y):
+		'''Shift the contour by given amout'''
+		for node in self.nodes:
+			node.point += Point(delta_x, delta_y)
+
+	def align_to(self, entity, align=(True, True), align_matrix_key='C'):
+		'''Align contour to a node or line given.
+		Arguments:
+			entity (Node, Point, Line): Object to align to
+			align (tuple(bool, bool)): Align X, Align Y
+			align_matrix_key (string): 'TL', 'TM', 'TR', 'LM', 'C', 'RM', 'BL', 'BM', 'BR', 
+			where T(top), B(bottom), L(left), R(right), M(middle), C(center)
+		
+		Returns:
+			Nothing
+		'''
+		align_matrix = self.bounds.align_matrix
+		self_x, self_y = align_matrix[align_matrix_key.upper()]
+
+		if isinstance(entity, (Node, Point)):
+			delta_x = entity.x - self_x if align[0] else 0.
+			delta_y = entity.y - self_y if align[1] else 0.
+			self.shift(delta_x, delta_y)
+
+		elif isinstance(entity, (Line, Vector)):
+			delta_x = entity.solve_x(self_y) - self_x if align[0] else 0.
+			delta_y = entity.solve_y(self_x) - self_y if align[1] else 0.
+			self.shift(delta_x, delta_y)
 
 	# -- IO Format ------------------------------
 	def to_VFJ(self):
@@ -143,7 +173,6 @@ class Contour(Container):
 	@staticmethod
 	def from_XML(string):
 		raise NotImplementedError
-
 
 if __name__ == '__main__':
 	from pprint import pprint

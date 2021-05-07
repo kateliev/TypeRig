@@ -31,7 +31,7 @@ class Atom(object):
 
 class Member(Atom):
 	''' A primitive that is a member of a sequence. '''
-	__slots__ = ('uid', 'parent', 'identifier')
+	__slots__ = ('uid', 'identifier', 'parent', 'lib')
 
 	def __init__(self, *args, **kwargs):
 		self.uid = uuid.uuid4()
@@ -75,7 +75,7 @@ class Member(Atom):
 
 class Container(CustomList, Atom):
 	''' A primitive that is a member of a sequence and sequence of its own. '''
-	__slots__ = ('data', 'uid', 'parent', 'identifier', '_lock', '_subclass')
+	__slots__ = ('data', 'uid', 'identifier', 'parent', 'lib', '_lock', '_subclass')
 
 	def __init__(self, data=None, **kwargs):
 		super(Container, self).__init__(data, **kwargs)
