@@ -32,7 +32,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '2.05'
+app_name, app_version = 'TypeRig | Layers', '2.10'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -345,7 +345,7 @@ class TRLayerActionCollector(object):
 		# - Init
 		wGlyph = parent.glyph
 		wContours = wGlyph.contours()
-		parent.contourClipboard = {}
+		parent.contourClipboard = OrderedDict()
 		
 		# - Build initial contour information
 		selectionTuples = wGlyph.selectedAtContours()
@@ -396,7 +396,42 @@ class TRLayerActionCollector(object):
 						add_new_shape(wLayer, contours)
 		
 			parent.glyph.updateObject(parent.glyph.fl, 'Paste outline; Glyph: %s; Layers: %s' %(parent.glyph.fl.name, '; '.join([layer_name for layer_name in parent.lst_layers.getTable()])))
+	
+	@staticmethod
+	def layer_paste_outline_selection(parent):
+		# - Init
+		wGlyph = parent.glyph
+		modifiers = QtGui.QApplication.keyboardModifiers()
+		selected_layers = parent.lst_layers.getTable()
 
+		# - Helper
+		def add_new_shape(layer, contours):
+			newShape = fl6.flShape()
+			newShape.addContours(contours, True)
+			layer.addShape(newShape)
+
+		# - Process
+		if len(parent.contourClipboard.keys()) == len(selected_layers):
+			for i in range(len(selected_layers)):
+				layerName = selected_layers[i]
+				contours = parent.contourClipboard.values()[i]
+				wLayer = wGlyph.layer(layerName)
+
+				if wLayer is not None:
+					if modifiers == QtCore.Qt.ShiftModifier:
+						# - Insert contours into currently selected shape
+						selected_shapes_list = wGlyph.selectedAtShapes(index=False, layer=layerName, deep=False)
+
+						if len(selected_shapes_list):
+							selected_shape = selected_shapes_list[0][0]
+							selected_shape.addContours(contours, True)
+						else:
+							add_new_shape(wLayer, contours)	# Fallback
+					else:
+						# - Create new shape
+						add_new_shape(wLayer, contours)
+		
+			parent.glyph.updateObject(parent.glyph.fl, 'Paste outline; Glyph: %s; Layers: %s' %(parent.glyph.fl.name, '; '.join([layer_name for layer_name in parent.lst_layers.getTable()])))
 
 # - Sub widgets ------------------------
 class TRWLayerSelect(QtGui.QVBoxLayout):
@@ -752,9 +787,11 @@ class tool_tab(QtGui.QWidget):
 		self.menu_layer_outline = QtGui.QMenu('Outline', self)
 		act_layer_copy_outline = QtGui.QAction('Copy Outline', self)
 		act_layer_paste_outline = QtGui.QAction('Paste Outline', self)
+		act_layer_paste_outline_byName = QtGui.QAction('Paste Outline (by Layer Name)', self)
 
 		self.menu_layer_outline.addAction(act_layer_copy_outline)
 		self.menu_layer_outline.addAction(act_layer_paste_outline)
+		self.menu_layer_outline.addAction(act_layer_paste_outline_byName)
 		
 		self.menu_layer_view = QtGui.QMenu('View', self)
 		act_layer_unfold = QtGui.QAction('Unfold', self)
@@ -793,7 +830,8 @@ class tool_tab(QtGui.QWidget):
 		act_layer_unlock.triggered.connect(lambda: TRLayerActionCollector.layer_unlock(self.layerSelector, False))
 		act_layer_lock.triggered.connect(lambda: TRLayerActionCollector.layer_unlock(self.layerSelector, True))
 		act_layer_copy_outline.triggered.connect(lambda: TRLayerActionCollector.layer_copy_outline(self.layerSelector))
-		act_layer_paste_outline.triggered.connect(lambda: TRLayerActionCollector.layer_paste_outline(self.layerSelector))
+		act_layer_paste_outline_byName.triggered.connect(lambda: TRLayerActionCollector.layer_paste_outline(self.layerSelector))
+		act_layer_paste_outline.triggered.connect(lambda: TRLayerActionCollector.layer_paste_outline_selection(self.layerSelector))
 		
 		act_layer_unfold.triggered.connect(lambda: TRLayerActionCollector.layer_unfold(self.layerSelector))
 		act_layer_restore.triggered.connect(lambda: TRLayerActionCollector.layer_restore(self.layerSelector))
