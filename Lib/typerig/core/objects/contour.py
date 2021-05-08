@@ -12,17 +12,17 @@
 from __future__ import absolute_import, print_function, division
 
 from typerig.core.objects.point import Point
-from typerig.core.objects.node import Node
 from typerig.core.objects.line import Line
 from typerig.core.objects.cubicbezier import CubicBezier
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.utils import Bounds
 
 from typerig.core.func.utils import isMultiInstance
-from typerig.core.objects.atom import Member, Container
+from typerig.core.objects.atom import Container
+from typerig.core.objects.node import Node
 
 # - Init -------------------------------
-__version__ = '0.2.6'
+__version__ = '0.2.8'
 
 # - Classes -----------------------------
 class Contour(Container): 
@@ -94,7 +94,6 @@ class Contour(Container):
 
 	def get_on_area(self):
 		'''Get contour area using on curve points only'''
-		if not self.closed: return
 		polygon_area = []
 
 		for node in self.nodes:
@@ -134,29 +133,46 @@ class Contour(Container):
 		for node in self.nodes:
 			node.point += Point(delta_x, delta_y)
 
-	def align_to(self, entity, align=(True, True), align_matrix_key='C'):
+	def align_to(self, entity, mode=('C','C'), align=(True, True)):
 		'''Align contour to a node or line given.
 		Arguments:
-			entity (Node, Point, Line): Object to align to
-			align (tuple(bool, bool)): Align X, Align Y
-			align_matrix_key (string): 'TL', 'TM', 'TR', 'LM', 'C', 'RM', 'BL', 'BM', 'BR', 
-			where T(top), B(bottom), L(left), R(right), M(middle), C(center)
+			entity (Contour, Point, tuple(x,y)):
+				Object to align to
+
+			align (tuple(bool, bool)):
+				Align X, Align Y
+
+			mode tuple(string, string):
+				A special tuple(self, other) that is Bounds().align_matrix:
+				'TL', 'TM', 'TR', 'LM', 'C', 'RM', 'BL', 'BM', 'BR', 
+				where T(top), B(bottom), L(left), R(right), M(middle), C(center)
 		
 		Returns:
 			Nothing
 		'''
+		delta_x, delta_y = 0., 0.
 		align_matrix = self.bounds.align_matrix
-		self_x, self_y = align_matrix[align_matrix_key.upper()]
+		self_x, self_y = align_matrix[mode[0].upper()]
 
-		if isinstance(entity, (Node, Point)):
+		if isinstance(entity, self.__class__):
+			other_align_matrix = entity.bounds.align_matrix
+			other_x, other_y = other_align_matrix[mode[1].upper()]
+
+			delta_x = other_x - self_x if align[0] else 0.
+			delta_y = other_y - self_y if align[1] else 0.
+
+		elif isinstance(entity, Point):
 			delta_x = entity.x - self_x if align[0] else 0.
 			delta_y = entity.y - self_y if align[1] else 0.
-			self.shift(delta_x, delta_y)
 
-		elif isinstance(entity, (Line, Vector)):
-			delta_x = entity.solve_x(self_y) - self_x if align[0] else 0.
-			delta_y = entity.solve_y(self_x) - self_y if align[1] else 0.
-			self.shift(delta_x, delta_y)
+		elif isinstance(entity, tuple):
+			delta_x = entity.x - entity[0] if align[0] else 0.
+			delta_y = entity.y - entity[1] if align[1] else 0.
+
+		else: return
+
+		self.shift(delta_x, delta_y)
+		
 
 	# -- IO Format ------------------------------
 	def to_VFJ(self):
@@ -279,6 +295,7 @@ if __name__ == '__main__':
 	frame.reverse()
 	print(frame.clockwise)
 	print(frame)
+
 	
 
 	

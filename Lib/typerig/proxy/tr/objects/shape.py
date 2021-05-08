@@ -20,7 +20,7 @@ from typerig.proxy.tr.objects.contour import trContour
 from typerig.core.objects.shape import Shape
 
 # - Init --------------------------------
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 
 # - Classes -----------------------------
 class trShape(Shape):
@@ -33,7 +33,7 @@ class trShape(Shape):
 		.host (flShape): Original flShape 
 	'''
 	# - Metadata and proxy model
-	__slots__ = ('host', 'name', 'transform', 'identifier', 'parent')
+	__slots__ = ('host', 'name', 'transform', 'identifier', 'parent', 'lib')
 	__meta__ = {'name':'name'}
 
 	# - Connect to host dynamically	

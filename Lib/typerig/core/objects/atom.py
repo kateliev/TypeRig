@@ -16,7 +16,7 @@ import copy, uuid
 from typerig.core.objects.collection import CustomList
 
 # - Init -------------------------------
-__version__ = '0.1.9'
+__version__ = '0.2.0'
 
 # -- Fix Python 2.7 compatibility 
 if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
@@ -35,7 +35,7 @@ class Member(Atom):
 
 	def __init__(self, *args, **kwargs):
 		self.uid = uuid.uuid4()
-		self.parent = kwargs.get('parent', None)
+		self.parent = kwargs.pop('parent', None)
 		self.identifier = kwargs.get('identifier', None)
 
 	# - Internals -----------------------
@@ -82,9 +82,9 @@ class Container(CustomList, Atom):
 
 		# - Init
 		self.uid = uuid.uuid4()
-		self.parent = kwargs.get('parent', None)
-		self._lock = kwargs.get('locked', False)
-		self._subclass = kwargs.get('default_factory', self.__class__)
+		self.parent = kwargs.pop('parent', None)
+		self._lock = kwargs.pop('locked', False)
+		self._subclass = kwargs.pop('default_factory', self.__class__)
 
 		# - Process data
 		if len(self.data):

@@ -24,7 +24,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.4.0'
+__version__ = '0.4.1'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -33,7 +33,7 @@ class Node(Member):
 
 	def __init__(self, *args, **kwargs):
 		super(Node, self).__init__(*args, **kwargs)
-		self.parent = kwargs.get('parent', None)
+		self.parent = kwargs.pop('parent', None)
 
 		# - Basics
 		if len(args) == 1:
@@ -50,18 +50,18 @@ class Node(Member):
 		else:
 			self.x, self.y = 0., 0.
 
-		self.angle = kwargs.get('angle', 0)
-		self.transform = kwargs.get('transform', Transform())
-		self.complex_math = kwargs.get('complex', True)
+		self.angle = kwargs.pop('angle', 0)
+		self.transform = kwargs.pop('transform', Transform())
+		self.complex_math = kwargs.pop('complex', True)
 
 		# - Metadata
 		if not kwargs.pop('proxy', False): # Initialize in proxy mode
-			self.type = kwargs.get('type', node_types['on'])
-			self.name = kwargs.get('name', '')
-			self.identifier = kwargs.get('identifier', False)
-			self.smooth = kwargs.get('smooth', False)
-			self.selected = kwargs.get('selected', False)
-			self.g2 = kwargs.get('g2', False)
+			self.type = kwargs.pop('type', node_types['on'])
+			self.name = kwargs.pop('name', '')
+			self.identifier = kwargs.pop('identifier', False)
+			self.smooth = kwargs.pop('smooth', False)
+			self.selected = kwargs.pop('selected', False)
+			self.g2 = kwargs.pop('g2', False)
 
 	# -- Internals ------------------------------
 	def __repr__(self):
@@ -326,23 +326,22 @@ class Node(Member):
 			entity (Node, Point or Line)
 			align (tuple(Align_X (bool), Align_Y (bool)) 
 		'''
+		new_x, new_y = 0., 0.
+
 		if isinstance(entity, (self.__class__, Point)):
 			new_x = entity.x if align[0] else self.x
 			new_y = entity.y if align[1] else self.y
 				
-			if smart:
-				self.smart_reloc(new_x, new_y)
-			else:
-				self.reloc(new_x, new_y)
-
 		elif isinstance(entity, (Line, Vector)):
 			new_x = entity.solve_x(self.y) if align[0] else self.x
 			new_y = entity.solve_y(self.x) if align[1] else self.y
+		
+		else: return
 
-			if smart:
-				self.smart_reloc(new_x, new_y)
-			else:
-				self.reloc(new_x, new_y)
+		if smart:
+			self.smart_reloc(new_x, new_y)
+		else:
+			self.reloc(new_x, new_y)
 
 	# - Special ---------------------------------
 	def corner_mitre(self, mitre_size=5, is_radius=False):

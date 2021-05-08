@@ -11,6 +11,7 @@
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
 
+from typerig.core.objects.point import Point
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.utils import Bounds
 
@@ -18,11 +19,11 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.contour import Contour
 
 # - Init -------------------------------
-__version__ = '0.1.0'
+__version__ = '0.1.3'
 
 # - Classes -----------------------------
 class Shape(Container):
-	__slots__ = ('name', 'transform', 'identifier', 'parent')
+	__slots__ = ('name', 'transform', 'identifier', 'parent', 'lib')
 
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Contour)
@@ -75,6 +76,52 @@ class Shape(Container):
 		bounds = sum([[(bound.x, bound.y), (bound.xmax, bound.ymax)] for bound in contour_bounds],[])
 		return Bounds(bounds)
 
+	# - Transformation --------------------------
+	def shift(self, delta_x, delta_y):
+		'''Shift the shape by given amout'''
+		for node in self.nodes:
+			node.point += Point(delta_x, delta_y)
+
+	def align_to(self, entity, mode=('C','C'), align=(True, True)):
+		'''Align contour to a node or line given.
+		Arguments:
+			entity (Shape, Point, tuple(x,y)):
+				Object to align to
+
+			align (tuple(bool, bool)):
+				Align X, Align Y
+
+			mode tuple(string, string):
+				A special tuple(self, other) that is Bounds().align_matrix:
+				'TL', 'TM', 'TR', 'LM', 'C', 'RM', 'BL', 'BM', 'BR', 
+				where T(top), B(bottom), L(left), R(right), M(middle), C(center)
+		
+		Returns:
+			Nothing
+		'''
+		delta_x, delta_y = 0., 0.
+		align_matrix = self.bounds.align_matrix
+		self_x, self_y = align_matrix[mode[0].upper()]
+
+		if isinstance(entity, self.__class__):
+			other_align_matrix = entity.bounds.align_matrix
+			other_x, other_y = other_align_matrix[mode[1].upper()]
+
+			delta_x = other_x - self_x if align[0] else 0.
+			delta_y = other_y - self_y if align[1] else 0.
+
+		elif isinstance(entity, Point):
+			delta_x = entity.x - self_x if align[0] else 0.
+			delta_y = entity.y - self_y if align[1] else 0.
+
+		elif isinstance(entity, tuple):
+			delta_x = entity.x - entity[0] if align[0] else 0.
+			delta_y = entity.y - entity[1] if align[1] else 0.
+
+		else: return
+
+		self.shift(delta_x, delta_y)
+
 	# -- IO Format ------------------------------
 	def to_VFJ(self):
 		raise NotImplementedError
@@ -114,7 +161,7 @@ if __name__ == '__main__':
 			(120.0, 316.0),
 			(156.0, 280.0)]
 
-	s = Shape([test], closed=True)
+	s = Shape([Contour(test, closed=True)])
 
 	new = s[0].clone()
 	for node in new:
@@ -122,7 +169,7 @@ if __name__ == '__main__':
 	
 	s.append(new)
 	print(section('Shape'))
-	print(s)
+	print(s[0].closed)
 
 	print(section('Shape Bounds'))
 	pprint(s.bounds.align_matrix)
