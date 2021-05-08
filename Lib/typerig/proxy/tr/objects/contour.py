@@ -39,12 +39,12 @@ class trContour(Contour):
 	for src, dst in __meta__.items():
 		exec("{0} = property(lambda self: self.host.__getattribute__('{1}'), lambda self, value: self.host.__setattr__('{1}', value))".format(src, dst))
 		
-	# - Initialize 
+	# - Initialize -----------------------------
 	def __init__(self, contour, **kwargs):
 		self.host = contour
 		super(trContour, self).__init__(self.host.nodes(), default_factory=trNode, proxy=True, **kwargs)
 	
-	# - Functions
+	# - Functions ------------------------------
 	def insert(self, i, item):
 		if not self._lock:
 			if isinstance(item, self._subclass):

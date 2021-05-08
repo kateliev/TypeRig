@@ -76,6 +76,14 @@ class Shape(Container):
 		bounds = sum([[(bound.x, bound.y), (bound.xmax, bound.ymax)] for bound in contour_bounds],[])
 		return Bounds(bounds)
 
+	# - Functions -------------------------------
+	def reverse(self):
+		self.data = list(reversed(self.data))
+
+	def sort(self, direction=0, mode='BL'):
+		contour_bounds = [(contour, contour.bounds.align_matrix[mode.upper()]) for contour in self.contours]
+		self.data = [contour_pair[0] for contour_pair in sorted(contour_bounds, key=lambda d: d[1][direction])]
+
 	# - Transformation --------------------------
 	def shift(self, delta_x, delta_y):
 		'''Shift the shape by given amout'''

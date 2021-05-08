@@ -22,7 +22,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.node import Node
 
 # - Init -------------------------------
-__version__ = '0.2.8'
+__version__ = '0.2.9'
 
 # - Classes -----------------------------
 class Contour(Container): 

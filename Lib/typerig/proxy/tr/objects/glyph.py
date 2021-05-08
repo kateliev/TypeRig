@@ -20,7 +20,7 @@ from typerig.proxy.tr.objects.layer import trLayer
 from typerig.core.objects.glyph import Glyph
 
 # - Init --------------------------------
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 # - Classes -----------------------------
 class trGlyph(Glyph):
@@ -63,8 +63,12 @@ class trGlyph(Glyph):
 
 		super(trGlyph, self).__init__(self.host.layers, default_factory=trLayer, proxy=True, **kwargs)
 	
-	# - Properties
+	# - Properties --------------------------
 	@property
 	def unicodes(self):
 		return self.host.fgGlyph.unicodes
+
+	# - Functions ---------------------------
+	def update(self):
+		fl6.flItems.notifyChangesApplied(self.name, self.host, True)
 	
