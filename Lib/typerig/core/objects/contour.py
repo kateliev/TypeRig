@@ -22,7 +22,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.node import Node
 
 # - Init -------------------------------
-__version__ = '0.2.9'
+__version__ = '0.3.1'
 
 # - Classes -----------------------------
 class Contour(Container): 
@@ -88,6 +88,10 @@ class Contour(Container):
 		return obj_segments
 		
 	# -- Functions ------------------------------
+	def set_start(self, index):
+		index = self.nodes[index].prev_on.idx if not self.nodes[index].is_on else index
+		self.data = self.data[index:] + self.data[:index] 
+
 	def get_winding(self):
 		'''Check if contour has clockwise winding direction'''
 		return self.get_on_area() > 0
@@ -128,6 +132,10 @@ class Contour(Container):
 		self.clockwise = not self.clockwise
 	
 	# - Transformation --------------------------
+	def apply_transform(self):
+		for node in self.nodes:
+			node.x, node.y = self.transform.applyTransformation(node.x, node.y)
+
 	def shift(self, delta_x, delta_y):
 		'''Shift the contour by given amout'''
 		for node in self.nodes:

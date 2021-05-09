@@ -19,7 +19,7 @@ from typerig.proxy.tr.objects.node import trNode
 from typerig.core.objects.contour import Contour
 
 # - Init --------------------------------
-__version__ = '0.0.6'
+__version__ = '0.0.7'
 
 # - Classes -----------------------------
 class trContour(Contour):
@@ -67,3 +67,8 @@ class trContour(Contour):
 	def clone(self):
 		new_contour = self.host.clone()
 		return self.__class__(new_contour)
+
+	def set_start(self, index):
+		index = self.nodes[index].prev_on.idx if not self.nodes[index].is_on else index
+		self.data = self.data[index:] + self.data[:index] 
+		return self.host.setStartPoint(index)

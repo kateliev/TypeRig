@@ -19,7 +19,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.contour import Contour
 
 # - Init -------------------------------
-__version__ = '0.1.3'
+__version__ = '0.1.4'
 
 # - Classes -----------------------------
 class Shape(Container):
@@ -85,6 +85,10 @@ class Shape(Container):
 		self.data = [contour_pair[0] for contour_pair in sorted(contour_bounds, key=lambda d: d[1][direction])]
 
 	# - Transformation --------------------------
+	def apply_transform(self):
+		for node in self.nodes:
+			node.x, node.y = self.transform.applyTransformation(node.x, node.y)
+
 	def shift(self, delta_x, delta_y):
 		'''Shift the shape by given amout'''
 		for node in self.nodes:

@@ -19,7 +19,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.shape import Shape
 
 # - Init -------------------------------
-__version__ = '0.1.3'
+__version__ = '0.1.4'
 
 # - Classes -----------------------------
 class Layer(Container): 
@@ -85,6 +85,10 @@ class Layer(Container):
 		return Bounds(bounds)
 
 	# - Transformation --------------------------
+	def apply_transform(self):
+		for node in self.nodes:
+			node.x, node.y = self.transform.applyTransformation(node.x, node.y)
+
 	def shift(self, delta_x, delta_y):
 		'''Shift the layer by given amout'''
 		for node in self.nodes:

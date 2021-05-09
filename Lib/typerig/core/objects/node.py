@@ -24,7 +24,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.4.1'
+__version__ = '0.4.2'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -244,6 +244,9 @@ class Node(Member):
 		raise NotImplementedError
 
 	# - Transformation -----------------------------------------------
+	def apply_transform(self):
+		self.x, self.y = self.transform.applyTransformation(self.x, self.y)
+		
 	def reloc(self, new_x, new_y):
 		'''Relocate the node to new coordinates'''
 		self.point = Point(new_x, new_y)
