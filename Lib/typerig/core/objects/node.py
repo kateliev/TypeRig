@@ -14,6 +14,7 @@ import math, copy
 
 from typerig.core.func.geometry import ccw
 from typerig.core.func.math import ratfrac, randomize
+from typerig.core.func.transform import adaptive_scale, lerp
 
 from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line, Vector
@@ -24,7 +25,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.4.2'
+__version__ = '0.4.3'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -346,6 +347,34 @@ class Node(Member):
 		else:
 			self.reloc(new_x, new_y)
 
+	def lerp_to(self, entity, time):
+		'''Perform linear interpolation
+		Args:
+			entity -> Node or Point : Object to make delta to
+			time(tx, ty) -> tuple((float, float) : Interpolation times (anisotropic X, Y) 
+
+		Returns:
+			None
+		'''
+		tx, ty = time
+		self.point = Point(lerp(self.x, entity.x, tx), lerp(self.y, entity.y, ty))
+
+	def delta_to(self, entity, stems, scale=(1.,1.), time=(0.,0.), transalte=(0.,0.), angle=0., compensate=(0.,0.)):
+		'''Perform adaptive scaling by keeping the stem/stroke weights
+		Args:
+			entity -> Node or Point : Object to make delta to
+			stems(stx0, stx1, sty0, sty1) -> tuple((float, float, float, float) : Stems widths for weights t0, t1
+			scale(sx, sy) -> tuple((float, float) : Scale factors (X, Y)
+			time(tx, ty) -> tuple((float, float) : Interpolation times (anisotropic X, Y) 
+			transalte(dx, dy) -> tuple((float, float) : Translate values (X, Y) 
+			angle -> (radians) : Angle of sharing (for italic designs)  
+			compensate(cx, cy) -> tuple((float, float) : Compensation factor 0.0 (no compensation) to 1.0 (full compensation) (X,Y)
+
+		Returns:
+			None
+		'''
+		self.point = Point(adaptive_scale(((self.x, self.y), (entity.x, entity.y)), scale, transalte, time, compensate, stems))
+
 	# - Special ---------------------------------
 	def corner_mitre(self, mitre_size=5, is_radius=False):
 		# - Calculate unit vectors and shifts
@@ -503,7 +532,7 @@ class Node(Member):
 
 
 if __name__ == '__main__':
-	# - Test initialization, normal and rom VFJ
+	# - Test initialization, normal and from VFJ
 	n0 = Node.from_VFJ('10 20 s g2')
 	n1 = Node.from_VFJ('20 30 s')
 	n2 = Node(35, 55.65)
@@ -519,5 +548,7 @@ if __name__ == '__main__':
 	# - Test Containers and VFJ export 
 	c = Container([n0, n1, n2, n3, n4], default_factory=Node)
 	c.append((99,99))
-	print(n0.next)
+	print(n0)
+	n0.lerp_to(n1, (.5,.5))
+	print(n0)
 	
