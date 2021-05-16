@@ -19,7 +19,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.contour import Contour
 
 # - Init -------------------------------
-__version__ = '0.1.4'
+__version__ = '0.1.5'
 
 # - Classes -----------------------------
 class Shape(Container):
@@ -83,6 +83,12 @@ class Shape(Container):
 	def sort(self, direction=0, mode='BL'):
 		contour_bounds = [(contour, contour.bounds.align_matrix[mode.upper()]) for contour in self.contours]
 		self.data = [contour_pair[0] for contour_pair in sorted(contour_bounds, key=lambda d: d[1][direction])]
+
+	def set_weight(self, wx, wy):
+		'''Set x and y weights (a.k.a. stems) for all nodes'''
+		for node in self.nodes:
+			node.weight.x = wx
+			node.weight.y = wy
 
 	# - Transformation --------------------------
 	def apply_transform(self):

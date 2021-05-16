@@ -25,12 +25,12 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.4.3'
+__version__ = '0.4.5'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
 class Node(Member): 
-	__slots__ = ('x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'identifier','complex_math', 'parent', 'lib')
+	__slots__ = ('x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'identifier','complex_math','weight', 'parent', 'lib')
 
 	def __init__(self, *args, **kwargs):
 		super(Node, self).__init__(*args, **kwargs)
@@ -54,6 +54,7 @@ class Node(Member):
 		self.angle = kwargs.pop('angle', 0)
 		self.transform = kwargs.pop('transform', Transform())
 		self.complex_math = kwargs.pop('complex', True)
+		self.weight = Point(kwargs.pop('weight', (0.,0.)))
 
 		# - Metadata
 		if not kwargs.pop('proxy', False): # Initialize in proxy mode
@@ -359,21 +360,59 @@ class Node(Member):
 		tx, ty = time
 		self.point = Point(lerp(self.x, entity.x, tx), lerp(self.y, entity.y, ty))
 
-	def delta_to(self, entity, stems, scale=(1.,1.), time=(0.,0.), transalte=(0.,0.), angle=0., compensate=(0.,0.)):
-		'''Perform adaptive scaling by keeping the stem/stroke weights
+	def lerp_function(self, entity):
+		'''Linear interpolation function to Node or Point
 		Args:
 			entity -> Node or Point : Object to make delta to
-			stems(stx0, stx1, sty0, sty1) -> tuple((float, float, float, float) : Stems widths for weights t0, t1
+			
+		Returns:
+			lerp function(tx, ty) with parameters:
+			tx, ty (float, float) : Interpolation times (anisotropic X, Y) 
+		'''
+		x0, y0 = self.point.tuple
+		x1, y1 = entity.x, entity.y
+
+		def func(tx, ty):
+			self.point = Point(lerp(x0, x1, tx), lerp(y0, y1, ty))
+
+		return func
+
+	def delta_to(self, other, scale=(1.,1.), time=(0.,0.), transalte=(0.,0.), angle=0., compensate=(0.,0.)):
+		'''Perform adaptive scaling by keeping the stem/stroke weights
+		Args:
+			other -> Node: Object to make delta to
 			scale(sx, sy) -> tuple((float, float) : Scale factors (X, Y)
 			time(tx, ty) -> tuple((float, float) : Interpolation times (anisotropic X, Y) 
-			transalte(dx, dy) -> tuple((float, float) : Translate values (X, Y) 
+			translate(dx, dy) -> tuple((float, float) : Translate values (X, Y) 
 			angle -> (radians) : Angle of sharing (for italic designs)  
 			compensate(cx, cy) -> tuple((float, float) : Compensation factor 0.0 (no compensation) to 1.0 (full compensation) (X,Y)
 
 		Returns:
 			None
 		'''
-		self.point = Point(adaptive_scale(((self.x, self.y), (entity.x, entity.y)), scale, transalte, time, compensate, stems))
+		self.point = Point(adaptive_scale(((self.x, self.y), (other.x, other.y)), scale, transalte, time, compensate, angle, (self.weight.x, self.weight.y, other.weight.x, other.weight.y)))
+
+	def delta_function(self, other):
+		'''Adaptive scaling function to Node
+		Args:
+			other -> Node: Object to make delta to
+
+		Returns:
+			Delta function(scale=(1.,1.), time=(0.,0.), transalte=(0.,0.), angle=0., compensate=(0.,0.)) with parameters:
+				scale(sx, sy) -> tuple((float, float) : Scale factors (X, Y)
+				time(tx, ty) -> tuple((float, float) : Interpolation times (anisotropic X, Y) 
+				translate(dx, dy) -> tuple((float, float) : Translate values (X, Y) 
+				angle -> (radians) : Angle of sharing (for italic designs)  
+				compensate(cx, cy) -> tuple((float, float) : Compensation factor 0.0 (no compensation) to 1.0 (full compensation) (X,Y)
+		'''
+		x0, y0 = self.point.tuple
+		x1, y1 = other.point.tuple
+		weights = (self.weight.x, other.weight.x, self.weight.y, other.weight.y)
+		
+		def func(scale=(1.,1.), time=(0.,0.), transalte=(0.,0.), angle=0., compensate=(0.,0.)):
+			self.point = Point(adaptive_scale(((x0, y0), (x1, y1)), scale, transalte, time, compensate, angle, weights))
+
+		return func
 
 	# - Special ---------------------------------
 	def corner_mitre(self, mitre_size=5, is_radius=False):

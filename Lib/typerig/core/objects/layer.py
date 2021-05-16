@@ -19,7 +19,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.shape import Shape
 
 # - Init -------------------------------
-__version__ = '0.1.4'
+__version__ = '0.1.6'
 
 # - Classes -----------------------------
 class Layer(Container): 
@@ -56,7 +56,7 @@ class Layer(Container):
 	@property
 	def contours(self):
 		layer_contours = []
-		for contour in self.shapes:
+		for shape in self.shapes:
 			layer_contours += shape.contours
 
 		return layer_contours
@@ -84,6 +84,13 @@ class Layer(Container):
 		bounds = sum([[(bound.x, bound.y), (bound.xmax, bound.ymax)] for bound in contour_bounds],[])
 		return Bounds(bounds)
 
+	# - Functions --------------------------
+	def set_weight(self, wx, wy):
+		'''Set x and y weights (a.k.a. stems) for all nodes'''
+		for node in self.nodes:
+			node.weight.x = wx
+			node.weight.y = wy
+	
 	# - Transformation --------------------------
 	def apply_transform(self):
 		for node in self.nodes:

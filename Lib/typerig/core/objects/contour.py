@@ -18,11 +18,13 @@ from typerig.core.objects.transform import Transform
 from typerig.core.objects.utils import Bounds
 
 from typerig.core.func.utils import isMultiInstance
+from typerig.core.func.transform import adaptive_scale, lerp
+
 from typerig.core.objects.atom import Container
 from typerig.core.objects.node import Node
 
 # - Init -------------------------------
-__version__ = '0.3.1'
+__version__ = '0.3.3'
 
 # - Classes -----------------------------
 class Contour(Container): 
@@ -131,6 +133,12 @@ class Contour(Container):
 		#self.clockwise = self.get_winding()
 		self.clockwise = not self.clockwise
 	
+	def set_weight(self, wx, wy):
+		'''Set x and y weights (a.k.a. stems) for all nodes'''
+		for node in self.nodes:
+			node.weight.x = wx
+			node.weight.y = wy
+
 	# - Transformation --------------------------
 	def apply_transform(self):
 		for node in self.nodes:
@@ -180,7 +188,44 @@ class Contour(Container):
 		else: return
 
 		self.shift(delta_x, delta_y)
+	
+	def lerp_function(self, other):
+		'''Linear interpolation function to Node or Point
+		Args:
+			other -> Contour
+			
+		Returns:
+			lerp function(tx, ty) with parameters:
+			tx, ty (float, float) : Interpolation times (anisotropic X, Y) 
+		'''
+		node_array = [(n0.point, n1.point) for n0, n1 in zip(self.nodes, other.nodes)]
+
+		def func(tx, ty):
+			for idx in range(len(self.nodes)):
+				self.nodes[idx].point = Point(lerp(node_array[idx][0].x, node_array[idx][1].x, tx), lerp(node_array[idx][0].y, node_array[idx][1].y, ty))
+
+		return func	
+
+	def delta_function(self, other):
+		'''Adaptive scaling function to Node
+		Args:
+			other -> Contour
+
+		Returns:
+			Delta function(scale=(1.,1.), time=(0.,0.), transalte=(0.,0.), angle=0., compensate=(0.,0.)) with parameters:
+				scale(sx, sy) -> tuple((float, float) : Scale factors (X, Y)
+				time(tx, ty) -> tuple((float, float) : Interpolation times (anisotropic X, Y) 
+				translate(dx, dy) -> tuple((float, float) : Translate values (X, Y) 
+				angle -> (radians) : Angle of sharing (for italic designs)  
+				compensate(cx, cy) -> tuple((float, float) : Compensation factor 0.0 (no compensation) to 1.0 (full compensation) (X,Y)
+		'''
+		node_array = [(n0.point.tuple, n1.point.tuple, n0.weight.tuple, n1.weight.tuple) for n0, n1 in zip(self.nodes, other.nodes)]
 		
+		def func(scale=(1.,1.), time=(0.,0.), transalte=(0.,0.), angle=0., compensate=(0.,0.)):
+			for idx in range(len(self.nodes)):
+				self.nodes[idx].point = Point(adaptive_scale((node_array[idx][0], node_array[idx][1]), scale, transalte, time, compensate, angle, (node_array[idx][2][0], node_array[idx][3][0], node_array[idx][2][1], node_array[idx][3][1])))
+
+		return func
 
 	# -- IO Format ------------------------------
 	def to_VFJ(self):
