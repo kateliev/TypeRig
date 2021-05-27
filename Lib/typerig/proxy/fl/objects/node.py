@@ -20,10 +20,8 @@ from typerig.core.func.geometry import ccw
 from typerig.core.objects.utils import Bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
-from typerig.core.objects.node import Node
-
 # - Init ---------------------------------
-__version__ = '0.27.5'
+__version__ = '0.27.6'
 
 # - Classes -------------------------------
 class pNode(object):
