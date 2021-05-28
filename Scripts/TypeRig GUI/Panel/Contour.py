@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '0.33'
+app_name, app_version = 'TypeRig | Contour', '0.34'
 
 # - Sub widgets ------------------------
 class breakContour(QtGui.QGridLayout):
@@ -313,7 +313,7 @@ class alignContours(QtGui.QGridLayout):
 	def alignContours(self):
 		# - Helpers
 		def getContourBonds(work_contours):
-			tmp_bounds = [contour.bounds() for contour in work_contours]
+			tmp_bounds = [contour.bounds for contour in work_contours]
 			cont_min_X, cont_min_Y, cont_max_X, cont_max_Y = map(set, zip(*tmp_bounds))
 			return (min(cont_min_X), min(cont_min_Y), max(cont_max_X), max(cont_max_Y))
 

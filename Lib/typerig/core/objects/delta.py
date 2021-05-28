@@ -291,7 +291,7 @@ if __name__ == '__main__':
 	b = DeltaScale(a)
 	#print(a.scale_by_time((1,1), (1,3), (1.0, 1.0), (0,0), 0))
 	#print(a.scale_by_stem((40,25), (1,3), (1.0, 1.0), (0,0), 0))
-	print(a.x == b.x)
+	print(a.x)
 	
 
 
