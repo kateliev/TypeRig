@@ -33,7 +33,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '2.10'
+app_name, app_version = 'TypeRig | Nodes', '2.11'
 
 # - Helpers ----------------------------
 def filter_consecutive(selection):
@@ -825,55 +825,62 @@ class copyNodes(QtGui.QGridLayout):
 						dst_container = eNodesContainer(glyph.selectedNodes(layer), extend=eNode)
 
 						if len(dst_container):
-							src_countainer = self.node_bank[layer].clone()
+							src_container = self.node_bank[layer].clone()
 							src_transform = QtGui.QTransform()
 																		
 							# - Transform
 							if self.chk_flipH.isChecked() or self.chk_flipV.isChecked():
 								scaleX = -1 if self.chk_flipH.isChecked() else 1
 								scaleY = -1 if self.chk_flipV.isChecked() else 1
-								dX = src_countainer.x() + src_countainer.width()/2.
-								dY = src_countainer.y() + src_countainer.height()/2.
+								dX = src_container.x() + src_container.width()/2.
+								dY = src_container.y() + src_container.height()/2.
 
 								src_transform.translate(dX, dY)
 								src_transform.scale(scaleX, scaleY)
 								src_transform.translate(-dX, -dY)
-								src_countainer.applyTransform(src_transform)
+								src_container.applyTransform(src_transform)
 								
 
 							# - Align source
 							if self.copy_align_state is None:
-								src_countainer.shift(*src_countainer[0].diffTo(dst_container[0]))
+								src_container.shift(*src_container[0].diffTo(dst_container[0]))
 							else:
-								src_countainer.alignTo(dst_container, self.copy_align_state, align=(True,True))
+								src_container.alignTo(dst_container, self.copy_align_state, align=(True,True))
 
 							if self.chk_reverse.isChecked(): 
-								src_countainer = src_countainer.reverse()
+								src_container = src_container.reverse()
 
 							# - Process
 							if modifiers == QtCore.Qt.ShiftModifier: # - Inject mode - insert source after first node index
-								dst_container[0].contour.insert(dst_container[0].index, [node.fl for node in src_countainer.nodes])
+								dst_container[0].contour.insert(dst_container[0].index, [node.fl for node in src_container.nodes])
 								update_flag = True
 
 							elif modifiers == QtCore.Qt.AltModifier: # - Overwrite mode - delete all nodes in selection and replace with source
 								insert_index = dst_container[0].index
 								insert_contour = dst_container[0].contour
 								insert_contour.removeNodesBetween(dst_container[0].fl, dst_container[-1].getNextOn())
-								insert_contour.insert(dst_container[0].index, [node.fl for node in src_countainer.nodes])
-								insert_contour.removeAt(insert_index + len(src_countainer))
+								insert_contour.insert(dst_container[0].index, [node.fl for node in src_container.nodes])
+								insert_contour.removeAt(insert_index + len(src_container))
+
+								update_flag = True
+
+							elif modifiers == QtCore.Qt.ControlModifier: # - Overwrite mode - copy node coordinates only
+								for nid in range(len(dst_container)):
+									dst_container.nodes[nid].x = src_container.nodes[nid].x
+									dst_container.nodes[nid].y = src_container.nodes[nid].y
 
 								update_flag = True
 
 							else: # - Paste mode - remap node by node
 								if len(dst_container) == len(self.node_bank[layer]):
 									for nid in range(len(dst_container)):
-										dst_container[nid].fl.x = src_countainer[nid].x 
-										dst_container[nid].fl.y = src_countainer[nid].y 
+										dst_container[nid].fl.x = src_container[nid].x 
+										dst_container[nid].fl.y = src_container[nid].y 
 
 									update_flag = True
 								else:
 									update_flag = False
-									warnings.warn('Layer: {};\tCount Mismatch: Selected nodes [{}]; Source nodes [{}].'.format(layer, len(dst_container), len(src_countainer)), NodeWarning)
+									warnings.warn('Layer: {};\tCount Mismatch: Selected nodes [{}]; Source nodes [{}].'.format(layer, len(dst_container), len(src_container)), NodeWarning)
 							
 				# - Done							
 				if update_flag:	
