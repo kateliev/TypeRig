@@ -17,12 +17,12 @@ from fontTools import afmLib
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 
-from typerig.proxy.fl import pFont
-from typerig.proxy.fl import pKerning
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.kern import pKerning
 from typerig.core.func.math import round2base
 
 # - Init --------------------------
-app_name, app_version = 'TypeRig | AFM Import & Export', '0.8'
+app_name, app_version = 'TypeRig | AFM Import & Export', '1.0'
 file_formats = {'afm':'Adobe Font Metrics (*.afm)'}
 
 # - Action Objects ---------------
