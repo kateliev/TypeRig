@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '0.34'
+app_name, app_version = 'TypeRig | Contour', '1.00'
 
 # - Sub widgets ------------------------
 class breakContour(QtGui.QGridLayout):
@@ -78,6 +78,13 @@ class breakContour(QtGui.QGridLayout):
 class basicContour(QtGui.QGridLayout):
 	# - Split/Break contour 
 	def __init__(self):
+
+		# - Init
+		self.var_bool_A = {}
+		self.var_bool_B = {}
+
+		# - Widgets
+		# -- Buttons
 		super(basicContour, self).__init__()
 		self.btn_BL = QtGui.QPushButton('B L')
 		self.btn_TL = QtGui.QPushButton('T L')
@@ -90,6 +97,13 @@ class basicContour(QtGui.QGridLayout):
 		self.btn_CW = QtGui.QPushButton('CW')
 		self.btn_CCW = QtGui.QPushButton('CCW')
 		self.btn_overlap = QtGui.QPushButton('Remove Overlap')
+
+		self.btn_bool_setA = QtGui.QPushButton('Set A')
+		self.btn_bool_setB = QtGui.QPushButton('Set B')
+		self.btn_bool_subtract = QtGui.QPushButton('Subtract B from A')
+
+		self.btn_bool_setA.setCheckable(True)
+		self.btn_bool_setB.setCheckable(True)
 
 		self.btn_close.setMinimumWidth(40)
 		self.btn_BL.setMinimumWidth(40)
@@ -122,21 +136,28 @@ class basicContour(QtGui.QGridLayout):
 		self.btn_overlap.clicked.connect(self.removeOverlap)
 		self.btn_sort_x.clicked.connect(lambda : self.setOrder(False))
 		self.btn_sort_y.clicked.connect(lambda : self.setOrder(True))
+		self.btn_bool_setA.clicked.connect(lambda: self.bool_set_shape(False))
+		self.btn_bool_setB.clicked.connect(lambda: self.bool_set_shape(True))
+		self.btn_bool_subtract.clicked.connect(lambda: self.bool_subtract())
 
-		self.addWidget(self.btn_close, 	0, 0, 1, 1)
-		self.addWidget(self.btn_start, 	0, 1, 1, 1)
-		self.addWidget(self.btn_CW, 	1, 0, 1, 1)
-		self.addWidget(self.btn_CCW, 	1, 1, 1, 1)
+		self.addWidget(self.btn_close, 						0, 0, 1, 1)
+		self.addWidget(self.btn_start, 						0, 1, 1, 1)
+		self.addWidget(self.btn_CW, 						1, 0, 1, 1)
+		self.addWidget(self.btn_CCW, 						1, 1, 1, 1)
 
-		self.addWidget(self.btn_TL, 	0, 2, 1, 1)
-		self.addWidget(self.btn_TR, 	0, 3, 1, 1)
-		self.addWidget(self.btn_BL, 	1, 2, 1, 1)
-		self.addWidget(self.btn_BR, 	1, 3, 1, 1)
-		self.addWidget(self.btn_sort_x, 2, 0, 1, 2)
-		self.addWidget(self.btn_sort_y, 2, 2, 1, 2)
-		self.addWidget(self.btn_overlap, 3, 0, 1, 4)
+		self.addWidget(self.btn_TL, 						0, 2, 1, 1)
+		self.addWidget(self.btn_TR, 						0, 3, 1, 1)
+		self.addWidget(self.btn_BL, 						1, 2, 1, 1)
+		self.addWidget(self.btn_BR, 						1, 3, 1, 1)
+		self.addWidget(self.btn_sort_x, 					2, 0, 1, 2)
+		self.addWidget(self.btn_sort_y, 					2, 2, 1, 2)
+
+		self.addWidget(QtGui.QLabel('Boolean Operations:'), 3, 0, 1, 4)
+		self.addWidget(self.btn_overlap, 					4, 0, 1, 4)
+		self.addWidget(self.btn_bool_setA, 					5, 0, 1, 1)
+		self.addWidget(self.btn_bool_setB, 					5, 1, 1, 1)
+		self.addWidget(self.btn_bool_subtract, 				5, 2, 1, 2)
 		
-
 	def closeContour(self):
 		glyph = eGlyph()
 		wLayers = glyph._prepareLayers(pLayers)
@@ -150,6 +171,56 @@ class basicContour(QtGui.QGridLayout):
 
 		glyph.updateObject(glyph.fl, 'Close Contour @ %s.' %'; '.join(wLayers))
 		glyph.update()
+
+	def bool_set_shape(self, isB=False):
+		# - Init
+		glyph = eGlyph()
+		selection = glyph.selectedAtShapes()
+		work_selection = {}
+		reset_value = False
+
+		# - Prepare
+		for sid, cid, nid in selection:
+			work_selection.setdefault(sid, set([])).add(cid)
+
+		# - Set
+		if self.btn_bool_setA.isChecked() and not isB:
+			self.var_bool_A = work_selection
+		
+		elif not self.btn_bool_setA.isChecked() and not isB:
+			self.var_bool_A = {}
+			reset_value = True
+		
+		if self.btn_bool_setB.isChecked() and isB:
+			self.var_bool_B = work_selection
+
+		elif not self.btn_bool_setB.isChecked() and isB:
+			self.var_bool_B = {}
+			reset_value = True
+
+		if not reset_value:
+			output(0, app_name, 'Boolean Operations | Set {} for contours: {}'.format(['A', 'B'][isB], work_selection))
+		else:
+			output(0, app_name, 'Boolean Operations | Reset {}'.format(['A', 'B'][isB]))
+
+	def bool_subtract(self):
+		glyph = eGlyph()
+		wLayers = glyph._prepareLayers(pLayers)
+
+		# - Get contours
+		process_shapes_A = []
+		process_shapes_B = []
+
+		print(self.var_bool_A, self.var_bool_B)
+		if len(self.var_bool_A.keys()) and len(self.var_bool_B.keys()):
+			for layerName in wLayers:
+				for sid, cid_list in self.var_bool_A.items():
+					process_shapes_A.append((glyph.shapes(layerName)[sid], [glyph.contours(layerName)[cid] for cid in cid_list]))
+
+				for sid, cid_list in self.var_bool_B.items():
+					process_shapes_B.append((glyph.shapes(layerName)[sid], [glyph.contours(layerName)[cid] for cid in cid_list]))
+
+		print(process_shapes_A, process_shapes_B)
 
 	def removeOverlap(self):
 		glyph = eGlyph()
