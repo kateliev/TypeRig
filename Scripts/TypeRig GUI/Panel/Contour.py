@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '1.00'
+app_name, app_version = 'TypeRig | Contour', '1.01'
 
 # - Sub widgets ------------------------
 class breakContour(QtGui.QGridLayout):
@@ -98,12 +98,13 @@ class basicContour(QtGui.QGridLayout):
 		self.btn_CCW = QtGui.QPushButton('CCW')
 		self.btn_overlap = QtGui.QPushButton('Remove Overlap')
 
-		self.btn_bool_setA = QtGui.QPushButton('Set A')
-		self.btn_bool_setB = QtGui.QPushButton('Set B')
-		self.btn_bool_subtract = QtGui.QPushButton('Subtract B from A')
+		self.btn_bool_setA = QtGui.QPushButton('A')
+		self.btn_bool_setB = QtGui.QPushButton('B')
+		self.btn_bool_subtract = QtGui.QPushButton('A - B')
 
 		self.btn_bool_setA.setCheckable(True)
 		self.btn_bool_setB.setCheckable(True)
+		self.btn_bool_subtract.setEnabled(False)
 
 		self.btn_close.setMinimumWidth(40)
 		self.btn_BL.setMinimumWidth(40)
@@ -208,19 +209,47 @@ class basicContour(QtGui.QGridLayout):
 		wLayers = glyph._prepareLayers(pLayers)
 
 		# - Get contours
-		process_shapes_A = []
-		process_shapes_B = []
+		process_shapes = []
 
-		print(self.var_bool_A, self.var_bool_B)
 		if len(self.var_bool_A.keys()) and len(self.var_bool_B.keys()):
 			for layerName in wLayers:
+				process_shapes_A = []
+				process_shapes_B = []
+
 				for sid, cid_list in self.var_bool_A.items():
 					process_shapes_A.append((glyph.shapes(layerName)[sid], [glyph.contours(layerName)[cid] for cid in cid_list]))
 
 				for sid, cid_list in self.var_bool_B.items():
 					process_shapes_B.append((glyph.shapes(layerName)[sid], [glyph.contours(layerName)[cid] for cid in cid_list]))
 
-		print(process_shapes_A, process_shapes_B)
+				process_shapes.append(zip(process_shapes_A, process_shapes_B))
+
+		for source_A, source_B in sum(process_shapes, []):
+			# - A
+			shape_A, contours_A = source_A
+			shape_A.removeContours(contours_A)
+			new_shape_A = fl6.flShape()
+			new_fg_shape_A = fgt.fgShape()
+			new_shape_A.contours = contours_A
+			new_shape_A.convertToFgShape(new_fg_shape_A)
+
+			# - B
+			shape_B, contours_B = source_B
+			shape_B.removeContours(contours_B)
+			new_shape_B = fl6.flShape()
+			new_fg_shape_B = fgt.fgShape()
+			new_shape_B.contours = contours_B
+			new_shape_B.convertToFgShape(new_fg_shape_B)
+
+			print(new_fg_shape_A.contours, new_fg_shape_B.contours)
+
+			# - Boolean
+			result = new_fg_shape_A.subtractShape(new_fg_shape_B, 0)
+			shape_A.addContours(fl6.flShape(new_fg_shape_A).contours, True)
+			shape_B.addContours(fl6.flShape(new_fg_shape_B).contours, True)
+
+		glyph.updateObject(glyph.fl, 'Boolean Operations @ %s.' %'; '.join(wLayers))
+		glyph.update()
 
 	def removeOverlap(self):
 		glyph = eGlyph()
