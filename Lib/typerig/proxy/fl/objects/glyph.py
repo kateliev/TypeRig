@@ -27,7 +27,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.28.6'
+__version__ = '0.28.7'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -1337,13 +1337,14 @@ class eGlyph(pGlyph):
 		pGlyph(fgFont, fgGlyph)
 	'''
 	# - Internal ------------------------------------------
-	def _prepareLayers(self, layers):
+	def _prepareLayers(self, layers, compatible=True):
 		'''Internal! Prepares layers to be used in tools using GUI
 		Args:
 			layers (Bool control tuple(active_layer, masters, masks, services)). Note If all are set to False only the active layer is used.
 		Returns:
 			list: List of layer names
 		'''
+		active_layer = self.activeLayer()
 		layerBanList = ['#', 'img'] #! Parts or names of layers that are banned for manipulation
 
 		if layers is None:
@@ -1352,8 +1353,20 @@ class eGlyph(pGlyph):
 		elif isinstance(layers, tuple):
 			bpass = lambda condition, value: value if condition else []
 			
-			tempLayers = [] + bpass(layers[0], [self.activeLayer()]) + bpass(layers[1], self.masters()) + bpass(layers[2], self.masks()) + bpass(layers[3], self.services())
-			return list(set([layer.name for layer in tempLayers if all([item not in layer.name for item in layerBanList])]))
+			tempLayers = [] + bpass(layers[0], [active_layer]) + bpass(layers[1], self.masters()) + bpass(layers[2], self.masks()) + bpass(layers[3], self.services())
+			layers = list(set([layer.name for layer in tempLayers if all([item not in layer.name for item in layerBanList])]))
+
+			if compatible:
+				compatible_layers = []
+
+				for layer_name in layers:
+					if active_layer.isCompatible(self.layer(layer_name), True):
+						compatible_layers.append(layer_name)
+
+				return compatible_layers
+
+			
+			return layers
 		
 		elif isinstance(layers, list):
 			return list(set([layer for layer in layers if all([item not in layer for item in layerBanList])]))	
