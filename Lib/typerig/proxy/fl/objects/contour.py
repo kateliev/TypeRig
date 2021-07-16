@@ -21,7 +21,7 @@ from typerig.proxy.fl.objects.base import Coord
 from typerig.proxy.fl.objects.node import pNode
 
 # - Init --------------------------------
-__version__ = '0.26.9'
+__version__ = '0.27.0'
 
 # - Classes -----------------------------
 class pContour(object):
@@ -152,6 +152,7 @@ class pContour(object):
 
 	def draw(self, pen, transform=None):
 		''' Utilizes the Pen protocol'''
+		transform = self.fl.transform if transform is None else transform
 		self.fl.convertToFgContour(transform).draw(pen)
 
 # -- Extensions -------------------------

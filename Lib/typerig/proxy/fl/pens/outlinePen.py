@@ -20,12 +20,15 @@ import fontgate as fgt
 
 from typerig.core.func.math import roundFloat
 from typerig.core.func.geometry import checkSmooth, checkInnerOuter
-from typerig.core.objects import Point, Line, CubicBezier
+from typerig.core.objects.point import Point
+from typerig.core.objects.line import Line
+from typerig.core.objects.cubicbezier import CubicBezier
 
-from typerig.proxy.fl import pGlyph, pFont
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.glyph import pGlyph
 
 # - Init ---------------------------------
-__version__ = '0.1.5'
+__version__ = '0.1.7'
 
 # - Classes ------------------------------
 class altPoint(Point):
@@ -489,3 +492,7 @@ class OutlinePen(BasePen):
 	def getShapes(self):
 		fgGlyphs = self.getGlyphs()
 		return [fl6.flShape(glyph.layer[0]) for glyph in fgGlyphs]
+
+	def getContours(self):
+		fgGlyphs = self.getGlyphs()
+		return [fl6.flShape(glyph.layer[0]).getContours() for glyph in fgGlyphs]
