@@ -27,7 +27,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.28.7'
+__version__ = '0.28.8'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -1364,7 +1364,6 @@ class eGlyph(pGlyph):
 						compatible_layers.append(layer_name)
 
 				return compatible_layers
-
 			
 			return layers
 		

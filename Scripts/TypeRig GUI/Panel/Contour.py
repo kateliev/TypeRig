@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '1.01'
+app_name, app_version = 'TypeRig | Contour', '1.2'
 
 # - Sub widgets ------------------------
 class breakContour(QtGui.QGridLayout):
@@ -287,7 +287,7 @@ class basicContour(QtGui.QGridLayout):
 		process_glyphs = getProcessGlyphs(pMode)
 
 		for glyph in process_glyphs:
-			wLayers = glyph._prepareLayers(pLayers)
+			wLayers = glyph._prepareLayers(pLayers, False)
 			
 			selected_contours = {layer:glyph.selectedAtContours(layer)[0] for layer in wLayers}
 
@@ -303,7 +303,7 @@ class basicContour(QtGui.QGridLayout):
 		modifiers = QtGui.QApplication.keyboardModifiers()
 
 		for glyph in process_glyphs:
-			wLayers = glyph._prepareLayers(pLayers)
+			wLayers = glyph._prepareLayers(pLayers, False)
 
 			for layerName in wLayers:
 				wShapes = glyph.shapes(layerName, extend=eShape)
@@ -321,7 +321,7 @@ class basicContour(QtGui.QGridLayout):
 		process_glyphs = getProcessGlyphs(pMode)
 
 		for glyph in process_glyphs:
-			wLayers = glyph._prepareLayers(pLayers)
+			wLayers = glyph._prepareLayers(pLayers, False)
 
 			if control == (0,0): 	# BL
 				criteria = lambda node : (node.y, node.x)
@@ -349,7 +349,7 @@ class basicContour(QtGui.QGridLayout):
 		for glyph in process_glyphs:
 			selection = glyph.selectedAtContours()
 
-			wLayers = glyph._prepareLayers(pLayers)
+			wLayers = glyph._prepareLayers(pLayers, False)
 
 			for layerName in wLayers:
 				all_contours = glyph.contours(layerName)
