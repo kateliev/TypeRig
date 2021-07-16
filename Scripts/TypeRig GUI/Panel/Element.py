@@ -18,7 +18,7 @@ import fontgate as fgt
 
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
-from typerig.proxy.fl.objects.shape import pShape
+from typerig.proxy.fl.objects.shape import pShape, eShape
 from typerig.core.base.message import *
 
 from PythonQt import QtCore
@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '0.37'
+app_name, app_version = 'TypeRig | Elements', '0.38'
 
 # - Syntax -------------------------------
 syn_comment = '#'
