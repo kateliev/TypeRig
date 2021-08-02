@@ -11,7 +11,7 @@
 
 from collections import OrderedDict
 from typerig.proxy.fl.application.app import pWorkspace
-from typerig.gui.QtGui import QAction
+from typerig.proxy.fl.gui.QtGui import QAction
 
 class Automat(object):
     def __init__(self):
