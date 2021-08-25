@@ -21,7 +21,7 @@ from typerig.core.objects.utils import Bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 # - Init ---------------------------------
-__version__ = '0.27.6'
+__version__ = '0.27.8'
 
 # - Classes -------------------------------
 class pNode(object):
@@ -474,7 +474,11 @@ class eNode(pNode):
 		
 		if not isRadius:
 			angle = math.atan2(nextUnit | prevUnit, nextUnit & prevUnit)
-			radius = abs((float(size)/2)/math.sin(angle/2))
+			# !!! Old:
+			#radius = abs((float(size)/2)/math.sin(angle/2))
+			
+			# !!! New: https://math.stackexchange.com/questions/109250/how-to-calculate-the-two-tangent-points-to-a-circle-with-radius-r-from-two-lines
+			radius = abs(float(size)*(math.cos(angle/2)/math.sin(angle/2.))) 
 		else:
 			radius = size
 
