@@ -10,7 +10,7 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kern Classes', '3.5'
+app_name, app_version = 'TypeRig | Kern Classes', '3.6'
 alt_mark = '.'
 
 # - Dependencies -----------------
@@ -23,7 +23,7 @@ import fontgate as fgt
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 
-from typerig.proxy.fl import *
+from typerig.proxy.fl.objects.font import *
 from typerig.core.func.string import getUppercaseCodepoint, getLowercaseCodepoint
 
 # - Strings ------------------------------------------------------------------

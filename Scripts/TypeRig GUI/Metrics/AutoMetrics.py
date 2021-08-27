@@ -17,7 +17,9 @@ import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore
 
-from typerig.proxy.fl import *
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.glyph import pGlyph
+from typerig.proxy.fl.objects.sampler import MetricSampler
 
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import TRTableView, TRSliderCtrl, getProcessGlyphs
@@ -27,7 +29,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Auto Metrics', '0.5'
+app_name, app_version = 'TypeRig | Auto Metrics', '1.0'
 
 # -- Strings
 

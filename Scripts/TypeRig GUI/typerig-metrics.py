@@ -13,7 +13,8 @@ from collections import OrderedDict
 
 import fontlab as fl6
 
-from typerig.proxy.fl import *
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.glyph import pGlyph
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
@@ -23,7 +24,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRVTabWidget
 import Metrics as Panel 
 
 # - Init --------------------------
-app_version = '0.10'
+app_version = '1.00'
 app_name = 'TypeRig Metrics'
 ignorePanel = '__'
 
