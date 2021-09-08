@@ -19,15 +19,19 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import pGlyph
 
 from PythonQt import QtCore
+
+from typerig.core.base.message import *
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRGLineEdit, TRTransformCtrl, fontMarkColors
 
 # - Init --------------------------
 global pLayers
 global pMode
+global pUndo
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Glyph', '0.18'
+pUndo = True
+app_name, app_version = 'TypeRig | Glyph', '1.10'
 
 number_token = '#'
 
@@ -35,6 +39,7 @@ number_token = '#'
 help_numeration = 'Use # for sequential numeration.\n\nExample:\n#=1; ##=01; ###=001\nA.ss## will crearte A.ss01 to A.ss20'
 help_setName = 'Set name for current glyph or multiple selected glyphs (TR Selection mode).\n' + help_numeration
 help_duplicate = 'Duplicate current glyph or multiple selected glyphs (TR Selection mode).\n' + help_numeration
+str_warning = '<p><b>NOTE</b>: Disabling UNDO will generate the new glyphs, but the font would not update.</p><p>New glyphs will NOT be visible in FontWidow< until your next operation.</p>'
 
 # - Functions --------------------------
 fromat_number = lambda x, i: '0'*(i - 1) + str(x) if len(str(x)) < i else str(x)
@@ -44,7 +49,7 @@ class TRGlyphBasic(QtGui.QGridLayout):
 	def __init__(self):
 		super(TRGlyphBasic, self).__init__()
 
-		# -- Edit fileds
+		# -- Edit fields
 		self.edt_glyphName = TRGLineEdit()
 		self.edt_glyphTags = TRGLineEdit()
 		self.edt_glyphUnis = TRGLineEdit()
@@ -135,7 +140,13 @@ class TRGlyphBasic(QtGui.QGridLayout):
 			
 			processed_glyphs.append(glyph.name)
 
-		font.updateObject(font.fl, 'Set Glyph(s) %s | %s' %(mode, ', '.join(processed_glyphs)))
+		# - Finish operation
+		global pUndo
+		if pUndo:
+			font.updateObject(font.fl, 'Set Glyph(s) %s | %s' %(mode, ', '.join(processed_glyphs)))
+		else:
+			output(1, app_name, 'Set Glyph(s) %s | %s' %(mode, ', '.join(processed_glyphs)))
+
 
 	def setStem(self, horizontal=False):
 		font = pFont()
@@ -152,7 +163,13 @@ class TRGlyphBasic(QtGui.QGridLayout):
 
 		font.setStem(stem_width, stem_name, horizontal, stem_type)
 
-		font.updateObject(font.fl, 'Set Stem(s): {}; {}; {}.'.format(stem_name, stem_width, self.cmb_select_stem.currentText))
+		# - Finish operation
+		global pUndo
+		if pUndo:
+			font.updateObject(font.fl, 'Set Stem(s): {}; {}; {}.'.format(stem_name, stem_width, self.cmb_select_stem.currentText))
+		else:
+			output(1, app_name, 'Set Stem(s): {}; {}; {}.'.format(stem_name, stem_width, self.cmb_select_stem.currentText))
+
 
 class TRGlyphCopyTools(QtGui.QGridLayout):
 	def __init__(self):
@@ -287,7 +304,13 @@ class TRGlyphCopyTools(QtGui.QGridLayout):
 
 				processed_glyphs.append(dst_glyph.name)
 
-			font.updateObject(font.fl, 'Insert Glyph: %s --> %s;' %(src_glyph_name, ', '.join(processed_glyphs)))
+			
+			# - Finish operation
+			global pUndo
+			if pUndo:
+				font.updateObject(font.fl, 'Insert Glyph: %s --> %s;' %(src_glyph_name, ', '.join(processed_glyphs)))
+			else:
+				output(1, app_name, 'Insert Glyph: %s --> %s;' %(src_glyph_name, ', '.join(processed_glyphs)))
 		else:
 			warnings.warn('Glyph not found: %s;' %(None, src_glyph_name)[1 if len(src_glyph_name) else 0], GlyphWarning)
 
@@ -327,7 +350,12 @@ class TRGlyphCopyTools(QtGui.QGridLayout):
 		for glyph in process_glyphs:	
 			wLayers = glyph._prepareLayers(pLayers)
 		'''
-		font.updateObject(font.fl, 'Duplicate Glyph(s) | %s' %', '.join(processed_glyphs))
+		# - Finish operation
+		global pUndo
+		if pUndo:
+			font.updateObject(font.fl, 'Duplicate Glyph(s) | %s' %', '.join(processed_glyphs))
+		else:
+			output(1, app_name, 'Duplicate Glyph(s) | %s' %', '.join(processed_glyphs))
 		
 			
 class tool_tab(QtGui.QWidget):
@@ -336,16 +364,37 @@ class tool_tab(QtGui.QWidget):
 
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
+
+		# - Set Undo controller
+		# -- Warning Label
+		self.lbl_warn = QtGui.QLabel(str_warning)
+		self.lbl_warn.setWordWrap(True)
+		self.lbl_warn.setStyleSheet('padding: 10; font-size: 10pt; background: lightpink;')
+		self.lbl_warn.hide()
+
+		# -- Buttons
+		self.btn_disable_undo = QtGui.QPushButton('Disable UNDO') 
+		self.btn_disable_undo.setCheckable(True)
+		self.btn_disable_undo.setChecked(False)
+		self.btn_disable_undo.clicked.connect(self.undo_set_state)
 		
 		# - Build ---------------------------
 		layoutV.addLayout(TRGlyphBasic())
 		layoutV.addLayout(TRGlyphCopyTools())
+		layoutV.addWidget(QtGui.QLabel('Font UNDO state:'))
+		layoutV.addWidget(self.btn_disable_undo)
+		layoutV.addWidget(self.lbl_warn)
 
 		layoutV.addStretch()
 		self.setLayout(layoutV)
 
 		# !!! Hotfix FL7 7355 
 		self.setMinimumSize(300, self.sizeHint.height())
+
+	def undo_set_state(self):
+		global pUndo
+		pUndo = not pUndo
+		warnings.warn('Font wide UNDO state changed! Undo Enabled: %s' %pUndo, FontWarning)
 
 # - Test ----------------------
 if __name__ == '__main__':

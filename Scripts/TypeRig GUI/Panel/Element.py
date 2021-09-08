@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '0.38'
+app_name, app_version = 'TypeRig | Elements', '0.39'
 
 # - Syntax -------------------------------
 syn_comment = '#'
@@ -444,6 +444,7 @@ class glyphComposer(QtGui.QGridLayout):
 		
 		# - Init
 		self.parentWgt = parent
+		self.active_font = pFont()
 
 		# - Widgets
 		self.cmb_fontShapes = QtGui.QComboBox()
