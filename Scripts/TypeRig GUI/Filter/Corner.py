@@ -32,7 +32,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Corner', '2.32'
+app_name, app_version = 'TypeRig | Corner', '2.33'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -331,7 +331,7 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 		#glyph.layer(layer).update()
 
 	def process_smartCorner(self, glyph, preset):
-		wLayers = glyph._prepareLayers(pLayers)	
+		wLayers = glyph._prepareLayers(pLayers, False)	
 		nodes_at_shapes = {}	
 
 		# - Build selection
@@ -408,7 +408,7 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 			for work_glyph in process_glyphs:
 				if work_glyph is not None:
 					# - Init
-					wLayers = work_glyph._prepareLayers(pLayers)	
+					wLayers = work_glyph._prepareLayers(pLayers, False)	
 					smart_corners, target_corners = [], []
 					
 					# - Get all smart nodes/corners
@@ -526,7 +526,7 @@ class TRCornerControl(QtGui.QVBoxLayout):
 		# - Get nodes grouped by smart angle value
 		if len(self.process_glyphs):
 			for glyph in self.process_glyphs:
-				#wLayers = glyph._prepareLayers(pLayers)
+				#wLayers = glyph._prepareLayers(pLayers, False)
 				layer = None
 				eNodes = glyph.nodes(layer=layer, extend=eNode)
 				
