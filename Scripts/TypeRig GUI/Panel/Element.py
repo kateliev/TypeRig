@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '0.39'
+app_name, app_version = 'TypeRig | Elements', '0.50'
 
 # - Syntax -------------------------------
 syn_comment = '#'
@@ -507,9 +507,12 @@ class glyphComposer(QtGui.QGridLayout):
 		self.active_font = pFont()
 		self.font_shapes = {}
 		for glyph in self.active_font.pGlyphs():
-			for shape in glyph.shapes():
-				if len(shape.shapeData.name):
-					self.font_shapes.setdefault(shape.shapeData.name,[]).append(glyph.name)
+			try:			
+				for shape in glyph.shapes():
+					if len(shape.shapeData.name):
+						self.font_shapes.setdefault(shape.shapeData.name,[]).append(glyph.name)
+			except AttributeError:
+				pass
 		
 		self.cmb_fontShapes.clear()
 		self.cmb_fontShapes.addItems(sorted(self.font_shapes.keys()))

@@ -24,7 +24,7 @@ from typerig.core.objects.collection import extBiDict
 from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
 
 # - Init ---------------------------------
-__version__ = '0.28.0'
+__version__ = '0.28.1'
 
 # - Classes -------------------------------
 class pFontMetrics(object):
@@ -386,9 +386,10 @@ class pFont(object):
 	def findShape(self, shapeName, master=None):
 		'''Search for element (flShape) in font and return it'''
 		for glyph in self.pGlyphs():
-			foundShape = glyph.findShape(shapeName, master)
-			if foundShape is not None:
-				return foundShape
+			if glyph.layer(master) is not None:
+				foundShape = glyph.findShape(shapeName, master)
+				if foundShape is not None:
+					return foundShape
 	
 	def hasGlyph(self, glyphName):
 		return self.fg.has_key(glyphName)
