@@ -30,14 +30,16 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '0.50'
+app_name, app_version = 'TypeRig | Elements', '1.20'
 
 # - Syntax -------------------------------
 syn_comment = '#'
 syn_insert = '->'
+syn_swap = '<>'
 syn_label = '!'
 syn_anchor = '$'
 syn_pos = '@'
+syn_swap_pair = '&'
 syn_transform = '^'
 syn_exprbegin = '('
 syn_exprend = ')'
@@ -53,6 +55,8 @@ syn_passlayer = syn_label + 'passlayer'
 
 # - Strings ------------------------------
 str_help = '''Examples:
+Inserting elements:
+
 _element_ -> A B C D 
 Inserts _element_ into glyphs with names /A, /B, /C, /D at the layer specified using the layer selector.
 
@@ -84,9 +88,13 @@ Inserts _element_ by matching the (TL) BBOX coordinates of _element_ to the -20,
 e1@!foo e2@!baz e3@!bar -> H I K
 Inserts elements e1, e2, e3 into every glyph (/H, /I, /K) at specified node tags
 
-layer1 - > e1!BL@!foo e2!TL@!baz^-20,0 -> H N
-layer2 - > e1!BL@!foo e2!TL@!baz^-50,0 -> H N
+layer1 -> e1!BL@!foo e2!TL@!baz^-20,0 -> H N
+layer2 -> e1!BL@!foo e2!TL@!baz^-50,0 -> H N
 Inserts elements e1, e2, into every glyph (/H, /N) at specified node tags with correction different for every layer set explicitly.
+
+Swapping elements:
+_find_element_&_replace_element_ <> !glyph
+Will find element _find_element_ in current active glyph (or multiple glyphs) and replace it with _replace_element_
 '''
 
 # - Sub-widgets --------------------
@@ -132,11 +140,14 @@ class TRPlainTextEdit(QtGui.QPlainTextEdit):
 
 	def _addCustomMenuItems(self, menu):
 		menu.addSeparator()
-		menu.addAction('Symbol: Insert', lambda: self.insertPlainText(syn_insert))
+		menu.addAction('Operation: Insert', lambda: self.insertPlainText(syn_insert))
+		menu.addAction('Operation: Swap', lambda: self.insertPlainText(syn_swap))
+		menu.addSeparator()
 		menu.addAction('Symbol: Attachment', lambda: self.insertPlainText(syn_pos))
 		menu.addAction('Symbol: Node Label', lambda: self.insertPlainText(syn_label))
 		menu.addAction('Symbol: Anchor Label', lambda: self.insertPlainText(syn_anchor))
 		menu.addAction('Symbol: Transform', lambda: self.insertPlainText(syn_transform))
+		menu.addAction('Symbol: Swap pair', lambda: self.insertPlainText(syn_swap_pair))
 		menu.addAction('Symbol: Comment', lambda: self.insertPlainText(syn_comment))
 		menu.addSeparator()
 		menu.addAction('Tag: Current Glyph', lambda: self.insertPlainText(syn_currglyph))
@@ -474,7 +485,7 @@ class glyphComposer(QtGui.QGridLayout):
 		self.addWidget(self.btn_populateShapes,						1, 6, 1, 2)
 		self.addWidget(self.btn_insertShape,						2, 0, 1, 4)
 		self.addWidget(self.btn_replaceShape,						2, 4, 1, 4)
-		self.addWidget(QtGui.QLabel('Advanced Insert elements:'),	5, 0, 1, 4)
+		self.addWidget(QtGui.QLabel('Advanced elements editor:'),	5, 0, 1, 4)
 		self.addWidget(self.txt_editor,								7, 0, 30, 8)
 		self.addWidget(self.btn_saveExpr, 							37, 0, 1, 4)
 		self.addWidget(self.btn_loadExpr, 							37, 4, 1, 4)
@@ -573,6 +584,7 @@ class glyphComposer(QtGui.QGridLayout):
 			dst_store, src_store = [], []
 			w_layer = syn_passlayer # Pass all commands - no specific layer selected
 
+			# - Parse Insertions
 			if syn_insert in line and syn_comment not in line:
 				init_parse = line.split(syn_insert)
 
@@ -595,7 +607,7 @@ class glyphComposer(QtGui.QGridLayout):
 				
 				process_glyphs = {glyph:src_temp for glyph in dst_store}
 			
-			# - Process ------------------------------------------------------------
+				# - Process ------------------------------------------------------------
 				for glyph_name, insert_command in process_glyphs.iteritems():
 					
 					# - Set working glyph
@@ -712,7 +724,65 @@ class glyphComposer(QtGui.QGridLayout):
 					# - Finish
 					w_glyph.updateObject(w_glyph.fl, 'Shapes inserted to glyph: %s' %w_glyph.name)
 
-			output(0, app_name, 'Glyphs processed: %s' %' '.join(dst_store))
+			# - Parse Swaps
+			elif syn_swap in line and syn_comment not in line:
+				init_parse = line.split(syn_swap)
+
+				if len(init_parse) == 2: # No specific layer given
+					left, rigth = init_parse
+				
+				elif len(init_parse) == 3: # Layer explicitly set
+					w_layer, left, rigth = init_parse
+					w_layer = w_layer.strip()
+				
+				else: 
+					output(2, app_name, 'Invalid syntax! Skipping Line: %s\n' %line)
+					continue
+
+				# - Set basics
+				if syn_currglyph in rigth:
+					dst_store = getProcessGlyphs(pMode)
+				else:
+					dst_store = [eGlyph(self.active_font.glyph(glyph_name).fl) for glyph_name in rigth.split()]
+
+				src_store = [item.strip().split(syn_swap_pair) for item in left.split()]
+				process_glyphs = {glyph:src_store for glyph in dst_store}
+			
+				# - Process ------------------------------------------------------------
+				for glyph, swap_command in process_glyphs.items():
+					process_layers = glyph._prepareLayers(pLayers)
+					do_update = False
+
+					for layer in process_layers:
+						for swap_pair in swap_command:
+							if len(swap_pair):
+								# - Init
+								destination_shape_name, source_shape_name = swap_pair
+								source_shape = self.active_font.findShape(source_shape_name, layer)
+								destination_shape = glyph.findShape(destination_shape_name, layer)
+								
+								if source_shape is None:
+									output(2, app_name, 'Element not found! Font Missing: %s' %source_shape_name)
+									continue
+
+								if destination_shape is None:
+									output(2, app_name, 'Element not found! Glyph:%s Missing: %s' %(glyph.name, destination_shape_name))
+									continue
+								
+								source_shape.transform =  destination_shape.transform # Apply transform
+								glyph.replaceShape(destination_shape, source_shape, layer)
+								do_update = True
+								
+							else:
+								output(2, app_name, 'Invalid command! Skipping swap command: %s' %swap_pair)
+								continue
+
+					if do_update:
+						glyph.updateObject(glyph.fl, 'Shapes inserted to glyph: %s' %glyph.name)
+
+
+			# - Report and finish
+			#output(0, app_name, 'Glyphs processed: %s' %' '.join(dst_store))
 				
 class shapeMovement(QtGui.QVBoxLayout):
 	def __init__(self):
