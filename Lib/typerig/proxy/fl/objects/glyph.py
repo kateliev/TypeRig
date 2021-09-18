@@ -27,7 +27,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.28.8'
+__version__ = '0.29.0'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -362,6 +362,46 @@ class pGlyph(object):
 		'''
 		self.layer(layer).replaceShape(old_shape, new_shape)
 
+	def replaceShapeAdv(self, old_shape_name, new_shape, layer=None):
+		'''Advanced Repalce a shape at given layer. Will look inside groups and swap there.
+		Args:
+			old_shape_name (str): Shape name to search for
+			new_shape (flShape): Replace all occurances with the following flShape
+			layer (str): Layer name
+		Returns:
+			old_shapes (list): List of all shapes that were replaced
+		'''
+		# - Init
+		deep_shapes = [(shape, shape.includesList) for shape in self.layer(layer).shapes]
+		base_shapes, nested_shapes = [], []
+
+		# - Collect data
+		for shape, included_shapes in deep_shapes:
+			if old_shape_name == shape.shapeData.name: 
+				base_shapes.append(shape)
+				continue
+
+			ix = 0
+			for inc_shape in included_shapes:
+				if old_shape_name == inc_shape.shapeData.name: 
+					nested_shapes.append((shape, inc_shape, ix))
+
+				ix += 1
+
+		# - Replace shapes
+		# -- Replace base shapes
+		for shape in base_shapes:
+			new_shape.transform = shape.transform
+			self.layer(layer).replaceShape(shape, new_shape)
+
+		# -- Replace included/grouped shapes
+		for base, shape, ix in nested_shapes:
+			new_shape.transform = shape.transform
+			base.eject(shape)
+			base.includeTo(ix, new_shape)
+
+		return base_shapes + [item[1] for item in nested_shapes]
+
 	def removeShape(self, shape, layer=None, recursive=True):
 		'''Remove a new shape at given layer.
 		Args:
@@ -391,7 +431,7 @@ class pGlyph(object):
 
 		return self.addShape(shape_container, layer, clone=False)
 
-	def findShape(self, shapeName, layer=None):
+	def findShape(self, shapeName, layer=None, deep=True):
 		'''Finds shape by name on given layer
 		Args:
 			shapeName (str): Shape name
@@ -399,7 +439,7 @@ class pGlyph(object):
 		Returns:
 			flShape or None
 		'''
-		for shape in self.shapes(layer):
+		for shape in self.shapes(layer, deep=deep):
 			if shapeName == shape.shapeData.name:
 				return shape
 				
@@ -1914,10 +1954,11 @@ class eGlyph(pGlyph):
 			None
 		'''
 		# - Init
-		ejected_shapes = [(shape, shape.ejectTo(False, applyTransform)) for shape in self.shapes(layer) if len(shape.includesList)]
+		ejected_shapes = [(shape, shape.ejectTo(False, applyTransform)) for shape in self.shapes(layer, deep=False) if len(shape.includesList)]
 		
 		# - Process
 		for shape, eject in ejected_shapes:
 			self.layer(layer).addShapes(eject)
 			self.layer(layer).removeShape(shape)
 
+	

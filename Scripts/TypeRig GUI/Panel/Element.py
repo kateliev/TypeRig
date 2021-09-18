@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '1.20'
+app_name, app_version = 'TypeRig | Elements', '1.25'
 
 # - Syntax -------------------------------
 syn_comment = '#'
@@ -770,7 +770,7 @@ class glyphComposer(QtGui.QGridLayout):
 									continue
 								
 								source_shape.transform =  destination_shape.transform # Apply transform
-								glyph.replaceShape(destination_shape, source_shape, layer)
+								glyph.replaceShapeAdv(destination_shape_name, source_shape, layer)
 								do_update = True
 								
 							else:
@@ -778,7 +778,7 @@ class glyphComposer(QtGui.QGridLayout):
 								continue
 
 					if do_update:
-						glyph.updateObject(glyph.fl, 'Shapes inserted to glyph: %s' %glyph.name)
+						glyph.updateObject(glyph.fl, 'Elements [%s ->> %s] swapped in glyph: %s' %(destination_shape_name, source_shape_name, glyph.name))
 
 
 			# - Report and finish
