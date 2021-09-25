@@ -1,46 +1,172 @@
-# SCR : Typerig Installer
-# VER : 0.03
-# -------------------------
+#FLM: TypeRig: Installer
+# -------------------------------------------------------------------------
+#  ___ ___ ____
+# |   |   |   /\   TypeRig
+# |___|___|__/__\  
+#     |   | /   /  (C) Font development kit for FontLab
+#     |___|/___/   (C) Vassil Kateliev, 2017-2021 (http://www.kateliev.com)
+#     |   |\   \   
+#     |___| \___\  www.typerig.com 
+# 
+# -------------------------------------------------------------------------
+# (C) Vassil Kateliev, 2021  (http://www.kateliev.com)
+# (C) Karandash Type Foundry (http://www.karandash.eu)
+#--------------------------------------------------------------------------
 # www.typerig.com
 
-# - Dependencies --------------------------
+# No warranties. By using this you agree
+# that you use it at your own risk!
+
+# - Dependencies -----------------
 from __future__ import print_function
+
+import os
+import sys
+
 from distutils.sysconfig import get_python_lib
-import os, sys
 
-# - Init
-moduleName = 'typerig'
-moduleSubPath = 'Lib'
+from PythonQt import QtCore, QtGui
 
-# - String
-tr_head = r'''
- ___ ___ ____
-|   |   |   /\   TypeRig
-|___|___|__/__\  
-    |   | /   /  (C) Font development kit for FontLab 6 & 7
-    |___|/___/   (C) Vassil Kateliev, 2017-2020 (http://www.kateliev.com)
-    |   |\   \   
-    |___| \___\  www.typerig.com 
+# - Init --------------------------------
+app_name, app_version = 'TR | Module Installer', '1.2'
 
+# - String ------------------------------
+str_manual_label = '''
+<p><b>Manual installation via Link:</b> Will generate a *.pth file containing a link pointing to your current TypeRig library folder.
+Please save the generated file in a folder of your choosing and then copy it to the python installation path shown below in the Information field.</p>
 '''
 
+str_auto_pth_label = '''
+<p><b>Dynamic installation via Link:</b> Will generate a special *.pth file containing a link pointing to your current TypeRig library folder and copy it into your FontLab Python folder.
+Best option if you want to keep your TypeRig folder outside your FontLab installation and sync it regularly to the TypeRig GitHub repository. Regular updates will not require running the installer again, unless you move the TypeRig folder.</p>
+'''
+
+str_auto_copy_label = '''
+<p><b>Static installation via Copy:</b> Will copy all the necessary files from TypeRig library folder into into your FontLab Python folder. Best if you are not planning to update TypeRig from GitHub repository. For each update/sync to GitHub repo you will need to run this script again.</p>'''
+
+str_auto_failed = '''
+<p><i>Please note that if both automatic options fail due to OS security reasons (access denied) you should use the manual installer below.</i></p>
+'''
+
+# - Config ------------------------------
+module_name = 'typerig'
+module_path = 'Lib'
+file_ext = '.pth'
+
+current_folder = os.path.dirname(__file__)
+libary_folder = os.path.normpath(os.path.join(current_folder, module_path))
+python_folder = get_python_lib()
+
 # - Functions --------------------------
-def installModule(srcDir, modulePathName):
-	sitePackDir = get_python_lib()
-	fileName = os.path.join(sitePackDir, '%s.pth' %modulePathName)
+
+
+# - Widgets ---------------------
+class dlg_install(QtGui.QDialog):
+	def __init__(self):
+		super(dlg_install, self).__init__()
 	
-	print(tr_head)
-	print('\nINFO:\t Installing TypeRig library...\nPATH:\t%r\nFILE:\t%r\n\n' %(srcDir, fileName))
+		# - Images
+		img_logo = QtGui.QPixmap(os.path.join(current_folder, 'typerig-logo.png'))
 
-	file = open(fileName, 'w')
-	file.write(srcDir)
-	file.close()
+		# - Labels
+		self.lbl_logo = QtGui.QLabel()
+		self.lbl_logo.setPixmap(img_logo.scaled(200, 200, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
+		self.lbl_logo.setAlignment(QtCore.Qt.AlignCenter)
 
-	return fileName
+		self.lbl_auto_pth = QtGui.QLabel(str_auto_pth_label)
+		self.lbl_auto_pth.setWordWrap(True) 
+		self.lbl_auto_pth.setTextFormat(QtCore.Qt.RichText)
+		
+		self.lbl_auto_copy = QtGui.QLabel(str_auto_copy_label)
+		self.lbl_auto_copy.setWordWrap(True)
+		self.lbl_auto_copy.setTextFormat(QtCore.Qt.RichText)
+		
+		self.lbl_manual = QtGui.QLabel(str_manual_label)
+		self.lbl_manual.setWordWrap(True) 
+		self.lbl_manual.setTextFormat(QtCore.Qt.RichText)
+		
+		self.lbl_fail = QtGui.QLabel(str_auto_failed)
+		self.lbl_fail.setWordWrap(True) 
+		self.lbl_fail.setTextFormat(QtCore.Qt.RichText)
 
-# - Run --------------------------
-intallDir = os.path.join(os.path.dirname(os.path.normpath(os.path.abspath(__file__))), moduleSubPath)
+		# - Init
+		
+		
+		# - Group box
+		self.box_auto = QtGui.QGroupBox('Automatic')
+		self.box_manual = QtGui.QGroupBox('Manual')
+		self.box_info = QtGui.QGroupBox('Information')
 
-fileName = installModule(intallDir, moduleName)
+		# - Edit
+		self.edt_python_path = QtGui.QLineEdit()
+		self.edt_python_path.setText(python_folder)
+		
+		# - Buttons 
+		self.btn_install_auto_pth = QtGui.QPushButton('Auto Install via Link')
+		self.btn_install_auto_copy = QtGui.QPushButton('Auto Install via Copy')
+		self.btn_install_manual_pth = QtGui.QPushButton('Manual Install via Link')
 
-print('DONE:\tTypeRig installed!\nNOTE:\tRun script again if you change the location of the library')
+		self.btn_install_auto_copy.setEnabled(False)
+
+		self.btn_install_auto_pth.clicked.connect(self.install_auto_pth)
+		#self.btn_install_auto_copy.clicked.connect(self.install_manual_pth)
+		self.btn_install_manual_pth.clicked.connect(self.install_manual_pth)
+
+				
+		# - Build layouts 
+		# -- Auto install 
+		layout_auto = QtGui.QVBoxLayout() 
+		layout_auto.addWidget(self.lbl_auto_pth)
+		layout_auto.addWidget(self.btn_install_auto_pth)
+		layout_auto.addWidget(self.lbl_auto_copy)
+		layout_auto.addWidget(self.btn_install_auto_copy)
+		layout_auto.addWidget(self.lbl_fail)
+		self.box_auto.setLayout(layout_auto)
+		
+		# -- Manual install 
+		layout_manual = QtGui.QVBoxLayout() 
+		layout_manual.addWidget(self.lbl_manual)
+		layout_manual.addWidget(self.btn_install_manual_pth)
+		self.box_manual.setLayout(layout_manual)
+
+		# -- Info box
+		layout_info = QtGui.QVBoxLayout() 
+		layout_info.addWidget(QtGui.QLabel('Your current FontLab Python installation path:'))
+		layout_info.addWidget(self.edt_python_path)
+		self.box_info.setLayout(layout_info)
+
+		# -- Main
+		layout_main = QtGui.QVBoxLayout()
+		layout_main.addWidget(self.lbl_logo)
+		layout_main.addWidget(self.box_auto)
+		layout_main.addWidget(self.box_manual)
+		layout_main.addWidget(self.box_info)
+
+		# - Set Widget
+		self.setLayout(layout_main)
+		self.setWindowTitle('%s %s' %(app_name, app_version))
+		self.setGeometry(300, 300, 400, 200)
+		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
+		self.show()
+
+	# - Functions -----------------------
+	def install_auto_pth(self):
+		pth_file_name = os.path.join(python_folder, '%s%s' %(module_name, file_ext))
+	
+		with open(pth_file_name, 'w') as pth_file:
+			pth_file.write(libary_folder)
+
+		print('DONE:\tTypeRig installed!\nNOTE:\tRun script again if you change the location of the library')
+
+	def install_manual_pth(self):
+		pth_folder_name = QtGui.QFileDialog.getExistingDirectory(self, 'Save Link to TypeRig Module', python_folder)
+		pth_file_name = os.path.join(pth_folder_name, '%s%s' %(module_name, file_ext))
+
+		with open(pth_file_name, 'w') as pth_file:
+			pth_file.write(libary_folder)
+
+		print('DONE:\tTypeRig Link created!\n\tPlease copy file: %s into your python path: %s' %(pth_file_name, python_folder))
+
+
+# - RUN ------------------------------
+dialog = dlg_install()
