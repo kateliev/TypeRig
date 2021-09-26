@@ -9,7 +9,11 @@
 
 # - Dependencies -----------------
 from __future__ import absolute_import, print_function
-import os, json, warnings
+
+import os
+import json
+import warnings
+
 from itertools import groupby
 from operator import itemgetter
 from collections import OrderedDict
@@ -25,14 +29,14 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.core.base.message import *
 
 from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import TRTableView, TRSliderCtrl, getProcessGlyphs
+from typerig.proxy.fl.gui.widgets import TRTableView, TRSliderCtrl, getProcessGlyphs, TRCollapsibleBox
 
 # - Init ---------------------------
 global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Corner', '2.33'
+app_name, app_version = 'TypeRig | Corner', '2.50'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -53,8 +57,6 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 		self.last_preset = 0
 
 		# -- Widgets
-		self.lay_head = QtGui.QGridLayout()
-
 		self.edt_glyphName = QtGui.QLineEdit()
 		self.edt_glyphName.setPlaceholderText('Glyph name')
 
@@ -67,7 +69,7 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 		self.btn_loadPreset = QtGui.QPushButton('&Load Presets')
 		self.btn_savePreset = QtGui.QPushButton('&Save Presets')
 		self.btn_apply_smartCorner = QtGui.QPushButton('&Apply Smart Corner')
-		self.btn_remove_smartCorner = QtGui.QPushButton('R&emove Smart Corner')
+		self.btn_remove_smartCorner = QtGui.QPushButton('R&emove')
 		self.btn_remove_presetCorner = QtGui.QPushButton('&Find and Remove')
 
 		self.btn_apply_smartCorner.setToolTip('Apply Smart Corner preset on SELECTED nodes.')
@@ -80,27 +82,14 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 		self.btn_apply_overlap = QtGui.QPushButton('&Overlap')
 		self.btn_apply_trap = QtGui.QPushButton('&Trap')
 		self.btn_rebuild = QtGui.QPushButton('Rebuild corner')
+		self.btn_apply_round.setToolTip('Round selected corner with given tension (syntax radius@tension).\nClick+Alt will alternate between rounding algorithm modes.')
 
-		self.btn_getBuilder.setMinimumWidth(70)
-		self.btn_findBuilder.setMinimumWidth(70)
-		self.btn_apply_round.setMinimumWidth(70)
-		self.btn_apply_mitre.setMinimumWidth(70)
-		self.btn_apply_overlap.setMinimumWidth(70)
-		self.btn_apply_trap.setMinimumWidth(70)
-		self.btn_rebuild.setMinimumWidth(70)
-
-		self.btn_addPreset.setMinimumWidth(70)
-		self.btn_delPreset.setMinimumWidth(70)
-		self.btn_loadPreset.setMinimumWidth(140)
-		self.btn_savePreset.setMinimumWidth(140)
-		self.btn_apply_smartCorner.setMinimumWidth(140)
-		self.btn_remove_smartCorner.setMinimumWidth(140)
-		self.btn_remove_presetCorner.setMinimumWidth(140)
+		
 
 		self.btn_getBuilder.setCheckable(True)
 		self.btn_getBuilder.setChecked(False)
 		self.btn_findBuilder.setEnabled(False)
-		self.btn_apply_round.setEnabled(False)
+		self.btn_apply_round.setEnabled(True)
 
 		self.btn_getBuilder.clicked.connect(lambda: self.getBuilder())
 		self.btn_addPreset.clicked.connect(lambda: self.preset_modify(False))
@@ -113,7 +102,7 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 		self.btn_remove_smartCorner.clicked.connect(lambda: self.apply_SmartCorner(True))
 		self.btn_remove_presetCorner.clicked.connect(lambda: self.remove_SmartCorner())
 		
-		#self.btn_apply_round.clicked.connect(lambda: self.apply_round())
+		self.btn_apply_round.clicked.connect(lambda: self.apply_round())
 		self.btn_apply_mitre.clicked.connect(lambda: self.apply_mitre(False))
 		self.btn_apply_overlap.clicked.connect(lambda: self.apply_mitre(True))
 		self.btn_apply_trap.clicked.connect(lambda: self.apply_trap())
@@ -124,31 +113,40 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 		self.preset_reset()			
 
 		# -- Build Layout
-		self.lay_head.addWidget(QtGui.QLabel('Value Presets:'), 0,0,1,8)
-		self.lay_head.addWidget(self.btn_loadPreset,			1,0,1,4)
-		self.lay_head.addWidget(self.btn_savePreset,			1,4,1,4)
-		self.lay_head.addWidget(self.btn_addPreset,				2,0,1,2)
-		self.lay_head.addWidget(self.btn_delPreset,				2,2,1,2)
-		self.lay_head.addWidget(self.btn_resetPreset,			2,4,1,4)
-		self.lay_head.addWidget(self.tab_presets,				3,0,5,8)
+		lay_presets = QtGui.QGridLayout()
+		lay_presets.addWidget(self.btn_loadPreset,				1, 0, 1, 4)
+		lay_presets.addWidget(self.btn_savePreset,				1, 4, 1, 4)
+		lay_presets.addWidget(self.btn_addPreset,				2, 0, 1, 2)
+		lay_presets.addWidget(self.btn_delPreset,				2, 2, 1, 2)
+		lay_presets.addWidget(self.btn_resetPreset,				2, 4, 1, 4)
+		lay_presets.addWidget(self.tab_presets,					3, 0, 10, 8)
 
-		self.lay_head.addWidget(QtGui.QLabel('Corner Actions:'),10, 0, 1, 8)
-		self.lay_head.addWidget(self.btn_apply_round,			11, 0, 1, 2)
-		self.lay_head.addWidget(self.btn_apply_mitre,			11, 2, 1, 2)
-		self.lay_head.addWidget(self.btn_apply_overlap,			11, 4, 1, 2)
-		self.lay_head.addWidget(self.btn_apply_trap,			11, 6, 1, 2)
-		self.lay_head.addWidget(self.btn_rebuild,				12, 0, 1, 8)
+		lay_corners = QtGui.QGridLayout()
+		tools_corner = TRCollapsibleBox('Corner Actions')
+		lay_corners.addWidget(self.btn_apply_round,			1, 0, 1, 2)
+		lay_corners.addWidget(self.btn_apply_mitre,			1, 2, 1, 2)
+		lay_corners.addWidget(self.btn_apply_overlap,		1, 4, 1, 2)
+		lay_corners.addWidget(self.btn_apply_trap,			1, 6, 1, 2)
+		lay_corners.addWidget(self.btn_rebuild,				2, 0, 1, 8)
+		tools_corner.setContentLayout(lay_corners)
+		tools_corner.on_pressed()
 
-		self.lay_head.addWidget(QtGui.QLabel('Smart Corner:'),	13,0,1,8)
-		self.lay_head.addWidget(QtGui.QLabel('Builder: '),		14,0,1,1)
-		self.lay_head.addWidget(self.edt_glyphName,				14,1,1,3)
-		self.lay_head.addWidget(self.btn_getBuilder,			14,4,1,2)
-		self.lay_head.addWidget(self.btn_findBuilder,			14,6,1,2)
-		self.lay_head.addWidget(self.btn_remove_smartCorner,	15,0,1,4)
-		self.lay_head.addWidget(self.btn_remove_presetCorner,	15,4,1,4)
-		self.lay_head.addWidget(self.btn_apply_smartCorner,		16,0,1,8)
+		lay_smart_corners = QtGui.QGridLayout()
+		tools_smart_corner = TRCollapsibleBox('Smart Corners')
+		lay_smart_corners.addWidget(QtGui.QLabel('Smart Corner:'),	1, 0, 1, 8)
+		lay_smart_corners.addWidget(QtGui.QLabel('Builder: '),		2, 0, 1, 1)
+		lay_smart_corners.addWidget(self.edt_glyphName,				2, 1, 1, 3)
+		lay_smart_corners.addWidget(self.btn_getBuilder,			2, 4, 1, 2)
+		lay_smart_corners.addWidget(self.btn_findBuilder,			2, 6, 1, 2)
+		lay_smart_corners.addWidget(self.btn_remove_smartCorner,	3, 0, 1, 4)
+		lay_smart_corners.addWidget(self.btn_remove_presetCorner,	3, 4, 1, 4)
+		lay_smart_corners.addWidget(self.btn_apply_smartCorner,		4, 0, 1, 8)
+		tools_smart_corner.setContentLayout(lay_smart_corners)
+		tools_smart_corner.on_pressed()
 
-		self.addLayout(self.lay_head)
+		self.addLayout(lay_presets)
+		self.addWidget(tools_corner)
+		self.addWidget(tools_smart_corner)
 
 	# - Presets management ------------------------------------------------
 	def preset_reset(self):
@@ -161,7 +159,7 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 		self.tab_presets.setTable(self.table_dict, sortData=(False, False))
 		self.tab_presets.horizontalHeader().setStretchLastSection(False)
 		self.tab_presets.verticalHeader().hide()
-		#self.tab_presets.resizeColumnsToContents()
+		self.tab_presets.resizeColumnsToContents()
 
 	def preset_modify(self, delete=False):
 		table_rawList = self.tab_presets.getTable(raw=True)
@@ -192,6 +190,7 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 				new_data[key] = OrderedDict(data)
 
 			self.tab_presets.setTable(new_data, sortData=(False, False))
+			self.tab_presets.resizeColumnsToContents()
 			output(6, app_name, 'Font:%s; Presets loaded from: %s.' %(self.active_font.name, fname))
 
 	def preset_save(self):
@@ -245,6 +244,39 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 					action = 'Mitre Corner' if not doKnot else 'Overlap Corner'
 					glyph.update()
 					glyph.updateObject(glyph.fl, '%s @ %s.' %(action, '; '.join(active_preset.keys())))
+
+	def apply_round(self, radius_mode=False):
+		# - Init
+		process_glyphs = getProcessGlyphs(pMode)
+		modifiers = QtGui.QApplication.keyboardModifiers()
+		radius_mode = False if modifiers == QtCore.Qt.AltModifier else True
+		active_preset = self.getPreset()
+		if active_preset is None: return
+
+		# - Process
+		if len(process_glyphs):
+			for glyph in process_glyphs:
+				if glyph is not None:
+					wLayers = glyph._prepareLayers(pLayers)
+		
+					for layer in reversed(wLayers):
+						if layer in active_preset.keys():
+							selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode, deep=True)
+							
+							if '@' in active_preset[layer]:
+								radius, tension = active_preset[layer].strip().split('@')
+								radius = float(radius.strip())
+								tension = float(tension.strip())
+							else:
+								radius = float(active_preset[layer].strip())
+								tension = 1.
+
+							for node in reversed(selection):
+								node.cornerRound(radius, curvature=tension, isRadius=radius_mode)
+								
+								
+					glyph.update()
+					glyph.updateObject(glyph.fl, 'Round Corner @ %s.' %'; '.join(active_preset.keys()))
 
 	def apply_trap(self):
 		# - Init
@@ -451,7 +483,6 @@ class TRCornerControl(QtGui.QVBoxLayout):
 		# - Widgets
 		self.__build()
 
-	
 	def __build(self):
 		# - Init
 		self.sliders = []
@@ -554,23 +585,25 @@ class tool_tab(QtGui.QWidget):
 
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
+		
 		self.smart_corner = TRSmartCorner(self)
-		self.corner_control = TRCornerControl(self)
 		layoutV.addLayout(self.smart_corner)
-		layoutV.addLayout(self.corner_control)
+		
+		#self.corner_control = TRCornerControl(self)
+		#layoutV.addLayout(self.corner_control)
 		
 		# - Build
-		layoutV.addStretch()
+		#layoutV.addStretch()
 		self.setLayout(layoutV)
 
 		# !!! Hotfix FL7 7355 
-		self.setMinimumSize(300,self.sizeHint.height())
+		self.setMinimumSize(300, self.sizeHint.height())
 
 # - Test ----------------------
 if __name__ == '__main__':
 	test = tool_tab()
 	test.setWindowTitle('%s %s' %(app_name, app_version))
-	test.setGeometry(300, 300, 300, 600)
+	test.setGeometry(300, 300, 320, 600)
 	test.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 	
 	test.show()
