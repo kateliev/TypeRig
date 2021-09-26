@@ -22,13 +22,13 @@ from __future__ import print_function
 
 import os
 import sys
+import shutil
 
 from distutils.sysconfig import get_python_lib
-
 from PythonQt import QtCore, QtGui
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Module Installer', '1.2'
+app_name, app_version = 'TR | Module Installer', '1.3'
 
 # - String ------------------------------
 str_manual_label = '''
@@ -58,7 +58,14 @@ libary_folder = os.path.normpath(os.path.join(current_folder, module_path))
 python_folder = get_python_lib()
 
 # - Functions --------------------------
+def copy_tree(path_source, path_destination):
+	# - Make sure the destination folder does not exist.
+	if os.path.exists(path_destination) and os.path.isdir(path_destination):
+		print('Destination path already present! Removing existing tree: {}'.format(path_destination))
+		shutil.rmtree(path_destination, ignore_errors=False)
 
+	# - Process
+	shutil.copytree(path_source, path_destination)
 
 # - Widgets ---------------------
 class dlg_install(QtGui.QDialog):
@@ -88,9 +95,6 @@ class dlg_install(QtGui.QDialog):
 		self.lbl_fail = QtGui.QLabel(str_auto_failed)
 		self.lbl_fail.setWordWrap(True) 
 		self.lbl_fail.setTextFormat(QtCore.Qt.RichText)
-
-		# - Init
-		
 		
 		# - Group box
 		self.box_auto = QtGui.QGroupBox('Automatic')
@@ -106,10 +110,8 @@ class dlg_install(QtGui.QDialog):
 		self.btn_install_auto_copy = QtGui.QPushButton('Auto Install via Copy')
 		self.btn_install_manual_pth = QtGui.QPushButton('Manual Install via Link')
 
-		self.btn_install_auto_copy.setEnabled(False)
-
 		self.btn_install_auto_pth.clicked.connect(self.install_auto_pth)
-		#self.btn_install_auto_copy.clicked.connect(self.install_manual_pth)
+		self.btn_install_auto_copy.clicked.connect(self.install_auto_copy)
 		self.btn_install_manual_pth.clicked.connect(self.install_manual_pth)
 
 				
@@ -150,6 +152,10 @@ class dlg_install(QtGui.QDialog):
 		self.show()
 
 	# - Functions -----------------------
+	def install_auto_copy(self):
+		copy_tree(os.path.join(libary_folder, module_name), os.path.join(python_folder, module_name))
+		print('DONE:\tTypeRig installed in: %s' %python_folder)
+
 	def install_auto_pth(self):
 		pth_file_name = os.path.join(python_folder, '%s%s' %(module_name, file_ext))
 	
