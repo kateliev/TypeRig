@@ -24,7 +24,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.core.base.message import *
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Copy Anchors', '1.4'
+app_name, app_version = 'TR | Copy Anchors', '1.5'
 str_all_masters = '*All masters*'
 
 # - Interface -----------------------------
@@ -238,7 +238,7 @@ class dlg_copy_anchors(QtGui.QDialog):
 						do_update = True
 
 			else:
-				output(2, 'Destination glyph not found! Font: {}; Glyph: {}'.format(self.cmb_select_font_B.currentText, glyph.name))
+				output(2, 'Destination glyph not found! Font: {}; Glyph: {}'.format(self.cmb_select_font_B.currentText, src_glyph.name))
 
 		# - Finish it
 		if do_update:
