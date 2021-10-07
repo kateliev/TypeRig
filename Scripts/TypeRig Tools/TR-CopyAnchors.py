@@ -24,7 +24,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.core.base.message import *
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Copy Anchors', '1.7'
+app_name, app_version = 'TR | Copy Anchors', '1.8'
 str_all_masters = '*All masters*'
 
 # - Interface -----------------------------
@@ -181,8 +181,19 @@ class dlg_copy_anchors(QtGui.QDialog):
 		replace_suffix = self.edt_collide_suffix.text.strip()
 
 		#glyphs_source = getProcessGlyphs(mode=mode_source, font=font_src_fl)
-		glyphs_source_names = [glyph.name for glyph in getProcessGlyphs(mode=mode_source)]
-		glyphs_source = font_src.pGlyphs(glyphs_source_names)
+		glyphs_source_names = []
+
+		for glyph in getProcessGlyphs(mode=mode_source):
+			if font_src.hasGlyph(glyph.name):
+				glyphs_source_names.append(glyph.name)
+			else:
+				output(2, app_name, 'Source glyph not found! Font: {}; Glyph: {}'.format(self.cmb_select_font_B.currentText, glyph.name))
+		
+		if len(glyphs_source_names):
+			glyphs_source = font_src.pGlyphs(glyphs_source_names)
+		else:
+			output(3, app_name, 'Nothing to process! Font: {}.'.format(self.cmb_select_font_B.currentText))
+			return
 		
 		mode_layers_src = font_src.masters() if '*' in self.cmb_select_layer_A.currentText else [self.cmb_select_layer_A.currentText]
 		mode_layers_dst = font_dst.masters() if '*' in self.cmb_select_layer_B.currentText else [self.cmb_select_layer_B.currentText]
