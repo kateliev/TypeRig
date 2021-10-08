@@ -31,13 +31,22 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Modify Layers', '1.32'
+app_name, app_version = 'TypeRig | Modify Layers', '1.50'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
 column_init = (None, None, QtGui.QColor(0, 255, 0, 10))
 init_table_dict = {1 : OrderedDict(zip(column_names, column_init))}
-color_dict = {'Master': QtGui.QColor(0, 255, 0, 10), 'Service': QtGui.QColor(0, 0, 255, 10), 'Mask': QtGui.QColor(255, 0, 0, 10)}
+color_dict = {'Master': QtGui.QColor(0, 255, 0, 10),
+			  'Service': QtGui.QColor(0, 0, 255, 10),
+			  'Mask': QtGui.QColor(255, 0, 0, 10),
+			  'Any': QtGui.QColor(255, 255, 255, 0)}
+
+# - Functions ----------------------------------------------------------------
+def check_type(layer):
+	if layer.isMaskLayer: 	return 'Mask'
+	if layer.isMasterLayer: return 'Master'
+	if layer.isService: 	return 'Service'
 
 # - Actions ------------------------------------------------------------------
 class TRLayerActionCollector(object):
@@ -48,21 +57,28 @@ class TRLayerActionCollector(object):
 	def layer_toggle_visible(parent):	
 		# - Init
 		glyphs_source = getProcessGlyphs(mode=pMode)
-		process_layers = parent.lst_layers.getTable()
+		process_layers = parent.lst_layers.getTable(parent.chk_names.isChecked(), parent.chk_type.isChecked(), parent.chk_color.isChecked())
 		do_update = False
 
 		for glyph in glyphs_source:
-			for layer_name in process_layers:
-				if glyph.layer(layer_name) is not None:
-					glyph.layer(layer_name).isVisible = not glyph.layer(layer_name).isVisible
-					do_update = True
+			for layer_name, layer_type, layer_color in process_layers:
+				wLayer = glyph.layer(layer_name)
+				
+				# - Precision
+				if wLayer is None: continue
+				if layer_type is not None and layer_type != check_type(wLayer): continue
+				if layer_color is not None and layer_color != wLayer.wireframeColor.name(): continue
+
+				# - Process
+				wLayer.isVisible = not wLayer.isVisible
+				do_update = True
 
 			if do_update and pMode != 3 and len(glyphs_source) <= 5:
-				glyph.updateObject(glyph.fl, 'Toggle Visibility | Glyph: {} Layer: {}.'.format(glyph.name, '; '.join(process_layers)))
+				glyph.updateObject(glyph.fl, 'Toggle Visibility | Glyph: {} Layers: {}.'.format(glyph.name, len(process_layers)))
 
 		# - Finish
 		if do_update and (pMode == 3 or len(glyphs_source) > 5):
-			parent.font.updateObject(parent.font.fl, 'Toggle Visibility | Glyphs: {} Layer: {}.'.format(len(glyphs_source), '; '.join(process_layers)))
+			parent.font.updateObject(parent.font.fl, 'Toggle Visibility | Glyphs: {} Layers: {}.'.format(len(glyphs_source), len(process_layers)))
 		
 		parent.refresh()
 
@@ -80,11 +96,11 @@ class TRLayerActionCollector(object):
 			glyph.addLayer(newLayer)
 			
 			if pMode != 3 and len(glyphs_source) <= 5:
-				glyph.updateObject(glyph.fl, 'Add Layer | Glyph: {} Layer: {}.'.format(glyph.name, user_input))
+				glyph.updateObject(glyph.fl, 'Add Layer | Glyph: {} Layers: {}.'.format(glyph.name, user_input))
 
 		# - Finish
 		if pMode == 3 or len(glyphs_source) > 5:
-			parent.font.updateObject(parent.font.fl, 'Add Layer | Glyphs: {} Layer: {}.'.format(len(glyphs_source), user_input))
+			parent.font.updateObject(parent.font.fl, 'Add Layer | Glyphs: {} Layers: {}.'.format(len(glyphs_source), user_input))
 		
 		parent.refresh()
 
@@ -92,7 +108,7 @@ class TRLayerActionCollector(object):
 	def layer_duplicate(parent):	
 		# - Init
 		glyphs_source = getProcessGlyphs(mode=pMode)
-		process_layers = parent.lst_layers.getTable()
+		process_layers = parent.lst_layers.getTable(parent.chk_names.isChecked(), parent.chk_type.isChecked(), parent.chk_color.isChecked())
 		do_update = False
 		
 		# - Ask user about rename pattern
@@ -102,18 +118,24 @@ class TRLayerActionCollector(object):
 
 		# - Process
 		for glyph in glyphs_source:	
-			# - Duplicate 
-			for layer_name in process_layers:
-				if glyph.layer(layer_name) is not None: 
-					glyph.duplicateLayer(layer_name , '{1}{0}{2}'.format(layer_name, layer_prefix, layer_suffux))
-					do_update = True
+			for layer_name, layer_type, layer_color in process_layers:
+				wLayer = glyph.layer(layer_name)
+				
+				# - Precision
+				if wLayer is None: continue
+				if layer_type is not None and layer_type != check_type(wLayer): continue
+				if layer_color is not None and layer_color != wLayer.wireframeColor.name(): continue
+
+				# - Duplicate 
+				glyph.duplicateLayer(layer_name , '{1}{0}{2}'.format(layer_name, layer_prefix, layer_suffux))
+				do_update = True
 			
 			if do_update and pMode != 3 and len(glyphs_source) <= 5:
-				glyph.updateObject(glyph.fl, 'Duplicate Layer | Glyph: {} Layer: {}.'.format(glyph.name, '; '.join(process_layers)))
+				glyph.updateObject(glyph.fl, 'Duplicate Layer | Glyph: {} Layers: {}.'.format(glyph.name, len(process_layers)))
 
 		# - Finish
 		if do_update and (pMode == 3 or len(glyphs_source) > 5):
-			parent.font.updateObject(parent.font.fl, 'Duplicate Layer | Glyphs: {} Layer: {}.'.format(len(glyphs_source), '; '.join(process_layers)))
+			parent.font.updateObject(parent.font.fl, 'Duplicate Layer | Glyphs: {} Layers: {}.'.format(len(glyphs_source), len(process_layers)))
 		
 		parent.refresh()
 
@@ -121,29 +143,35 @@ class TRLayerActionCollector(object):
 	def layer_duplicate_mask(parent):	
 		# - Init
 		glyphs_source = getProcessGlyphs(mode=pMode)
-		process_layers = parent.lst_layers.getTable()
+		process_layers = parent.lst_layers.getTable(parent.chk_names.isChecked(), parent.chk_type.isChecked(), parent.chk_color.isChecked())
 		do_update = False
 
 		# - Process
 		for glyph in glyphs_source:	
-			for layer_name in process_layers:
-				if glyph.layer(layer_name) is not None:
-					# - Build mask layer
-					srcShapes = glyph.shapes(layer_name)
-					newMaskLayer = glyph.layer(layer_name).getMaskLayer(True)			
+			for layer_name, layer_type, layer_color in process_layers:
+				wLayer = glyph.layer(layer_name)
+				
+				# - Precision
+				if wLayer is None: continue
+				if layer_type is not None and layer_type != check_type(wLayer): continue
+				if layer_color is not None and layer_color != wLayer.wireframeColor.name(): continue
+				
+				# - Build mask layer
+				srcShapes = glyph.shapes(layer_name)
+				newMaskLayer = wLayer.getMaskLayer(True)			
 
-					# - Copy shapes to mask layer
-					for shape in srcShapes:
-						newMaskLayer.addShape(shape.cloneTopLevel()) # Clone so that the shapes are NOT referenced, but actually copied!
+				# - Copy shapes to mask layer
+				for shape in srcShapes:
+					newMaskLayer.addShape(shape.cloneTopLevel()) # Clone so that the shapes are NOT referenced, but actually copied!
 
-					do_update = True
+				do_update = True
 			
 			if do_update and pMode != 3 and len(glyphs_source) <= 5:
-				glyph.updateObject(glyph.fl, 'Duplicate to Mask | Glyph: {} Layer: {}.'.format(glyph.name, '; '.join(process_layers)))
+				glyph.updateObject(glyph.fl, 'Duplicate to Mask | Glyph: {} Layers: {}.'.format(glyph.name, len(process_layers)))
 
 		# - Finish
 		if do_update and (pMode == 3 or len(glyphs_source) > 5):
-			parent.font.updateObject(parent.font.fl, 'Duplicate to Mask | Glyphs: {} Layer: {}.'.format(len(glyphs_source), '; '.join(process_layers)))
+			parent.font.updateObject(parent.font.fl, 'Duplicate to Mask | Glyphs: {} Layers: {}.'.format(len(glyphs_source), len(process_layers)))
 		
 		parent.refresh()
 
@@ -151,22 +179,29 @@ class TRLayerActionCollector(object):
 	def layer_delete(parent):
 		# - Init
 		glyphs_source = getProcessGlyphs(mode=pMode)
-		process_layers = parent.lst_layers.getTable()
+		process_layers = parent.lst_layers.getTable(parent.chk_names.isChecked(), parent.chk_type.isChecked(), parent.chk_color.isChecked())
 		do_update = False
 
 		# - Process
 		for glyph in glyphs_source:			
-			for layer_name in process_layers:
-				if glyph.layer(layer_name) is not None:
-					glyph.removeLayer(layer_name)
-					do_update = True
+			for layer_name, layer_type, layer_color in process_layers:
+				wLayer = glyph.layer(layer_name)
+				
+				# - Precision
+				if wLayer is None: continue
+				if layer_type is not None and layer_type != check_type(wLayer): continue
+				if layer_color is not None and layer_color != wLayer.wireframeColor.name(): continue
+
+				# - Process
+				glyph.removeLayer(layer_name)
+				do_update = True
 			
 			if do_update and pMode != 3 and len(glyphs_source) <= 5:
-				glyph.updateObject(glyph.fl, 'Remove Layer | Glyph: {} Layer: {}.'.format(glyph.name, '; '.join(process_layers)))
+				glyph.updateObject(glyph.fl, 'Remove Layer | Glyph: {} Layers: {}.'.format(glyph.name, len(process_layers)))
 
 		# - Finish
 		if do_update and (pMode == 3 or len(glyphs_source) > 5):
-			parent.font.updateObject(parent.font.fl, 'Remove Layer | Glyphs: {} Layer: {}.'.format(len(glyphs_source), '; '.join(process_layers)))
+			parent.font.updateObject(parent.font.fl, 'Remove Layer | Glyphs: {} Layers: {}.'.format(len(glyphs_source), len(process_layers)))
 		
 		parent.refresh()
 
@@ -174,25 +209,30 @@ class TRLayerActionCollector(object):
 	def layer_set_type(parent, type):
 		# - Init
 		glyphs_source = getProcessGlyphs(mode=pMode)
-		process_layers = parent.lst_layers.getTable()
+		process_layers = parent.lst_layers.getTable(parent.chk_names.isChecked(), parent.chk_type.isChecked(), parent.chk_color.isChecked())
 		do_update = False
 
 		# - Process
 		for glyph in glyphs_source:		
-			for layer_name in process_layers:
+			for layer_name, layer_type, layer_color in process_layers:
 				wLayer = glyph.layer(layer_name)
+				
+				# - Precision
+				if wLayer is None: continue
+				if layer_type is not None and layer_type != check_type(wLayer): continue
+				if layer_color is not None and layer_color != wLayer.wireframeColor.name(): continue
 
-				if wLayer is not None:
-					if type is 'Service': wLayer.isService = not wLayer.isService
-					if type is 'Wireframe': wLayer.isWireframe = not wLayer.isWireframe
-					do_update = True
+				# - Process
+				if type is 'Service': wLayer.isService = not wLayer.isService
+				if type is 'Wireframe': wLayer.isWireframe = not wLayer.isWireframe
+				do_update = True
 
 			if do_update and pMode != 3 and len(glyphs_source) <= 5:
-				glyph.updateObject(glyph.fl, 'Set Layer Type | Glyph: {} Layer: {}.'.format(glyph.name, '; '.join(process_layers)))
+				glyph.updateObject(glyph.fl, 'Set Layer Type | Glyph: {} Layers: {}.'.format(glyph.name, len(process_layers)))
 
 		# - Finish
 		if do_update and (pMode == 3 or len(glyphs_source) > 5):
-			parent.font.updateObject(parent.font.fl, 'Set Layer Type  | Glyphs: {} Layer: {}.'.format(len(glyphs_source), '; '.join(process_layers)))
+			parent.font.updateObject(parent.font.fl, 'Set Layer Type  | Glyphs: {} Layers: {}.'.format(len(glyphs_source), len(process_layers)))
 		
 		parent.refresh()
 
@@ -200,132 +240,35 @@ class TRLayerActionCollector(object):
 	def layer_set_color(parent):
 		# - Init
 		glyphs_source = getProcessGlyphs(mode=pMode)
-		process_layers = parent.lst_layers.getTable()
+		process_layers = parent.lst_layers.getTable(parent.chk_names.isChecked(), parent.chk_type.isChecked(), parent.chk_color.isChecked())
 		user_input = TRColorDLG('Pick layer color', 'Please select a new layer color.').values
+		if not user_input: return
 		do_update = False
 
 		# - Process
 		for glyph in glyphs_source:		
-			for layer_name in process_layers:
+			for layer_name, layer_type, layer_color in process_layers:
 				wLayer = glyph.layer(layer_name)
+				
+				# - Precision
+				if wLayer is None: continue
+				if layer_type is not None and layer_type != check_type(wLayer): continue
+				if layer_color is not None and layer_color != wLayer.wireframeColor.name(): continue
 
-				if wLayer is not None:
-					wLayer.wireframeColor = user_input[1]
-					do_update = True
+				# - Process
+				wLayer.wireframeColor = user_input[1]
+				do_update = True
 
 			if do_update and pMode != 3 and len(glyphs_source) <= 5:
-				glyph.updateObject(glyph.fl, 'Set Layer Color: {} | Glyph: {} Layer: {}.'.format(user_input[0], glyph.name, '; '.join(process_layers)))
+				glyph.updateObject(glyph.fl, 'Set Layer Color: {} | Glyph: {} Layers: {}.'.format(user_input[0], glyph.name, len(process_layers)))
 
 		# - Finish
 		if do_update and (pMode == 3 or len(glyphs_source) > 5):
-			parent.font.updateObject(parent.font.fl, 'Set Layer Color: {} | Glyphs: {} Layer: {}.'.format(user_input[0], len(glyphs_source), '; '.join(process_layers)))
+			parent.font.updateObject(parent.font.fl, 'Set Layer Color: {} | Glyphs: {} Layers: {}.'.format(user_input[0], len(glyphs_source), len(process_layers)))
 		
 		parent.refresh()
 
 # - Sub widgets ------------------------
-class ColorAction(QtGui.QWidgetAction):
-	colorSelected = QtCore.Signal("QtGui.QColor")
-
-	def __init__(self, parent):
-		QtGui.QWidgetAction.__init__(self, parent)
-		widget = QtGui.QWidget(parent)
-		layout = QtGui.QGridLayout(widget)
-		layout.setSpacing(0)
-		layout.setContentsMargins(2, 2, 2, 2)
-		palette = self.palette()
-		count = len(palette)
-		rows = count // round(count ** .5)
-		for row in range(int(rows)):
-			for column in range(int(count // rows)):
-				color = palette.pop()
-				button = QtGui.QToolButton(widget)
-				button.setAutoRaise(True)
-				button.clicked.connect(lambda color=color: self.handleButton(color))
-				pixmap = QtGui.QPixmap(16, 16)
-				pixmap.fill(color)
-				button.setIcon(QtGui.QIcon(pixmap))
-				layout.addWidget(button, row, column)
-		self.setDefaultWidget(widget)
-
-	def handleButton(self, color):
-		self.parent().hide()
-		self.colorSelected.emit(color)
-
-	def palette(self):
-		palette = []
-		for g in range(4):
-			for r in range(4):
-				for b in range(3):
-					palette.append(QtGui.QColor(
-						r * 255 // 3, g * 255 // 3, b * 255 // 2))
-		return palette
-		
-class TRWLayerSelect(QtGui.QVBoxLayout):
-	def __init__(self):
-		super(TRWLayerSelect, self).__init__()
-
-		# - Init
-		self.font = None
-
-		# - Buttons
-		self.btn_refresh = QtGui.QPushButton('Refresh')
-		self.btn_refresh.clicked.connect(lambda: self.refresh())
-
-		# - Radios
-		self.rad_selection = QtGui.QRadioButton('Selection')
-		self.rad_font = QtGui.QRadioButton('Font')
-		
-		self.rad_selection.setChecked(True)
-
-		# -- Head
-		self.lay_head = QtGui.QHBoxLayout()
-		self.lay_head.addWidget(QtGui.QLabel('Source:'))
-		self.lay_head.addWidget(self.rad_selection)
-		self.lay_head.addWidget(self.rad_font)
-		self.lay_head.addWidget(self.btn_refresh)
-		self.addLayout(self.lay_head)
-
-		# -- Layer List
-		self.lst_layers = TRWMasterTableView(init_table_dict)
-		self.lst_layers.selectionModel().selectionChanged.connect(self.set_selected)
-		self.addWidget(self.lst_layers)
-		self.refresh()
-
-	# - Basics ---------------------------------------
-	def refresh(self):
-		def check_type(layer):
-			if layer.isMaskLayer: 	return 'Mask'
-			if layer.isMasterLayer: return 'Master'
-			if layer.isService: 	return 'Service'
-		
-		# - Set work mode
-		global pMode
-		if self.rad_selection.isChecked(): pMode = 2
-		if self.rad_font.isChecked(): pMode = 3
-
-		# - Populate table
-		if fl6.CurrentFont() is not None:
-			self.font = pFont()
-			glyphs_source = getProcessGlyphs(mode=pMode)
-			init_data = []
-
-			for glyph in glyphs_source:
-				init_data += [(layer.name, check_type(layer), layer.wireframeColor.name()) for layer in glyph.layers() if '#' not in layer.name]
-			
-			filter_data = set(init_data)
-			table_dict = {n : OrderedDict(zip(column_names, data)) for n, data in enumerate(filter_data)}
-			
-			self.lst_layers.setTable(table_dict)
-
-	def set_selected(self):
-		selected_rows = [si.row() for si in self.lst_layers.selectionModel().selectedRows()]
-		
-		for row in range(self.lst_layers.rowCount):
-			if row in selected_rows:
-				self.lst_layers.item(row,0).setCheckState(QtCore.Qt.Checked)
-			else:
-				self.lst_layers.item(row,0).setCheckState(QtCore.Qt.Unchecked)
-	
 class TRWMasterTableView(QtGui.QTableWidget):
 	def __init__(self, data):
 		super(TRWMasterTableView, self).__init__()
@@ -394,8 +337,96 @@ class TRWMasterTableView(QtGui.QTableWidget):
 		self.setSortingEnabled(True)
 		self.setColumnHidden(2, True)
 	
-	def getTable(self):
-		return [self.item(row, 0).text() for row in range(self.rowCount) if self.item(row, 0).checkState() == QtCore.Qt.Checked]
+	def getTable(self, get_name=True, get_type=False, get_color=False):
+		table_data = []
+		for row in range(self.rowCount):
+			if self.item(row, 0).checkState() == QtCore.Qt.Checked:
+				layer_name = self.item(row, 0).text() if get_name else None
+				layer_type = self.item(row, 1).text() if get_type else None
+				layer_color = self.item(row, 2).text() if get_color else None
+
+				table_data.append((layer_name, layer_type, layer_color))
+
+		return table_data
+
+class TRWLayerSelect(QtGui.QVBoxLayout):
+	def __init__(self):
+		super(TRWLayerSelect, self).__init__()
+
+		# - Init
+		self.font = None
+
+		# - Buttons
+		self.btn_refresh = QtGui.QPushButton('Refresh')
+		self.btn_refresh.clicked.connect(lambda: self.refresh())
+
+		# - Radios
+		self.rad_selection = QtGui.QRadioButton('Selection')
+		self.rad_font = QtGui.QRadioButton('Font')
+		self.rad_selection.setChecked(True)
+
+		# - Checks
+		self.chk_names = QtGui.QCheckBox('Name')
+		self.chk_type = QtGui.QCheckBox('Type')
+		self.chk_color = QtGui.QCheckBox('Color')
+		self.chk_names.setChecked(True)
+		self.chk_names.setEnabled(False)
+
+		# -- Head
+		self.lay_head = QtGui.QGridLayout()
+		self.lay_head.addWidget(QtGui.QLabel('Source:'),		1, 0, 1, 1)
+		self.lay_head.addWidget(self.rad_selection,				1, 1, 1, 1)
+		self.lay_head.addWidget(self.rad_font,					1, 2, 1, 1)
+		self.lay_head.addWidget(self.btn_refresh,				1, 3, 1, 1)
+		self.lay_head.addWidget(QtGui.QLabel('Precision:'),		2, 0, 1, 1)
+		self.lay_head.addWidget(self.chk_names,					2, 1, 1, 1)
+		self.lay_head.addWidget(self.chk_type,					2, 2, 1, 1)
+		self.lay_head.addWidget(self.chk_color,					2, 3, 1, 1)
+		self.addLayout(self.lay_head)
+
+		# -- Layer List
+		self.lst_layers = TRWMasterTableView(init_table_dict)
+		self.lst_layers.selectionModel().selectionChanged.connect(self.set_selected)
+		self.addWidget(self.lst_layers)
+		self.refresh()
+
+	# - Basics ---------------------------------------
+	def refresh(self):
+		# - Set work mode
+		global pMode
+		if self.rad_selection.isChecked(): pMode = 2
+		if self.rad_font.isChecked(): pMode = 3
+
+		# - Populate table
+		if fl6.CurrentFont() is not None:
+			self.font = pFont()
+			glyphs_source = getProcessGlyphs(mode=pMode)
+			init_data = []
+
+			for glyph in glyphs_source:
+				glyph_data = []
+				for layer in glyph.layers():
+					if '#' not in layer.name:
+						layer_name = layer.name if self.chk_names.isChecked() else 'Any'
+						layer_type = check_type(layer) if self.chk_type.isChecked() else 'Any'
+						layer_color = layer.wireframeColor.name() if self.chk_color.isChecked() else 'lightgray'
+						glyph_data.append((layer_name, layer_type, layer_color))
+				
+				init_data += glyph_data 
+			
+			filter_data = set(init_data)
+			table_dict = {n : OrderedDict(zip(column_names, data)) for n, data in enumerate(filter_data)}
+			
+			self.lst_layers.setTable(table_dict)
+
+	def set_selected(self):
+		selected_rows = [si.row() for si in self.lst_layers.selectionModel().selectedRows()]
+		
+		for row in range(self.lst_layers.rowCount):
+			if row in selected_rows:
+				self.lst_layers.item(row,0).setCheckState(QtCore.Qt.Checked)
+			else:
+				self.lst_layers.item(row,0).setCheckState(QtCore.Qt.Unchecked)
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
@@ -435,7 +466,6 @@ class tool_tab(QtGui.QWidget):
 		self.act_layer_delete.triggered.connect(lambda: TRLayerActionCollector.layer_delete(self.layerSelector))
 		self.act_layer_visible.triggered.connect(lambda: TRLayerActionCollector.layer_toggle_visible(self.layerSelector))
 		self.act_layer_color.triggered.connect(lambda: TRLayerActionCollector.layer_set_color(self.layerSelector))
-		#self.act_layer_color_new.colorSelected.connect(self.handleColorSelected)
 		
 		act_layer_set_type_wireframe.triggered.connect(lambda: TRLayerActionCollector.layer_set_type(self.layerSelector, 'Wireframe'))
 		act_layer_set_type_service.triggered.connect(lambda: TRLayerActionCollector.layer_set_type(self.layerSelector, 'Service'))
@@ -461,16 +491,10 @@ class tool_tab(QtGui.QWidget):
 		self.layerSelector.lst_layers.menu.addSeparator()
 		self.layerSelector.lst_layers.menu.addAction(self.act_layer_visible)
 		self.layerSelector.lst_layers.menu.addAction(self.act_layer_color)
-		#self.layerSelector.lst_layers.menu.addAction(self.act_layer_color_new)
 		self.layerSelector.lst_layers.menu.addSeparator()
 		self.layerSelector.lst_layers.menu.addMenu(self.menu_layer_type)
 
 		self.layerSelector.lst_layers.menu.popup(QtGui.QCursor.pos())
-
-	'''
-	def handleColorSelected(self, color):
-		print(color.name())
-	'''
 
 # - Test ----------------------
 if __name__ == '__main__':
