@@ -22,7 +22,7 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.2.5'
+__version__ = '0.2.6'
 
 # -- Colors ------------------------------
 # Fontlab Name, Fontlab Value, QtColor Name
@@ -306,6 +306,52 @@ class TR2ComboDLG(QtGui.QDialog):
 	def return_values(self):
 		self.accept()
 		self.values = (self.edt_field_t.text, self.cmb_field_b.currentIndex)
+
+class TRColorDLG(QtGui.QDialog):
+	def __init__(self, dlg_name, dlg_msg, dlg_size=(300, 300, 300, 100)):
+		super(TRColorDLG, self).__init__()
+		
+		# - Init
+		from typerig.proxy.fl.gui.widgets import fontMarkColors
+		self.values = (None, None)
+		self.color_codes = {name:value for name, discard, value in fontMarkColors}
+		
+		# - Widgets
+		self.lbl_main = QtGui.QLabel(dlg_msg)
+		self.lbl_color = QtGui.QLabel('\nColor Presets:')
+		
+		self.cmb_select_color = QtGui.QComboBox()
+		self.color_codes = {name:value for name, discard, value in fontMarkColors}
+		
+		for i in range(len(fontMarkColors)):
+			self.cmb_select_color.addItem(fontMarkColors[i][0])
+			self.cmb_select_color.setItemData(i, QtGui.QColor(fontMarkColors[i][2]), QtCore.Qt.DecorationRole)
+
+		self.btn_ok = QtGui.QPushButton('OK', self)
+		self.btn_cancel = QtGui.QPushButton('Cancel', self)
+
+		self.btn_ok.clicked.connect(self.return_values)
+		self.btn_cancel.clicked.connect(self.reject)
+		
+		# - Build 
+		main_layout = QtGui.QGridLayout() 
+		main_layout.addWidget(self.lbl_main, 			0, 0, 1, 4)
+		main_layout.addWidget(self.lbl_color, 			1, 0, 1, 4)
+		main_layout.addWidget(self.cmb_select_color,	2, 0, 1, 4)
+		main_layout.addWidget(self.btn_ok,				3, 0, 1, 2)
+		main_layout.addWidget(self.btn_cancel,			3, 2, 1, 2)
+
+		# - Set 
+		self.setLayout(main_layout)
+		self.setWindowTitle(dlg_name)
+		self.setGeometry(*dlg_size)
+		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
+		self.exec_()
+
+	def return_values(self):
+		self.accept()
+		selection_name = self.color_codes[self.cmb_select_color.currentText]
+		self.values = (selection_name,  QtGui.QColor(selection_name))
 
 # - Line Edit ----------------------------
 class TRGLineEdit(QtGui.QLineEdit):

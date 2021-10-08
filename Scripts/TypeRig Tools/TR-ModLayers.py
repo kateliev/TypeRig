@@ -31,7 +31,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Modify Layers', '1.30'
+app_name, app_version = 'TypeRig | Modify Layers', '1.32'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -196,7 +196,70 @@ class TRLayerActionCollector(object):
 		
 		parent.refresh()
 
+	@staticmethod
+	def layer_set_color(parent):
+		# - Init
+		glyphs_source = getProcessGlyphs(mode=pMode)
+		process_layers = parent.lst_layers.getTable()
+		user_input = TRColorDLG('Pick layer color', 'Please select a new layer color.').values
+		do_update = False
+
+		# - Process
+		for glyph in glyphs_source:		
+			for layer_name in process_layers:
+				wLayer = glyph.layer(layer_name)
+
+				if wLayer is not None:
+					wLayer.wireframeColor = user_input[1]
+					do_update = True
+
+			if do_update and pMode != 3 and len(glyphs_source) <= 5:
+				glyph.updateObject(glyph.fl, 'Set Layer Color: {} | Glyph: {} Layer: {}.'.format(user_input[0], glyph.name, '; '.join(process_layers)))
+
+		# - Finish
+		if do_update and (pMode == 3 or len(glyphs_source) > 5):
+			parent.font.updateObject(parent.font.fl, 'Set Layer Color: {} | Glyphs: {} Layer: {}.'.format(user_input[0], len(glyphs_source), '; '.join(process_layers)))
+		
+		parent.refresh()
+
 # - Sub widgets ------------------------
+class ColorAction(QtGui.QWidgetAction):
+	colorSelected = QtCore.Signal("QtGui.QColor")
+
+	def __init__(self, parent):
+		QtGui.QWidgetAction.__init__(self, parent)
+		widget = QtGui.QWidget(parent)
+		layout = QtGui.QGridLayout(widget)
+		layout.setSpacing(0)
+		layout.setContentsMargins(2, 2, 2, 2)
+		palette = self.palette()
+		count = len(palette)
+		rows = count // round(count ** .5)
+		for row in range(int(rows)):
+			for column in range(int(count // rows)):
+				color = palette.pop()
+				button = QtGui.QToolButton(widget)
+				button.setAutoRaise(True)
+				button.clicked.connect(lambda color=color: self.handleButton(color))
+				pixmap = QtGui.QPixmap(16, 16)
+				pixmap.fill(color)
+				button.setIcon(QtGui.QIcon(pixmap))
+				layout.addWidget(button, row, column)
+		self.setDefaultWidget(widget)
+
+	def handleButton(self, color):
+		self.parent().hide()
+		self.colorSelected.emit(color)
+
+	def palette(self):
+		palette = []
+		for g in range(4):
+			for r in range(4):
+				for b in range(3):
+					palette.append(QtGui.QColor(
+						r * 255 // 3, g * 255 // 3, b * 255 // 2))
+		return palette
+		
 class TRWLayerSelect(QtGui.QVBoxLayout):
 	def __init__(self):
 		super(TRWLayerSelect, self).__init__()
@@ -248,11 +311,11 @@ class TRWLayerSelect(QtGui.QVBoxLayout):
 
 			for glyph in glyphs_source:
 				init_data += [(layer.name, check_type(layer), layer.wireframeColor.name()) for layer in glyph.layers() if '#' not in layer.name]
-		 	
-		 	filter_data = set(init_data)
-		 	table_dict = {n : OrderedDict(zip(column_names, data)) for n, data in enumerate(filter_data)}
-		 	
-		 	self.lst_layers.setTable(table_dict)
+			
+			filter_data = set(init_data)
+			table_dict = {n : OrderedDict(zip(column_names, data)) for n, data in enumerate(filter_data)}
+			
+			self.lst_layers.setTable(table_dict)
 
 	def set_selected(self):
 		selected_rows = [si.row() for si in self.lst_layers.selectionModel().selectedRows()]
@@ -297,10 +360,10 @@ class TRWMasterTableView(QtGui.QTableWidget):
 		self.setRowCount(len(data.keys()))
 
 		# - Populate
-		for n, layer in enumerate(data.keys()):
+		for row, layer in enumerate(data.keys()):
 			name_row.append(layer)
 
-			for m, key in enumerate(data[layer].keys()):
+			for column, key in enumerate(data[layer].keys()):
 				
 				# -- Build name column
 				name_column.append(key)
@@ -308,7 +371,7 @@ class TRWMasterTableView(QtGui.QTableWidget):
 				# -- Selectively add data
 				newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
 				
-				if m == 0:
+				if column == 0:
 					newitem.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
 					newitem.setData(QtCore.Qt.DecorationRole, QtGui.QColor(data[layer]['Color']))
 					newitem.setCheckState(QtCore.Qt.Unchecked) 
@@ -317,7 +380,7 @@ class TRWMasterTableView(QtGui.QTableWidget):
 
 				if data[layer]['Type']: newitem.setBackground(color_dict[data[layer]['Type']])
 
-				self.setItem(n, m, newitem)
+				self.setItem(row, column, newitem)
 
 		self.verticalHeader().hide()
 		self.setVerticalHeaderLabels(name_row)
@@ -347,11 +410,15 @@ class tool_tab(QtGui.QWidget):
 		layoutV.addLayout(self.layerSelector)
 		
 		# -- Menus and Actions -----------------------------------
+
 		self.act_layer_add = QtGui.QAction('New', self)
 		self.act_layer_duplicate = QtGui.QAction('Duplicate', self)
 		self.act_layer_duplicate_mask = QtGui.QAction('Duplicate to Mask', self)
 		self.act_layer_delete = QtGui.QAction('Remove', self)
 		self.act_layer_visible = QtGui.QAction('Toggle Visible', self)
+		self.act_layer_color = QtGui.QAction('Change Color', self)
+		#self.act_layer_color_new = ColorAction(self)
+			
 
 		self.menu_layer_type = QtGui.QMenu('Type', self)
 		act_layer_set_type_wireframe = QtGui.QAction('Set as Wireframe', self)
@@ -367,6 +434,8 @@ class tool_tab(QtGui.QWidget):
 		self.act_layer_duplicate_mask.triggered.connect(lambda: TRLayerActionCollector.layer_duplicate_mask(self.layerSelector))
 		self.act_layer_delete.triggered.connect(lambda: TRLayerActionCollector.layer_delete(self.layerSelector))
 		self.act_layer_visible.triggered.connect(lambda: TRLayerActionCollector.layer_toggle_visible(self.layerSelector))
+		self.act_layer_color.triggered.connect(lambda: TRLayerActionCollector.layer_set_color(self.layerSelector))
+		#self.act_layer_color_new.colorSelected.connect(self.handleColorSelected)
 		
 		act_layer_set_type_wireframe.triggered.connect(lambda: TRLayerActionCollector.layer_set_type(self.layerSelector, 'Wireframe'))
 		act_layer_set_type_service.triggered.connect(lambda: TRLayerActionCollector.layer_set_type(self.layerSelector, 'Service'))
@@ -388,12 +457,20 @@ class tool_tab(QtGui.QWidget):
 		self.layerSelector.lst_layers.menu.addAction(self.act_layer_add)
 		self.layerSelector.lst_layers.menu.addAction(self.act_layer_duplicate)
 		self.layerSelector.lst_layers.menu.addAction(self.act_layer_duplicate_mask)
-		self.layerSelector.lst_layers.menu.addAction(self.act_layer_visible)
 		self.layerSelector.lst_layers.menu.addAction(self.act_layer_delete)
+		self.layerSelector.lst_layers.menu.addSeparator()
+		self.layerSelector.lst_layers.menu.addAction(self.act_layer_visible)
+		self.layerSelector.lst_layers.menu.addAction(self.act_layer_color)
+		#self.layerSelector.lst_layers.menu.addAction(self.act_layer_color_new)
 		self.layerSelector.lst_layers.menu.addSeparator()
 		self.layerSelector.lst_layers.menu.addMenu(self.menu_layer_type)
 
 		self.layerSelector.lst_layers.menu.popup(QtGui.QCursor.pos())
+
+	'''
+	def handleColorSelected(self, color):
+		print(color.name())
+	'''
 
 # - Test ----------------------
 if __name__ == '__main__':
