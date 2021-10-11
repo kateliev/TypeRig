@@ -20,7 +20,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.27.5'
+__version__ = '0.27.6'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -107,14 +107,18 @@ class CubicBezier(object):
 		return abs(self.y_max - self.y)
 	
 	# -- Modifiers
-	def align(self, other_line):
+	def align_to(self, other_line):
 		tx = other_line.p0.x
 		ty = other_line.p0.y
-		angle = -math.atan2(other_line.p1.y - ty, other_line.p1.x - tx)
+		angle = -other_line.angle
+		result = []
 
 		for p in self.points:
-			p.x = (p.x - tx)*math.cos(angle) - (p.y - ty)*math.sin(angle)
-			p.y = (p.x - tx)*math.sin(angle) + (p.y - ty)*math.cos(angle)
+			x = (p.x - tx)*math.cos(angle) - (p.y - ty)*math.sin(angle)
+			y = (p.x - tx)*math.sin(angle) + (p.y - ty)*math.cos(angle)
+			result.append((x,y))
+
+		return self.__class__(result)
 
 	def asList(self):
 		return 
@@ -208,21 +212,20 @@ class CubicBezier(object):
 		d, a, b, c = self.find_coeffs()
 		
 		# - Calculate
-		#return root_dim(a.x, b.x, c.x, d.x), root_dim(a.y, b.y, c.y, d.y)
-		return root_dim(a.y, b.y, c.y, d.y)
+		return root_dim(a.x, b.x, c.x, d.x), root_dim(a.y, b.y, c.y, d.y)
 		
 	def intersect_line(self, other_line):
 		'''Find Curve and line intersection
-		Note: Not working very well - problems with alignment!!!.
 		Adapted from bezier.js library by Pomax : https://github.com/Pomax/bezierjs
 		'''
-		aligned_bezier = self.__class__(self.tuple)
-		aligned_bezier.align(other_line)
-		intersect_times = aligned_bezier.find_roots()
-		intersect_points = [self.solve_point(t) for t in intersect_times]
-		intersect_points = [p for p in intersect_points if other_line.hasPoint(p)]
+		aligned_bezier = self.align_to(other_line)
+		intersect_times_x, intersect_times_y = aligned_bezier.find_roots()
+		intersect_points_x = [self.solve_point(t) for t in intersect_times_x]
+		intersect_points_y = [self.solve_point(t) for t in intersect_times_y]
+		intersect_points_x = [p for p in intersect_points_x if other_line.hasPoint(p)]
+		intersect_points_y = [p for p in intersect_points_y if other_line.hasPoint(p)]
 		
-		return intersect_points	
+		return (intersect_times_x, intersect_times_y), (intersect_points_x, intersect_points_y)
 
 	def solve_point(self, time):
 		'''Find point on cubic bezier at given time '''
@@ -240,11 +243,21 @@ class CubicBezier(object):
 		
 		return pt, d1, d2
 
+	def solve_normal_at_time(self, time):
+		'''Returns point that is the unit vector of normal at given time.'''
+		_d, d1, _d2 = self.solve_derivative_at_time(time)
+		q = math.sqrt(d1.x*d1.x + d1.y*d1.y);
+		return Point(-d1.y/q, d1.x/q)
+
+	def solve_tangent_at_time(self, time):
+		'''Returns point that is the unit vector of tangent at given time.'''
+		_d, d1, _d2 = self.solve_derivative_at_time(time)
+		return d1.unit
+
 	def solve_curvature(self, time):
 		'''Find Curvature of on-curve point at given time'''
 		pt, d1, d2 = self.solve_derivative_at_time(time)
 		return (d1.x * d2.y - d1.y * d2.x) / (d1.x**2 + d1.y**2)**1.5
-
 
 	def solve_slice(self, time):
 		'''Returns two segments representing cubic bezier sliced at given time. 
