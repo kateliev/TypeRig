@@ -10,6 +10,7 @@
 # - Dependencies -----------------
 from __future__ import absolute_import, print_function
 from collections import OrderedDict
+from itertools import groupby
 
 import fontlab as fl6
 import fontgate as fgt
@@ -23,14 +24,14 @@ from typerig.proxy.fl.objects.font import pFontMetrics
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import getProcessGlyphs
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRTransformCtrl
 
 # - Init -------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '1.2'
+app_name, app_version = 'TypeRig | Contour', '1.4'
 
 # - Sub widgets ------------------------
 class breakContour(QtGui.QGridLayout):
@@ -528,6 +529,99 @@ class alignContours(QtGui.QGridLayout):
 			glyph.update()
 			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Align Contours @ %s.' %(glyph.name, '; '.join(wLayers)))
 
+class copyContours(QtGui.QGridLayout):
+	# - Align Contours
+	def __init__(self):
+		super(copyContours, self).__init__()
+
+		# - Init
+		self.contourClipboard = {}
+
+		# -- Custom controls
+		self.tr_trans_ctrl = TRTransformCtrl()
+
+		# -- Quick Tool buttons
+		self.btn_copy_contour = QtGui.QPushButton('Copy')
+		self.btn_paste_contour = QtGui.QPushButton('Paste')
+
+		self.btn_copy_contour.clicked.connect(self.copy_contour)
+		self.btn_paste_contour.clicked.connect(self.paste_contour)
+				
+		self.addWidget(self.tr_trans_ctrl, 			0, 0, 2, 8)
+		self.addWidget(self.btn_copy_contour,		2, 0, 1, 4)
+		self.addWidget(self.btn_paste_contour,		2, 4, 1, 4)
+		
+		self.tr_trans_ctrl.lay_controls.setMargin(0)
+
+	def copy_contour(self):
+		# - Init
+		wGlyph = eGlyph()
+		wContours = wGlyph.contours()
+		wLayers = wGlyph._prepareLayers(pLayers)
+		self.contourClipboard = OrderedDict()
+		
+		# - Build initial contour information
+		selectionTuples = wGlyph.selectedAtContours()
+		selection = {key:[layer_name[1] for layer_name in value] if not wContours[key].isAllNodesSelected() else [] for key, value in groupby(selectionTuples, lambda x:x[0])}
+
+		# - Process
+		if len(selection.keys()):
+			for layer_name in wLayers:
+				wLayer = layer_name
+				self.contourClipboard[wLayer] = []
+
+				for cid, nList in selection.iteritems():
+					if len(nList):
+						 self.contourClipboard[wLayer].append(fl6.flContour([wGlyph.nodes(wLayer)[nid].clone() for nid in nList]))
+					else:
+						self.contourClipboard[wLayer].append(wGlyph.contours(wLayer)[cid].clone())
+
+			output(0, app_name, 'Copy contours; Glyph: %s; Layers: %s.' %(wGlyph.name, '; '.join(wLayers)))
+		
+	def paste_contour(self):
+		# - Init
+		wGlyph = eGlyph()
+		wContours = wGlyph.contours()
+		wLayers = wGlyph._prepareLayers(pLayers)
+
+		# - Helper
+		def add_new_shape(layer, contours):
+			newShape = fl6.flShape()
+			newShape.addContours(contours, True)
+			layer.addShape(newShape)
+
+		# - Process
+		if len(self.contourClipboard.keys()):
+			for layerName, contours in self.contourClipboard.iteritems():
+				wLayer = wGlyph.layer(layerName)
+				
+				if wLayer is not None:	
+					# - Process transform
+					tranformed_contours = []
+
+					for contour in contours:
+						# -- Get transformation data
+						wBBox = QtCore.QRectF(*contour.bounds)
+						new_transform, org_transform, rev_transform = self.tr_trans_ctrl.getTransform(wBBox)
+						
+						# - Transform contours
+						new_contour = contour.clone()
+						new_contour.transform = org_transform
+						new_contour.applyTransform()
+						new_contour.transform = new_transform
+						new_contour.applyTransform()
+						new_contour.transform = rev_transform
+						new_contour.applyTransform()
+						
+						tranformed_contours.append(new_contour)
+
+					# - Insert contours into currently selected shape
+					selected_shape = wGlyph.shapes(layerName)[0]
+					selected_shape.addContours(tranformed_contours, True)
+					
+		
+			wGlyph.updateObject(wGlyph.fl, 'Paste contours; Glyph: %s; Layers: %s' %(wGlyph.name, '; '.join(wLayers)))
+
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
 	def __init__(self):
@@ -544,6 +638,8 @@ class tool_tab(QtGui.QWidget):
 
 		layoutV.addWidget(QtGui.QLabel('Contour: Align '))
 		layoutV.addLayout(alignContours())
+		layoutV.addWidget(QtGui.QLabel('Contour: Copy '))
+		layoutV.addLayout(copyContours())
 
 		# - Build ---------------------------
 		layoutV.addStretch()
