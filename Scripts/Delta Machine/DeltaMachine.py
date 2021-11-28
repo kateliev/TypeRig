@@ -16,19 +16,19 @@ from collections import OrderedDict
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig.proxy.fl import *
-
 from typerig.core.func.math import linInterp, ratfrac
 from typerig.core.func import transform
 from typerig.core.objects.array import PointArray
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRMsgSimple
 
 
 # - Init --------------------------------
-app_version = '1.12'
+app_version = '1.13'
 app_name = 'TypeRig | Delta Machine'
 
 ss_controls = """
