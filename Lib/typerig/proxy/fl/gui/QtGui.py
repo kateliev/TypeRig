@@ -14,10 +14,6 @@ __version__ = '0.0.2'
 from PythonQt.QtGui import *
 from platform import system
 
-
-if system() == 'Darwin':
-	QApplication.setStyle(QStyleFactory.create('macintosh')) # Options: Windows, WindowsXP, WindowsVista, Fusion
-
 MAC_VSPACING = 2
 MAC_VMARGIN = 2
 
