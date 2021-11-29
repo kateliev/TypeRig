@@ -9,7 +9,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.4'
+__version__ = '0.0.5'
 
 # - Dependancies -----------------------
 import fontlab as fl6
@@ -43,7 +43,8 @@ def uiRefresh(widget):
 		QTabBar::tab,
 		QTabWidget, 
 		QTableWidget,
-		QTreeWidget
+		QTreeWidget,
+		QFrame
 	'''
 
 	# - Set OS specific styling
@@ -95,8 +96,8 @@ def uiRefresh(widget):
 					font-size: %(fontSize)spx;
 				}
 				QPushButton { 
-					padding: 2px 6px 2px 6px; 
-					margin: 3px 2px 3px 2px;
+					padding: 2px 3px 2px 3px; 
+					margin: 2px 1px 2px 1px;
 					border-style: solid;
 					border-color: #c8c8c8;
 					border-radius: 3px;
@@ -117,6 +118,11 @@ class QDialog(QDialog):
 class QWidget(QWidget):
 	def __init__(self, *args, **kwargs):
 		super(QWidget, self).__init__(*args, **kwargs)
+		uiRefresh(self)
+
+class QFrame(QFrame):
+	def __init__(self, *args, **kwargs):
+		super(QFrame, self).__init__(*args, **kwargs)
 		uiRefresh(self)
 
 class QGridLayout(QGridLayout):
