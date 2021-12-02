@@ -31,7 +31,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '1.4'
+app_name, app_version = 'TypeRig | Contour', '1.8'
 
 # - Sub widgets ------------------------
 class breakContour(QtGui.QGridLayout):
@@ -535,30 +535,75 @@ class copyContours(QtGui.QGridLayout):
 		super(copyContours, self).__init__()
 
 		# - Init
-		self.contourClipboard = {}
+		self.contourClipboard = []
 
 		# -- Custom controls
 		self.tr_trans_ctrl = TRTransformCtrl()
 
+		# -- Listview
+		self.lst_contours = QtGui.QListView()
+		self.mod_contours = QtGui.QStandardItemModel(self.lst_contours)
+		self.lst_contours.setModel(self.mod_contours)
+		self.lst_contours.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+
 		# -- Quick Tool buttons
 		self.btn_copy_contour = QtGui.QPushButton('Copy')
 		self.btn_paste_contour = QtGui.QPushButton('Paste')
+		self.btn_clear = QtGui.QPushButton('Clear')
 
 		self.btn_copy_contour.clicked.connect(self.copy_contour)
 		self.btn_paste_contour.clicked.connect(self.paste_contour)
+		self.btn_clear.clicked.connect(self.__reset)
 				
-		self.addWidget(self.tr_trans_ctrl, 			0, 0, 2, 8)
-		self.addWidget(self.btn_copy_contour,		2, 0, 1, 4)
-		self.addWidget(self.btn_paste_contour,		2, 4, 1, 4)
+		self.addWidget(self.btn_copy_contour,		0, 0, 1, 4)
+		self.addWidget(self.btn_paste_contour,		0, 4, 1, 4)
+		self.addWidget(self.lst_contours,			1, 0, 10, 8)
+		self.addWidget(self.btn_clear,				11, 0, 1, 8)
+		self.addWidget(self.tr_trans_ctrl, 			12, 0, 2, 8)
 		
 		self.tr_trans_ctrl.lay_controls.setMargin(0)
+
+	def __reset(self):
+		self.contourClipboard = []
+		self.mod_contours.removeRows(0, self.mod_contours.rowCount())
+
+	def __drawIcon(self, contours, foreground='black', background='white'):
+		# - Init
+		# -- Prepare contours
+		cloned_contours = [contour.clone() for contour in contours]
+		new_shape = fl6.flShape()
+		for contour in cloned_contours:
+			new_shape.addContour(contour, True)
+
+
+		new_painter = QtGui.QPainter()
+		new_icon = QtGui.QIcon()
+		shape_bbox = new_shape.boundingBox
+		draw_dimension = max(shape_bbox.width(), shape_bbox.height())
+		new_pixmap = QtGui.QPixmap(draw_dimension, draw_dimension)
+
+		# - Paint
+		new_painter.begin(new_pixmap)
+		
+		# -- Background
+		new_painter.setBrush(QtGui.QBrush(QtGui.QColor(background)))
+		new_painter.drawRect(QtCore.QRectF(0, 0, draw_dimension, draw_dimension))
+		
+		# -- Foreground
+		new_painter.setBrush(QtGui.QBrush(QtGui.QColor(foreground)))
+		new_transform = new_shape.transform.translate(-shape_bbox.x(), -shape_bbox.y())
+		new_shape.applyTransform(new_transform)
+		new_shape.ensurePaths()
+		new_painter.drawPath(new_shape.closedPath)
+		new_icon.addPixmap(new_pixmap.transformed(QtGui.QTransform().scale(1, -1)))
+		return new_icon
 
 	def copy_contour(self):
 		# - Init
 		wGlyph = eGlyph()
 		wContours = wGlyph.contours()
 		wLayers = wGlyph._prepareLayers(pLayers)
-		self.contourClipboard = OrderedDict()
+		export_clipboard = OrderedDict()
 		
 		# - Build initial contour information
 		selectionTuples = wGlyph.selectedAtContours()
@@ -566,16 +611,35 @@ class copyContours(QtGui.QGridLayout):
 
 		# - Process
 		if len(selection.keys()):
+			# -- Add to gallery
+			draw_contours = [wGlyph.contours()[cid] for cid in selection.keys()]
+			draw_count = sum([contour.nodesCount for contour in draw_contours])
+			new_item = QtGui.QStandardItem('{} Nodes | Source: {}'.format(draw_count, wGlyph.name))
+			
+			if len(wLayers) == len(wGlyph.masters()):
+				conditional_color = 'green'
+			elif len(wLayers) == 1:
+				conditional_color = 'red'
+			else:
+				conditional_color = 'blue'
+
+			new_icon = self.__drawIcon(draw_contours, conditional_color)
+			new_item.setIcon(new_icon)
+			new_item.setSelectable(True)
+			self.mod_contours.appendRow(new_item)
+
+			# -- Add to clipboard
 			for layer_name in wLayers:
 				wLayer = layer_name
-				self.contourClipboard[wLayer] = []
+				export_clipboard[wLayer] = []
 
 				for cid, nList in selection.iteritems():
 					if len(nList):
-						 self.contourClipboard[wLayer].append(fl6.flContour([wGlyph.nodes(wLayer)[nid].clone() for nid in nList]))
+						 export_clipboard[wLayer].append(fl6.flContour([wGlyph.nodes(wLayer)[nid].clone() for nid in nList]))
 					else:
-						self.contourClipboard[wLayer].append(wGlyph.contours(wLayer)[cid].clone())
+						export_clipboard[wLayer].append(wGlyph.contours(wLayer)[cid].clone())
 
+			self.contourClipboard.append(export_clipboard)
 			output(0, app_name, 'Copy contours; Glyph: %s; Layers: %s.' %(wGlyph.name, '; '.join(wLayers)))
 		
 	def paste_contour(self):
@@ -583,6 +647,7 @@ class copyContours(QtGui.QGridLayout):
 		wGlyph = eGlyph()
 		wContours = wGlyph.contours()
 		wLayers = wGlyph._prepareLayers(pLayers)
+		gallery_selection = [qidx.row() for qidx in self.lst_contours.selectedIndexes()]
 
 		# - Helper
 		def add_new_shape(layer, contours):
@@ -591,33 +656,36 @@ class copyContours(QtGui.QGridLayout):
 			layer.addShape(newShape)
 
 		# - Process
-		if len(self.contourClipboard.keys()):
-			for layerName, contours in self.contourClipboard.iteritems():
-				wLayer = wGlyph.layer(layerName)
-				
-				if wLayer is not None:	
-					# - Process transform
-					tranformed_contours = []
+		if len(self.contourClipboard) and len(gallery_selection):
+			for idx in gallery_selection:
+				paste_data = self.contourClipboard[idx]
 
-					for contour in contours:
-						# -- Get transformation data
-						wBBox = QtCore.QRectF(*contour.bounds)
-						new_transform, org_transform, rev_transform = self.tr_trans_ctrl.getTransform(wBBox)
-						
-						# - Transform contours
-						new_contour = contour.clone()
-						new_contour.transform = org_transform
-						new_contour.applyTransform()
-						new_contour.transform = new_transform
-						new_contour.applyTransform()
-						new_contour.transform = rev_transform
-						new_contour.applyTransform()
-						
-						tranformed_contours.append(new_contour)
+				for layerName, contours in paste_data.iteritems():
+					wLayer = wGlyph.layer(layerName)
+					
+					if wLayer is not None:	
+						# - Process transform
+						tranformed_contours = []
 
-					# - Insert contours into currently selected shape
-					selected_shape = wGlyph.shapes(layerName)[0]
-					selected_shape.addContours(tranformed_contours, True)
+						for contour in contours:
+							# -- Get transformation data
+							wBBox = QtCore.QRectF(*contour.bounds)
+							new_transform, org_transform, rev_transform = self.tr_trans_ctrl.getTransform(wBBox)
+							
+							# - Transform contours
+							new_contour = contour.clone()
+							new_contour.transform = org_transform
+							new_contour.applyTransform()
+							new_contour.transform = new_transform
+							new_contour.applyTransform()
+							new_contour.transform = rev_transform
+							new_contour.applyTransform()
+							
+							tranformed_contours.append(new_contour)
+
+						# - Insert contours into currently selected shape
+						selected_shape = wGlyph.shapes(layerName)[0]
+						selected_shape.addContours(tranformed_contours, True)
 					
 		
 			wGlyph.updateObject(wGlyph.fl, 'Paste contours; Glyph: %s; Layers: %s' %(wGlyph.name, '; '.join(wLayers)))
@@ -638,7 +706,7 @@ class tool_tab(QtGui.QWidget):
 
 		layoutV.addWidget(QtGui.QLabel('Contour: Align '))
 		layoutV.addLayout(alignContours())
-		layoutV.addWidget(QtGui.QLabel('Contour: Copy '))
+		layoutV.addWidget(QtGui.QLabel('Contour Clipboard: Copy and Paste (+ transformation)'))
 		layoutV.addLayout(copyContours())
 
 		# - Build ---------------------------
