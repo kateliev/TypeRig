@@ -21,7 +21,7 @@ from typerig.proxy.tr.objects.contour import trContour
 from typerig.core.objects.shape import Shape
 
 # - Init --------------------------------
-__version__ = '0.0.4'
+__version__ = '0.0.5'
 
 # - Classes -----------------------------
 class trShape(Shape):
@@ -37,14 +37,23 @@ class trShape(Shape):
 	__slots__ = ('host', 'name', 'transform', 'identifier', 'parent', 'lib')
 	__meta__ = {'name':'name'}
 
-	# - Connect to host dynamically	
-	for src, dst in __meta__.items():
-		exec("{0} = property(lambda self: self.host.__getattribute__('{1}'), lambda self, value: self.host.__setattr__('{1}', value))".format(src, dst))
-		
-	# - Initialize 
+	# - Initialize ------------------------------
 	def __init__(self, shape, **kwargs):
 		self.host = shape
 		super(trShape, self).__init__(self.host.contours, default_factory=trContour, proxy=True, **kwargs)
+
+	# - Internals ------------------------------
+	def __getattribute__(self, name):
+		if name in trShape.__meta__.keys():
+			return self.host.__getattribute__(trShape.__meta__[name])
+		else:
+			return Shape.__getattribute__(self, name)
+
+	def __setattr__(self, name, value):
+		if name in trShape.__meta__.keys():
+			self.host.__setattr__(trShape.__meta__[name], value)
+		else:
+			Shape.__setattr__(self, name, value)
 
 	# - Functions -------------------------------
 	def insert(self, i, item):

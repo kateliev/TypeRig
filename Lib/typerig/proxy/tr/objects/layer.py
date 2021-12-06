@@ -20,7 +20,7 @@ from typerig.proxy.tr.objects.shape import trShape
 from typerig.core.objects.layer import Layer
 
 # - Init --------------------------------
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 
 # - Classes -----------------------------
 class trLayer(Layer):
@@ -35,12 +35,21 @@ class trLayer(Layer):
 	# - Metadata and proxy model
 	__slots__ = ('name', 'transform', 'identifier', 'parent')
 	__meta__ = {'name':'name'}
-
-	# - Connect to host dynamically	
-	for src, dst in __meta__.items():
-		exec("{1} = property(lambda self: self.host.__getattribute__('{0}'), lambda self, value: self.host.__setattr__('{1}', value))".format(src, dst))
 		
 	# - Initialize 
 	def __init__(self, layer, **kwargs):
 		self.host = layer
 		super(trLayer, self).__init__(self.host.shapes, default_factory=trShape, proxy=True, **kwargs)
+
+	# - Internals ------------------------------
+	def __getattribute__(self, name):
+		if name in trLayer.__meta__.keys():
+			return self.host.__getattribute__(trLayer.__meta__[name])
+		else:
+			return Layer.__getattribute__(self, name)
+
+	def __setattr__(self, name, value):
+		if name in trLayer.__meta__.keys():
+			self.host.__setattr__(trLayer.__meta__[name], value)
+		else:
+			Layer.__setattr__(self, name, value)

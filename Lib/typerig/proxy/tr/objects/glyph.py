@@ -20,7 +20,7 @@ from typerig.proxy.tr.objects.layer import trLayer
 from typerig.core.objects.glyph import Glyph
 
 # - Init --------------------------------
-__version__ = '0.0.4'
+__version__ = '0.0.5'
 
 # - Classes -----------------------------
 class trGlyph(Glyph):
@@ -35,10 +35,6 @@ class trGlyph(Glyph):
 	# - Metadata and proxy model
 	__slots__ = ('name', 'unicodes', 'identifier', 'parent')
 	__meta__ = {'name':'name'}
-
-	# - Connect to host dynamically	
-	for src, dst in __meta__.items():
-		exec("{0} = property(lambda self: self.host.__getattribute__('{1}'), lambda self, value: self.host.__setattr__('{1}', value))".format(src, dst))
 		
 	# -- Some hardcoded properties
 	active_layer = property(lambda self: self.host.activeLayer.name)
@@ -62,6 +58,19 @@ class trGlyph(Glyph):
 			self.host = fl6.flGlyph(glyph, font)
 
 		super(trGlyph, self).__init__(self.host.layers, default_factory=trLayer, proxy=True, **kwargs)
+
+	# - Internals ------------------------------
+	def __getattribute__(self, name):
+		if name in trGlyph.__meta__.keys():
+			return self.host.__getattribute__(trGlyph.__meta__[name])
+		else:
+			return Glyph.__getattribute__(self, name)
+
+	def __setattr__(self, name, value):
+		if name in trGlyph.__meta__.keys():
+			self.host.__setattr__(trGlyph.__meta__[name], value)
+		else:
+			Glyph.__setattr__(self, name, value)
 	
 	# - Properties --------------------------
 	@property

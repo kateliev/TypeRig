@@ -19,7 +19,7 @@ from typerig.proxy.tr.objects.node import trNode
 from typerig.core.objects.contour import Contour
 
 # - Init --------------------------------
-__version__ = '0.0.7'
+__version__ = '0.0.9'
 
 # - Classes -----------------------------
 class trContour(Contour):
@@ -35,10 +35,6 @@ class trContour(Contour):
 	__slots__ = ('host', 'name', 'closed', 'clockwise', 'transform', 'parent', 'lib')
 	__meta__ = {'closed':'closed', 'clockwise':'clockwise', 'name':'name'}
 
-	# - Connect to host dynamically	
-	for src, dst in __meta__.items():
-		exec("{0} = property(lambda self: self.host.__getattribute__('{1}'), lambda self, value: self.host.__setattr__('{1}', value))".format(src, dst))
-		
 	# - Initialize -----------------------------
 	def __init__(self, contour, **kwargs):
 		self.host = contour
@@ -59,6 +55,21 @@ class trContour(Contour):
 
 			self.data.insert(i, item)
 			self.host.insert(i, item.host)
+
+	# - Internals ------------------------------
+	def __getattribute__(self, name):
+		if name in trContour.__meta__.keys():
+			return self.host.__getattribute__(trContour.__meta__[name])
+		else:
+			return Contour.__getattribute__(self, name)
+
+	def __setattr__(self, name, value):
+		if name in trContour.__meta__.keys():
+			self.host.__setattr__(trContour.__meta__[name], value)
+		else:
+			Contour.__setattr__(self, name, value)
+
+	# - Basics ---------------------------------
 
 	def reverse(self):
 		self.host.reverse()
