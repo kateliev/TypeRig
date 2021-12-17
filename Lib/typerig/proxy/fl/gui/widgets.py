@@ -22,7 +22,7 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.2.6'
+__version__ = '0.2.7'
 
 # -- Colors ------------------------------
 # Fontlab Name, Fontlab Value, QtColor Name
@@ -410,8 +410,8 @@ class TRTransformCtrl(QtGui.QWidget):
 		self.spb_shear = QtGui.QSpinBox()
 		self.spb_rotate = QtGui.QSpinBox()
 
-		self.spb_scale_x.setMinimum(0)
-		self.spb_scale_y.setMinimum(0)
+		self.spb_scale_x.setMinimum(-999)
+		self.spb_scale_y.setMinimum(-999)
 		self.spb_translate_x.setMinimum(-9999)
 		self.spb_translate_y.setMinimum(-9999)
 		self.spb_shear.setMinimum(-90)

@@ -31,7 +31,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '1.8'
+app_name, app_version = 'TypeRig | Contour', '2.0'
 
 # - Sub widgets ------------------------
 class breakContour(QtGui.QGridLayout):
@@ -559,8 +559,7 @@ class copyContours(QtGui.QGridLayout):
 		self.addWidget(self.btn_paste_contour,		0, 4, 1, 4)
 		self.addWidget(self.lst_contours,			1, 0, 10, 8)
 		self.addWidget(self.btn_clear,				11, 0, 1, 8)
-		self.addWidget(self.tr_trans_ctrl, 			12, 0, 2, 8)
-		
+
 		self.tr_trans_ctrl.lay_controls.setMargin(0)
 
 	def __reset(self):
@@ -665,30 +664,79 @@ class copyContours(QtGui.QGridLayout):
 					
 					if wLayer is not None:	
 						# - Process transform
-						tranformed_contours = []
-
-						for contour in contours:
-							# -- Get transformation data
-							wBBox = QtCore.QRectF(*contour.bounds)
-							new_transform, org_transform, rev_transform = self.tr_trans_ctrl.getTransform(wBBox)
-							
-							# - Transform contours
-							new_contour = contour.clone()
-							new_contour.transform = org_transform
-							new_contour.applyTransform()
-							new_contour.transform = new_transform
-							new_contour.applyTransform()
-							new_contour.transform = rev_transform
-							new_contour.applyTransform()
-							
-							tranformed_contours.append(new_contour)
+						cloned_contours = [contour.clone() for contour in contours]
 
 						# - Insert contours into currently selected shape
-						selected_shape = wGlyph.shapes(layerName)[0]
-						selected_shape.addContours(tranformed_contours, True)
+						try:
+							selected_shape = wGlyph.shapes(layerName)[0]
+						
+						except IndexError:
+							selected_shape = fl6.flShape()
+							wLayer.addShape(selected_shape)
+
+						selected_shape.addContours(cloned_contours, True)
 					
 		
 			wGlyph.updateObject(wGlyph.fl, 'Paste contours; Glyph: %s; Layers: %s' %(wGlyph.name, '; '.join(wLayers)))
+
+class transformContours(QtGui.QGridLayout):
+	# - Align Contours
+	def __init__(self):
+		super(transformContours, self).__init__()
+
+		# - Init
+		# -- Custom controls
+		self.tr_trans_ctrl = TRTransformCtrl()
+
+		# -- Quick Tool buttons
+		self.btn_transform_contour = QtGui.QPushButton('Transform')
+		self.btn_transform_contour.clicked.connect(self.transform_contour)
+				
+		self.addWidget(self.tr_trans_ctrl, 			0, 0, 2, 8)
+		self.addWidget(self.btn_transform_contour,	3, 0, 1, 8)
+		
+		self.tr_trans_ctrl.lay_controls.setMargin(0)
+
+	def transform_contour(self):
+		# - Init
+		wGlyph = eGlyph()
+		wContours = wGlyph.contours()
+		wLayers = wGlyph._prepareLayers(pLayers)
+		export_clipboard = OrderedDict()
+		
+		# - Build initial contour information
+		selectionTuples = wGlyph.selectedAtContours()
+		selection = [cid for cid, nodes in groupby(selectionTuples, lambda x:x[0])]
+
+		# - Process
+		if len(selection):
+			for layer_name in wLayers:
+				# - Init
+				wContours = wGlyph.contours(layer_name)
+
+				# - Get Bounding box
+				temp_shape = fl6.flShape()
+				temp_contours = [wContours[cid].clone() for cid in selection]
+				temp_shape.addContours(temp_contours, True)
+
+				wBBox = temp_shape.boundingBox
+
+				# - Set transformation
+				new_transform, org_transform, rev_transform = self.tr_trans_ctrl.getTransform(wBBox)
+				
+				# - Transform contours
+				for cid in selection:
+					wContour = wContours[cid]
+					wContour.transform = org_transform
+					wContour.applyTransform()
+					wContour.transform = new_transform
+					wContour.applyTransform()
+					wContour.transform = rev_transform
+					wContour.applyTransform()
+					wContour.update()
+			
+			# - Done
+			wGlyph.updateObject(wGlyph.fl, 'Transform contours; Glyph: %s; Layers: %s' %(wGlyph.name, '; '.join(wLayers)))
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
@@ -698,15 +746,17 @@ class tool_tab(QtGui.QWidget):
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
 		
-		layoutV.addWidget(QtGui.QLabel('Contour: Basic Operations'))
+		layoutV.addWidget(QtGui.QLabel('Basic Operations:'))
 		layoutV.addLayout(basicContour())
 
 		#layoutV.addWidget(QtGui.QLabel('Break/Knot Contour'))
 		#layoutV.addLayout(breakContour())
 
-		layoutV.addWidget(QtGui.QLabel('Contour: Align '))
+		layoutV.addWidget(QtGui.QLabel('Align:'))
 		layoutV.addLayout(alignContours())
-		layoutV.addWidget(QtGui.QLabel('Contour Clipboard: Copy and Paste (+ transformation)'))
+		layoutV.addWidget(QtGui.QLabel('Transform:'))
+		layoutV.addLayout(transformContours())
+		layoutV.addWidget(QtGui.QLabel('Clipboard:'))
 		layoutV.addLayout(copyContours())
 
 		# - Build ---------------------------
