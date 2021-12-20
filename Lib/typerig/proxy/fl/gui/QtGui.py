@@ -9,7 +9,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.5'
+__version__ = '0.0.6'
 
 # - Dependancies -----------------------
 import fontlab as fl6
@@ -104,6 +104,18 @@ def uiRefresh(widget):
 					border-width: 1px;
 					min-height: 14px;
 				}
+
+				QPushButton:pressed { 
+					background-color: #1389ec;
+					border-color: #90ceff;
+					color: white;
+				}
+
+				QPushButton:checked{
+					background-color: #1389ec;
+					border-color: #1389ec;
+					color: white;
+                }
 				
 			''' % {'fontSize': fontSize, 'fontWidgets': fontWidgets}
 
