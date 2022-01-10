@@ -27,7 +27,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.29.0'
+__version__ = '0.29.1'
 
 # - Classes -----------------------------------------
 class pGlyph(object):
@@ -1830,6 +1830,12 @@ class eGlyph(pGlyph):
 		y_base_dict['C'] = bbox.height()/2 + bbox.y()			# Y: Center
 		y_base_dict['W'] = stat_pen.meanY						# Y: Center of mass
 		y_base_dict['S'] = old_y 								# Y: Shift 
+
+		# --- Metrics
+		x_base_dict['LSB'] = 0.									# X: Left Side Bearing
+		x_base_dict['RSB'] = self.getAdvance(layer)				# X: Right Side Bearing (Advance width)
+		x_base_dict['ADM'] = self.getAdvance(layer)/2			# X: Half of the Advance widht (Middle)
+
 
 		# -- Post calc
 		x_base = x_base_dict[alignX] if alignX is not None else 0.

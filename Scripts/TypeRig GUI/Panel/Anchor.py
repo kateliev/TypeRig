@@ -29,7 +29,7 @@ global clipboard_glyph_anchors
 pLayers = None
 pMode = 0
 clipboard_glyph_anchors = {}
-app_name, app_version = 'TypeRig | Anchors', '2.02'
+app_name, app_version = 'TypeRig | Anchors', '2.03'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):
@@ -175,9 +175,9 @@ class tool_tab(QtGui.QWidget):
 
 		self.types = 'Anchor PinPoint'.split(' ')
 		self.posY = 'Coord, Expression, Keep, Shift, Above, Below, Center, Baseline, Center of mass'.split(', ')
-		self.posX = 'Coord, Expression, Keep, Shift, Left, Right, Center, Highest, Highest Left, Highest Right, Lowest, Lowest Left, Lowest Right, Center of mass'.split(', ')
+		self.posX = 'Coord, Expression, Keep, Shift, Left, Right, Center, LSB, RSB, Advance middle, Highest, Highest Left, Highest Right, Lowest, Lowest Left, Lowest Right, Center of mass'.split(', ')
 		posYvals = (None, None, 'S', 'S', 'T', 'B', 'C', None, 'W')
-		posXvals = (None, None, 'S', 'S', 'L', 'R', 'C', 'AT', 'ATL', 'ATR', 'A', 'AL', 'AR', 'M')
+		posXvals = (None, None, 'S', 'S', 'L', 'R', 'C', 'LSB', 'RSB', 'ADM', 'AT', 'ATL', 'ATR', 'A', 'AL', 'AR', 'M')
 		self.posYctrl = dict(zip(self.posY, posYvals))
 		self.posXctrl = dict(zip(self.posX, posXvals))
 
