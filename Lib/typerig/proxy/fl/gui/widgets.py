@@ -11,8 +11,11 @@
 
 # - Dependencies --------------------------
 from __future__ import absolute_import
-from platform import system
+from collections import OrderedDict
 from math import radians
+from platform import system
+
+import fontlab as fl6
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
@@ -22,7 +25,7 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.2.7'
+__version__ = '0.2.8'
 
 # -- Colors ------------------------------
 # Fontlab Name, Fontlab Value, QtColor Name
@@ -353,7 +356,121 @@ class TRColorDLG(QtGui.QDialog):
 		selection_name = self.color_codes[self.cmb_select_color.currentText]
 		self.values = (selection_name,  QtGui.QColor(selection_name))
 
-# - Line Edit ----------------------------
+class TRLayerSelectDLG(QtGui.QDialog):
+	def __init__(self, parent, mode):
+		super(TRLayerSelectDLG, self).__init__()
+	
+		# - Init
+		self.parent_widget = parent
+		self.column_names = ('Layer Name', 'Layer Type')
+		self.color_dict = {'Master': QtGui.QColor(0, 255, 0, 20), 'Service': QtGui.QColor(0, 0, 255, 20), 'Mask': QtGui.QColor(255, 0, 0, 20)}
+		column_init = (None, None)
+		table_dict = {1:OrderedDict(zip(self.column_names, column_init))}
+		
+		# - Basic Widgets
+		self.tab_masters = TRCheckTableView(table_dict)
+		self.table_populate(mode)
+		self.tab_masters.cellChanged.connect(lambda: self.parent_widget.layers_refresh())
+		
+		# - Search Box
+		self.edt_search_field = QtGui.QLineEdit()
+		self.edt_search_field.setPlaceholderText('Filter: Layer Name')
+		self.edt_search_field.textChanged.connect(self.table_filter)
+		self.btn_search_field = QtGui.QPushButton('Clear')
+		self.btn_search_field.clicked.connect(lambda: self.edt_search_field.setText(''))
+
+		# -- Layer Buttons
+		self.btn_tableCheck = QtGui.QPushButton('Select All')
+		self.btn_tableSwap = QtGui.QPushButton('Swap Selection')
+		self.btn_tableCheckMasters = QtGui.QPushButton('Masters')
+		self.btn_tableCheckMasks = QtGui.QPushButton('Masks')
+		self.btn_tableCheckServices = QtGui.QPushButton('Services')
+
+		self.btn_tableCheck.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
+		self.btn_tableCheckMasters.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
+		self.btn_tableCheckMasks.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
+		self.btn_tableCheckServices.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
+		
+		if mode !=0:
+			self.btn_tableCheckMasters.setEnabled(False)
+			self.btn_tableCheckMasks.setEnabled(False)
+			self.btn_tableCheckServices.setEnabled(False)
+		
+		self.btn_tableCheck.clicked.connect(lambda: self.table_check_all())
+		self.btn_tableSwap.clicked.connect(lambda: self.table_check_all(do_swap=True))
+		self.btn_tableCheckMasters.clicked.connect(lambda: self.table_check_all('Master'))
+		self.btn_tableCheckMasks.clicked.connect(lambda: self.table_check_all('Mask'))
+		self.btn_tableCheckServices.clicked.connect(lambda: self.table_check_all('Service'))
+
+		# - Build layout
+		layoutV = QtGui.QGridLayout() 
+		layoutV.addWidget(self.btn_tableCheck, 				0, 0, 1, 2)
+		layoutV.addWidget(self.btn_tableSwap, 				0, 2, 1, 2)
+		layoutV.addWidget(self.btn_tableCheckMasters, 		1, 0, 1, 2)
+		layoutV.addWidget(self.btn_tableCheckMasks, 		1, 2, 1, 1)
+		layoutV.addWidget(self.btn_tableCheckServices, 		1, 3, 1, 1)
+		layoutV.addWidget(self.edt_search_field,	 		2, 0, 1, 3)
+		layoutV.addWidget(self.btn_search_field, 			2, 3, 1, 1)
+		layoutV.addWidget(self.tab_masters, 				3, 0, 20, 4)
+
+		# - Set Widget
+		self.setLayout(layoutV)
+		self.setWindowTitle('Select Layers')
+		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
+		self.setGeometry(500, 200, 300, 600)
+
+	# - Table operations
+	def table_filter(self):
+		search_string = self.edt_search_field.text
+
+		for row in range(self.tab_masters.rowCount):
+			if len(search_string):
+				if search_string.lower() not in self.tab_masters.item(row, 0).text().lower():
+					self.tab_masters.hideRow(row)
+			else:
+				self.tab_masters.showRow(row)
+
+	def table_check_all(self, layer_type=None, do_swap=False):
+		modifiers = QtGui.QApplication.keyboardModifiers() # Listen to Shift - reverses the ratio
+
+		for row in range(self.tab_masters.rowCount):
+			if modifiers == QtCore.Qt.AltModifier or do_swap: # Toggle state
+				if self.tab_masters.item(row, 0).checkState() == QtCore.Qt.Checked:
+					self.tab_masters.item(row, 0).setCheckState(QtCore.Qt.Unchecked)
+				else:
+					self.tab_masters.item(row, 0).setCheckState(QtCore.Qt.Checked)		
+
+			elif modifiers == QtCore.Qt.ShiftModifier: # Uncheck all
+				if not self.tab_masters.isRowHidden(row):
+					self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Unchecked)								
+
+			else: # Check all
+				if layer_type is None or self.tab_masters.item(row,1).text() == layer_type:
+					if not self.tab_masters.isRowHidden(row):
+						self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Checked)
+	
+	def table_populate(self, mode):
+		# - Helper	
+		def check_type(layer):
+			if layer.isMaskLayer: return 'Mask'
+			if layer.isMasterLayer: return 'Master'
+			if layer.isService: return 'Service'
+		
+		# - Set Table
+		if fl6.CurrentFont() is not None and fl6.CurrentGlyph() is not None:
+			active_font = pFont()
+			active_glyph = eGlyph()
+
+			if mode == 0:
+				init_data = [(layer.name, check_type(layer)) for layer in active_glyph.layers() if '#' not in layer.name]
+			else:
+				init_data = [(master, 'Master') for master in active_font.pMasters.names]
+		 	
+		 	table_dict = {n:OrderedDict(zip(self.column_names, data)) for n, data in enumerate(init_data)}
+			self.tab_masters.clear()
+			self.tab_masters.setTable(table_dict, color_dict=self.color_dict, enable_check=True)	
+
+# - Line Edit -----------------------------------------------------
 class TRGLineEdit(QtGui.QLineEdit):
 	# - Custom QLine Edit extending the contextual menu with FL6 metric expressions
 	def __init__(self, *args, **kwargs):
@@ -389,7 +506,7 @@ class TRGLineEdit(QtGui.QLineEdit):
 		menu.addAction(u'.tnum', lambda: self.setText('%s.tnum' %self.text))
 		menu.addAction(u'.bak', lambda: self.setText('%s.bak' %self.text))
 
-# -- Transform Controls ------------------
+# -- Transform Controls -----------------------------------------------
 class TRTransformCtrl(QtGui.QWidget):
 	def __init__(self):
 		super(TRTransformCtrl, self).__init__()
@@ -487,7 +604,7 @@ class TRTransformCtrl(QtGui.QWidget):
 
 		return return_transform, origin_transform, rev_origin_transform
 
-# -- Sliders ------------------------------
+# -- Sliders --------------------------------------------------------------
 class TRSliderCtrl(QtGui.QGridLayout):
 	def __init__(self, edt_0, edt_1, edt_pos, spb_step):
 		super(TRSliderCtrl, self).__init__()
@@ -608,8 +725,78 @@ class TRTableView(QtGui.QTableWidget):
 	def markChange(self, item):
 		item.setBackground(self.flag_valueChanged)
 
+class TRCheckTableView(QtGui.QTableWidget):
+	def __init__(self, data):
+		super(TRCheckTableView, self).__init__()
+		
+		# - Init
+		self.setColumnCount(max(map(len, data.values())))
+		self.setRowCount(len(data.keys()))
+	
+		# - Set 
+		self.setTable(data)		
+	
+		# - Styling
+		#self.setSortingEnabled(True)
+		self.horizontalHeader().setStretchLastSection(True)
+		self.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
+		self.setAlternatingRowColors(True)
+		self.setShowGrid(True)
+		self.resizeColumnsToContents()
+		self.resizeRowsToContents()
 
-# - Folder/collapsible widgets
+	def setTable(self, data, color_dict=None, enable_check=False):
+		self.clear()
+		self.setSortingEnabled(False)
+		self.blockSignals(True)
+		self.model().sort(-1)
+		self.horizontalHeader().setSortIndicator(-1, 0)
+
+		name_row, name_column = [], []
+
+		self.setColumnCount(max(map(len, data.values())))
+		self.setRowCount(len(data.keys()))
+
+		# - Populate
+		for n, layer in enumerate(data.keys()):
+			name_row.append(layer)
+
+			for m, key in enumerate(data[layer].keys()):
+				
+				# -- Build name column
+				name_column.append(key)
+				
+				# -- Selectively add data
+				newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
+				
+				if m == 0 and enable_check:
+					newitem.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+					newitem.setCheckState(QtCore.Qt.Unchecked)
+				
+				if color_dict is not None:
+					try:
+						newitem.setBackground(color_dict[data[layer]['Layer Type']])
+					except KeyError:
+						pass
+				
+
+				self.setItem(n, m, newitem)
+
+		self.setHorizontalHeaderLabels(name_column)
+		self.setVerticalHeaderLabels(name_row)
+		self.resizeColumnsToContents()
+
+		self.blockSignals(False)
+		self.setSortingEnabled(True)
+
+		self.horizontalHeader().setSectionResizeMode(0, QtGui.QHeaderView.Stretch)
+		self.horizontalHeader().setSectionResizeMode(1, QtGui.QHeaderView.ResizeToContents)
+
+	def getTable(self):
+		return [self.item(row, 0).text() for row in range(self.rowCount) if self.item(row, 0).checkState() == QtCore.Qt.Checked]
+
+
+# - Folder/collapsible widgets ---------------------------------------
 class TRCollapsibleBox(QtGui.QWidget):
 	def __init__(self, title="", parent=None):
 		super(TRCollapsibleBox, self).__init__(parent)
@@ -618,7 +805,7 @@ class TRCollapsibleBox(QtGui.QWidget):
 		self.toggle_button.text = '  ' + title
 		self.toggle_button.checkable = True
 		self.toggle_button.checked = True
-		self.toggle_button.setStyleSheet("QToolButton { border: none; font-weight: bold; color: #505050; vertical-align: middle }")
+		self.toggle_button.setStyleSheet("QToolButton { border: none; font-weight: bold; vertical-align: middle }")
 		self.toggle_button.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
 		self.toggle_button.setArrowType(QtCore.Qt.RightArrow)
 		self.toggle_button.setIconSize(QtCore.QSize(5,5))

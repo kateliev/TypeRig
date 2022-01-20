@@ -9,7 +9,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.6'
+__version__ = '0.0.7'
 
 # - Dependancies -----------------------
 import fontlab as fl6
@@ -66,6 +66,7 @@ def uiRefresh(widget):
 				%(fontWidgets)s { 
 					font-size: %(fontSize)spx;
 				}
+
 				QPushButton { 
 					padding: 2px 8px 2px 8px; 
 					margin: 3px 2px 3px 2px;
@@ -75,10 +76,21 @@ def uiRefresh(widget):
 					border-width: 1px;
 					background-color: white;
 				}
+
 				QPushButton:pressed { 
 					color: white;
 					background-color: #1c76ff;
 				}
+
+				QToolButton {
+					border: none;
+					font-weight: bold;
+					vertical-align: middle
+					padding: 2px 3px 2px 3px; 
+					margin: 2px 1px 2px 1px;
+					min-height: 14px;
+				}
+
 			''' % {'fontSize': fontSize, 'fontWidgets': fontWidgets}
 		
 		else:
@@ -95,6 +107,7 @@ def uiRefresh(widget):
 				%(fontWidgets)s { 
 					font-size: %(fontSize)spx;
 				}
+
 				QPushButton { 
 					padding: 2px 3px 2px 3px; 
 					margin: 2px 1px 2px 1px;
@@ -115,7 +128,16 @@ def uiRefresh(widget):
 					background-color: #1389ec;
 					border-color: #1389ec;
 					color: white;
-                }
+				}
+
+				QToolButton {
+					border: none;
+					font-weight: bold;
+					vertical-align: middle
+					padding: 2px 3px 2px 3px; 
+					margin: 2px 1px 2px 1px;
+					min-height: 14px;
+				}
 				
 			''' % {'fontSize': fontSize, 'fontWidgets': fontWidgets}
 

@@ -19,7 +19,8 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import pGlyph
 
 from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRVTabWidget
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRVTabWidget, TRLayerSelectDLG, TRCheckTableView
+
 
 # -- Internals - Load tool panels 
 import Panel 
@@ -33,180 +34,20 @@ ignorePanel = '__'
 pMode = 0
 pLayers = (True, False, False, False)
 
-# -- Inital config for Get Layers dialog
-column_names = ('Layer Name', 'Layer Type')
-column_init = (None, None)
-table_dict = {1:OrderedDict(zip(column_names, column_init))}
-color_dict = {'Master': QtGui.QColor(0, 255, 0, 20), 'Service': QtGui.QColor(0, 0, 255, 20), 'Mask': QtGui.QColor(255, 0, 0, 20)}
-
 # - Style -------------------------
 ss_Toolbox_none = """/* EMPTY STYLESHEET */ """
 
-# - Interface -----------------------------
-# - Widgets --------------------------------
-class TRTableView(QtGui.QTableWidget):
-	def __init__(self, data):
-		super(TRTableView, self).__init__()
-		
-		# - Init
-		self.setColumnCount(max(map(len, data.values())))
-		self.setRowCount(len(data.keys()))
-	
-		# - Set 
-		self.setTable(data)		
-	
-		# - Styling
-		#self.setSortingEnabled(True)
-		self.horizontalHeader().setStretchLastSection(True)
-		self.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
-		self.setAlternatingRowColors(True)
-		self.setShowGrid(True)
-		self.resizeColumnsToContents()
-		self.resizeRowsToContents()
-
-	def setTable(self, data, color_dict=None, enable_check=False):
-		self.clear()
-		self.setSortingEnabled(False)
-		self.blockSignals(True)
-		self.model().sort(-1)
-		self.horizontalHeader().setSortIndicator(-1, 0)
-
-		name_row, name_column = [], []
-
-		self.setColumnCount(max(map(len, data.values())))
-		self.setRowCount(len(data.keys()))
-
-		# - Populate
-		for n, layer in enumerate(data.keys()):
-			name_row.append(layer)
-
-			for m, key in enumerate(data[layer].keys()):
-				
-				# -- Build name column
-				name_column.append(key)
-				
-				# -- Selectively add data
-				newitem = QtGui.QTableWidgetItem(str(data[layer][key]))
-				
-				if m == 0 and enable_check:
-					newitem.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
-					newitem.setCheckState(QtCore.Qt.Unchecked)
-				
-				if color_dict is not None:
-					try:
-						newitem.setBackground(color_dict[data[layer]['Layer Type']])
-					except KeyError:
-						pass
-				
-
-				self.setItem(n, m, newitem)
-
-		self.setHorizontalHeaderLabels(name_column)
-		self.setVerticalHeaderLabels(name_row)
-		self.resizeColumnsToContents()
-
-		self.blockSignals(False)
-		self.setSortingEnabled(True)
-
-		self.horizontalHeader().setSectionResizeMode(0, QtGui.QHeaderView.Stretch)
-		self.horizontalHeader().setSectionResizeMode(1, QtGui.QHeaderView.ResizeToContents)
-
-	def getTable(self):
-		return [self.item(row, 0).text() for row in range(self.rowCount) if self.item(row, 0).checkState() == QtCore.Qt.Checked]
-
-# - Dialogs --------------------------------
-class dlg_LayerSelect(QtGui.QDialog):
-	def __init__(self, parent, mode):
-		super(dlg_LayerSelect, self).__init__()
-	
-		# - Init
-		self.parent_widget = parent
-		
-		# - Basic Widgets
-		self.tab_masters = TRTableView(table_dict)
-		self.table_populate(mode)
-		self.tab_masters.cellChanged.connect(lambda: self.parent_widget.layers_refresh())
-
-		# -- Buttons
-		self.btn_tableCheck = QtGui.QPushButton('Refresh')
-		self.btn_tableCheckMasters = QtGui.QPushButton('Masters')
-		self.btn_tableCheckMasks = QtGui.QPushButton('Masks')
-		self.btn_tableCheckServices = QtGui.QPushButton('Services')
-		self.btn_tableRefresh = QtGui.QPushButton('Refresh')
-
-		self.btn_tableCheck.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
-		self.btn_tableCheckMasters.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
-		self.btn_tableCheckMasks.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
-		self.btn_tableCheckServices.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
-		
-		if mode !=0:
-			self.btn_tableCheckMasters.setEnabled(False)
-			self.btn_tableCheckMasks.setEnabled(False)
-			self.btn_tableCheckServices.setEnabled(False)
-		
-		#self.btn_tableCheck.clicked.connect(lambda: self.table_check_all())
-		self.btn_tableCheckMasters.clicked.connect(lambda: self.table_check_all('Master'))
-		self.btn_tableCheckMasks.clicked.connect(lambda: self.table_check_all('Mask'))
-		self.btn_tableCheckServices.clicked.connect(lambda: self.table_check_all('Service'))
-		self.btn_tableCheck.clicked.connect(lambda: self.table_populate(0))
-
-		# - Build layout
-		layoutV = QtGui.QGridLayout() 
-		layoutV.addWidget(self.btn_tableCheck, 				0, 0, 1, 2)
-		layoutV.addWidget(self.btn_tableCheckMasters, 		0, 2, 1, 2)
-		layoutV.addWidget(self.btn_tableCheckMasks, 		1, 0, 1, 2)
-		layoutV.addWidget(self.btn_tableCheckServices, 		1, 2, 1, 2)
-		layoutV.addWidget(self.tab_masters, 				2, 0, 20, 4)
-		
-		# - Set Widget
-		self.setLayout(layoutV)
-		self.setWindowTitle('%s %s | Select Layers' %(app_name, app_version))
-		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
-		self.setGeometry(500, 200, 300, 600)
-		#self.show()
-
-	# - Table operations
-	def table_check_all(self, layer_type=None):
-		modifiers = QtGui.QApplication.keyboardModifiers() 
-
-		for row in range(self.tab_masters.rowCount):
-			if modifiers == QtCore.Qt.AltModifier:
-				self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Unchecked)								
-			else:
-				if layer_type is None or self.tab_masters.item(row,1).text() == layer_type:
-					self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Checked)
-	
-	def table_populate(self, mode):
-		
-		def check_type(layer):
-			if layer.isMaskLayer: return 'Mask'
-			if layer.isMasterLayer: return 'Master'
-			if layer.isService: return 'Service'
-		
-		if fl6.CurrentFont() is not None and fl6.CurrentGlyph() is not None:
-			active_font = pFont()
-			active_glyph = pGlyph()
-
-			if mode == 0:
-				init_data = [(layer.name, check_type(layer)) for layer in active_glyph.layers() if '#' not in layer.name]
-			else:
-				init_data = [(master, 'Master') for master in active_font.pMasters.names]
-		 	
-		 	table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
-			self.tab_masters.clear()
-			self.tab_masters.setTable(table_dict, color_dict=color_dict, enable_check=True)	
-
 # -- Main Widget --------------------------
-class typerig_Panel(QtGui.QDialog):
+class TRMainPanel(QtGui.QDialog):
 	def __init__(self):
-		super(typerig_Panel, self).__init__()
+		super(TRMainPanel, self).__init__()
 
 		# - Init ----------------------------
 		#self.setStyleSheet(ss_Toolbox_none)
 		self.layers_selected = []
 		
 		# - Dialogs -------------------------
-		self.layer_dialog = dlg_LayerSelect(self, pMode)
+		self.layer_dialog = TRLayerSelectDLG(self, pMode)
 
 		# - Layers --------------------------
 		self.chk_ActiveLayer = QtGui.QCheckBox('Active')
@@ -269,7 +110,7 @@ class typerig_Panel(QtGui.QDialog):
 		panel_vers = {n:OrderedDict([	('Panel', toolName), ('Version', eval('Panel.%s.app_version' %toolName))])
 										for n, toolName in enumerate(Panel.modules)} 
 
-		self.options = TRTableView(panel_vers)
+		self.options = TRCheckTableView(panel_vers)
 		self.options.verticalHeader().hide()
 
 		# -- Dynamically load all tabs
@@ -386,5 +227,5 @@ class typerig_Panel(QtGui.QDialog):
 			self.flag_fold = False
 
 # - RUN ------------------------------
-dialog = typerig_Panel()
+dialog = TRMainPanel()
 
