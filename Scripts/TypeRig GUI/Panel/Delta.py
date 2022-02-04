@@ -492,7 +492,7 @@ class tool_tab(QtGui.QWidget):
 			self.mixer_dx.refreshSlider()
 			self.mixer_dy.refreshSlider()
 		
-		except ValueError, IndexError:
+		except (ValueError, IndexError):
 			warnings.warn('Invalid Axis/Target or Axis/Target not set!', TRDeltaAxisWarning)
 
 	def reset_axis(self):
