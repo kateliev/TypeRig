@@ -395,9 +395,9 @@ class alignContours(QtGui.QGridLayout):
 		self.cmb_align_x = QtGui.QComboBox()
 		self.cmb_align_y = QtGui.QComboBox()
 		self.cmb_align_mode = QtGui.QComboBox()
-		self.cmb_align_x.addItems(self.align_x.keys())
-		self.cmb_align_y.addItems(self.align_y.keys())
-		self.cmb_align_mode.addItems(self.align_mode.keys())
+		self.cmb_align_x.addItems(list(self.align_x.keys()))
+		self.cmb_align_y.addItems(list(self.align_y.keys()))
+		self.cmb_align_mode.addItems(list(self.align_mode.keys()))
 
 		self.cmb_align_x.setToolTip('Horizontal Alignment')
 		self.cmb_align_y.setToolTip('Vertical Alignment')
