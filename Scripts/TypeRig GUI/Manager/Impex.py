@@ -8,6 +8,7 @@
 # that you use it at your own risk!
 
 # - Init
+from __future__ import absolute_import
 global pLayers
 pLayers = None
 app_name, app_version = 'TypeRig | Import & Export', '0.5'
@@ -19,7 +20,7 @@ import fontgate as fgt
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 
-import ImpexActions
+from . import ImpexActions
 
 # - Configuration ------------------------------------------------------------
 file_formats = {'afm':'Adobe Font Metrics (*.afm)',

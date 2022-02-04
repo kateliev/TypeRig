@@ -92,14 +92,14 @@ class TRStringGen(QtGui.QGridLayout):
 		self.cmb_fillerRight = QtGui.QComboBox()
 		self.cmb_join = QtGui.QComboBox()
 
-		self.cmb_inputA.addItems(sorted(self.glyphNames.keys()))
-		self.cmb_inputB.addItems(sorted(self.glyphNames.keys()))
+		self.cmb_inputA.addItems(sorted(list(self.glyphNames.keys())))
+		self.cmb_inputB.addItems(sorted(list(self.glyphNames.keys())))
 
 		self.cmb_fillerPattern.setEditable(True)
 		self.cmb_fillerLeft.setEditable(True)
 		self.cmb_fillerRight.setEditable(True)
 
-		self.cmb_join.addItems(joinOpt.keys())
+		self.cmb_join.addItems(list(joinOpt.keys()))
 		self.cmb_fillerPattern.addItems(filler_patterns)
 
 		self.cmb_inputA.setToolTip('Glyph names list.')
@@ -212,8 +212,8 @@ class TRStringGen(QtGui.QGridLayout):
 		self.edt_inputB.clear()
 		self.cmb_inputA.clear()
 		self.cmb_inputB.clear()
-		self.cmb_inputA.addItems(sorted(self.glyphNames.keys()))
-		self.cmb_inputB.addItems(sorted(self.glyphNames.keys()))
+		self.cmb_inputA.addItems(sorted(list(self.glyphNames.keys())))
+		self.cmb_inputB.addItems(sorted(list(self.glyphNames.keys())))
 
 		self.edt_suffixA.clear()
 		self.edt_suffixB.clear()
@@ -222,7 +222,7 @@ class TRStringGen(QtGui.QGridLayout):
 		self.cmb_fillerPattern.addItems(filler_patterns)
 		self.edt_sep.setText(glyphSep)
 		self.cmb_join.clear()
-		self.cmb_join.addItems(joinOpt.keys())
+		self.cmb_join.addItems(list(joinOpt.keys()))
 
 	
 	def populate(self):
@@ -262,8 +262,8 @@ class TRStringGen(QtGui.QGridLayout):
 		# - Reset
 		self.cmb_inputA.clear()
 		self.cmb_inputB.clear()
-		self.cmb_inputA.addItems(sorted(self.glyphNames.keys()))
-		self.cmb_inputB.addItems(sorted(self.glyphNames.keys()))	
+		self.cmb_inputA.addItems(sorted(list(self.glyphNames.keys())))
+		self.cmb_inputB.addItems(sorted(list(self.glyphNames.keys())))	
 
 		output(0, app_name, 'Active font glyph names loaded into generator.')
 

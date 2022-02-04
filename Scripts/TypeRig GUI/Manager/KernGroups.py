@@ -8,6 +8,7 @@
 # that you use it at your own risk!
 
 # - Init
+from __future__ import print_function
 global pLayers
 pLayers = None
 app_name, app_version = 'TypeRig | Kern Classes', '3.6'
@@ -342,7 +343,7 @@ class WKernGroups(QtGui.QWidget):
 					currItem.setText(currItem.text().replace(find, replace))
 
 		self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
-		print 'DONE:\t Search and replace in class names.'
+		print('DONE:\t Search and replace in class names.')
 
 	def class_prefix(self):
 		prefix = QtGui.QInputDialog.getText(self, 'Add Prefix to Class names', 'Please enter prefix for all selected class names:', QtGui.QLineEdit.Normal, '_')
@@ -359,7 +360,7 @@ class WKernGroups(QtGui.QWidget):
 
 		self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
 		self.active_font.update()
-		print 'DONE:\t Adding prefix to %s classes!\t Layer: %s updated!' %(len(mod_keys), self.cmb_layer.currentText)
+		print('DONE:\t Adding prefix to %s classes!\t Layer: %s updated!' %(len(mod_keys), self.cmb_layer.currentText))
 
 	def class_del(self):
 		temp_data = self.tab_groupKern.getTable()
@@ -368,7 +369,7 @@ class WKernGroups(QtGui.QWidget):
 		for key in del_keys: temp_data.pop(key, None)
 			
 		self.update_data(temp_data, layerUpdate=True)
-		print 'DONE:\t Removed Classes: %s'  %(', '.join(del_keys))
+		print('DONE:\t Removed Classes: %s'  %(', '.join(del_keys)))
 
 	def class_copy(self):
 		prefix = QtGui.QInputDialog.getText(self, 'Duplicate classes', 'Please enter prefix for the new classes.', QtGui.QLineEdit.Normal, 'copy_')
@@ -379,7 +380,7 @@ class WKernGroups(QtGui.QWidget):
 
 			for key in dup_keys:
 				temp_data[prefix + key] = temp_data[key]
-				print 'DONE:\t Class: %s; Duplicated with prefix: %s.' %(key, prefix)
+				print('DONE:\t Class: %s; Duplicated with prefix: %s.' %(key, prefix))
 
 			self.update_data(temp_data, layerUpdate=True)
 
@@ -396,16 +397,16 @@ class WKernGroups(QtGui.QWidget):
 				if delete:
 					for key in merge_keys:
 						temp_data.pop(key, None)
-					print 'DONE:\t Removed Classes: %s; Merged to: %s.' %(', '.join(merge_keys), merge_name)
+					print('DONE:\t Removed Classes: %s; Merged to: %s.' %(', '.join(merge_keys), merge_name))
 				else:
-					print 'DONE:\t Classes: %s; Merged to: %s.' %(', '.join(merge_keys), merge_name)
+					print('DONE:\t Classes: %s; Merged to: %s.' %(', '.join(merge_keys), merge_name))
 
 				self.update_data(temp_data, layerUpdate=True)
 		
 	def set_type(self, typeStr):
 		for row, col in self.tab_groupKern.getSelection():
 			self.tab_groupKern.item(row, 1).setText(typeStr)
-			print 'DONE:\t Class: %s; Type set to: %s.' %(self.tab_groupKern.item(row, 0).text(), typeStr)
+			print('DONE:\t Class: %s; Type set to: %s.' %(self.tab_groupKern.item(row, 0).text(), typeStr))
 
 		self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
 
@@ -416,7 +417,7 @@ class WKernGroups(QtGui.QWidget):
 			
 			if self.tab_groupKern.item(row, 1).text() in replace_dict.keys():
 				self.tab_groupKern.item(row, 1).setText(replace_dict[self.tab_groupKern.item(row, 1).text()])
-				print 'DONE:\t Class: %s; Type set to: %s.' %(self.tab_groupKern.item(row, 0).text(), replace_dict[self.tab_groupKern.item(row, 1).text()])
+				print('DONE:\t Class: %s; Type set to: %s.' %(self.tab_groupKern.item(row, 0).text(), replace_dict[self.tab_groupKern.item(row, 1).text()]))
 
 		self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
 
@@ -430,7 +431,7 @@ class WKernGroups(QtGui.QWidget):
 			old_data = self.tab_groupKern.item(row, 2).text()
 			new_data = ' '.join(sorted(list(set(old_data.split()))))
 			self.tab_groupKern.item(row, 2).setText(new_data)
-			print 'DONE:\t Class: %s; Members cleanup.' %self.tab_groupKern.item(row, 0).text()
+			print('DONE:\t Class: %s; Members cleanup.' %self.tab_groupKern.item(row, 0).text())
 
 		self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
 
@@ -439,7 +440,7 @@ class WKernGroups(QtGui.QWidget):
 			old_data = self.tab_groupKern.item(row, 2).text()
 			new_data = ' '.join([item.split(alt_mark)[0] for item in old_data.split()])
 			self.tab_groupKern.item(row, 2).setText(new_data)
-			print 'DONE:\t Class: %s; All suffixes removed from members.' %self.tab_groupKern.item(row, 0).text()
+			print('DONE:\t Class: %s; All suffixes removed from members.' %self.tab_groupKern.item(row, 0).text())
 
 		self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
 
@@ -451,7 +452,7 @@ class WKernGroups(QtGui.QWidget):
 				old_data = self.tab_groupKern.item(row, 2).text()
 				new_data = ' '.join([item + suffix for item in old_data.split()])
 				self.tab_groupKern.item(row, 2).setText(new_data)
-				print 'DONE:\t Class: %s; New suffix (%s) added to members.' %(self.tab_groupKern.item(row, 0).text(), suffix)
+				print('DONE:\t Class: %s; New suffix (%s) added to members.' %(self.tab_groupKern.item(row, 0).text(), suffix))
 
 			self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
 
@@ -462,7 +463,7 @@ class WKernGroups(QtGui.QWidget):
 			old_data = self.tab_groupKern.item(row, 2).text()
 			new_data = old_data + ' ' + ' '.join(selection)
 			self.tab_groupKern.item(row, 2).setText(new_data)
-			print 'DONE:\t Class: %s; Added members: %s' %(self.tab_groupKern.item(row, 0).text(), ' '.join(selection))
+			print('DONE:\t Class: %s; Added members: %s' %(self.tab_groupKern.item(row, 0).text(), ' '.join(selection)))
 
 		self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
 
@@ -491,7 +492,7 @@ class WKernGroups(QtGui.QWidget):
 			self.tab_groupKern.item(row, 2).setText(' '.join(new_data))
 
 		self.update_data(self.tab_groupKern.getTable(), False, layerUpdate=True)
-		print 'DONE:\t Class: %s; Members change case.' %self.tab_groupKern.item(row, 0).text()
+		print('DONE:\t Class: %s; Members change case.' %self.tab_groupKern.item(row, 0).text())
 
 	# - Main Procedures --------------------------------------------
 	def update_data(self, source, updateTable=True, setNotes=False, layerUpdate=False):
@@ -507,10 +508,10 @@ class WKernGroups(QtGui.QWidget):
 				self.tab_groupKern.clear()
 				while self.tab_groupKern.rowCount > 0: self.tab_groupKern.removeRow(0)
 				self.tab_groupKern.setTable(self.kern_group_data[layer], setNotes)
-				print 'DONE:\t Updating classes table for master: %s' %layer
+				print('DONE:\t Updating classes table for master: %s' %layer)
 			
 			else:
-				print 'ERROR:\t Updating classes table for master: %s' %layer
+				print('ERROR:\t Updating classes table for master: %s' %layer)
 				msg = QtGui.QMessageBox(QtGui.QMessageBox.Warning, 'TypeRig: Warning', 'There is no kerning class information for current selected layer: %s.\n\n Do you want to add a new empty table into database for layer: %s?' %(layer, layer), QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel, self)
 
 				if msg.exec_() == 1024:
@@ -519,24 +520,24 @@ class WKernGroups(QtGui.QWidget):
 					self.tab_groupKern.clear()
 					while self.tab_groupKern.rowCount > 0: self.tab_groupKern.removeRow(0)
 					self.tab_groupKern.setTable(self.kern_group_data[layer], setNotes)
-					print 'DONE:\t Updating classes table for master: %s' %layer
+					print('DONE:\t Updating classes table for master: %s' %layer)
 
 	def apply_changes(self, writeToFont=True):
 		active_layer = self.cmb_layer.currentText
 		self.kern_group_data[active_layer] = self.tab_groupKern.getTable()
-		if not writeToFont: print 'DONE:\t Internal Database classes updated for layer: %s' %active_layer
+		if not writeToFont: print('DONE:\t Internal Database classes updated for layer: %s' %active_layer)
 		
 		if writeToFont:	
 			self.active_font.dict_to_kerning_groups(self.kern_group_data[active_layer], active_layer)
 			
-			print 'DONE:\t Font: %s - Kerning classes updated.' %self.active_font.name
-			print '\nPlease add a new empty class in FL Classes panel to preview changes!'
+			print('DONE:\t Font: %s - Kerning classes updated.' %self.active_font.name)
+			print('\nPlease add a new empty class in FL Classes panel to preview changes!')
 			self.active_font.update()
 
 	def reset_classes(self):
 		self.active_font.reset_kerning_groups(self.cmb_layer.currentText)
-		print 'DONE:\t Font: %s - Kerning classes removed.' %self.active_font.name
-		print '\nPlease add a new empty class in FL6 Classes panel to preview changes!'
+		print('DONE:\t Font: %s - Kerning classes removed.' %self.active_font.name)
+		print('\nPlease add a new empty class in FL6 Classes panel to preview changes!')
 
 	def file_save_groups(self, exportRaw=True):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
@@ -550,7 +551,7 @@ class WKernGroups(QtGui.QWidget):
 				if exportRaw:
 					json.dump(self.kern_group_data, exportFile)
 				
-				print 'SAVE:\t Font:%s; %s format Group Kerning classes saved to: %s.' %(self.active_font.name, ('FontLab','TypeRig')[exportRaw], fname)
+				print('SAVE:\t Font:%s; %s format Group Kerning classes saved to: %s.' %(self.active_font.name, ('FontLab','TypeRig')[exportRaw], fname))
 
 	def file_load_groups(self, importRaw=True):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
@@ -564,7 +565,7 @@ class WKernGroups(QtGui.QWidget):
 					imported_data = json_class_dumb_decoder(json.load(importFile))
 					
 				self.update_data(imported_data, setNotes=False)
-				print 'LOAD:\t Font:%s; %s Group Kerning classes loaded from: %s.' %(self.active_font.name, ('FontLab','TypeRig')[importRaw], fname)
+				print('LOAD:\t Font:%s; %s Group Kerning classes loaded from: %s.' %(self.active_font.name, ('FontLab','TypeRig')[importRaw], fname))
 
 	def from_font(self):
 		temp_dict = {}
@@ -598,13 +599,13 @@ class WKernGroups(QtGui.QWidget):
 						class_dict.setdefault(glyph.name.split(alt_mark)[0], set([glyph.name.split(alt_mark)[0]])).add(glyph.name)
 
 					if len(clear_comp) > 1:
-						print 'WARN:\t Glyph: %s; Multiple components: %s' %(glyph.name, clear_comp)
+						print('WARN:\t Glyph: %s; Multiple components: %s' %(glyph.name, clear_comp))
 		
 		for key, value in class_dict.iteritems():
 			temp_dict['%s_1' %key] = (sorted(value), 'KernLeft')
 			temp_dict['%s_2' %key] = (sorted(value), 'KernRight')
 
-			#print 'ADD:\t 1st and 2nd Classes: %s -> %s' %(key, ' '.join(sorted(value)))
+			#print('ADD:\t 1st and 2nd Classes: %s -> %s' %(key, ' '.join(sorted(value))))
 
 		# - Finish
 		self.update_data(temp_dict, layerUpdate=True)

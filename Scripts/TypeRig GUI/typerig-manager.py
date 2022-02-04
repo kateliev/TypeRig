@@ -11,7 +11,7 @@
 # - Dependencies -----------------
 #import fontlab as fl6
 #import fontgate as fgt
-
+from __future__ import absolute_import
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRHTabWidget

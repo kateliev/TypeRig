@@ -190,7 +190,7 @@ class dlg_LayerSelect(QtGui.QDialog):
 			else:
 				init_data = [(master, 'Master') for master in active_font.pMasters.names]
 		 	
-		 	table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
+			table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
 			self.tab_masters.clear()
 			self.tab_masters.setTable(table_dict, color_dict=color_dict, enable_check=True)	
 
