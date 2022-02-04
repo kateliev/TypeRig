@@ -20,7 +20,7 @@ import fontgate as fgt
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 
-from . import ImpexActions
+import ImpexActions
 
 # - Configuration ------------------------------------------------------------
 file_formats = {'afm':'Adobe Font Metrics (*.afm)',
