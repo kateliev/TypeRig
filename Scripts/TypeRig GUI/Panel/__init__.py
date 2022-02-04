@@ -17,4 +17,4 @@ global modules
 modules = [moduleName[:-3] for moduleName in os.listdir(os.path.dirname(__file__)) if '__' not in moduleName and '.py' == moduleName[-3:]]
 
 for module in modules:
-    __import__(module, locals(), globals(), level=1)
+	__import__(module, locals(), globals(), level=1)

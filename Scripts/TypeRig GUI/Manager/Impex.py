@@ -10,16 +10,17 @@
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Import & Export', '0.5'
+app_name, app_version = 'TypeRig | Import & Export', '0.6'
 
 # - Dependencies -----------------
+from __future__ import absolute_import
 import fontlab as fl6
 import fontgate as fgt
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 
-import ImpexActions
+from . import ImpexActions
 
 # - Configuration ------------------------------------------------------------
 file_formats = {'afm':'Adobe Font Metrics (*.afm)',
@@ -80,7 +81,7 @@ class TRImpEx(QtGui.QWidget):
 		self.plane_A.setAlternatingRowColors(True)
 		self.plane_B.setAlternatingRowColors(True)
 		
-		self.plane_A.addItems(sorted(impex_actions_db.keys()))
+		self.plane_A.addItems(sorted(list(impex_actions_db.keys())))
 		self.plane_A.selectionModel().selectionChanged.connect(self.refresh_plane_B)
 		self.plane_B.selectionModel().selectionChanged.connect(self.run_action)
 
@@ -103,7 +104,7 @@ class TRImpEx(QtGui.QWidget):
 	def refresh_plane_B(self):
 		self.plane_B.blockSignals(True)
 		self.plane_B.clear()
-		self.plane_B.addItems(sorted(impex_actions_db[self.plane_A.currentItem().text()].keys()))
+		self.plane_B.addItems(sorted(list(impex_actions_db[self.plane_A.currentItem().text()].keys())))
 		self.plane_B.blockSignals(False)
 
 	def run_action(self):

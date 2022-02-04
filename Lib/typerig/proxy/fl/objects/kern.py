@@ -18,7 +18,13 @@ import PythonQt as pqt
 from typerig.core.objects.collection import extBiDict
 
 # - Init ---------------------------------
-__version__ = '0.26.3'
+__version__ = '0.26.4'
+
+# - Keep compatibility for basestring checks
+try:
+	basestring
+except NameError:
+	basestring = (str, bytes)
 
 # - Classes -------------------------------
 class pKerning(object):

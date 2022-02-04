@@ -8,7 +8,10 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.76.0'
+__version__ = '0.76.1'
+
+# - Keep compatibility for basestring checks
+if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
 
 # - Dependencies --------------------------
 import fontlab as fl6

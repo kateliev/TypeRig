@@ -8,6 +8,7 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
+from __future__ import absolute_import, print_function, unicode_literals
 import os, json
 
 import fontlab as fl6
@@ -22,7 +23,7 @@ from typerig.proxy.fl.objects.kern import pKerning
 from typerig.core.func.math import round2base
 
 # - Init --------------------------
-app_name, app_version = 'TypeRig | AFM Import & Export', '1.0'
+app_name, app_version = 'TypeRig | AFM Import & Export', '1.1'
 file_formats = {'afm':'Adobe Font Metrics (*.afm)'}
 
 # - Action Objects ---------------
@@ -143,8 +144,8 @@ class action_import_afm_kerning(QtGui.QWidget):
 						kerning_current.setPairs(new_kerning_afm, True)
 					else:
 						kerning_current.fg.setPlainPairs(new_kerning_afm)
-					print 'DONE:\t Layer: %s\t Import AFM plain pairs kerning from: %s' %(layer_name, work_file)
+					print('DONE:\t Layer: %s\t Import AFM plain pairs kerning from: %s' %(layer_name, work_file))
 
 		if kerning_changed:
-			print 'DONE:\t AFM Files processed for kerning data: %s' %(kerning_count)			
+			print('DONE:\t AFM Files processed for kerning data: %s' %(kerning_count))
 			active_font.update()

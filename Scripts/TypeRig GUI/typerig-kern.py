@@ -25,7 +25,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRVTabWidget
 import Kern as Panel 
 
 # - Init --------------------------
-app_version = '1.10'
+app_version = '1.11'
 app_name = 'TypeRig Kern'
 ignorePanel = '__'
 
@@ -189,8 +189,8 @@ class dlg_LayerSelect(QtGui.QDialog):
 				init_data = [(layer.name, check_type(layer)) for layer in active_glyph.layers() if '#' not in layer.name]
 			else:
 				init_data = [(master, 'Master') for master in active_font.pMasters.names]
-		 	
-		 	table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
+			
+			table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
 			self.tab_masters.clear()
 			self.tab_masters.setTable(table_dict, color_dict=color_dict, enable_check=True)	
 

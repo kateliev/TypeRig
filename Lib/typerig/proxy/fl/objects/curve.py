@@ -20,7 +20,13 @@ from typerig.proxy.fl.objects.node import eNode
 from typerig.core.func.utils import isMultiInstance
 
 # - Init -----------------------------------
-__version__ = '0.3.9'
+__version__ = '0.3.91'
+
+# - Keep compatibility for basestring checks
+try:
+	basestring
+except NameError:
+	basestring = (str, bytes)
 
 # - Classes ---------------------------------
 class eCurveEx(object):

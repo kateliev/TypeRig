@@ -12,7 +12,13 @@
 from collections import defaultdict, OrderedDict
 
 # - Init ---------------------------------
-__version__ = '0.0.1'
+__version__ = '0.0.2'
+
+# - Keep compatibility for basestring checks
+try:
+	basestring
+except NameError:
+	basestring = (str, bytes)
 
 # - Classes -------------------------------------------------------
 class dictComposer(object):

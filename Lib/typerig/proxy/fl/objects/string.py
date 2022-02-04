@@ -12,7 +12,13 @@
 #from typerig.core.func.string import *
 
 # - Init ----------------------------------------------------
-__version__ = '0.18.4'
+__version__ = '0.18.5'
+
+# - Keep compatibility for basestring checks
+try:
+	basestring
+except NameError:
+	basestring = (str, bytes)
 
 # - Collections (Static)
 # -- Values

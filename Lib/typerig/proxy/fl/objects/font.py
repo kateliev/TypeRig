@@ -24,7 +24,13 @@ from typerig.core.objects.collection import extBiDict
 from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
 
 # - Init ---------------------------------
-__version__ = '0.28.2'
+__version__ = '0.28.3'
+
+# - Keep compatibility for basestring checks
+try:
+	basestring
+except NameError:
+	basestring = (str, bytes)
 
 # - Classes -------------------------------
 class pFontMetrics(object):

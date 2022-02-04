@@ -18,7 +18,13 @@ from typerig.proxy.fl.objects.base import Line, Curve
 from typerig.core.func.math import linspread
 
 # - Init -----------------------------
-__version__ = '0.2.3'
+__version__ = '0.2.4'
+
+# - Keep compatibility for basestring checks
+try:
+	basestring
+except NameError:
+	basestring = (str, bytes)
 
 # - Classes --------------------------
 class GlyphSampler(object):

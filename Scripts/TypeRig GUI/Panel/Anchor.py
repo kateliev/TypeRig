@@ -29,7 +29,7 @@ global clipboard_glyph_anchors
 pLayers = None
 pMode = 0
 clipboard_glyph_anchors = {}
-app_name, app_version = 'TypeRig | Anchors', '2.03'
+app_name, app_version = 'TypeRig | Anchors', '2.04'
 
 # - Sub widgets ------------------------
 class ALineEdit(QtGui.QLineEdit):
@@ -79,7 +79,7 @@ class TRWAnchorTree(QtGui.QTreeWidget):
 		self.setHeaderLabels(headers)
 
 		# - Insert 
-		for key, value in data.iteritems():
+		for key, value in data.items():
 			master = QtGui.QTreeWidgetItem(self, [key])
 
 			for sub in value:
@@ -396,7 +396,7 @@ class tool_tab(QtGui.QWidget):
 				if len(clipboard_glyph_anchors.keys()):
 					update = True
 
-					for layer, layer_anchors in clipboard_glyph_anchors.iteritems():
+					for layer, layer_anchors in clipboard_glyph_anchors.items():
 
 						for anchor_name, anchor_coords, anchor_expression in layer_anchors:
 							if self.anchorSelector.glyph.findAnchor(anchor_name, layer) is None:

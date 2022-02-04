@@ -7,13 +7,8 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-# - Init
-global pLayers
-pLayers = None
-app_name, app_version = 'TypeRig | Kerning Overview', '3.6'
-alt_mark = '.'
-
 # - Dependencies -----------------
+from __future__ import absolute_import, print_function, unicode_literals
 import os, json, re
 from platform import system
 
@@ -30,6 +25,12 @@ from typerig.proxy.fl.objects.kern import pKerning
 from typerig.proxy.fl.application.app import pWorkspace, pItems
 from typerig.core.fileio import cla, krn
 from typerig.core.base.message import *
+
+# - Init
+global pLayers
+pLayers = None
+app_name, app_version = 'TypeRig | Kerning Overview', '3.7'
+alt_mark = '.'
 
 # - Strings ------------------------------------------------------------------
 file_formats = {'trjson': 	'TypeRig JSON Raw Kerning (*.json)',
@@ -478,7 +479,7 @@ class WKernGroups(QtGui.QWidget):
 			# - Find and remove rows from table
 			self.tab_fontKerning.removeRow(current_row)
 		
-		print 'DONE:\tPairs removed: {}; Pairs: {}!\nWARN:\tAuto update was disabled during the process! Please update font manually!'.format(len(pairs_removed), ' '.join(pairs_removed))
+		print('DONE:\tPairs removed: {}; Pairs: {}!\nWARN:\tAuto update was disabled during the process! Please update font manually!'.format(len(pairs_removed), ' '.join(pairs_removed)))
 		self.lbl_status_pairs_len.setText(len(self.data_fontKerning[2]))
 		self.tab_fontKerning.blockSignals(False)
 
@@ -487,7 +488,7 @@ class WKernGroups(QtGui.QWidget):
 
 		if not paste_values:
 			self.data_clipboard = [item.text() for item in selected_items]
-			print 'COPY:\tValues: {} to clipboard!'.format(len(self.data_clipboard))
+			print('COPY:\tValues: {} to clipboard!'.format(len(self.data_clipboard)))
 		else:
 			self.btn_fontKerning_autoupdate.setChecked(False)
 
@@ -495,15 +496,15 @@ class WKernGroups(QtGui.QWidget):
 				for item in selected_items:
 					item.setText(self.data_clipboard[0])
 
-				print 'PASTE:\tSINGLE value to Pairs: {}\nWARN:\tAuto update was disabled during the process! Please update font manually!'.format(len(selected_items))
+				print('PASTE:\tSINGLE value to Pairs: {}\nWARN:\tAuto update was disabled during the process! Please update font manually!'.format(len(selected_items)))
 
 			elif len(self.data_clipboard) == len(selected_items):
 				for idx in range(len(selected_items)):
 					selected_items[idx].setText(self.data_clipboard[idx])
 
-				print 'PASTE:\tMULTIPLE values to Pairs: {}\nWARN:\tAuto update was disabled during the process! Please update font manually!'.format(len(selected_items))
+				print('PASTE:\tMULTIPLE values to Pairs: {}\nWARN:\tAuto update was disabled during the process! Please update font manually!'.format(len(selected_items)))
 			else:
-				print 'ERROR:\tData in Clipboard and Selection do not match: {}/{}!'.format(len(self.data_clipboard),len(selected_items))
+				print('ERROR:\tData in Clipboard and Selection do not match: {}/{}!'.format(len(self.data_clipboard),len(selected_items)))
 
 	def pair_copy_string(self, return_leaders=False):
 		selected_pairs, _discard = self.getSelectedPairs(return_leaders)
@@ -514,7 +515,7 @@ class WKernGroups(QtGui.QWidget):
 		else:
 			clipboard.setText(str(list(selected_pairs)))
 
-		print 'DONE:\t Generated string sent to clipboard!\t Pairs: {}'.format(len(selected_pairs))
+		print('DONE:\t Generated string sent to clipboard!\t Pairs: {}'.format(len(selected_pairs)))
 
 	def pair_save_krn(self, return_leaders=False):
 		mark_groups = '' if return_leaders else pair_class
@@ -527,7 +528,7 @@ class WKernGroups(QtGui.QWidget):
 			with krn.KRNparser(save_path, 'w') as writer:
 				writer.dump(sorted(save_pairs), 'Font: {}'.format(self.active_font.name))
 
-			print 'DONE:\t {} Generated pairs saved! File: {}'.format(len(save_pairs), save_path)
+			print('DONE:\t {} Generated pairs saved! File: {}'.format(len(save_pairs), save_path))
 
 	def pair_preview_string(self, use_layer=False):
 		selected_pairs, selected_layers = self.getSelectedPairs(True)
@@ -547,7 +548,7 @@ class WKernGroups(QtGui.QWidget):
 			item.setText(update_value)
 
 		self.tab_fontKerning.blockSignals(False)
-		print 'UPDATE:\tPair values updated from source: {}'.format(len(selected_items))
+		print('UPDATE:\tPair values updated from source: {}'.format(len(selected_items)))
 
 	# --- Actions Tools --------------------------------------------
 	def tools_replace(self):
@@ -566,12 +567,12 @@ class WKernGroups(QtGui.QWidget):
 							cell_item.setText(replace)
 							work_done += 1
 
-			print 'REPLACE:\tKern pairs changed: {}\nWARN:\tAuto update was disabled during the process! Please update font manually!'.format(work_done)
+			print('REPLACE:\tKern pairs changed: {}\nWARN:\tAuto update was disabled during the process! Please update font manually!'.format(work_done))
 
 	# - Main Procedures --------------------------------------------
 	def update_font(self):
 		self.active_font.update()
-		print 'DONE:\tKerning updated! Font: %s;' %self.active_font.fg.path
+		print('DONE:\tKerning updated! Font: %s;' %self.active_font.fg.path)
 
 	def update_data(self, source, updateTable=True):
 		self.data_fontKerning = source
@@ -670,7 +671,7 @@ class WKernGroups(QtGui.QWidget):
 				self.tab_fontKerning.selectRow(row)
 				show_items.append(row)
 			else:
-				print 'RegEx:\tNot Found: %s' %search_result
+				print('RegEx:\tNot Found: %s' %search_result)
 
 		if self.btn_search_hide.isChecked():
 			for row in xrange(self.tab_fontKerning.rowCount):
@@ -727,20 +728,20 @@ class WKernGroups(QtGui.QWidget):
 				tmp_proxy = pKerning(self.active_font.kerning(layer))
 				tmp_len = len(tmp_proxy.fg)
 				tmp_proxy.clear()
-				print 'DEL:\t Layer: %s;\tPairs: %s' %(layer, tmp_len)
+				print('DEL:\t Layer: %s;\tPairs: %s' %(layer, tmp_len))
 
 			self.active_font.kerning(layer)
 			self.active_font.update()
 			self.tab_fontKerning.clear()
 			while self.tab_fontKerning.rowCount > 0: self.tab_fontKerning.removeRow(0)
-			print 'DONE:\t Font: %s - Kerning removed!' %self.active_font.fg.path	
+			print('DONE:\t Font: %s - Kerning removed!' %self.active_font.fg.path	)
 	
 	def kerning_from_font(self, ask_user=True):
 		font_kerning = []
 		font_layers = []
 		pair_set = []
 		import_empty = False
-		print 'LOAD:\tPreparing kerning data...'
+		print('LOAD:\tPreparing kerning data...')
 		
 		if ask_user:
 			ask_import_empty = QtGui.QMessageBox.question(self, 'Import kerning from font', 'Do you want to import layers with empty/no kerning', QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
@@ -763,7 +764,7 @@ class WKernGroups(QtGui.QWidget):
 		
 		self.data_fontKerning = (font_layers, font_kerning, all_pairs)
 		self.update_data(self.data_fontKerning, updateTable=True)
-		print 'LOAD:\tKern table loaded! Font: %s;' %self.active_font.fg.path
+		print('LOAD:\tKern table loaded! Font: %s;' %self.active_font.fg.path)
 
 
 # - Tabs -------------------------------

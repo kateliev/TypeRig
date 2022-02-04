@@ -20,7 +20,13 @@ from typerig.core.objects.line import Line, Vector
 from typerig.core.objects.cubicbezier import CubicBezier
 
 # - Init ----------------------------------------------------
-__version__ = '0.26.4'
+__version__ = '0.26.5'
+
+# - Keep compatibility for basestring checks
+try:
+	basestring
+except NameError:
+	basestring = (str, bytes)
 
 # - FL Proxy model -------------------------------------------
 class Coord(trPoint): # Dumb Name but avoids name collision with FL Point object

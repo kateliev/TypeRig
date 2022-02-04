@@ -25,7 +25,10 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.2.9'
+__version__ = '0.2.91'
+
+# - Keep compatibility for basestring checks
+if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
 
 # -- Colors ------------------------------
 # Fontlab Name, Fontlab Value, QtColor Name

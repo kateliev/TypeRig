@@ -32,7 +32,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '2.10'
+app_name, app_version = 'TypeRig | Layers', '2.11'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -496,11 +496,11 @@ class TRWLayerSelect(QtGui.QVBoxLayout):
 				init_data = [(layer, 'Master', layer.wireframeColor) for layer in self.glyph.layers() if layer.isMasterLayer]
 			else:
 				init_data = [(layer.name, check_type(layer), layer.wireframeColor) for layer in self.glyph.layers() if '#' not in layer.name]
-		 	
-		 	table_dict = {n : OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
-		 	
-		 	self.lst_layers.setTable(init_table_dict)
-		 	self.lst_layers.setTable(table_dict)
+			
+			table_dict = {n : OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
+			
+			self.lst_layers.setTable(init_table_dict)
+			self.lst_layers.setTable(table_dict)
 
 	def set_selected(self):
 		selected_rows = [si.row() for si in self.lst_layers.selectionModel().selectedRows()]

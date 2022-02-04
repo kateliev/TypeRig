@@ -19,7 +19,13 @@ from typerig.proxy.fl.objects.base import Coord
 from typerig.proxy.fl.objects.node import pNode
 
 # - Init ---------------------------------
-__version__ = '0.26.7'
+__version__ = '0.26.8'
+
+# - Keep compatibility for basestring checks
+try:
+	basestring
+except NameError:
+	basestring = (str, bytes)
 
 # - Classes -------------------------------
 class pShape(object):

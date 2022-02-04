@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '1.25'
+app_name, app_version = 'TypeRig | Elements', '1.26'
 
 # - Syntax -------------------------------
 syn_comment = '#'
@@ -328,9 +328,9 @@ class alignShapes(QtGui.QGridLayout):
 		self.cmb_align_x = QtGui.QComboBox()
 		self.cmb_align_y = QtGui.QComboBox()
 		self.cmb_align_mode = QtGui.QComboBox()
-		self.cmb_align_x.addItems(self.align_x.keys())
-		self.cmb_align_y.addItems(self.align_y.keys())
-		self.cmb_align_mode.addItems(self.align_mode.keys())
+		self.cmb_align_x.addItems(list(self.align_x.keys()))
+		self.cmb_align_y.addItems(list(self.align_y.keys()))
+		self.cmb_align_mode.addItems(list(self.align_mode.keys()))
 
 		self.cmb_align_x.setToolTip('Horizontal Alignment')
 		self.cmb_align_y.setToolTip('Vertical Alignment')
@@ -526,7 +526,7 @@ class glyphComposer(QtGui.QGridLayout):
 				pass
 		
 		self.cmb_fontShapes.clear()
-		self.cmb_fontShapes.addItems(sorted(self.font_shapes.keys()))
+		self.cmb_fontShapes.addItems(sorted(list(self.font_shapes.keys())))
 
 	def shape_insert(self):
 		process_glyphs = getProcessGlyphs(pMode)

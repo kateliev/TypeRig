@@ -8,6 +8,7 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
+from __future__ import absolute_import, print_function, unicode_literals
 import os, json
 from itertools import groupby
 from operator import itemgetter
@@ -29,7 +30,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Auto Metrics', '1.0'
+app_name, app_version = 'TypeRig | Auto Metrics', '1.1'
 
 # -- Strings
 
@@ -187,7 +188,7 @@ class TRAutoMetrics(QtGui.QVBoxLayout):
 		if delete:
 			for selection in self.tab_presets.selectionModel().selectedIndexes:
 				table_rawList.pop(selection.row())
-				print selection.row()
+				print(selection.row())
 
 		new_entry = OrderedDict()
 		
@@ -211,7 +212,7 @@ class TRAutoMetrics(QtGui.QVBoxLayout):
 				new_data[key] = OrderedDict(data)
 
 			self.tab_presets.setTable(new_data, sortData=(False, False))
-			print 'LOAD:\t Font:%s; Presets loaded from: %s.' %(self.active_font.name, fname)
+			print('LOAD:\t Font:%s; Presets loaded from: %s.' %(self.active_font.name, fname))
 
 	def preset_save(self):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
@@ -221,7 +222,7 @@ class TRAutoMetrics(QtGui.QVBoxLayout):
 			with open(fname, 'w') as exportFile:
 				json.dump(self.tab_presets.getTable(raw=True), exportFile)
 
-			print 'SAVE:\t Font:%s; Presets saved to: %s.' %(self.active_font.name, fname)
+			print('SAVE:\t Font:%s; Presets saved to: %s.' %(self.active_font.name, fname))
 
 	def getPreset(self):
 		table_raw = self.tab_presets.getTable(raw=True)

@@ -21,7 +21,13 @@ from typerig.core.objects.utils import Bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 # - Init ---------------------------------
-__version__ = '0.27.8'
+__version__ = '0.27.9'
+
+# - Keep compatibility for basestring checks
+try:
+	basestring
+except NameError:
+	basestring = (str, bytes)
 
 # - Classes -------------------------------
 class pNode(object):

@@ -9,6 +9,7 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
+from __future__ import absolute_import, print_function
 #import fontlab as fl6
 #import fontgate as fgt
 
@@ -20,7 +21,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRHTabWidget
 import Manager
 
 # - Init --------------------------
-app_version = '0.11'
+app_version = '0.12'
 app_name = 'TypeRig Managers'
 ignorePanel = '__'
 

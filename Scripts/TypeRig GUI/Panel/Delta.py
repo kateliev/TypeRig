@@ -34,7 +34,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Delta', '4.45'
+app_name, app_version = 'TypeRig | Delta', '4.46'
 
 # -- Strings
 tree_column_names = ('Layer','X', 'Y', 'Width', 'Height', 'Color')
@@ -492,7 +492,7 @@ class tool_tab(QtGui.QWidget):
 			self.mixer_dx.refreshSlider()
 			self.mixer_dy.refreshSlider()
 		
-		except ValueError, IndexError:
+		except (ValueError, IndexError):
 			warnings.warn('Invalid Axis/Target or Axis/Target not set!', TRDeltaAxisWarning)
 
 	def reset_axis(self):
