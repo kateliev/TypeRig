@@ -25,7 +25,7 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.2.8'
+__version__ = '0.2.9'
 
 # -- Colors ------------------------------
 # Fontlab Name, Fontlab Value, QtColor Name
@@ -465,8 +465,8 @@ class TRLayerSelectDLG(QtGui.QDialog):
 				init_data = [(layer.name, check_type(layer)) for layer in active_glyph.layers() if '#' not in layer.name]
 			else:
 				init_data = [(master, 'Master') for master in active_font.pMasters.names]
-		 	
-		 	table_dict = {n:OrderedDict(zip(self.column_names, data)) for n, data in enumerate(init_data)}
+			
+			table_dict = {n:OrderedDict(zip(self.column_names, data)) for n, data in enumerate(init_data)}
 			self.tab_masters.clear()
 			self.tab_masters.setTable(table_dict, color_dict=self.color_dict, enable_check=True)	
 
