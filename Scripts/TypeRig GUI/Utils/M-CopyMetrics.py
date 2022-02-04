@@ -9,7 +9,6 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
-from __future__ import print_function
 import os, json
 import fontlab as fl6
 import fontgate as fgt
@@ -92,10 +91,10 @@ class dlg_copyMetrics(QtGui.QDialog):
 		
 		if self.cmb_mode.currentIndex == 1:
 			self.srcGlyphBounds = {glyph.name:{layer.name:(glyph.getLSB(layer.name), glyph.getRSB(layer.name), glyph.getAdvance(layer.name)) for layer in glyph.masters()} for glyph in font.pGlyphs()}
-			print('COPY MM:\t Font:%s; Glyph Metric Values copied: %s.' %(font.name,len(self.srcGlyphBounds.keys())))
+			print 'COPY MM:\t Font:%s; Glyph Metric Values copied: %s.' %(font.name,len(self.srcGlyphBounds.keys()))
 		else:
 			self.srcGlyphBounds = {glyph.name:(glyph.getLSB(fixedLayer), glyph.getRSB(fixedLayer), glyph.getAdvance(fixedLayer)) for glyph in font.pGlyphs()}
-			print('COPY:\t Font:%s; Glyph Metric Values copied: %s.' %(font.name,len(self.srcGlyphBounds.keys())))
+			print 'COPY:\t Font:%s; Glyph Metric Values copied: %s.' %(font.name,len(self.srcGlyphBounds.keys()))
 		
 		self.btn_pasteADV.setEnabled(True)
 		self.btn_pasteRSB.setEnabled(True)
@@ -104,7 +103,7 @@ class dlg_copyMetrics(QtGui.QDialog):
 		font = pFont()
 		dstGlyphs = {glyph.name:glyph for glyph in font.pGlyphs()}
 		
-		print('WARN:\t Pasting Metrics to Font:%s;' %font.name)
+		print 'WARN:\t Pasting Metrics to Font:%s;' %font.name
 		for glyphName, glyphMetrics in self.srcGlyphBounds.iteritems():
 			if glyphName in dstGlyphs:
 				wGlyph = dstGlyphs[glyphName]
@@ -120,17 +119,17 @@ class dlg_copyMetrics(QtGui.QDialog):
 								wGlyph.setAdvance(glyphMetrics[layer.name][2], layer.name)
 							
 							wGlyph.update()
-							print('PASTE MM:\t Glyph: /%s;\tLayer: %s;\tValues(LSB, RSB, ADV): %s.' %(glyphName, layer.name, glyphMetrics))
+							print 'PASTE MM:\t Glyph: /%s;\tLayer: %s;\tValues(LSB, RSB, ADV): %s.' %(glyphName, layer.name, glyphMetrics)
 						else:
-							print('WARN:\t Glyph /%s - Layer %s not found!' %glyphName, layerName)
+							print 'WARN:\t Glyph /%s - Layer %s not found!' %glyphName, layerName
 				else:
 					wGlyph.setLSB(glyphMetrics[0])
 					#wGlyph.setRSB(glyphMetrics[1])
 					wGlyph.setAdvance(glyphMetrics[2])
 					wGlyph.update()
-					print('PASTE:\t Glyph: /%s;\tLayer: %s;\tValues(LSB, RSB, ADV): %s.' %(glyphName, wGlyph.layer().name, glyphMetrics))
+					print 'PASTE:\t Glyph: /%s;\tLayer: %s;\tValues(LSB, RSB, ADV): %s.' %(glyphName, wGlyph.layer().name, glyphMetrics)
 			else:
-				print('SKIP:\t Glyph /%s not found.' %glyphName)
+				print 'SKIP:\t Glyph /%s not found.' %glyphName
 
 		fl6.Update(CurrentFont())
 
@@ -141,15 +140,15 @@ class dlg_copyMetrics(QtGui.QDialog):
 		
 		if self.cmb_mode.currentIndex == 1:
 			expGlyphBounds = {glyph.name:{layer.name:(glyph.getLSB(layer.name), glyph.getRSB(layer.name), glyph.getAdvance(layer.name)) for layer in glyph.masters()} for glyph in font.pGlyphs()}
-			print('EXPORT MM:\t Font:%s; Glyph Metrics found: %s.' %(font.name, len(expGlyphBounds.keys())))
+			print 'EXPORT MM:\t Font:%s; Glyph Metrics found: %s.' %(font.name, len(expGlyphBounds.keys()))
 		else:
 			expGlyphBounds = {glyph.name:(glyph.getLSB(fixedLayer), glyph.getRSB(fixedLayer), glyph.getAdvance(fixedLayer)) for glyph in font.pGlyphs()}
-			print('EXPORT:\t Font:%s; Glyph Metrics found: %s.' %(font.name, len(expGlyphBounds.keys())))
+			print 'EXPORT:\t Font:%s; Glyph Metrics found: %s.' %(font.name, len(expGlyphBounds.keys()))
 		
 		with open(fname, 'w') as exportFile:
 			json.dump(expGlyphBounds, exportFile)
 
-		print('SAVE:\t Font:%s; %s Glyph Metrics saved to %s.' %(font.name, len(expGlyphBounds.keys()), fname))
+		print 'SAVE:\t Font:%s; %s Glyph Metrics saved to %s.' %(font.name, len(expGlyphBounds.keys()), fname)
 
 	def importExpr(self):
 		font = pFont()
@@ -160,8 +159,8 @@ class dlg_copyMetrics(QtGui.QDialog):
 		with open(fname, 'r') as importFile:
 			self.srcGlyphBounds = json.load(importFile)
 
-		print('LOAD:\t Font:%s; %s Glyph Metrics loaded from %s.' %(font.name, len(self.srcGlyphBounds.keys()), fname))
-		print('NOTE:\t Use < Pastes > to apply loaded!')
+		print 'LOAD:\t Font:%s; %s Glyph Metrics loaded from %s.' %(font.name, len(self.srcGlyphBounds.keys()), fname)
+		print 'NOTE:\t Use < Pastes > to apply loaded!'
 		self.btn_pasteADV.setEnabled(True)
 		self.btn_pasteRSB.setEnabled(True)
 

@@ -239,7 +239,7 @@ class pGlyph(object):
 			if isinstance(layer, int):
 				return self.fl.layers[layer]
 
-			elif isinstance(layer, (str, bytes)):
+			elif isinstance(layer, basestring):
 				return self.fl.getLayerByName(layer)
 
 	def fg_layer(self, layer=None):
@@ -255,7 +255,7 @@ class pGlyph(object):
 			if isinstance(layer, int):
 				return self.fg.layers[layer]
 
-			elif isinstance(layer, (str, bytes)):
+			elif isinstance(layer, basestring):
 				try:
 					return self.fg_layers(True)[layer]
 				except KeyError:
@@ -1194,7 +1194,7 @@ class pGlyph(object):
 			if isinstance(layer, int):
 				return fl6.FontMetrics(self.package, self.fl.layers[layer].name) 
 
-			elif isinstance(layer, (str, bytes)):
+			elif isinstance(layer, basestring):
 				return fl6.FontMetrics(self.package, layer)
 
 	# - Anchors and pins ---------------------------------------

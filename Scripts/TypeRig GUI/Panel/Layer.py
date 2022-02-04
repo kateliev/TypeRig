@@ -497,10 +497,10 @@ class TRWLayerSelect(QtGui.QVBoxLayout):
 			else:
 				init_data = [(layer.name, check_type(layer), layer.wireframeColor) for layer in self.glyph.layers() if '#' not in layer.name]
 		 	
-			table_dict = {n : OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
+		 	table_dict = {n : OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
 		 	
-			self.lst_layers.setTable(init_table_dict)
-			self.lst_layers.setTable(table_dict)
+		 	self.lst_layers.setTable(init_table_dict)
+		 	self.lst_layers.setTable(table_dict)
 
 	def set_selected(self):
 		selected_rows = [si.row() for si in self.lst_layers.selectionModel().selectedRows()]

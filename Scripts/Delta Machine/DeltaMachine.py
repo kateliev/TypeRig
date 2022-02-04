@@ -9,7 +9,6 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
-from __future__ import print_function
 import os, json
 from math import radians
 from collections import OrderedDict
@@ -502,7 +501,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		if fname != None:
 			with open(fname, 'w') as exportFile:
 				json.dump(self.tab_masters.getTable(), exportFile)
-				print( 'SAVE:\t| Delta Machine | Font:%s; Deltas saved to: %s.' %(self.active_font.name, fname))
+				print 'SAVE:\t| Delta Machine | Font:%s; Deltas saved to: %s.' %(self.active_font.name, fname)
 
 	def file_load_deltas(self):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
@@ -514,7 +513,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 								
 				table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in imported_data.iteritems()}
 				self.tab_masters.updateTable(table_dict)
-				print( 'LOAD:\t| Delta Machine | Font:%s; Deltas loaded from: %s.' %(self.active_font.name, fname))
+				print 'LOAD:\t| Delta Machine | Font:%s; Deltas loaded from: %s.' %(self.active_font.name, fname)
 
 	# - Table operations
 	def table_refresh(self):
@@ -535,7 +534,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 	
 	def table_populate(self):
 		init_data = [[master, self.active_font.pMasters.names, self.active_font.pMasters.names, 1., 2., 1., 2., 0., 0.,100, 100, 0.00, 0.00] for master in self.active_font.pMasters.names]
-		table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
+	 	table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
 		self.tab_masters.setTable(table_dict)
 		
 	# - Stem operations
@@ -546,7 +545,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		self.cmb_infoArrays.clear()
 		self.cmb_infoArrays.addItems(sorted(self.data_PointArrays.keys()))
 
-		print( 'Done:\t| Delta Machine | Updated PointArrays.\tGlyph:%s' %glyph.name)
+		print 'Done:\t| Delta Machine | Updated PointArrays.\tGlyph:%s' %glyph.name
 
 	def get_Stems(self, vertical=True, source=True):
 		# - Helper
@@ -615,7 +614,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		else:
 			self.ratio_source = {layerName:glyph.getBounds(layerName) for layerName in self.active_font.masters()}
 
-		print( 'Done:\t| Delta Machine | Stored BBOX data for Glyph: %s' %glyph.name)
+		print 'Done:\t| Delta Machine | Stored BBOX data for Glyph: %s' %glyph.name
 
 	def push_ratio(self, height=False, bbox=False):
 		modifiers = QtGui.QApplication.keyboardModifiers() # Listen to Shift - reverses the ratio
@@ -655,7 +654,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 		
 
 		
-		print( 'Done:\t| Delta Machine | Pushed Ratio data per master.')
+		print 'Done:\t| Delta Machine | Pushed Ratio data per master.'
 
 	# - Processing --------------------------
 	def table_execute(self):
@@ -742,7 +741,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 			
 			if live_update:
 				wGlyph.update()
-				fl6.Update(wGlyph.fl)
+			 	fl6.Update(wGlyph.fl)
 
 			# - Restore metrics
 			if keep_metrics:

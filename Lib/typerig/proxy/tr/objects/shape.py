@@ -61,7 +61,7 @@ class trShape(Shape):
 			if isinstance(item, self._subclass):
 				item.parent = self
 			
-			elif not isinstance(item, (int, float, (str, bytes))):
+			elif not isinstance(item, (int, float, basestring)):
 				item = self._subclass(item, parent=self) 
 
 			if not hasattr(item, 'host'):

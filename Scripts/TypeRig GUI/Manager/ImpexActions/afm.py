@@ -8,7 +8,6 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
-from __future__ import print_function
 import os, json
 
 import fontlab as fl6
@@ -144,8 +143,8 @@ class action_import_afm_kerning(QtGui.QWidget):
 						kerning_current.setPairs(new_kerning_afm, True)
 					else:
 						kerning_current.fg.setPlainPairs(new_kerning_afm)
-					print('DONE:\t Layer: %s\t Import AFM plain pairs kerning from: %s' %(layer_name, work_file))
+					print 'DONE:\t Layer: %s\t Import AFM plain pairs kerning from: %s' %(layer_name, work_file)
 
 		if kerning_changed:
-			print('DONE:\t AFM Files processed for kerning data: %s' %(kerning_count)			)
+			print 'DONE:\t AFM Files processed for kerning data: %s' %(kerning_count)			
 			active_font.update()

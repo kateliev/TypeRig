@@ -692,7 +692,7 @@ class TRTableView(QtGui.QTableWidget):
 				name_column.append(key)
 				rowData = data[value][key]
 				
-				if isinstance(rowData, (str, bytes)):
+				if isinstance(rowData, basestring):
 					newitem = QtGui.QTableWidgetItem(str(rowData))
 				else:
 					newitem = QtGui.QTableWidgetItem()

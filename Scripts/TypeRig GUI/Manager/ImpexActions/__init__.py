@@ -9,12 +9,11 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
-from __future__ import print_function, absolute_import
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 
 # - Imports ----------------------
-from . import afm
+import afm
 
 # - Action Objects ---------------
 class action_empty(QtGui.QWidget):
@@ -34,4 +33,4 @@ class action_empty(QtGui.QWidget):
 		# ...
 		self.setLayout(lay_wgt)
 		
-		print('WARN:\t Action Not Implemented...')
+		print 'WARN:\t Action Not Implemented...'

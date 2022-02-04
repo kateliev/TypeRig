@@ -8,7 +8,6 @@
 # that you use it at your own risk!
 
 # - Init
-from __future__ import absolute_import
 global pLayers
 pLayers = None
 app_name, app_version = 'TypeRig | Import & Export', '0.5'

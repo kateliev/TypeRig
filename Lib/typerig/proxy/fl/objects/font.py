@@ -261,7 +261,7 @@ class pFont(object):
 				self.fg = font
 				self.fl = fl6.flPackage(font)
 
-			elif isinstance(font, (str, bytes)):
+			elif isinstance(font, basestring):
 				fl6.flItems.requestLoadingFont(font)
 				self.fg = fl6.CurrentFont()
 				self.fl = fl6.flPackage(fl6.CurrentFont())
@@ -356,7 +356,7 @@ class pFont(object):
 		
 	def glyph(self, glyph, extend=None):
 		'''Return TypeRig proxy glyph object (pGlyph) by index (int) or name (str).'''
-		if isinstance(glyph, int) or isinstance(glyph, (str, bytes)):
+		if isinstance(glyph, int) or isinstance(glyph, basestring):
 			return pGlyph(self.fg, self.fg[glyph]) if extend is None else extend(self.fg, self.fg[glyph])
 		else:
 			return pGlyph(self.fg, glyph) if extend is None else extend(self.fg, self.fg[glyph])
@@ -408,7 +408,7 @@ class pFont(object):
 		if isinstance(layer, int):
 			return fl6.FontMetrics(self.fl, self.fl.masters[layer]) 
 
-		elif isinstance(layer, (str, bytes)):
+		elif isinstance(layer, basestring):
 			return fl6.FontMetrics(self.fl, layer)
 
 	def fontMetrics(self):
@@ -678,7 +678,7 @@ class pFont(object):
 		# - Add layers
 		if len(layers):
 			for layer in layers:
-				if isinstance(layer, (str, bytes)):
+				if isinstance(layer, basestring):
 					new_layer = fl6.flLayer()
 					new_layer.name = layer
 					new_glyph.addLayer(new_layer)
@@ -792,7 +792,7 @@ class pFont(object):
 			if isinstance(layer, int):
 				return self.fl.kerning(self.masters[layer])
 
-			elif isinstance(layer, (str, bytes)):
+			elif isinstance(layer, basestring):
 				return self.fl.kerning(layer)
 
 	def kerning_to_list(self, layer=None):
@@ -951,7 +951,7 @@ class jFont(object):
 		self.path = None
 
 		if source is not None:
-			if isinstance(source, (str, bytes)):
+			if isinstance(source, basestring):
 				self.path = source
 
 			elif isinstance(source, pFont):
