@@ -8,6 +8,7 @@
 # that you use it at your own risk!
 
 # - Dependencies -----------------
+from __future__ import absolute_import, print_function, unicode_literals
 import os, json
 from platform import system
 
@@ -21,7 +22,6 @@ from typerig.proxy.fl.objects.font import *
 from typerig.core.func.string import getUppercaseCodepoint, getLowercaseCodepoint
 
 # - Init
-from __future__ import absolute_import, print_function, unicode_literals
 
 global pLayers
 pLayers = None
@@ -526,7 +526,8 @@ class WKernGroups(QtGui.QWidget):
 	def apply_changes(self, writeToFont=True):
 		active_layer = self.cmb_layer.currentText
 		self.kern_group_data[active_layer] = self.tab_groupKern.getTable()
-		if not writeToFont: print 'DONE:\t Internal Database classes updated for layer: %s' %active_layer
+		if not writeToFont: 
+			print('DONE:\t Internal Database classes updated for layer: %s' %active_layer)
 		
 		if writeToFont:	
 			self.active_font.dict_to_kerning_groups(self.kern_group_data[active_layer], active_layer)

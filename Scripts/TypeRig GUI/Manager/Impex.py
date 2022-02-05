@@ -8,23 +8,26 @@
 # that you use it at your own risk!
 
 # - Init
+from __future__ import absolute_import
 global pLayers
 pLayers = None
 app_name, app_version = 'TypeRig | Import & Export', '0.6'
 
 # - Dependencies -----------------
-from __future__ import absolute_import
 import fontlab as fl6
 import fontgate as fgt
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 
-from . import ImpexActions
+try: 
+	import ImpexActions
+except ImportError:
+	from . import ImpexActions
 
 # - Configuration ------------------------------------------------------------
 file_formats = {'afm':'Adobe Font Metrics (*.afm)',
-				'svg': 'Scalable Vector Graphics (*.svg)'	
+				'svg': 'Scalable Vector Graphics (*.svg)'
 }
 
 impex_actions_db = {
@@ -34,12 +37,12 @@ impex_actions_db = {
 
 					},
 
-					'Scalable Vector Graphics (SVG)':{	
+					'Scalable Vector Graphics (SVG)':{
 												'Import SVG Graphics to Current Font Layer':ImpexActions.action_empty()
 
 					},
 
-					'Comma Separated Values (CSV)':{	
+					'Comma Separated Values (CSV)':{
 												'Export Components':ImpexActions.action_empty(),
 												'Export Anchors':ImpexActions.action_empty(),
 												'Export Kerning':ImpexActions.action_empty(),
@@ -59,10 +62,10 @@ def layout_clear_items(layout):
 		while layout.count():
 			item = layout.takeAt(0)
 			widget = item.widget()
-			
+
 			if widget is not None:
 				widget.setParent(None)
-				 
+
 			else:
 				layout_clear_items(item.layout())
 
@@ -80,7 +83,7 @@ class TRImpEx(QtGui.QWidget):
 
 		self.plane_A.setAlternatingRowColors(True)
 		self.plane_B.setAlternatingRowColors(True)
-		
+
 		self.plane_A.addItems(sorted(list(impex_actions_db.keys())))
 		self.plane_A.selectionModel().selectionChanged.connect(self.refresh_plane_B)
 		self.plane_B.selectionModel().selectionChanged.connect(self.run_action)
@@ -94,7 +97,7 @@ class TRImpEx(QtGui.QWidget):
 		self.lay_base.addWidget(self.plane_A, 				1,1)
 		self.lay_base.addWidget(self.plane_B, 				1,2)
 		self.lay_base.addLayout(self.plane_C, 				1,3)
-		
+
 		self.lay_base.setColumnStretch(1,1)
 		self.lay_base.setColumnStretch(2,1)
 		self.lay_base.setColumnStretch(3,1)
@@ -117,21 +120,21 @@ class TRImpEx(QtGui.QWidget):
 		if action_widget is not None:
 			# - Clear previous widget
 			layout_clear_items(self.plane_C)
-			
+
 			# - Set new widget
 			self.plane_C.addWidget(action_widget)
 			self.plane_C.addStretch()
-		
-	
+
+
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
 	def __init__(self):
 		super(tool_tab, self).__init__()
 		layoutV = QtGui.QVBoxLayout()
-		
+
 		self.Importer = TRImpEx()
 		layoutV.addWidget(self.Importer)
-						
+
 		# - Build ---------------------------
 		self.setLayout(layoutV)
 
