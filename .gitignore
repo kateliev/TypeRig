@@ -9,4 +9,4 @@ __pycache__/
 dmypy.json
 .idea/
 *.vfpyc
-Scripts/TypeRig GUI/.DS_Store
+.DS_Store
