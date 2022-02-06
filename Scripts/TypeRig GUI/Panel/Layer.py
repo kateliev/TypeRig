@@ -837,8 +837,6 @@ class tool_tab(QtGui.QWidget):
 		act_layer_restore.triggered.connect(lambda: TRLayerActionCollector.layer_restore(self.layerSelector))
 
 		# - Build ----------------------------------------
-		scriptDir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-		self.setWindowIcon(QtGui.QIcon(scriptDir + os.path.sep + 'Resource' + os.path.sep + 'typerig-icon.svg'))
 		self.setLayout(layoutV)
 
 		# !!! Hotfix FL7 7355 
