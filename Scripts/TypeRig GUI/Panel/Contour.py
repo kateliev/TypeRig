@@ -31,7 +31,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '2.1'
+app_name, app_version = 'TypeRig | Contour', '2.2'
 
 # - Sub widgets ------------------------
 class breakContour(QtGui.QGridLayout):
@@ -292,7 +292,7 @@ class basicContour(QtGui.QGridLayout):
 			
 			selected_contours = {layer:glyph.selectedAtContours(layer)[0] for layer in wLayers}
 
-			for layer, selection in selected_contours.iteritems():
+			for layer, selection in selected_contours.items():
 				cid, nid = selection
 				glyph.contours(layer)[cid].setStartPoint(nid)
 
@@ -632,7 +632,7 @@ class copyContours(QtGui.QGridLayout):
 				wLayer = layer_name
 				export_clipboard[wLayer] = []
 
-				for cid, nList in selection.iteritems():
+				for cid, nList in selection.items():
 					if len(nList):
 						 export_clipboard[wLayer].append(fl6.flContour([wGlyph.nodes(wLayer)[nid].clone() for nid in nList]))
 					else:
@@ -659,7 +659,7 @@ class copyContours(QtGui.QGridLayout):
 			for idx in gallery_selection:
 				paste_data = self.contourClipboard[idx]
 
-				for layerName, contours in paste_data.iteritems():
+				for layerName, contours in paste_data.items():
 					wLayer = wGlyph.layer(layerName)
 					
 					if wLayer is not None:	

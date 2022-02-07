@@ -9,10 +9,13 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.8'
+__version__ = '0.0.9'
 
 # - Keep compatibility for basestring checks
-if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
+try:
+	basestring
+except NameError:
+	basestring = (str, bytes)
 
 # - Dependancies -----------------------
 import fontlab as fl6

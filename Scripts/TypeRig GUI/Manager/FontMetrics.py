@@ -24,7 +24,7 @@ from typerig.proxy.fl.gui.widgets import TRTableView
 # - Init ----------------------------
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Font Metrics', '1.16'
+app_name, app_version = 'TypeRig | Font Metrics', '1.17'
 
 # - Sub widgets ------------------------
 class TRZLineEdit(QtGui.QLineEdit):
@@ -96,7 +96,7 @@ class WFontMetrics(QtGui.QWidget):
 		oldMetricData = self.activeFont.fontMetrics()
 		newMetricData = self.tab_fontMetrics.getTable()
 		
-		for layer, metrics in newMetricData.iteritems():
+		for layer, metrics in newMetricData.items():
 			oldMetricData.fromDict(metrics, layer)
 
 		self.activeFont.fl.update()
@@ -150,7 +150,7 @@ class WTreeWidget(QtGui.QTreeWidget):
 		header_row = ['Layer/Zone', 'Position', 'Width', 'Type']
 		self.setHeaderLabels(header_row)
 
-		for key, value in data.iteritems():
+		for key, value in data.items():
 			master = QtGui.QTreeWidgetItem(self, [key])
 
 			for zoneTuple in value:
@@ -234,7 +234,7 @@ class WFontZones(QtGui.QWidget):
 	def applyChanges(self):
 		newZoneData = self.tree_fontZones.getTree()
 		
-		for layer, zones in newZoneData.iteritems():
+		for layer, zones in newZoneData.items():
 			self.activeFont.zonesFromTuples(zones, layer, True)
 
 		self.zoneData = {master:self.activeFont.zonesToTuples() for master in self.activeFont.masters()}

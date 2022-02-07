@@ -8,15 +8,19 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.76.1'
+__version__ = '0.76.2'
 
-# - Keep compatibility for basestring checks
-if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
 
 # - Dependencies --------------------------
 import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
+
+# - Keep compatibility for basestring checks
+try:
+	basestring
+except NameError:
+	basestring = (str, bytes)
 
 # - Procedures/Functions ------------------
 def openFont(file_path):

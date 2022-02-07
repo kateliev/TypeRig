@@ -21,7 +21,13 @@ from typerig.proxy.tr.objects.contour import trContour
 from typerig.core.objects.shape import Shape
 
 # - Init --------------------------------
-__version__ = '0.0.5'
+__version__ = '0.1.0'
+
+# - Keep compatibility for basestring checks
+try:
+	basestring
+except NameError:
+	basestring = (str, bytes)
 
 # - Classes -----------------------------
 class trShape(Shape):

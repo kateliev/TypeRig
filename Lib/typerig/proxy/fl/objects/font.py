@@ -24,7 +24,7 @@ from typerig.core.objects.collection import extBiDict
 from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
 
 # - Init ---------------------------------
-__version__ = '0.28.3'
+__version__ = '0.28.4'
 
 # - Keep compatibility for basestring checks
 try:
@@ -139,7 +139,7 @@ class pFontMetrics(object):
 		return {getter.replace('get',''):getattr(self, getter)(layer) for getter in getterFunctions} 
 
 	def fromDict(self, metricDict, layer=None):
-		for func, value in metricDict.iteritems():
+		for func, value in metricDict.items():
 			eval("self.set{}({}, '{}')".format(func, value, layer))
 
 
@@ -807,7 +807,7 @@ class pFont(object):
 		layer_kernig = self.kerning(layer)
 		kern_list = []
 
-		for key, value in layer_kernig.asDict().iteritems():
+		for key, value in layer_kernig.asDict().items():
 			kern_list.append([[item.asTuple() for item in key.asTuple()], value])
 
 		return kern_list
@@ -881,7 +881,7 @@ class pFont(object):
 		# - Build Group kerning from dictionary
 		kerning_groups = self.kerning_groups(layer)
 		
-		for key, value in groupDict.iteritems():
+		for key, value in groupDict.items():
 			kerning_groups[key] = value
 
 	def reset_kerning_groups(self, layer=None):

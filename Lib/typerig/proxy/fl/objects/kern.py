@@ -18,7 +18,7 @@ import PythonQt as pqt
 from typerig.core.objects.collection import extBiDict
 
 # - Init ---------------------------------
-__version__ = '0.26.4'
+__version__ = '0.26.5'
 
 # - Keep compatibility for basestring checks
 try:
@@ -77,7 +77,7 @@ class pKerning(object):
 		self.useExternalGroupData = True	
 
 	def storeExternalGroupData(self):
-		for key, value in self.useExternalGroupData.iteritems():
+		for key, value in self.useExternalGroupData.items():
 			self.fg.groups[key] = value
 
 	def resetGroups(self):
@@ -90,7 +90,7 @@ class pKerning(object):
 	def asList(self):
 		# Structure:
 		# 	fgKerning{fgKernigPair(fgKerningObject(glyph A, mode), fgKerningObject(glyph B, mode)) : kern value, ...}
-		return [[[item.asTuple() for item in key.asTuple()], value] for key, value in self.kerning.asDict().iteritems()]
+		return [[[item.asTuple() for item in key.asTuple()], value] for key, value in self.kerning.asDict().items()]
 
 	def groupsAsDict(self):
 		# - Semi working fixup of Build 6927 Bug
@@ -102,16 +102,16 @@ class pKerning(object):
 	def groupsBiDict(self):
 		temp_data = {}
 
-		for key, value in self.groupsAsDict().iteritems():
+		for key, value in self.groupsAsDict().items():
 			temp_data.setdefault(value[1], {}).update({key : value[0]})
 
-		return {key:extBiDict(value) for key, value in temp_data.iteritems()}
+		return {key:extBiDict(value) for key, value in temp_data.items()}
 
 	def groupsFromDict(self, groupDict):
 		# - Build Group kerning from dictionary
 		kerning_groups = self.groups()
 		
-		for key, value in groupDict.iteritems():
+		for key, value in groupDict.items():
 			kerning_groups[key] = value
 
 	def removeGroup(self, key):

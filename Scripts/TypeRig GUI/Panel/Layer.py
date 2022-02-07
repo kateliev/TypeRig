@@ -32,7 +32,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '2.11'
+app_name, app_version = 'TypeRig | Layers', '2.12'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -331,7 +331,7 @@ class TRLayerActionCollector(object):
 			# - Resore metrics
 			wGlyph = parent.glyph
 
-			for layer, metrics in parent.backup.iteritems():
+			for layer, metrics in parent.backup.items():
 				wGlyph.setLSB(metrics[0], layer)
 				wGlyph.setAdvance(metrics[1], layer)
 				wGlyph.layer(layer).isVisible = False
@@ -357,7 +357,7 @@ class TRLayerActionCollector(object):
 				wLayer = layer_name
 				parent.contourClipboard[wLayer] = []
 
-				for cid, nList in selection.iteritems():
+				for cid, nList in selection.items():
 					if len(nList):
 						 parent.contourClipboard[wLayer].append(fl6.flContour([wGlyph.nodes(wLayer)[nid].clone() for nid in nList]))
 					else:
@@ -378,7 +378,7 @@ class TRLayerActionCollector(object):
 
 		# - Process
 		if len(parent.contourClipboard.keys()):
-			for layerName, contours in parent.contourClipboard.iteritems():
+			for layerName, contours in parent.contourClipboard.items():
 				wLayer = wGlyph.layer(layerName)
 
 				if wLayer is not None:

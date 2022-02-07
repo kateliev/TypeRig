@@ -17,7 +17,7 @@ from PythonQt import QtCore, QtGui
 from typerig.proxy.fl import pFont, pGlyph
 
 # - Init --------------------------------
-app_version = '0.05'
+app_version = '0.06'
 app_name = 'Copy Metric Bindings'
 fixedLayer = None
 
@@ -97,7 +97,7 @@ class dlg_copyMetricBinding(QtGui.QDialog):
 		dstGlyphs = {glyph.name:glyph for glyph in font.pGlyphs()}
 		
 		print('WARN:\t Pasting Metric expressions to Font:%s;' %font.name)
-		for glyphName, glyphMetrics in self.srcGlyphBounds.iteritems():
+		for glyphName, glyphMetrics in self.srcGlyphBounds.items():
 			if glyphName in dstGlyphs:
 				wGlyph = dstGlyphs[glyphName]
 

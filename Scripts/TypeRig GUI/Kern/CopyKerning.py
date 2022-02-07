@@ -23,7 +23,7 @@ from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 
 # - Init --------------------------------
-app_name, app_version = 'Copy Kernig', '2.0'
+app_name, app_version = 'Copy Kernig', '2.1'
 
 # -- Strings 
 str_help = '''
@@ -123,10 +123,10 @@ class tool_tab(QtGui.QWidget):
 
 		for layer in self.active_font.masters():
 			if source.has_key(layer):
-				for key, value in source[layer].iteritems():
+				for key, value in source[layer].items():
 					temp_data.setdefault(value[1], {}).update({key : value[0]})
 
-				self.class_data[layer] = {key:extBiDict(value) for key, value in temp_data.iteritems()}
+				self.class_data[layer] = {key:extBiDict(value) for key, value in temp_data.items()}
 			else:
 				warnings.warn('Class kering not found for Master: %s' %layer, KernClassWarning)
 

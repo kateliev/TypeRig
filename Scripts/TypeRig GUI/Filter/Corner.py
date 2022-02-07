@@ -36,7 +36,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Corner', '2.50'
+app_name, app_version = 'TypeRig | Corner', '2.51'
 
 # -- Strings
 filter_name = 'Smart corner'
@@ -568,7 +568,7 @@ class TRCornerControl(QtGui.QVBoxLayout):
 						process_angles.setdefault(smart_angle[1], []).append(node)
 
 		# - Build sliders
-		for angle_value, angle_nodes in process_angles.iteritems():
+		for angle_value, angle_nodes in process_angles.items():
 			new_slider = TRSliderCtrl('0', '100', angle_value, 5)
 			new_slider.sld_axis.valueChanged.connect(self.__processNodes)
 			self.addLayout(new_slider)

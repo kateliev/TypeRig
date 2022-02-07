@@ -9,14 +9,19 @@
 
 # Running UI FontLab actions
 
-# - Keep compatibility for basestring checks
 from __future__ import print_function
-if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
 
 from collections import OrderedDict
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.gui.QtGui import QAction
 
+# - Keep compatibility for basestring checks
+try:
+    basestring
+except NameError:
+    basestring = (str, bytes)
+
+# - Classes -----------------------------------
 class Automat(object):
     def __init__(self):
         self.ws = pWorkspace()

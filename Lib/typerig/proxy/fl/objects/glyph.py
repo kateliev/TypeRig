@@ -27,7 +27,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.29.2'
+__version__ = '0.29.3'
 
 # - Keep compatibility for basestring checks
 try:
@@ -935,10 +935,10 @@ class pGlyph(object):
 		n2tMap = self._mapOn(layer)
 		t2nMap = {}
 
-		for cID, nodeMap in n2tMap.iteritems():
+		for cID, nodeMap in n2tMap.items():
 			tempMap = {}
 			
-			for nID, time in nodeMap.iteritems():
+			for nID, time in nodeMap.items():
 				tempMap.setdefault(time, []).append(nID)
 
 			t2nMap[cID] = tempMap
@@ -984,7 +984,7 @@ class pGlyph(object):
 		timeTable = self.mapTimes2Nodes(layer)[cID]
 		n4sMap = {}
 
-		for time, nodeIndexes in timeTable.iteritems():
+		for time, nodeIndexes in timeTable.items():
 			n4sMap[time] = (segments[time], [nodes[nID] for nID in nodeIndexes] + [nodes[nodeIndexes[-1] + 1]]) # Should be closed otherwise fail			
 
 		return n4sMap
@@ -1581,7 +1581,7 @@ class eGlyph(pGlyph):
 			processSingle = len(nodes) < 2
 
 		# - Process
-		for layerName, layerCoords in coordDict.iteritems():
+		for layerName, layerCoords in coordDict.items():
 						
 			if not processSingle:
 				vector = pqt.QtCore.QLineF(layerCoords[0], layerCoords[1])

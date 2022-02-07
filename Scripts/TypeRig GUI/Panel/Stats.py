@@ -29,7 +29,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Glyph Statistics', '2.00'
+app_name, app_version = 'TypeRig | Glyph Statistics', '2.01'
 
 # - Sub widgets ------------------------
 class TRGlyphInfo(QtGui.QVBoxLayout):
@@ -163,17 +163,17 @@ class TRGlyphInfo(QtGui.QVBoxLayout):
 		base_name = self.tab_stats.verticalHeaderItem(base_index.row()).text()
 		base_layer = self.tab_stats.horizontalHeaderItem(base_index.column()).text()
 				
-		for glyph_name, glyph_layers in self.table_data.iteritems():
+		for glyph_name, glyph_layers in self.table_data.items():
 			if not self.btn_probe.isChecked():
 				if self.btn_units.isChecked():
-					self.table_proc[glyph_name] = {layer_name: -round(self.table_data[base_name][layer_name] - layer_value, 2)  for layer_name, layer_value in glyph_layers.iteritems()}
+					self.table_proc[glyph_name] = {layer_name: -round(self.table_data[base_name][layer_name] - layer_value, 2)  for layer_name, layer_value in glyph_layers.items()}
 				else:
-					self.table_proc[glyph_name] = {layer_name:'%s %%' %round(ratfrac(noZero(layer_value), noZero(self.table_data[base_name][layer_name])),2)  for layer_name, layer_value in glyph_layers.iteritems()}
+					self.table_proc[glyph_name] = {layer_name:'%s %%' %round(ratfrac(noZero(layer_value), noZero(self.table_data[base_name][layer_name])),2)  for layer_name, layer_value in glyph_layers.items()}
 			else:
 				if self.btn_units.isChecked():
-					self.table_proc[glyph_name] = {layer_name: -round(self.table_data[glyph_name][base_layer] - layer_value, 2)  for layer_name, layer_value in glyph_layers.iteritems()}
+					self.table_proc[glyph_name] = {layer_name: -round(self.table_data[glyph_name][base_layer] - layer_value, 2)  for layer_name, layer_value in glyph_layers.items()}
 				else:
-					self.table_proc[glyph_name] = {layer_name:'%s %%' %round(ratfrac(noZero(layer_value), noZero(self.table_data[glyph_name][base_layer])),2)  for layer_name, layer_value in glyph_layers.iteritems()}
+					self.table_proc[glyph_name] = {layer_name:'%s %%' %round(ratfrac(noZero(layer_value), noZero(self.table_data[glyph_name][base_layer])),2)  for layer_name, layer_value in glyph_layers.items()}
 
 		self.tab_stats.setTable(self.table_proc)
 		self.tab_stats.resizeColumnsToContents()

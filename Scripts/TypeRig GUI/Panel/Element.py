@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '1.26'
+app_name, app_version = 'TypeRig | Elements', '1.27'
 
 # - Syntax -------------------------------
 syn_comment = '#'
@@ -608,7 +608,7 @@ class glyphComposer(QtGui.QGridLayout):
 				process_glyphs = {glyph:src_temp for glyph in dst_store}
 			
 				# - Process ------------------------------------------------------------
-				for glyph_name, insert_command in process_glyphs.iteritems():
+				for glyph_name, insert_command in process_glyphs.items():
 					
 					# - Set working glyph
 					w_glyph = eGlyph(self.active_font.glyph(glyph_name).fl)

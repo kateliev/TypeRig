@@ -29,7 +29,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRMsgSi
 
 
 # - Init --------------------------------
-app_version = '1.13'
+app_version = '1.14'
 app_name = 'TypeRig | Delta Machine'
 
 ss_controls = """
@@ -91,7 +91,7 @@ class probe_dict(dict):
 	def __add__(self, other):
 		result = self.__class__()
 
-		for key, value in self.iteritems():
+		for key, value in self.items():
 			if isinstance(other, self.__class__):
 				if other.has_key(key):
 					result[key] = self[key] + other[key]
@@ -104,7 +104,7 @@ class probe_dict(dict):
 	def __sub__(self, other):
 		result = self.__class__()
 
-		for key, value in self.iteritems():
+		for key, value in self.items():
 			if isinstance(other, self.__class__):
 				if other.has_key(key):
 					result[key] = self[key] - other[key]
@@ -117,7 +117,7 @@ class probe_dict(dict):
 	def __mul__(self, other):
 		result = self.__class__()
 
-		for key, value in self.iteritems():
+		for key, value in self.items():
 			if isinstance(other, self.__class__):
 				if other.has_key(key):
 					result[key] = self[key] * other[key]
@@ -130,7 +130,7 @@ class probe_dict(dict):
 	def __div__(self, other):
 		result = self.__class__()
 
-		for key, value in self.iteritems():
+		for key, value in self.items():
 			if isinstance(other, self.__class__):
 				if other.has_key(key):
 					result[key] = self[key] / other[key]
@@ -143,7 +143,7 @@ class probe_dict(dict):
 	def round_values(self):
 		result = self.__class__()
 
-		for key, value in self.iteritems():
+		for key, value in self.items():
 			result[key] = round(self[key])
 
 		return result
@@ -512,7 +512,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 			with open(fname, 'r') as importFile:
 				imported_data = json.load(importFile)
 								
-				table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in imported_data.iteritems()}
+				table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in imported_data.items()}
 				self.tab_masters.updateTable(table_dict)
 				print('LOAD:\t| Delta Machine | Font:%s; Deltas loaded from: %s.' %(self.active_font.name, fname))
 

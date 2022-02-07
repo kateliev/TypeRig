@@ -16,10 +16,13 @@ import copy, uuid
 from typerig.core.objects.collection import CustomList
 
 # - Init -------------------------------
-__version__ = '0.2.0'
+__version__ = '0.2.1'
 
-# -- Fix Python 2.7 compatibility 
-if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
+# - Keep compatibility for basestring checks
+try:
+	basestring
+except NameError:
+	basestring = (str, bytes)
 
 # - Objects ----------------------------
 class Atom(object):

@@ -33,7 +33,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '2.11'
+app_name, app_version = 'TypeRig | Nodes', '2.12'
 
 # - Helpers ----------------------------
 def filter_consecutive(selection):
@@ -157,7 +157,7 @@ class basicOps(QtGui.QGridLayout):
 			tempDict.setdefault(cID, []).append(nID)
 
 		for layer in wLayers:
-			for cID, nidList in tempDict.iteritems():
+			for cID, nidList in tempDict.items():
 				for nID in reversed(nidList):
 					nodeA = eNode(glyph.contours(layer)[cID].nodes()[nID]).getNextOn()
 					nodeB = eNode(glyph.contours(layer)[cID].nodes()[nID]).getPrevOn()
