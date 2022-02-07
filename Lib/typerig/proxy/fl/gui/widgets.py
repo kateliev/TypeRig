@@ -25,7 +25,7 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.2.92'
+__version__ = '0.2.93'
 
 # - Keep compatibility for basestring checks
 if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
@@ -387,10 +387,10 @@ class TRLayerSelectDLG(QtGui.QDialog):
 		self.btn_tableCheckMasks = QtGui.QPushButton('Masks')
 		self.btn_tableCheckServices = QtGui.QPushButton('Services')
 
-		self.btn_tableCheck.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
-		self.btn_tableCheckMasters.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
-		self.btn_tableCheckMasks.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
-		self.btn_tableCheckServices.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
+		self.btn_tableCheck.setToolTip('Click check all.\n<Shift> + Click uncheck all.')
+		self.btn_tableCheckMasters.setToolTip('Click check all.\n<Shift> + Click uncheck all.')
+		self.btn_tableCheckMasks.setToolTip('Click check all.\n<Shift> + Click uncheck all.')
+		self.btn_tableCheckServices.setToolTip('Click check all.\n<Shift> + Click uncheck all.')
 		
 		self.btn_tableCheck.clicked.connect(lambda: self.table_check_all())
 		self.btn_tableSwap.clicked.connect(lambda: self.table_check_all(do_swap=True))
