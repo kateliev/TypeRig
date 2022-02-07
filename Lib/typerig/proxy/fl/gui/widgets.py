@@ -25,7 +25,7 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.2.91'
+__version__ = '0.2.92'
 
 # - Keep compatibility for basestring checks
 if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
@@ -360,7 +360,7 @@ class TRColorDLG(QtGui.QDialog):
 		self.values = (selection_name,  QtGui.QColor(selection_name))
 
 class TRLayerSelectDLG(QtGui.QDialog):
-	def __init__(self, parent, mode):
+	def __init__(self, parent, mode, font=None, glyph=None):
 		super(TRLayerSelectDLG, self).__init__()
 	
 		# - Init
@@ -371,9 +371,7 @@ class TRLayerSelectDLG(QtGui.QDialog):
 		table_dict = {1:OrderedDict(zip(self.column_names, column_init))}
 		
 		# - Basic Widgets
-		self.tab_masters = TRCheckTableView(table_dict)
-		self.table_populate(mode)
-		self.tab_masters.cellChanged.connect(lambda: self.parent_widget.layers_refresh())
+		
 		
 		# - Search Box
 		self.edt_search_field = QtGui.QLineEdit()
@@ -394,16 +392,16 @@ class TRLayerSelectDLG(QtGui.QDialog):
 		self.btn_tableCheckMasks.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
 		self.btn_tableCheckServices.setToolTip('Click check all.\n<ALT> + Click uncheck all.')
 		
-		if mode !=0:
-			self.btn_tableCheckMasters.setEnabled(False)
-			self.btn_tableCheckMasks.setEnabled(False)
-			self.btn_tableCheckServices.setEnabled(False)
-		
 		self.btn_tableCheck.clicked.connect(lambda: self.table_check_all())
 		self.btn_tableSwap.clicked.connect(lambda: self.table_check_all(do_swap=True))
 		self.btn_tableCheckMasters.clicked.connect(lambda: self.table_check_all('Master'))
 		self.btn_tableCheckMasks.clicked.connect(lambda: self.table_check_all('Mask'))
 		self.btn_tableCheckServices.clicked.connect(lambda: self.table_check_all('Service'))
+
+		# -- Table 
+		self.tab_masters = TRCheckTableView(table_dict)
+		self.table_populate(mode, font, glyph)
+		self.tab_masters.cellChanged.connect(lambda: self.parent_widget.layers_refresh())
 
 		# - Build layout
 		layoutV = QtGui.QGridLayout() 
@@ -452,7 +450,16 @@ class TRLayerSelectDLG(QtGui.QDialog):
 					if not self.tab_masters.isRowHidden(row):
 						self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Checked)
 	
-	def table_populate(self, mode):
+	def table_populate(self, mode, font=None, glyph=None):
+		if mode !=0:
+			self.btn_tableCheckMasters.hide()
+			self.btn_tableCheckMasks.hide()
+			self.btn_tableCheckServices.hide()
+		else:
+			self.btn_tableCheckMasters.show()
+			self.btn_tableCheckMasks.show()
+			self.btn_tableCheckServices.show()
+
 		# - Helper	
 		def check_type(layer):
 			if layer.isMaskLayer: return 'Mask'
@@ -461,8 +468,8 @@ class TRLayerSelectDLG(QtGui.QDialog):
 		
 		# - Set Table
 		if fl6.CurrentFont() is not None and fl6.CurrentGlyph() is not None:
-			active_font = pFont()
-			active_glyph = eGlyph()
+			active_font = pFont() if font is None else font
+			active_glyph = eGlyph() if glyph is None else glyph
 
 			if mode == 0:
 				init_data = [(layer.name, check_type(layer)) for layer in active_glyph.layers() if '#' not in layer.name]
