@@ -9,6 +9,7 @@
 # that you use it at your own risk!
 
 # - Dependencies ----------------------
+from __future__ import print_function
 import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
@@ -268,7 +269,7 @@ class GlyphSampler(object):
 			new_shape.addContours([contour_left, contour_mid, contour_right], True)
 			mask_layer.addShape(new_shape)
 		else:
-			print 'ABORT:\t Draw Area;\t Glyph: %s; Layer: %s;\tGlyphSampler data not found!' %(glyph_name, layer_name)
+			print('ABORT:\t Draw Area;\t Glyph: %s; Layer: %s;\tGlyphSampler data not found!' %(glyph_name, layer_name))
 
 class MetricSampler(GlyphSampler):
 	'''Metric sampler for automatically generating glyph side-bearings based on negative space area.
@@ -348,4 +349,4 @@ if __name__ == '__main__':
 	g.updateObject(g.fl)
 
 	# - Finish ---------------------------
-	print 'SAMPLER: %s;' %g.name
+	print('SAMPLER: %s;' %g.name)

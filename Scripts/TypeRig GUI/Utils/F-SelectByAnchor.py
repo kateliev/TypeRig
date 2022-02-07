@@ -10,6 +10,7 @@
 # that you use it at your own risk!
 
 # - Dependancies
+from __future__ import print_function
 from typerig.proxy.fl import pFont, pGlyph
 
 # - Helper
@@ -47,7 +48,7 @@ for glyph in font.pGlyphs():
 				
 				if contains(search_anchors, layer_anchor_names, search_mode):
 					selection.append(glyph.name)
-					print 'FOUND:\tGlyph: %s;\tAnchors: %s' %(glyph.name, search_anchors)
+					print('FOUND:\tGlyph: %s;\tAnchors: %s' %(glyph.name, search_anchors))
 					break
 		
 		except AttributeError:
@@ -55,4 +56,4 @@ for glyph in font.pGlyphs():
 
 font.unselectAll()
 font.selectGlyphs(selection)
-print 'DONE:\tFind Anchors...'
+print('DONE:\tFind Anchors...')

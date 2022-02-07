@@ -10,6 +10,7 @@
 # Running UI FontLab actions
 
 # - Keep compatibility for basestring checks
+from __future__ import print_function
 if not hasattr(__builtins__, "basestring"): basestring = (str, bytes)
 
 from collections import OrderedDict
@@ -53,5 +54,5 @@ class Automat(object):
 if __name__ == '__main__':
     # from typerig.automat import Automat
     auto = Automat()
-    print auto.helpAll()
+    print(auto.helpAll())
     auto.run('About')
