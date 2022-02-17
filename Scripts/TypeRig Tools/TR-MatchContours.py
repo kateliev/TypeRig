@@ -26,19 +26,15 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TR | Match Contours', '1.4'
+app_name, app_version = 'TR | Match Contours', '1.5'
 
 # - Sub widgets ------------------------
 class TRWContourView(QtGui.QTableWidget):
-	def __init__(self, data):
+	def __init__(self, data, aux):
 		super(TRWContourView, self).__init__()
 		
 		# - Init
-		self.setRowCount(len(data.items()[0][1]))
-		self.setColumnCount(len(data.keys()))
-		self.header = self.horizontalHeader()
-
-		# - Set 
+		self.aux = aux
 		self.set_table(data)	
 		self.setIconSize(QtCore.QSize(100, 100))
 		
@@ -51,6 +47,9 @@ class TRWContourView(QtGui.QTableWidget):
 		self.clear()
 		self.setSortingEnabled(False)
 		self.blockSignals(True)
+		self.setDragDropMode(self.InternalMove)
+		self.setDragEnabled(True)
+		self.setDropIndicatorShown(True)
 		self.model().sort(-1)
 		self.horizontalHeader().setSortIndicator(-1, 0)
 		self.setIconSize(QtCore.QSize(100, 100))	
@@ -66,7 +65,8 @@ class TRWContourView(QtGui.QTableWidget):
 			column_names.append(layer_name)
 
 			for row, glyph_data in enumerate(data[layer_name]):
-				newitem = QtGui.QTableWidgetItem(*glyph_data)
+				newitem = QtGui.QTableWidgetItem()
+				newitem.setIcon(glyph_data)
 				self.setItem(row, col, newitem)
 
 		self.setHorizontalHeaderLabels(column_names)
@@ -74,14 +74,11 @@ class TRWContourView(QtGui.QTableWidget):
 		self.resizeColumnsToContents()
 		self.blockSignals(False)
 	
-	def get_table(self):
-		table_record = []
-
-		for row in range(self.rowCount):
-			row_data = [(self.item(row, col).text(), self.item(row, col).checkState() == QtCore.Qt.Checked) for col in range(self.columnCount)]
-			table_record.append(zip(column_names, row_data))
-
-		return table_record
+	def dropEvent(self, event):
+		new_index = self.rowAt(event.pos().y())
+		old_index = self.selectedItems()[0].row()
+		layer_index = self.selectedItems()[0].column()
+		self.aux.moveContour(layer_index, old_index, new_index)
 				
 class TRIconsProspect(QtGui.QDialog):
 	# - Split/Break contour 
@@ -89,6 +86,7 @@ class TRIconsProspect(QtGui.QDialog):
 		super(TRIconsProspect, self).__init__()
 
 		# - Init
+		self.glyph = pGlyph()
 		glyph_contours = self.contours_refresh()
 
 		# -- Buttons
@@ -96,10 +94,10 @@ class TRIconsProspect(QtGui.QDialog):
 		self.btn_apply = QtGui.QPushButton('&Apply')
 		
 		self.btn_refresh.clicked.connect(lambda: self.tab_glyphs.set_table(self.contours_refresh()))
-		#self.btn_apply.clicked.connect(self.contours_apply)
+		self.btn_apply.clicked.connect(lambda: self.glyph.updateObject(self.glyph.fl, '{} | Glyph: {}'.format(app_name, self.glyph.name)))
 
 		# -- Table
-		self.tab_glyphs = TRWContourView(glyph_contours)
+		self.tab_glyphs = TRWContourView(glyph_contours, self)
 
 		# - Layout
 		lay_tail = QtGui.QHBoxLayout()
@@ -120,16 +118,24 @@ class TRIconsProspect(QtGui.QDialog):
 		return_icons = []
 
 		for layer in self.glyph.masters():
-			if '#' not in layer.name:
-				return_icons.append((layer.name, self.__drawIcons(layer.getContours())))
+			return_icons.append((layer.name, self.__drawIcons(layer.getContours())))
 		
 		return OrderedDict(return_icons)
 
+	def moveContour(self, lid, oid, nid):
+		work_layer_name = self.glyph.masters()[lid].name
+		work_shape = self.glyph.shapes(work_layer_name)[0] # Only first shape for now
+		work_contours = work_shape.contours
+		work_contours[oid], work_contours[nid] = work_contours[nid], work_contours[oid]
+		work_shape.contours = work_contours
+		work_shape.update()
+		self.tab_glyphs.set_table(self.contours_refresh())
+
 	def __drawIcons(self, contours):
 		# - Init
-		color_foreground= QtGui.QColor('gray')
-		color_background= QtGui.QColor('white')
-		color_accent =QtGui.QColor('red')
+		color_foreground = QtGui.QColor('gray')
+		color_background = QtGui.QColor('white')
+		color_accent = QtGui.QColor('red')
 		color_accent.setAlpha(100)
 		color_basepen = QtGui.QColor('black')
 		padding = 100
@@ -183,7 +189,7 @@ class TRIconsProspect(QtGui.QDialog):
 
 			new_icon.addPixmap(cont_pixmap.transformed(QtGui.QTransform().scale(1, -1)))
 
-			return_icons.append((new_icon, str(cid)))
+			return_icons.append(new_icon)
 
 		return return_icons
 
