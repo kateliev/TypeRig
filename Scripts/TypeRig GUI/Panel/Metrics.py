@@ -28,7 +28,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Metrics', '1.32'
+app_name, app_version = 'TypeRig | Metrics', '1.33'
 
 # - Sub widgets ------------------------
 class TRMLineEdit(QtGui.QLineEdit):
@@ -155,9 +155,9 @@ class metrics_copy(QtGui.QGridLayout):
 		super(metrics_copy, self).__init__()
 
 		# - Edit Fields
-		self.edt_lsb =  QtGui.QLineEdit()
-		self.edt_adv = QtGui.QLineEdit()
-		self.edt_rsb =   QtGui.QLineEdit()
+		self.edt_lsb = TRMLineEdit()
+		self.edt_adv = TRMLineEdit()
+		self.edt_rsb = TRMLineEdit()
 
 		self.edt_lsb.setPlaceholderText('Glyph Name')
 		self.edt_adv.setPlaceholderText('Glyph Name')
