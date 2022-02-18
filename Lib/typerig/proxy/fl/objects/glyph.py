@@ -27,7 +27,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.29.3'
+__version__ = '0.29.4'
 
 # - Keep compatibility for basestring checks
 try:
@@ -1136,6 +1136,16 @@ class pGlyph(object):
 		pLayer = self.layer(layer)
 		return int(pLayer.advanceWidth - (pLayer.boundingBox.x() + pLayer.boundingBox.width()))
 
+	def getVSB(self, layer=None):
+		'''Get the Bottom (Vertical) Side-bearing at given layer (int or str)'''
+		pLayer = self.layer(layer)
+		return int(pLayer.boundingBox.y())
+
+	def getTSB(self, layer=None):
+		'''Get the Top (Vertical) Side-bearing at given layer (int or str)'''
+		pLayer = self.layer(layer)
+		return int(pLayer.boundingBox.y() + pLayer.boundingBox.height())
+
 	def getBounds(self, layer=None):
 		'''Get Glyph's Boundig Box at given layer (int or str). Returns QRectF.'''
 		return self.layer(layer).boundingBox
@@ -1153,6 +1163,22 @@ class pGlyph(object):
 		pLayer = self.layer(layer)
 		pRSB = pLayer.advanceWidth - (pLayer.boundingBox.x() + pLayer.boundingBox.width())
 		pLayer.advanceWidth += newRSB - pRSB
+
+	def setVSB(self, newVSB, layer=None):
+		'''Set the Bottom (Vertical) Side-bearing (int) at given layer (int or str)'''
+		pLayer = self.layer(layer)
+		pTransform = pLayer.transform
+		shiftDy = newVSB - int(pLayer.boundingBox.y())
+		pTransform.translate(0, shiftDy)
+		pLayer.applyTransform(pTransform)
+
+	def setTSB(self, newTSB, layer=None):
+		'''Set the Bottom (Vertical) Side-bearing by adjusting the topmost point position (int) at given layer (int or str)'''
+		pLayer = self.layer(layer)
+		pTransform = pLayer.transform
+		shiftDy = newTSB - int(pLayer.boundingBox.y() + pLayer.boundingBox.height())
+		pTransform.translate(0, shiftDy)
+		pLayer.applyTransform(pTransform)
 
 	def setAdvance(self, newAdvance, layer=None):
 		'''Set the Advance Width (int) at given layer (int or str)'''
@@ -1665,15 +1691,40 @@ class eGlyph(pGlyph):
 		for layer in safeLayers:
 			self.setAdvance(srcGlyph.getAdvance(layer)*adjustPercent/100 + adjustUnits, layer)
 
-	def copyMetricsbyName(self, metricTriple=(None, None, None), layers=None, order=(0, 0, 0), adjustPercent=(100, 100, 100), adjustUnits=(0,0,0)):
-		'''Copy LSB, RSB and Advance width from glyphs specified by Glyph Name.
+	def copyVSBbyName(self, glyphName, layers=None, order=0, adjustPercent=100, adjustUnits=0):
+		'''Copy VSB from another glyph specified by Glyph Name.
 		
 		Args:
-			metricTriple tuple(str): Names of source glyphs for (LSB, RSB, ADV)
+			glyphName (str): Name of source glyph
 			layers tuple(bool): Bool control tuple(active_layer, masters, masks, services). Note If all are set to False only the active layer is used.
-			order tuple(bool): Use source LSB (0 False) or RSB (1 True). Flips the metric copied. (LSB, RSB, 0)
-			adjustPercent tuple(int): Adjust the copied metric by percent (100 default) - (LSB, RSB, ADV)
-			adjustUnits tuple(int): Adjust the copied metric by units (0 default) - (LSB, RSB, ADV)
+			order (bool or int): Use source VSB (0 False) or TSB (1 True)
+			adjustPercent (int): Adjust the copied metric by percent (100 default)
+			adjustUnits (int): Adjust the copied metric by units (0 default)
+
+		Return:
+			None
+		'''
+		srcGlyph = self.__class__(self.package.findName(glyphName))
+		srcLayers = srcGlyph._prepareLayers(layers)		
+		dstLayers = self._prepareLayers(layers)
+
+		safeLayers = list(set(srcLayers) & set(dstLayers))
+
+		for layer in safeLayers:
+			if not order:
+				self.setVSB(srcGlyph.getVSB(layer)*adjustPercent/100 + adjustUnits, layer)
+			else:
+				self.setTSB(srcGlyph.getTSB(layer)*adjustPercent/100 + adjustUnits, layer)
+
+	def copyMetricsbyName(self, metricTriple=(None, None, None, None), layers=None, order=(0, 0, 0, 0), adjustPercent=(100, 100, 100, 100), adjustUnits=(0, 0, 0, 0)):
+		'''Copy LSB, RSB, Advance and VSB width from glyphs specified by Glyph Name.
+		
+		Args:
+			metricTriple tuple(str): Names of source glyphs for (LSB, RSB, ADV, VSB)
+			layers tuple(bool): Bool control tuple(active_layer, masters, masks, services). Note If all are set to False only the active layer is used.
+			order tuple(bool): Use source LSB (0 False) or RSB (1 True). Flips the metric copied. (LSB, RSB, 0, 0)
+			adjustPercent tuple(int): Adjust the copied metric by percent (100 default) - (LSB, RSB, ADV, VSB)
+			adjustUnits tuple(int): Adjust the copied metric by units (0 default) - (LSB, RSB, ADV, VSB)
 
 		Return:
 			None
@@ -1681,6 +1732,7 @@ class eGlyph(pGlyph):
 		if metricTriple[0] is not None:	self.copyLSBbyName(metricTriple[0], layers, order[0], adjustPercent[0], adjustUnits[0])
 		if metricTriple[1] is not None:	self.copyRSBbyName(metricTriple[1], layers, order[1], adjustPercent[1], adjustUnits[1])
 		if metricTriple[2] is not None:	self.copyADVbyName(metricTriple[2], layers, adjustPercent[2], adjustUnits[2])
+		if metricTriple[3] is not None:	self.copyVSBbyName(metricTriple[3], layers, order[3], adjustPercent[3], adjustUnits[3])
 		
 	def bindCompMetrics(self, layer=None, bindIndex=None):
 		'''Auto bind metrics to the base composite glyph or to specified shape index'''

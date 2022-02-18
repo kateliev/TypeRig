@@ -28,7 +28,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Metrics', '1.33'
+app_name, app_version = 'TypeRig | Metrics', '1.40'
 
 # - Sub widgets ------------------------
 class TRMLineEdit(QtGui.QLineEdit):
@@ -158,42 +158,59 @@ class metrics_copy(QtGui.QGridLayout):
 		self.edt_lsb = TRMLineEdit()
 		self.edt_adv = TRMLineEdit()
 		self.edt_rsb = TRMLineEdit()
+		self.edt_vsb = TRMLineEdit()
+
+		self.edt_lsb.setToolTip('Set Left Side-bearing')
+		self.edt_adv.setToolTip('Set Right Side-bearing')
+		self.edt_rsb.setToolTip('Set Advance width')
+		self.edt_vsb.setToolTip('Set Vertical location as measured from Baseline - Vertical Side-bearing')
 
 		self.edt_lsb.setPlaceholderText('Glyph Name')
 		self.edt_adv.setPlaceholderText('Glyph Name')
 		self.edt_rsb.setPlaceholderText('Glyph Name')
+		self.edt_vsb.setPlaceholderText('Glyph Name')
 
 		# - Spin Box
 		self.spb_lsb_percent =  QtGui.QSpinBox()
 		self.spb_adv_percent = QtGui.QSpinBox()
 		self.spb_rsb_percent = QtGui.QSpinBox()
+		self.spb_vsb_percent = QtGui.QSpinBox()
+
 		self.spb_lsb_units =  QtGui.QSpinBox()
 		self.spb_adv_units = QtGui.QSpinBox()
 		self.spb_rsb_units = QtGui.QSpinBox()
+		self.spb_vsb_units = QtGui.QSpinBox()
 
 		self.spb_lsb_percent.setMaximum(200)
 		self.spb_adv_percent.setMaximum(200)
 		self.spb_rsb_percent.setMaximum(200)
+		self.spb_vsb_percent.setMaximum(200)
 		self.spb_lsb_units.setMaximum(200)
 		self.spb_adv_units.setMaximum(200)
 		self.spb_rsb_units.setMaximum(200)
+		self.spb_vsb_units.setMaximum(200)
 		self.spb_lsb_units.setMinimum(-200)
 		self.spb_adv_units.setMinimum(-200)
 		self.spb_rsb_units.setMinimum(-200)
+		self.spb_vsb_units.setMinimum(-200)
 
 		self.spb_lsb_percent.setSuffix('%')
 		self.spb_adv_percent.setSuffix('%')
 		self.spb_rsb_percent.setSuffix('%')
+		self.spb_vsb_percent.setSuffix('%')
 		self.spb_lsb_units.setSuffix(' u')
 		self.spb_adv_units.setSuffix(' u')
 		self.spb_rsb_units.setSuffix(' u')
+		self.spb_vsb_units.setSuffix(' u')
 
 		self.spb_lsb_percent.setMaximumWidth(50)
 		self.spb_adv_percent.setMaximumWidth(50)
 		self.spb_rsb_percent.setMaximumWidth(50)
+		self.spb_vsb_percent.setMaximumWidth(50)
 		self.spb_lsb_units.setMaximumWidth(50)
 		self.spb_adv_units.setMaximumWidth(50)
 		self.spb_rsb_units.setMaximumWidth(50)
+		self.spb_vsb_units.setMaximumWidth(50)
 
 		self.reset_fileds()
 
@@ -223,31 +240,42 @@ class metrics_copy(QtGui.QGridLayout):
 		self.addWidget(QtGui.QLabel('+'), 		2, 6, 1, 1)
 		self.addWidget(self.spb_rsb_units, 		2, 7, 1, 1)
 
-		self.addWidget(self.btn_copyMetrics, 	3, 0, 1, 8)
+		self.addWidget(QtGui.QLabel('VSB:'), 	3, 0, 1, 1)
+		self.addWidget(self.edt_vsb, 			3, 1, 1, 3)
+		self.addWidget(QtGui.QLabel('@'), 		3, 4, 1, 1)
+		self.addWidget(self.spb_vsb_percent, 	3, 5, 1, 1)
+		self.addWidget(QtGui.QLabel('+'), 		3, 6, 1, 1)
+		self.addWidget(self.spb_vsb_units, 		3, 7, 1, 1)
+
+		self.addWidget(self.btn_copyMetrics, 	4, 0, 1, 8)
 
 	def reset_fileds(self):
 		# - Reset text fields
 		self.edt_lsb.setText('')
 		self.edt_adv.setText('')
 		self.edt_rsb.setText('')
+		self.edt_vsb.setText('')
 		
 		# - Reset spin-box
 		self.spb_lsb_percent.setValue(100)
 		self.spb_adv_percent.setValue(100)
 		self.spb_rsb_percent.setValue(100)
+		self.spb_vsb_percent.setValue(100)
+		
 		self.spb_lsb_units.setValue(0)
 		self.spb_adv_units.setValue(0)
 		self.spb_rsb_units.setValue(0)
+		self.spb_vsb_units.setValue(0)
 
 	def copyMetrics(self):
 		process_glyphs = getProcessGlyphs(pMode)
 
 		for glyph in process_glyphs:			
-			copyOrder = ['--' in name for name in (self.edt_lsb.text, self.edt_rsb.text, self.edt_adv.text)]
-			srcGlyphs = [str(name).replace('--', '') if len(name) else None for name in (self.edt_lsb.text, self.edt_rsb.text, self.edt_adv.text)]
+			copyOrder = ['--' in name for name in (self.edt_lsb.text, self.edt_rsb.text, self.edt_adv.text, self.edt_vsb.text)]
+			srcGlyphs = [str(name).replace('--', '') if len(name) else None for name in (self.edt_lsb.text, self.edt_rsb.text, self.edt_adv.text, self.edt_vsb.text)]
 			
-			adjPercents = (self.spb_lsb_percent.value, self.spb_rsb_percent.value, self.spb_adv_percent.value)
-			adjUnits = (self.spb_lsb_units.value, self.spb_rsb_units.value, self.spb_adv_units.value)
+			adjPercents = (self.spb_lsb_percent.value, self.spb_rsb_percent.value, self.spb_adv_percent.value, self.spb_vsb_percent.value)
+			adjUnits = (self.spb_lsb_units.value, self.spb_rsb_units.value, self.spb_adv_units.value, self.spb_vsb_units.value)
 			
 			glyph.copyMetricsbyName(srcGlyphs, pLayers, copyOrder, adjPercents, adjUnits)
 
