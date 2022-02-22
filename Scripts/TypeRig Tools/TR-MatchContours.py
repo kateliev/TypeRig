@@ -26,7 +26,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TR | Match Contours', '1.6'
+app_name, app_version = 'TR | Match Contours', '1.7'
 
 # - Sub widgets ------------------------
 class TRWContourView(QtGui.QTableWidget):
@@ -56,7 +56,7 @@ class TRWContourView(QtGui.QTableWidget):
 
 		# - Init
 		column_names = []
-		self.setRowCount(len(data.items()[0][1]))
+		self.setRowCount(len(list(data.items())[0][1]))
 		self.setColumnCount(len(data.keys()))
 		name_row = []
 
@@ -133,7 +133,6 @@ class TRIconsProspect(QtGui.QDialog):
 		work_contours[oid], work_contours[nid] = work_contours[nid], work_contours[oid]
 		work_shape.contours = work_contours
 		work_shape.update()
-		#self.tab_glyphs.set_table(self.contours_refresh())
 
 	def __drawIcons(self, contours):
 		# - Init
