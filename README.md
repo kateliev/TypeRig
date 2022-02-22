@@ -3,7 +3,7 @@
 **TypeRig** is a Python library aimed at simplifying the current FontLab API while offering some additional functionality that is heavily biased towards a simultaneous multi-layered workflow. As TypeRig (TR) is under rapid development in the last couple of years, please do update frequently. 
 
 ### Important note
-If you are experiencing any trouble running your scripts after April 2021 please refer to our [latest Py2.7 release](https://github.com/kateliev/TypeRig/releases/tag/v1.5.0-py27). It is a snapshot before switching the TR core to Py3+ and refactoring most scripts to be both Py2.7 and Py3+ compatible. 
+If you are experiencing any trouble running your scripts after February 2022 please refer to our [latest Py2.7 release](https://github.com/kateliev/TypeRig/releases/tag/v1.9.0-Py2.7). It is a snapshot of TR that is both Py2.7 and Py3.10 compatible. 
 
 ## Documentation
 Please refer to the following [work in progress document](https://kateliev.github.io/TypeRig/Docs/).
@@ -20,13 +20,17 @@ Download the archived (.zip) package provided from this repository or clone it. 
 
 If you want to install the **GUI based part of Typerig** _(only after successfully installing the core library)_ please open FonLab, _Scripting panel_. At the bottom of the panel you will see a small black _Plus sign (+)_. Click on it and FontLab will ask you to _Select directory_ where your scripts reside. Point the app towards `./Scripts/Delta Machine` and `./Scripts/GUI`.
 
-### FontLab 7 - Automatic installation within the application
-Run FontLab 7, choose _Scripts > Update / Install Scripts_. Click _OK_ in the dialog, wait until the installation completes. When you see the _TypeRig is up-to-date_ dialog, click _OK_ and restart FontLab 7.
+### FontLab 7+ 
+#### Automatic installation within the application
+Run FontLab 7+, choose _Scripts > Update / Install Scripts_. Click _OK_ in the dialog, wait until the installation completes. When you see the _TypeRig is up-to-date_ dialog, click _OK_ and restart FontLab 7.
+
+#### Automatic installation via script
+Run FontLab 7+ and drag install.vfpy into the font window. Follow the steps of the installer.
 
 The _Scripts_ menu should now show the _Delta Machine_ and _TypeRig GUI_ sub-menus.
 
 ## Developer
-TypeRig FDK is developed by: **Vassil Kateliev** (2017-2021) and **Adam Twardoch** (2019-2020)
+TypeRig FDK is developed by: **Vassil Kateliev** (2017-2022) and **Adam Twardoch** (2019-2022)
 
 For contact and inquiries: vassil(at)kateliev(dot)com
 
