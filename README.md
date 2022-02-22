@@ -15,17 +15,14 @@ Please refer to our [issues tracker](https://github.com/kateliev/TypeRig/issues)
 Please take a look at our latest [releases](https://github.com/kateliev/TypeRig/releases).
 
 ## Installation
-### FontLab 7 - Manual installation from GitHub
-Download the archived (.zip) package provided from this repository or clone it. Run FontLab 7 and drag the installation file provided in the root folder caleld `install.vfpy` to the application _(as if it was a font)_. The _Output window_ should report if the installation was successful. The **TypeRig library** should now be installed.
+### FontLab 7+
+#### Manual installation from GitHub 
+Download the archived (.zip) package provided from this repository or clone it. Run FontLab 7+ and drag the installation file provided in the root folder caleld `install.vfpy` to the application _(as if it was a font)_. Follow the steps as described by the installer.
 
 If you want to install the **GUI based part of Typerig** _(only after successfully installing the core library)_ please open FonLab, _Scripting panel_. At the bottom of the panel you will see a small black _Plus sign (+)_. Click on it and FontLab will ask you to _Select directory_ where your scripts reside. Point the app towards `./Scripts/Delta Machine` and `./Scripts/GUI`.
 
-### FontLab 7+ 
 #### Automatic installation within the application
 Run FontLab 7+, choose _Scripts > Update / Install Scripts_. Click _OK_ in the dialog, wait until the installation completes. When you see the _TypeRig is up-to-date_ dialog, click _OK_ and restart FontLab 7.
-
-#### Automatic installation via script
-Run FontLab 7+ and drag install.vfpy into the font window. Follow the steps of the installer.
 
 The _Scripts_ menu should now show the _Delta Machine_ and _TypeRig GUI_ sub-menus.
 
