@@ -32,7 +32,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '2.12'
+app_name, app_version = 'TypeRig | Layers', '2.13'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -414,7 +414,7 @@ class TRLayerActionCollector(object):
 		if len(parent.contourClipboard.keys()) == len(selected_layers):
 			for i in range(len(selected_layers)):
 				layerName = selected_layers[i]
-				contours = parent.contourClipboard.values()[i]
+				contours = list(parent.contourClipboard.values())[i]
 				wLayer = wGlyph.layer(layerName)
 
 				if wLayer is not None:
