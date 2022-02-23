@@ -9,7 +9,7 @@
 
 # - Dependencies -----------------
 from __future__ import absolute_import, print_function
-from collections import OrderedDict
+from itertools import permutations
 import warnings
 
 import fontlab as fl6
@@ -26,7 +26,20 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TR | Match Contours', '1.7'
+app_name, app_version = 'TR | Match Contours', '1.8'
+
+# - Configuration ----------------------
+color_foreground = QtGui.QColor('gray')
+color_background = QtGui.QColor('white')
+color_basepen = QtGui.QColor('black')
+colors_tuples = [(255, 0, 0, 100),
+				(0, 255, 0, 100),
+				(0, 0, 255, 100)]
+			
+colors_tuples += list(permutations(range(0,256, 32), 3))
+accent_colors = [QtGui.QColor(*item) for item in colors_tuples]
+draw_padding = 100
+draw_size = 100
 
 # - Sub widgets ------------------------
 class TRWContourView(QtGui.QTableWidget):
@@ -36,7 +49,7 @@ class TRWContourView(QtGui.QTableWidget):
 		# - Init
 		self.aux = aux
 		self.set_table(data)	
-		self.setIconSize(QtCore.QSize(100, 100))
+		self.setIconSize(QtCore.QSize(draw_size, draw_size))
 		
 		# - Styling
 		self.setShowGrid(False)
@@ -52,21 +65,21 @@ class TRWContourView(QtGui.QTableWidget):
 		self.setDropIndicatorShown(True)
 		self.model().sort(-1)
 		self.horizontalHeader().setSortIndicator(-1, 0)
-		self.setIconSize(QtCore.QSize(100, 100))	
+		self.setIconSize(QtCore.QSize(draw_size, draw_size))	
 
 		# - Init
 		column_names = []
-		self.setRowCount(len(list(data.items())[0][1]))
-		self.setColumnCount(len(data.keys()))
+		self.setRowCount(len(data[0][1]))
+		self.setColumnCount(len(data))
 		name_row = []
 
 		# - Populate
-		for col, layer_name in enumerate(data.keys()):
-			column_names.append(layer_name)
+		for col, layer_data in enumerate(data):
+			column_names.append(layer_data[0])
 
-			for row, glyph_data in enumerate(data[layer_name]):
+			for row, draw_data in enumerate(layer_data[1]):
 				newitem = QtGui.QTableWidgetItem()
-				newitem.setIcon(glyph_data)
+				newitem.setIcon(draw_data)
 				self.setItem(row, col, newitem)
 
 		self.setHorizontalHeaderLabels(column_names)
@@ -80,14 +93,14 @@ class TRWContourView(QtGui.QTableWidget):
 		for item in self.selectedItems():
 			old_index = item.row()
 			layer_index = item.column()
-			self.aux.moveContour(layer_index, old_index, new_index)
+			self.aux.move_item(layer_index, old_index, new_index)
 
 		self.set_table(self.aux.contours_refresh())
 				
-class TRIconsProspect(QtGui.QDialog):
+class TRMatchLayers(QtGui.QDialog):
 	# - Split/Break contour 
 	def __init__(self):
-		super(TRIconsProspect, self).__init__()
+		super(TRMatchLayers, self).__init__()
 
 		# - Init
 		self.glyph = pGlyph()
@@ -122,11 +135,16 @@ class TRIconsProspect(QtGui.QDialog):
 		return_icons = []
 
 		for layer in self.glyph.masters():
-			return_icons.append((layer.name, self.__drawIcons(layer.getContours())))
-		
-		return OrderedDict(return_icons)
+			layer_shapes = []
+			
+			for idx, shape in enumerate(layer.shapes):
+				layer_shapes.append(self.__drawIcons(shape.contours, accent_colors[idx]))
 
-	def moveContour(self, lid, oid, nid):
+			return_icons.append((layer.name, sum(layer_shapes,[])))
+		
+		return return_icons
+
+	def move_item(self, lid, oid, nid):
 		work_layer_name = self.glyph.masters()[lid].name
 		work_shape = self.glyph.shapes(work_layer_name)[0] # Only first shape for now
 		work_contours = work_shape.contours
@@ -134,14 +152,8 @@ class TRIconsProspect(QtGui.QDialog):
 		work_shape.contours = work_contours
 		work_shape.update()
 
-	def __drawIcons(self, contours):
+	def __drawIcons(self, contours, color_accent):
 		# - Init
-		color_foreground = QtGui.QColor('gray')
-		color_background = QtGui.QColor('white')
-		color_accent = QtGui.QColor('red')
-		color_accent.setAlpha(100)
-		color_basepen = QtGui.QColor('black')
-		padding = 100
 		return_icons = []
 		sep_contours = []
 
@@ -160,7 +172,7 @@ class TRIconsProspect(QtGui.QDialog):
 		# - Prepare
 		main_painter = QtGui.QPainter()
 		shape_bbox = main_shape.boundingBox
-		draw_dimension = max(shape_bbox.width(), shape_bbox.height()) + 2*padding
+		draw_dimension = max(shape_bbox.width(), shape_bbox.height()) + 2*draw_padding
 
 		for cid, draw_contours in enumerate(sep_contours):
 			new_icon = QtGui.QIcon()
@@ -177,7 +189,7 @@ class TRIconsProspect(QtGui.QDialog):
 			# - Draw all other contours
 			cont_painter.setBrush(QtGui.QBrush(color_foreground))
 			cont_painter.setPen(QtGui.QPen(color_basepen, 10, QtCore.Qt.SolidLine))
-			new_transform = other_shape.transform.translate(-shape_bbox.x() + padding, -shape_bbox.y() + padding)
+			new_transform = other_shape.transform.translate(-shape_bbox.x() + draw_padding, -shape_bbox.y() + draw_padding)
 			other_shape.applyTransform(new_transform)
 			other_shape.ensurePaths()
 			cont_painter.drawPath(other_shape.closedPath)
@@ -185,7 +197,7 @@ class TRIconsProspect(QtGui.QDialog):
 			# - Draw the specific contour
 			cont_painter.setBrush(QtGui.QBrush(color_accent))
 			cont_painter.setPen(QtGui.QPen(color_accent, 30, QtCore.Qt.SolidLine))
-			new_transform = cont_shape.transform.translate(-shape_bbox.x() + padding, -shape_bbox.y() + padding)
+			new_transform = cont_shape.transform.translate(-shape_bbox.x() + draw_padding, -shape_bbox.y() + draw_padding)
 			cont_shape.applyTransform(new_transform)
 			cont_shape.ensurePaths()
 			cont_painter.drawPath(cont_shape.closedPath)
@@ -199,7 +211,7 @@ class TRIconsProspect(QtGui.QDialog):
 
 # - Test ----------------------
 if __name__ == '__main__':
-	test = TRIconsProspect()
+	test = TRMatchLayers()
 	test.setWindowTitle('%s %s' %(app_name, app_version))
 	test.setGeometry(100, 100, 1440, 880)
 	test.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
