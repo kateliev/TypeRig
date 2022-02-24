@@ -10,7 +10,7 @@ from __future__ import print_function
 import os, warnings
 
 # - Init -----------------------------
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 # - Classes --------------------------
 class NAMparser(object):
@@ -24,7 +24,7 @@ class NAMparser(object):
 		self.__ignored_line = '%'
 
 	def __enter__(self):
-		self.__file_object = open(self.__path, 'rb')
+		self.__file_object = open(self.__path, 'r')
 		return self
 
 	def __exit__(self, type, val, tb):
@@ -36,7 +36,7 @@ class NAMparser(object):
 	def __next__(self):
 		new_line = self.__file_object.readline().strip()
 
-		if self.__file_object is None or new_line == b'':
+		if self.__file_object is None or not len(new_line) or new_line == '':
 			raise StopIteration
 		else:
 			if new_line[0] == self.__ignored_line:

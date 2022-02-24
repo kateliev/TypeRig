@@ -40,7 +40,8 @@ class Automat(object):
 
     def getQAction(self, code):
         if code in self.actions:
-            return self.main.children()[self.actions[unicode(code)]]
+            #return self.main.children()[self.actions[unicode(code)]]
+            return self.main.children()[self.actions[code]]
 
     def run(self, code):
         self.getQAction(code).trigger()

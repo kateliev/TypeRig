@@ -33,7 +33,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '2.12'
+app_name, app_version = 'TypeRig | Nodes', '2.13'
 
 # - Helpers ----------------------------
 def filter_consecutive(selection):
@@ -821,7 +821,7 @@ class copyNodes(QtGui.QGridLayout):
 				wLayers = glyph._prepareLayers(pLayers)
 				
 				for layer in wLayers:
-					if self.node_bank.has_key(layer):
+					if layer in self.node_bank.keys():
 						dst_container = eNodesContainer(glyph.selectedNodes(layer), extend=eNode)
 
 						if len(dst_container):
