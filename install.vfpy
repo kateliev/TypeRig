@@ -25,10 +25,11 @@ import sys
 import shutil
 
 import sysconfig
+import site
 from PythonQt import QtCore, QtGui
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Module Installer', '1.4'
+app_name, app_version = 'TR | Module Installer', '1.5'
 
 # - String ------------------------------
 str_manual_label = '''
@@ -55,7 +56,8 @@ file_ext = '.pth'
 
 current_folder = os.path.dirname(__file__)
 libary_folder = os.path.normpath(os.path.join(current_folder, module_path))
-python_folder = sysconfig.get_paths()['purelib']
+python_folder = site.USER_SITE
+if python_folder is None: python_folder = sysconfig.get_paths()['purelib']
 
 # - Functions --------------------------
 def copy_tree(path_source, path_destination):
