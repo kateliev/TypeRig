@@ -29,7 +29,7 @@ import site
 from PythonQt import QtCore, QtGui
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Module Installer', '1.5'
+app_name, app_version = 'TR | Module Installer', '1.6'
 
 # - String ------------------------------
 str_manual_label = '''
@@ -159,6 +159,9 @@ class dlg_install(QtGui.QDialog):
 		print('DONE:\tTypeRig installed in: %s' %python_folder)
 
 	def install_auto_pth(self):
+		if not os.path.exists(python_folder):
+			os.makedirs(python_folder)
+
 		pth_file_name = os.path.join(python_folder, '%s%s' %(module_name, file_ext))
 	
 		with open(pth_file_name, 'w') as pth_file:
