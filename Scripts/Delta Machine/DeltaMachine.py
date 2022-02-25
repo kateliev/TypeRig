@@ -29,7 +29,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRMsgSi
 
 
 # - Init --------------------------------
-app_version = '1.14'
+app_version = '1.15'
 app_name = 'TypeRig | Delta Machine'
 
 ss_controls = """
@@ -535,7 +535,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 	
 	def table_populate(self):
 		init_data = [[master, self.active_font.pMasters.names, self.active_font.pMasters.names, 1., 2., 1., 2., 0., 0.,100, 100, 0.00, 0.00] for master in self.active_font.pMasters.names]
-	 	table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
+		table_dict = {n:OrderedDict(zip(column_names, data)) for n, data in enumerate(init_data)}
 		self.tab_masters.setTable(table_dict)
 		
 	# - Stem operations
@@ -742,7 +742,7 @@ class dlg_DeltaMachine(QtGui.QDialog):
 			
 			if live_update:
 				wGlyph.update()
-			 	fl6.Update(wGlyph.fl)
+				fl6.Update(wGlyph.fl)
 
 			# - Restore metrics
 			if keep_metrics:
