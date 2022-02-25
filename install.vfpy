@@ -24,11 +24,11 @@ import os
 import sys
 import shutil
 
-from distutils.sysconfig import get_python_lib
+import sysconfig
 from PythonQt import QtCore, QtGui
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Module Installer', '1.3'
+app_name, app_version = 'TR | Module Installer', '1.4'
 
 # - String ------------------------------
 str_manual_label = '''
@@ -45,7 +45,7 @@ str_auto_copy_label = '''
 <p><b>Static installation via Copy:</b> Will copy all the necessary files from TypeRig library folder into into your FontLab Python folder. Best if you are not planning to update TypeRig from GitHub repository. For each update/sync to GitHub repo you will need to run this script again.</p>'''
 
 str_auto_failed = '''
-<p><i>Please note that if both automatic options fail due to OS security reasons (access denied) you should use the manual installer below.</i></p>
+<p><b>Important note: </b>If installation options fail due to OS security reasons (Access Denied) you should run FontLab with elevated privileges (administrator) and execute this script again.</p>
 '''
 
 # - Config ------------------------------
@@ -55,7 +55,7 @@ file_ext = '.pth'
 
 current_folder = os.path.dirname(__file__)
 libary_folder = os.path.normpath(os.path.join(current_folder, module_path))
-python_folder = get_python_lib()
+python_folder = sysconfig.get_paths()['purelib']
 
 # - Functions --------------------------
 def copy_tree(path_source, path_destination):
@@ -122,7 +122,6 @@ class dlg_install(QtGui.QDialog):
 		layout_auto.addWidget(self.btn_install_auto_pth)
 		layout_auto.addWidget(self.lbl_auto_copy)
 		layout_auto.addWidget(self.btn_install_auto_copy)
-		layout_auto.addWidget(self.lbl_fail)
 		self.box_auto.setLayout(layout_auto)
 		
 		# -- Manual install 
@@ -135,6 +134,7 @@ class dlg_install(QtGui.QDialog):
 		layout_info = QtGui.QVBoxLayout() 
 		layout_info.addWidget(QtGui.QLabel('Your current FontLab Python installation path:'))
 		layout_info.addWidget(self.edt_python_path)
+		layout_info.addWidget(self.lbl_fail)
 		self.box_info.setLayout(layout_info)
 
 		# -- Main
