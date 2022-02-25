@@ -27,7 +27,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.29.4'
+__version__ = '0.29.5'
 
 # - Keep compatibility for basestring checks
 try:
@@ -1452,6 +1452,7 @@ class eGlyph(pGlyph):
 
 	def _setPointArray(self, PointArray, layer=None, keep_center=False):
 		nodeArray = self.nodes(layer)
+		PointArray = list(PointArray)
 		
 		if keep_center:
 			layer_BBox = self.getBounds(layer)
@@ -1480,8 +1481,9 @@ class eGlyph(pGlyph):
 		return layer_advance + layer_anchors
 
 	def _setServiceArray(self, PointArray, layer=None, set_metrics=True, set_anchors=True):
-		if len(PointArray) > 2:
-			
+		PointArray = list(PointArray)
+
+		if len(PointArray) > 2:	
 			if set_metrics:
 				layer_advance = PointArray[0]
 				self.setAdvance(layer_advance[0], layer)
@@ -1493,8 +1495,8 @@ class eGlyph(pGlyph):
 				if len(layer_anchors) == len(anchorArray):
 					for aid in range(len(layer_anchors)):
 						anchorArray[aid].point = pqt.QtCore.QPointF(*layer_anchors[aid])
-			else:
-				print('ERROR:\t Incompatible coordinate array provided.')
+		else:
+			print('ERROR:\t Incompatible coordinate array provided.')
 
 
 	# - Nodes ----------------------------------------------
