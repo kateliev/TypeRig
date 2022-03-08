@@ -29,7 +29,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TR | Match Contours', '2.3'
+app_name, app_version = 'TR | Match Contours', '2.4'
 
 # - Configuration ----------------------
 color_foreground = QtGui.QColor('gray')
@@ -62,7 +62,6 @@ class TRWContourView(QtGui.QTableWidget):
 		
 		# - Styling
 		self.setShowGrid(False)
-		self.setAlternatingRowColors(True)
 	
 	def set_table(self, data):
 		# - Fix sorting

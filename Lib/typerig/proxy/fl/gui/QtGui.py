@@ -116,34 +116,42 @@ def uiRefresh(widget):
 				}
 
 				QPushButton { 
-					padding: 2px 3px 2px 3px; 
-					margin: 2px 1px 2px 1px;
-					border-style: solid;
+					background-color: white;
 					border-color: #c8c8c8;
-					border-radius: 3px;
+					/*border-radius: 3px;*/
+					border-style: solid;
 					border-width: 1px;
-					min-height: 14px;
+					margin: 2px 1px 2px 1px;
+					min-height: 15px;
+					padding: 2px 5px 2px 5px; 
+					color: black;
 				}
 
+				QPushButton:disabled{
+					background-color: lightgray;
+					color:gray;
+				}
+				
+				QPushButton:hover,
+				QPushButton:focus{
+					border-color: #1389ec;
+					background-color: white;
+				}
+
+				QPushButton:checked,
 				QPushButton:pressed { 
 					background-color: #1389ec;
 					border-color: #90ceff;
 					color: white;
 				}
 
-				QPushButton:checked{
-					background-color: #1389ec;
-					border-color: #1389ec;
-					color: white;
-				}
-
 				QToolButton {
 					border: none;
 					font-weight: bold;
-					vertical-align: middle
-					padding: 2px 3px 2px 3px; 
 					margin: 2px 1px 2px 1px;
 					min-height: 14px;
+					padding: 2px 3px 2px 3px; 
+					vertical-align: middle
 				}
 				
 			''' % {'fontSize': fontSize, 'fontWidgets': fontWidgets}

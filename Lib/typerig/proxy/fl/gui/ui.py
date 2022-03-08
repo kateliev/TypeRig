@@ -19,24 +19,27 @@ from typerig.proxy.fl.gui import QtGui
 # -- CSS Styling
 css_fl_button = '''
 QPushButton {
-	margin: 5 10 5 10;
-    padding: 0 0 2 0;
-    background: none;
-    border: none;
-    font-size: 8pt;
-    color: rgb(130, 130, 130);
-    border-radius: 3px;
+	background: white;
+	/* border-radius: 3px; */
+	border: 1px solid #c8c8c8;
+	color: black;
+	font-size: 8pt;
+	margin: 2px 1px 2px 1px;
+	min-height: 15px;
+	padding: 2px 5px 2px 5px; 
 }
 
-QPushButton:hover {
+QPushButton:hover,
+QPushButton:focus{
+	border-color: #1389ec;
 	background-color: white;
 }
 
 QPushButton:pressed,
 QPushButton:checked {
-    background-color: gray;
-    border: 1px solid gray;
-    color: black;
+	background-color: #1389ec;
+	border: 1px solid #90ceff;
+	color: white;
 }
 '''
 
@@ -48,7 +51,7 @@ def FLIcon(icon_path, icon_size):
 
 def FLPushButton(button_text, icon_path, icon_size=32):
 	new_button = QtGui.QPushButton(button_text)
-	new_button.setStyleSheet(css_fl_button)
+	#new_button.setStyleSheet(css_fl_button)
 
 	if len(icon_path):
 		new_button.setIcon(QtGui.QIcon(icon_path))
