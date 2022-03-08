@@ -2,14 +2,14 @@
 # NOTE: Application and OS specific GUI compatibility module
 # ----------------------------------------
 # (C) Adam Twardoch, 2019-2021
-# (C) Vassil Kateliev, 2021
+# (C) Vassil Kateliev, 2021-2022
 #-----------------------------------------
 # www.typerig.com
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.9'
+__version__ = '0.1.0'
 
 # - Keep compatibility for basestring checks
 try:
@@ -21,6 +21,7 @@ except NameError:
 import fontlab as fl6
 
 from PythonQt.QtGui import *
+from PythonQt.QtCore import QSize
 from platform import system
 
 # - Init --------------------------------
@@ -149,7 +150,20 @@ def uiRefresh(widget):
 
 			widget.setStyleSheet(css)
 
-# - Classes -----------------------------------
+# -- Icons and UI ---------------------------------------
+def FLIcon(icon_path, icon_size):
+	new_label = QLabel()
+	new_label.setPixmap(QIcon(icon_path).pixmap(icon_size))
+	return new_label
+
+def FLPushButton(button_text, icon_path, icon_size=32):
+	new_button = QPushButton(button_text)
+	if len(icon_path):
+		new_button.setIcon(QIcon(icon_path))
+		new_button.setIconSize(QSize(icon_size,icon_size))
+	return new_button
+
+# - Qt Classes -----------------------------------
 class QDialog(QDialog):
 	def __init__(self, *args, **kwargs):
 		super(QDialog, self).__init__(*args, **kwargs)

@@ -20,6 +20,7 @@ from typerig.proxy.fl.objects.shape import eShape
 from typerig.core.base.message import *
 
 from PythonQt import QtCore
+from typerig.proxy.fl.gui.ui import *
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import TRHTabWidget
 
@@ -28,7 +29,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TR | Match Contours', '2.2'
+app_name, app_version = 'TR | Match Contours', '2.3'
 
 # - Configuration ----------------------
 color_foreground = QtGui.QColor('gray')
@@ -213,7 +214,9 @@ class TRWContoursOrder(QtGui.QWidget):
 			cont_shape.ensurePaths()
 			cont_painter.drawPath(cont_shape.closedPath)
 
-			new_icon.addPixmap(cont_pixmap.transformed(QtGui.QTransform().scale(1, -1)))
+			pixmap_transform = QtGui.QTransform().scale(draw_size/draw_dimension, -draw_size/draw_dimension)
+			pixmap_resized = cont_pixmap.transformed(pixmap_transform, QtCore.Qt.SmoothTransformation)
+			new_icon.addPixmap(pixmap_resized)
 
 			return_icons.append(new_icon)
 
@@ -346,7 +349,9 @@ class TRWContoursWinding(QtGui.QWidget):
 			cont_shape.ensurePaths()
 			cont_painter.drawPath(cont_shape.closedPath)
 
-			new_icon.addPixmap(cont_pixmap.transformed(QtGui.QTransform().scale(1, -1)))
+			pixmap_transform = QtGui.QTransform().scale(draw_size/draw_dimension, -draw_size/draw_dimension)
+			pixmap_resized = cont_pixmap.transformed(pixmap_transform, QtCore.Qt.SmoothTransformation)
+			new_icon.addPixmap(pixmap_resized)
 
 			return_icons.append(new_icon)
 
@@ -499,7 +504,9 @@ class TRWContoursStart(QtGui.QWidget):
 					node = draw_path.elementAt(i)
 					cont_painter.drawEllipse(node.x - draw_radius, node.y - draw_radius, draw_radius*2, draw_radius*2)
 
-			new_icon.addPixmap(cont_pixmap.transformed(QtGui.QTransform().scale(1, -1)))
+			pixmap_transform = QtGui.QTransform().scale(draw_size/draw_dimension, -draw_size/draw_dimension)
+			pixmap_resized = cont_pixmap.transformed(pixmap_transform, QtCore.Qt.SmoothTransformation)
+			new_icon.addPixmap(pixmap_resized)
 
 			return_icons.append(new_icon)
 
@@ -533,17 +540,37 @@ class typerig_match(QtGui.QDialog):
 		self.tab_tools.addTab(self.tool_contour_wind, 'Contour Winding')
 		self.tab_tools.addTab(self.tool_contour_start, 'Contour Start')
 
+		# -- Spinboxes
+		self.spn_icon_size = QtGui.QSpinBox()
+		self.spn_icon_size.setMinimum(20)
+		self.spn_icon_size.setMaximum(300)
+		self.spn_icon_size.setSingleStep(20)
+		self.spn_icon_size.setValue(draw_size)
+		self.spn_icon_size.valueChanged.connect(self.tools_refresh)
+
+		# -- Editing fields
+		self.edt_glyph_name = QtGui.QLineEdit()
+		self.edt_glyph_name.setText(self.glyph.name)
+		self.edt_glyph_name.setMaximumWidth(200)
+
 		# -- Buttons
-		self.btn_refresh = QtGui.QPushButton('&Refresh')
+		self.btn_refresh = FLPushButton('', ':/images/resources/diamond-inverted.png', 32)
+		self.btn_refresh.setMinimumWidth(32)
 		self.btn_apply = QtGui.QPushButton('&Apply')
+		self.btn_apply.setMinimumWidth(200)
 		
 		self.btn_refresh.clicked.connect(self.tools_refresh)
 		self.btn_apply.clicked.connect(self.tools_update)
 		
 		# - Layouts -------------------------------
 		lay_tail = QtGui.QHBoxLayout()
+		lay_tail.addWidget(FLIcon(':/images/resources/name.png', 32))
+		lay_tail.addWidget(self.edt_glyph_name)
 		lay_tail.addWidget(self.btn_refresh)
 		lay_tail.addWidget(self.btn_apply)
+		lay_tail.addStretch()
+		lay_tail.addWidget(FLIcon(':/images/resources/glyph_zoom_middle.png', 32))
+		lay_tail.addWidget(self.spn_icon_size)
 
 		lay_main = QtGui.QVBoxLayout() 
 		lay_main.addLayout(lay_tail)
@@ -558,9 +585,13 @@ class typerig_match(QtGui.QDialog):
 
 	def tools_refresh(self):
 		# - Init
+		global draw_size
 		self.glyph = eGlyph()
+		
+		draw_size = self.spn_icon_size.value
+		self.edt_glyph_name.setText(self.glyph.name)
 
-		# - Match contour order
+		# - Refresh tabs
 		self.tool_contour_order.refresh()
 		self.tool_contour_wind.refresh()
 		self.tool_contour_start.refresh()
