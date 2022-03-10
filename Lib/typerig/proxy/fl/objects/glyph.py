@@ -18,7 +18,7 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
-from fontTools.pens import statisticsPen
+from fontlab_private.fontTools.pens import statisticsPen
 
 from typerig.core.objects.point import Point
 from typerig.core.func.math import linInterp
@@ -27,7 +27,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.29.5'
+__version__ = '0.29.7'
 
 # - Keep compatibility for basestring checks
 try:

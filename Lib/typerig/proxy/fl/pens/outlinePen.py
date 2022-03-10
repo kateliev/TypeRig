@@ -13,7 +13,7 @@
 from __future__ import print_function, absolute_import
 import math
 
-from fontTools.pens.basePen import BasePen
+from fontlab_private.fontTools.pens.basePen import BasePen
 
 import fontlab as fl6
 import fontgate as fgt
@@ -28,7 +28,7 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import pGlyph
 
 # - Init ---------------------------------
-__version__ = '0.1.7'
+__version__ = '0.1.9'
 
 # - Classes ------------------------------
 class altPoint(Point):
