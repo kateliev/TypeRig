@@ -112,8 +112,8 @@ class TRLayerActionCollector(object):
 			for layer_name in parent.lst_layers.getTable():
 				wLayer = parent.glyph.layer(layer_name)
 
-				if type is 'Service': wLayer.isService = not wLayer.isService
-				if type is 'Wireframe': wLayer.isWireframe = not wLayer.isWireframe
+				if type == 'Service': wLayer.isService is not wLayer.isService
+				if type == 'Wireframe': wLayer.isWireframe is not wLayer.isWireframe
 
 			parent.glyph.updateObject(parent.glyph.fl, 'Set Layer as <%s>: %s.' %(type, '; '.join([layer_name for layer_name in parent.lst_layers.getTable()])))
 			parent.refresh()

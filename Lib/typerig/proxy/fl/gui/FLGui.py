@@ -1,4 +1,4 @@
-# MODULE: Typerig / GUI / UI
+# MODULE: Typerig / GUI / FLGUI
 # NOTE: Fontlab specific user interface elements
 # ----------------------------------------
 # (C) Vassil Kateliev, 2021-2022
@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 
 # - Dependancies -----------------------
 import fontlab as fl6
@@ -49,9 +49,10 @@ def FLIcon(icon_path, icon_size):
 	new_label.setPixmap(QtGui.QIcon(icon_path).pixmap(icon_size))
 	return new_label
 
-def FLPushButton(button_text, icon_path, icon_size=32):
+def FLPushButton(button_text, icon_path, icon_size=32, checkable=False):
 	new_button = QtGui.QPushButton(button_text)
-	#new_button.setStyleSheet(css_fl_button)
+	new_button.setCheckable(checkable)
+	new_button.setStyleSheet(css_fl_button)
 
 	if len(icon_path):
 		new_button.setIcon(QtGui.QIcon(icon_path))

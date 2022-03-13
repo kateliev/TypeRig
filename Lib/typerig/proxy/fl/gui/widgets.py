@@ -19,13 +19,14 @@ import fontlab as fl6
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui import FLGui
 
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.2.94'
+__version__ = '0.2.95'
 
 # - Keep compatibility for basestring checks
 try:
@@ -374,8 +375,7 @@ class TRLayerSelectDLG(QtGui.QDialog):
 		table_dict = {1:OrderedDict(zip(self.column_names, column_init))}
 		
 		# - Basic Widgets
-		
-		
+	
 		# - Search Box
 		self.edt_search_field = QtGui.QLineEdit()
 		self.edt_search_field.setPlaceholderText('Filter: Layer Name')
@@ -785,6 +785,11 @@ class TRCheckTableView(QtGui.QTableWidget):
 				if m == 0 and enable_check:
 					newitem.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
 					newitem.setCheckState(QtCore.Qt.Unchecked)
+				
+				try:
+					newitem.setData(QtCore.Qt.DecorationRole, data[layer]['Layer Color'])
+				except KeyError:
+					pass
 				
 				if color_dict is not None:
 					try:
