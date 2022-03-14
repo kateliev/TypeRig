@@ -20,7 +20,7 @@ from typerig.proxy.fl.objects.shape import eShape
 from typerig.core.base.message import *
 
 from PythonQt import QtCore
-from typerig.proxy.fl.gui.ui import *
+from typerig.proxy.fl.gui import FLGui
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import TRHTabWidget
 
@@ -29,7 +29,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TR | Match Contours', '2.4'
+app_name, app_version = 'TR | Match Contours', '2.5'
 
 # - Configuration ----------------------
 color_foreground = QtGui.QColor('gray')
@@ -48,7 +48,7 @@ color_start_accent = QtGui.QColor(0, 255, 0, 255)
 
 draw_padding = 100
 draw_size = 100
-draw_radius = 16
+draw_radius = 18
 
 # - Sub widgets ------------------------
 class TRWContourView(QtGui.QTableWidget):
@@ -63,9 +63,9 @@ class TRWContourView(QtGui.QTableWidget):
 		# - Styling
 		self.setShowGrid(False)
 	
-	def set_table(self, data):
+	def set_table(self, data, clear=True):
 		# - Fix sorting
-		self.clear()
+		if clear: self.clear()
 		self.setSortingEnabled(False)
 		self.blockSignals(True)
 		self.setDragDropMode(self.InternalMove)
@@ -222,9 +222,9 @@ class TRWContoursOrder(QtGui.QWidget):
 		return return_icons
 
 	# - Procedures ---------------------------------------
-	def refresh(self):
+	def refresh(self, clear=True):
 		glyph_pixmaps = self.__pixmaps_refresh()
-		self.tab_glyphs.set_table(glyph_pixmaps)
+		self.tab_glyphs.set_table(glyph_pixmaps, clear)
 
 	def drop_item(self, lid, oid, nid):
 		work_layer_name = self.aux.glyph.masters()[lid].name
@@ -357,9 +357,9 @@ class TRWContoursWinding(QtGui.QWidget):
 		return return_icons
 
 	# - Procedures ---------------------------------------
-	def refresh(self):
+	def refresh(self, clear=True):
 		glyph_pixmaps = self.__pixmaps_refresh()
-		self.tab_glyphs.set_table(glyph_pixmaps)
+		self.tab_glyphs.set_table(glyph_pixmaps, clear)
 
 	def drop_item(self, lid, oid, nid):
 		work_layer_name = self.aux.glyph.masters()[lid].name
@@ -379,7 +379,7 @@ class TRWContoursWinding(QtGui.QWidget):
 			work_layer_contours = self.aux.glyph.layer(work_layer_name).getContours()
 			work_layer_contours[contour_index].reverse()
 
-		self.refresh()
+		self.refresh(False)
 
 class TRWContoursStart(QtGui.QWidget):
 	'''Match layers by changing the contours start point'''
@@ -398,6 +398,15 @@ class TRWContoursStart(QtGui.QWidget):
 		self.btn_TL = QtGui.QPushButton('Top Left')
 		self.btn_BR = QtGui.QPushButton('Bottom Right')
 		self.btn_TR = QtGui.QPushButton('Top Right')
+		self.btn_next = QtGui.QPushButton('Ne&xt')
+		self.btn_prev = QtGui.QPushButton('Previou&s')
+
+		self.btn_BL.clicked.connect(lambda: self.set_start_node((0,0)))
+		self.btn_TL.clicked.connect(lambda: self.set_start_node((0,1)))
+		self.btn_BR.clicked.connect(lambda: self.set_start_node((1,0)))
+		self.btn_TR.clicked.connect(lambda: self.set_start_node((1,1)))
+		self.btn_next.clicked.connect(lambda: self.shift_start_node(True))
+		self.btn_prev.clicked.connect(lambda: self.shift_start_node(False))
 
 		# - Layout
 		lay_tail = QtGui.QHBoxLayout()
@@ -405,6 +414,8 @@ class TRWContoursStart(QtGui.QWidget):
 		lay_tail.addWidget(self.btn_TL)
 		lay_tail.addWidget(self.btn_BR)
 		lay_tail.addWidget(self.btn_TR)
+		lay_tail.addWidget(self.btn_prev)
+		lay_tail.addWidget(self.btn_next)
 
 		lay_main = QtGui.QVBoxLayout()
 		lay_main.addWidget(self.tab_glyphs)
@@ -512,13 +523,52 @@ class TRWContoursStart(QtGui.QWidget):
 		return return_icons
 
 	# - Procedures ---------------------------------------
-	def refresh(self):
+	def refresh(self, clear=True):
 		glyph_pixmaps = self.__pixmaps_refresh()
-		self.tab_glyphs.set_table(glyph_pixmaps)
+		self.tab_glyphs.set_table(glyph_pixmaps, clear)
 
 	def drop_item(self, lid, oid, nid):
 		return
 
+	def set_start_node(self, control=(0,0)):
+		# - Init
+		if control == (0,0): 	# BL
+			criteria = lambda node : (node.y, node.x)
+		elif control == (0,1): 	# TL
+			criteria = lambda node : (-node.y, node.x)
+		elif control == (1,0): 	# BR
+			criteria = lambda node : (node.y, -node.x)
+		elif control == (1,1): 	# TR
+			criteria = lambda node : (-node.y, -node.x)
+
+		# - Process selection
+		for item in self.tab_glyphs.selectedItems():
+			contour_index = item.row()
+			layer_index = item.column()
+
+			work_layer_name = self.aux.glyph.masters()[layer_index].name
+			work_layer_contours = self.aux.glyph.layer(work_layer_name).getContours()
+			work_contour = work_layer_contours[contour_index]
+			onNodes = [node for node in work_contour.nodes() if node.isOn()]
+			newFirstNode = sorted(onNodes, key=criteria)[0]
+			work_contour.setStartPoint(newFirstNode.index)
+
+		self.refresh(False)
+
+	def shift_start_node(self, forward=True):
+		# - Process selection
+		for item in self.tab_glyphs.selectedItems():
+			contour_index = item.row()
+			layer_index = item.column()
+
+			work_layer_name = self.aux.glyph.masters()[layer_index].name
+			work_layer_contours = self.aux.glyph.layer(work_layer_name).getContours()
+			work_contour = work_layer_contours[contour_index]
+			onNodes = [node for node in work_contour.nodes() if node.isOn()]
+			new_start_index = 1 if forward else len(onNodes) - 1
+			work_contour.setStartPoint(new_start_index)
+
+		self.refresh(False)
 	
 # - Dialogs ------------------------------------------------
 class typerig_match(QtGui.QDialog):
@@ -553,7 +603,7 @@ class typerig_match(QtGui.QDialog):
 		self.edt_glyph_name.setMaximumWidth(200)
 
 		# -- Buttons
-		self.btn_refresh = FLPushButton('', ':/images/resources/diamond-inverted.png', 32)
+		self.btn_refresh = FLGui.FLPushButton('', ':/images/resources/diamond-inverted.png', 32)
 		self.btn_refresh.setMinimumWidth(32)
 		self.btn_apply = QtGui.QPushButton('&Apply')
 		self.btn_apply.setMinimumWidth(200)
@@ -563,12 +613,12 @@ class typerig_match(QtGui.QDialog):
 		
 		# - Layouts -------------------------------
 		lay_tail = QtGui.QHBoxLayout()
-		lay_tail.addWidget(FLIcon(':/images/resources/name.png', 32))
+		lay_tail.addWidget(FLGui.FLIcon(':/images/resources/name.png', 32))
 		lay_tail.addWidget(self.edt_glyph_name)
 		lay_tail.addWidget(self.btn_refresh)
 		lay_tail.addWidget(self.btn_apply)
 		lay_tail.addStretch()
-		lay_tail.addWidget(FLIcon(':/images/resources/glyph_zoom_middle.png', 32))
+		lay_tail.addWidget(FLGui.FLIcon(':/images/resources/glyph_zoom_middle.png', 32))
 		lay_tail.addWidget(self.spn_icon_size)
 
 		lay_main = QtGui.QVBoxLayout() 
@@ -591,9 +641,9 @@ class typerig_match(QtGui.QDialog):
 		self.edt_glyph_name.setText(self.glyph.name)
 
 		# - Refresh tabs
-		self.tool_contour_order.refresh()
-		self.tool_contour_wind.refresh()
-		self.tool_contour_start.refresh()
+		self.tool_contour_order.refresh(True)
+		self.tool_contour_wind.refresh(True)
+		self.tool_contour_start.refresh(True)
 
 	def tools_update(self):
 		self.glyph.updateObject(self.glyph.fl, '{} | Glyph: {}'.format(app_name, self.glyph.name))
