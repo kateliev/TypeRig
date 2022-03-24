@@ -21,7 +21,7 @@ from typerig.core.objects.utils import Bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 # - Init ---------------------------------
-__version__ = '0.27.9'
+__version__ = '0.28.0'
 
 # - Keep compatibility for basestring checks
 try:
@@ -84,6 +84,16 @@ class pNode(object):
 	@type.setter
 	def type(self, value):
 		self.fl.type = value
+
+	@property
+	def smooth(self):
+		return self.fl.smooth
+
+	@smooth.setter
+	def smooth(self, value):
+		if self.fl.canBeSmooth():
+			self.fl.setNextSmooth(self.fl.position)
+			self.fl.smooth = value
 
 	@property
 	def x(self):
@@ -392,6 +402,12 @@ class eNode(pNode):
 
 	def getPrevLine(self):
 		return Line(self.getPrevOn(), self.fl)
+
+	def getNextOffLine(self):
+		return Line(self.fl, self.getNext())
+
+	def getPrevOffLine(self):
+		return Line(self.getPrev(), self.fl)
 
 	def diffTo(self, node):
 		cPos = self.fl.position

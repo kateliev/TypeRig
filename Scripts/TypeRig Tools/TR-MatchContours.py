@@ -29,7 +29,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TR | Match Contours', '2.5'
+app_name, app_version = 'TR | Match Contours', '2.6'
 
 # - Configuration ----------------------
 color_foreground = QtGui.QColor('gray')
@@ -102,6 +102,8 @@ class TRWContourView(QtGui.QTableWidget):
 			old_index = item.row()
 			layer_index = item.column()
 			self.aux.drop_item(layer_index, old_index, new_index)
+
+		self.aux.refresh()
 
 # - Main widgets -------------------------------------------------		
 class TRWContoursOrder(QtGui.QWidget):
@@ -234,7 +236,7 @@ class TRWContoursOrder(QtGui.QWidget):
 		work_shape.contours = work_contours
 		work_shape.update()
 
-		self.refresh()
+		#self.refresh()
 
 	def set_order(self, sort_order):
 		work_layers = self.aux.glyph.masters()
@@ -368,7 +370,7 @@ class TRWContoursWinding(QtGui.QWidget):
 		if work_layer_contours[oid].clockwise != work_layer_contours[nid].clockwise:
 			work_layer_contours[nid].reverse()
 
-		self.refresh()
+		#self.refresh()
 
 	def reverse_items(self):
 		for item in self.tab_glyphs.selectedItems():
