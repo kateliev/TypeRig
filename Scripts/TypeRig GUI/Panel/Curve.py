@@ -28,7 +28,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Curves', '0.16'
+app_name, app_version = 'TypeRig | Curves', '0.17'
 
 # - Sub widgets ------------------------
 class curveEq(QtGui.QGridLayout):
@@ -61,10 +61,15 @@ class curveEq(QtGui.QGridLayout):
 		self.spn_hobby0.setSingleStep(0.05)
 		self.spn_hobby1.setSingleStep(0.05)
 
-		self.spn_prop = QtGui.QSpinBox()
-		self.spn_prop.setValue(30)
-		self.spn_prop.setSuffix(' %')
-		self.spn_prop.setMaximum(100)
+		self.spn_prop_p1 = QtGui.QSpinBox()
+		self.spn_prop_p1.setValue(30)
+		self.spn_prop_p1.setSuffix(' %')
+		self.spn_prop_p1.setMaximum(100)
+
+		self.spn_prop_p2 = QtGui.QSpinBox()
+		self.spn_prop_p2.setValue(30)
+		self.spn_prop_p2.setSuffix(' %')
+		self.spn_prop_p2.setMaximum(100)
 		
 		self.btn_tunni.setToolTip('Apply Tunni curve optimization')
 		self.btn_hobby.setToolTip('Set Hobby spline curvature')
@@ -73,7 +78,8 @@ class curveEq(QtGui.QGridLayout):
 		self.btn_prop.setToolTip('Set handle length in proportion to bezier node distance')
 		self.spn_hobby0.setToolTip('Curvature at the START of Bezier segment.')
 		self.spn_hobby1.setToolTip('Curvature at the END of Bezier segment.')
-		self.spn_prop.setToolTip('Handle length in proportion to curve length.')
+		self.spn_prop_p1.setToolTip('Handle length in proportion to curve length.')
+		self.spn_prop_p2.setToolTip('Handle length in proportion to curve length.')
 
 		self.btn_toLine.clicked.connect(lambda: self.convert_segment(False))
 		self.btn_toCurve.clicked.connect(lambda: self.convert_segment(True))
@@ -95,8 +101,9 @@ class curveEq(QtGui.QGridLayout):
 		self.addWidget(self.btn_tunni,						 					0, 2, 1, 2)    
 		self.addWidget(self.btn_toCurve,						 				0, 4, 1, 2)    
 		self.addWidget(QtGui.QLabel('Curve: Handles proportion (BCP length)'), 	2, 0, 1, 6)
-		self.addWidget(self.spn_prop,						 					3, 0, 1, 2)
-		self.addWidget(self.btn_prop,						 					3, 2, 1, 4)
+		self.addWidget(self.spn_prop_p1,						 				3, 0, 1, 2)
+		self.addWidget(self.btn_prop,						 					3, 2, 1, 2)
+		self.addWidget(self.spn_prop_p2,						 				3, 4, 1, 2)
 		self.addWidget(self.btn_prop_50,					 					4, 0, 1, 2)
 		self.addWidget(self.btn_prop_00,					 					4, 2, 1, 2)
 		self.addWidget(self.btn_prop_30,					 					4, 4, 1, 2)
@@ -175,21 +182,21 @@ class curveEq(QtGui.QGridLayout):
 				if len(segment) == 4:
 					wSegment = eCurveEx(segment)
 					
-					if method is 'tunni':
+					if method == 'tunni':
 						wSegment.eqTunni()
 
-					elif method is 'hobby':
+					elif method == 'hobby':
 						curvature = (float(self.spn_hobby0.value), float(self.spn_hobby1.value))
 						wSegment.eqHobbySpline(curvature)
 
-					elif method is 'hobby_value':
+					elif method == 'hobby_value':
 						wSegment.eqHobbySpline((float(value), float(value)))
 
-					elif method is 'prop':
-						proportion = float(self.spn_prop.value/100.)
-						wSegment.eqProportionalHandles(proportion)
+					elif method == 'prop':
+						ratio = (float(self.spn_prop_p1.value/100.), float(self.spn_prop_p2.value/100.))
+						wSegment.eqProportionalHandles(ratio)
 
-					elif method is 'prop_value':
+					elif method == 'prop_value':
 						wSegment.eqProportionalHandles(value)
 
 		glyph.updateObject(glyph.fl, 'Optimize %s @ %s.' %(method, '; '.join(wLayers)))

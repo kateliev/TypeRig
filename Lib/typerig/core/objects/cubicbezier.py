@@ -20,7 +20,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.27.6'
+__version__ = '0.27.7'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -440,8 +440,8 @@ class CubicBezier(object):
 			else:
 				return None
 
-	def solve_proportional_handles(self, proportion=.3):
-		'''Equalizes handle length to given float(proportion)'''
+	def solve_proportional_handles(self, ratio=(.3,.3)):
+		'''Equalizes handle length to given float(ratio_p1, ratio_p2 )'''
 
 		def getNewPoint(targetPoint, referencePoint, alternateReferencePoint, distance):
 			if targetPoint.y == referencePoint.y and targetPoint.x == referencePoint.x:
@@ -460,10 +460,11 @@ class CubicBezier(object):
 		c = math.hypot(self.p2.x - self.p3.x, self.p2.y - self.p3.y)
 
 		#- Calculate equal distance
-		eqDistance = (a + b + c) * proportion
+		eqDistance_p1 = (a + b + c) * ratio[0]
+		eqDistance_p2 = (a + b + c) * ratio[1]
 
-		new_p1 = getNewPoint(self.p1, self.p0, self.p2, eqDistance)
-		new_p2 = getNewPoint(self.p2, self.p3, self.p1, eqDistance)
+		new_p1 = getNewPoint(self.p1, self.p0, self.p2, eqDistance_p1)
+		new_p2 = getNewPoint(self.p2, self.p3, self.p1, eqDistance_p2)
 
 		return self.__class__(self.p0.tuple, new_p1, new_p2, self.p3.tuple)
 

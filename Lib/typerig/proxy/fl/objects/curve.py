@@ -20,7 +20,7 @@ from typerig.proxy.fl.objects.node import eNode
 from typerig.core.func.utils import isMultiInstance
 
 # - Init -----------------------------------
-__version__ = '0.3.91'
+__version__ = '0.3.92'
 
 # - Keep compatibility for basestring checks
 try:
@@ -97,8 +97,10 @@ class eCurveEx(object):
 			return self.__riseCurveWaring()			
 
 	def eqProportionalHandles(self, proportion=.3, apply=True):
+		ratio = proportion if isinstance(proportion, tuple) else (proportion, proportion)
+
 		if self.isCurve:	
-			self.curve = self.curve.solve_proportional_handles(proportion)
+			self.curve = self.curve.solve_proportional_handles(ratio)
 			if apply: self.updateNodes()
 			return self.curve
 		else:
