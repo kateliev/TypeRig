@@ -13,7 +13,11 @@ import os, json
 
 import fontlab as fl6
 import fontgate as fgt
-from fontTools import afmLib
+
+try: 
+  from fontlab_private.fontTools import afmLib
+except ImportError:
+  from fontTools import afmLib
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui

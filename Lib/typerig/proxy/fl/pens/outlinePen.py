@@ -13,7 +13,11 @@
 from __future__ import print_function, absolute_import
 import math
 
-from fontlab_private.fontTools.pens.basePen import BasePen
+try: 
+  from fontlab_private.fontTools.pens.basePen import BasePen
+except ImportError:
+  from fontTools.pens.basePen import BasePen
+
 
 import fontlab as fl6
 import fontgate as fgt

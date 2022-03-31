@@ -18,7 +18,10 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
-from fontlab_private.fontTools.pens import statisticsPen
+try: 
+  from fontlab_private.fontTools.pens import statisticsPen
+except ImportError:
+  from fontTools.pens import statisticsPen
 
 from typerig.core.objects.point import Point
 from typerig.core.func.math import linInterp
