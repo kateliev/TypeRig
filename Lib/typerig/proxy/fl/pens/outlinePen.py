@@ -32,7 +32,7 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import pGlyph
 
 # - Init ---------------------------------
-__version__ = '0.1.9'
+__version__ = '0.1.10'
 
 # - Classes ------------------------------
 class altPoint(Point):

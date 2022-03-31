@@ -30,7 +30,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.29.7'
+__version__ = '0.29.8'
 
 # - Keep compatibility for basestring checks
 try:

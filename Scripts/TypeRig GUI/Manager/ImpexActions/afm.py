@@ -27,7 +27,7 @@ from typerig.proxy.fl.objects.kern import pKerning
 from typerig.core.func.math import round2base
 
 # - Init --------------------------
-app_name, app_version = 'TypeRig | AFM Import & Export', '1.1'
+app_name, app_version = 'TypeRig | AFM Import & Export', '1.1.1'
 file_formats = {'afm':'Adobe Font Metrics (*.afm)'}
 
 # - Action Objects ---------------
