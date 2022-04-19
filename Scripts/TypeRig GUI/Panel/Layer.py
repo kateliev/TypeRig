@@ -32,7 +32,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '2.13'
+app_name, app_version = 'TypeRig | Layers', '2.30'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -728,6 +728,9 @@ class tool_tab(QtGui.QWidget):
 		layoutV.addWidget(self.tools_blend)
 
 		# -- Menus and Actions -----------------------------------
+		# !!! TODO: Add metrics, anchors, guidelines and etc...
+
+		# --- Layer operations
 		self.act_layer_add = QtGui.QAction('New', self)
 		self.act_layer_duplicate = QtGui.QAction('Duplicate', self)
 		self.act_layer_duplicate_mask = QtGui.QAction('Duplicate to Mask', self)
@@ -744,55 +747,43 @@ class tool_tab(QtGui.QWidget):
 		self.menu_layer_type.addAction(act_layer_set_type_service)
 		self.menu_layer_type.addAction(act_layer_set_type_service)
 
-		self.menu_layer_content = QtGui.QMenu('Content', self)
-		'''
-		act_layer_push_shapes = QtGui.QAction('Push Shapes', self)
-		act_layer_push_metrics = QtGui.QAction('Push Metrics', self)
-		act_layer_push_guides = QtGui.QAction('Push Guidelines', self)
-		act_layer_push_anchors = QtGui.QAction('Push Anchors', self)
-		act_layer_pull_shapes = QtGui.QAction('Pull Shapes', self)
-		act_layer_pull_metrics = QtGui.QAction('Pull Metrics', self)
-		act_layer_pull_guides = QtGui.QAction('Pull Guidelines', self)
-		act_layer_pull_anchors = QtGui.QAction('Pull Anchors', self)
-		'''
-		act_layer_swap = QtGui.QAction('Swap', self)
-		act_layer_pull = QtGui.QAction('Pull', self)
-		act_layer_push = QtGui.QAction('Push', self)
-		act_layer_clean = QtGui.QAction('Clean', self)
-
-		self.menu_layer_content.addAction(act_layer_swap)
-		self.menu_layer_content.addAction(act_layer_pull)
-		self.menu_layer_content.addAction(act_layer_push)
-		self.menu_layer_content.addAction(act_layer_clean)
-		'''
-		self.menu_layer_content.addSeparator()
-		self.menu_layer_content.addAction(act_layer_push_shapes)
-		self.menu_layer_content.addAction(act_layer_push_metrics)
-		self.menu_layer_content.addAction(act_layer_push_guides)
-		self.menu_layer_content.addAction(act_layer_push_anchors)
-		self.menu_layer_content.addSeparator()
-		self.menu_layer_content.addAction(act_layer_pull_shapes)
-		self.menu_layer_content.addAction(act_layer_pull_metrics)
-		self.menu_layer_content.addAction(act_layer_pull_guides)
-		self.menu_layer_content.addAction(act_layer_pull_anchors)
-		'''
-
-		self.menu_layer_elements = QtGui.QMenu('Elements', self)
+		# --- Element (Shape) operations
+		self.menu_layer_element = QtGui.QMenu('Element', self)
+		
+		act_layer_element_swap = QtGui.QAction('Swap Elements', self)
+		act_layer_element_pull = QtGui.QAction('Pull Elements', self)
+		act_layer_element_push = QtGui.QAction('Push Elements', self)
+		act_layer_element_clean = QtGui.QAction('Clean Elements', self)
 		act_layer_unlock = QtGui.QAction('Unlock elements', self)
 		act_layer_lock = QtGui.QAction('Lock elements', self)
 
-		self.menu_layer_elements.addAction(act_layer_unlock)
-		self.menu_layer_elements.addAction(act_layer_lock)
-
-		self.menu_layer_outline = QtGui.QMenu('Outline', self)
-		act_layer_copy_outline = QtGui.QAction('Copy Outline', self)
-		act_layer_paste_outline = QtGui.QAction('Paste Outline', self)
-		act_layer_paste_outline_byName = QtGui.QAction('Paste Outline (by Layer Name)', self)
-
-		self.menu_layer_outline.addAction(act_layer_copy_outline)
-		self.menu_layer_outline.addAction(act_layer_paste_outline)
-		self.menu_layer_outline.addAction(act_layer_paste_outline_byName)
+		self.menu_layer_element.addAction(act_layer_element_swap)
+		self.menu_layer_element.addAction(act_layer_element_pull)
+		self.menu_layer_element.addAction(act_layer_element_push)
+		self.menu_layer_element.addAction(act_layer_element_clean)
+		self.menu_layer_element.addSeparator()
+		self.menu_layer_element.addAction(act_layer_unlock)
+		self.menu_layer_element.addAction(act_layer_lock)
 		
+		# --- Contour operations
+		self.menu_layer_outline = QtGui.QMenu('Contour', self)
+		
+		act_layer_contour_swap = QtGui.QAction('Swap Nodes', self)
+		act_layer_contour_pull = QtGui.QAction('Pull Nodes', self)
+		act_layer_contour_push = QtGui.QAction('Push Nodes', self)
+		act_layer_contour_copy = QtGui.QAction('Copy Nodes', self)
+		act_layer_contour_paste = QtGui.QAction('Paste Nodes', self)
+		act_layer_contour_paste_byName = QtGui.QAction('Paste by Layer', self)
+
+		self.menu_layer_outline.addAction(act_layer_contour_swap)
+		self.menu_layer_outline.addAction(act_layer_contour_pull)
+		self.menu_layer_outline.addAction(act_layer_contour_push)
+		self.menu_layer_outline.addSeparator()
+		self.menu_layer_outline.addAction(act_layer_contour_copy)
+		self.menu_layer_outline.addAction(act_layer_contour_paste)
+		self.menu_layer_outline.addAction(act_layer_contour_paste_byName)
+		
+		# --- Layer Unfold/Stack Operations
 		self.menu_layer_view = QtGui.QMenu('View', self)
 		act_layer_unfold = QtGui.QAction('Unfold', self)
 		act_layer_restore = QtGui.QAction('Fold', self)
@@ -811,27 +802,17 @@ class tool_tab(QtGui.QWidget):
 		act_layer_set_type_wireframe.triggered.connect(lambda: TRLayerActionCollector.layer_set_type(self.layerSelector, 'Wireframe'))
 		act_layer_set_type_service.triggered.connect(lambda: TRLayerActionCollector.layer_set_type(self.layerSelector, 'Service'))
 		
-		'''
-		act_layer_push_shapes.triggered.connect(lambda: TRLayerActionCollector.layer_push_shapes(self.layerSelector))
-		act_layer_push_metrics.triggered.connect(lambda: TRLayerActionCollector.layer_push_metrics(self.layerSelector))
-		act_layer_push_guides.triggered.connect(lambda: TRLayerActionCollector.layer_push_guides(self.layerSelector))
-		act_layer_push_anchors.triggered.connect(lambda: TRLayerActionCollector.layer_push_anchors(self.layerSelector))
-		act_layer_pull_shapes.triggered.connect(lambda: TRLayerActionCollector.layer_pull_shapes(self.layerSelector))
-		act_layer_pull_metrics.triggered.connect(lambda: TRLayerActionCollector.layer_pull_metrics(self.layerSelector))
-		act_layer_pull_guides.triggered.connect(lambda: TRLayerActionCollector.layer_pull_guides(self.layerSelector))
-		act_layer_pull_anchors.triggered.connect(lambda: TRLayerActionCollector.layer_pull_anchors(self.layerSelector))
-		'''
 
-		act_layer_swap.triggered.connect(lambda: TRLayerActionCollector.layer_swap(self.layerSelector))
-		act_layer_pull.triggered.connect(lambda: TRLayerActionCollector.layer_pull(self.layerSelector))
-		act_layer_push.triggered.connect(lambda: TRLayerActionCollector.layer_push(self.layerSelector))
-		act_layer_clean.triggered.connect(lambda: TRLayerActionCollector.layer_clean(self.layerSelector))
+		act_layer_element_swap.triggered.connect(lambda: TRLayerActionCollector.layer_swap(self.layerSelector))
+		act_layer_element_pull.triggered.connect(lambda: TRLayerActionCollector.layer_pull(self.layerSelector))
+		act_layer_element_push.triggered.connect(lambda: TRLayerActionCollector.layer_push(self.layerSelector))
+		act_layer_element_clean.triggered.connect(lambda: TRLayerActionCollector.layer_clean(self.layerSelector))
 		
 		act_layer_unlock.triggered.connect(lambda: TRLayerActionCollector.layer_unlock(self.layerSelector, False))
 		act_layer_lock.triggered.connect(lambda: TRLayerActionCollector.layer_unlock(self.layerSelector, True))
-		act_layer_copy_outline.triggered.connect(lambda: TRLayerActionCollector.layer_copy_outline(self.layerSelector))
-		act_layer_paste_outline_byName.triggered.connect(lambda: TRLayerActionCollector.layer_paste_outline(self.layerSelector))
-		act_layer_paste_outline.triggered.connect(lambda: TRLayerActionCollector.layer_paste_outline_selection(self.layerSelector))
+		act_layer_contour_copy.triggered.connect(lambda: TRLayerActionCollector.layer_copy_outline(self.layerSelector))
+		act_layer_contour_paste_byName.triggered.connect(lambda: TRLayerActionCollector.layer_paste_outline(self.layerSelector))
+		act_layer_contour_paste.triggered.connect(lambda: TRLayerActionCollector.layer_paste_outline_selection(self.layerSelector))
 		
 		act_layer_unfold.triggered.connect(lambda: TRLayerActionCollector.layer_unfold(self.layerSelector))
 		act_layer_restore.triggered.connect(lambda: TRLayerActionCollector.layer_restore(self.layerSelector))
@@ -857,9 +838,8 @@ class tool_tab(QtGui.QWidget):
 		self.layerSelector.lst_layers.menu.addSeparator()
 		self.layerSelector.lst_layers.menu.addMenu(self.menu_layer_type)
 		self.layerSelector.lst_layers.menu.addSeparator()
-		self.layerSelector.lst_layers.menu.addMenu(self.menu_layer_content)
+		self.layerSelector.lst_layers.menu.addMenu(self.menu_layer_element)
 		self.layerSelector.lst_layers.menu.addMenu(self.menu_layer_outline)
-		self.layerSelector.lst_layers.menu.addMenu(self.menu_layer_elements)
 		self.layerSelector.lst_layers.menu.addSeparator()
 		self.layerSelector.lst_layers.menu.addMenu(self.menu_layer_view)
 
