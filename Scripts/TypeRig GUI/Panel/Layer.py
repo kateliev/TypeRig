@@ -32,7 +32,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '2.30'
+app_name, app_version = 'TypeRig | Layers', '2.31'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -64,6 +64,44 @@ class TRLayerActionCollector(object):
 			parent.glyph.addLayer(newLayer)
 			parent.glyph.updateObject(parent.glyph.fl, 'Add Layer: %s.' %newLayer.name)
 			parent.refresh()
+
+	@staticmethod
+	def layer_ditto(parent, reverse=False):	
+		operation = ['Pull', 'Push'][reverse]
+
+		if parent.doCheck():
+			current_layer = parent.glyph.layer()
+			current_selection = parent.glyph.selectedNodes()
+			
+			if not len(current_selection): 
+				warnings.warn('No selection on active layer: %s.' %current_layer.name, TRPanelWarning)
+				return
+			
+			# - Persistent bank of selected nodes
+			process_selection = []
+
+			for layer_name in parent.lst_layers.getTable():
+				if layer_name != current_layer.name:
+					process_layer = parent.glyph.layer(layer_name)
+					
+					if current_layer.isCompatible(process_layer, True):
+						process_selection.append(parent.glyph.selectedNodes(layer_name))
+					else:
+						warnings.warn('Skiping Layer: %s. Layer not compatible to: %s.' %(layer_name,current_layer.name), LayerWarning)
+
+			if len(process_selection):
+				for nodes_selection in process_selection:
+					for nid in range(len(current_selection)):
+						if not reverse:
+							current_selection[nid].x = nodes_selection[nid].x
+							current_selection[nid].y = nodes_selection[nid].y
+						else:
+							nodes_selection[nid].x = current_selection[nid].x
+							nodes_selection[nid].y = current_selection[nid].y
+				
+			
+				parent.glyph.updateObject(parent.glyph.fl, '%s Contour; Layer: %s.' %(operation,'; '.join([layer_name for layer_name in parent.lst_layers.getTable()])))
+				parent.refresh()
 
 	@staticmethod
 	def layer_duplicate(parent, ask_user=False):	
@@ -768,14 +806,12 @@ class tool_tab(QtGui.QWidget):
 		# --- Contour operations
 		self.menu_layer_outline = QtGui.QMenu('Contour', self)
 		
-		act_layer_contour_swap = QtGui.QAction('Swap Nodes', self)
 		act_layer_contour_pull = QtGui.QAction('Pull Nodes', self)
 		act_layer_contour_push = QtGui.QAction('Push Nodes', self)
 		act_layer_contour_copy = QtGui.QAction('Copy Nodes', self)
 		act_layer_contour_paste = QtGui.QAction('Paste Nodes', self)
 		act_layer_contour_paste_byName = QtGui.QAction('Paste by Layer', self)
 
-		self.menu_layer_outline.addAction(act_layer_contour_swap)
 		self.menu_layer_outline.addAction(act_layer_contour_pull)
 		self.menu_layer_outline.addAction(act_layer_contour_push)
 		self.menu_layer_outline.addSeparator()
@@ -798,10 +834,8 @@ class tool_tab(QtGui.QWidget):
 		self.act_layer_delete.triggered.connect(lambda: TRLayerActionCollector.layer_delete(self.layerSelector))
 		self.act_layer_visible.triggered.connect(lambda: TRLayerActionCollector.layer_toggle_visible(self.layerSelector))
 		
-		#act_layer_set_type_mask.triggered.connect(lambda: TRLayerActionCollector.layer_set_type_mask(self.layerSelector))
 		act_layer_set_type_wireframe.triggered.connect(lambda: TRLayerActionCollector.layer_set_type(self.layerSelector, 'Wireframe'))
 		act_layer_set_type_service.triggered.connect(lambda: TRLayerActionCollector.layer_set_type(self.layerSelector, 'Service'))
-		
 
 		act_layer_element_swap.triggered.connect(lambda: TRLayerActionCollector.layer_swap(self.layerSelector))
 		act_layer_element_pull.triggered.connect(lambda: TRLayerActionCollector.layer_pull(self.layerSelector))
@@ -810,6 +844,9 @@ class tool_tab(QtGui.QWidget):
 		
 		act_layer_unlock.triggered.connect(lambda: TRLayerActionCollector.layer_unlock(self.layerSelector, False))
 		act_layer_lock.triggered.connect(lambda: TRLayerActionCollector.layer_unlock(self.layerSelector, True))
+		
+		act_layer_contour_pull.triggered.connect(lambda: TRLayerActionCollector.layer_ditto(self.layerSelector, False))
+		act_layer_contour_push.triggered.connect(lambda: TRLayerActionCollector.layer_ditto(self.layerSelector, True))
 		act_layer_contour_copy.triggered.connect(lambda: TRLayerActionCollector.layer_copy_outline(self.layerSelector))
 		act_layer_contour_paste_byName.triggered.connect(lambda: TRLayerActionCollector.layer_paste_outline(self.layerSelector))
 		act_layer_contour_paste.triggered.connect(lambda: TRLayerActionCollector.layer_paste_outline_selection(self.layerSelector))
