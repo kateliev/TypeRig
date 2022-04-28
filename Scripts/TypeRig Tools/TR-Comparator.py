@@ -25,7 +25,7 @@ from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRLayerSelectDLG, fontMarkColors
 
 # - Init ---------------------------
-app_name, app_version = 'TR | Comparator', '0.8'
+app_name, app_version = 'TR | Comparator', '0.9'
 
 # - Configuration ----------------------
 # -- Colors
@@ -220,15 +220,57 @@ class fontComparator(object):
 
 		return layers_different, layers_similar
 
+	def __make_anchor_diff(self, glyph, process_layers):	
+		# - Init
+		layers_different = []
+		
+		# - Compare layers
+		first_layer = glyph.layer(process_layers[0])
+		second_layer = glyph.layer(process_layers[1])
+
+		# - Skip autolayers
+		if not first_layer.autoLayer or not second_layer.autoLayer:
+			# - Compare layers (by node coordinates)
+			first_array =  {anchor.name: (float(anchor.point.x()), float(anchor.point.y())) for anchor in glyph.anchors(process_layers[0])}
+			second_array = {anchor.name: (float(anchor.point.x()), float(anchor.point.y())) for anchor in glyph.anchors(process_layers[1])}
+
+			for anchor, position in first_array.items():
+				try:
+					if position != second_array[anchor]:
+						layers_different.append('Different: %s ->> %s; %s;' %(anchor, process_layers[0], process_layers[1]))
+				except KeyError:
+					layers_different.append('Missing: %s ->> %s;' %(anchor, process_layers[1]))
+
+		return layers_different
+
+	def __make_metric_diff(self, glyph, process_layers):	
+		# - Init
+		layers_different = []
+		
+		# - Compare layers
+		first_layer = glyph.layer(process_layers[0])
+		second_layer = glyph.layer(process_layers[1])
+
+		# - Skip autolayers
+		if not first_layer.autoLayer or not second_layer.autoLayer:
+			# - Compare layers (by node coordinates)
+			first_array =  (int(first_layer.boundingBox.x()), int(first_layer.advanceWidth))
+			second_array = (int(second_layer.boundingBox.x()), int(second_layer.advanceWidth))
+
+			if first_array != second_array:
+				layers_different.append('; '.join(process_layers))
+
+		return layers_different
+
 	# -- Procedures follow ------------------
 	# --- Fonts Diff: Compare glyphs between two fonts
 	def compare_fonts(self, process_layers=[]):
 		# - Helper
 		def make_font_diff(glyph, process_layers):
-			layers_different_msg = ('Layer >> Outlines', 'Source and Destination layers are different' )
-			layers_similar_msg = ('Layer >> Metrics ', 'Source and Destination have identical outlines but different metrics')
+			layers_different_msg = ('Layer >> Outlines', 'Source and destination layers are different' )
+			layers_similar_msg = ('Layer >> Metrics ', 'Source and destination have identical outlines but different metrics')
 			glyph_missing_msg = ('Glyph >> Missing ', 'Source glyph not found in destination')
-			layers_missing_msg = ('Layer >> Missing ', 'Layer(s) missing in Source or destination')
+			layers_missing_msg = ('Layer >> Missing ', 'Layer(s) missing in source or destination')
 		
 			diff_report = self.__make_font_diff(glyph, process_layers)
 			
@@ -263,11 +305,15 @@ class fontComparator(object):
 	def compare_layers(self, process_layers=[]):
 		# - Helper
 		def make_layer_diff(glyph, process_layers):
-			layers_different_msg = ('Layer >> Outlines', 'Source and Destination layers are different' )
-			layers_similar_msg = ('Layer >> Outlines ', 'Source and Destination have identical outlines but shifted')
+			layers_different_msg = ('Layer >> Outlines', 'Source and destination layers are different' )
+			layers_similar_msg = ('Layer >> Shifted ', 'Source and destination have identical outlines but different metrics')
+			anchors_different_msg = ('Layer >> Anchors ', 'Source and destination have identical outlines but different anchors')
+			metrics_different_msg = ('Layer >> Metrics ', 'Source and destination have identical outlines but different metrics')
 		
 			diff_report = self.__make_layer_diff(glyph, process_layers)
-			
+			diff_anchor = self.__make_anchor_diff(glyph, process_layers)
+			diff_metric = self.__make_metric_diff(glyph, process_layers)
+
 			if diff_report is not None:
 				layers_different, layers_similar = diff_report
 
@@ -279,6 +325,14 @@ class fontComparator(object):
 				if len(layers_similar):
 					self.__write_record(layers_similar_msg, {(glyph.name, ''): layers_similar})
 					self.__write_process(layers_similar_msg[0], {glyph.name: layers_similar})
+
+				if len(diff_anchor):
+					self.__write_record(anchors_different_msg, {(glyph.name, ''): diff_anchor})
+					self.__write_process(anchors_different_msg[0], {glyph.name: diff_anchor})
+
+				if len(diff_metric):
+					self.__write_record(metrics_different_msg, {(glyph.name, ''): diff_metric})
+					self.__write_process(metrics_different_msg[0], {glyph.name: diff_metric})
 
 		# - Init
 		if len(process_layers) > 1:
@@ -485,21 +539,25 @@ class TRComparator(QtGui.QDialog):
 			depth = depth_test(current_selection)
 
 			if depth == 3: # Layer is selected
-				self.gsn_diff_scene.clear()
+				try:
+					self.gsn_diff_scene.clear()
+					
+					if self.font_src.fl != self.font_dst.fl:
+						glyph_a = self.font_src.glyph(current_selection_parent.text(0))
+						glyph_b = self.font_dst.glyph(current_selection_parent.text(0))
+
+						diff_pixmap = draw_diff(glyph_a, glyph_b, current_selection.text(0), current_selection.text(0))
+					else:
+						glyph_a = self.font_src.glyph(current_selection_parent.text(0))
+						layer_a, layer_b = current_selection.text(0).split('; ')
+						diff_pixmap = draw_diff(glyph_a, glyph_a, layer_a, layer_b)
+
+					add_pixmap = self.gsn_diff_scene.addPixmap(diff_pixmap)
+					add_pixmap.setTransformationMode(QtCore.Qt.SmoothTransformation)
+					self.gsv_diff_preview.fitInView(add_pixmap, QtCore.Qt.KeepAspectRatio)
 				
-				if self.font_src.fl != self.font_dst.fl:
-					glyph_a = self.font_src.glyph(current_selection_parent.text(0))
-					glyph_b = self.font_dst.glyph(current_selection_parent.text(0))
-
-					diff_pixmap = draw_diff(glyph_a, glyph_b, current_selection.text(0), current_selection.text(0))
-				else:
-					glyph_a = self.font_src.glyph(current_selection_parent.text(0))
-					layer_a, layer_b = current_selection.text(0).split('; ')
-					diff_pixmap = draw_diff(glyph_a, glyph_a, layer_a, layer_b)
-
-				add_pixmap = self.gsn_diff_scene.addPixmap(diff_pixmap)
-				add_pixmap.setTransformationMode(QtCore.Qt.SmoothTransformation)
-				self.gsv_diff_preview.fitInView(add_pixmap, QtCore.Qt.KeepAspectRatio)
+				except (IndexError, AttributeError):
+					pass
 			
 
 	def save_audit(self):
