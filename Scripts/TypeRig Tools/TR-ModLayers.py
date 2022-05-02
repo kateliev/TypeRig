@@ -31,7 +31,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Modify Layers', '1.50'
+app_name, app_version = 'TypeRig | Modify Layers', '1.51'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -223,8 +223,8 @@ class TRLayerActionCollector(object):
 				if layer_color is not None and layer_color != wLayer.wireframeColor.name(): continue
 
 				# - Process
-				if type is 'Service': wLayer.isService = not wLayer.isService
-				if type is 'Wireframe': wLayer.isWireframe = not wLayer.isWireframe
+				if type == 'Service': wLayer.isService = not wLayer.isService
+				if type == 'Wireframe': wLayer.isWireframe = not wLayer.isWireframe
 				do_update = True
 
 			if do_update and pMode != 3 and len(glyphs_source) <= 5:
