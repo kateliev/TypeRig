@@ -10,6 +10,7 @@
 # - Dependencies -----------------
 from __future__ import absolute_import, print_function, unicode_literals
 import os, json, re
+from functools import reduce
 from platform import system
 
 import fontlab as fl6
@@ -29,7 +30,7 @@ from typerig.core.base.message import *
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kerning Overview', '3.7'
+app_name, app_version = 'TypeRig | Kerning Overview', '3.8'
 alt_mark = '.'
 
 # - Strings ------------------------------------------------------------------
