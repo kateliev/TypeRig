@@ -24,7 +24,7 @@ from typerig.core.objects.collection import extBiDict
 from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
 
 # - Init ---------------------------------
-__version__ = '0.28.4'
+__version__ = '0.28.5'
 
 # - Keep compatibility for basestring checks
 try:
@@ -468,7 +468,7 @@ class pFont(object):
 		return self.fl.axes
 
 	def masters(self):
-		return self.fl.masters
+		return [layer_name for layer_name in self.fl.masters if '#' not in layer_name]
 
 	def hasMaster(self, layerName):
 		return self.fl.hasMaster(layerName)

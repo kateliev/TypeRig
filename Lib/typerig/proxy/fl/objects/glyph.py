@@ -30,7 +30,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.29.8'
+__version__ = '0.29.9'
 
 # - Keep compatibility for basestring checks
 try:
@@ -229,7 +229,7 @@ class pGlyph(object):
 
 	def layers(self):
 		'''Return all layers'''
-		return self.fl.layers
+		return [layer for layer in self.fl.layers if '#' not in layer.name]
 
 	def fg_layers(self, asDict=False):
 		'''Return all FotnGate layers'''
