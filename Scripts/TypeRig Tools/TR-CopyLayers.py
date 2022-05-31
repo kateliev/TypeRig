@@ -24,7 +24,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.core.base.message import *
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Copy Layers', '1.1'
+app_name, app_version = 'TR | Copy Layers', '1.3'
 
 # - Interface -----------------------------
 class dlg_copy_layers(QtGui.QDialog):
@@ -55,6 +55,7 @@ class dlg_copy_layers(QtGui.QDialog):
 		self.rad_group_collide = QtGui.QButtonGroup()
 		self.rad_group_rename = QtGui.QButtonGroup()
 		self.rad_group_source = QtGui.QButtonGroup()
+		self.rad_group_type = QtGui.QButtonGroup()
 
 		self.rad_source_font = QtGui.QRadioButton('All glyphs')
 		self.rad_source_sellected = QtGui.QRadioButton('Selected glyphs')
@@ -62,10 +63,13 @@ class dlg_copy_layers(QtGui.QDialog):
 		self.rad_collide_rename = QtGui.QRadioButton('Rename')
 		self.rad_collide_src = QtGui.QRadioButton('Incoming')
 		self.rad_collide_dst = QtGui.QRadioButton('Destination')
+		self.rad_type_master = QtGui.QRadioButton('Layer')
+		self.rad_type_mask = QtGui.QRadioButton('Mask')
 		
 		self.rad_collide_dst.setChecked(True)
 		self.rad_source_sellected.setChecked(True)
 		self.rad_collide_rename.setChecked(True)
+		self.rad_type_mask.setChecked(True)
 
 		self.rad_group_source.addButton(self.rad_source_font, 1)
 		self.rad_group_source.addButton(self.rad_source_sellected, 2)
@@ -73,6 +77,8 @@ class dlg_copy_layers(QtGui.QDialog):
 		self.rad_group_rename.addButton(self.rad_collide_dst, 2)
 		self.rad_group_collide.addButton(self.rad_collide_write, 1)
 		self.rad_group_collide.addButton(self.rad_collide_rename, 2)
+		self.rad_group_type.addButton(self.rad_type_master, 1)
+		self.rad_group_type.addButton(self.rad_type_mask, 2)
 
 		# - Edit
 		self.edt_collide_suffix = QtGui.QLineEdit()
@@ -119,8 +125,11 @@ class dlg_copy_layers(QtGui.QDialog):
 		layout_dst.addWidget(QtGui.QLabel('Collision rename:'), 	5, 0, 1, 1)
 		layout_dst.addWidget(self.rad_collide_src, 					5, 1, 1, 3)
 		layout_dst.addWidget(self.rad_collide_dst, 					5, 4, 1, 3)
-		layout_dst.addWidget(QtGui.QLabel('Addon suffix:'), 		6, 0, 1, 1)
-		layout_dst.addWidget(self.edt_collide_suffix, 				6, 1, 1, 6)
+		layout_dst.addWidget(QtGui.QLabel('Collision type:'), 		6, 0, 1, 1)
+		layout_dst.addWidget(self.rad_type_master, 					6, 1, 1, 3)
+		layout_dst.addWidget(self.rad_type_mask, 					6, 4, 1, 3)
+		layout_dst.addWidget(QtGui.QLabel('Addon suffix:'), 		7, 0, 1, 1)
+		layout_dst.addWidget(self.edt_collide_suffix, 				7, 1, 1, 6)
 		self.box_dst.setLayout(layout_dst)
 
 		# -- Main
@@ -162,7 +171,10 @@ class dlg_copy_layers(QtGui.QDialog):
 		mode_source = 3 if self.rad_source_font.isChecked() else 2  # if 3 for Font, 2 for selected glyphs
 		mode_collide = self.rad_collide_rename.isChecked()			# if True rename 
 		mode_rename = self.rad_collide_dst.isChecked()				# if True modify destination
-		replace_suffix = self.edt_collide_suffix.text.strip()
+		mode_mask = 'mask' if self.rad_type_mask.isChecked() else 'new'
+		
+		replace_suffix = self.edt_collide_suffix.text.strip() if not self.rad_type_mask.isChecked() else ''
+		new_layer_options = {'out': True, 'gui': True, 'anc': True, 'lsb': True, 'adv': True, 'rsb': True, 'lnk': True, 'ref': False}
 
 		#glyphs_source = getProcessGlyphs(mode=mode_source, font=font_src_fl)
 		glyphs_source_names = []
@@ -191,7 +203,7 @@ class dlg_copy_layers(QtGui.QDialog):
 				# - Handle collision
 				if dst_glyph.layer(layer_dst) is not None:
 					if mode_collide and mode_rename: # Rename mode
-						dst_glyph.duplicateLayer(layer_dst, layer_dst + replace_suffix)
+						dst_glyph.importLayer(dst_glyph, layer_dst, layer_dst + replace_suffix, new_layer_options, addLayer=True, cleanDST=True, toBack=True, mode=mode_mask)
 					
 					dst_glyph.removeLayer(layer_dst)
 
@@ -199,8 +211,7 @@ class dlg_copy_layers(QtGui.QDialog):
 					layer_dst = layer_dst + replace_suffix
 
 				# - Copy
-				options = {'out': True, 'gui': True, 'anc': True, 'lsb': True, 'adv': True, 'rsb': True, 'lnk': True, 'ref': False}
-				dst_glyph.importLayer(src_glyph, layer_src, layer_dst, options, addLayer=True, cleanDST=True, toBack=True, mode='new')
+				dst_glyph.importLayer(src_glyph, layer_src, layer_dst, new_layer_options, addLayer=True, cleanDST=True, toBack=True, mode='new')
 				do_update = True
 
 			else:
