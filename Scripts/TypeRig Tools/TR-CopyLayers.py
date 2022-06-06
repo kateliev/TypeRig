@@ -24,7 +24,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.core.base.message import *
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Copy Layers', '1.3'
+app_name, app_version = 'TR | Copy Layers', '1.4'
 
 # - Interface -----------------------------
 class dlg_copy_layers(QtGui.QDialog):
@@ -63,7 +63,7 @@ class dlg_copy_layers(QtGui.QDialog):
 		self.rad_collide_rename = QtGui.QRadioButton('Rename')
 		self.rad_collide_src = QtGui.QRadioButton('Incoming')
 		self.rad_collide_dst = QtGui.QRadioButton('Destination')
-		self.rad_type_master = QtGui.QRadioButton('Layer')
+		self.rad_type_master = QtGui.QRadioButton('Layer + suffix')
 		self.rad_type_mask = QtGui.QRadioButton('Mask')
 		
 		self.rad_collide_dst.setChecked(True)
@@ -202,8 +202,9 @@ class dlg_copy_layers(QtGui.QDialog):
 
 				# - Handle collision
 				if dst_glyph.layer(layer_dst) is not None:
-					if mode_collide and mode_rename: # Rename mode
-						dst_glyph.importLayer(dst_glyph, layer_dst, layer_dst + replace_suffix, new_layer_options, addLayer=True, cleanDST=True, toBack=True, mode=mode_mask)
+					if mode_collide:  
+						new_layer_name = layer_dst + replace_suffix if mode_rename else layer_src + replace_suffix  # Rename mode
+						dst_glyph.importLayer(dst_glyph, layer_dst, new_layer_name, new_layer_options, addLayer=True, cleanDST=True, toBack=True, mode=mode_mask)
 					
 					dst_glyph.removeLayer(layer_dst)
 
