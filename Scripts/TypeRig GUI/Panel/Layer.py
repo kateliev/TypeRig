@@ -32,7 +32,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '2.31'
+app_name, app_version = 'TypeRig | Layers', '2.32'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -54,6 +54,16 @@ class TRLayerActionCollector(object):
 				parent.glyph.layer(layer_name).isVisible = not parent.glyph.layer(layer_name).isVisible
 
 			parent.glyph.updateObject(parent.glyph.fl, 'Toggle Visibility Layer: %s.' %'; '.join(layer_list))
+
+	@staticmethod
+	def layer_set_visible(parent, visible=False):	
+		if parent.doCheck():	
+			layer_list = parent.lst_layers.getTable()
+			
+			for layer_name in layer_list:
+				parent.glyph.layer(layer_name).isVisible = visible
+
+			parent.glyph.updateObject(parent.glyph.fl, 'Set Visibility Layer: %s.' %'; '.join(layer_list))
 
 	@staticmethod
 	def layer_add(parent):
@@ -774,6 +784,8 @@ class tool_tab(QtGui.QWidget):
 		self.act_layer_duplicate_mask = QtGui.QAction('Duplicate to Mask', self)
 		self.act_layer_delete = QtGui.QAction('Remove', self)
 		self.act_layer_visible = QtGui.QAction('Toggle Visible', self)
+		self.act_layer_visible_on = QtGui.QAction('Set Visible', self)
+		self.act_layer_visible_off = QtGui.QAction('Set Invisible', self)
 
 		self.menu_layer_type = QtGui.QMenu('Type', self)
 		act_layer_set_type_mask = QtGui.QAction('Set as Mask', self)
@@ -833,6 +845,8 @@ class tool_tab(QtGui.QWidget):
 		self.act_layer_duplicate_mask.triggered.connect(lambda: TRLayerActionCollector.layer_duplicate_mask(self.layerSelector))
 		self.act_layer_delete.triggered.connect(lambda: TRLayerActionCollector.layer_delete(self.layerSelector))
 		self.act_layer_visible.triggered.connect(lambda: TRLayerActionCollector.layer_toggle_visible(self.layerSelector))
+		self.act_layer_visible_on.triggered.connect(lambda: TRLayerActionCollector.layer_set_visible(self.layerSelector, True))
+		self.act_layer_visible_off.triggered.connect(lambda: TRLayerActionCollector.layer_set_visible(self.layerSelector, False))
 		
 		act_layer_set_type_wireframe.triggered.connect(lambda: TRLayerActionCollector.layer_set_type(self.layerSelector, 'Wireframe'))
 		act_layer_set_type_service.triggered.connect(lambda: TRLayerActionCollector.layer_set_type(self.layerSelector, 'Service'))
@@ -870,8 +884,11 @@ class tool_tab(QtGui.QWidget):
 		self.layerSelector.lst_layers.menu.addAction(self.act_layer_add)
 		self.layerSelector.lst_layers.menu.addAction(self.act_layer_duplicate)
 		self.layerSelector.lst_layers.menu.addAction(self.act_layer_duplicate_mask)
-		self.layerSelector.lst_layers.menu.addAction(self.act_layer_visible)
 		self.layerSelector.lst_layers.menu.addAction(self.act_layer_delete)
+		self.layerSelector.lst_layers.menu.addSeparator()
+		self.layerSelector.lst_layers.menu.addAction(self.act_layer_visible_on)
+		self.layerSelector.lst_layers.menu.addAction(self.act_layer_visible_off)
+		self.layerSelector.lst_layers.menu.addAction(self.act_layer_visible)
 		self.layerSelector.lst_layers.menu.addSeparator()
 		self.layerSelector.lst_layers.menu.addMenu(self.menu_layer_type)
 		self.layerSelector.lst_layers.menu.addSeparator()
