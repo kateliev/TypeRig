@@ -30,7 +30,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.29.9'
+__version__ = '0.30.0'
 
 # - Keep compatibility for basestring checks
 try:
@@ -712,6 +712,11 @@ class pGlyph(object):
 				master_components_count.append(counter)
 
 		return not len(set(master_components_count)) == 1	
+
+	def isHybridComponent(self, layer=None):
+		'''Test if glyph has contours mixed with components'''
+		
+		return len(self.components(layer)) != len(self.shapes(layer))
 			
 	def reportLayerComp(self, strong=False):
 		'''Returns a layer compatibility report'''
