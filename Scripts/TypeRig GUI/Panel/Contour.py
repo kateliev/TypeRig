@@ -31,7 +31,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '2.2'
+app_name, app_version = 'TypeRig | Contour', '2.3'
 
 # - Sub widgets ------------------------
 class breakContour(QtGui.QGridLayout):
@@ -385,7 +385,9 @@ class alignContours(QtGui.QGridLayout):
 										('Contour to Contour','CC'),
 										('Contour to Contour (REV)','RC'),
 										('Contour to Node','CN'),
-										('Contour to Node (REV)','RN')
+										('Contour to Node (REV)','RN'),
+										('Contours A to B','AB'),
+										('Contours B to A','BA')
 									])
 		
 		# !!! To be implemented
@@ -404,12 +406,55 @@ class alignContours(QtGui.QGridLayout):
 		self.cmb_align_mode.setToolTip('Alignment Mode')
 
 		self.btn_align = QtGui.QPushButton('Align')
-		self.btn_align.clicked.connect(self.alignContours)
+		self.btn_bool_setA = QtGui.QPushButton('A')
+		self.btn_bool_setB = QtGui.QPushButton('B')
+		self.btn_bool_setA.setCheckable(True)
+		self.btn_bool_setB.setCheckable(True)
 
-		self.addWidget(self.cmb_align_mode, 	0, 0, 1, 2)
-		self.addWidget(self.cmb_align_x, 		0, 2, 1, 1)
-		self.addWidget(self.cmb_align_y, 		0, 3, 1, 1)
-		self.addWidget(self.btn_align, 			1, 0, 1, 4)
+		self.btn_align.clicked.connect(self.alignContours)
+		self.btn_bool_setA.clicked.connect(lambda: self.get_contours(False))
+		self.btn_bool_setB.clicked.connect(lambda: self.get_contours(True))
+
+		self.addWidget(self.btn_bool_setA, 		0, 0, 1, 2)
+		self.addWidget(self.btn_bool_setB, 		0, 2, 1, 2)
+		self.addWidget(self.cmb_align_mode, 	1, 0, 1, 2)
+		self.addWidget(self.cmb_align_x, 		1, 2, 1, 1)
+		self.addWidget(self.cmb_align_y, 		1, 3, 1, 1)
+		self.addWidget(self.btn_align, 			2, 0, 1, 4)
+
+	def get_contours(self, isB=False):
+		# - Init
+		glyph = eGlyph()
+		selection = glyph.selectedAtContours()
+		reset_value = False
+		work_selection = {}
+
+		# - Prepare
+		wLayers = glyph._prepareLayers(pLayers)
+		for layerName in wLayers:
+			glyph_contours = glyph.contours(layerName, extend=eContour)
+			layer_selection = [glyph_contours[index] for index in list(set([item[0] for item in selection]))]
+			work_selection.setdefault(layerName, []).extend(layer_selection)
+
+		# - Set
+		if self.btn_bool_setA.isChecked() and not isB:
+			self.var_bool_A = work_selection
+		
+		elif not self.btn_bool_setA.isChecked() and not isB:
+			self.var_bool_A = {}
+			reset_value = True
+		
+		if self.btn_bool_setB.isChecked() and isB:
+			self.var_bool_B = work_selection
+
+		elif not self.btn_bool_setB.isChecked() and isB:
+			self.var_bool_B = {}
+			reset_value = True
+
+		if not reset_value:
+			output(0, app_name, 'Align Contours | Set {} for contours: {}'.format(['A', 'B'][isB], len(list(work_selection.values())[0])))
+		else:
+			output(0, app_name, 'Align Contours | Reset {}'.format(['A', 'B'][isB]))
 
 	def alignContours(self):
 		# - Helpers
@@ -428,6 +473,12 @@ class alignContours(QtGui.QGridLayout):
 						}
 
 			return align_dict
+
+		def reset_buttons():
+			if self.btn_bool_setA.isChecked(): self.btn_bool_setA.setChecked(False)
+			if self.btn_bool_setB.isChecked(): self.btn_bool_setB.setChecked(False)
+			self.var_bool_A = {}
+			self.var_bool_B = {}
 
 		# - Init
 		user_mode =  self.align_mode[self.cmb_align_mode.currentText]
@@ -495,6 +546,24 @@ class alignContours(QtGui.QGridLayout):
 				elif user_mode == 'NN': # Align a node on contour to node on another
 					pass
 
+				elif user_mode == 'AB': # Align contours A to B
+					if len(self.var_bool_A.keys()) and len(self.var_bool_B.keys()):
+						cont_bounds = getContourBonds(self.var_bool_B[layerName])
+						align_type = getAlignDict(cont_bounds)
+						target = Coord(align_type[user_x], align_type[user_y])
+
+						for contour in reversed(self.var_bool_A[layerName]):
+							contour.alignTo(target, user_x + user_y, (keep_x, keep_y))
+
+				elif user_mode == 'BA': # Align contours B to A
+					if len(self.var_bool_A.keys()) and len(self.var_bool_B.keys()):
+						cont_bounds = getContourBonds(self.var_bool_A[layerName])
+						align_type = getAlignDict(cont_bounds)
+						target = Coord(align_type[user_x], align_type[user_y])
+
+						for contour in reversed(self.var_bool_B[layerName]):
+							contour.alignTo(target, user_x + user_y, (keep_x, keep_y))
+
 				else:
 					metrics = pFontMetrics(glyph.package)
 					max_layer_y = max([metrics.getXHeight(layerName), metrics.getCapsHeight(layerName), metrics.getAscender(layerName)])
@@ -523,9 +592,14 @@ class alignContours(QtGui.QGridLayout):
 					align_type = getAlignDict(cont_bounds)
 					target = Coord(align_type[user_x], align_type[user_y])					
 
+					if len(self.var_bool_A): work_contours += self.var_bool_A[layerName]
+					if len(self.var_bool_B): work_contours += self.var_bool_B[layerName]
+
 					for contour in work_contours:
 						contour.alignTo(target, user_x + user_y, (keep_x, keep_y))
 
+
+			reset_buttons()
 			glyph.update()
 			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Align Contours @ %s.' %(glyph.name, '; '.join(wLayers)))
 
@@ -545,6 +619,7 @@ class copyContours(QtGui.QGridLayout):
 		self.mod_contours = QtGui.QStandardItemModel(self.lst_contours)
 		self.lst_contours.setModel(self.mod_contours)
 		self.lst_contours.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+		self.lst_contours.setMinimumHeight(350)
 
 		# -- Quick Tool buttons
 		self.btn_copy_contour = QtGui.QPushButton('Copy')
@@ -557,8 +632,8 @@ class copyContours(QtGui.QGridLayout):
 				
 		self.addWidget(self.btn_copy_contour,		0, 0, 1, 4)
 		self.addWidget(self.btn_paste_contour,		0, 4, 1, 4)
-		self.addWidget(self.lst_contours,			1, 0, 10, 8)
-		self.addWidget(self.btn_clear,				11, 0, 1, 8)
+		self.addWidget(self.lst_contours,			1, 0, 18, 8)
+		self.addWidget(self.btn_clear,				20, 0, 1, 8)
 
 		self.tr_trans_ctrl.lay_controls.setMargin(0)
 

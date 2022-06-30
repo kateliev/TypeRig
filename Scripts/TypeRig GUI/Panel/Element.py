@@ -16,7 +16,8 @@ from collections import OrderedDict
 import fontlab as fl6
 import fontgate as fgt
 
-from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.base import Coord
+from typerig.proxy.fl.objects.font import pFont, pFontMetrics
 from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
 from typerig.proxy.fl.objects.shape import pShape, eShape
 from typerig.core.base.message import *
@@ -30,7 +31,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '1.27'
+app_name, app_version = 'TypeRig | Elements', '1.28'
 
 # - Syntax -------------------------------
 syn_comment = '#'
