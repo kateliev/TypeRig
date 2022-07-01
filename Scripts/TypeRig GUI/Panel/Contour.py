@@ -31,7 +31,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '2.3'
+app_name, app_version = 'TypeRig | Contour', '2.4'
 
 # - Sub widgets ------------------------
 class breakContour(QtGui.QGridLayout):
@@ -386,8 +386,7 @@ class alignContours(QtGui.QGridLayout):
 										('Contour to Contour (REV)','RC'),
 										('Contour to Node','CN'),
 										('Contour to Node (REV)','RN'),
-										('Contours A to B','AB'),
-										('Contours B to A','BA')
+										('Contours Groups A to B','AB')
 									])
 		
 		# !!! To be implemented
@@ -466,10 +465,10 @@ class alignContours(QtGui.QGridLayout):
 		def getAlignDict(bounds_tuple):
 			align_dict = {	'L': bounds_tuple[0], 
 							'R': bounds_tuple[2],
-							'C': bounds_tuple[2]/2,
+							'C': bounds_tuple[0] + (bounds_tuple[2] - bounds_tuple[0])/2,
 							'B': bounds_tuple[1], 
 							'T': bounds_tuple[3], 
-							'E': bounds_tuple[3]/2
+							'E': bounds_tuple[1] + (bounds_tuple[3] - bounds_tuple[1])/2
 						}
 
 			return align_dict
@@ -548,21 +547,21 @@ class alignContours(QtGui.QGridLayout):
 
 				elif user_mode == 'AB': # Align contours A to B
 					if len(self.var_bool_A.keys()) and len(self.var_bool_B.keys()):
-						cont_bounds = getContourBonds(self.var_bool_B[layerName])
-						align_type = getAlignDict(cont_bounds)
-						target = Coord(align_type[user_x], align_type[user_y])
+						cont_bounds_A = getContourBonds(self.var_bool_A[layerName])
+						align_type_A = getAlignDict(cont_bounds_A)
+
+						cont_bounds_B = getContourBonds(self.var_bool_B[layerName])
+						align_type_B = getAlignDict(cont_bounds_B)
+						
+						target = Coord(align_type_B[user_x], align_type_B[user_y])
+						group_base = Coord(align_type_A[user_x], align_type_A[user_y])
 
 						for contour in reversed(self.var_bool_A[layerName]):
-							contour.alignTo(target, user_x + user_y, (keep_x, keep_y))
+							align_temp =  getAlignDict(contour.bounds)
+							contour_base = Coord(align_temp[user_x], align_temp[user_y])
+							contour_delta = group_base - contour_base
 
-				elif user_mode == 'BA': # Align contours B to A
-					if len(self.var_bool_A.keys()) and len(self.var_bool_B.keys()):
-						cont_bounds = getContourBonds(self.var_bool_A[layerName])
-						align_type = getAlignDict(cont_bounds)
-						target = Coord(align_type[user_x], align_type[user_y])
-
-						for contour in reversed(self.var_bool_B[layerName]):
-							contour.alignTo(target, user_x + user_y, (keep_x, keep_y))
+							contour.alignTo(target - contour_delta, user_x + user_y, (keep_x, keep_y))
 
 				else:
 					metrics = pFontMetrics(glyph.package)
