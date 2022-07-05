@@ -24,7 +24,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.core.base.message import *
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Copy Layers', '1.4'
+app_name, app_version = 'TR | Copy Layers', '1.5'
 
 # - Interface -----------------------------
 class dlg_copy_layers(QtGui.QDialog):
@@ -170,6 +170,7 @@ class dlg_copy_layers(QtGui.QDialog):
 		
 		mode_source = 3 if self.rad_source_font.isChecked() else 2  # if 3 for Font, 2 for selected glyphs
 		mode_collide = self.rad_collide_rename.isChecked()			# if True rename 
+		mode_destination =  self.rad_collide_dst.isChecked()
 		mode_rename = self.rad_collide_dst.isChecked()				# if True modify destination
 		mode_mask = 'mask' if self.rad_type_mask.isChecked() else 'new'
 		
@@ -202,17 +203,19 @@ class dlg_copy_layers(QtGui.QDialog):
 
 				# - Handle collision
 				if dst_glyph.layer(layer_dst) is not None:
-					if mode_collide:  
+					if mode_collide and mode_destination:  
 						new_layer_name = layer_dst + replace_suffix if mode_rename else layer_src + replace_suffix  # Rename mode
 						dst_glyph.importLayer(dst_glyph, layer_dst, new_layer_name, new_layer_options, addLayer=True, cleanDST=True, toBack=True, mode=mode_mask)
 					
-					dst_glyph.removeLayer(layer_dst)
+					if mode_destination:
+						dst_glyph.removeLayer(layer_dst)
 
 				if mode_collide and not mode_rename:
 					layer_dst = layer_dst + replace_suffix
 
 				# - Copy
-				dst_glyph.importLayer(src_glyph, layer_src, layer_dst, new_layer_options, addLayer=True, cleanDST=True, toBack=True, mode='new')
+				mode_mask = 'mask' if self.rad_type_mask.isChecked() and not mode_destination else 'new'
+				dst_glyph.importLayer(src_glyph, layer_src, layer_dst, new_layer_options, addLayer=True, cleanDST=True, toBack=True, mode=mode_mask)
 				do_update = True
 
 			else:

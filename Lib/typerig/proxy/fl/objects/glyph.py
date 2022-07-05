@@ -30,7 +30,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.30.1'
+__version__ = '0.30.3'
 
 # - Keep compatibility for basestring checks
 try:
@@ -156,8 +156,6 @@ class pGlyph(object):
 
 	def fg_activeLayer(self): return self.fg.layer
 
-	def mask(self): return self.fl.activeLayer.getMaskLayer(True)
-
 	def activeGuides(self): return self.fl.activeLayer.guidelines
 
 	def mLine(self): return self.fl.measurementLine()
@@ -250,6 +248,22 @@ class pGlyph(object):
 
 			elif isinstance(layer, basestring):
 				return self.fl.getLayerByName(layer)
+
+	def mask(self, layer=None, force_create=False):
+		'''Returns mask layer no matter the reference.
+		Args:
+			layer (int or str): Layer index or name. If None returns ActiveLayer
+		Returns:
+			flLayer
+		'''
+		if layer is None:
+			return self.fl.activeLayer.getMaskLayer(force_create)
+		else:
+			if isinstance(layer, int):
+				return self.fl.layers[layer].getMaskLayer(force_create)
+
+			elif isinstance(layer, basestring):
+				return self.fl.getLayerByName(layer).getMaskLayer(force_create)
 
 	def fg_layer(self, layer=None):
 		'''Returns FontGate layer no matter the reference.
