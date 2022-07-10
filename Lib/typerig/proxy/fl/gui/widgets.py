@@ -15,6 +15,7 @@ from collections import OrderedDict
 from math import radians
 from platform import system
 
+import os
 import fontlab as fl6
 
 from PythonQt import QtCore
@@ -26,13 +27,24 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.2.95'
+__version__ = '0.2.96'
 
 # - Keep compatibility for basestring checks
 try:
 	basestring
 except NameError:
 	basestring = (str, bytes)
+
+# -- Fonts -------------------------------
+def getTRIconFont(font_pixel_size=20):
+	font_path = [os.path.dirname(__file__), 'resource' , 'typerig-icons.ttf']
+	font_loaded = QtGui.QFontDatabase.addApplicationFont(os.path.join(*font_path))
+
+	TRIconFont = QtGui.QFont()
+	TRIconFont.setFamily("TypeRig Icons")
+	TRIconFont.setPixelSize(font_pixel_size)
+
+	return TRIconFont
 
 # -- Colors ------------------------------
 # Fontlab Name, Fontlab Value, QtColor Name
