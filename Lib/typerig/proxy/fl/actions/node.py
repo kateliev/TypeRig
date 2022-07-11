@@ -206,53 +206,42 @@ class TRNodeActionCollector(object):
 		
 		for layer in wLayers:
 			selection = glyph.selectedNodes(layer)
-			slope_dict[layer] = Vector(selection[0], selection[-1])
+			slope_dict[layer] = Vector(selection[0], selection[-1]).slope
 
 		return slope_dict
 
-	# >>>>>>>>>>>>>> You are here <<<<<<<<<<<<<
-	@staticmethod
-	def slope_paste(glyph:eGlyph, pLayers:tuple, slope_dict:dict, mode:str):
+	def slope_italic(glyph:eGlyph, pLayers:tuple) -> dict:
 		wLayers = glyph._prepareLayers(pLayers)
 		italicAngle = glyph.package.italicAngle_value
+		slope_dict = {layer : -1*italicAngle for layer in wLayers}
+
+		return slope_dict
+
+	@staticmethod
+	def slope_paste(glyph:eGlyph, pLayers:tuple, slope_dict:dict, mode:tuple):
+		'''
+		mode -> (max:bool, flip:bool) where
+		minY = (False, False)
+		MaXY = (True, False)
+		FLminY = (False, True)
+		FLMaxY = (True, True)
+		'''
+		wLayers = glyph._prepareLayers(pLayers)
 		control = (True, False)
 		
 		for layer in wLayers:
 			selection = [eNode(node) for node in glyph.selectedNodes(layer)]
-			srcLine = parent.copyLine[layer] if not parent.chk_italic.isChecked() else None
 
-			if mode == 'MinY':
+			if mode[0]:
+				dstVector = Vector(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
+			else:
 				dstVector = Vector(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
 				
-				if not parent.chk_italic.isChecked():
-					dstVector.slope = srcLine.slope
-				else:
-					dstVector.angle = -1*italicAngle
+			if mode[1]:
+				dstVector.slope = -1.*slope_dict[layer]
+			else:
+				dstVector.slope = slope_dict[layer]
 
-			elif mode == 'MaxY':
-				dstVector = Vector(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
-				
-				if not parent.chk_italic.isChecked():
-					dstVector.slope = srcLine.slope
-				else:
-					dstVector.angle = -1*italicAngle
-
-			elif mode == 'FLMinY':
-				dstVector = Vector(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
-				
-				if not parent.chk_italic.isChecked():
-					dstVector.slope = -1.*srcLine.slope
-				else:
-					dstVector.angle = italicAngle
-
-			elif mode == 'FLMaxY':
-				dstVector = Vector(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
-				
-				if not parent.chk_italic.isChecked():
-					dstVector.slope = -1.*srcLine.slope
-				else:
-					dstVector.angle = italicAngle
-			
 			for node in selection:
 				node.alignTo(dstVector, control)
 
@@ -262,7 +251,7 @@ class TRNodeActionCollector(object):
 
 	# -- Nodes alignment ------------------------------------------------------
 	@staticmethod
-	def nodes_align(parent, mode):
+	def nodes_align(glyph:eGlyph, pLayers:tuple, mode:str):
 		process_glyphs = getProcessGlyphs(pMode)
 		modifiers = QtGui.QApplication.keyboardModifiers()
 
@@ -270,8 +259,7 @@ class TRNodeActionCollector(object):
 			wLayers = glyph._prepareLayers(pLayers)
 			
 			for layer in wLayers:
-				extend_nodes = None if parent.chk_relations.isChecked() else eNode
-				selection = glyph.selectedNodes(layer, extend=extend_nodes)
+				selection = glyph.selectedNodes(layer, extend=eNode)
 				italicAngle = glyph.package.italicAngle_value
 
 				if mode == 'L':
