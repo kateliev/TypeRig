@@ -18,7 +18,7 @@ import fontgate as fgt
 from typerig.proxy.fl.objects.node import eNode, eNodesContainer
 from typerig.proxy.fl.objects.contour import pContour
 from typerig.proxy.fl.objects.glyph import eGlyph
-from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.font import pFont, pFontMetrics
 from typerig.proxy.fl.objects.base import Line, Vector
 
 from typerig.core.func.collection import group_consecutive
@@ -29,7 +29,7 @@ from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.20.0'
+__version__ = '2.50.0'
 
 # - Keep compatibility for basestring checks
 try:
@@ -175,6 +175,8 @@ class TRNodeActionCollector(object):
 
 	@staticmethod
 	def corner_trap(glyph:eGlyph, pLayers:tuple, incision:int, depth:int, trap:int, smooth:bool=True):
+		wLayers = glyph._prepareLayers(pLayers)
+
 		for layer in wLayers:
 			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
 			
@@ -184,19 +186,30 @@ class TRNodeActionCollector(object):
 		glyph.updateObject(glyph.fl, 'Trap Corner @ {}.'.format('Trap Corner', '; '.join(wLayers)))
 
 	@staticmethod
-	def corner_rebuild(glyph:eGlyph, pLayers:tuple):
-		selection_layers = {layer:glyph.selectedNodes(layer, filterOn=True, extend=eNode) for layer in wLayers}
+	def corner_rebuild(glyph:eGlyph, pLayers:tuple, cleanup_nodes:bool=True):
+		wLayers = glyph._prepareLayers(pLayers)
+		selection_layers_all = {layer : glyph.selectedNodes(layer, extend=eNode) for layer in wLayers}
+		selection_layers_on = {layer : [node for node in selection if node.isOn] for layer, selection in selection_layers_all.items()}
+		done_flag = False
 
-		for layer, selection in selection_layers.items():			
+		for layer, selection in selection_layers_on.items():			
 			if len(selection) > 1:
 				node_first = selection[0]
 				node_last = selection[-1]
 				crossing = get_crossing(selection)
 
-				node_first.smartReloc(*crossing.tuple)
-				node_first.parent.removeNodesBetween(node_first.fl, node_last.getNextOn())
+				if cleanup_nodes:
+					node_first.smartReloc(*crossing.tuple)
+					node_first.parent.removeNodesBetween(node_first.fl, node_last.getNextOn())
 
-		glyph.updateObject(glyph.fl, 'Rebuild corner:\t{} nodes reduced @ {}'.format(len(selection), '; '.join(wLayers)))
+				else:
+					for node in selection_layers_all:
+						node.reloc(*crossing.tuple)
+
+				done_flag = True
+
+		if done_flag:
+			glyph.updateObject(glyph.fl, 'Rebuild corner:\t{} nodes reduced @ {}'.format(len(selection), '; '.join(wLayers)))
 
 	# -- Slope tools -----------------------------------------------------------------
 	@staticmethod
@@ -251,16 +264,16 @@ class TRNodeActionCollector(object):
 
 	# -- Nodes alignment ------------------------------------------------------
 	@staticmethod
-	def nodes_align(glyph:eGlyph, pLayers:tuple, mode:str):
+	def nodes_align(glyph:eGlyph, pLayers:tuple, mode:str, intercept:bool=False, keep_relations:bool=False, smart_shift:bool=False):
 		process_glyphs = getProcessGlyphs(pMode)
 		modifiers = QtGui.QApplication.keyboardModifiers()
 
 		for glyph in process_glyphs:
 			wLayers = glyph._prepareLayers(pLayers)
+			italicAngle = glyph.package.italicAngle_value
 			
 			for layer in wLayers:
 				selection = glyph.selectedNodes(layer, extend=eNode)
-				italicAngle = glyph.package.italicAngle_value
 
 				if mode == 'L':
 					target = min(selection, key=lambda item: item.x)
@@ -359,6 +372,9 @@ class TRNodeActionCollector(object):
 						container_mode = 'LB' if modifiers == QtCore.Qt.ShiftModifier else 'LT'
 						if modifiers == QtCore.Qt.ShiftModifier: toMaxY = not toMaxY
 
+				'''
+				# !!! Turn this into standalone dialog >>>
+
 				elif mode == 'Layer_V':
 					if 'BBox' in parent.cmb_select_V.currentText:
 						width = glyph.layer(layer).boundingBox.width()
@@ -412,8 +428,11 @@ class TRNodeActionCollector(object):
 					container_mode = container_mode_H + container_mode_V
 
 					control = (False, True)
+				
+				# !!! End <<<
+				'''
 
-				if parent.chk_relations.isChecked():
+				if keep_relations:
 					container = eNodesContainer(selection)
 					
 					if 'FontMetrics' in mode:
@@ -425,14 +444,14 @@ class TRNodeActionCollector(object):
 				else:
 					for node in selection:
 						if 'FontMetrics' in mode or mode == 'T' or mode == 'B':
-							if italicAngle != 0 and not parent.chk_intercept.isChecked():
+							if italicAngle != 0 and not intercept:
 								tempTarget = Coord(node.fl)
 								tempTarget.setAngle(italicAngle)
 
 								target = fl6.flNode(tempTarget.getWidth(newY), newY)
 								control = (True, True)
 							
-							elif parent.chk_intercept.isChecked():
+							elif intercept:
 								pairUp = node.getMaxY().position
 								pairDown = node.getMinY().position
 								pairPos = pairUp if toMaxY else pairDown
@@ -459,165 +478,147 @@ class TRNodeActionCollector(object):
 							control = (False, True)
 
 						# - Execute Align ----------
-						node.alignTo(target, control, parent.chk_smartShift.isChecked())
+						node.alignTo(target, control, smart_shift)
 
 			glyph.updateObject(glyph.fl, 'Align Nodes @ %s.' %'; '.join(wLayers))
 			glyph.update()
 
 	# -- Node clipboard ----------------------------------------------------
 	@staticmethod
-	def nodes_copy(parent):
-		if parent.chk_copy.isChecked():
-			glyph = eGlyph()
-			parent.chk_copy.setText('Reset')
-			wLayers = glyph._prepareLayers(pLayers)
-			parent.node_bank = {layer : eNodesContainer([node.clone() for node in glyph.selectedNodes(layer)], extend=eNode) for layer in wLayers}
-		else:
-			parent.node_bank = {}
-			parent.chk_copy.setText('Copy')
+	def nodes_copy(glyph:eGlyph, pLayers:tuple):
+		wLayers = glyph._prepareLayers(pLayers)
+		node_bank = {layer : eNodesContainer([node.clone() for node in glyph.selectedNodes(layer)], extend=eNode) for layer in wLayers}
+		return node_bank
 
 	@staticmethod
-	def nodes_paste(parent):
-		if parent.chk_copy.isChecked():
-			process_glyphs = getProcessGlyphs(pMode)
-			modifiers = QtGui.QApplication.keyboardModifiers()
-			update_flag = False
+	def nodes_paste(glyph:eGlyph, pLayers:tuple, node_bank:dict, align:str=None, mode:tuple=(False, False, False, False, False, False)):
+		wLayers = glyph._prepareLayers(pLayers)
+		flip_h, flip_v, reverse, inject_nodes, overwrite_nodes, overwrite_coordinates = flip_reverse
+		
+		for layer in wLayers:
+			if layer in node_bank.keys():
+				dst_container = eNodesContainer(glyph.selectedNodes(layer), extend=eNode)
 
-			for glyph in process_glyphs:
-				wLayers = glyph._prepareLayers(pLayers)
-				
-				for layer in wLayers:
-					if layer in parent.node_bank.keys():
-						dst_container = eNodesContainer(glyph.selectedNodes(layer), extend=eNode)
+				if len(dst_container):
+					src_container = parent.node_bank[layer].clone()
+					src_transform = QtGui.QTransform()
+																
+					# - Transform
+					if flip_h or flip_v:
+						scaleX = -1 if flip_h else 1
+						scaleY = -1 if flip_v else 1
+						dX = src_container.x() + src_container.width()/2.
+						dY = src_container.y() + src_container.height()/2.
 
-						if len(dst_container):
-							src_container = parent.node_bank[layer].clone()
-							src_transform = QtGui.QTransform()
-																		
-							# - Transform
-							if parent.chk_flipH.isChecked() or parent.chk_flipV.isChecked():
-								scaleX = -1 if parent.chk_flipH.isChecked() else 1
-								scaleY = -1 if parent.chk_flipV.isChecked() else 1
-								dX = src_container.x() + src_container.width()/2.
-								dY = src_container.y() + src_container.height()/2.
+						src_transform.translate(dX, dY)
+						src_transform.scale(scaleX, scaleY)
+						src_transform.translate(-dX, -dY)
+						src_container.applyTransform(src_transform)
+						
 
-								src_transform.translate(dX, dY)
-								src_transform.scale(scaleX, scaleY)
-								src_transform.translate(-dX, -dY)
-								src_container.applyTransform(src_transform)
-								
+					# - Align source
+					if align is None:
+						src_container.shift(*src_container[0].diffTo(dst_container[0]))
+					else:
+						src_container.alignTo(dst_container, align, align=(True,True))
 
-							# - Align source
-							if parent.copy_align_state is None:
-								src_container.shift(*src_container[0].diffTo(dst_container[0]))
-							else:
-								src_container.alignTo(dst_container, parent.copy_align_state, align=(True,True))
+					if reverse: 
+						src_container = src_container.reverse()
 
-							if parent.chk_reverse.isChecked(): 
-								src_container = src_container.reverse()
+					# - Process
+					if inject_nodes: # - Inject mode - insert source after first node index
+						dst_container[0].contour.insert(dst_container[0].index, [node.fl for node in src_container.nodes])
+						update_flag = True
 
-							# - Process
-							if modifiers == QtCore.Qt.ShiftModifier: # - Inject mode - insert source after first node index
-								dst_container[0].contour.insert(dst_container[0].index, [node.fl for node in src_container.nodes])
-								update_flag = True
+					elif overwrite_nodes: # - Overwrite mode - delete all nodes in selection and replace with source
+						insert_index = dst_container[0].index
+						insert_contour = dst_container[0].contour
+						insert_contour.removeNodesBetween(dst_container[0].fl, dst_container[-1].getNextOn())
+						insert_contour.insert(dst_container[0].index, [node.fl for node in src_container.nodes])
+						insert_contour.removeAt(insert_index + len(src_container))
 
-							elif modifiers == QtCore.Qt.AltModifier: # - Overwrite mode - delete all nodes in selection and replace with source
-								insert_index = dst_container[0].index
-								insert_contour = dst_container[0].contour
-								insert_contour.removeNodesBetween(dst_container[0].fl, dst_container[-1].getNextOn())
-								insert_contour.insert(dst_container[0].index, [node.fl for node in src_container.nodes])
-								insert_contour.removeAt(insert_index + len(src_container))
+						update_flag = True
 
-								update_flag = True
+					elif overwrite_coordinates: # - Overwrite mode - copy node coordinates only
+						for nid in range(len(dst_container)):
+							dst_container.nodes[nid].x = src_container.nodes[nid].x
+							dst_container.nodes[nid].y = src_container.nodes[nid].y
 
-							elif modifiers == QtCore.Qt.ControlModifier: # - Overwrite mode - copy node coordinates only
-								for nid in range(len(dst_container)):
-									dst_container.nodes[nid].x = src_container.nodes[nid].x
-									dst_container.nodes[nid].y = src_container.nodes[nid].y
+						update_flag = True
 
-								update_flag = True
+					else: # - Paste mode - remap node by node
+						if len(dst_container) == len(parent.node_bank[layer]):
+							for nid in range(len(dst_container)):
+								dst_container[nid].fl.x = src_container[nid].x 
+								dst_container[nid].fl.y = src_container[nid].y 
 
-							else: # - Paste mode - remap node by node
-								if len(dst_container) == len(parent.node_bank[layer]):
-									for nid in range(len(dst_container)):
-										dst_container[nid].fl.x = src_container[nid].x 
-										dst_container[nid].fl.y = src_container[nid].y 
-
-									update_flag = True
-								else:
-									update_flag = False
-									warnings.warn('Layer: {};\tCount Mismatch: Selected nodes [{}]; Source nodes [{}].'.format(layer, len(dst_container), len(src_container)), NodeWarning)
+							update_flag = True
+						else:
+							update_flag = False
+							warnings.warn('Layer: {};\tCount Mismatch: Selected nodes [{}]; Source nodes [{}].'.format(layer, len(dst_container), len(src_container)), NodeWarning)
 							
-				# - Done							
-				if update_flag:	
-					glyph.updateObject(glyph.fl, 'Paste Nodes @ %s.' %'; '.join(wLayers))
-					glyph.update()
+		# - Done							
+		if update_flag:
+			glyph.update()
+			glyph.updateObject(glyph.fl, 'Paste Nodes @ %s.' %'; '.join(wLayers))
 
 	# -- Shift & Movement ------------------------------------------------
 	@staticmethod
-	def nodes_move(parent, offset_x, offset_y, method, inPercent):
+	def nodes_move(glyph:eGlyph, pLayers:tuple, offset_x:int, offset_y:int, method:str, slope_dict:dict={}, in_percent_of_advance:bool=False):
 		# - Init
-		font = pFont()
-		glyph = eGlyph()
-		italic_angle = font.getItalicAngle()
+		wLayers = glyph._prepareLayers(pLayers)
+		italic_angle = glyph.package.italicAngle_value
 
-		process_glyphs = getProcessGlyphs(pMode)
+		for layer in wLayers:
+			selectedNodes = glyph.selectedNodes(layer=layer, extend=eNode)
+			
+			width = glyph.layer(layer).boundingBox.width() # glyph.layer().advanceWidth
+			height = glyph.layer(layer).boundingBox.height() # glyph.layer().advanceHeight
 
-		for glyph in process_glyphs:
-			wLayers = glyph._prepareLayers(pLayers)
-
-			for layer in wLayers:
-				selectedNodes = glyph.selectedNodes(layer=layer, extend=eNode)
-				
-				width = glyph.layer(layer).boundingBox.width() # glyph.layer().advanceWidth
-				height = glyph.layer(layer).boundingBox.height() # glyph.layer().advanceHeight
-
-				# - Process
-				if method == parent.methodList[0]:
-					for node in selectedNodes:
-						if node.isOn:
-							if inPercent:						
-								node.smartShift(*scale_offset(node, offset_x, offset_y, width, height))
-							else:
-								node.smartShift(offset_x, offset_y)
-
-				elif method == parent.methodList[1]:
-					for node in selectedNodes:
-						if inPercent:						
-							node.shift(*scale_offset(node, offset_x, offset_y, width, height))
+			# - Process
+			if method == 'SMART':
+				for node in selectedNodes:
+					if node.isOn:
+						if in_percent_of_advance:						
+							node.smartShift(*scale_offset(node, offset_x, offset_y, width, height))
 						else:
-							node.shift(offset_x, offset_y)
+							node.smartShift(offset_x, offset_y)
 
-				elif method == parent.methodList[2]:
+			elif method == 'MOVE':
+				for node in selectedNodes:
+					if in_percent_of_advance:						
+						node.shift(*scale_offset(node, offset_x, offset_y, width, height))
+					else:
+						node.shift(offset_x, offset_y)
+
+			elif method == 'LERP':
+				for node in selectedNodes:
+					if in_percent_of_advance:						
+						node.interpShift(*scale_offset(node, offset_x, offset_y, width, height))
+					else:
+						node.interpShift(offset_x, offset_y)
+
+			elif method == 'SLANT':
+				if italic_angle != 0:
 					for node in selectedNodes:
-						if inPercent:						
-							node.interpShift(*scale_offset(node, offset_x, offset_y, width, height))
+						if in_percent_of_advance:						
+							node.slantShift(*scale_offset(node, offset_x, offset_y, width, height))
 						else:
-							node.interpShift(offset_x, offset_y)
+							node.slantShift(offset_x, offset_y, italic_angle)
+				else:
+					for node in selectedNodes:
+						if in_percent_of_advance:						
+							node.smartShift(*scale_offset(node, offset_x, offset_y, width, height))
+						else:
+							node.smartShift(offset_x, offset_y)
 
-				elif method == parent.methodList[3]:
-					if italic_angle != 0:
-						for node in selectedNodes:
-							if inPercent:						
-								node.slantShift(*scale_offset(node, offset_x, offset_y, width, height))
-							else:
-								node.slantShift(offset_x, offset_y, italic_angle)
-					else:
-						for node in selectedNodes:
-							if inPercent:						
-								node.smartShift(*scale_offset(node, offset_x, offset_y, width, height))
-							else:
-								node.smartShift(offset_x, offset_y)
+			elif method == 'SLOPE':			
+				try:
+					for node in selectedNodes:
+						node.slantShift(offset_x, offset_y, -90 + slope_dict[layer])				
+				except KeyError:
+					warnings.warn('No slope information for layer found!\nNOTE:\tPlease <<Copy Slope>> first using TypeRig Node align toolbox.', LayerWarning)
 
-				elif method == parent.methodList[4]:			
-					current_layer = glyph.activeLayer().name
-
-					if len(parent.aux.copyLine) and current_layer in parent.aux.copyLine:
-						for node in selectedNodes:
-							node.slantShift(offset_x, offset_y, -90 + parent.aux.copyLine[current_layer].angle)				
-					else:
-						warnings.warn('No slope information for layer found!\nNOTE:\tPlease <<Copy Slope>> first using TypeRig Node align toolbox.', LayerWarning)
-
-			# - Finish it
-			glyph.update()
-			glyph.updateObject(glyph.fl, 'Node: %s @ %s.' %(method, '; '.join(wLayers)))
+		# - Finish it
+		glyph.update()
+		glyph.updateObject(glyph.fl, 'Node: %s @ %s.' %(method, '; '.join(wLayers)))
