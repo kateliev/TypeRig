@@ -79,7 +79,7 @@ class TRNodeActionCollector(object):
 
 	# -- Basic node tools --------------------------------------------------------------
 	@staticmethod
-	def node_insert(glyph:eGlyph, pLayers:tuple, single_mode=False):
+	def node_insert(glyph:eGlyph, pLayers:tuple, time:float, single_mode=False):
 		selection = glyph.selectedAtContours(True)
 		wLayers = glyph._prepareLayers(pLayers)
 
@@ -111,7 +111,7 @@ class TRNodeActionCollector(object):
 							
 			for cID, nID_list in selection_filtered.items():
 				for nID in reversed(nID_list):
-					glyph.insertNodeAt(cID, nodeMap[cID][nID] + float(parent.edt_time.text), layer)
+					glyph.insertNodeAt(cID, nodeMap[cID][nID] + time, layer)
 
 		glyph.updateObject(glyph.fl, 'Insert Node @ {}.'.format('; '.join(wLayers)))
 
@@ -275,14 +275,18 @@ class TRNodeActionCollector(object):
 			for layer in wLayers:
 				selection = glyph.selectedNodes(layer, extend=eNode)
 
+				# - Contour/selection relative alignment
+				# -- Left
 				if mode == 'L':
 					target = min(selection, key=lambda item: item.x)
 					control = (True, False)
 
+				# -- Right
 				elif mode == 'R':
 					target = max(selection, key=lambda item: item.x)
 					control = (True, False)
 				
+				# -- Top
 				elif mode == 'T':
 					temp_target = max(selection, key=lambda item: item.y)
 					newX = temp_target.x
@@ -290,6 +294,7 @@ class TRNodeActionCollector(object):
 					toMaxY = True if modifiers == QtCore.Qt.ShiftModifier else False 
 					control = (False, True)
 				
+				# -- Bottom
 				elif mode == 'B':
 					temp_target = min(selection, key=lambda item: item.y)
 					newX = temp_target.x
@@ -297,18 +302,21 @@ class TRNodeActionCollector(object):
 					toMaxY = False if modifiers == QtCore.Qt.ShiftModifier else True 
 					control = (False, True)
 				
+				# -- Horizontal Center
 				elif mode == 'C':
 					newX = (min(selection, key=lambda item: item.x).x + max(selection, key=lambda item: item.x).x)/2
 					newY = 0.
 					target = fl6.flNode(newX, newY)
 					control = (True, False)
 
+				# -- Vertical Center
 				elif mode == 'E':
 					newY = (min(selection, key=lambda item: item.y).y + max(selection, key=lambda item: item.y).y)/2
 					newX = 0.
 					target = fl6.flNode(newX, newY)
 					control = (False, True)
 
+				# - To imaginary line between minimum and maximum of selection
 				elif mode == 'Y':
 					target = Vector(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
 					control = (True, False)
@@ -317,6 +325,7 @@ class TRNodeActionCollector(object):
 					target = Vector(min(selection, key=lambda item: item.x).fl, max(selection, key=lambda item: item.x).fl)
 					control = (False, True)
 
+				# - Bounding box alignment
 				elif mode == 'BBoxCenterX':
 					newX = glyph.layer(layer).boundingBox.x() + glyph.layer(layer).boundingBox.width()/2
 					newY = 0.
@@ -329,6 +338,7 @@ class TRNodeActionCollector(object):
 					target = fl6.flNode(newX, newY)
 					control = (False, True)
 
+				# - Font Metrics alignment
 				elif 'FontMetrics' in mode:
 					layerMetrics = glyph.fontMetricsInfo(layer)
 					italicAngle = glyph.package.italicAngle_value
@@ -336,37 +346,38 @@ class TRNodeActionCollector(object):
 					newX = 0.
 					toMaxY = True
 
+					# -- Ascender
 					if '0' in mode:
 						newY = layerMetrics.ascender
 						toMaxY = True if modifiers == QtCore.Qt.ShiftModifier else False 
 						container_mode = 'LB' if modifiers == QtCore.Qt.ShiftModifier else 'LT'
 
+					# -- Caps
 					elif '1' in mode:
 						newY = layerMetrics.capsHeight
 						toMaxY = True if modifiers == QtCore.Qt.ShiftModifier else False 
 						container_mode = 'LB' if modifiers == QtCore.Qt.ShiftModifier else 'LT'
 
+					# -- Descender
 					elif '2' in mode:
 						newY = layerMetrics.descender
 						toMaxY = False if modifiers == QtCore.Qt.ShiftModifier else True 
 						container_mode = 'LT' if modifiers == QtCore.Qt.ShiftModifier else 'LB'
 
+					# -- xHeight
 					elif '3' in mode:
 						newY = layerMetrics.xHeight
 						toMaxY = True if modifiers == QtCore.Qt.ShiftModifier else False 
 						container_mode = 'LB' if modifiers == QtCore.Qt.ShiftModifier else 'LT'
 
+					# -- Baseline
 					elif '4' in mode:
 						newY = 0
 						toMaxY = False if modifiers == QtCore.Qt.ShiftModifier else True 
 						container_mode = 'LT' if modifiers == QtCore.Qt.ShiftModifier else 'LB'
 
+					# -- Mesurment line Y position
 					elif '5' in mode:
-						newY = parent.edt_toYpos.value
-						toMaxY = False if modifiers == QtCore.Qt.ShiftModifier else True 
-						container_mode = 'LT' if modifiers == QtCore.Qt.ShiftModifier else 'LB'
-
-					elif '6' in mode:
 						newY = glyph.mLine()
 						toMaxY = newY >= 0 
 						container_mode = 'LB' if modifiers == QtCore.Qt.ShiftModifier else 'LT'
@@ -500,7 +511,7 @@ class TRNodeActionCollector(object):
 				dst_container = eNodesContainer(glyph.selectedNodes(layer), extend=eNode)
 
 				if len(dst_container):
-					src_container = parent.node_bank[layer].clone()
+					src_container = node_bank[layer].clone()
 					src_transform = QtGui.QTransform()
 																
 					# - Transform
@@ -547,7 +558,7 @@ class TRNodeActionCollector(object):
 						update_flag = True
 
 					else: # - Paste mode - remap node by node
-						if len(dst_container) == len(parent.node_bank[layer]):
+						if len(dst_container) == len(node_bank[layer]):
 							for nid in range(len(dst_container)):
 								dst_container[nid].fl.x = src_container[nid].x 
 								dst_container[nid].fl.y = src_container[nid].y 
