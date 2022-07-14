@@ -18,8 +18,9 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import pGlyph
 
 from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import getTRIconFont, getProcessGlyphs, TRVTabWidget, TRLayerSelectDLG, TRCheckTableView
+from typerig.proxy.fl.gui.widgets import getTRIconFont, getProcessGlyphs, TRVTabWidget, TRCheckTableView
 from typerig.proxy.fl.application.app import pWorkspace
+from typerig.proxy.fl.gui.dialogs import TRLayerSelectDLG
 
 
 # - Init --------------------------

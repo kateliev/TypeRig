@@ -20,14 +20,13 @@ import fontlab as fl6
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui import FLGui
 
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.2.96'
+__version__ = '0.3.1'
 
 # - Keep compatibility for basestring checks
 try:
@@ -100,281 +99,7 @@ def getProcessGlyphs(mode=0, font=None, workspace=None):
 	return process_glyphs
 	
 # - Classes -------------------------------
-# -- ListViews ----------------------------
-class TRGlyphSelect(QtGui.QWidget):
-	# - Split/Break contour 
-	def __init__(self, font=None, parent=None):
-		super(TRGlyphSelect, self).__init__()
-
-		# - Init
-		self.active_font = font
-		self.parentWgt = self.parent if parent is None else parent
-
-		# - Widgets
-		# -- Buttons
-		self.btn_filter = QtGui.QPushButton('Refresh')
-		self.btn_filter.clicked.connect(self.refresh)
-
-		self.chk_glyphName = QtGui.QCheckBox('Name')
-		self.chk_glyphMark = QtGui.QCheckBox('Mark')
-		self.chk_glyphUnicode = QtGui.QCheckBox('Unicode')
-		self.chk_glyphChecked = QtGui.QCheckBox('Check all')
-
-		self.chk_glyphName.setChecked(True)
-		self.chk_glyphMark.setChecked(True)
-		self.chk_glyphUnicode.setChecked(True)
-		self.chk_glyphChecked.setChecked(True)
-		
-		# -- Fileds
-		self.edt_filter = QtGui.QLineEdit()
-		self.edt_filter.setPlaceholderText('Filter glyphnames')
-		self.edt_filter.textChanged.connect(self.__filterClicked)
-
-		self.lst_glyphNames = QtGui.QListView(self.parentWgt)
-		self.model = QtGui.QStandardItemModel(self.lst_glyphNames)
-		
-		if self.active_font is not None:
-			self.refresh()
-		
-		# -- Build Layout
-		self.layout = QtGui.QGridLayout()
-		self.layout.addWidget(QtGui.QLabel('Destination Glyphs:'),	0,0,1,4)
-		self.layout.addWidget(self.edt_filter,			1,0,1,3)
-		self.layout.addWidget(self.btn_filter,			1,3,1,1)
-		self.layout.addWidget(self.chk_glyphName,		2,0,1,1)
-		self.layout.addWidget(self.chk_glyphUnicode,	2,1,1,1)
-		self.layout.addWidget(self.chk_glyphMark,		2,2,1,1)
-		self.layout.addWidget(self.chk_glyphChecked,	2,3,1,1)
-		self.layout.addWidget(self.lst_glyphNames,		3,0,1,4)
-		
-	def refresh(self):
-		# - Init
-		self.model.removeRows(0, self.model.rowCount())
-		self.data_glyphs = getProcessGlyphs(pMode)
-
-		# - Set Items
-		for glyph in self.data_glyphs:
-			glyph_name = ''
-
-			# - GlyphName
-			if self.chk_glyphUnicode.isChecked():
-				try:
-					glyph_name += str(hex(glyph.unicode)).upper() + '\t'
-				except TypeError:
-					glyph_name += ' '*6 + '\t'
-
-			if self.chk_glyphName.isChecked():
-				glyph_name += glyph.name			
-			
-			item = QtGui.QStandardItem(glyph_name)
-
-			# - Set Mark
-			if self.chk_glyphMark.isChecked():
-				new_color = QtGui.QColor(fontMarkColors[glyph.mark])
-				new_color.setAlpha(30)
-				item.setBackground(QtGui.QBrush(new_color))
-			
-			# - Set Check
-			item.setCheckable(True)
-			if self.chk_glyphChecked.isChecked():
-				item.setChecked(True)
-
-			self.model.appendRow(item)
-		
-		self.lst_glyphNames.setModel(self.model)
-
-	def __filterClicked(self):
-		filter_text = self.edt_filter.text.lower()
-		
-		for row in range(self.model.rowCount()):
-			if filter_text in self.model.item(row).text().lower():
-				self.lst_glyphNames.setRowHidden(row, False)
-			else:
-				self.lst_glyphNames.setRowHidden(row, True)
-				self.lst_glyphNames.item(row),setChecked(False)
-
-	def getGlyphs(self):
-		selected_glyphs = []
-		for row in range(self.model.rowCount()):
-			if self.model.item(row).checkState() == QtCore.Qt.Checked:
-				selected_glyphs.append(self.model.item(row).text())
-
-		return selected_glyphs
-
-# -- Messages & Dialogs -------------------
-class TRMsgSimple(QtGui.QVBoxLayout):
-	def __init__(self, msg):
-		super(TRMsgSimple, self).__init__()
-		self.warnMessage = QtGui.QLabel(msg)
-		self.warnMessage.setOpenExternalLinks(True)
-		self.warnMessage.setWordWrap(True)
-		self.addWidget(self.warnMessage)
-
-class TR1FieldDLG(QtGui.QDialog):
-	def __init__(self, dlg_name, dlg_msg, dlg_field_t, dlg_size=(300, 300, 300, 100)):
-		super(TR1FieldDLG, self).__init__()
-		# - Init
-		self.values = (None, None)
-		
-		# - Widgets
-		self.lbl_main = QtGui.QLabel(dlg_msg)
-		self.lbl_field_t = QtGui.QLabel(dlg_field_t)
-		self.edt_field_t = QtGui.QLineEdit() # Top field
-
-		self.btn_ok = QtGui.QPushButton('OK', self)
-		self.btn_cancel = QtGui.QPushButton('Cancel', self)
-
-		self.btn_ok.clicked.connect(self.return_values)
-		self.btn_cancel.clicked.connect(self.reject)
-		
-		# - Build 
-		main_layout = QtGui.QGridLayout() 
-		main_layout.addWidget(self.lbl_main, 	0, 0, 1, 4)
-		main_layout.addWidget(self.lbl_field_t,	1, 0, 1, 2)
-		main_layout.addWidget(self.edt_field_t,	1, 2, 1, 2)
-		main_layout.addWidget(self.btn_ok,		2, 0, 1, 2)
-		main_layout.addWidget(self.btn_cancel,	2, 2, 1, 2)
-
-		# - Set 
-		self.setLayout(main_layout)
-		self.setWindowTitle(dlg_name)
-		self.setGeometry(*dlg_size)
-		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
-		self.exec_()
-
-	def return_values(self):
-		self.accept()
-		self.values = self.edt_field_t.text
-
-class TR2FieldDLG(QtGui.QDialog):
-	def __init__(self, dlg_name, dlg_msg, dlg_field_t, dlg_field_b, dlg_size=(300, 300, 300, 100)):
-		super(TR2FieldDLG, self).__init__()
-		# - Init
-		self.values = (None, None)
-		
-		# - Widgets
-		self.lbl_main = QtGui.QLabel(dlg_msg)
-		self.lbl_field_t = QtGui.QLabel(dlg_field_t)
-		self.lbl_field_b = QtGui.QLabel(dlg_field_b)
-		
-		self.edt_field_t = QtGui.QLineEdit() # Top field
-		self.edt_field_b = QtGui.QLineEdit() # Bottom field
-
-		self.btn_ok = QtGui.QPushButton('OK', self)
-		self.btn_cancel = QtGui.QPushButton('Cancel', self)
-
-		self.btn_ok.clicked.connect(self.return_values)
-		self.btn_cancel.clicked.connect(self.reject)
-		
-		# - Build 
-		main_layout = QtGui.QGridLayout() 
-		main_layout.addWidget(self.lbl_main, 	0, 0, 1, 4)
-		main_layout.addWidget(self.lbl_field_t,	1, 0, 1, 2)
-		main_layout.addWidget(self.edt_field_t,	1, 2, 1, 2)
-		main_layout.addWidget(self.lbl_field_b,	2, 0, 1, 2)
-		main_layout.addWidget(self.edt_field_b,	2, 2, 1, 2)
-		main_layout.addWidget(self.btn_ok,		3, 0, 1, 2)
-		main_layout.addWidget(self.btn_cancel,	3, 2, 1, 2)
-
-		# - Set 
-		self.setLayout(main_layout)
-		self.setWindowTitle(dlg_name)
-		self.setGeometry(*dlg_size)
-		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
-		self.exec_()
-
-	def return_values(self):
-		self.accept()
-		self.values = (self.edt_field_t.text, self.edt_field_b.text)
-
-class TR2ComboDLG(QtGui.QDialog):
-	def __init__(self, dlg_name, dlg_msg, dlg_field_t, dlg_field_b, dlg_field_b_items, dlg_size=(300, 300, 300, 100)):
-		super(TR2ComboDLG, self).__init__()
-		# - Init
-		self.values = (None, None)
-		
-		# - Widgets
-		self.lbl_main = QtGui.QLabel(dlg_msg)
-		self.lbl_field_t = QtGui.QLabel(dlg_field_t)
-		self.lbl_field_b = QtGui.QLabel(dlg_field_b)
-		
-		self.edt_field_t = QtGui.QLineEdit() # Top field
-		self.cmb_field_b = QtGui.QComboBox() # Bottom Combo Box
-		self.cmb_field_b.addItems(dlg_field_b_items)
-
-		self.btn_ok = QtGui.QPushButton('OK', self)
-		self.btn_cancel = QtGui.QPushButton('Cancel', self)
-
-		self.btn_ok.clicked.connect(self.return_values)
-		self.btn_cancel.clicked.connect(self.reject)
-		
-		# - Build 
-		main_layout = QtGui.QGridLayout() 
-		main_layout.addWidget(self.lbl_main, 	0, 0, 1, 4)
-		main_layout.addWidget(self.lbl_field_t,	1, 0, 1, 2)
-		main_layout.addWidget(self.edt_field_t,	1, 2, 1, 2)
-		main_layout.addWidget(self.lbl_field_b,	2, 0, 1, 2)
-		main_layout.addWidget(self.cmb_field_b,	2, 2, 1, 2)
-		main_layout.addWidget(self.btn_ok,		3, 0, 1, 2)
-		main_layout.addWidget(self.btn_cancel,	3, 2, 1, 2)
-
-		# - Set 
-		self.setLayout(main_layout)
-		self.setWindowTitle(dlg_name)
-		self.setGeometry(*dlg_size)
-		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
-		self.exec_()
-
-	def return_values(self):
-		self.accept()
-		self.values = (self.edt_field_t.text, self.cmb_field_b.currentIndex)
-
-class TRColorDLG(QtGui.QDialog):
-	def __init__(self, dlg_name, dlg_msg, dlg_size=(300, 300, 300, 100)):
-		super(TRColorDLG, self).__init__()
-		
-		# - Init
-		from typerig.proxy.fl.gui.widgets import fontMarkColors
-		self.values = (None, None)
-		self.color_codes = {name:value for name, discard, value in fontMarkColors}
-		
-		# - Widgets
-		self.lbl_main = QtGui.QLabel(dlg_msg)
-		self.lbl_color = QtGui.QLabel('\nColor Presets:')
-		
-		self.cmb_select_color = QtGui.QComboBox()
-		self.color_codes = {name:value for name, discard, value in fontMarkColors}
-		
-		for i in range(len(fontMarkColors)):
-			self.cmb_select_color.addItem(fontMarkColors[i][0])
-			self.cmb_select_color.setItemData(i, QtGui.QColor(fontMarkColors[i][2]), QtCore.Qt.DecorationRole)
-
-		self.btn_ok = QtGui.QPushButton('OK', self)
-		self.btn_cancel = QtGui.QPushButton('Cancel', self)
-
-		self.btn_ok.clicked.connect(self.return_values)
-		self.btn_cancel.clicked.connect(self.reject)
-		
-		# - Build 
-		main_layout = QtGui.QGridLayout() 
-		main_layout.addWidget(self.lbl_main, 			0, 0, 1, 4)
-		main_layout.addWidget(self.lbl_color, 			1, 0, 1, 4)
-		main_layout.addWidget(self.cmb_select_color,	2, 0, 1, 4)
-		main_layout.addWidget(self.btn_ok,				3, 0, 1, 2)
-		main_layout.addWidget(self.btn_cancel,			3, 2, 1, 2)
-
-		# - Set 
-		self.setLayout(main_layout)
-		self.setWindowTitle(dlg_name)
-		self.setGeometry(*dlg_size)
-		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
-		self.exec_()
-
-	def return_values(self):
-		self.accept()
-		selection_name = self.color_codes[self.cmb_select_color.currentText]
-		self.values = (selection_name,  QtGui.QColor(selection_name))
-
+# -- Sub Dialogs --------------------------
 class TRLayerSelectDLG(QtGui.QDialog):
 	def __init__(self, parent, mode, font=None, glyph=None):
 		super(TRLayerSelectDLG, self).__init__()
@@ -494,6 +219,107 @@ class TRLayerSelectDLG(QtGui.QDialog):
 			table_dict = {n:OrderedDict(zip(self.column_names, data)) for n, data in enumerate(init_data)}
 			self.tab_masters.clear()
 			self.tab_masters.setTable(table_dict, color_dict=self.color_dict, enable_check=True)	
+
+# -- ListViews ----------------------------
+class TRGlyphSelect(QtGui.QWidget):
+	# - Split/Break contour 
+	def __init__(self, font=None, parent=None):
+		super(TRGlyphSelect, self).__init__()
+
+		# - Init
+		self.active_font = font
+		self.parentWgt = self.parent if parent is None else parent
+
+		# - Widgets
+		# -- Buttons
+		self.btn_filter = QtGui.QPushButton('Refresh')
+		self.btn_filter.clicked.connect(self.refresh)
+
+		self.chk_glyphName = QtGui.QCheckBox('Name')
+		self.chk_glyphMark = QtGui.QCheckBox('Mark')
+		self.chk_glyphUnicode = QtGui.QCheckBox('Unicode')
+		self.chk_glyphChecked = QtGui.QCheckBox('Check all')
+
+		self.chk_glyphName.setChecked(True)
+		self.chk_glyphMark.setChecked(True)
+		self.chk_glyphUnicode.setChecked(True)
+		self.chk_glyphChecked.setChecked(True)
+		
+		# -- Fileds
+		self.edt_filter = QtGui.QLineEdit()
+		self.edt_filter.setPlaceholderText('Filter glyphnames')
+		self.edt_filter.textChanged.connect(self.__filterClicked)
+
+		self.lst_glyphNames = QtGui.QListView(self.parentWgt)
+		self.model = QtGui.QStandardItemModel(self.lst_glyphNames)
+		
+		if self.active_font is not None:
+			self.refresh()
+		
+		# -- Build Layout
+		self.layout = QtGui.QGridLayout()
+		self.layout.addWidget(QtGui.QLabel('Destination Glyphs:'),	0,0,1,4)
+		self.layout.addWidget(self.edt_filter,			1,0,1,3)
+		self.layout.addWidget(self.btn_filter,			1,3,1,1)
+		self.layout.addWidget(self.chk_glyphName,		2,0,1,1)
+		self.layout.addWidget(self.chk_glyphUnicode,	2,1,1,1)
+		self.layout.addWidget(self.chk_glyphMark,		2,2,1,1)
+		self.layout.addWidget(self.chk_glyphChecked,	2,3,1,1)
+		self.layout.addWidget(self.lst_glyphNames,		3,0,1,4)
+		
+	def refresh(self):
+		# - Init
+		self.model.removeRows(0, self.model.rowCount())
+		self.data_glyphs = getProcessGlyphs(pMode)
+
+		# - Set Items
+		for glyph in self.data_glyphs:
+			glyph_name = ''
+
+			# - GlyphName
+			if self.chk_glyphUnicode.isChecked():
+				try:
+					glyph_name += str(hex(glyph.unicode)).upper() + '\t'
+				except TypeError:
+					glyph_name += ' '*6 + '\t'
+
+			if self.chk_glyphName.isChecked():
+				glyph_name += glyph.name			
+			
+			item = QtGui.QStandardItem(glyph_name)
+
+			# - Set Mark
+			if self.chk_glyphMark.isChecked():
+				new_color = QtGui.QColor(fontMarkColors[glyph.mark])
+				new_color.setAlpha(30)
+				item.setBackground(QtGui.QBrush(new_color))
+			
+			# - Set Check
+			item.setCheckable(True)
+			if self.chk_glyphChecked.isChecked():
+				item.setChecked(True)
+
+			self.model.appendRow(item)
+		
+		self.lst_glyphNames.setModel(self.model)
+
+	def __filterClicked(self):
+		filter_text = self.edt_filter.text.lower()
+		
+		for row in range(self.model.rowCount()):
+			if filter_text in self.model.item(row).text().lower():
+				self.lst_glyphNames.setRowHidden(row, False)
+			else:
+				self.lst_glyphNames.setRowHidden(row, True)
+				self.lst_glyphNames.item(row),setChecked(False)
+
+	def getGlyphs(self):
+		selected_glyphs = []
+		for row in range(self.model.rowCount()):
+			if self.model.item(row).checkState() == QtCore.Qt.Checked:
+				selected_glyphs.append(self.model.item(row).text())
+
+		return selected_glyphs
 
 # - Line Edit -----------------------------------------------------
 class TRGLineEdit(QtGui.QLineEdit):

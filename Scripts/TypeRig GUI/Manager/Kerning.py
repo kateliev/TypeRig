@@ -18,7 +18,7 @@ import fontgate as fgt
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import TR2FieldDLG
+from typerig.proxy.fl.gui.dialogs import TR2FieldDLG
 
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import pGlyph
@@ -30,7 +30,7 @@ from typerig.core.base.message import *
 # - Init
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Kerning Overview', '3.8'
+app_name, app_version = 'TypeRig | Kerning Overview', '3.9'
 alt_mark = '.'
 
 # - Strings ------------------------------------------------------------------

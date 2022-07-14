@@ -26,7 +26,7 @@ from typerig.core.base.message import *
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import getProcessGlyphs
+from typerig.proxy.fl.application.app import pWorkspace
 
 # - Init ----------------------------------------------------------------------------
 __version__ = '2.50.0'
@@ -37,7 +37,31 @@ try:
 except NameError:
 	basestring = (str, bytes)
 
-# - Helpers ---------------------------------------------------------------------------
+# - Functions ------------------------------------------------------------------------
+def getProcessGlyphs(mode:int=0, font:fgt.fgFont=None):
+	'''Returns a list of glyphs for processing in TypeRig gui apps
+
+	Args:
+		mode (int): 0 - Current active glyph; 1 - All glyphs in current window; 2 - All selected glyphs; 3 - All glyphs in font
+		font (fgFont) - Font file (object)
+		workspace (flWorkspace) - Workspace
+	
+	Returns:
+		list(eGlyph)
+	'''
+	# - Init
+	process_glyphs = []
+	active_workspace = pWorkspace()
+	active_font = pFont(font)
+		
+	# - Collect process glyphs
+	if mode == 0: process_glyphs.append(eGlyph())
+	if mode == 1: process_glyphs = [eGlyph(glyph) for glyph in active_workspace.getTextBlockGlyphs()]
+	if mode == 2: process_glyphs = active_font.selectedGlyphs(extend=eGlyph) 
+	if mode == 3: process_glyphs = active_font.glyphs(extend=eGlyph)
+	
+	return process_glyphs
+
 def filter_consecutive(selection):
 	'''Group the results of selectedAtContours and filter out consecutive nodes.'''
 	selection_dict = {}

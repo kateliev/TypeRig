@@ -25,13 +25,14 @@ from typerig.core.base.message import *
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import *
+from typerig.proxy.fl.gui.dialogs import TRMsgSimple, TR2FieldDLG, TRColorDLG
 
 # - Init --------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Modify Layers', '1.51'
+app_name, app_version = 'TypeRig | Modify Layers', '1.53'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')

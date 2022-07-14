@@ -26,9 +26,10 @@ from typerig.core.base.message import *
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import *
+from typerig.proxy.fl.gui.dialogs import TRMsgSimple, TR2FieldDLG
 
 # - Init ---------------------------------
-__version__ = '2.32.0'
+__version__ = '2.32.1'
 
 # - Keep compatibility for basestring checks
 try:

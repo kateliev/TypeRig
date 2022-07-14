@@ -22,10 +22,11 @@ from typerig.core.objects.array import PointArray
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRLayerSelectDLG, fontMarkColors
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs, fontMarkColors
+from typerig.proxy.fl.gui.dialogs import TRLayerSelectDLG
 
 # - Init ---------------------------
-app_name, app_version = 'TR | Comparator', '0.9'
+app_name, app_version = 'TR | Comparator', '0.91'
 
 # - Configuration ----------------------
 # -- Colors

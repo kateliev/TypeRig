@@ -28,13 +28,14 @@ from typerig.core.objects.delta import DeltaArray, DeltaScale
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import * 
+from typerig.proxy.fl.gui.dialogs import TR2ComboDLG
 
 # - Init -------------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Delta', '4.46'
+app_name, app_version = 'TypeRig | Delta', '4.47'
 
 # -- Strings
 tree_column_names = ('Layer','X', 'Y', 'Width', 'Height', 'Color')

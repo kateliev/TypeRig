@@ -19,14 +19,15 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import pGlyph
 
 from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRVTabWidget, TRLayerSelectDLG, TRCheckTableView
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRVTabWidget, TRCheckTableView
+from typerig.proxy.fl.gui.dialogs import TRLayerSelectDLG
 
 
 # -- Internals - Load tool panels 
 import Panel 
 
 # - Init --------------------------
-app_version = '2.60'
+app_version = '2.61'
 app_name = 'TypeRig Panel'
 ignorePanel = '__'
 
