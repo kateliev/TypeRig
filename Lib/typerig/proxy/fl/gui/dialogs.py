@@ -20,10 +20,10 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import TRCheckTableView
+from typerig.proxy.fl.gui.widgets import TRCheckTableView, TRSliderCtrl
 
 # - Init ----------------------------------
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 
 # - Keep compatibility for basestring checks
 try:
@@ -117,6 +117,41 @@ class TR2FieldDLG(QtGui.QDialog):
 	def return_values(self):
 		self.accept()
 		self.values = (self.edt_field_t.text, self.edt_field_b.text)
+
+class TR1SliderDLG(QtGui.QDialog):
+	def __init__(self, dlg_name, dlg_msg, dlg_init_values=(0., 100., 50., 1.), dlg_size=(300, 300, 300, 100)):
+		super(TR1SliderDLG, self).__init__()
+		# - Init
+		self.values = (None, None)
+		
+		# - Widgets
+		self.lbl_main = QtGui.QLabel(dlg_msg)
+		self.lbl_field_t = QtGui.QLabel(dlg_field_t)
+		self.sld_variable_t = TRSliderCtrl(*dlg_init_values) # Top field
+
+		self.btn_ok = QtGui.QPushButton('OK', self)
+		self.btn_cancel = QtGui.QPushButton('Cancel', self)
+
+		self.btn_ok.clicked.connect(self.return_values)
+		self.btn_cancel.clicked.connect(self.reject)
+		
+		# - Build 
+		main_layout = QtGui.QGridLayout() 
+		main_layout.addWidget(self.lbl_main, 		0, 0, 1, 4)
+		main_layout.addLayout(self.sld_variable_t,	1, 0, 1, 4)
+		main_layout.addWidget(self.btn_ok,			2, 0, 1, 2)
+		main_layout.addWidget(self.btn_cancel,		2, 2, 1, 2)
+
+		# - Set 
+		self.setLayout(main_layout)
+		self.setWindowTitle(dlg_name)
+		self.setGeometry(*dlg_size)
+		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
+		self.exec_()
+
+	def return_values(self):
+		self.accept()
+		self.values = self.sld_variable_t.value
 
 class TR2ComboDLG(QtGui.QDialog):
 	def __init__(self, dlg_name, dlg_msg, dlg_field_t, dlg_field_b, dlg_field_b_items, dlg_size=(300, 300, 300, 100)):
