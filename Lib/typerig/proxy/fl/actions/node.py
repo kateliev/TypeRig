@@ -27,6 +27,7 @@ from typerig.core.base.message import *
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.application.app import pWorkspace
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 
 # - Init ----------------------------------------------------------------------------
 __version__ = '2.50.0'
@@ -38,30 +39,6 @@ except NameError:
 	basestring = (str, bytes)
 
 # - Functions ------------------------------------------------------------------------
-def getProcessGlyphs(mode:int=0, font:fgt.fgFont=None):
-	'''Returns a list of glyphs for processing in TypeRig gui apps
-
-	Args:
-		mode (int): 0 - Current active glyph; 1 - All glyphs in current window; 2 - All selected glyphs; 3 - All glyphs in font
-		font (fgFont) - Font file (object)
-		workspace (flWorkspace) - Workspace
-	
-	Returns:
-		list(eGlyph)
-	'''
-	# - Init
-	process_glyphs = []
-	active_workspace = pWorkspace()
-	active_font = pFont(font)
-		
-	# - Collect process glyphs
-	if mode == 0: process_glyphs.append(eGlyph())
-	if mode == 1: process_glyphs = [eGlyph(glyph) for glyph in active_workspace.getTextBlockGlyphs()]
-	if mode == 2: process_glyphs = active_font.selectedGlyphs(extend=eGlyph) 
-	if mode == 3: process_glyphs = active_font.glyphs(extend=eGlyph)
-	
-	return process_glyphs
-
 def filter_consecutive(selection):
 	'''Group the results of selectedAtContours and filter out consecutive nodes.'''
 	selection_dict = {}
@@ -103,7 +80,7 @@ class TRNodeActionCollector(object):
 
 	# -- Basic node tools --------------------------------------------------------------
 	@staticmethod
-	def node_insert(glyph:eGlyph, pLayers:tuple, time:float, single_mode=False):
+	def node_insert(glyph:eGlyph, pLayers:tuple, time:float, select_one_node=False):
 		selection = glyph.selectedAtContours(True)
 		wLayers = glyph._prepareLayers(pLayers)
 
@@ -115,7 +92,7 @@ class TRNodeActionCollector(object):
 		for cID, nID in selection:
 			selection_dict.setdefault(cID,[]).append(nID)
 				
-		if single_mode: 
+		if not select_one_node: 
 			for cID, sNodes in selection_dict.items():
 				onNodes = glyph.contours(extend=pContour)[cID].indexOn()
 				segments = zip(onNodes, onNodes[1:] + [onNodes[0]]) # Shift and zip so that we have the last segment working

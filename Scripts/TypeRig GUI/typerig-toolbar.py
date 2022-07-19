@@ -10,6 +10,7 @@
 # - Dependencies -----------------
 from __future__ import absolute_import, print_function
 from collections import OrderedDict
+import inspect
 
 import fontlab as fl6
 from PythonQt import QtCore
@@ -22,9 +23,10 @@ from typerig.proxy.fl.gui.widgets import getTRIconFont, getProcessGlyphs, TRVTab
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.gui.dialogs import TRLayerSelectDLG
 
+import Toolbar
 
 # - Init --------------------------
-tool_version = '1.10'
+tool_version = '1.51'
 tool_name = 'TypeRig Controller'
 ignore_toolbar = '__'
 
@@ -46,6 +48,7 @@ class TRToolbarController(QtGui.QToolBar):
 		
 		# - Dialogs 
 		self.dlg_layer = TRLayerSelectDLG(self, pMode)
+		self.dlg_layer.hide()
 
 		# - Actions and groups 
 		self.grp_layers = QtGui.QActionGroup(self)
@@ -111,6 +114,9 @@ class TRToolbarController(QtGui.QToolBar):
 
 		self.dlg_layer.table_populate(pMode)
 
+		for toolbar_name in Toolbar.modules:
+			exec('Toolbar.{}.pMode = {}'.format(toolbar_name, pMode))
+
 	def layers_refresh(self):
 		global pLayers
 
@@ -121,8 +127,20 @@ class TRToolbarController(QtGui.QToolBar):
 		else:
 			self.dlg_layer.hide()
 			pLayers = (self.chk_ActiveLayer.isChecked(), self.chk_Masters.isChecked(), False, False)
+
+		for toolbar_name in Toolbar.modules:
+			exec('Toolbar.{}.pLayers = {}'.format(toolbar_name, pLayers))
 	
 # - RUN ------------------------------
 toolbar_control = TRToolbarController(app.main)
 app.main.addToolBar(toolbar_control)
+
+# -- Import external toolbars
+# --- Load all toolbars from Toolbar directory as modules. Check __init__.py 
+# --- <dirName>.modules tabs/modules manifest in list format
+for toolbar_name in Toolbar.modules:
+	if ignore_toolbar not in toolbar_name:
+		app.main.addToolBar(eval('Toolbar.{}.TRExternalToolBar()'.format(toolbar_name)))
+
+
 

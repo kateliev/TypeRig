@@ -26,7 +26,7 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.3.1'
+__version__ = '0.3.2'
 
 # - Keep compatibility for basestring checks
 try:
@@ -320,6 +320,65 @@ class TRGlyphSelect(QtGui.QWidget):
 				selected_glyphs.append(self.model.item(row).text())
 
 		return selected_glyphs
+
+# - Special controls ----------------------------------------------
+class TREdit2Spin(QtGui.QWidget):
+	def __init__(self, filed_t, edit_t=''):
+		super(TREdit2Spin, self).__init__()
+
+		# - Widgets
+		self.lbl_filed = QtGui.QLabel(filed_t)
+		
+		self.edt_field = TRGLineEdit()
+		self.edt_field.setPlaceholderText(edit_t)
+		
+		self.spb_prc = QtGui.QSpinBox()
+		self.spb_prc.setMaximum(100)
+		self.spb_prc.setSuffix('%')
+
+		self.spb_unit =  QtGui.QSpinBox()
+		self.spb_unit.setMaximum(100)
+		self.spb_unit.setMinimum(-100)
+		self.spb_unit.setSuffix(' U')
+
+		# - Layout
+		self.lay_main = QtGui.QHBoxLayout()
+		self.lay_main.addWidget(lbl_field)
+		self.lay_main.addWidget(edt_field)
+		self.lay_main.addWidget(spb_prc)
+		self.lay_main.addWidget(spb_unit)
+
+	def get_values():
+		return [self.edt_field.currentText, self.spb_prc.value, self.spb_unit.value]
+
+class TRCombo2Spin(QtGui.QWidget):
+	def __init__(self, filed_t, combo_items):
+		super(TREdit2Spin, self).__init__()
+
+		# - Widgets
+		self.lbl_filed = QtGui.QLabel(filed_t)
+		
+		self.cmb_field = QComboBox()
+		self.cmb_field.addItems(combo_items)
+		
+		self.spb_prc = QtGui.QSpinBox()
+		self.spb_prc.setMaximum(100)
+		self.spb_prc.setSuffix('%')
+
+		self.spb_unit =  QtGui.QSpinBox()
+		self.spb_unit.setMaximum(100)
+		self.spb_unit.setMinimum(-100)
+		self.spb_unit.setSuffix(' U')
+
+		# - Layout
+		self.lay_main = QtGui.QHBoxLayout()
+		self.lay_main.addWidget(lbl_field)
+		self.lay_main.addWidget(cmb_field)
+		self.lay_main.addWidget(spb_prc)
+		self.lay_main.addWidget(spb_unit)
+
+	def get_values():
+		return [self.cmb_field.currentText, self.spb_prc.value, self.spb_unit.value]
 
 # - Line Edit -----------------------------------------------------
 class TRGLineEdit(QtGui.QLineEdit):

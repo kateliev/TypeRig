@@ -118,15 +118,112 @@ class TR2FieldDLG(QtGui.QDialog):
 		self.accept()
 		self.values = (self.edt_field_t.text, self.edt_field_b.text)
 
-class TR1SliderDLG(QtGui.QDialog):
-	def __init__(self, dlg_name, dlg_msg, dlg_init_values=(0., 100., 50., 1.), dlg_size=(300, 300, 300, 100)):
-		super(TR1SliderDLG, self).__init__()
+class TR1SpinDLG(QtGui.QDialog):
+	def __init__(self, dlg_name, dlg_msg, dlg_field_t, dlg_init_values=(0., 100., 0., 1.), dlg_size=(300, 300, 300, 100)):
+		super(TR1SpinDLG, self).__init__()
 		# - Init
-		self.values = (None, None)
+		self.values = None
+		spb_min, spb_max, spb_value, spb_step = dlg_init_values
 		
 		# - Widgets
 		self.lbl_main = QtGui.QLabel(dlg_msg)
 		self.lbl_field_t = QtGui.QLabel(dlg_field_t)
+		self.spb_value = QtGui.QDoubleSpinBox()
+		self.spb_value.setMinimum(spb_min)
+		self.spb_value.setMaximum(spb_max)
+		self.spb_value.setValue(spb_value)
+		self.spb_value.setSingleStep(spb_step)
+
+		self.btn_ok = QtGui.QPushButton('OK', self)
+		self.btn_cancel = QtGui.QPushButton('Cancel', self)
+
+		self.btn_ok.clicked.connect(self.return_values)
+		self.btn_cancel.clicked.connect(self.reject)
+		
+		# - Build 
+		main_layout = QtGui.QGridLayout() 
+		main_layout.addWidget(self.lbl_main, 	0, 0, 1, 4)
+		main_layout.addWidget(self.lbl_field_t,	1, 0, 1, 2)
+		main_layout.addWidget(self.spb_value,	1, 2, 1, 2)
+		main_layout.addWidget(self.btn_ok,		2, 0, 1, 2)
+		main_layout.addWidget(self.btn_cancel,	2, 2, 1, 2)
+
+		# - Set 
+		self.setLayout(main_layout)
+		self.setWindowTitle(dlg_name)
+		self.setGeometry(*dlg_size)
+		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
+		self.exec_()
+
+	def return_values(self):
+		self.accept()
+		self.values = self.spb_value.value
+
+class TRNSpinDLG(QtGui.QDialog):
+	def __init__(self, dlg_name, dlg_msg, dlg_fields_dict={'Value 01':(0., 100., 0., 1.)}, dlg_size=(300, 300, 300, 100)):
+		super(TRNSpinDLG, self).__init__()
+		# - Init
+		self.values = None
+		self.fields = []
+		
+		# - Widgets
+		self.lbl_main = QtGui.QLabel(dlg_msg)
+
+		self.btn_ok = QtGui.QPushButton('OK', self)
+		self.btn_cancel = QtGui.QPushButton('Cancel', self)
+
+		self.btn_ok.clicked.connect(self.return_values)
+		self.btn_cancel.clicked.connect(self.reject)
+		
+		# - Build 
+		# -- Main layout
+		main_layout = QtGui.QVBoxLayout() 
+		main_layout.addWidget(self.lbl_main)
+
+		# -- Auto layout
+		for new_field_label, dlg_init_values in dlg_fields_dict.items():
+			# --- Init
+			spb_min, spb_max, spb_value, spb_step = dlg_init_values
+			temp_layout = QtGui.QHBoxLayout()
+
+			# --- Add
+			lbl_field = QtGui.QLabel(new_field_label)
+			spb_temp = QtGui.QDoubleSpinBox()
+			spb_temp.setMinimum(spb_min)
+			spb_temp.setMaximum(spb_max)
+			spb_temp.setValue(spb_value)
+			spb_temp.setSingleStep(spb_step)
+			temp_layout.addWidget(lbl_field)
+			temp_layout.addWidget(spb_temp)
+			
+			main_layout.addLayout(temp_layout)
+			self.fields.append(spb_temp)
+
+		# - Ok/Cancel
+		end_layout = QtGui.QHBoxLayout()
+		end_layout.addWidget(self.btn_ok)
+		end_layout.addWidget(self.btn_cancel)
+		main_layout.addLayout(end_layout)
+
+		# - Set 
+		self.setLayout(main_layout)
+		self.setWindowTitle(dlg_name)
+		self.setGeometry(*dlg_size)
+		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
+		self.exec_()
+
+	def return_values(self):
+		self.accept()
+		self.values = [spin.value for spin in self.fields]
+
+class TR1SliderDLG(QtGui.QDialog):
+	def __init__(self, dlg_name, dlg_msg, dlg_init_values=(0., 100., 50., 1.), dlg_size=(300, 300, 300, 100)):
+		super(TR1SliderDLG, self).__init__()
+		# - Init
+		self.values = None
+		
+		# - Widgets
+		self.lbl_main = QtGui.QLabel(dlg_msg)
 		self.sld_variable_t = TRSliderCtrl(*dlg_init_values) # Top field
 
 		self.btn_ok = QtGui.QPushButton('OK', self)
@@ -151,7 +248,7 @@ class TR1SliderDLG(QtGui.QDialog):
 
 	def return_values(self):
 		self.accept()
-		self.values = self.sld_variable_t.value
+		self.values = self.sld_variable_t.sld_axis.value
 
 class TR2ComboDLG(QtGui.QDialog):
 	def __init__(self, dlg_name, dlg_msg, dlg_field_t, dlg_field_b, dlg_field_b_items, dlg_size=(300, 300, 300, 100)):
@@ -359,4 +456,11 @@ class TRLayerSelectDLG(QtGui.QDialog):
 			
 			table_dict = {n:OrderedDict(zip(self.column_names, data)) for n, data in enumerate(init_data)}
 			self.tab_masters.clear()
-			self.tab_masters.setTable(table_dict, color_dict=self.color_dict, enable_check=True)	
+			self.tab_masters.setTable(table_dict, color_dict=self.color_dict, enable_check=True)
+
+# - Test ----------------------
+if __name__ == '__main__':
+	#test_dialog_return = TR1SliderDLG('Insert Node', 'Set time along bezier curve')
+	#test_dialog_return = TR1SpinDLG('Round corner', 'Set corner radius', 'Radius')
+	test_dialog_return = TRNSpinDLG('Round corner', 'Set corner radius', {'Radius':(0.,100.,5.,1), 'Handle length %':(0.,100.,30.,1)})
+	print(test_dialog_return.values)
