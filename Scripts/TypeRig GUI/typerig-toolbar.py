@@ -26,7 +26,7 @@ from typerig.proxy.fl.gui.dialogs import TRLayerSelectDLG
 import Toolbar
 
 # - Init --------------------------
-tool_version = '1.51'
+tool_version = '1.52'
 tool_name = 'TypeRig Controller'
 ignore_toolbar = '__'
 
@@ -66,41 +66,43 @@ class TRToolbarController(QtGui.QToolBar):
 		self.addAction(self.chk_Selected)
 		self.chk_Selected.setToolTip("Select layers")
 
-		self.rad_glyph = QtGui.QAction("glyph_active", self.grp_glyphs)
-		self.addAction(self.rad_glyph)
-		self.rad_glyph.setToolTip("Active Glyph")
+		self.chk_glyph = QtGui.QAction("glyph_active", self.grp_glyphs)
+		self.addAction(self.chk_glyph)
+		self.chk_glyph.setToolTip("Active Glyph")
 
-		self.rad_window = QtGui.QAction("select_window", self.grp_glyphs)
-		self.addAction(self.rad_window)
-		self.rad_window.setToolTip("Glyph window")
+		self.chk_window = QtGui.QAction("select_window", self.grp_glyphs)
+		self.addAction(self.chk_window)
+		self.chk_window.setToolTip("Glyph window")
 
-		self.rad_selection = QtGui.QAction("select_glyph", self.grp_glyphs)
-		self.addAction(self.rad_selection)
-		self.rad_selection.setToolTip("Font window selection")
+		self.chk_selection = QtGui.QAction("select_glyph", self.grp_glyphs)
+		self.addAction(self.chk_selection)
+		self.chk_selection.setToolTip("Font window selection")
 
 		self.chk_ActiveLayer.setFont(TRToolFont)
 		self.chk_Masters.setFont(TRToolFont)
 		self.chk_Selected.setFont(TRToolFont)
 		
-		self.rad_glyph.setFont(TRToolFont)
-		self.rad_window.setFont(TRToolFont)
-		self.rad_selection.setFont(TRToolFont)
+		self.chk_glyph.setFont(TRToolFont)
+		self.chk_window.setFont(TRToolFont)
+		self.chk_selection.setFont(TRToolFont)
 		
 		self.chk_ActiveLayer.setCheckable(True)
 		self.chk_Selected.setCheckable(True)
 		self.chk_Masters.setCheckable(True)
+		self.chk_Masters.setChecked(True)
 
-		self.rad_glyph.setCheckable(True)
-		self.rad_window.setCheckable(True)
-		self.rad_selection.setCheckable(True)
+		self.chk_glyph.setCheckable(True)
+		self.chk_window.setCheckable(True)
+		self.chk_selection.setCheckable(True)
+		self.chk_glyph.setChecked(True)
 
 		self.chk_ActiveLayer.triggered.connect(self.layers_refresh)
 		self.chk_Masters.triggered.connect(self.layers_refresh)
 		self.chk_Selected.triggered.connect(self.layers_refresh)
 
-		self.rad_glyph.triggered.connect(self.mode_refresh)
-		self.rad_window.triggered.connect(self.mode_refresh)
-		self.rad_selection.triggered.connect(self.mode_refresh)
+		self.chk_glyph.triggered.connect(self.mode_refresh)
+		self.chk_window.triggered.connect(self.mode_refresh)
+		self.chk_selection.triggered.connect(self.mode_refresh)
 
 		self.layers_refresh()
 
@@ -108,9 +110,9 @@ class TRToolbarController(QtGui.QToolBar):
 	def mode_refresh(self):
 		global pMode
 
-		if self.rad_glyph.isChecked(): pMode = 0
-		if self.rad_window.isChecked(): pMode = 1
-		if self.rad_selection.isChecked(): pMode = 2
+		if self.chk_glyph.isChecked(): pMode = 0
+		if self.chk_window.isChecked(): pMode = 1
+		if self.chk_selection.isChecked(): pMode = 2
 
 		self.dlg_layer.table_populate(pMode)
 

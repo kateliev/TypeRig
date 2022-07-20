@@ -16,7 +16,7 @@ from __future__ import absolute_import
 import os, warnings
 
 # - Init -----------------------------
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 
 # - Strings --------------------------
 # --------------> 	0		1		2		3		4		5		6		7		8		9
@@ -56,6 +56,9 @@ class KernClassWarning(UserWarning):
 	pass
 
 # -- IO Related ---------------------
+class UserInputWarning(UserWarning):
+	pass
+
 class FileSaveWarning(UserWarning):
 	pass
 

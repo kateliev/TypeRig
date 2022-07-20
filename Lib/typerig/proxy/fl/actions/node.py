@@ -19,9 +19,10 @@ from typerig.proxy.fl.objects.node import eNode, eNodesContainer
 from typerig.proxy.fl.objects.contour import pContour
 from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.objects.font import pFont, pFontMetrics
-from typerig.proxy.fl.objects.base import Line, Vector
+from typerig.proxy.fl.objects.base import Line, Vector, Coord
 
 from typerig.core.func.collection import group_consecutive
+from typerig.core.objects.point import Void
 from typerig.core.base.message import *
 
 from PythonQt import QtCore
@@ -29,8 +30,10 @@ from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 
+import typerig.proxy.fl.gui.dialogs as TRDialogs
+
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.50.0'
+__version__ = '2.50.1'
 
 # - Keep compatibility for basestring checks
 try:
@@ -117,6 +120,17 @@ class TRNodeActionCollector(object):
 		glyph.updateObject(glyph.fl, 'Insert Node @ {}.'.format('; '.join(wLayers)))
 
 	@staticmethod
+	def node_insert_dlg(glyph:eGlyph, pLayers:tuple, select_one_node=False):
+		dlg_node_add = TRDialogs.TR1SliderDLG('Insert Node', 'Set time along bezier curve', (0., 100., 50., 1.))
+		dlg_node_add.return_values()
+
+		if dlg_node_add.values is None:
+			warnings.warn('ABORT:\tNo user input provided! No Action taken!', UserInputWarning)
+			return
+
+		TRNodeActionCollector.node_insert(glyph, pLayers, dlg_node_add.values/100., select_one_node)
+
+	@staticmethod
 	def node_remove(glyph:eGlyph, pLayers:tuple):
 		wLayers = glyph._prepareLayers(pLayers)
 
@@ -149,6 +163,17 @@ class TRNodeActionCollector(object):
 		glyph.updateObject(glyph.fl, 'Mitre Corner @ {}.'.format('; '.join(wLayers)))
 
 	@staticmethod
+	def corner_mitre_dlg(glyph:eGlyph, pLayers:tuple):
+		dlg_get_input = TRDialogs.TR1SpinDLG('Mitre Corner', 'Please provide miter radius...', 'Radius:', (0., 200., 4., 1.))
+		dlg_get_input.return_values()
+
+		if dlg_get_input.values is None:
+			warnings.warn('ABORT:\tNo user input provided! No Action taken!', UserInputWarning)
+			return
+
+		TRNodeActionCollector.corner_mitre(glyph, pLayers, dlg_get_input.values)
+
+	@staticmethod
 	def corner_round(glyph:eGlyph, pLayers:tuple, radius:float, curvature:float=1., is_radius:bool=True):
 		# - Init
 		wLayers = glyph._prepareLayers(pLayers)
@@ -163,6 +188,18 @@ class TRNodeActionCollector(object):
 		glyph.updateObject(glyph.fl, 'Round Corner @ {}.'.format('; '.join(wLayers)))
 
 	@staticmethod
+	def corner_round_dlg(glyph:eGlyph, pLayers:tuple):
+		dlg_get_input = TRDialogs.TRNSpinDLG('Round Corner', 'Please provide radius and curvature for the new round corner...', {'Radius:':(0., 200., 5., 1.), 'Curvature:':(0., 2., 1., .1)})
+		dlg_get_input.return_values()
+
+		if dlg_get_input.values is None:
+			warnings.warn('ABORT:\tNo user input provided! No Action taken!', UserInputWarning)
+			return
+
+		radius, curvature = dlg_get_input.values
+		TRNodeActionCollector.corner_round(glyph, pLayers, radius, curvature)
+
+	@staticmethod
 	def corner_loop(glyph:eGlyph, pLayers:tuple, radius:float):
 		wLayers = glyph._prepareLayers(pLayers)
 		
@@ -175,6 +212,17 @@ class TRNodeActionCollector(object):
 		glyph.updateObject(glyph.fl, 'Loop Corner @ {}.'.format('; '.join(wLayers)))
 
 	@staticmethod
+	def corner_loop_dlg(glyph:eGlyph, pLayers:tuple):
+		dlg_get_input = TRDialogs.TR1SpinDLG('Loop Corner', 'Please provide overlap length...', 'Overlap:', (0., 200., 20., 1.))
+		dlg_get_input.return_values()
+
+		if dlg_get_input.values is None:
+			warnings.warn('ABORT:\tNo user input provided! No Action taken!', UserInputWarning)
+			return
+
+		TRNodeActionCollector.corner_loop(glyph, pLayers, dlg_get_input.values)
+
+	@staticmethod
 	def corner_trap(glyph:eGlyph, pLayers:tuple, incision:int, depth:int, trap:int, smooth:bool=True):
 		wLayers = glyph._prepareLayers(pLayers)
 
@@ -185,6 +233,18 @@ class TRNodeActionCollector(object):
 				node.cornerTrapInc(incision, depth, trap, smooth)
 
 		glyph.updateObject(glyph.fl, 'Trap Corner @ {}.'.format('Trap Corner', '; '.join(wLayers)))
+
+	@staticmethod
+	def corner_trap_dlg(glyph:eGlyph, pLayers:tuple, smooth:bool=True):
+		dlg_get_input = TRDialogs.TRNSpinDLG('Trap Corner', 'Create ink trap with the following parameters...', {'Incision:':(0., 200., 10., 1.), 'Depth:':(0., 200., 50., 1.), 'Mitre:':(0., 20., 2., 1.)})
+		dlg_get_input.return_values()
+
+		if dlg_get_input.values is None:
+			warnings.warn('ABORT:\tNo user input provided! No Action taken!', UserInputWarning)
+			return
+
+		incision, depth, trap = dlg_get_input.values
+		TRNodeActionCollector.corner_trap(glyph, pLayers, incision, depth, trap, smooth)
 
 	@staticmethod
 	def corner_rebuild(glyph:eGlyph, pLayers:tuple, cleanup_nodes:bool=True):
