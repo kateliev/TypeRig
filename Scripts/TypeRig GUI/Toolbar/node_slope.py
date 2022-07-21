@@ -24,7 +24,7 @@ from typerig.proxy.fl.gui.widgets import getTRIconFont, getProcessGlyphs
 
 
 # - Init --------------------------
-tool_version = '1.00'
+tool_version = '1.2'
 tool_name = 'TypeRig Nodes: Slope'
 
 TRToolFont = getTRIconFont()
@@ -53,6 +53,7 @@ class TRExternalToolBar(QtGui.QToolBar):
 		# - Groups
 		self.grp_slope_options = QtGui.QActionGroup(self)
 		self.grp_slope_actions = QtGui.QActionGroup(self)
+		self.grp_slope_options.setExclusive(False)
 
 		# - Options
 		self.chk_slope_copy = QtGui.QAction("slope_copy", self.grp_slope_options)
@@ -76,25 +77,25 @@ class TRExternalToolBar(QtGui.QToolBar):
 		self.btn_slope_paste_min.setToolTip("Paste slope to selected nodes pivoting around the one with lowest vertical coordinates")
 		self.btn_slope_paste_min.setFont(TRToolFont)
 		self.addAction(self.btn_slope_paste_min)
-		self.btn_slope_paste_min.triggered.connect(lambda: TRNodeActionCollector.slope_paste(eGlyph(), pLayers, self.slope_bank, (False, False)))
+		self.btn_slope_paste_min.triggered.connect(lambda: TRNodeActionCollector.slope_paste(pMode, pLayers, self.slope_bank, (False, False)))
 
 		self.btn_slope_paste_max = QtGui.QAction("slope_paste_max", self.grp_slope_actions)
 		self.btn_slope_paste_max.setToolTip("Paste slope to selected nodes pivoting around the one with highest vertical coordinates")
 		self.btn_slope_paste_max.setFont(TRToolFont)
 		self.addAction(self.btn_slope_paste_max)
-		self.btn_slope_paste_max.triggered.connect(lambda: TRNodeActionCollector.slope_paste(eGlyph(), pLayers, self.slope_bank, (True, False)))
+		self.btn_slope_paste_max.triggered.connect(lambda: TRNodeActionCollector.slope_paste(pMode, pLayers, self.slope_bank, (True, False)))
 
 		self.btn_slope_paste_min_flip = QtGui.QAction("slope_paste_min_flip", self.grp_slope_actions)
 		self.btn_slope_paste_min_flip.setToolTip("Paste horizontally flipped slope to selected nodes pivoting around the one with lowest vertical coordinates")
 		self.btn_slope_paste_min_flip.setFont(TRToolFont)
 		self.addAction(self.btn_slope_paste_min_flip)
-		self.btn_slope_paste_min_flip.triggered.connect(lambda: TRNodeActionCollector.slope_paste(eGlyph(), pLayers, self.slope_bank, (False, True)))
+		self.btn_slope_paste_min_flip.triggered.connect(lambda: TRNodeActionCollector.slope_paste(pMode, pLayers, self.slope_bank, (False, True)))
 
 		self.btn_slope_paste_max_flip = QtGui.QAction("slope_paste_max_flip", self.grp_slope_actions)
 		self.btn_slope_paste_max_flip.setToolTip("Paste horizontally flipped slope to selected nodes pivoting around the one with highest vertical coordinates")
 		self.btn_slope_paste_max_flip.setFont(TRToolFont)
 		self.addAction(self.btn_slope_paste_max_flip)
-		self.btn_slope_paste_max_flip.triggered.connect(lambda: TRNodeActionCollector.slope_paste(eGlyph(), pLayers, self.slope_bank, (True, True)))
+		self.btn_slope_paste_max_flip.triggered.connect(lambda: TRNodeActionCollector.slope_paste(pMode, pLayers, self.slope_bank, (True, True)))
 
 	# - Procedures -------------------------	
 	def act_slope_copy(self):

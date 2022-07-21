@@ -24,7 +24,7 @@ from typerig.proxy.fl.gui.widgets import getTRIconFont, getProcessGlyphs
 
 
 # - Init --------------------------
-tool_version = '1.16'
+tool_version = '1.18'
 tool_name = 'TypeRig Nodes: Align'
 
 TRToolFont = getTRIconFont()
@@ -53,6 +53,8 @@ class TRExternalToolBar(QtGui.QToolBar):
 		self.grp_align_options_shift = QtGui.QActionGroup(self)
 		self.grp_align_options_other = QtGui.QActionGroup(self)
 		self.grp_align_actions = QtGui.QActionGroup(self)
+
+		self.grp_align_options_other.setExclusive(False)
 
 		# - Options
 		self.chk_shift_smart = QtGui.QAction("shift_smart", self.grp_align_options_shift)
@@ -106,7 +108,7 @@ class TRExternalToolBar(QtGui.QToolBar):
 		self.btn_node_align_bottom.setToolTip("Align selected nodes bottom")
 		self.btn_node_align_bottom.setFont(TRToolFont)
 		self.addAction(self.btn_node_align_bottom)
-		self.btn_node_align_bottom.triggered.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'L', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked()))
+		self.btn_node_align_bottom.triggered.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'B', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked()))
 
 		self.btn_node_align_selection_x = QtGui.QAction("node_align_selection_x", self.grp_align_actions)
 		self.btn_node_align_selection_x.setToolTip("Align selected nodes to horizontal center of selection")

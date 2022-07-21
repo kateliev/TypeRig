@@ -11,6 +11,7 @@
 from __future__ import absolute_import, print_function
 
 import warnings
+import math
 
 import fontlab as fl6
 import fontgate as fgt
@@ -33,7 +34,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.50.1'
+__version__ = '2.60'
 
 # - Keep compatibility for basestring checks
 try:
@@ -83,44 +84,50 @@ class TRNodeActionCollector(object):
 
 	# -- Basic node tools --------------------------------------------------------------
 	@staticmethod
-	def node_insert(glyph:eGlyph, pLayers:tuple, time:float, select_one_node=False):
-		selection = glyph.selectedAtContours(True)
-		wLayers = glyph._prepareLayers(pLayers)
-
-		# - Get selected nodes. 
-		# - NOTE: Only the fist node in every selected segment is important, so we filter for that
-		selection = glyph.selectedAtContours(True, filterOn=True)
-		selection_dict, selection_filtered = {}, {}
-		
-		for cID, nID in selection:
-			selection_dict.setdefault(cID,[]).append(nID)
-				
-		if not select_one_node: 
-			for cID, sNodes in selection_dict.items():
-				onNodes = glyph.contours(extend=pContour)[cID].indexOn()
-				segments = zip(onNodes, onNodes[1:] + [onNodes[0]]) # Shift and zip so that we have the last segment working
-				onSelected = []
-
-				for pair in segments:
-					if pair[0] in sNodes and pair[1] in sNodes:
-						onSelected.append(pair[0] )
-
-				selection_filtered[cID] = onSelected
-		else:
-			selection_filtered = selection_dict
+	def node_insert(pMode:int, pLayers:tuple, time:float, select_one_node=False):
+		# - Get list of glyphs to be processed
+		process_glyphs = getProcessGlyphs(pMode)
 
 		# - Process
-		for layer in wLayers:
-			nodeMap = glyph._mapOn(layer)
-							
-			for cID, nID_list in selection_filtered.items():
-				for nID in reversed(nID_list):
-					glyph.insertNodeAt(cID, nodeMap[cID][nID] + time, layer)
+		for glyph in process_glyphs:
+			# - Init		
+			selection = glyph.selectedAtContours(True)
+			wLayers = glyph._prepareLayers(pLayers)
 
-		glyph.updateObject(glyph.fl, 'Insert Node @ {}.'.format('; '.join(wLayers)))
+			# - Get selected nodes. 
+			# - NOTE: Only the fist node in every selected segment is important, so we filter for that
+			selection = glyph.selectedAtContours(True, filterOn=True)
+			selection_dict, selection_filtered = {}, {}
+			
+			for cID, nID in selection:
+				selection_dict.setdefault(cID,[]).append(nID)
+					
+			if not select_one_node: 
+				for cID, sNodes in selection_dict.items():
+					onNodes = glyph.contours(extend=pContour)[cID].indexOn()
+					segments = zip(onNodes, onNodes[1:] + [onNodes[0]]) # Shift and zip so that we have the last segment working
+					onSelected = []
+
+					for pair in segments:
+						if pair[0] in sNodes and pair[1] in sNodes:
+							onSelected.append(pair[0] )
+
+					selection_filtered[cID] = onSelected
+			else:
+				selection_filtered = selection_dict
+
+			# - Process
+			for layer in wLayers:
+				nodeMap = glyph._mapOn(layer)
+								
+				for cID, nID_list in selection_filtered.items():
+					for nID in reversed(nID_list):
+						glyph.insertNodeAt(cID, nodeMap[cID][nID] + time, layer)
+
+			glyph.updateObject(glyph.fl, '{};\tInsert Node @ {}.'.format(glyph.name, '; '.join(wLayers)))
 
 	@staticmethod
-	def node_insert_dlg(glyph:eGlyph, pLayers:tuple, select_one_node=False):
+	def node_insert_dlg(pMode:int, pLayers:tuple, select_one_node=False):
 		dlg_node_add = TRDialogs.TR1SliderDLG('Insert Node', 'Set time along bezier curve', (0., 100., 50., 1.))
 		dlg_node_add.return_values()
 
@@ -128,42 +135,73 @@ class TRNodeActionCollector(object):
 			warnings.warn('ABORT:\tNo user input provided! No Action taken!', UserInputWarning)
 			return
 
-		TRNodeActionCollector.node_insert(glyph, pLayers, dlg_node_add.values/100., select_one_node)
+		TRNodeActionCollector.node_insert(pMode, pLayers, dlg_node_add.values/100., select_one_node)
 
 	@staticmethod
-	def node_remove(glyph:eGlyph, pLayers:tuple):
-		wLayers = glyph._prepareLayers(pLayers)
+	def node_remove(pMode:int, pLayers:tuple):
+		# - Get list of glyphs to be processed
+		process_glyphs = getProcessGlyphs(pMode)
 
-		selection = glyph.selectedAtContours(filterOn=True)
-		tempDict = {}
+		# - Process
+		for glyph in process_glyphs:
+			# - Init		
+			wLayers = glyph._prepareLayers(pLayers)
 
-		for cID, nID in selection:
-			tempDict.setdefault(cID, []).append(nID)
+			selection = glyph.selectedAtContours(filterOn=True)
+			tempDict = {}
 
-		for layer in wLayers:
-			for cID, nidList in tempDict.items():
-				for nID in reversed(nidList):
-					nodeA = eNode(glyph.contours(layer)[cID].nodes()[nID]).getNextOn()
-					nodeB = eNode(glyph.contours(layer)[cID].nodes()[nID]).getPrevOn()
-					glyph.contours(layer)[cID].removeNodesBetween(nodeB, nodeA)
+			for cID, nID in selection:
+				tempDict.setdefault(cID, []).append(nID)
 
-		glyph.updateObject(glyph.fl, 'Remove Node @ {}.'.format('; '.join(wLayers)))
+			for layer in wLayers:
+				for cID, nidList in tempDict.items():
+					for nID in reversed(nidList):
+						nodeA = eNode(glyph.contours(layer)[cID].nodes()[nID]).getNextOn()
+						nodeB = eNode(glyph.contours(layer)[cID].nodes()[nID]).getPrevOn()
+						glyph.contours(layer)[cID].removeNodesBetween(nodeB, nodeA)
+
+			glyph.updateObject(glyph.fl, '{};\tRemove Node @ {}.'.format(glyph.name, '; '.join(wLayers)))
+
+	@staticmethod
+	def node_round(pMode:int, pLayers:tuple, round_up:bool=True, round_all:bool=False):
+		# - Get list of glyphs to be processed
+		process_glyphs = getProcessGlyphs(pMode)
+
+		# - Process
+		for glyph in process_glyphs:
+			# - Init		
+			wLayers = glyph._prepareLayers(pLayers)
+
+			for layer_name in wLayers:
+				selection = glyph.selectedNodes(layer_name) if not round_all else glyph.nodes(layer_name)
+
+				for node in selection:
+					node.x = math.ceil(node.x) if round_up else math.floor(node.x)
+					node.y = math.ceil(node.y) if round_up else math.floor(node.y)
+			
+			glyph.updateObject(glyph.fl, '{};\tRound {} nodes to integer coordinates @ {}.'.format(glyph.name, len(selection) if not round_all else 'ALL', '; '.join(wLayers)))
 
 	# -- Corner tools -----------------------------------------------------------
 	@staticmethod
-	def corner_mitre(glyph:eGlyph, pLayers:tuple, radius:float):
-		wLayers = glyph._prepareLayers(pLayers)
-		
-		for layer in wLayers:
-			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
-			
-			for node in reversed(selection):
-				node.cornerMitre(radius)
+	def corner_mitre(pMode:int, pLayers:tuple, radius:float):
+		# - Get list of glyphs to be processed
+		process_glyphs = getProcessGlyphs(pMode)
 
-		glyph.updateObject(glyph.fl, 'Mitre Corner @ {}.'.format('; '.join(wLayers)))
+		# - Process
+		for glyph in process_glyphs:
+			# - Init		
+			wLayers = glyph._prepareLayers(pLayers)
+			
+			for layer in wLayers:
+				selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
+				
+				for node in reversed(selection):
+					node.cornerMitre(radius)
+
+			glyph.updateObject(glyph.fl, '{};\tMitre Corner @ {}.'.format(glyph.name, '; '.join(wLayers)))
 
 	@staticmethod
-	def corner_mitre_dlg(glyph:eGlyph, pLayers:tuple):
+	def corner_mitre_dlg(pMode:int, pLayers:tuple):
 		dlg_get_input = TRDialogs.TR1SpinDLG('Mitre Corner', 'Please provide miter radius...', 'Radius:', (0., 200., 4., 1.))
 		dlg_get_input.return_values()
 
@@ -171,24 +209,29 @@ class TRNodeActionCollector(object):
 			warnings.warn('ABORT:\tNo user input provided! No Action taken!', UserInputWarning)
 			return
 
-		TRNodeActionCollector.corner_mitre(glyph, pLayers, dlg_get_input.values)
+		TRNodeActionCollector.corner_mitre(pMode, pLayers, dlg_get_input.values)
 
 	@staticmethod
-	def corner_round(glyph:eGlyph, pLayers:tuple, radius:float, curvature:float=1., is_radius:bool=True):
-		# - Init
-		wLayers = glyph._prepareLayers(pLayers)
+	def corner_round(pMode:int, pLayers:tuple, radius:float, curvature:float=1., is_radius:bool=True):
+		# - Get list of glyphs to be processed
+		process_glyphs = getProcessGlyphs(pMode)
 
-		# - Process				
-		for layer in wLayers:
-			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
-			
-			for node in selection:
-				node.cornerRound(radius, curvature=curvature, isRadius=is_radius)
+		# - Process
+		for glyph in process_glyphs:
+			# - Init
+			wLayers = glyph._prepareLayers(pLayers)
 
-		glyph.updateObject(glyph.fl, 'Round Corner @ {}.'.format('; '.join(wLayers)))
+			# - Process				
+			for layer in wLayers:
+				selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
+				
+				for node in selection:
+					node.cornerRound(radius, curvature=curvature, isRadius=is_radius)
+
+			glyph.updateObject(glyph.fl, '{};\tRound Corner @ {}.'.format(glyph.name, '; '.join(wLayers)))
 
 	@staticmethod
-	def corner_round_dlg(glyph:eGlyph, pLayers:tuple):
+	def corner_round_dlg(pMode:int, pLayers:tuple):
 		dlg_get_input = TRDialogs.TRNSpinDLG('Round Corner', 'Please provide radius and curvature for the new round corner...', {'Radius:':(0., 200., 5., 1.), 'Curvature:':(0., 2., 1., .1)})
 		dlg_get_input.return_values()
 
@@ -200,19 +243,25 @@ class TRNodeActionCollector(object):
 		TRNodeActionCollector.corner_round(glyph, pLayers, radius, curvature)
 
 	@staticmethod
-	def corner_loop(glyph:eGlyph, pLayers:tuple, radius:float):
-		wLayers = glyph._prepareLayers(pLayers)
-		
-		for layer in wLayers:
-			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
-			
-			for node in reversed(selection):
-				node.cornerMitre(-radius, True)
+	def corner_loop(pMode:int, pLayers:tuple, radius:float):
+		# - Get list of glyphs to be processed
+		process_glyphs = getProcessGlyphs(pMode)
 
-		glyph.updateObject(glyph.fl, 'Loop Corner @ {}.'.format('; '.join(wLayers)))
+		# - Process
+		for glyph in process_glyphs:
+			# - Init		
+			wLayers = glyph._prepareLayers(pLayers)
+			
+			for layer in wLayers:
+				selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
+				
+				for node in reversed(selection):
+					node.cornerMitre(-radius, True)
+
+			glyph.updateObject(glyph.fl, '{};\tLoop Corner @ {}.'.format(glyph.name, '; '.join(wLayers)))
 
 	@staticmethod
-	def corner_loop_dlg(glyph:eGlyph, pLayers:tuple):
+	def corner_loop_dlg(pMode:int, pLayers:tuple):
 		dlg_get_input = TRDialogs.TR1SpinDLG('Loop Corner', 'Please provide overlap length...', 'Overlap:', (0., 200., 20., 1.))
 		dlg_get_input.return_values()
 
@@ -220,22 +269,28 @@ class TRNodeActionCollector(object):
 			warnings.warn('ABORT:\tNo user input provided! No Action taken!', UserInputWarning)
 			return
 
-		TRNodeActionCollector.corner_loop(glyph, pLayers, dlg_get_input.values)
+		TRNodeActionCollector.corner_loop(pMode, pLayers, dlg_get_input.values)
 
 	@staticmethod
-	def corner_trap(glyph:eGlyph, pLayers:tuple, incision:int, depth:int, trap:int, smooth:bool=True):
-		wLayers = glyph._prepareLayers(pLayers)
+	def corner_trap(pMode:int, pLayers:tuple, incision:int, depth:int, trap:int, smooth:bool=True):
+		# - Get list of glyphs to be processed
+		process_glyphs = getProcessGlyphs(pMode)
 
-		for layer in wLayers:
-			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
-			
-			for node in reversed(selection):
-				node.cornerTrapInc(incision, depth, trap, smooth)
+		# - Process
+		for glyph in process_glyphs:
+			# - Init	
+			wLayers = glyph._prepareLayers(pLayers)
 
-		glyph.updateObject(glyph.fl, 'Trap Corner @ {}.'.format('Trap Corner', '; '.join(wLayers)))
+			for layer in wLayers:
+				selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
+				
+				for node in reversed(selection):
+					node.cornerTrapInc(incision, depth, trap, smooth)
+
+			glyph.updateObject(glyph.fl, '{};\tTrap Corner @ {}.'.format(glyph.name, '; '.join(wLayers)))
 
 	@staticmethod
-	def corner_trap_dlg(glyph:eGlyph, pLayers:tuple, smooth:bool=True):
+	def corner_trap_dlg(pMode:int, pLayers:tuple, smooth:bool=True):
 		dlg_get_input = TRDialogs.TRNSpinDLG('Trap Corner', 'Create ink trap with the following parameters...', {'Incision:':(0., 200., 10., 1.), 'Depth:':(0., 200., 50., 1.), 'Mitre:':(0., 20., 2., 1.)})
 		dlg_get_input.return_values()
 
@@ -244,33 +299,39 @@ class TRNodeActionCollector(object):
 			return
 
 		incision, depth, trap = dlg_get_input.values
-		TRNodeActionCollector.corner_trap(glyph, pLayers, incision, depth, trap, smooth)
+		TRNodeActionCollector.corner_trap(pMode, pLayers, incision, depth, trap, smooth)
 
 	@staticmethod
-	def corner_rebuild(glyph:eGlyph, pLayers:tuple, cleanup_nodes:bool=True):
-		wLayers = glyph._prepareLayers(pLayers)
-		selection_layers_all = {layer : glyph.selectedNodes(layer, extend=eNode) for layer in wLayers}
-		selection_layers_on = {layer : [node for node in selection if node.isOn] for layer, selection in selection_layers_all.items()}
-		done_flag = False
+	def corner_rebuild(pMode:int, pLayers:tuple, cleanup_nodes:bool=True):
+		# - Get list of glyphs to be processed
+		process_glyphs = getProcessGlyphs(pMode)
 
-		for layer, selection in selection_layers_on.items():			
-			if len(selection) > 1:
-				node_first = selection[0]
-				node_last = selection[-1]
-				crossing = get_crossing(selection)
+		# - Process
+		for glyph in process_glyphs:
+			# - Init	
+			wLayers = glyph._prepareLayers(pLayers)
+			selection_layers_all = {layer : glyph.selectedNodes(layer, extend=eNode) for layer in wLayers}
+			selection_layers_on = {layer : [node for node in selection if node.isOn] for layer, selection in selection_layers_all.items()}
+			done_flag = False
 
-				if cleanup_nodes:
-					node_first.smartReloc(*crossing.tuple)
-					node_first.parent.removeNodesBetween(node_first.fl, node_last.getNextOn())
+			for layer, selection in selection_layers_on.items():			
+				if len(selection) > 1:
+					node_first = selection[0]
+					node_last = selection[-1]
+					crossing = get_crossing(selection)
 
-				else:
-					for node in selection_layers_all:
-						node.reloc(*crossing.tuple)
+					if cleanup_nodes:
+						node_first.smartReloc(*crossing.tuple)
+						node_first.parent.removeNodesBetween(node_first.fl, node_last.getNextOn())
 
-				done_flag = True
+					else:
+						for node in selection_layers_all:
+							node.reloc(*crossing.tuple)
 
-		if done_flag:
-			glyph.updateObject(glyph.fl, 'Rebuild corner:\t{} nodes reduced @ {}'.format(len(selection), '; '.join(wLayers)))
+					done_flag = True
+
+			if done_flag:
+				glyph.updateObject(glyph.fl, '{};\tRebuild corner:\t{} nodes reduced @ {}'.format(glyph.name, len(selection), '; '.join(wLayers)))
 
 	# -- Slope tools -----------------------------------------------------------------
 	@staticmethod
@@ -292,7 +353,7 @@ class TRNodeActionCollector(object):
 		return slope_dict
 
 	@staticmethod
-	def slope_paste(glyph:eGlyph, pLayers:tuple, slope_dict:dict, mode:tuple):
+	def slope_paste(pMode:int, pLayers:tuple, slope_dict:dict, mode:tuple):
 		'''
 		mode -> (max:bool, flip:bool) where
 		minY = (False, False)
@@ -300,32 +361,38 @@ class TRNodeActionCollector(object):
 		FLminY = (False, True)
 		FLMaxY = (True, True)
 		'''
-		wLayers = glyph._prepareLayers(pLayers)
-		control = (True, False)
-		
-		for layer in wLayers:
-			selection = [eNode(node) for node in glyph.selectedNodes(layer)]
+		# - Get list of glyphs to be processed
+		process_glyphs = getProcessGlyphs(pMode)
 
-			if mode[0]:
-				dstVector = Vector(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
-			else:
-				dstVector = Vector(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
-				
-			if mode[1]:
-				dstVector.slope = -1.*slope_dict[layer]
-			else:
-				dstVector.slope = slope_dict[layer]
+		# - Process
+		for glyph in process_glyphs:
+			# - Init
+			wLayers = glyph._prepareLayers(pLayers)
+			control = (True, False)
+			
+			for layer in wLayers:
+				selection = [eNode(node) for node in glyph.selectedNodes(layer)]
 
-			for node in selection:
-				node.alignTo(dstVector, control)
+				if mode[0]:
+					dstVector = Vector(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
+				else:
+					dstVector = Vector(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
+					
+				if mode[1]:
+					dstVector.slope = -1.*slope_dict[layer]
+				else:
+					dstVector.slope = slope_dict[layer]
 
-		glyph.updateObject(glyph.fl, 'Paste Slope @ %s.' %'; '.join(wLayers))
-		glyph.update()
+				for node in selection:
+					node.alignTo(dstVector, control)
+
+			glyph.updateObject(glyph.fl, '{};\tPaste Slope @ {}.'.fromat(glyph.name, '; '.join(wLayers)))
+			glyph.update()
 
 
 	# -- Nodes alignment ------------------------------------------------------
 	@staticmethod
-	def nodes_align(pMode:int, pLayers:tuple, mode:str, intercept:bool=False, keep_relations:bool=False, smart_shift:bool=False):
+	def nodes_align(pMode:int, pLayers:tuple, mode:str, intercept:bool=False, keep_relations:bool=False, smart_shift:bool=False, ext_target:Coord=None):
 		process_glyphs = getProcessGlyphs(pMode)
 		modifiers = QtGui.QApplication.keyboardModifiers()
 
@@ -549,10 +616,13 @@ class TRNodeActionCollector(object):
 							target = fl6.flNode(newX, newY)
 							control = (False, True)
 
+						# - Switch to external target if provided
+						if ext_target is not None: target = ext_target
+						
 						# - Execute Align ----------
 						node.alignTo(target, control, smart_shift)
 
-			glyph.updateObject(glyph.fl, 'Align Nodes @ %s.' %'; '.join(wLayers))
+			glyph.updateObject(glyph.fl, '{};\tAlign Nodes @ {}.'.format(glyph.name, '; '.join(wLayers)))
 			glyph.update()
 
 	# -- Node clipboard ----------------------------------------------------
@@ -632,7 +702,7 @@ class TRNodeActionCollector(object):
 		# - Done							
 		if update_flag:
 			glyph.update()
-			glyph.updateObject(glyph.fl, 'Paste Nodes @ %s.' %'; '.join(wLayers))
+			glyph.updateObject(glyph.fl, '{};\nPaste Nodes @ {}.'.format(glyph.name, '; '.join(wLayers)))
 
 	# -- Shift & Movement ------------------------------------------------
 	@staticmethod
@@ -693,4 +763,4 @@ class TRNodeActionCollector(object):
 
 		# - Finish it
 		glyph.update()
-		glyph.updateObject(glyph.fl, 'Node: %s @ %s.' %(method, '; '.join(wLayers)))
+		glyph.updateObject(glyph.fl, '{};\tNode: {} @ {}.'.format(glyph.name, method, '; '.join(wLayers)))
