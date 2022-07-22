@@ -35,6 +35,7 @@ import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
 __version__ = '2.60'
+app = pWorkspace()
 
 # - Keep compatibility for basestring checks
 try:
@@ -125,6 +126,8 @@ class TRNodeActionCollector(object):
 						glyph.insertNodeAt(cID, nodeMap[cID][nID] + time, layer)
 
 			glyph.updateObject(glyph.fl, '{};\tInsert Node @ {}.'.format(glyph.name, '; '.join(wLayers)))
+			app.fl.updateActiveViewport()
+
 
 	@staticmethod
 	def node_insert_dlg(pMode:int, pLayers:tuple, select_one_node=False):
@@ -161,6 +164,7 @@ class TRNodeActionCollector(object):
 						glyph.contours(layer)[cID].removeNodesBetween(nodeB, nodeA)
 
 			glyph.updateObject(glyph.fl, '{};\tRemove Node @ {}.'.format(glyph.name, '; '.join(wLayers)))
+			app.fl.updateActiveViewport()
 
 	@staticmethod
 	def node_round(pMode:int, pLayers:tuple, round_up:bool=True, round_all:bool=False):
@@ -180,6 +184,7 @@ class TRNodeActionCollector(object):
 					node.y = math.ceil(node.y) if round_up else math.floor(node.y)
 			
 			glyph.updateObject(glyph.fl, '{};\tRound {} nodes to integer coordinates @ {}.'.format(glyph.name, len(selection) if not round_all else 'ALL', '; '.join(wLayers)))
+			app.fl.updateActiveViewport()
 
 	# -- Corner tools -----------------------------------------------------------
 	@staticmethod
@@ -199,6 +204,7 @@ class TRNodeActionCollector(object):
 					node.cornerMitre(radius)
 
 			glyph.updateObject(glyph.fl, '{};\tMitre Corner @ {}.'.format(glyph.name, '; '.join(wLayers)))
+			app.fl.updateActiveViewport()
 
 	@staticmethod
 	def corner_mitre_dlg(pMode:int, pLayers:tuple):
@@ -229,6 +235,7 @@ class TRNodeActionCollector(object):
 					node.cornerRound(radius, curvature=curvature, isRadius=is_radius)
 
 			glyph.updateObject(glyph.fl, '{};\tRound Corner @ {}.'.format(glyph.name, '; '.join(wLayers)))
+			app.fl.updateActiveViewport()
 
 	@staticmethod
 	def corner_round_dlg(pMode:int, pLayers:tuple):
@@ -259,6 +266,7 @@ class TRNodeActionCollector(object):
 					node.cornerMitre(-radius, True)
 
 			glyph.updateObject(glyph.fl, '{};\tLoop Corner @ {}.'.format(glyph.name, '; '.join(wLayers)))
+			app.fl.updateActiveViewport()
 
 	@staticmethod
 	def corner_loop_dlg(pMode:int, pLayers:tuple):
@@ -288,6 +296,7 @@ class TRNodeActionCollector(object):
 					node.cornerTrapInc(incision, depth, trap, smooth)
 
 			glyph.updateObject(glyph.fl, '{};\tTrap Corner @ {}.'.format(glyph.name, '; '.join(wLayers)))
+			app.fl.updateActiveViewport()
 
 	@staticmethod
 	def corner_trap_dlg(pMode:int, pLayers:tuple, smooth:bool=True):
@@ -332,6 +341,7 @@ class TRNodeActionCollector(object):
 
 			if done_flag:
 				glyph.updateObject(glyph.fl, '{};\tRebuild corner:\t{} nodes reduced @ {}'.format(glyph.name, len(selection), '; '.join(wLayers)))
+				app.fl.updateActiveViewport()
 
 	# -- Slope tools -----------------------------------------------------------------
 	@staticmethod
@@ -387,7 +397,7 @@ class TRNodeActionCollector(object):
 					node.alignTo(dstVector, control)
 
 			glyph.updateObject(glyph.fl, '{};\tPaste Slope @ {}.'.fromat(glyph.name, '; '.join(wLayers)))
-			glyph.update()
+			app.fl.updateActiveViewport()
 
 
 	# -- Nodes alignment ------------------------------------------------------
@@ -623,7 +633,7 @@ class TRNodeActionCollector(object):
 						node.alignTo(target, control, smart_shift)
 
 			glyph.updateObject(glyph.fl, '{};\tAlign Nodes @ {}.'.format(glyph.name, '; '.join(wLayers)))
-			glyph.update()
+			app.fl.updateActiveViewport()
 
 	# -- Node clipboard ----------------------------------------------------
 	@staticmethod
@@ -701,8 +711,8 @@ class TRNodeActionCollector(object):
 							
 		# - Done							
 		if update_flag:
-			glyph.update()
 			glyph.updateObject(glyph.fl, '{};\nPaste Nodes @ {}.'.format(glyph.name, '; '.join(wLayers)))
+			app.fl.updateActiveViewport()
 
 	# -- Shift & Movement ------------------------------------------------
 	@staticmethod
@@ -762,5 +772,5 @@ class TRNodeActionCollector(object):
 					warnings.warn('No slope information for layer found!\nNOTE:\tPlease <<Copy Slope>> first using TypeRig Node align toolbox.', LayerWarning)
 
 		# - Finish it
-		glyph.update()
 		glyph.updateObject(glyph.fl, '{};\tNode: {} @ {}.'.format(glyph.name, method, '; '.join(wLayers)))
+		app.fl.updateActiveViewport()
