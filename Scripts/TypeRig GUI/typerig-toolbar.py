@@ -11,6 +11,7 @@
 from __future__ import absolute_import, print_function
 from collections import OrderedDict
 import inspect
+from platform import system
 
 import fontlab as fl6
 from PythonQt import QtCore
@@ -26,12 +27,13 @@ from typerig.proxy.fl.gui.dialogs import TRLayerSelectDLG
 import Toolbar
 
 # - Init --------------------------
-tool_version = '1.52'
+tool_version = '1.60'
 tool_name = 'TypeRig Controller'
 ignore_toolbar = '__'
 
 TRToolFont = getTRIconFont()
 app = pWorkspace()
+fl_runtime_platform = system()
 
 # -- Global parameters
 pMode = 0
@@ -134,15 +136,36 @@ class TRToolbarController(QtGui.QToolBar):
 			exec('Toolbar.{}.pLayers = {}'.format(toolbar_name, pLayers))
 	
 # - RUN ------------------------------
-toolbar_control = TRToolbarController(app.main)
+# -- Platform specific fix for MacOs by Adam Twardoch (2022). Pt.1
+# -- Fixes Mac's lack of visible QMainWindow, thus adding toolbars to invisible item renders them ivisible too :) 
+# -- Note: the fix is temporary, we should find a better solution that suits all platforms...
+if fl_runtime_platform == 'Darwin':
+	app.main.show()
+	app.main.setGeometry(0,0,0,0)
+	toolbar_control.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.FramelessWindowHint)
+	toolbar_control.move(50,50)
+
+# - Init
+toolbar_control = TRToolbarController()
 app.main.addToolBar(toolbar_control)
 
 # -- Import external toolbars
 # --- Load all toolbars from Toolbar directory as modules. Check __init__.py 
 # --- <dirName>.modules tabs/modules manifest in list format
-for toolbar_name in Toolbar.modules:
+for i, toolbar_name in enumerate(Toolbar.modules):
 	if ignore_toolbar not in toolbar_name:
-		app.main.addToolBar(eval('Toolbar.{}.TRExternalToolBar()'.format(toolbar_name)))
+		
+		new_toolbar = eval('Toolbar.{}.TRExternalToolBar()'.format(toolbar_name))
+		app.main.addToolBar(new_toolbar) 
+
+		# -- The above fix Pt.2
+		if fl_runtime_platform == 'Darwin':
+			new_toolbar.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.FramelessWindowHint) #ADAM-MAC
+			new_toolbar.move(50, 100 + 50 * i) #ADAM_MAC
+
+# -- The above fix Pt.3
+if fl_runtime_platform == 'Darwin':
+	app.main.hide()
 
 
 

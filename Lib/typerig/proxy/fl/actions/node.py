@@ -34,7 +34,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.60'
+__version__ = '2.65'
 app = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -402,7 +402,7 @@ class TRNodeActionCollector(object):
 
 	# -- Nodes alignment ------------------------------------------------------
 	@staticmethod
-	def nodes_align(pMode:int, pLayers:tuple, mode:str, intercept:bool=False, keep_relations:bool=False, smart_shift:bool=False, ext_target:Coord=None):
+	def nodes_align(pMode:int, pLayers:tuple, mode:str, intercept:bool=False, keep_relations:bool=False, smart_shift:bool=False, ext_target:dict={}):
 		process_glyphs = getProcessGlyphs(pMode)
 		modifiers = QtGui.QApplication.keyboardModifiers()
 
@@ -418,11 +418,13 @@ class TRNodeActionCollector(object):
 				if mode == 'L':
 					target = min(selection, key=lambda item: item.x)
 					control = (True, False)
+					container_mode = mode + 'B'
 
 				# -- Right
 				elif mode == 'R':
 					target = max(selection, key=lambda item: item.x)
 					control = (True, False)
+					container_mode = mode + 'B'
 				
 				# -- Top
 				elif mode == 'T':
@@ -431,6 +433,7 @@ class TRNodeActionCollector(object):
 					newY = temp_target.y
 					toMaxY = True if modifiers == QtCore.Qt.ShiftModifier else False 
 					control = (False, True)
+					container_mode = 'L' + mode
 				
 				# -- Bottom
 				elif mode == 'B':
@@ -439,6 +442,7 @@ class TRNodeActionCollector(object):
 					newY = temp_target.y
 					toMaxY = False if modifiers == QtCore.Qt.ShiftModifier else True 
 					control = (False, True)
+					container_mode = 'L' + mode
 				
 				# -- Horizontal Center
 				elif mode == 'C':
@@ -446,6 +450,7 @@ class TRNodeActionCollector(object):
 					newY = 0.
 					target = fl6.flNode(newX, newY)
 					control = (True, False)
+					container_mode = mode + 'B'
 
 				# -- Vertical Center
 				elif mode == 'E':
@@ -453,6 +458,7 @@ class TRNodeActionCollector(object):
 					newX = 0.
 					target = fl6.flNode(newX, newY)
 					control = (False, True)
+					container_mode = 'L' + mode
 
 				# - To imaginary line between minimum and maximum of selection
 				elif mode == 'Y':
@@ -585,9 +591,15 @@ class TRNodeActionCollector(object):
 					container = eNodesContainer(selection)
 					
 					if 'FontMetrics' in mode:
-						target = fl6.flNode(newX, newY)
 						control = (False, True)												
+						target = fl6.flNode(newX, newY)
 					
+					if len(ext_target.keys()): 
+							try:
+								target = ext_target[layer]
+							except KeyError:
+								pass
+
 					container.alignTo(target, container_mode, control)
 
 				else:
@@ -627,7 +639,11 @@ class TRNodeActionCollector(object):
 							control = (False, True)
 
 						# - Switch to external target if provided
-						if ext_target is not None: target = ext_target
+						if len(ext_target.keys()): 
+							try:
+								target = ext_target[layer]
+							except KeyError:
+								pass
 						
 						# - Execute Align ----------
 						node.alignTo(target, control, smart_shift)
