@@ -27,7 +27,7 @@ from typerig.proxy.fl.gui.dialogs import TRLayerSelectDLG
 import Toolbar
 
 # - Init --------------------------
-tool_version = '1.60'
+tool_version = '1.61'
 tool_name = 'TypeRig Controller'
 ignore_toolbar = '__'
 
@@ -136,17 +136,19 @@ class TRToolbarController(QtGui.QToolBar):
 			exec('Toolbar.{}.pLayers = {}'.format(toolbar_name, pLayers))
 	
 # - RUN ------------------------------
+# - Init
+toolbar_control = TRToolbarController()
+
 # -- Platform specific fix for MacOs by Adam Twardoch (2022). Pt.1
 # -- Fixes Mac's lack of visible QMainWindow, thus adding toolbars to invisible item renders them ivisible too :) 
 # -- Note: the fix is temporary, we should find a better solution that suits all platforms...
+
 if fl_runtime_platform == 'Darwin':
 	app.main.show()
 	app.main.setGeometry(0,0,0,0)
 	toolbar_control.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.FramelessWindowHint)
 	toolbar_control.move(50,50)
 
-# - Init
-toolbar_control = TRToolbarController()
 app.main.addToolBar(toolbar_control)
 
 # -- Import external toolbars
