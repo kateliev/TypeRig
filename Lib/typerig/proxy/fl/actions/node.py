@@ -34,7 +34,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.66'
+__version__ = '2.67'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -186,6 +186,27 @@ class TRNodeActionCollector(object):
 					node.y = math.ceil(node.y) if round_up else math.floor(node.y)
 			
 			glyph.updateObject(glyph.fl, '{};\tRound {} nodes to integer coordinates @ {}.'.format(glyph.name, len(selection) if not round_all else 'ALL', '; '.join(wLayers)))
+			
+		active_workspace.getCanvas(True).refreshAll()
+
+	def node_smooth(pMode:int, pLayers:tuple, set_smooth:bool=True):
+		# - Get list of glyphs to be processed
+		process_glyphs = getProcessGlyphs(pMode)
+
+		# - Process
+		for glyph in process_glyphs:
+			# - Init		
+			wLayers = glyph._prepareLayers(pLayers)
+
+			for work_layer in wLayers:
+				# - Init
+				selection = glyph.selectedNodes(work_layer)
+				
+				for node in selection:
+					node.smooth = set_smooth
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, '{};\tSet {} nodes to {} @ {}.'.format(glyph.name, len(selection), ['Sharp', 'Smooth'][set_smooth], '; '.join(wLayers)))
 			
 		active_workspace.getCanvas(True).refreshAll()
 

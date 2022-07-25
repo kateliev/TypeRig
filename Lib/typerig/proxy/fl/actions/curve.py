@@ -30,7 +30,7 @@ from typerig.core.base.message import *
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init -------------------------
-__version__ = '2.65'
+__version__ = '2.66'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -93,6 +93,7 @@ class TRCurveActionCollector(object):
 	def curve_optimize(pMode:int, pLayers:tuple, method_values:tuple):
 		# - Get list of glyphs to be processed
 		process_glyphs = getProcessGlyphs(pMode)
+		method_name, p0_value, p1_value = method_values
 
 		# - Process
 		for glyph in process_glyphs:	
@@ -104,23 +105,22 @@ class TRCurveActionCollector(object):
 				
 				for node in selection:
 					work_node = eNode(node)
-					work_segment = eCurveEx(work_node.getSegment())
+					work_segment = eCurveEx(work_node.getSegmentNodes())
 					
-					if all(len(work_segment.fl) == 4, work_segment.p0 in selection, work_segment.p1 in selection):
-						method_name, p0_value, p1_value = method_values
+					if len(work_segment.nodes) == 4:
+						if work_segment.n0.fl in selection and work_segment.n3.fl in selection:
+							if method_name == 'tunni':
+								work_segment.eqTunni()
 
-						if method_name == 'tunni':
-							work_segment.eqTunni()
+							elif method_name == 'hobby':
+								curvature = (float(p0_value), float(p1_value))
+								work_segment.eqHobbySpline(curvature)
 
-						elif method_name == 'hobby':
-							curvature = (float(p0_value), float(p1_value))
-							work_segment.eqHobbySpline(curvature)
-
-						elif method_name == 'proportional':
-							work_segment.eqProportionalHandles((p0_value, p1_value))
+							elif method_name == 'proportional':
+								work_segment.eqProportionalHandles((p0_value, p1_value))
 
 			glyph.update()
-			glyph.updateObject(glyph.fl, '{};\tOptimize curve: {} @ {}.'.format(glyph.name, method.title(), '; '.join(wLayers)))
+			glyph.updateObject(glyph.fl, '{};\tOptimize curve: {} @ {}.'.format(glyph.name, method_name.title(), '; '.join(wLayers)))
 
 		active_workspace.getCanvas(True).refreshAll()
 

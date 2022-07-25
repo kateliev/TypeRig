@@ -20,7 +20,7 @@ from typerig.proxy.fl.objects.node import eNode
 from typerig.core.func.utils import isMultiInstance
 
 # - Init -----------------------------------
-__version__ = '0.3.92'
+__version__ = '0.3.93'
 
 # - Keep compatibility for basestring checks
 try:
@@ -42,7 +42,8 @@ class eCurveEx(object):
 		
 		if isinstance(argv[0], fl6.CurveEx):
 			self.fl = self.CurveEx = argv[0]
-			self.nodes = argv[1]
+			# WRONG!!!! 
+			self.nodes = [eNode(self.fl.p0), eNode(self.fl.bcp0), eNode(self.fl.bcp1), eNode(self.fl.p1)]
 		
 		elif isinstance(argv[0], (list, tuple)) and isMultiInstance(argv[0], fl6.flNode):
 			self.fl = None
