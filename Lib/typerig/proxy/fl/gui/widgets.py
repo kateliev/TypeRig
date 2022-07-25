@@ -26,7 +26,7 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.3.2'
+__version__ = '0.3.3'
 
 # - Keep compatibility for basestring checks
 try:
@@ -380,6 +380,21 @@ class TRCombo2Spin(QtGui.QWidget):
 	def get_values():
 		return [self.cmb_field.currentText, self.spb_prc.value, self.spb_unit.value]
 
+class TRColorCombo(QtGui.QComboBox):
+	def __init__(self, *args, **kwargs):
+		super(TRColorCombo, self).__init__(*args, **kwargs)
+
+		# - Init
+		self.color_codes = {name:value for name, value, discard in fontMarkColors}
+		
+		# - Build
+		for i in range(len(fontMarkColors)):
+			self.addItem(fontMarkColors[i][0])
+			self.setItemData(i, QtGui.QColor(fontMarkColors[i][2]), QtCore.Qt.DecorationRole)
+
+	def getValue(self):
+		return self.color_codes[self.currentText]
+			
 # - Line Edit -----------------------------------------------------
 class TRGLineEdit(QtGui.QLineEdit):
 	# - Custom QLine Edit extending the contextual menu with FL6 metric expressions

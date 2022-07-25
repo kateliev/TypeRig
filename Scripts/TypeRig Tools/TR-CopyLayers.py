@@ -17,14 +17,14 @@ import fontgate as fgt
 from PythonQt import QtCore
 
 from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import getProcessGlyphs
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRColorCombo
 
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.core.base.message import *
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Copy Layers', '1.5'
+app_name, app_version = 'TR | Copy Layers', '1.6'
 
 # - Interface -----------------------------
 class dlg_copy_layers(QtGui.QDialog):
@@ -44,6 +44,7 @@ class dlg_copy_layers(QtGui.QDialog):
 		self.cmb_select_font_B = QtGui.QComboBox()
 		self.cmb_select_font_A.addItems(self.font_files)
 		self.cmb_select_font_B.addItems(self.font_files)
+		self.cmb_mark = TRColorCombo()
 
 		self.cmb_select_layer_A = QtGui.QComboBox()
 		self.cmb_select_layer_B = QtGui.QComboBox()
@@ -130,6 +131,8 @@ class dlg_copy_layers(QtGui.QDialog):
 		layout_dst.addWidget(self.rad_type_mask, 					6, 4, 1, 3)
 		layout_dst.addWidget(QtGui.QLabel('Addon suffix:'), 		7, 0, 1, 1)
 		layout_dst.addWidget(self.edt_collide_suffix, 				7, 1, 1, 6)
+		layout_dst.addWidget(QtGui.QLabel('Colorize:'), 			8, 0, 1, 1)
+		layout_dst.addWidget(self.cmb_mark, 						8, 1, 1, 6)
 		self.box_dst.setLayout(layout_dst)
 
 		# -- Main
@@ -216,6 +219,7 @@ class dlg_copy_layers(QtGui.QDialog):
 				# - Copy
 				mode_mask = 'mask' if self.rad_type_mask.isChecked() and not mode_destination else 'new'
 				dst_glyph.importLayer(src_glyph, layer_src, layer_dst, new_layer_options, addLayer=True, cleanDST=True, toBack=True, mode=mode_mask)
+				dst_glyph.mark = self.cmb_mark.getValue()
 				do_update = True
 
 			else:
