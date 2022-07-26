@@ -34,7 +34,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.67'
+__version__ = '2.68'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -425,7 +425,7 @@ class TRNodeActionCollector(object):
 				for node in selection:
 					node.alignTo(dstVector, control)
 
-			glyph.updateObject(glyph.fl, '{};\tPaste Slope @ {}.'.fromat(glyph.name, '; '.join(wLayers)))
+			glyph.updateObject(glyph.fl, '{};\tPaste Slope @ {}.'.format(glyph.name, '; '.join(wLayers)))
 		
 		active_workspace.getCanvas(True).refreshAll()
 
