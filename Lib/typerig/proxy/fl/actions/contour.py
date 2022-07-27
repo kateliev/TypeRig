@@ -28,7 +28,7 @@ from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRTransformCtrl
 
 # - Init ---------------------------------------------------
-__version__ = '2.4'
+__version__ = '2.5'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -76,7 +76,7 @@ class TRContourActionCollector(object):
 		active_workspace.getCanvas(True).refreshAll()
 
 	@staticmethod
-	def contour_bool_union(pMode:int, pLayers:tuple):
+	def contour_bool_remove_overlap(pMode:int, pLayers:tuple):
 		# - Get list of glyphs to be processed
 		process_glyphs = getProcessGlyphs(pMode)
 
@@ -111,6 +111,79 @@ class TRContourActionCollector(object):
 
 			glyph.update()
 			glyph.updateObject(glyph.fl, '{};\tRemove overlap @ {}.'.format(glyph.name, '; '.join(work_layers)))
+
+		active_workspace.getCanvas(True).refreshAll()
+
+	@staticmethod
+	def contour_bool(pMode:int, pLayers:tuple, operation:str='add', reverse_order:bool=False):
+		# - Get list of glyphs to be processed
+		process_glyphs = getProcessGlyphs(pMode)
+
+		# - Process
+		for glyph in process_glyphs:
+			work_layers = glyph._prepareLayers(pLayers)
+			
+			# - Prepare selection
+			tmp = {}
+			selection = glyph.selectedAtShapes()
+
+			for sid, cid, nid in selection:
+				tmp.setdefault(sid,[]).append(cid)
+
+			selection = {key:list(set(value)) for key, value in tmp.items()}
+
+			# - Get contours
+			
+			for layer_name in work_layers:
+				layer_shapes = glyph.shapes(layer_name)
+				layer_contours = glyph.contours(layer_name)
+				process_shapes = []
+				process_fg_shapes = []
+				
+				# - Prepare per shape contour list
+				for sid, cid_list in selection.items():
+					process_tuple = (layer_shapes[sid], [layer_contours[cid] for cid in cid_list])
+					process_shapes.append(process_tuple)
+
+				# - Cleanup and convert
+				for shape, contours in process_shapes:
+					new_fl_shape = fl6.flShape()
+					shape.removeContours(contours)
+					new_fl_shape.addContours(contours, True)
+
+					new_fg_shape = fgt.fgShape()
+					new_fl_shape.convertToFgShape(new_fg_shape)
+
+					# - Convert each contour into a separate fgShape
+					for contour in new_fg_shape.contours:
+						temp_fg_shape = fgt.fgShape()
+						temp_fg_shape.addContour(contour)
+						process_fg_shapes.append(temp_fg_shape)
+
+				# - Perform boolean operation
+				process_fg_shapes = reversed(process_fg_shapes) if reverse_order else process_fg_shapes
+				base_fg_shape = process_fg_shapes[0]
+
+				for bop_shape in process_fg_shapes[1:]:
+					if operation == 'add':
+						base_fg_shape.addShape(bop_shape)
+					
+					elif operation == 'subtract':
+						base_fg_shape.subtractShape(bop_shape)
+
+					elif operation == 'intersect':
+						base_fg_shape.intersectShape(bop_shape)
+
+					elif operation == 'exclude':
+						base_fg_shape.excludeShape(bop_shape)
+				
+				# - Append the results to the first/last shape in selection
+				base_fl_shape = process_shapes[[0, -1][reverse_order]][0]
+				processed_fl_shape = fl6.flShape(base_fg_shape)
+				base_fl_shape.addContours(processed_fl_shape.contours, True)
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, '{};\t{} contours @ {}.'.format(operation.title(), glyph.name, '; '.join(work_layers)))
 
 		active_workspace.getCanvas(True).refreshAll()
 

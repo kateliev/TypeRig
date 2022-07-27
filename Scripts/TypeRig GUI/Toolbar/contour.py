@@ -24,7 +24,7 @@ from typerig.proxy.fl.gui.widgets import getTRIconFont, getProcessGlyphs
 
 
 # - Init --------------------------
-tool_version = '1.2'
+tool_version = '1.4'
 tool_name = 'TypeRig Contour'
 
 TRToolFont = getTRIconFont()
@@ -82,12 +82,28 @@ class TRExternalToolBar(QtGui.QToolBar):
 		self.btn_contour_close.triggered.connect(lambda: TRContourActionCollector.contour_close(pMode, pLayers))
 
 		self.btn_contour_union = QtGui.QAction("contour_union", self.grp_contour_actions)
-		self.btn_contour_union.setToolTip("Remove overlap for selected contours")
+		self.btn_contour_union.setToolTip("Boolean Add operation for selected contours")
 		self.btn_contour_union.setFont(TRToolFont)
 		self.addAction(self.btn_contour_union)
-		self.btn_contour_union.triggered.connect(lambda: TRContourActionCollector.contour_bool_union(pMode, pLayers))
+		self.btn_contour_union.triggered.connect(lambda: TRContourActionCollector.contour_bool(pMode, pLayers, 'add', get_modifier()))
 
-		# !!! TODO: Implement Boolean operations as recently added in FontGate
+		self.btn_contour_subtract = QtGui.QAction("contour_subtract", self.grp_contour_actions)
+		self.btn_contour_subtract.setToolTip("Boolean Subtract operation for selected contours")
+		self.btn_contour_subtract.setFont(TRToolFont)
+		self.addAction(self.btn_contour_subtract)
+		self.btn_contour_subtract.triggered.connect(lambda: TRContourActionCollector.contour_bool(pMode, pLayers, 'subtract', get_modifier()))
+		
+		self.btn_contour_intersect = QtGui.QAction("contour_intersect", self.grp_contour_actions)
+		self.btn_contour_intersect.setToolTip("Boolean Intersect operation for selected contours")
+		self.btn_contour_intersect.setFont(TRToolFont)
+		self.addAction(self.btn_contour_intersect)
+		self.btn_contour_intersect.triggered.connect(lambda: TRContourActionCollector.contour_bool(pMode, pLayers, 'intersect', get_modifier()))
+
+		self.btn_contour_difference = QtGui.QAction("contour_difference", self.grp_contour_actions)
+		self.btn_contour_difference.setToolTip("Boolean Exclude operation for selected contours")
+		self.btn_contour_difference.setFont(TRToolFont)
+		self.addAction(self.btn_contour_difference)
+		self.btn_contour_difference.triggered.connect(lambda: TRContourActionCollector.contour_bool(pMode, pLayers, 'exclude', get_modifier()))
 
 		self.btn_contour_cw = QtGui.QAction("contour_cw_alt", self.grp_contour_actions)
 		self.btn_contour_cw.setToolTip("Set clockwise winding direction (TrueType)")
