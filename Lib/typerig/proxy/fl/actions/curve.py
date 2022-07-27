@@ -30,7 +30,7 @@ from typerig.core.base.message import *
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init -------------------------
-__version__ = '2.67'
+__version__ = '2.68'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -99,7 +99,7 @@ class TRCurveActionCollector(object):
 			wLayers = glyph._prepareLayers(pLayers)
 
 			for layer in wLayers:
-				selection = glyph.selectedNodes(filterOn=True)
+				selection = glyph.selectedNodes(layer, filterOn=True)
 				
 				for node in selection:
 					work_node = eNode(node)
