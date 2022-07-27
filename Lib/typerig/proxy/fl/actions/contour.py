@@ -21,6 +21,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.objects.shape import eShape
 from typerig.proxy.fl.objects.contour import eContour
 from typerig.proxy.fl.objects.font import pFontMetrics
+from typerig.proxy.fl.application.app import pWorkspace
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
@@ -134,7 +135,7 @@ class TRContourActionCollector(object):
 		active_workspace.getCanvas(True).refreshAll()
 
 	@staticmethod
-	def contour_set_order(pMode:int, pLayers:tuple, sort_order:tuple, reverse_order:bool=False):
+	def contour_set_order(pMode:int, pLayers:tuple, sort_order:tuple, reverse_sort:bool=False):
 		# - Get list of glyphs to be processed
 		process_glyphs = getProcessGlyphs(pMode)
 
@@ -148,10 +149,10 @@ class TRContourActionCollector(object):
 				reverse_order.append(new_item)
 
 			for layer in work_layers:
-				work_shapes = glyph.shapes(layer.name, extend=eShape)
+				work_shapes = glyph.shapes(layer, extend=eShape)
 
 				for shape in work_shapes:
-					if modifiers == QtCore.Qt.AltModifier:
+					if reverse_sort:
 						shape.contourOrder(reverse_order)
 					else:
 						shape.contourOrder(sort_order)
