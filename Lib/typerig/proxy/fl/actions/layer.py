@@ -29,7 +29,7 @@ from typerig.proxy.fl.gui.widgets import *
 from typerig.proxy.fl.gui.dialogs import TRMsgSimple, TR2FieldDLG
 
 # - Init ---------------------------------
-__version__ = '2.32.1'
+__version__ = '2.4'
 
 # - Keep compatibility for basestring checks
 try:
@@ -407,7 +407,7 @@ class TRLayerActionCollector(object):
 						 parent.contourClipboard[wLayer].append(fl6.flContour([wGlyph.nodes(wLayer)[nid].clone() for nid in nList]))
 					else:
 						parent.contourClipboard[wLayer].append(wGlyph.contours(wLayer)[cid].clone())
-			output(0, app_name, 'Copy outline; Glyph: %s; Layers: %s.' %(parent.glyph.fl.name, '; '.join([layer_name for layer_name in parent.lst_layers.getTable()])))
+			output(0, '', 'Copy outline; Glyph: %s; Layers: %s.' %(parent.glyph.fl.name, '; '.join([layer_name for layer_name in parent.lst_layers.getTable()])))
 		
 	@staticmethod
 	def layer_paste_outline(parent):

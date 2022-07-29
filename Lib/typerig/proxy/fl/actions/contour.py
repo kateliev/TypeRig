@@ -28,7 +28,7 @@ from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRTransformCtrl
 
 # - Init ---------------------------------------------------
-__version__ = '2.5'
+__version__ = '2.6'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -161,7 +161,7 @@ class TRContourActionCollector(object):
 						process_fg_shapes.append(temp_fg_shape)
 
 				# - Perform boolean operation
-				process_fg_shapes = reversed(process_fg_shapes) if reverse_order else process_fg_shapes
+				process_fg_shapes = list(reversed(process_fg_shapes)) if reverse_order else process_fg_shapes
 				base_fg_shape = process_fg_shapes[0]
 
 				for bop_shape in process_fg_shapes[1:]:
