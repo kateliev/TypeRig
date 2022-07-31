@@ -27,9 +27,10 @@ from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import *
 from typerig.proxy.fl.gui.dialogs import TRMsgSimple, TR2FieldDLG
+from typerig.proxy.fl.application.app import pItems
 
 # - Init ---------------------------------
-__version__ = '2.4'
+__version__ = '2.5'
 
 # - Keep compatibility for basestring checks
 try:
@@ -344,6 +345,16 @@ class TRLayerActionCollector(object):
 			parent.glyph.updateObject(parent.glyph.fl, 'Clean Layer(s) | %s' %'; '.join([layer_name for layer_name in parent.lst_layers.getTable()]))
 
 	# - Layer: Multilayer tools ---------------------------------------------------
+	@staticmethod
+	def layer_side_by_side(parent):
+		# - Init
+		selected_layers = parent.lst_layers.getTable()
+		wItems = pItems()
+		
+		if parent.doCheck() and len(selected_layers) > 1:
+			wGlyph = parent.glyph
+			wItems.outputGlyphNames([wGlyph.name]*len(selected_layers), selected_layers)
+			
 	@staticmethod
 	def layer_unfold(parent):
 		if parent.doCheck() and len(parent.lst_layers.getTable()) > 1:

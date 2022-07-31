@@ -33,7 +33,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '2.33'
+app_name, app_version = 'TypeRig | Layers', '2.40'
 
 # -- Inital config for Get Layers dialog
 column_names = ('Name', 'Type', 'Color')
@@ -393,11 +393,8 @@ class tool_tab(QtGui.QWidget):
 		
 		# --- Layer Unfold/Stack Operations
 		self.menu_layer_view = QtGui.QMenu('View', self)
-		act_layer_unfold = QtGui.QAction('Unfold', self)
-		act_layer_restore = QtGui.QAction('Fold', self)
-
-		self.menu_layer_view.addAction(act_layer_unfold)
-		self.menu_layer_view.addAction(act_layer_restore)
+		act_layer_side_by_side = QtGui.QAction('Side by side', self)
+		self.menu_layer_view.addAction(act_layer_side_by_side)
 
 		# -- Set Triggers ------------------------------------
 		self.act_layer_add.triggered.connect(lambda: TRLayerActionCollector.layer_add(self.layerSelector))
@@ -425,8 +422,7 @@ class tool_tab(QtGui.QWidget):
 		act_layer_contour_paste_byName.triggered.connect(lambda: TRLayerActionCollector.layer_paste_outline(self.layerSelector))
 		act_layer_contour_paste.triggered.connect(lambda: TRLayerActionCollector.layer_paste_outline_selection(self.layerSelector))
 		
-		act_layer_unfold.triggered.connect(lambda: TRLayerActionCollector.layer_unfold(self.layerSelector))
-		act_layer_restore.triggered.connect(lambda: TRLayerActionCollector.layer_restore(self.layerSelector))
+		act_layer_side_by_side.triggered.connect(lambda: TRLayerActionCollector.layer_side_by_side(self.layerSelector))
 
 		# - Build ----------------------------------------
 		self.setLayout(layoutV)
