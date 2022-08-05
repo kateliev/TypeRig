@@ -20,7 +20,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.27.7'
+__version__ = '0.27.8'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -527,10 +527,14 @@ class CubicBezier(object):
 			return u, v
 		
 		delta0 = complex(self.p1.x, self.p1.y) - complex(self.p0.x, self.p0.y)
+		if delta0 == 0: return self # Retracted handle, do not modify
+
 		rad0 = atan2(delta0.real, delta0.imag)
-		w0 = complex(math.sin(rad0), math.cos(rad0))
+		w0 = complex(math.sin(rad0), math.cos(rad0)) 
 		
 		delta1 = complex(self.p3.x, self.p3.y) - complex(self.p2.x, self.p2.y)
+		if delta1 == 0: return self  # Retracted handle, do not modify
+
 		rad1 = atan2(delta1.real, delta1.imag)
 		w1 = complex(math.sin(rad1), math.cos(rad1))
 		
@@ -633,7 +637,7 @@ class CubicBezier(object):
 
 			return self.__class__(self.p0.tuple, (bcp2c.x, bcp2c.y), (bcp1b.x, bcp1b.y), self.p3.tuple)
 		else:
-			return None
+			return self
 
 	def lerp_first(self, shift):
 		diffBase = self.p3 - self.p0
