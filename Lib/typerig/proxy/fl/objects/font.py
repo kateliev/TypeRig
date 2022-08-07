@@ -24,7 +24,7 @@ from typerig.core.objects.collection import extBiDict
 from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
 
 # - Init ---------------------------------
-__version__ = '0.28.5'
+__version__ = '0.28.6'
 
 # - Keep compatibility for basestring checks
 try:
@@ -473,8 +473,66 @@ class pFont(object):
 	def hasMaster(self, layerName):
 		return self.fl.hasMaster(layerName)
 
+	def addEmptyMaster(self, master_name, location_dict=None):
+		new_location = fl6.flLocation(new_location_dict)
+		self.fl.addMaster(master_name, False, self.fl, master_name, False, False, new_location)
+
+	def addSynthMaster(self, source_location_dict, new_location_dict, new_master_name=None, deactivate_master=True):
+		'''Adds synthetic master to font'''
+		# - Init
+		source_package = self.fl
+		source_location = fl6.flLocation(source_location_dict)
+		new_location = fl6.flLocation(new_location_dict)
+		if new_master_name is None: new_master_name = ','.join(['{}={}'.format(key, value) for key, value in new_location_dict.items()])
+
+		# - Generate Master
+		success = self.fl.interpolateMaster(source_location, new_master_name)
+
+		if success:		
+			# - Deactivate master
+			if source_package.can_interpolate(new_master_name):
+				source_package.set_interpolate(not deactivate_master, new_master_name)
+
+			# - Set new location
+			source_package.setLocation(new_location, new_master_name)
+			
+		return success
+
+	def addSynthMasters(self, synth_masters_cfg):
+		'''Adds multiple synthetic masters to font.
+		Args:
+			synth_masters_cfg: tuple(master_name:str, source_location_dict:dict, new_location_dict:dict)
+		'''
+		# - Init
+		success = []
+		activate_later = []
+
+		# - Generate new masters, add them to font and then deactivate
+		for new_master_name, source_location_dict, new_location_dict in synth_masters_cfg:
+			result = self.addSynthMaster(source_location_dict, new_location_dict, new_master_name, True)
+			if result: activate_later.append(new_master_name)
+			success.append(result)
+
+		# - Activate Masters
+		for master_name in activate_later:
+			if not self.fl.can_interpolate(master_name):
+				self.fl.set_interpolate(True, master_name)
+
+		return all(success)
+
+	def copyMaster(self, new_master_name, new_location_dict={}, source_master_name=None, source_package=None):
+		if source_package is None: source_package = self.fl 
+		if source_master_name is None: source_master_name = new_master_name
+		new_location = fl6.flLocation(new_location_dict)
+		self.fl.addMaster(new_master_name, True, source_package, source_master_name, True, True, new_location)
+
 	def instances(self):
 		return self.fl.instances
+
+	def generateInstance(self, location_dict, round_coordinates=True):
+		new_location = fl6.flLocation(location_dict)
+		new_instance = self.fl.interpolateInstance(new_location, round_coordinates)
+		return new_instance
 
 	# - Guides & Hinting Basics ----------------------------------------
 	def guidelines(self, hostInf=False, fontgate=False):

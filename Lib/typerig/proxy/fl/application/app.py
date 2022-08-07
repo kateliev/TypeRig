@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.76.2'
+__version__ = '0.76.3'
 
 
 # - Dependencies --------------------------
@@ -23,7 +23,7 @@ except NameError:
 	basestring = (str, bytes)
 
 # - Procedures/Functions ------------------
-def openFont(file_path):
+def loadFont(file_path):
 	''' Loads Font file from path (str) and returns opened fgFont object'''
 	fl6.flItems.requestLoadingFont(file_path)
 	return fl6.CurrentFont()
@@ -41,6 +41,7 @@ class pItems(object):
 	def __init__(self):
 		self.fl = fl6.flItems()
 
+	# - Output and string related -------------------------
 	def outputString(self, string, cursor_location=0):
 		'''Output text to the application'''
 		self.fl.requestContent(fl6.fgSymbolList(string), cursor_location)
@@ -65,6 +66,13 @@ class pItems(object):
 			symbol.layerName = layer
 
 		self.fl.requestContent(fl6.fgSymbolList(fgSymbols), cursor_location)
+
+	# - Font related ------------------------------------
+	def openFont(self, font_package):
+		self.fl.requestPackageBorn(font_package)
+
+	def loadFont(self):
+		self.fl.requestLoadingFont(file_path)
 
 
 class pWorkspace(object):
