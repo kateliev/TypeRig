@@ -30,7 +30,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.30.3'
+__version__ = '0.30.4'
 
 # - Keep compatibility for basestring checks
 try:
@@ -150,27 +150,31 @@ class pGlyph(object):
 		return fl6.flPackage(self.fl.package)
 
 	# - Basics -----------------------------------------------
-	def version(self): return self.fl.lastModified
+	def version(self): 
+		return self.fl.lastModified
 
-	def activeLayer(self): return self.fl.activeLayer
+	def activeLayer(self): 
+		return self.fl.activeLayer
 
-	def fg_activeLayer(self): return self.fg.layer
+	def fg_activeLayer(self): 
+		return self.fg.layer
 
-	def activeGuides(self): return self.fl.activeLayer.guidelines
+	def activeGuides(self): 
+		return self.fl.activeLayer.guidelines
 
-	def mLine(self): return self.fl.measurementLine()
+	def mLine(self): 
+		return self.fl.measurementLine()
 
 	def object(self): return fl6.flObject(self.fl.id)
 
-	def italicAngle(self): return self.package.italicAngle_value
+	def italicAngle(self): 
+		return self.package.italicAngle_value
 
 	def setMark(self, mark_color, layer=None): 
-		if layer is None:
-			self.fl.mark = self.mark = mark_color
-		else:
-			self.layers(layer).mark = mark_color
+		self.layer(layer).mark = mark_color
 
-	def setName(self, glyph_name): self.fl.name = self.fg.name = self.name = glyph_name
+	def setName(self, glyph_name): 
+		self.fl.name = self.fg.name = self.name = glyph_name
 
 	def nodes(self, layer=None, extend=None, deep=False):
 		'''Return all nodes at given layer.
