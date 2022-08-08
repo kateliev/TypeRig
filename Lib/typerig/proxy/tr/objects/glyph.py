@@ -1,6 +1,6 @@
 # MODULE: Typerig / Proxy / Glyph (Objects)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2019-2021 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2019-2022 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -20,7 +20,7 @@ from typerig.proxy.tr.objects.layer import trLayer
 from typerig.core.objects.glyph import Glyph
 
 # - Init --------------------------------
-__version__ = '0.0.5'
+__version__ = '0.0.6'
 
 # - Classes -----------------------------
 class trGlyph(Glyph):
@@ -33,7 +33,7 @@ class trGlyph(Glyph):
 		.host (flLayer): Original flLayer 
 	'''
 	# - Metadata and proxy model
-	__slots__ = ('name', 'unicodes', 'identifier', 'parent')
+	#__slots__ = ('name', 'unicodes', 'identifier', 'parent')
 	__meta__ = {'name':'name'}
 		
 	# -- Some hardcoded properties

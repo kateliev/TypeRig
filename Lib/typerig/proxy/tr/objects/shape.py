@@ -1,6 +1,6 @@
 # MODULE: Typerig / Proxy / Shape (Objects)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2019-2021 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2019-2022 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -21,7 +21,7 @@ from typerig.proxy.tr.objects.contour import trContour
 from typerig.core.objects.shape import Shape
 
 # - Init --------------------------------
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 # - Keep compatibility for basestring checks
 try:
@@ -40,7 +40,7 @@ class trShape(Shape):
 		.host (flShape): Original flShape 
 	'''
 	# - Metadata and proxy model
-	__slots__ = ('host', 'name', 'transform', 'identifier', 'parent', 'lib')
+	#__slots__ = ('host', 'name', 'transform', 'identifier', 'parent', 'lib')
 	__meta__ = {'name':'name'}
 
 	# - Initialize ------------------------------

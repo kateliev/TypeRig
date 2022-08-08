@@ -1,7 +1,7 @@
 # MODULE: Typerig / Proxy / Node (Object)
 # NOTE: Experimental proxy approach
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2017-2021 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2017-2022 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -18,7 +18,7 @@ from typerig.core.objects.node import Node
 from typerig.core.func.utils import isMultiInstance
 
 # - Init ---------------------------------
-__version__ = '0.2.1'
+__version__ = '0.2.2'
 	
 # - Classes -------------------------------
 class trNode(Node):
@@ -33,7 +33,7 @@ class trNode(Node):
 		.contour (trContour): parent contour
 	'''
 	# - Metadata and proxy model
-	__slots__ = ('host', 'x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'identifier','complex_math', 'parent', 'lib')
+	#__slots__ = ('host', 'x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'identifier','complex_math', 'parent', 'lib')
 	__meta__ = {'x':'x', 'y':'y', 'type':'type', 'g2':'g2', 'smooth':'smooth', 'name':'name', 'selected':'selected'}
 
 	# - Initialize ---------------------------

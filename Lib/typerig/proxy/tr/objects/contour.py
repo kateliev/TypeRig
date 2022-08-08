@@ -1,6 +1,6 @@
 # MODULE: Typerig / Proxy / Contour (Objects)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2019-2021 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2019-2022 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -19,7 +19,7 @@ from typerig.proxy.tr.objects.node import trNode
 from typerig.core.objects.contour import Contour
 
 # - Init --------------------------------
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 # - Keep compatibility for basestring checks
 try:
@@ -38,7 +38,7 @@ class trContour(Contour):
 		.host (flContour): Original flContour 
 	'''
 	# - Metadata and proxy model
-	__slots__ = ('host', 'name', 'closed', 'clockwise', 'transform', 'parent', 'lib')
+	#__slots__ = ('host', 'name', 'closed', 'clockwise', 'transform', 'parent', 'lib')
 	__meta__ = {'closed':'closed', 'clockwise':'clockwise', 'name':'name'}
 
 	# - Initialize -----------------------------
