@@ -30,7 +30,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.30.4'
+__version__ = '0.30.5'
 
 # - Keep compatibility for basestring checks
 try:
@@ -170,8 +170,11 @@ class pGlyph(object):
 	def italicAngle(self): 
 		return self.package.italicAngle_value
 
-	def setMark(self, mark_color, layer=None): 
-		self.layer(layer).mark = mark_color
+	def setMark(self, mark_color, layer=None):
+		if layer is None:
+			self.fl.mark = self.mark = mark_color
+		else:
+			self.layer(layer).mark = mark_color
 
 	def setName(self, glyph_name): 
 		self.fl.name = self.fg.name = self.name = glyph_name
