@@ -30,7 +30,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.30.6'
+__version__ = '0.30.7'
 
 # - Keep compatibility for basestring checks
 try:
@@ -268,7 +268,7 @@ class pGlyph(object):
 		else:
 			if isinstance(layer, int):
 				return_layer = self.fl.layers[layer]
-				return return_layer if return_layer.isMaskLayer() else return_layer.getMaskLayer(force_create)
+				return return_layer if return_layer.isMaskLayer else return_layer.getMaskLayer(force_create)
 
 			elif isinstance(layer, basestring):
 				return self.fl.getLayerByName(layer).getMaskLayer(force_create)
