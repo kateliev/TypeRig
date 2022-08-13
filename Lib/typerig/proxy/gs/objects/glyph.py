@@ -12,15 +12,13 @@
 from __future__ import print_function
 import math 
 
-import fontlab as fl6
-import fontgate as fgt
-import PythonQt as pqt
+import GlyphsApp
 
-from typerig.proxy.tr.objects.layer import trLayer
+from typerig.proxy.gs.objects.layer import trLayer
 from typerig.core.objects.glyph import Glyph
 
 # - Init --------------------------------
-__version__ = '0.0.6'
+__version__ = '0.1.1'
 
 # - Classes -----------------------------
 class trGlyph(Glyph):
@@ -43,19 +41,10 @@ class trGlyph(Glyph):
 	def __init__(self, *argv, **kwargs):
 
 		if len(argv) == 0:
-			self.host = fl6.flGlyph(fl6.CurrentGlyph(), fl6.CurrentFont())
+			self.host = GlyphsApp.Glyphs.font.selectedLayers[0].parent
 		
-		elif len(argv) == 1 and isinstance(argv[0], fl6.flGlyph):
-			font, glyph = argv[0].fgPackage, argv[0].fgPackage[argv[0].name]
-			self.host = fl6.flGlyph(glyph, font)
-
-		elif len(argv) == 2 and isinstance(argv[0], fgt.fgFont) and isinstance(argv[1], fgt.fgGlyph):
-			font, glyph = argv
-			self.host = fl6.flGlyph(glyph, font)
-
-		elif len(argv) == 2 and isinstance(argv[1], fgt.fgFont) and isinstance(argv[0], fgt.fgGlyph):
-			glyph, font = argv
-			self.host = fl6.flGlyph(glyph, font)
+		elif len(argv) == 1 and isinstance(argv[0], GlyphsApp.GSGlyph):
+			self.host = argv[0]
 
 		super(trGlyph, self).__init__(self.host.layers, default_factory=trLayer, proxy=True, **kwargs)
 
@@ -72,12 +61,4 @@ class trGlyph(Glyph):
 		else:
 			Glyph.__setattr__(self, name, value)
 	
-	# - Properties --------------------------
-	@property
-	def unicodes(self):
-		return self.host.fgGlyph.unicodes
-
-	# - Functions ---------------------------
-	def update(self):
-		fl6.flItems.notifyChangesApplied(self.name, self.host, True)
 	

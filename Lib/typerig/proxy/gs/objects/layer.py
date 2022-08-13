@@ -12,34 +12,31 @@
 from __future__ import print_function
 import math 
 
-import fontlab as fl6
-import fontgate as fgt
-import PythonQt as pqt
+import GlyphsApp
 
-from typerig.proxy.tr.objects.shape import trShape
+from typerig.proxy.gs.objects.contour import trContour
 from typerig.core.objects.layer import Layer
 
 # - Init --------------------------------
-__version__ = '0.0.3'
+__version__ = '0.1.1'
 
 # - Classes -----------------------------
 class trLayer(Layer):
-	'''Proxy to flLayer object
+	'''Proxy to GSLayer object
 
 	Constructor:
-		trLayer(flLayer)
+		trLayer(GSLayer)
 
 	Attributes:
-		.host (flLayer): Original flLayer 
+		.host (GSLayer): Original flLayer 
 	'''
 	# - Metadata and proxy model
-	#__slots__ = ('name', 'transform', 'identifier', 'parent')
 	__meta__ = {'name':'name'}
 		
 	# - Initialize 
 	def __init__(self, layer, **kwargs):
 		self.host = layer
-		super(trLayer, self).__init__(self.host.shapes, default_factory=trShape, proxy=True, **kwargs)
+		super(trLayer, self).__init__(self.host.paths, default_factory=trContour, proxy=True, **kwargs)
 
 	# - Internals ------------------------------
 	def __getattribute__(self, name):

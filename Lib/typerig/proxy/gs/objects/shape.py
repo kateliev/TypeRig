@@ -12,8 +12,8 @@
 from __future__ import print_function
 import math 
 
-from typerig.proxy.tr.objects.node import trNode
-from typerig.proxy.tr.objects.contour import trContour
+from typerig.proxy.gs.objects.node import trNode
+from typerig.proxy.gs.objects.contour import trContour
 from typerig.core.objects.shape import Shape
 
 # - Init --------------------------------

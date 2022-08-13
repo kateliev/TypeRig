@@ -11,11 +11,11 @@
 # - Dependencies -------------------------
 from __future__ import print_function
 
-from typerig.proxy.tr.objects.node import trNode
+from typerig.proxy.gs.objects.node import trNode
 from typerig.core.objects.contour import Contour
 
 # - Init --------------------------------
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 # - Keep compatibility for basestring checks
 try:
