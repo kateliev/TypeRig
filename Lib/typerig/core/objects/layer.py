@@ -19,17 +19,19 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.shape import Shape
 
 # - Init -------------------------------
-__version__ = '0.1.6'
+__version__ = '0.1.7'
 
 # - Classes -----------------------------
 class Layer(Container): 
-	__slots__ = ('name', 'transform', 'identifier', 'parent', 'lib')
+	__slots__ = ('name', 'transform', 'advance_width', 'advance_height', 'identifier', 'parent', 'lib')
 	
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Shape)
 		super(Layer, self).__init__(data, default_factory=factory, **kwargs)
 		
 		self.transform = kwargs.pop('transform', Transform())
+		self.advance_width = kwargs.pop('advance', 0.) 
+		self.advance_height = kwargs.pop('advance', 1000.) 
 		
 		# - Metadata
 		if not kwargs.pop('proxy', False): # Initialize in proxy mode
@@ -83,6 +85,66 @@ class Layer(Container):
 		contour_bounds = [shape.bounds for shape in self.data]
 		bounds = sum([[(bound.x, bound.y), (bound.xmax, bound.ymax)] for bound in contour_bounds],[])
 		return Bounds(bounds)
+
+	@property
+	def LSB(self):
+		'''Layer's Left sidebearing'''
+		return self.bounds.x
+
+	@LSB.setter
+	def LSB(self, value):
+		delta = value - self.LSB
+		self.shift(delta, 0.)
+
+	@property
+	def RSB(self):
+		'''Layer's Right sidebearing'''
+		layer_bounds = self.bounds
+		return self.ADV - (layer_bounds.x + layer_bounds.width)
+
+	@RSB.setter
+	def RSB(self, value):
+		delta = value - self.RSB
+		self.ADV += delta
+
+	@property
+	def BSB(self):
+		'''Layer's Bottom sidebearing'''
+		return self.bounds.y
+
+	@BSB.setter
+	def BSB(self, value):
+		delta = value - self.BSB
+		self.shift(0., delta)
+
+	@property
+	def TSB(self):
+		'''Layer's Top sidebearing'''
+		layer_bounds = self.bounds
+		return layer_bounds.y + layer_bounds.height
+
+	@TSB.setter
+	def TSB(self, value):
+		delta = value - self.TSB
+		self.VADV += delta
+
+	@property
+	def ADV(self):
+		'''Layer's Advance width'''
+		return self.advance_width
+
+	@ADV.setter
+	def ADV(self, value):
+		self.advance_width = value
+
+	@property
+	def VADV(self):
+		'''Layer's Advance height'''
+		return self.advance_height
+
+	@VADV.setter
+	def VADV(self, value):
+		self.advance_height = value
 
 	# - Functions --------------------------
 	def set_weight(self, wx, wy):

@@ -18,7 +18,7 @@ from typerig.proxy.gs.objects.contour import trContour
 from typerig.core.objects.layer import Layer
 
 # - Init --------------------------------
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 
 # - Classes -----------------------------
 class trLayer(Layer):
@@ -31,7 +31,7 @@ class trLayer(Layer):
 		.host (GSLayer): Original flLayer 
 	'''
 	# - Metadata and proxy model
-	__meta__ = {'name':'name'}
+	__meta__ = {'name':'name', 'advance_width':'width'} #, 'advance_height':'vertWidth'} !!! Missing in GS2, present in GS3
 		
 	# - Initialize 
 	def __init__(self, layer, **kwargs):
