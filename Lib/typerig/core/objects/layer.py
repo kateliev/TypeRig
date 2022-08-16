@@ -30,13 +30,13 @@ class Layer(Container):
 		super(Layer, self).__init__(data, default_factory=factory, **kwargs)
 		
 		self.transform = kwargs.pop('transform', Transform())
-		self.advance_width = kwargs.pop('advance', 0.) 
-		self.advance_height = kwargs.pop('advance', 1000.) 
 		
 		# - Metadata
 		if not kwargs.pop('proxy', False): # Initialize in proxy mode
 			self.name = kwargs.pop('name', hash(self))
 			self.identifier = kwargs.pop('identifier', None)
+			self.advance_width = kwargs.pop('advance', 0.) 
+			self.advance_height = kwargs.pop('advance', 1000.) 
 	
 	# -- Internals ------------------------------
 	def __repr__(self):
