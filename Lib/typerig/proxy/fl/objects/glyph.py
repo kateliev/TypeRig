@@ -30,7 +30,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.30.7'
+__version__ = '0.30.8'
 
 # - Keep compatibility for basestring checks
 try:
@@ -332,7 +332,8 @@ class pGlyph(object):
 		clones = [shape.cloneTopLevel() for shape in only_shapes]
 
 		wLayer.removeAllShapes()
-		for clone in clones: wLayer.addShape(clone)
+		for clone in clones + components: 
+			wLayer.addShape(clone)
 
 		return clones
 
