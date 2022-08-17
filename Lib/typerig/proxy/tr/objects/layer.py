@@ -20,7 +20,7 @@ from typerig.proxy.tr.objects.shape import trShape
 from typerig.core.objects.layer import Layer
 
 # - Init --------------------------------
-__version__ = '0.0.4'
+__version__ = '0.0.5'
 
 # - Classes -----------------------------
 class trLayer(Layer):
@@ -34,7 +34,7 @@ class trLayer(Layer):
 	'''
 	# - Metadata and proxy model
 	#__slots__ = ('name', 'transform', 'identifier', 'parent')
-	__meta__ = {'name':'name', 'advance_width':'advanceWidth', 'advance_height':'advanceHeight'}
+	__meta__ = {'name':'name', 'mark':'mark', 'advance':'advanceWidth', 'advance_width':'advanceWidth', 'advance_height':'advanceHeight'}
 		
 	# - Initialize 
 	def __init__(self, layer, **kwargs):

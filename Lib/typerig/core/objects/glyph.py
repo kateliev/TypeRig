@@ -18,11 +18,11 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.layer import Layer
 
 # - Init -------------------------------
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 # - Classes -----------------------------
 class Glyph(Container): 
-	__slots__ = ('name', 'unicodes', 'identifier', 'parent')
+	__slots__ = ('name', 'mark', 'unicodes', 'identifier', 'parent')
 
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Layer)
@@ -30,9 +30,10 @@ class Glyph(Container):
 		
 		# - Metadata
 		if not kwargs.pop('proxy', False): # Initialize in proxy mode
+			self.identifier = kwargs.pop('identifier', None)
+			self.mark = kwargs.pop('mark', 0)
 			self.name = kwargs.pop('name', hash(self))
 			self.unicodes = kwargs.pop('unicodes', [])
-			self.identifier = kwargs.pop('identifier', None)
 
 		#self.active_layer = kwargs.pop('active_layer', None)
 		
@@ -63,6 +64,24 @@ class Glyph(Container):
 	@property
 	def unicode(self):
 		return self.unicodes[0] if len(self.unicodes) else None
+
+	@unicode.setter
+	def unicode(self, value):
+		try:
+			self.unicodes[0] = values
+		except (IndexError, AttributeError):
+			self.unicodes = [value]
+
+	@property
+	def is_compatible(self):
+		return all([layer.is_compatible(self.layers[0]) for layer in self.layers])
+
+	# - Functions -------------------------------
+	def set_mark(self, value):
+		self.mark = value
+
+		for layer in self.layers:
+			layer.mark = value
 
 	# -- IO Format ------------------------------
 	def to_VFJ(self):

@@ -19,7 +19,7 @@ from typerig.proxy.tr.objects.node import trNode
 from typerig.core.objects.contour import Contour
 
 # - Init --------------------------------
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 
 # - Keep compatibility for basestring checks
 try:
@@ -75,8 +75,13 @@ class trContour(Contour):
 		else:
 			Contour.__setattr__(self, name, value)
 
-	# - Basics ---------------------------------
+	# - Properties -----------------------------
+	@property
+	def nodes(self):
+		self.data = [trNode(node) for node in self.host.nodes()]
+		return self.data
 
+	# - Basics ---------------------------------
 	def reverse(self):
 		self.host.reverse()
 		self.data = list(reversed(self.data))

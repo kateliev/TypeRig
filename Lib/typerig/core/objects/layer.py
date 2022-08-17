@@ -23,7 +23,7 @@ __version__ = '0.1.7'
 
 # - Classes -----------------------------
 class Layer(Container): 
-	__slots__ = ('name', 'transform', 'advance_width', 'advance_height', 'identifier', 'parent', 'lib')
+	__slots__ = ('name', 'transform', 'mark', 'advance_width', 'advance_height', 'identifier', 'parent', 'lib')
 	
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Shape)
@@ -33,10 +33,11 @@ class Layer(Container):
 		
 		# - Metadata
 		if not kwargs.pop('proxy', False): # Initialize in proxy mode
-			self.name = kwargs.pop('name', hash(self))
+			self.advance_height = kwargs.pop('height', 1000.) 
+			self.advance_width = kwargs.pop('width', 0.) 
 			self.identifier = kwargs.pop('identifier', None)
-			self.advance_width = kwargs.pop('advance', 0.) 
-			self.advance_height = kwargs.pop('advance', 1000.) 
+			self.mark = kwargs.pop('mark', 0)
+			self.name = kwargs.pop('name', hash(self))
 	
 	# -- Internals ------------------------------
 	def __repr__(self):
@@ -85,6 +86,10 @@ class Layer(Container):
 		contour_bounds = [shape.bounds for shape in self.data]
 		bounds = sum([[(bound.x, bound.y), (bound.xmax, bound.ymax)] for bound in contour_bounds],[])
 		return Bounds(bounds)
+
+	@property
+	def signature(self):
+		return hash(tuple([node.type for node in self.nodes]))
 
 	@property
 	def LSB(self):
@@ -202,6 +207,9 @@ class Layer(Container):
 		else: return
 
 		self.shift(delta_x, delta_y)
+
+	def is_compatible(self, other):
+		return self.signature == other.signature
 
 	# -- IO Format ------------------------------
 	def to_VFJ(self):

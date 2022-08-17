@@ -32,7 +32,7 @@ class trGlyph(Glyph):
 	'''
 	# - Metadata and proxy model
 	#__slots__ = ('name', 'unicodes', 'identifier', 'parent')
-	__meta__ = {'name':'name'}
+	__meta__ = {'name':'name', 'mark':'color'}
 		
 	# -- Some hardcoded properties
 	active_layer = property(lambda self: self.host.activeLayer.name)
