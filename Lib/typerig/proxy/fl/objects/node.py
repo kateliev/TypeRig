@@ -21,7 +21,7 @@ from typerig.core.objects.utils import Bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 # - Init ---------------------------------
-__version__ = '0.28.0'
+__version__ = '0.28.1'
 
 # - Keep compatibility for basestring checks
 try:
@@ -139,20 +139,22 @@ class pNode(object):
 		return self.fl.nextNode() if naked else self.__class__(self.fl.nextNode())
 
 	def getNextOn(self, naked=True):
-		nextNode = self.fl.nextNode()
-		nextNodeOn = nextNode if nextNode.isOn() else nextNode.nextNode().getOn()
+		nextNode = self.getNext(False)
+		nextNodeOn = nextNode if nextNode.isOn else nextNode.getNext(False).getOn(True)
 		return nextNodeOn if naked else self.__class__(nextNodeOn)
 
 	def getPrevOn(self, naked=True):
-		prevNode = self.fl.prevNode()
-		prevNodeOn = prevNode if prevNode.isOn() else prevNode.prevNode().getOn()
+		prevNode = self.getPrev(False)
+		prevNodeOn = prevNode if prevNode.isOn else prevNode.getPrev(False).getOn(True)
 		return prevNodeOn if naked else self.__class__(prevNodeOn)
 
 	def getPrev(self, naked=True):
 		return self.fl.prevNode() if naked else self.__class__(self.fl.prevNode())
 
 	def getOn(self, naked=True):
-		return self.fl.getOn() if naked else self.__class__(self.fl.getOn())
+		on_node = self.fl.getOn() if naked else self.__class__(self.fl.getOn())
+		on_node = on_node if on_node is not None else self.fl
+		return on_node if naked else self
 
 	def getMaxY(self, naked=True):
 		next_node = self.getNextOn()
