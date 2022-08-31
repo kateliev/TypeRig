@@ -21,7 +21,7 @@ from typerig.core.objects.utils import Bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 # - Init ---------------------------------
-__version__ = '0.28.1'
+__version__ = '0.28.2'
 
 # - Keep compatibility for basestring checks
 try:
@@ -140,12 +140,12 @@ class pNode(object):
 
 	def getNextOn(self, naked=True):
 		nextNode = self.getNext(False)
-		nextNodeOn = nextNode if nextNode.isOn else nextNode.getNext(False).getOn(True)
+		nextNodeOn = nextNode.fl if nextNode.isOn else nextNode.getNext(False).getOn(True)
 		return nextNodeOn if naked else self.__class__(nextNodeOn)
 
 	def getPrevOn(self, naked=True):
 		prevNode = self.getPrev(False)
-		prevNodeOn = prevNode if prevNode.isOn else prevNode.getPrev(False).getOn(True)
+		prevNodeOn = prevNode.fl if prevNode.isOn else prevNode.getPrev(False).getOn(True)
 		return prevNodeOn if naked else self.__class__(prevNodeOn)
 
 	def getPrev(self, naked=True):
