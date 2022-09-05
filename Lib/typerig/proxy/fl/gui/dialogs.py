@@ -23,7 +23,7 @@ from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import TRCheckTableView, TRSliderCtrl
 
 # - Init ----------------------------------
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 # - Keep compatibility for basestring checks
 try:
@@ -55,8 +55,8 @@ class TR1FieldDLG(QtGui.QDialog):
 		self.btn_ok = QtGui.QPushButton('OK', self)
 		self.btn_cancel = QtGui.QPushButton('Cancel', self)
 
-		self.btn_ok.clicked.connect(self.return_values)
-		self.btn_cancel.clicked.connect(self.reject)
+		self.btn_ok.clicked.connect(lambda: self.return_values())
+		self.btn_cancel.clicked.connect(lambda: self.reject())
 		
 		# - Build 
 		main_layout = QtGui.QGridLayout() 
@@ -94,8 +94,8 @@ class TR2FieldDLG(QtGui.QDialog):
 		self.btn_ok = QtGui.QPushButton('OK', self)
 		self.btn_cancel = QtGui.QPushButton('Cancel', self)
 
-		self.btn_ok.clicked.connect(self.return_values)
-		self.btn_cancel.clicked.connect(self.reject)
+		self.btn_ok.clicked.connect(lambda: self.return_values())
+		self.btn_cancel.clicked.connect(lambda: self.reject())
 		
 		# - Build 
 		main_layout = QtGui.QGridLayout() 
@@ -137,8 +137,8 @@ class TR1SpinDLG(QtGui.QDialog):
 		self.btn_ok = QtGui.QPushButton('OK', self)
 		self.btn_cancel = QtGui.QPushButton('Cancel', self)
 
-		self.btn_ok.clicked.connect(self.return_values)
-		self.btn_cancel.clicked.connect(self.reject)
+		self.btn_ok.clicked.connect(lambda: self.return_values())
+		self.btn_cancel.clicked.connect(lambda: self.reject())
 		
 		# - Build 
 		main_layout = QtGui.QGridLayout() 
@@ -172,8 +172,8 @@ class TRNSpinDLG(QtGui.QDialog):
 		self.btn_ok = QtGui.QPushButton('OK', self)
 		self.btn_cancel = QtGui.QPushButton('Cancel', self)
 
-		self.btn_ok.clicked.connect(self.return_values)
-		self.btn_cancel.clicked.connect(self.reject)
+		self.btn_ok.clicked.connect(lambda: self.return_values())
+		self.btn_cancel.clicked.connect(lambda: self.reject())
 		
 		# - Build 
 		# -- Main layout
@@ -229,8 +229,8 @@ class TR1SliderDLG(QtGui.QDialog):
 		self.btn_ok = QtGui.QPushButton('OK', self)
 		self.btn_cancel = QtGui.QPushButton('Cancel', self)
 
-		self.btn_ok.clicked.connect(self.return_values)
-		self.btn_cancel.clicked.connect(self.reject)
+		self.btn_ok.clicked.connect(lambda: self.return_values())
+		self.btn_cancel.clicked.connect(lambda: self.reject())
 		
 		# - Build 
 		main_layout = QtGui.QGridLayout() 
@@ -268,8 +268,8 @@ class TR2ComboDLG(QtGui.QDialog):
 		self.btn_ok = QtGui.QPushButton('OK', self)
 		self.btn_cancel = QtGui.QPushButton('Cancel', self)
 
-		self.btn_ok.clicked.connect(self.return_values)
-		self.btn_cancel.clicked.connect(self.reject)
+		self.btn_ok.clicked.connect(lambda: self.return_values())
+		self.btn_cancel.clicked.connect(lambda: self.reject())
 		
 		# - Build 
 		main_layout = QtGui.QGridLayout() 
@@ -315,8 +315,8 @@ class TRColorDLG(QtGui.QDialog):
 		self.btn_ok = QtGui.QPushButton('OK', self)
 		self.btn_cancel = QtGui.QPushButton('Cancel', self)
 
-		self.btn_ok.clicked.connect(self.return_values)
-		self.btn_cancel.clicked.connect(self.reject)
+		self.btn_ok.clicked.connect(lambda: self.return_values())
+		self.btn_cancel.clicked.connect(lambda: self.reject())
 		
 		# - Build 
 		main_layout = QtGui.QGridLayout() 

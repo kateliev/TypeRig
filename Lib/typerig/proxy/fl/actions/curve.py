@@ -30,7 +30,7 @@ from typerig.core.base.message import *
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init -------------------------
-__version__ = '2.68'
+__version__ = '2.69'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -139,7 +139,6 @@ class TRCurveActionCollector(object):
 
 		if method_values is None and len(value_config.keys()):
 			dlg_get_input = TRDialogs.TRNSpinDLG('{} optimize curve'.format(method_name.title()), 'Please set curve optimization parameters.', value_config)
-			dlg_get_input.return_values()
 
 			if dlg_get_input.values is None:
 				warnings.warn('ABORT:\tNo user input provided! No Action taken!', UserInputWarning)

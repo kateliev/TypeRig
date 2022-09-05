@@ -34,7 +34,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.68'
+__version__ = '2.69'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -133,7 +133,6 @@ class TRNodeActionCollector(object):
 	@staticmethod
 	def node_insert_dlg(pMode:int, pLayers:tuple, select_one_node=False):
 		dlg_node_add = TRDialogs.TR1SliderDLG('Insert Node', 'Set time along bezier curve', (0., 100., 50., 1.))
-		dlg_node_add.return_values()
 
 		if dlg_node_add.values is None:
 			warnings.warn('ABORT:\tNo user input provided! No Action taken!', UserInputWarning)
@@ -234,7 +233,6 @@ class TRNodeActionCollector(object):
 	@staticmethod
 	def corner_mitre_dlg(pMode:int, pLayers:tuple):
 		dlg_get_input = TRDialogs.TR1SpinDLG('Mitre Corner', 'Please provide miter radius...', 'Radius:', (0., 200., 4., 1.))
-		dlg_get_input.return_values()
 
 		if dlg_get_input.values is None:
 			warnings.warn('ABORT:\tNo user input provided! No Action taken!', UserInputWarning)
@@ -266,7 +264,6 @@ class TRNodeActionCollector(object):
 	@staticmethod
 	def corner_round_dlg(pMode:int, pLayers:tuple):
 		dlg_get_input = TRDialogs.TRNSpinDLG('Round Corner', 'Please provide radius and curvature for the new round corner...', {'Radius:':(0., 200., 5., 1.), 'Curvature:':(0., 2., 1., .1)})
-		dlg_get_input.return_values()
 
 		if dlg_get_input.values is None:
 			warnings.warn('ABORT:\tNo user input provided! No Action taken!', UserInputWarning)
@@ -298,7 +295,6 @@ class TRNodeActionCollector(object):
 	@staticmethod
 	def corner_loop_dlg(pMode:int, pLayers:tuple):
 		dlg_get_input = TRDialogs.TR1SpinDLG('Loop Corner', 'Please provide overlap length...', 'Overlap:', (0., 200., 20., 1.))
-		dlg_get_input.return_values()
 
 		if dlg_get_input.values is None:
 			warnings.warn('ABORT:\tNo user input provided! No Action taken!', UserInputWarning)
@@ -329,7 +325,6 @@ class TRNodeActionCollector(object):
 	@staticmethod
 	def corner_trap_dlg(pMode:int, pLayers:tuple, smooth:bool=True):
 		dlg_get_input = TRDialogs.TRNSpinDLG('Trap Corner', 'Create ink trap with the following parameters...', {'Incision:':(0., 200., 10., 1.), 'Depth:':(0., 200., 50., 1.), 'Mitre:':(0., 20., 2., 1.)})
-		dlg_get_input.return_values()
 
 		if dlg_get_input.values is None:
 			warnings.warn('ABORT:\tNo user input provided! No Action taken!', UserInputWarning)
