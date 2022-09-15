@@ -13,30 +13,35 @@ from __future__ import absolute_import, print_function
 from collections import OrderedDict
 
 import fontlab as fl6
-from PythonQt import QtCore
+from PythonQt import QtCore, QtGui
 
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import pGlyph
 
-from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRVTabWidget, TRCheckTableView
+#from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import getTRIconFontPath, getProcessGlyphs, CustomPushButton, TRVTabWidget, TRCheckTableView
 from typerig.proxy.fl.gui.dialogs import TRLayerSelectDLG
-
+from typerig.proxy.fl.application.app import pWorkspace
+from typerig.proxy.fl.gui.styles import css_tr_button
 
 # -- Internals - Load tool panels 
 import Panel 
 
 # - Init --------------------------
-app_version = '2.61'
+app_version = '3.00'
 app_name = 'TypeRig Panel'
 ignorePanel = '__'
+
+app = pWorkspace()
+TRToolFont = getTRIconFontPath()
+font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
 
 # -- Global parameters
 pMode = 0
 pLayers = (True, False, False, False)
 
 # - Style -------------------------
-ss_Toolbox_none = """/* EMPTY STYLESHEET */ """
+
 
 # -- Main Widget --------------------------
 class TRMainPanel(QtGui.QDialog):
@@ -44,68 +49,48 @@ class TRMainPanel(QtGui.QDialog):
 		super(TRMainPanel, self).__init__()
 
 		# - Init ----------------------------
-		#self.setStyleSheet(ss_Toolbox_none)
+		self.setStyleSheet(css_tr_button)
 		self.layers_selected = []
-		
-		# - Dialogs -------------------------
-		self.layer_dialog = TRLayerSelectDLG(self, pMode)
-
-		# - Layers --------------------------
-		self.chk_ActiveLayer = QtGui.QCheckBox('Active')
-		self.chk_Masters = QtGui.QCheckBox('Masters')
-		self.chk_Masks = QtGui.QCheckBox('Masks')
-		self.chk_Service = QtGui.QCheckBox('Services')
-		self.chk_Selected = QtGui.QCheckBox('Selected')
-
-		self.chk_ActiveLayer.setCheckState(QtCore.Qt.Checked)
-
-		self.chk_ActiveLayer.stateChanged.connect(self.layers_refresh)
-		self.chk_Masters.stateChanged.connect(self.layers_refresh)
-		self.chk_Masks.stateChanged.connect(self.layers_refresh)
-		self.chk_Service.stateChanged.connect(self.layers_refresh)
-		self.chk_Selected.stateChanged.connect(self.layers_refresh)
-
-		self.layers_refresh()
-
-		# - Glyphs --------------------------
-		self.rad_glyph = QtGui.QRadioButton('Glyph')
-		self.rad_window = QtGui.QRadioButton('Window')
-		self.rad_selection = QtGui.QRadioButton('Selection')
-		self.rad_font = QtGui.QRadioButton('Font')
-		
-		self.rad_glyph.toggled.connect(self.mode_refresh)
-		self.rad_window.toggled.connect(self.mode_refresh)
-		self.rad_selection.toggled.connect(self.mode_refresh)
-		self.rad_font.toggled.connect(self.mode_refresh)
-		
-		self.rad_glyph.setChecked(True)
-
-		self.rad_glyph.setEnabled(True)
-		self.rad_window.setEnabled(True)
-		self.rad_selection.setEnabled(True)
-		self.rad_font.setEnabled(False)
-
-		self.rad_glyph.setToolTip('Affect current glyph')
-		self.rad_window.setToolTip('Affect glyphs in active window')
-		self.rad_selection.setToolTip('Affect selected glyphs')
-		self.rad_font.setToolTip('Affect the entire font')
-
-		# - Buttons ------------------------
-		self.btn_layersSelect = QtGui.QPushButton('Layers')
-		self.btn_fold = QtGui.QPushButton('^')
-		self.btn_unfold = QtGui.QPushButton('Restore Panel')
-		
-		self.btn_fold.setFixedHeight(self.chk_ActiveLayer.sizeHint.height()*2.5)
-		self.btn_fold.setFixedWidth(self.chk_ActiveLayer.sizeHint.height())
-		self.btn_unfold.setFixedHeight(self.chk_ActiveLayer.sizeHint.height() + 5)
-
-		self.btn_fold.setToolTip('Fold Panel.')
-		self.btn_unfold.setToolTip('Unfold Panel.')
-		self.btn_layersSelect.setToolTip('Select layers for processing.')
-
-		self.btn_fold.clicked.connect(self.fold)
-		self.btn_unfold.clicked.connect(self.fold)
 		self.flag_fold = False
+		
+		# - Masthead/controller ------------
+		self.dlg_layer = TRLayerSelectDLG(self, pMode)
+		self.dlg_layer.hide()
+
+		self.chk_ActiveLayer = CustomPushButton('layer_active', True, True, True, 'Active layer', 'btn_mast')
+		self.chk_Masters = CustomPushButton('layer_master', True, False, True, 'Master layers', 'btn_mast')
+		self.chk_Selected = CustomPushButton('select_option', True, False, True, 'Selected layers', 'btn_mast')
+		self.chk_glyph = CustomPushButton('glyph_active', True, True, True, 'Active glyph', 'btn_mast')
+		self.chk_window = CustomPushButton('select_window', True, False, True, 'Glyph window', 'btn_mast')
+		self.chk_selection = CustomPushButton('select_glyph', True, False, True, 'Font window selection', 'btn_mast')
+		self.btn_fold = CustomPushButton('fold_up', False, False, True, 'Fold panel', 'btn_mast')
+
+		self.chk_ActiveLayer.clicked.connect(self.layers_refresh)
+		self.chk_Masters.clicked.connect(self.layers_refresh)
+		self.chk_Selected.clicked.connect(self.layers_refresh)
+
+		self.chk_glyph.clicked.connect(self.mode_refresh)
+		self.chk_window.clicked.connect(self.mode_refresh)
+		self.chk_selection.clicked.connect(self.mode_refresh)
+		self.btn_fold.clicked.connect(self.fold)
+
+		# - Layout ----------------------------------
+		self.grp_layers = QtGui.QButtonGroup()
+		self.grp_glyphs = QtGui.QButtonGroup()
+
+		self.lay_mast = QtGui.QHBoxLayout()
+
+		self.grp_layers.addButton(self.chk_ActiveLayer, 1)
+		self.grp_layers.addButton(self.chk_Masters, 2)
+		self.grp_layers.addButton(self.chk_Selected, 3)
+
+		self.grp_glyphs.addButton(self.chk_glyph, 1)
+		self.grp_glyphs.addButton(self.chk_window, 2)
+		self.grp_glyphs.addButton(self.chk_selection, 3)
+		self.lay_mast.setContentsMargins(4, 4, 4, 4)
+
+		for button in self.grp_layers.buttons() + self.grp_glyphs.buttons() + (self.btn_fold,):
+			self.lay_mast.addWidget(button)
 				
 		# - Tabs --------------------------
 		panel_vers = {n:OrderedDict([	('Panel', toolName), ('Version', eval('Panel.%s.app_version' %toolName))])
@@ -127,57 +112,33 @@ class TRMainPanel(QtGui.QDialog):
 		self.tabs.addTab(self.options, '...')
 
 		# - Layouts -------------------------------
-		layoutV = QtGui.QVBoxLayout() 
-		layoutV.setContentsMargins(0,0,0,0)
-		
-		self.lay_controller = QtGui.QGridLayout()
-		self.fr_controller = QtGui.QFrame()
-		self.lay_controller.setContentsMargins(15,5,5,3)
-		self.lay_controller.setSpacing(5)
-
-		# -- Build layouts -------------------------------
-		self.lay_controller.addWidget(self.chk_ActiveLayer,	0, 0, 1, 1)
-		self.lay_controller.addWidget(self.chk_Masters, 	0, 1, 1, 1)
-		self.lay_controller.addWidget(self.chk_Masks, 		0, 2, 1, 1)
-		#self.lay_controller.addWidget(self.chk_Service, 	0, 3, 1, 1)
-		self.lay_controller.addWidget(self.chk_Selected, 	0, 3, 1, 1)
-		self.lay_controller.addWidget(self.btn_fold, 		0, 4, 2, 1)
-		self.lay_controller.addWidget(self.rad_glyph, 		1, 0, 1, 1)
-		self.lay_controller.addWidget(self.rad_window, 		1, 1, 1, 1)
-		self.lay_controller.addWidget(self.rad_selection, 	1, 2, 1, 1)
-		self.lay_controller.addWidget(self.rad_font, 		1, 3, 1, 1)
-					 
-		layoutV.addWidget(self.btn_unfold)
-		self.fr_controller.setLayout(self.lay_controller)
-		
-		layoutV.addWidget(self.fr_controller)
-		layoutV.addWidget(self.tabs)
-
-		self.btn_unfold.hide()
+		self.lay_main = QtGui.QVBoxLayout() 
+		self.lay_main.setContentsMargins(0, 0, 0, 0)
+		self.lay_main.addLayout(self.lay_mast)
+		self.lay_main.addWidget(self.tabs)
 
 		# - Set Widget -------------------------------
-		#scriptDir = os.path.dirname(os.path.realpath(__file__))
-		#self.setWindowIcon(QtGui.QIcon(scriptDir + os.path.sep + 'Resource' + os.path.sep + 'typerig-icon-small.svg'))
-		self.setLayout(layoutV)
+		self.setLayout(self.lay_main)
 		self.setWindowTitle('%s %s' %(app_name, app_version))
 		self.setGeometry(100, 100, 300, 600)
 		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 
 		# !!! Hotfix FL7 7355 
 		self.setMinimumSize(330, self.sizeHint.height())
-
+		
+		self.layers_refresh()
 		self.show()
 
 	# - Procedures -----------------------------------
 	def mode_refresh(self):
 		global pMode
 
-		if self.rad_glyph.isChecked(): pMode = 0
-		if self.rad_window.isChecked(): pMode = 1
-		if self.rad_selection.isChecked(): pMode = 2
-		if self.rad_font.isChecked(): pMode = 3
+		if self.chk_glyph.isChecked(): pMode = 0
+		if self.chk_window.isChecked(): pMode = 1
+		if self.chk_selection.isChecked(): pMode = 2
+		#if self.chk_font.isChecked(): pMode = 3
 
-		self.layer_dialog.table_populate(pMode)
+		self.dlg_layer.table_populate(pMode)
 
 		for toolName in Panel.modules:
 			exec('Panel.%s.pMode = %s' %(toolName, pMode))
@@ -186,42 +147,34 @@ class TRMainPanel(QtGui.QDialog):
 		global pLayers
 
 		if self.chk_Selected.isChecked():
-			self.chk_ActiveLayer.setChecked(False),
-			self.chk_Masters.setChecked(False)
-			self.chk_Masks.setChecked(False)
-			self.chk_Service.setChecked(False)
-			
-			self.layer_dialog.show()
-			pLayers = self.layer_dialog.tab_masters.getTable()
+			self.dlg_layer.show()
+			pLayers = self.dlg_layer.tab_masters.getTable()
 
 		else:
-			self.chk_Selected.setChecked(False)
-			self.layer_dialog.hide()
-			pLayers = (self.chk_ActiveLayer.isChecked(), self.chk_Masters.isChecked(), self.chk_Masks.isChecked(), self.chk_Service.isChecked())
-	
+			self.dlg_layer.hide()
+			pLayers = (self.chk_ActiveLayer.isChecked(), self.chk_Masters.isChecked(), False, False)
+
 		for toolName in Panel.modules:
 			exec('Panel.%s.pLayers = %s' %(toolName, pLayers))
 
 	def fold(self):
 		# - Init
 		width_all = self.width
-		height_folded = self.btn_unfold.sizeHint.height()
+		height_folded = self.btn_fold.sizeHint.height() + 7
 						
 		# - Do
 		if not self.flag_fold:
 			self.tabs.hide()
-			self.fr_controller.hide()
-			self.btn_unfold.show()
+			self.btn_fold.setText('fold_down')
 			self.setMinimumHeight(height_folded)
 			self.repaint()
 			self.resize(width_all, height_folded)
 			self.flag_fold = True
 
 		else:
-			QtGui.uiRefresh(self)
+			#QtGui.uiRefresh(self)
 			self.tabs.show()
-			self.fr_controller.show()
-			self.btn_unfold.hide()
+			self.btn_fold.setText('fold_up')
 			self.adjustSize()
 			self.resize(width_all, self.sizeHint.height()) # !!! Hotfix FL7 7355 
 			self.repaint()

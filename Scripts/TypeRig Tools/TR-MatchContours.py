@@ -20,16 +20,19 @@ from typerig.proxy.fl.objects.shape import eShape
 from typerig.core.base.message import *
 
 from PythonQt import QtCore
-from typerig.proxy.fl.gui import FLGui
 from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import TRHTabWidget
+from typerig.proxy.fl.gui.widgets import getTRIconFontPath, TRHTabWidget, CustomPushButton, CustomLabel
+from typerig.proxy.fl.gui.styles import css_tr_button
 
 # - Init -------------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TR | Match Contours', '2.6'
+app_name, app_version = 'TR | Match Contours', '2.7'
+
+TRToolFont = getTRIconFontPath()
+font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
 
 # - Configuration ----------------------
 color_foreground = QtGui.QColor('gray')
@@ -578,6 +581,7 @@ class typerig_match(QtGui.QDialog):
 		super(typerig_match, self).__init__()
 	
 		# - Init --------------------------
+		self.setStyleSheet(css_tr_button)
 		self.glyph = eGlyph()
 
 		# - Tabs --------------------------
@@ -605,8 +609,9 @@ class typerig_match(QtGui.QDialog):
 		self.edt_glyph_name.setMaximumWidth(200)
 
 		# -- Buttons
-		self.btn_refresh = FLGui.FLPushButton('', ':/images/resources/diamond-inverted.png', 32)
-		self.btn_refresh.setMinimumWidth(32)
+		self.btn_refresh = CustomPushButton('refresh', obj_name='btn_mast')
+		self.btn_refresh.setMinimumWidth(40)
+
 		self.btn_apply = QtGui.QPushButton('&Apply')
 		self.btn_apply.setMinimumWidth(200)
 		
@@ -615,12 +620,12 @@ class typerig_match(QtGui.QDialog):
 		
 		# - Layouts -------------------------------
 		lay_tail = QtGui.QHBoxLayout()
-		lay_tail.addWidget(FLGui.FLIcon(':/images/resources/name.png', 32))
+		lay_tail.addWidget(CustomLabel('label', 'lbl_icon'))
 		lay_tail.addWidget(self.edt_glyph_name)
 		lay_tail.addWidget(self.btn_refresh)
 		lay_tail.addWidget(self.btn_apply)
 		lay_tail.addStretch()
-		lay_tail.addWidget(FLGui.FLIcon(':/images/resources/glyph_zoom_middle.png', 32))
+		lay_tail.addWidget(CustomLabel('search','lbl_icon'))
 		lay_tail.addWidget(self.spn_icon_size)
 
 		lay_main = QtGui.QVBoxLayout() 

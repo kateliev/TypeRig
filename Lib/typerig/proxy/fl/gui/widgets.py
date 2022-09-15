@@ -26,7 +26,7 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.3.3'
+__version__ = '0.3.4'
 
 # - Keep compatibility for basestring checks
 try:
@@ -44,6 +44,9 @@ def getTRIconFont(font_pixel_size=20):
 	TRIconFont.setPixelSize(font_pixel_size)
 
 	return TRIconFont
+
+def getTRIconFontPath():
+	return os.path.join(os.path.dirname(__file__), 'resource' , 'typerig-icons.ttf')
 
 # -- Colors ------------------------------
 # Fontlab Name, Fontlab Value, QtColor Name
@@ -99,6 +102,44 @@ def getProcessGlyphs(mode=0, font=None, workspace=None):
 	return process_glyphs
 	
 # - Classes -------------------------------
+# -- Basics -------------------------------
+def CustomPushButton(button_text, checkable=False, cheked=False, enabled=True, tooltip=None, obj_name=None):
+	new_button = QtGui.QPushButton(button_text)
+	new_button.setCheckable(checkable)
+	new_button.setChecked(cheked)
+	new_button.setEnabled(enabled)
+
+	if tooltip is not None:
+		new_button.setToolTip(tooltip)
+
+	if obj_name is not None:
+		new_button.setObjectName(obj_name)
+
+	return new_button
+
+def CustomLabel(label_text, obj_name=None):
+	new_label = QtGui.QLabel(label_text)
+
+	if obj_name is not None:
+		new_label.setObjectName(obj_name)
+		
+	return new_label
+
+def FLIcon(icon_path, icon_size):
+	new_label = QtGui.QLabel()
+	new_label.setPixmap(QtGui.QIcon(icon_path).pixmap(icon_size))
+	return new_label
+
+def FLIconButton(button_text, icon_path, icon_size=32, checkable=False):
+	new_button = QtGui.QPushButton(button_text)
+	new_button.setCheckable(checkable)
+	new_button.setStyleSheet(css_fl_button)
+
+	if len(icon_path):
+		new_button.setIcon(QtGui.QIcon(icon_path))
+		new_button.setIconSize(QtCore.QSize(icon_size,icon_size))
+	return new_button
+
 # -- Sub Dialogs --------------------------
 class TRLayerSelectDLG(QtGui.QDialog):
 	def __init__(self, parent, mode, font=None, glyph=None):
