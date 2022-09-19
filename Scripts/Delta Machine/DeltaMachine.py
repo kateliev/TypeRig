@@ -25,12 +25,12 @@ from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
-from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRSliderCtrl, TRMsgSimple
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRSliderCtrl
 from typerig.proxy.fl.gui.dialogs import TRMsgSimple
 
 
 # - Init --------------------------------
-app_version = '1.15'
+app_version = '1.16'
 app_name = 'TypeRig | Delta Machine'
 
 ss_controls = """
