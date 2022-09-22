@@ -11,6 +11,7 @@
 # - Dependencies -----------------------------------
 from __future__ import print_function
 import math
+import warnings
 from itertools import combinations
 from operator import itemgetter
 
@@ -26,11 +27,12 @@ except ImportError:
 from typerig.core.objects.point import Point
 from typerig.core.func.math import linInterp
 
+from typerig.core.base.message import *
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.30.8'
+__version__ = '0.30.9'
 
 # - Keep compatibility for basestring checks
 try:
@@ -1497,6 +1499,10 @@ class eGlyph(pGlyph):
 	def _setPointArray(self, PointArray, layer=None, keep_center=False):
 		nodeArray = self.nodes(layer)
 		PointArray = list(PointArray)
+
+		if len(PointArray) != len(nodeArray):
+			warnings.warn('Glyph: {}'.format(self.name), TRPointArrayWarning)
+			return
 		
 		if keep_center:
 			layer_BBox = self.getBounds(layer)
@@ -1509,15 +1515,12 @@ class eGlyph(pGlyph):
 			center_array = pqt.QtCore.QPointF((array_BBox[0] + array_BBox[2])/2., (array_BBox[1] + array_BBox[3])/2)
 			recenter_shift = layer_center - center_array
 
-		if len(PointArray) == len(nodeArray):
-			for nid in range(len(PointArray)):
-				if keep_center:
-					nodeArray[nid].x = PointArray[nid][0] + recenter_shift.x()
-					nodeArray[nid].y = PointArray[nid][1] + recenter_shift.y()
-				else:
-					nodeArray[nid].x, nodeArray[nid].y = PointArray[nid]
-		else:
-			print('ERROR:\t Incompatible coordinate array provided.')
+		for nid in range(len(PointArray)):
+			if keep_center:
+				nodeArray[nid].x = PointArray[nid][0] + recenter_shift.x()
+				nodeArray[nid].y = PointArray[nid][1] + recenter_shift.y()
+			else:
+				nodeArray[nid].x, nodeArray[nid].y = PointArray[nid]
 
 	def _getServiceArray(self, layer=None):
 		layer_advance = [(float(self.layer(layer).advanceWidth), float(self.layer(layer).advanceHeight))]
@@ -1527,21 +1530,21 @@ class eGlyph(pGlyph):
 	def _setServiceArray(self, PointArray, layer=None, set_metrics=True, set_anchors=True):
 		PointArray = list(PointArray)
 
-		if len(PointArray) > 2:	
-			if set_metrics:
-				layer_advance = PointArray[0]
-				self.setAdvance(layer_advance[0], layer)
+		if len(PointArray) == 0:
+			warnings.warn('Glyph: {}'.format(self.name), TRServiceArrayWarning)
+			return
 
-			if set_anchors:
-				layer_anchors = PointArray[1:]
-				anchorArray = self.anchors(layer)
+		if set_metrics:
+			layer_advance = PointArray[0]
+			self.setAdvance(layer_advance[0], layer)
 
-				if len(layer_anchors) == len(anchorArray):
-					for aid in range(len(layer_anchors)):
-						anchorArray[aid].point = pqt.QtCore.QPointF(*layer_anchors[aid])
-		else:
-			print('ERROR:\t Incompatible coordinate array provided.')
+		if set_anchors and len(PointArray) > 2:
+			layer_anchors = PointArray[1:]
+			anchorArray = self.anchors(layer)
 
+			if len(layer_anchors) == len(anchorArray):
+				for aid in range(len(layer_anchors)):
+					anchorArray[aid].point = pqt.QtCore.QPointF(*layer_anchors[aid])
 
 	# - Nodes ----------------------------------------------
 	def breakContour(self, contourId, nodeId, layer=None, expand=0):

@@ -16,7 +16,7 @@ from __future__ import absolute_import
 import os, warnings
 
 # - Init -----------------------------
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 # - Strings --------------------------
 # --------------> 	0		1		2		3		4		5		6		7		8		9
@@ -98,6 +98,13 @@ class TRDeltaStemWarning(UserWarning):
 	pass
 
 class TRDeltaArrayWarning(UserWarning):
+	pass
+
+# -- Glyph Warning ----------------
+class TRPointArrayWarning(UserWarning):
+	pass
+
+class TRServiceArrayWarning(UserWarning):
 	pass
 
 # - Setup ----------------------------

@@ -140,6 +140,42 @@ def FLIconButton(button_text, icon_path, icon_size=32, checkable=False):
 		new_button.setIconSize(QtCore.QSize(icon_size,icon_size))
 	return new_button
 
+# -- Miniwidgets --------------------------
+class CustomSpinButton(QtGui.QWidget):
+	def __init__(button_text, init_values=(0., 100., 0., 1.), tooltip=(None, None), obj_name=(None, None)):
+		super(CustomSpinButton, self).__init__()
+
+		# - Init
+		spb_min, spb_max, spb_value, spb_step = init_values
+
+		# - Widgets
+		self.button = QtGui.QPushButton(button_text)
+
+		self.input = QtGui.QtGui.QDoubleSpinBox()
+		self.input.setMinimum(spb_min)
+		self.input.setMaximum(spb_max)
+		self.input.setValue(spb_value)
+		self.input.setSingleStep(spb_step)
+
+		if len(tooltip) == 2:
+			if tooltip[0] is not None:
+				self.input.setToolTip(tooltip)
+
+			if tooltip[1] is not None:
+				self.button.setToolTip(tooltip)
+
+		if len(tooltip) == 2:
+			if obj_name[0] is not None:
+				self.input.setObjectName(obj_name)
+
+			if obj_name[1] is not None:
+				self.button.setObjectName(obj_name)
+
+		# - Layout
+		self.box = QtGui.QHBoxLayout()
+		self.box.addWidget(self.input)
+		self.box.addWidget(self.button)
+
 # -- Sub Dialogs --------------------------
 class TRLayerSelectDLG(QtGui.QDialog):
 	def __init__(self, parent, mode, font=None, glyph=None):

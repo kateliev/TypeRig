@@ -45,8 +45,8 @@ QLabel#lbl_icon {
     background: none;
     margin: 2 0 2 0;
     padding: 2 0 2 0;
-    min-height: 24px;
-    min-width: 24px;
+    min-height: 22px;
+    min-width: 22px;
 }
 
 QPushButton#btn_mast {
@@ -57,7 +57,7 @@ QPushButton#btn_mast {
     border-radius: 5px;
     margin: 2 0 2 0;
     padding: 2 0 2 0;
-    min-height: 24px;
+    min-height: 22px;
 }
 
 QPushButton#btn_mast:checked {
@@ -68,8 +68,8 @@ QPushButton#btn_mast:checked {
 }
 
 QPushButton#btn_mast:hover {
-    background-color: #ffffff;
-    color: #212121;
+    /*background-color: #ffffff;*/
+    /*color: #212121;*/
     border: 1px solid #dadbdc;
     border-bottom-color: #d1d2d3;
 }
