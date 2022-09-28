@@ -173,6 +173,7 @@ class CustomSpinButton(QtGui.QWidget):
 
 		# - Layout
 		self.box = QtGui.QHBoxLayout()
+		self.box.setContentsMargins(0, 0, 0, 0)
 		self.box.addWidget(self.input)
 		self.box.addWidget(self.button)
 		self.setLayout(self.box)

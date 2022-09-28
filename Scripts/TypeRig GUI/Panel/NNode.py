@@ -30,8 +30,69 @@ app_name, app_version = 'TypeRig | Nodes', '3.00'
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
 
+# - Styling ----------------------------
+temp_css = '''
+QGroupBox#box_group {
+	background: #edeeef;
+    border-radius: 5px;
+    padding-top: 5px;
+  	padding-bottom: 5px;
+  	padding-right: 5px;
+  	padding-left: 5px;
+    margin-top: 0px;
+  	margin-bottom: 5px;
+  	margin-right: 0px;
+  	margin-left: 0px;
+    border: none;
+}
+
+QDoubleSpinBox#spn_panel {
+    max-height: 20px;
+}
+
+QPushButton#btn_panel {
+    color: #212121;
+    font-family: "TypeRig Icons";
+    font-size: 18px;
+    background: none;
+    border-radius: 5px;
+    /*margin: 2 0 2 0;*/
+    /*padding: 2 0 2 0;*/
+    max-height: 26px;
+    max-width: 26px;
+    min-height: 26px;
+    min-width: 26px;
+}
+
+QPushButton#btn_panel:checked {
+    background-color: #9c9e9f;
+    border: 1px solid #dadbdc;
+    border-top-color: #d1d2d3;
+    color: #ffffff;
+}
+
+QPushButton#btn_panel:hover {
+    background-color: #ffffff;
+    color: #212121;
+}
+
+QPushButton#btn_panel:pressed {
+    background-color: #9c9e9f;
+    color: #ffffff;
+}
+
+QPushButton#btn_panel:disabled {
+    background-color: transparent;
+    border: none;
+}
+
+'''
+# -- Helpers ------------------------------
+def get_modifier(keyboard_modifier=QtCore.Qt.AltModifier):
+	modifiers = QtGui.QApplication.keyboardModifiers()
+	return modifiers == keyboard_modifier
+
 # - Sub widgets ------------------------
-# -- Layouts ---------------------------
 class TRNodeBasics(QtGui.QWidget):
 	def __init__(self):
 		super(TRNodeBasics, self).__init__()
@@ -41,64 +102,85 @@ class TRNodeBasics(QtGui.QWidget):
 		# - Layout
 		self.lay_main = QtGui.QVBoxLayout()
 		
-		# - Widgets
-		self.lay_main.addWidget(QtGui.QLabel('Node: Basic Operations'))
+		# - Widgets and tools
+		# -- Node tools
+		box_node = QtGui.QGroupBox()
+		box_node.setObjectName('box_group')
+		
+		lay_node = QtGui.QHBoxLayout()
+		lay_node.setContentsMargins(0, 0, 0, 0)
 
 		tooltip_button = 'Insert Node'
-		self.btn_node_add = CustomSpinButton('node_add', (0., 100., 0., 1.), ('Set value', tooltip_button), ('spn_panel', 'btn_mast'))
-		self.lay_main.addWidget(self.btn_node_add)
-		self.btn_node_add.button.clicked.connect(lambda: TRNodeActionCollector.node_insert_dlg(pMode, pLayers, get_modifier()))
-
-		tooltip_button = 'Insert Node at the beginning of a bezier.\n<ALT + Mouse Left> Use single node mode.'
-		self.btn_node_add_0 = CustomSpinButton('node_add_bgn', (0., 100., 0., 1.), ('Set value', tooltip_button), ('spn_panel', 'btn_mast'))
-		self.lay_main.addWidget(self.btn_node_add_0)
-		self.btn_node_add_0.button.clicked.connect(lambda: TRNodeActionCollector.node_insert(pMode, pLayers, 0., get_modifier()))
-
-		tooltip_button = 'Insert Node at the middle of a bezier.\n<ALT + Mouse Left> Use single node mode.'
-		self.btn_node_add_5 = CustomSpinButton('node_add_mid', (0., 100., 0., 1.), ('Set value', tooltip_button), ('spn_panel', 'btn_mast'))
-		self.lay_main.addWidget(self.btn_node_add_5)
-		self.btn_node_add_5.button.clicked.connect(lambda: TRNodeActionCollector.node_insert(pMode, pLayers, .5, get_modifier()))
-
-		tooltip_button = 'Insert Node at the end of a bezier.\n<ALT + Mouse Left> Use single node mode.'
-		self.btn_node_add_1 = CustomSpinButton('node_add_end', (0., 100., 0., 1.), ('Set value', tooltip_button), ('spn_panel', 'btn_mast'))
-		self.lay_main.addWidget(self.btn_node_add_1)
-		self.btn_node_add_1.button.clicked.connect(lambda: TRNodeActionCollector.node_insert(pMode, pLayers, 1., get_modifier()))
+		self.btn_node_add = CustomSpinButton('node_add', (0., 1., .5, .01), ('Set value', tooltip_button), ('spn_panel', 'btn_panel'))
+		lay_node.addWidget(self.btn_node_add)
+		self.btn_node_add.button.clicked.connect(lambda: TRNodeActionCollector.node_insert(pMode, pLayers, self.btn_node_add.input.value, get_modifier()))
 
 		tooltip_button = 'Remove Node'
-		self.btn_node_remove = CustomSpinButton('node_remove', (0., 100., 0., 1.), ('Set value', tooltip_button), ('spn_panel', 'btn_mast'))
-		self.lay_main.addWidget(self.btn_node_remove)
-		self.btn_node_remove.button.clicked.connect(lambda: TRNodeActionCollector.node_remove(pMode, pLayers))
+		self.btn_node_remove = CustomPushButton('node_remove', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_node.addWidget(self.btn_node_remove)
+		self.btn_node_remove.clicked.connect(lambda: TRNodeActionCollector.node_remove(pMode, pLayers))
 
-		tooltip_button = 'Round selected nodes to integer coordinates.\n<Mouse Left> Ceil.\n<ALT + Mouse Left> Floor.\n<... + Shift> Round all nodes.'
-		self.btn_node_round = CustomSpinButton('node_round', (0., 100., 0., 1.), ('Set value', tooltip_button), ('spn_panel', 'btn_mast'))
-		self.lay_main.addWidget(self.btn_node_round)
-		self.btn_node_round.button.clicked.connect(lambda: TRNodeActionCollector.node_round(pMode, pLayers, get_modifier(QtCore.Qt.AltModifier), get_modifier(QtCore.Qt.ShiftModifier)))
+		tooltip_button = 'Insert Node at the beginning of a bezier.\n<ALT + Mouse Left> Use single node mode.'
+		self.btn_node_add_0 = CustomPushButton('node_add_bgn', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_node.addWidget(self.btn_node_add_0)
+		self.btn_node_add_0.clicked.connect(lambda: TRNodeActionCollector.node_insert(pMode, pLayers, 0., get_modifier()))
+
+		tooltip_button = 'Insert Node at the middle of a bezier.\n<ALT + Mouse Left> Use single node mode.'
+		self.btn_node_add_5 = CustomPushButton('node_add_mid', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_node.addWidget(self.btn_node_add_5)
+		self.btn_node_add_5.clicked.connect(lambda: TRNodeActionCollector.node_insert(pMode, pLayers, .5, get_modifier()))
+
+		tooltip_button = 'Insert Node at the end of a bezier.\n<ALT + Mouse Left> Use single node mode.'
+		self.btn_node_add_1 = CustomPushButton('node_add_end', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_node.addWidget(self.btn_node_add_1)
+		self.btn_node_add_1.clicked.connect(lambda: TRNodeActionCollector.node_insert(pMode, pLayers, 1., get_modifier()))
+		
+		box_node.setLayout(lay_node)
+		self.lay_main.addWidget(box_node)
+		
+		# -- Corner Tools
+		box_corner = QtGui.QGroupBox()
+		box_corner.setObjectName('box_group')
+		
+		lay_corner = QtGui.QGridLayout()
+		lay_corner.setContentsMargins(0, 0, 0, 0)
+
 
 		tooltip_button = 'Corner Mitre'
-		self.btn_corner_mitre = CustomSpinButton('corner_mitre', (0., 100., 0., 1.), ('Set value', tooltip_button), ('spn_panel', 'btn_mast'))
-		self.lay_main.addWidget(self.btn_corner_mitre)
-		self.btn_corner_mitre.button.clicked.connect(lambda: TRNodeActionCollector.corner_mitre_dlg(pMode, pLayers))
+		self.btn_corner_mitre = CustomSpinButton('corner_mitre', (0., 300., 0., 1.), ('Set value', tooltip_button), ('spn_panel', 'btn_panel'))
+		lay_corner.addWidget(self.btn_corner_mitre, 1, 0, 1, 3)
+		self.btn_corner_mitre.button.clicked.connect(lambda: TRNodeActionCollector.corner_mitre(pMode, pLayers, self.btn_corner_mitre.input.value))
 
 		tooltip_button = 'Corner Round'
-		self.btn_corner_round = CustomSpinButton('corner_round', (0., 100., 0., 1.), ('Set value', tooltip_button), ('spn_panel', 'btn_mast'))
-		self.lay_main.addWidget(self.btn_corner_round)
-		self.btn_corner_round.button.clicked.connect(lambda: TRNodeActionCollector.corner_round_dlg(pMode, pLayers))
+		self.btn_corner_round = CustomSpinButton('corner_round', (0., 300., 0., 1.), ('Set value', tooltip_button), ('spn_panel', 'btn_panel'))
+		lay_corner.addWidget(self.btn_corner_round, 1, 3, 1, 3)
+		self.btn_corner_round.button.clicked.connect(lambda: TRNodeActionCollector.corner_round(pMode, pLayers, self.btn_corner_round.input.value))
 
 		tooltip_button = 'Corner Loop'
-		self.btn_corner_loop = CustomSpinButton('corner_loop', (0., 100., 0., 1.), ('Set value', tooltip_button), ('spn_panel', 'btn_mast'))
-		self.lay_main.addWidget(self.btn_corner_loop)
-		self.btn_corner_loop.button.clicked.connect(lambda: TRNodeActionCollector.corner_loop_dlg(pMode, pLayers))
-
-		tooltip_button = 'Create Ink Trap\n<ALT + Mouse Left> Create non-smooth basic trap.'
-		self.btn_corner_trap = CustomSpinButton('corner_trap', (0., 100., 0., 1.), ('Set value', tooltip_button), ('spn_panel', 'btn_mast'))
-		self.lay_main.addWidget(self.btn_corner_trap)
-		self.btn_corner_trap.button.clicked.connect(lambda: TRNodeActionCollector.corner_trap_dlg(pMode, pLayers, get_modifier()))
+		self.btn_corner_loop = CustomSpinButton('corner_loop', (0., 300., 0., 1.), ('Set value', tooltip_button), ('spn_panel', 'btn_panel'))
+		lay_corner.addWidget(self.btn_corner_loop, 2, 0, 1, 3)
+		self.btn_corner_loop.button.clicked.connect(lambda: TRNodeActionCollector.corner_loop(pMode, pLayers, self.btn_corner_loop.input.value))
 
 		tooltip_button = 'Rebuild Corner'
-		self.btn_corner_rebuild = CustomSpinButton('corner_rebuild', (0., 100., 0., 1.), ('Set value', tooltip_button), ('spn_panel', 'btn_mast'))
-		self.lay_main.addWidget(self.btn_corner_rebuild)
-		self.btn_corner_rebuild.button.clicked.connect(lambda: TRNodeActionCollector.corner_rebuild(pMode, pLayers))
+		self.btn_corner_rebuild = CustomPushButton('corner_rebuild', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_corner.addWidget(self.btn_corner_rebuild, 2, 3, 0, 1)
+		self.btn_corner_rebuild.clicked.connect(lambda: TRNodeActionCollector.corner_rebuild(pMode, pLayers))
+		
+		tooltip_button = 'Create Ink Trap\n<ALT + Mouse Left> Create non-smooth basic trap.'
+		self.btn_corner_trap = CustomPushButton('corner_trap', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_corner.addWidget(self.btn_corner_trap, 2, 4, 0, 1)
+		self.btn_corner_trap.clicked.connect(lambda: TRNodeActionCollector.corner_trap_dlg(pMode, pLayers, get_modifier()))
 
+		tooltip_button = 'Round selected nodes to integer coordinates.\n<Mouse Left> Ceil.\n<ALT + Mouse Left> Floor.\n<... + Shift> Round all nodes.'
+		self.btn_node_round = CustomPushButton('node_round', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_corner.addWidget(self.btn_node_round, 2, 5, 0, 1)
+		self.btn_node_round.clicked.connect(lambda: TRNodeActionCollector.node_round(pMode, pLayers, get_modifier(QtCore.Qt.AltModifier), get_modifier(QtCore.Qt.ShiftModifier)))
+		
+
+		box_corner.setLayout(lay_corner)
+		self.lay_main.addWidget(box_corner)
+
+		# - Finish it
 		self.setLayout(self.lay_main)
 
 
@@ -108,8 +190,10 @@ class tool_tab(QtGui.QWidget):
 		super(tool_tab, self).__init__()
 
 		# - Init
-		self.setStyleSheet(css_tr_button)
+		self.setStyleSheet(temp_css)
 		layoutV = QtGui.QVBoxLayout()
+		layoutV.setContentsMargins(0, 0, 0, 0)
+
 		
 		# - Add widgets to main dialog -------------------------
 		layoutV.addWidget(TRNodeBasics())
@@ -117,9 +201,6 @@ class tool_tab(QtGui.QWidget):
 		# - Build ---------------------------
 		layoutV.addStretch()
 		self.setLayout(layoutV)
-
-		# !!! Hotfix FL7 7355 
-		self.setMinimumSize(300,self.sizeHint.height())
 
 # - Test ----------------------
 if __name__ == '__main__':

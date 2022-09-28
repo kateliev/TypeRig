@@ -84,4 +84,39 @@ QPushButton#btn_mast:disabled {
     border: none;
 }
 
+QPushButton#btn_panel {
+    color: #212121;
+    font-family: "TypeRig Icons";
+    font-size: 16px;
+    background: none;
+    border-radius: 5px;
+    margin: 2 0 2 0;
+    padding: 2 0 2 0;
+    min-height: 18px;
+}
+
+QPushButton#btn_panel:checked {
+    background-color: #9c9e9f;
+    border: 1px solid #dadbdc;
+    border-top-color: #d1d2d3;
+    color: #ffffff;
+}
+
+QPushButton#btn_panel:hover {
+    background-color: #ffffff;
+    color: #212121;
+    /*border: 1px solid #dadbdc;*/
+    border-bottom-color: #d1d2d3;
+}
+
+QPushButton#btn_panel:pressed {
+    background-color: #9c9e9f;
+    color: #ffffff;
+}
+
+QPushButton#btn_panel:disabled {
+    background-color: transparent;
+    border: none;
+}
+
 '''
