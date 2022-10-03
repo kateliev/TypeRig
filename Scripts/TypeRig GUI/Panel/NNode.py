@@ -28,7 +28,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '3.01'
+app_name, app_version = 'TypeRig | Nodes', '3.02'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -53,6 +53,7 @@ QDoubleSpinBox#spn_panel {
     max-height: 20px;
 }
 
+QPushButton#btn_panel_opt,
 QPushButton#btn_panel {
     color: #212121;
     font-family: "TypeRig Icons";
@@ -67,6 +68,11 @@ QPushButton#btn_panel {
     min-width: 26px;
 }
 
+QPushButton#btn_panel_opt{
+	border: 1px solid #d1d2d3;
+}
+
+QPushButton#btn_panel_opt:checked,
 QPushButton#btn_panel:checked {
     background-color: #9c9e9f;
     border: 1px solid #dadbdc;
@@ -74,6 +80,7 @@ QPushButton#btn_panel:checked {
     color: #ffffff;
 }
 
+QPushButton#btn_panel_opt:checked:hover,
 QPushButton#btn_panel:checked:hover {
 	background-color: #9c9e9f;
     border: 1px solid #dadbdc;
@@ -82,16 +89,19 @@ QPushButton#btn_panel:checked:hover {
    
 }
 
+QPushButton#btn_panel_opt:hover,
 QPushButton#btn_panel:hover {
     background-color: #ffffff;
     color: #212121;
 }
 
+QPushButton#btn_panel_opt:pressed,
 QPushButton#btn_panel:pressed {
     background-color: #9c9e9f;
     color: #ffffff;
 }
 
+QPushButton#btn_panel_opt:disabled,
 QPushButton#btn_panel:disabled {
     background-color: transparent;
     border: none;
@@ -110,6 +120,7 @@ class TRNodeBasics(QtGui.QWidget):
 		
 		# - Init 
 		self.ext_target = {}
+		self.slope_bank = {}
 
 		# - Layout
 		self.lay_main = QtGui.QVBoxLayout()
@@ -202,27 +213,27 @@ class TRNodeBasics(QtGui.QWidget):
 		lay_align.setContentsMargins(0, 0, 0, 0)
 
 		tooltip_button = "Smart Shift: Shift oncurve nodes together with their respective offcurve nodes even when they are not explicitly selected,"
-		self.chk_shift_smart = CustomPushButton("shift_smart", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		self.chk_shift_smart = CustomPushButton("shift_smart", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options_shift.addButton(self.chk_shift_smart, 1)
 		lay_align.addWidget(self.chk_shift_smart, 0, 0)
 
 		tooltip_button = "Simple Shift: Shift only selected nodes."
-		self.chk_shift_dumb = CustomPushButton("shift_dumb", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel')
+		self.chk_shift_dumb = CustomPushButton("shift_dumb", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options_shift.addButton(self.chk_shift_dumb, 2)
 		lay_align.addWidget(self.chk_shift_dumb, 0, 1)
 
 		tooltip_button = "Keep relations between selected nodes"
-		self.chk_shift_keep_dimension = CustomPushButton("shift_keep_dimension", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		self.chk_shift_keep_dimension = CustomPushButton("shift_keep_dimension", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options_other.addButton(self.chk_shift_keep_dimension, 1)
 		lay_align.addWidget(self.chk_shift_keep_dimension, 0, 2)
 
 		tooltip_button = "Intercept vertical position"
-		self.chk_shift_intercept = CustomPushButton("shift_intercept", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		self.chk_shift_intercept = CustomPushButton("shift_intercept", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options_other.addButton(self.chk_shift_intercept, 2)
 		lay_align.addWidget(self.chk_shift_intercept, 0, 3)
 
 		tooltip_button = "Pick target node for alignment"
-		self.chk_node_target = CustomPushButton("node_target", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		self.chk_node_target = CustomPushButton("node_target", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.chk_node_target.clicked.connect(self.target_set)
 		self.grp_align_options_other.addButton(self.chk_node_target, 3)
 		lay_align.addWidget(self.chk_node_target, 0, 4)
@@ -344,7 +355,57 @@ class TRNodeBasics(QtGui.QWidget):
 
 		box_align.setLayout(lay_align)
 		self.lay_main.addWidget(box_align)
-		
+
+		# - Slope tools
+		box_slope = QtGui.QGroupBox()
+		box_slope.setObjectName('box_group')
+
+		self.grp_slope_options = QtGui.QButtonGroup()
+
+		lay_slope = QtGui.QGridLayout()
+		lay_slope.setContentsMargins(0, 0, 0, 0)
+
+		# - Options
+		tooltip = "Copy slope between selected nodes"
+		self.chk_slope_copy = CustomPushButton("slope_copy", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_slope_options.addButton(self.chk_slope_copy)
+		lay_slope.addWidget(self.chk_slope_copy, 0, 0)
+		self.chk_slope_copy.clicked.connect(self.act_slope_copy)
+
+		tooltip = "Use fonts italic angle as slope"
+		self.chk_slope_italic = CustomPushButton("slope_italic", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_slope_options.addButton(self.chk_slope_italic)
+		lay_slope.addWidget(self.chk_slope_italic, 0, 1)
+		self.chk_slope_italic.clicked.connect(self.act_slope_italic)
+
+		# - Actions
+		tooltip = "Paste slope to selected nodes pivoting around the one with lowest vertical coordinates"
+		self.btn_slope_paste_min = CustomPushButton("slope_paste_min", tooltip=tooltip_button, obj_name='btn_panel')
+		self.grp_slope_options.addButton(self.btn_slope_paste_min)
+		lay_slope.addWidget(self.btn_slope_paste_min, 1, 0)
+		self.btn_slope_paste_min.clicked.connect(lambda: TRNodeActionCollector.slope_paste(pMode, pLayers, self.slope_bank, (False, False)))
+
+		tooltip = "Paste slope to selected nodes pivoting around the one with highest vertical coordinates"
+		self.btn_slope_paste_max = CustomPushButton("slope_paste_max", tooltip=tooltip_button, obj_name='btn_panel')
+		self.grp_slope_options.addButton(self.btn_slope_paste_max)
+		lay_slope.addWidget(self.btn_slope_paste_max, 1, 1)
+		self.btn_slope_paste_max.clicked.connect(lambda: TRNodeActionCollector.slope_paste(pMode, pLayers, self.slope_bank, (True, False)))
+
+		tooltip = "Paste horizontally flipped slope to selected nodes pivoting around the one with lowest vertical coordinates"
+		self.btn_slope_paste_min_flip = CustomPushButton("slope_paste_min_flip", tooltip=tooltip_button, obj_name='btn_panel')
+		self.grp_slope_options.addButton(self.btn_slope_paste_min_flip)
+		lay_slope.addWidget(self.btn_slope_paste_min_flip, 1, 2)
+		self.btn_slope_paste_min_flip.clicked.connect(lambda: TRNodeActionCollector.slope_paste(pMode, pLayers, self.slope_bank, (False, True)))
+
+		tooltip = "Paste horizontally flipped slope to selected nodes pivoting around the one with highest vertical coordinates"
+		self.btn_slope_paste_max_flip = CustomPushButton("slope_paste_max_flip", tooltip=tooltip_button, obj_name='btn_panel')
+		self.grp_slope_options.addButton(self.btn_slope_paste_max_flip)
+		lay_slope.addWidget(self.btn_slope_paste_max_flip, 1, 3)
+		self.btn_slope_paste_max_flip.clicked.connect(lambda: TRNodeActionCollector.slope_paste(pMode, pLayers, self.slope_bank, (True, True)))
+
+		box_slope.setLayout(lay_slope)
+		self.lay_main.addWidget(box_slope)
+
 		# - Finish it
 		self.setLayout(self.lay_main)
 
@@ -373,6 +434,19 @@ class TRNodeBasics(QtGui.QWidget):
 
 			glyph.update()
 			glyph.updateObject(glyph.fl, 'Glyph: {}; Nodes collapsed; Layers:\t {}'.format(glyph.name, '; '.join(wLayers)))
+
+	def act_slope_copy(self):
+		if self.chk_slope_copy.isChecked():
+			self.slope_bank = TRNodeActionCollector.slope_copy(eGlyph(), pLayers)
+		else:
+			self.slope_bank = {}
+
+	def act_slope_italic(self):
+		if self.chk_slope_italic.isChecked():
+			self.slope_bank = TRNodeActionCollector.slope_italic(eGlyph(), pLayers)
+		else:
+			self.slope_bank = {}
+
 
 
 # - Tabs -------------------------------
