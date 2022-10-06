@@ -12,12 +12,12 @@
 from __future__ import print_function
 import math 
 
-from typerig.proxy.gs.objects.node import trNode
-from typerig.proxy.gs.objects.contour import trContour
+from typerig.proxy.gs2.objects.node import trNode
+from typerig.proxy.gs2.objects.contour import trContour
 from typerig.core.objects.shape import Shape
 
 # - Init --------------------------------
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 # - Keep compatibility for basestring checks
 try:

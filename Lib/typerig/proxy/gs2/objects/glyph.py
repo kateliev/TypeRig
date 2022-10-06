@@ -14,11 +14,11 @@ import math
 
 import GlyphsApp
 
-from typerig.proxy.gs.objects.layer import trLayer
+from typerig.proxy.gs2.objects.layer import trLayer
 from typerig.core.objects.glyph import Glyph
 
 # - Init --------------------------------
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 
 # - Classes -----------------------------
 class trGlyph(Glyph):

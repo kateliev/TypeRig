@@ -14,11 +14,11 @@ import math
 
 import GlyphsApp
 
-from typerig.proxy.gs.objects.contour import trContour
+from typerig.proxy.gs2.objects.contour import trContour
 from typerig.core.objects.layer import Layer
 
 # - Init --------------------------------
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 # - Classes -----------------------------
 class trLayer(Layer):
