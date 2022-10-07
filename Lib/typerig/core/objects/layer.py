@@ -19,16 +19,17 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.shape import Shape
 
 # - Init -------------------------------
-__version__ = '0.1.7'
+__version__ = '0.1.9'
 
 # - Classes -----------------------------
 class Layer(Container): 
-	__slots__ = ('name', 'transform', 'mark', 'advance_width', 'advance_height', 'identifier', 'parent', 'lib')
+	__slots__ = ('name', 'stx', 'sty', 'transform', 'mark', 'advance_width', 'advance_height', 'identifier', 'parent', 'lib')
 	
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Shape)
 		super(Layer, self).__init__(data, default_factory=factory, **kwargs)
 		
+		self.stx, self.sty= None, None
 		self.transform = kwargs.pop('transform', Transform())
 		
 		# - Metadata
@@ -45,6 +46,19 @@ class Layer(Container):
 
 	# -- Properties -----------------------------
 	@property
+	def has_stems(self):
+		return self.stx is not None and self.sty is not None
+
+	@property
+	def stems(self):
+		return (self.stx, self.sty)
+
+	@stems.setter
+	def stems(self, other):
+		if isinstance(other, (tuple, list)) and len(other) == 2:
+			self.stx, self.sty = other
+
+	@property
 	def shapes(self):
 		return self.data
 
@@ -55,6 +69,34 @@ class Layer(Container):
 			layer_nodes += shape.nodes
 
 		return layer_nodes
+
+	@property
+	def node_array(self):
+		return [node.tuple for node in self.nodes]
+
+	@node_array.setter
+	def node_array(self, other):
+		layer_nodes = self.nodes
+
+		if isinstance(other, (tuple, list)) and len(other) == len(layer_nodes):
+			for idx in range(len(layer_nodes)):
+				layer_nodes[idx].tuple = other[idx]
+
+	@property
+	def anchor_array(self):
+		#return [node.tuple for node in self.nodes]
+		pass
+
+	@node_array.setter
+	def anchor_array(self, other):
+		'''
+		layer_nodes = self.nodes
+
+		if isinstance(other, (tuple, list)) and len(other) == len(layer_nodes):
+			for idx in range(len(layer_nodes)):
+				layer_nodes[idx].tuple = other[idx]
+		'''
+		pass
 
 	@property
 	def contours(self):
@@ -208,6 +250,66 @@ class Layer(Container):
 
 		self.shift(delta_x, delta_y)
 
+	def fit_to(self, delta_array, width, height, fix_scale_direction=-1, extrapolate=False):
+		'''Delta Bruter: Brute-force fit to dimensions'''
+		
+		# - Init
+		outline_scale = self.node_array
+		
+		direction = [1,-1][extrapolate] # Negative for deltas that behave in reverse - investigate?! correlates with extrapolation!
+		precision_x = 1.
+		precision_y = 1.
+
+		# -- Safety
+		sentinel = 0
+		cutoff = 1000
+		
+		# -- Set source and target
+		target_x = width
+		source_x = self.bounds.width
+		diff_x = prev_diff_x = (target_x - source_x)
+
+		target_y = height
+		source_y = self.bounds.height
+		diff_y = prev_diff_y = (target_y - source_y)
+
+		# -- Set scale and precision
+		scale_x = prev_scale_x = 0.99
+		scale_y = prev_scale_y = 0.99
+
+		# -- Process
+		while (abs(round(diff_x)) != 0 and abs(round(diff_y)) != 0) if fix_scale_direction != -1 else (abs(round(diff_x)) != 0 or abs(round(diff_y)) != 0):
+			if sentinel == cutoff:	break
+
+			if abs(diff_x) > abs(prev_diff_x):
+				scale_x = prev_scale_x
+				precision_x /= 10
+
+			if abs(diff_y) > abs(prev_diff_y):
+				scale_y = prev_scale_y
+				precision_y /= 10
+
+			prev_scale_x, prev_diff_x = scale_x, diff_x
+			prev_scale_y, prev_diff_y = scale_y, diff_y
+
+			scale_x += [+direction,-direction][diff_x < 0]*precision_x
+			scale_y += [+direction,-direction][diff_y < 0]*precision_y
+
+			scale_x = scale_x if fix_scale_direction != 1 else scale_y
+			scale_y = scale_y if fix_scale_direction != 0 else scale_x
+
+			outline_scale = delta_array.scale_by_stem((self.stx, self.sty), (scale_x, scale_y), (0.,0.), (0.,0.), False, extrapolate)
+			outline_scale = list(outline_scale)
+			outline_bounds = Bounds(outline_scale)
+			
+			diff_x = (target_x - outline_bounds.width)
+			diff_y = (target_y - outline_bounds.height)
+			
+			sentinel += 1
+
+		# - Set Glyph outline 
+		self.node_array = outline_scale
+
 	def is_compatible(self, other):
 		return self.signature == other.signature
 
@@ -249,12 +351,24 @@ if __name__ == '__main__':
 			(120.0, 316.0),
 			(156.0, 280.0)]
 
+	new_test = [(t[0]+100, t[1]+100) for t in test]
+
 	l = Layer([[test]])
 	print(section('Layer'))
 	pprint(l)
 		
 	print(section('Layer Bounds'))
 	pprint(l)
+
+	print(section('Layer Array'))
+	pprint(l.node_array)
+
+	l.node_array = new_test
+
+	print(section('Updated Layer Array'))
+	pprint(l.node_array)
+
+	print(l.has_stems)
 
 	
 

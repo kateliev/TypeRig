@@ -25,7 +25,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.4.5'
+__version__ = '0.4.6'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -77,6 +77,16 @@ class Node(Member):
 	@property
 	def contour(self):
 		return self.parent
+
+	@property
+	def tuple(self):
+		return (self.x, self.y)
+
+	@tuple.setter
+	def tuple(self, other):
+		if isinstance(other, (tuple, list)) and len(other)==2:
+			self.x = float(other[0])
+			self.y = float(other[1])
 
 	@property
 	def point(self):
@@ -590,4 +600,6 @@ if __name__ == '__main__':
 	print(n0)
 	n0.lerp_to(n1, (.5,.5))
 	print(n0)
+	n0.tuple = (1,2)
+	print(n0.tuple)
 	

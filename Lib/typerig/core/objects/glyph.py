@@ -13,12 +13,13 @@ from __future__ import absolute_import, print_function, division
 
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.utils import Bounds
+from typerig.core.objects.delta import DeltaScale
 
 from typerig.core.objects.atom import Container
 from typerig.core.objects.layer import Layer
 
 # - Init -------------------------------
-__version__ = '0.1.3'
+__version__ = '0.1.4'
 
 # - Classes -----------------------------
 class Glyph(Container): 
@@ -50,11 +51,30 @@ class Glyph(Container):
 			if layer.name == layer_name: return layer
 		return
 
+	def shapes(self, layer_name=None):
+		return self.layer(layer_name).shapes
+
+	def contours(self, layer_name=None):
+		return self.layer(layer_name).contours
+
 	def nodes(self, layer_name=None):
 		return self.layer(layer_name).nodes
 
 	def selected_nodes(self, layer_name=None):
 		return self.layer(layer_name).selected_nodes
+
+	def delta(self, layer_names_list):
+		node_array = []
+		stem_array = []
+		anchor_array = []
+
+		for layer_name in layer_names_list:
+			work_layer = self.layer(layer_name)
+			node_array.append(work_layer.node_array)
+			#anchor_array.append(work_layer.anchor_array)
+			stem_array.append([work_layer.stems])
+
+		return DeltaScale(node_array, stem_array) #, DeltaScale(anchor_array, stem_array)
 
 	# -- Properties -----------------------------
 	@property
