@@ -19,7 +19,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.layer import Layer
 
 # - Init -------------------------------
-__version__ = '0.1.4'
+__version__ = '0.1.5'
 
 # - Classes -----------------------------
 class Glyph(Container): 
@@ -63,18 +63,22 @@ class Glyph(Container):
 	def selected_nodes(self, layer_name=None):
 		return self.layer(layer_name).selected_nodes
 
-	def delta(self, layer_names_list):
-		node_array = []
+	# -- Delta related ----------------------------
+	def build_delta(self, layer_names_list, attrib):
+		data_array = []
 		stem_array = []
-		anchor_array = []
-
+		
 		for layer_name in layer_names_list:
 			work_layer = self.layer(layer_name)
-			node_array.append(work_layer.node_array)
-			#anchor_array.append(work_layer.anchor_array)
-			stem_array.append([work_layer.stems])
+			if hasattr(work_layer, attrib):
+				data_array.append(getattr(work_layer, attrib))
+				stem_array.append([work_layer.stems])
 
-		return DeltaScale(node_array, stem_array) #, DeltaScale(anchor_array, stem_array)
+		return DeltaScale(data_array, stem_array)
+
+	def virtual_axis(self, layer_names_list):
+		process_attrib_list = ('node_array', 'metric_array') # 'anchor_array'
+		return {attrib: self.build_delta(layer_names_list, attrib) for attrib in process_attrib_list}
 
 	# -- Properties -----------------------------
 	@property
@@ -148,6 +152,8 @@ if __name__ == '__main__':
 		
 	print(section('Glyph Layers'))
 	print(g.nodes('Regular')[0].parent)
+	g.layer('Regular').stems = (100,50)
+	print(g.virtual_axis(('Regular', 'Regular')))
 
 
 	

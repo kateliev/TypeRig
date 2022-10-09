@@ -71,34 +71,6 @@ class Layer(Container):
 		return layer_nodes
 
 	@property
-	def node_array(self):
-		return [node.tuple for node in self.nodes]
-
-	@node_array.setter
-	def node_array(self, other):
-		layer_nodes = self.nodes
-
-		if isinstance(other, (tuple, list)) and len(other) == len(layer_nodes):
-			for idx in range(len(layer_nodes)):
-				layer_nodes[idx].tuple = other[idx]
-
-	@property
-	def anchor_array(self):
-		#return [node.tuple for node in self.nodes]
-		pass
-
-	@node_array.setter
-	def anchor_array(self, other):
-		'''
-		layer_nodes = self.nodes
-
-		if isinstance(other, (tuple, list)) and len(other) == len(layer_nodes):
-			for idx in range(len(layer_nodes)):
-				layer_nodes[idx].tuple = other[idx]
-		'''
-		pass
-
-	@property
 	def contours(self):
 		layer_contours = []
 		for shape in self.shapes:
@@ -193,6 +165,44 @@ class Layer(Container):
 	def VADV(self, value):
 		self.advance_height = value
 
+	# - Delta related retrievers -----------
+	@property
+	def node_array(self):
+		return [node.tuple for node in self.nodes]
+
+	@node_array.setter
+	def node_array(self, other):
+		layer_nodes = self.nodes
+
+		if isinstance(other, (tuple, list)) and len(other) == len(layer_nodes):
+			for idx in range(len(layer_nodes)):
+				layer_nodes[idx].tuple = other[idx]
+
+	@property
+	def anchor_array(self):
+		#return [node.tuple for node in self.nodes]
+		pass
+
+	@anchor_array.setter
+	def anchor_array(self, other):
+		'''
+		layer_nodes = self.nodes
+
+		if isinstance(other, (tuple, list)) and len(other) == len(layer_nodes):
+			for idx in range(len(layer_nodes)):
+				layer_nodes[idx].tuple = other[idx]
+		'''
+		pass
+
+	@property
+	def metric_array(self):
+		return [(0.,0.), (self.ADV, self.VADV)]
+
+	@metric_array.setter
+	def metric_array(self, other):
+		if isinstance(other, (tuple, list)) and len(other) == 2 and len(other[1]) == 2:
+			self.ADV, self.VADV = other[1]
+
 	# - Functions --------------------------
 	def set_weight(self, wx, wy):
 		'''Set x and y weights (a.k.a. stems) for all nodes'''
@@ -250,12 +260,14 @@ class Layer(Container):
 
 		self.shift(delta_x, delta_y)
 
-	def fit_to(self, delta_array, width, height, fix_scale_direction=-1, extrapolate=False):
-		'''Delta Bruter: Brute-force fit to dimensions'''
+	def delta_scale_to(self, virtual_axis, width, height, fix_scale_direction=-1, main="node_array" ,extrapolate=False):
+		'''Delta Bruter: Brute-force to given dimensions'''
 		
 		# - Init
-		outline_scale = self.node_array
-		
+		main_array = getattr(self, main)
+		main_bounds = Bounds(main_array)
+		process_axis = {}
+
 		direction = [1,-1][extrapolate] # Negative for deltas that behave in reverse - investigate?! correlates with extrapolation!
 		precision_x = 1.
 		precision_y = 1.
@@ -266,11 +278,11 @@ class Layer(Container):
 		
 		# -- Set source and target
 		target_x = width
-		source_x = self.bounds.width
+		source_x = main_bounds.width
 		diff_x = prev_diff_x = (target_x - source_x)
 
 		target_y = height
-		source_y = self.bounds.height
+		source_y = main_bounds.height
 		diff_y = prev_diff_y = (target_y - source_y)
 
 		# -- Set scale and precision
@@ -298,17 +310,20 @@ class Layer(Container):
 			scale_x = scale_x if fix_scale_direction != 1 else scale_y
 			scale_y = scale_y if fix_scale_direction != 0 else scale_x
 
-			outline_scale = delta_array.scale_by_stem((self.stx, self.sty), (scale_x, scale_y), (0.,0.), (0.,0.), False, extrapolate)
-			outline_scale = list(outline_scale)
-			outline_bounds = Bounds(outline_scale)
+			for attrib, delta_array in virtual_axis.items():
+				delta_scale = delta_array.scale_by_stem((self.stx, self.sty), (scale_x, scale_y), (0.,0.), (0.,0.), False, extrapolate)
+				process_axis[attrib] = list(delta_scale)
 			
-			diff_x = (target_x - outline_bounds.width)
-			diff_y = (target_y - outline_bounds.height)
+			main_bounds = Bounds(process_axis[main])
+			
+			diff_x = (target_x - main_bounds.width)
+			diff_y = (target_y - main_bounds.height)
 			
 			sentinel += 1
 
-		# - Set Glyph outline 
-		self.node_array = outline_scale
+		# - Set Glyph  
+		for attrib, data in process_axis.items():
+			setattr(self, attrib, data)
 
 	def is_compatible(self, other):
 		return self.signature == other.signature
@@ -369,6 +384,7 @@ if __name__ == '__main__':
 	pprint(l.node_array)
 
 	print(l.has_stems)
+	print(Bounds([(0,0),(100,200)]))
 
 	
 

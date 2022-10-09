@@ -27,7 +27,7 @@ from typerig.core.objects.array import PointArray
 __version__ = '0.10.8'
 
 # - Objects ------------------------------------
-# -- Interpolation ------------------------------
+# -- Interpolation -----------------------------
 class DeltaArray(Sequence):
 	''''''
 	def __init__(self, data):
