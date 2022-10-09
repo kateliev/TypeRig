@@ -38,6 +38,9 @@ class trLayer(Layer):
 		self.host = layer
 		super(trLayer, self).__init__(self.host.paths, default_factory=trContour, proxy=True, **kwargs)
 
+		# Hotfix for missing advance_height
+		self.advance_height = 0.
+
 	# - Internals ------------------------------
 	def __getattribute__(self, name):
 		if name in trLayer.__meta__.keys():
