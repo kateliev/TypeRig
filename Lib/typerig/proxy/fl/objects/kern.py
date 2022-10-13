@@ -18,7 +18,7 @@ import PythonQt as pqt
 from typerig.core.objects.collection import extBiDict
 
 # - Init ---------------------------------
-__version__ = '0.26.5'
+__version__ = '0.26.6'
 
 # - Keep compatibility for basestring checks
 try:
@@ -167,17 +167,17 @@ class pKerning(object):
 
 		if modeLeft:
 			if len(groupsBiDict.keys()):
-				if groupsBiDict['KernLeft'].inverse.has_key(left):
+				if left in groupsBiDict['KernLeft'].inverse:
 					left = groupsBiDict['KernLeft'].inverse[left][0]
 
-				elif groupsBiDict['KernBothSide'].inverse.has_key(left):
+				elif left in groupsBiDict['KernBothSide'].inverse:
 					left = groupsBiDict['KernBothSide'].inverse[left][0]
 
 		if modeRight:
-			if groupsBiDict['KernRight'].inverse.has_key(right):
+			if right in groupsBiDict['KernRight'].inverse:
 				right = groupsBiDict['KernRight'].inverse[right][0]
 
-			elif groupsBiDict['KernBothSide'].inverse.has_key(right):
+			elif right in groupsBiDict['KernBothSide'].inverse:
 				right = groupsBiDict['KernBothSide'].inverse[right][0]
 		
 		self.fg[left, right] = value
@@ -192,17 +192,17 @@ class pKerning(object):
 			
 			if modeLeft:
 				if len(groupsBiDict.keys()):
-					if groupsBiDict['KernLeft'].inverse.has_key(left):
+					if left in groupsBiDict['KernLeft'].inverse:
 						left = groupsBiDict['KernLeft'].inverse[left][0]
 
-					elif groupsBiDict['KernBothSide'].inverse.has_key(left):
+					elif left in groupsBiDict['KernBothSide'].inverse:
 						left = groupsBiDict['KernBothSide'].inverse[left][0]
 
 			if modeRight:
-				if groupsBiDict['KernRight'].inverse.has_key(right):
+				if right in groupsBiDict['KernRight'].inverse:
 					right = groupsBiDict['KernRight'].inverse[right][0]
 
-				elif groupsBiDict['KernBothSide'].inverse.has_key(right):
+				elif right in groupsBiDict['KernBothSide'].inverse:
 					right = groupsBiDict['KernBothSide'].inverse[right][0]
 			
 			self.fg[left, right] = value	
@@ -213,19 +213,19 @@ class pKerning(object):
 		groupsBiDict = self.groupsBiDict()
 		
 		if len(groupsBiDict.keys()):
-			if groupsBiDict['KernLeft'].inverse.has_key(left):
+			if left in groupsBiDict['KernLeft'].inverse:
 				left = groupsBiDict['KernLeft'].inverse[left]
 				modeLeft = 1
 
-			elif groupsBiDict['KernBothSide'].inverse.has_key(left):
+			elif left in groupsBiDict['KernBothSide'].inverse:
 				left = groupsBiDict['KernBothSide'].inverse[left]
 				modeLeft = 1
 
-			if groupsBiDict['KernRight'].inverse.has_key(right):
+			if right in groupsBiDict['KernRight'].inverse:
 				right = groupsBiDict['KernRight'].inverse[right]
 				modeRight = 1
 
-			elif groupsBiDict['KernBothSide'].inverse.has_key(right):
+			elif right in groupsBiDict['KernBothSide'].inverse:
 				right = groupsBiDict['KernBothSide'].inverse[right]
 				modeRight = 1
 
