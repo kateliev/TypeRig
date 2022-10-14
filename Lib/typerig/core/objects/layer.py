@@ -201,7 +201,8 @@ class Layer(Container):
 	@metric_array.setter
 	def metric_array(self, other):
 		if isinstance(other, (tuple, list)) and len(other) == 2 and len(other[1]) == 2:
-			self.ADV, self.VADV = other[1]
+			#self.ADV, self.VADV = other[1] # Skip VADV for now...
+			self.ADV = other[1][0]
 
 	# - Functions --------------------------
 	def set_weight(self, wx, wy):

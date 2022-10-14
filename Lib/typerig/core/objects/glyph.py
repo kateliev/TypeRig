@@ -19,11 +19,11 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.layer import Layer
 
 # - Init -------------------------------
-__version__ = '0.1.5'
+__version__ = '0.1.6'
 
 # - Classes -----------------------------
 class Glyph(Container): 
-	__slots__ = ('name', 'mark', 'unicodes', 'identifier', 'parent')
+	__slots__ = ('name', 'mark', 'unicodes', 'identifier', 'parent', 'selected')
 
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Layer)
@@ -35,6 +35,7 @@ class Glyph(Container):
 			self.mark = kwargs.pop('mark', 0)
 			self.name = kwargs.pop('name', hash(self))
 			self.unicodes = kwargs.pop('unicodes', [])
+			self.selected = kwargs.pop('selected', False)
 
 		#self.active_layer = kwargs.pop('active_layer', None)
 		
