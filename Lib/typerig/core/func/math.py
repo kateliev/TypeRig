@@ -13,7 +13,7 @@ from __future__ import absolute_import, print_function, division
 import math, random
 
 # - Init --------------------------------
-__version__ = '0.26.5'
+__version__ = '0.26.6'
 
 epsilon = 0.000001
 
@@ -183,7 +183,27 @@ def bilinInterp(x, y, points):
 			q22 * (x - x1) * (y - y1)
 		   ) / ((x2 - x1) * (y2 - y1) + 0.0)
 	
+# -- Drawing ---------------------------------------------------------
+def three_point_circle(p1, p2, p3):
+	'''Three point circle implementation: Return the center and 
+	radius of a circle that passes through three given points p1, p2, p3.
+	Source: https://codegolf.stackexchange.com/questions/2289/circle-through-three-points
+	'''
+	
+	temp = p2[0]*p2[0] + p2[1]*p2[1]
+	bc = (p1[0]*p1[0] + p1[1]*p1[1] - temp) / 2
+	cd = (temp - p3[0]*p3[0] - p3[1]*p3[1]) / 2
+	det = (p1[0] - p2[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0])*(p1[1] - p2[1])
 
+	if abs(det) < 1.0e-6: return (None, None)
+
+	cx = (bc*(p2[1] - p3[1]) - cd * (p1[1] - p2[1])) / det
+	cy = ((p1[0] - p2[0]) * cd - (p2[0] - p3[0]) * bc) / det
+
+	radius = math.sqrt((cx - p1[0])**2 + (cy - p1[1])**2)
+	return ((cx, cy), radius)
+
+# - Test ----------------------------------------------------------------	
 if __name__ == '__main__':
 	r = range(105,415,10)
 	a = 0.5
@@ -206,4 +226,5 @@ if __name__ == '__main__':
 	print(linInterp(10, 20, .5))
 	print(bilinInterp(12, 5.5, points))
 	print(maploc(axis_range, 140))
+	print(three_point_circle((10,10), (20,20), (3,5)))
 
