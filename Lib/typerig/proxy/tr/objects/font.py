@@ -20,7 +20,7 @@ from typerig.proxy.tr.objects.glyph import trGlyph
 from typerig.core.objects.font import Font
 
 # - Init --------------------------------
-__version__ = '0.0.1'
+__version__ = '0.0.3'
 
 # - Classes -----------------------------
 class trFont(Font):
@@ -34,25 +34,34 @@ class trFont(Font):
 	'''
 	# - Metadata and proxy model
 	#__slots__ = ('name', 'unicodes', 'identifier', 'parent')
-	__meta__ = {}
+	__meta__ = {'masters':'masters', 'info':'info' } #, 'axes':'axes', 'instances':'instances'}
 		
 	# -- Some hardcoded properties
 	active_layer = property(lambda self: self.host.activeLayer.name)
 	
 	# - Helpers
 	def __proxy_getattr(self, base_attr, str_attr):
-		for attribute in str_attr.split('.'):
-			base_attr = base_attr.__getattribute__(attribute)
+		''' Nested Attributes retriever'''
+		if '.' in str_attr:
+			for attribute in str_attr.split('.'):
+				base_attr = base_attr.__getattribute__(attribute)
 
-		return base_attr
+			return base_attr
+		
+		else:
+			return base_attr.__getattribute__(str_attr)
 
 	def __proxy_setattr(self, base_attr, str_attr, value):
-		proc_string = str_attr.split('.')
+		if '.' in str_attr:
+			proc_string = str_attr.split('.')
 
-		for attribute in proc_string[:1]:
-			base_attr = base_attr.__getattribute__(attribute)
+			for attribute in proc_string[:1]:
+				base_attr = base_attr.__getattribute__(attribute)
 
-		base_attr.__setattr__(proc_string[-1], value)
+			base_attr.__setattr__(proc_string[-1], value)
+		
+		else:
+			base_attr.__setattr__(str_attr, value)
 
 	# - Initialize 
 	def __init__(self, *argv, **kwargs):
@@ -66,9 +75,12 @@ class trFont(Font):
 		elif len(argv) == 1 and isinstance(argv[0], fl6.flPackage):
 			self.host = argv[0]
 
+		# - The regular way:
 		#super(trFont, self).__init__(self.host.fgPackage.glyphs, default_factory=trGlyph, proxy=True, **kwargs)
+		
+		# - Reduce overhead: add as simple list use on demand casting for speed
 		super(trFont, self).__init__([], default_factory=trGlyph, proxy=True, **kwargs)
-		self.data = self.host.fgPackage.glyphs
+		self.data = list(self.host.fgPackage.glyphs)
 
 	# - Internals ------------------------------
 	def __getattribute__(self, name):
@@ -78,10 +90,24 @@ class trFont(Font):
 			return Font.__getattribute__(self, name)
 
 	def __setattr__(self, name, value):
-		if name in trFont.__meta__.keys():
-			self.__proxy_setattr(self.host, trFont.__meta__[name], value)
-		else:
-			Font.__setattr__(self, name, value)
+		try:
+			if name in trFont.__meta__.keys():
+				self.__proxy_setattr(self.host, trFont.__meta__[name], value)
+			else:
+				Font.__setattr__(self, name, value)
+		
+		except AttributeError:
+			pass
+
+	def __getitem__(self, ik):
+		return self._subclass(self.host.fgPackage[ik])
+	
+	def __setitem__(self, ik, item): 
+		if isinstance(item, self._subclass):
+			item = item.host.fgGlyph
+
+		if isinstance(item, fgt.fgGlyph):
+			self.host.fgPackage[ik] = item
 	
 	# - Properties --------------------------
 	
