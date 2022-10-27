@@ -20,7 +20,7 @@ from typerig.core.objects.layer import Layer
 from typerig.core.objects.glyph import Glyph
 
 # - Init -------------------------------
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 # - Classes -----------------------------
 class FontInfo(object):
@@ -132,24 +132,24 @@ class Font(Container):
 		factory = kwargs.pop('default_factory', Glyph)
 		super(Font, self).__init__(data, default_factory=factory, **kwargs)
 		
-		# - Basic
-		self.info = kwargs.pop('info', FontInfo())
-
-		# - Designspace
-		self.axes = kwargs.pop('axes', set())
-		self.masters = kwargs.pop('masters', set())
-		self.instances = kwargs.pop('instances', set())
-
-		# - Features
-		self.features =  kwargs.pop('features', [])
-		self.classes =  kwargs.pop('classes', [])
-
-		# - Metrics and kern
-		self.kerning = kwargs.pop('kerning', [])
-		
 		# - Metadata
 		if not kwargs.pop('proxy', False): # Initialize in proxy mode
 			self.identifier = kwargs.pop('identifier', None)
+
+			# - Basic
+			self.info = kwargs.pop('info', FontInfo())
+
+			# - Designspace
+			self.axes = kwargs.pop('axes', set())
+			self.masters = kwargs.pop('masters', set())
+			self.instances = kwargs.pop('instances', set())
+
+			# - Features
+			self.features =  kwargs.pop('features', [])
+			self.classes =  kwargs.pop('classes', [])
+
+			# - Metrics and kern
+			self.kerning = kwargs.pop('kerning', [])
 		
 	# !!! NOTE: Currently operates as list... 
 	# !!! NOTE: In future consider reimplementing it as dict, so that font.glyphs[glyph_name] is possible.

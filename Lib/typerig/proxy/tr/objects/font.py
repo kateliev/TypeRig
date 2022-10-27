@@ -90,6 +90,7 @@ class trFont(Font):
 			return Font.__getattribute__(self, name)
 
 	def __setattr__(self, name, value):
+		#print('!!!!SET: {}'.format(name))
 		try:
 			if name in trFont.__meta__.keys():
 				self.__proxy_setattr(self.host, trFont.__meta__[name], value)
