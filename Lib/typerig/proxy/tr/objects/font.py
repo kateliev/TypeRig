@@ -34,11 +34,26 @@ class trFont(Font):
 	'''
 	# - Metadata and proxy model
 	#__slots__ = ('name', 'unicodes', 'identifier', 'parent')
-	__meta__ = {'info':'fgPackage.info'}
+	__meta__ = {}
 		
 	# -- Some hardcoded properties
 	active_layer = property(lambda self: self.host.activeLayer.name)
-		
+	
+	# - Helpers
+	def __proxy_getattr(self, base_attr, str_attr):
+		for attribute in str_attr.split('.'):
+			base_attr = base_attr.__getattribute__(attribute)
+
+		return base_attr
+
+	def __proxy_setattr(self, base_attr, str_attr, value):
+		proc_string = str_attr.split('.')
+
+		for attribute in proc_string[:1]:
+			base_attr = base_attr.__getattribute__(attribute)
+
+		base_attr.__setattr__(proc_string[-1], value)
+
 	# - Initialize 
 	def __init__(self, *argv, **kwargs):
 
@@ -51,18 +66,20 @@ class trFont(Font):
 		elif len(argv) == 1 and isinstance(argv[0], fl6.flPackage):
 			self.host = argv[0]
 
+		#super(trFont, self).__init__(self.host.fgPackage.glyphs, default_factory=trGlyph, proxy=True, **kwargs)
 		super(trFont, self).__init__([], default_factory=trGlyph, proxy=True, **kwargs)
+		self.data = self.host.fgPackage.glyphs
 
 	# - Internals ------------------------------
 	def __getattribute__(self, name):
 		if name in trFont.__meta__.keys():
-			return self.host.__getattribute__(trFont.__meta__[name])
+			return self.__proxy_getattr(self.host, trFont.__meta__[name])
 		else:
 			return Font.__getattribute__(self, name)
 
 	def __setattr__(self, name, value):
 		if name in trFont.__meta__.keys():
-			self.host.__setattr__(trFont.__meta__[name], value)
+			self.__proxy_setattr(self.host, trFont.__meta__[name], value)
 		else:
 			Font.__setattr__(self, name, value)
 	

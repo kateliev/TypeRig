@@ -20,7 +20,7 @@ from typerig.proxy.tr.objects.layer import trLayer
 from typerig.core.objects.glyph import Glyph
 
 # - Init --------------------------------
-__version__ = '0.0.6'
+__version__ = '0.0.7'
 
 # - Classes -----------------------------
 class trGlyph(Glyph):
@@ -46,7 +46,11 @@ class trGlyph(Glyph):
 			self.host = fl6.flGlyph(fl6.CurrentGlyph(), fl6.CurrentFont())
 		
 		elif len(argv) == 1 and isinstance(argv[0], fl6.flGlyph):
-			font, glyph = argv[0].fgPackage, argv[0].fgPackage[argv[0].name]
+			#font, glyph = argv[0].fgPackage, argv[0].fgPackage[argv[0].name]
+			self.host = argv[0]
+
+		elif len(argv) == 1 and isinstance(argv[0], fgt.fgGlyph):
+			font, glyph = argv[0].parent, argv[0]
 			self.host = fl6.flGlyph(glyph, font)
 
 		elif len(argv) == 2 and isinstance(argv[0], fgt.fgFont) and isinstance(argv[1], fgt.fgGlyph):
