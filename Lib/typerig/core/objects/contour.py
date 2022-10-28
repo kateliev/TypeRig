@@ -13,6 +13,7 @@ from __future__ import absolute_import, print_function, division
 
 from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
+from typerig.core.objects.array import PointArray
 from typerig.core.objects.cubicbezier import CubicBezier
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.utils import Bounds
@@ -24,7 +25,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.node import Node
 
 # - Init -------------------------------
-__version__ = '0.3.3'
+__version__ = '0.3.4'
 
 # - Classes -----------------------------
 class Contour(Container): 
@@ -88,6 +89,18 @@ class Contour(Container):
 				raise NotImplementedError
 
 		return obj_segments
+
+	@property
+	def point_array(self):
+		return PointArray([node.point for node in self.nodes])
+
+	@point_array.setter
+	def point_array(self, other):
+		contour_nodes = self.nodes
+
+		if isinstance(other, PointArray) and len(other) == len(contour_nodes):
+			for idx in range(len(contour_nodes)):
+				contour_nodes[idx].point = other[idx]
 		
 	# -- Functions ------------------------------
 	def set_start(self, index):

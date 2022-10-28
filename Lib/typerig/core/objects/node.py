@@ -25,7 +25,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.4.7'
+__version__ = '0.4.8'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -267,11 +267,11 @@ class Node(Member):
 	def curve_to(self, self_bcp_out, other_bcp_in, other):
 		if not isinstance(self_bcp_out, self.__class__):
 			self_bcp_out = self.__class__(self_bcp_out)
-			self_bcp_out.type = node_types['off']
+			self_bcp_out.type = node_types['curve']
 
 		if not isinstance(other_bcp_in, self.__class__):
 			other_bcp_in = self.__class__(other_bcp_in)
-			other_bcp_in.type = node_types['off']
+			other_bcp_in.type = node_types['curve']
 
 		if not isinstance(other, self.__class__):
 			other = self.__class__(other)

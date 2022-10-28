@@ -19,7 +19,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.contour import Contour
 
 # - Init -------------------------------
-__version__ = '0.1.5'
+__version__ = '0.1.6'
 
 # - Classes -----------------------------
 class Shape(Container):
@@ -75,6 +75,18 @@ class Shape(Container):
 		contour_bounds = [contour.bounds for contour in self.data]
 		bounds = sum([[(bound.x, bound.y), (bound.xmax, bound.ymax)] for bound in contour_bounds],[])
 		return Bounds(bounds)
+
+	@property
+	def point_array(self):
+		return PointArray([node.point for node in self.nodes])
+
+	@point_array.setter
+	def point_array(self, other):
+		shape_nodes = self.nodes
+
+		if isinstance(other, PointArray) and len(other) == len(shape_nodes):
+			for idx in range(len(shape_nodes)):
+				shape_nodes[idx].point = other[idx]
 
 	# - Functions -------------------------------
 	def reverse(self):

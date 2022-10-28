@@ -11,6 +11,7 @@
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
 
+from typerig.core.objects.array import PointArray
 from typerig.core.objects.point import Point
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.utils import Bounds
@@ -19,7 +20,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.shape import Shape
 
 # - Init -------------------------------
-__version__ = '0.1.9'
+__version__ = '0.2.0'
 
 # - Classes -----------------------------
 class Layer(Container): 
@@ -62,6 +63,7 @@ class Layer(Container):
 	def shapes(self):
 		return self.data
 
+	
 	@property
 	def nodes(self):
 		layer_nodes = []
@@ -167,16 +169,16 @@ class Layer(Container):
 
 	# - Delta related retrievers -----------
 	@property
-	def node_array(self):
-		return [node.tuple for node in self.nodes]
+	def point_array(self):
+		return PointArray([node.point for node in self.nodes])
 
-	@node_array.setter
-	def node_array(self, other):
+	@point_array.setter
+	def point_array(self, other):
 		layer_nodes = self.nodes
 
-		if isinstance(other, (tuple, list)) and len(other) == len(layer_nodes):
+		if isinstance(other, PointArray) and len(other) == len(layer_nodes):
 			for idx in range(len(layer_nodes)):
-				layer_nodes[idx].tuple = other[idx]
+				layer_nodes[idx].point = other[idx]
 
 	@property
 	def anchor_array(self):
@@ -210,6 +212,9 @@ class Layer(Container):
 		for node in self.nodes:
 			node.weight.x = wx
 			node.weight.y = wy
+
+	def is_compatible(self, other):
+		return self.signature == other.signature
 	
 	# - Transformation --------------------------
 	def apply_transform(self):
@@ -260,6 +265,16 @@ class Layer(Container):
 		else: return
 
 		self.shift(delta_x, delta_y)
+
+	# - Delta --------------------------------
+	def lerp_function(self, other):
+		if not isinstance(other, self.__class__) and not self.is_compatible(other): return
+
+		t0 = self.point_array
+		t1 = other.point_array
+		func = lambda tx, ty: (t1 - t0) * (tx, ty) + t0
+
+		return func
 
 	def delta_scale_to(self, virtual_axis, width, height, fix_scale_direction=-1, main="node_array" ,extrapolate=False):
 		'''Delta Bruter: Brute-force to given dimensions'''
@@ -325,9 +340,6 @@ class Layer(Container):
 		# - Set Glyph  
 		for attrib, data in process_axis.items():
 			setattr(self, attrib, data)
-
-	def is_compatible(self, other):
-		return self.signature == other.signature
 
 	# -- IO Format ------------------------------
 	def to_VFJ(self):
