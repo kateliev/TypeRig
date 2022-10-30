@@ -514,12 +514,16 @@ class CubicBezier(object):
 			return math.atan2(x.imag, x.real)
 
 		def hobby(theta, phi):
+			'''John Hobby and METAFONT book: "Velocity" function'''
 			st, ct = math.sin(theta), math.cos(theta)
 			sp, cp = math.sin(phi), math.cos(phi)
 			velocity = (2 + math.sqrt(2) * (st - 1/16*sp) * (sp - 1/16*st) * (ct - cp)) / (3 * (1 + 0.5*(math.sqrt(5) - 1) * ct + 0.5*(3 - math.sqrt(5)) * cp))
 			return velocity
 
 		def controls(z0, w0, alpha, beta, w1, z1):
+			"""Given two points in a path, and the angles of departure and arrival
+			at each one, this function finds the appropiate control points of the
+			Bezier's curve, using John Hobby's algorithm"""
 			theta = arg(w0 / (z1 - z0))
 			phi = arg((z1 - z0) / w1)
 			u = z0 + math.e**(0+1j * theta) * (z1 - z0) * hobby(theta, phi) / alpha
@@ -555,6 +559,7 @@ class CubicBezier(object):
 			return math.atan2(x.imag, x.real)
 
 		def hobby(theta, phi):
+			'''John Hobby and METAFONT book: "Velocity" function'''
 			st, ct = math.sin(theta), math.cos(theta)
 			sp, cp = math.sin(phi), math.cos(phi)
 			velocity = (2 + math.sqrt(2) * (st - 1/16*sp) * (sp - 1/16*st) * (ct - cp)) / (3 * (1 + 0.5*(math.sqrt(5) - 1) * ct + 0.5*(3 - math.sqrt(5)) * cp))
