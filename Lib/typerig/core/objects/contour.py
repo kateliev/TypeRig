@@ -22,7 +22,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.func.transform import adaptive_scale, lerp
 
 from typerig.core.objects.atom import Container
-from typerig.core.objects.node import Node
+from typerig.core.objects.node import Node, Knot
 
 # - Init -------------------------------
 __version__ = '0.3.4'

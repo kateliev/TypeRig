@@ -13,11 +13,38 @@ from __future__ import absolute_import, print_function, division
 import math, random
 
 # - Init --------------------------------
-__version__ = '0.26.6'
+__version__ = '0.26.7'
 
 epsilon = 0.000001
 
 # - Functions ---------------------------
+# -- Linear algebra ---------------------
+def zero_matrix(rows, cols):
+	'''Creates a matrix filled with zeros '''
+	M = []
+	while len(M) < rows:
+		M.append([])
+		while len(M[-1]) < cols:
+			M[-1].append(0.0)
+
+	return M
+
+def solve_equations(AM, BM):
+	'''Pure python implementaton of numpy.linalg.solve as explained by:
+	https://integratedmlai.com/system-of-equations-solution/
+	'''
+	for fd in range(len(AM)):
+		fdScaler = 1.0 / AM[fd][fd]
+		for j in range(len(AM)):
+			AM[fd][j] *= fdScaler
+		BM[fd][0] *= fdScaler
+		for i in list(range(len(AM)))[0:fd] + list(range(len(AM)))[fd+1:]:
+			crScaler = AM[i][fd]
+			for j in range(len(AM)):
+				AM[i][j] = AM[i][j] - crScaler * AM[fd][j]
+			BM[i][0] = BM[i][0] - crScaler * BM[fd][0]
+	return BM
+
 # -- Data sets --------------------------
 def normalize2max(values):
 	'''Normalize all values to the maximum value in a given list. 
@@ -202,6 +229,21 @@ def three_point_circle(p1, p2, p3):
 
 	radius = math.sqrt((cx - p1[0])**2 + (cy - p1[1])**2)
 	return ((cx, cy), radius)
+
+def hobby_velocity(theta, phi):
+	'''From John Hobby and METAFONT book'''
+	n = 2 + math.sqrt(2)*(math.sin(theta) - math.sin(phi)/16)*(math.sin(phi) - math.sin(theta)/16)*(math.cos(theta) - math.cos(phi))
+	m = 3*(1 + 0.5*(math.sqrt(5)-1)*math.cos(theta) + 0.5*(3 - math.sqrt(5))*math.cos(phi))
+	return n/m
+
+def hobby_control_points(z0, z1, theta=0., phi=0., alpha=1., beta=1.):
+	'''Given two points in a path, and the angles of departure and arrival
+	at each one, this function finds the appropiate control points of the
+	Bezier's curve, using John Hobby's algorithm (METAFONT book)'''
+	i = complex(0,1)
+	u = z0 + cmath.exp(i*theta)*(z1 - z0)*hobby_velocity(theta, phi)*alpha
+	v = z1 - cmath.exp(-i*phi)*(z1 - z0)*hobby_velocity(phi, theta)*beta
+	return (u,v)
 
 # - Test ----------------------------------------------------------------	
 if __name__ == '__main__':

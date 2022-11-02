@@ -25,7 +25,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.4.8'
+__version__ = '0.4.9'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -194,7 +194,12 @@ class Node(Member):
 	@property
 	def angle_to_prev_on(self):
 		return self.angle_to(self.prev_on)
-	
+
+	@property
+	def angle_poly_turn(self):
+		temp_point = (self.next_on.point - self.point)/(self.point - self.prev_on.point)
+		return math.atan2(temp_point.y, temp_point.x) # Arg (Argument): math.atan2(z.imag, z.real)
+
 	# - Functions ----------------------------
 	def distance_to(self, other):
 		return self.point.diff_to(other.point)
@@ -607,6 +612,45 @@ class Node(Member):
 	def from_XML(string):
 		raise NotImplementedError
 
+
+class Knot(Node):
+	def __init__(self, *args, **kwargs):
+		super(Knot, self).__init__(*args, **kwargs)
+
+		# - Tension at point (1. by default)
+		self.alpha = kwargs.pop('alpha', 1.) 
+		self.beta = kwargs.pop('beta', 1.)
+		
+		# - Angle at which the path leaves
+		self.theta = kwargs.pop('theta', 0.)
+		
+		# - Angle at which the path enters
+		self.phi = kwargs.pop('phi', 0.)
+	
+	# - Angle turned by the polyline at this point
+	@property
+	def xi(self):
+		return self.angle_poly_turn        
+	
+	# - Control points of the Bezier curve at this point
+	@property
+	def v_left(self):
+		return self.prev.point  
+	
+	# - (to be computed later)
+	@property
+	def u_right(self):
+		return self.next.point 
+	
+	# - Distance to previous point in the path
+	@property
+	def d_ant(self):
+		return self.distance_to_prev_on     
+	
+	# - Distance to next point in the path
+	@property
+	def d_post(self):
+		return self.distance_to_next_on     
 
 if __name__ == '__main__':
 	# - Test initialization, normal and from VFJ
