@@ -10,7 +10,7 @@
 
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
-import math, random
+import math, cmath, random
 
 # - Init --------------------------------
 __version__ = '0.26.7'

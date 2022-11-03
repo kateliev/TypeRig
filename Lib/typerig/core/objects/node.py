@@ -82,6 +82,10 @@ class Node(Member):
 	def tuple(self):
 		return (self.x, self.y)
 
+	@property
+	def complex(self):
+		return complex(self.x, self.y)
+
 	@tuple.setter
 	def tuple(self, other):
 		if isinstance(other, (tuple, list)) and len(other)==2:
@@ -626,21 +630,15 @@ class Knot(Node):
 		
 		# - Angle at which the path enters
 		self.phi = kwargs.pop('phi', 0.)
+
+		# - Control points of the Bezier curve at this point
+		self.v_left = complex(0,0)
+		self.u_right = complex(0,0)
 	
 	# - Angle turned by the polyline at this point
 	@property
 	def xi(self):
 		return self.angle_poly_turn        
-	
-	# - Control points of the Bezier curve at this point
-	@property
-	def v_left(self):
-		return self.prev.point  
-	
-	# - (to be computed later)
-	@property
-	def u_right(self):
-		return self.next.point 
 	
 	# - Distance to previous point in the path
 	@property
