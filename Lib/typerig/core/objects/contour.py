@@ -20,12 +20,13 @@ from typerig.core.objects.utils import Bounds
 
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.func.transform import adaptive_scale, lerp
+from typerig.core.func.math import zero_matrix, solve_equations, hobby_control_points
 
 from typerig.core.objects.atom import Container
 from typerig.core.objects.node import Node, Knot
 
 # - Init -------------------------------
-__version__ = '0.3.4'
+__version__ = '0.3.6'
 
 # - Classes -----------------------------
 class Contour(Container): 
@@ -47,6 +48,17 @@ class Contour(Container):
 	@property
 	def nodes(self):
 		return self.data
+
+	@nodes.setter
+	def nodes(self, other):
+		if isinstance(other, self.__class__):
+			self.data = other
+
+		if isinstance(other, (tuple, list)):
+			for item in other:
+				if not isinstance(item, self._subclass):
+					item = self._subclass(item, parent=self)
+					self.data.append(item)
 
 	@property
 	def selected_nodes(self):
@@ -256,6 +268,211 @@ class Contour(Container):
 	def from_XML(string):
 		raise NotImplementedError
 
+class HobbySpline(Container): 
+	'''Adapted from mp2tikz.py (c) 2012 JL Diaz'''
+
+	def __init__(self, data=None, **kwargs):
+		# - Init
+		factory = kwargs.pop('default_factory', Knot)
+
+		super(HobbySpline, self).__init__(data, default_factory=factory, **kwargs)
+		
+		# - Metadata
+		self.tension = kwargs.pop('tension', 1.)
+		self.transform = kwargs.pop('transform', Transform())
+		self.name = kwargs.pop('name', '')
+		self.closed = kwargs.pop('closed', False)
+		self.clockwise = kwargs.pop('clockwise', self.get_winding())
+
+	# - Internals ------------------------------
+	def __getitem__(self, index):
+		"""Gets the point [i] of the list, but assuming the list is
+		circular and thus allowing for indexes greater than the list
+		length"""
+		index %= len(self.data)
+		return self.data[index]
+
+	# - Functions ------------------------------
+	def __build_coefficients(self):
+		'''This function creates five vectors which are coefficients of a
+		linear system which allows finding the right values of 'theta' at
+		each point of the path (being 'theta' the angle of departure of the
+		path at each point). The theory is from METAFONT book.'''
+		
+		# - Init
+		A=[]; B=[]; C=[]; D=[]; R=[];
+		
+		for k in range(len(self)):
+			A.append(   self[k-1].alpha  / ((self[k].beta**2)  * self[k].d_ant))
+			B.append((3-self[k-1].alpha) / ((self[k].beta**2)  * self[k].d_ant))
+			C.append((3-self[k+1].beta)  / ((self[k].alpha**2) * self[k].d_post))
+			D.append(   self[k+1].beta   / ((self[k].alpha**2) * self[k].d_post))
+			R.append(-B[k] * self[k].xi  - D[k] * self[k+1].xi)
+		
+		return (A, B, C, D, R)
+		
+	# - Procedures ----------------------------
+	def __solve_for_thetas(self, A, B, C, D, R):
+		'''This function receives the five vectors created by
+		__build_coefficients() and uses them to build a linear system with N
+		unknonws (being N the number of points in the path). Solving the system
+		finds the value for theta (departure angle) at each point'''
+		L=len(R)
+		a = zero_matrix(L, L)
+		b = [[i] for i in R]
+		
+		for k in range(L):
+			prev = (k-1)%L
+			post = (k+1)%L
+			a[k][prev] = A[k]
+			a[k][k]    = B[k]+C[k]
+			a[k][post] = D[k]
+			
+		v = solve_equations(a, b)
+
+		return sum(v,[])
+
+	def __solve_angles(self):
+		'''This function receives a path in which each point is 'open', i.e. it
+		does not specify any direction of departure or arrival at each node,
+		and finds these directions in such a way which minimizes 'mock
+		curvature'. The theory is from METAFONT book.'''
+
+		# Basically it solves
+		# a linear system which finds all departure angles (theta), and from
+		# these and the turning angles at each point, the arrival angles (phi)
+		# can be obtained, since theta + phi + xi = 0  at each knot'''
+
+		x = self.__solve_for_thetas(*self.__build_coefficients())
+		L = len(self)
+
+		for k in range(L):
+			self[k].theta = x[k]
+
+		for k in range(L):
+			self[k].phi = - self[k].theta - self[k].xi
+
+	def __find_controls(self):
+		'''This function receives a path in which, for each point, the values
+		of theta and phi (leave and enter directions) are known, either because
+		they were previously stored in the structure, or because it was
+		computed by function __solve_angles(). From this path description
+		this function computes the control points for each knot and stores
+		it in the path. After this, it is possible to print path to get
+		a string suitable to be feed to tikz.'''
+		
+		# - Calculate bezier control points
+		for kid in range(len(self.knots)):
+			z0 = self[kid].complex
+			z1 = self[kid + 1].complex
+			theta = self[kid].theta
+			phi = self[kid + 1].phi
+			alpha = self[kid].alpha
+			beta = self[kid + 1].beta
+
+			u,v = hobby_control_points(z0, z1, theta, phi, alpha, beta)
+
+			self[kid].u_right = u
+			self[kid+1].v_left = v
+
+	def reverse(self):
+		self.data = list(reversed(self.data))
+		#self.clockwise = self.get_winding()
+		self.clockwise = not self.clockwise
+
+	def set_start(self, index):
+		index = self.nodes[index].prev_on.idx if not self.nodes[index].is_on else index
+		self.data = self.data[index:] + self.data[:index] 
+
+	def get_winding(self):
+		'''Check if contour has clockwise winding direction'''
+		return self.get_on_area() > 0
+
+	def get_on_area(self):
+		'''Get contour area using on curve points only'''
+		polygon_area = []
+
+		for knot in self.knots:
+			edge_sum = (knot.next.x - knot.x)*(knot.next.y + knot.y)
+			polygon_area.append(edge_sum)
+
+		return sum(polygon_area)*0.5
+
+	# - Transformation --------------------------
+	def apply_transform(self):
+		for knot in self.knots:
+			knot.x, knot.y = self.transform.applyTransformation(knot.x, knot.y)
+
+	def shift(self, delta_x, delta_y):
+		for knot in self.knots:
+			knot.point += Point(delta_x, delta_y)
+
+	# - Properties -----------------------------------
+	@property
+	def knots(self):
+		return self.data
+
+	@knots.setter
+	def knots(self, other):
+		if isinstance(other, self.__class__):
+			self.data = other
+
+		if isinstance(other, (tuple, list)):
+			for item in other:
+				if not isinstance(item, self._subclass):
+					item = self._subclass(item, parent=self)
+					self.data.append(item)
+
+
+	@property
+	def tension(self):
+		return self.global_tension
+
+	@tension.setter
+	def tension(self, other):
+		self.global_tension = other
+		
+		for knot in self.knots:
+			knot.alpha = other
+			knot.beta = other
+
+	@property
+	def bounds(self):
+		assert len(self.knots) > 0, 'Cannot return bounds for <{}> with length {}'.format(self.__class__.__name__, len(self.knots))
+		return Bounds([knot.point.tuple for knot in self.knots])
+
+	@property
+	def nodes(self):
+		self.__solve_angles()
+		self.__find_controls()
+
+		# - Init
+		return_nodes = []
+		count = len(self.knots)
+		last = 1
+
+		# - Calculate beziers
+		if self.closed:
+			last = 0
+
+		for kid in range(count - last):
+			post = (kid + 1) %count
+			z = self.knots[kid].point
+			u = Point(self.knots[kid].u_right.real, self.knots[kid].u_right.imag)
+			v = Point(self.knots[post].v_left.real, self.knots[post].v_left.imag)
+			return_nodes.append([Node(z.x, z.y, type='on'), Node(u.x, u.y, type='curve'), Node(v.x, v.y, type='curve')])
+		
+		if self.closed:
+			last_z = self[0].point
+		else:
+			last_z = self[-1].point
+		
+		return_nodes.append([Node(last_z.x, last_z.y, type='on')])
+		
+		return sum(return_nodes, [])
+
+
+
 if __name__ == '__main__':
 	from pprint import pprint
 	section = lambda s: '\n+{0}\n+ {1}\n+{0}'.format('-'*30, s)
@@ -361,6 +578,11 @@ if __name__ == '__main__':
 	frame.reverse()
 	print(frame.clockwise)
 	print(frame)
+
+	hobby_test = HobbySpline([(0,320), (320,640), (640,320), (320,0)])
+	hobby_test.tension = 1.1
+	print(hobby_test.knots)
+	print(hobby_test.nodes)
 
 	
 

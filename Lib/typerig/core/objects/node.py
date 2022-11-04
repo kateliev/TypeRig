@@ -25,7 +25,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.4.9'
+__version__ = '0.5.0'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -617,38 +617,148 @@ class Node(Member):
 		raise NotImplementedError
 
 
-class Knot(Node):
+class Knot(Member):
 	def __init__(self, *args, **kwargs):
 		super(Knot, self).__init__(*args, **kwargs)
 
-		# - Tension at point (1. by default)
+		# - Basics
+		if len(args) == 1:
+			if isinstance(args[0], self.__class__): # Clone
+				self.x, self.y = args[0].x, args[0].y
+
+			if isinstance(args[0], (tuple, list)):
+				self.x, self.y = args[0]
+
+		elif len(args) == 2:
+			if isMultiInstance(args, (float, int)):
+				self.x, self.y = float(args[0]), float(args[1])
+		
+		else:
+			self.x, self.y = 0., 0.
+
+		# - Metadata
+		self.type = 'on'
+		self.name = kwargs.pop('name', '')
+		self.identifier = kwargs.pop('identifier', False)
+		self.parent = kwargs.pop('parent', None)
+		self.angle = kwargs.pop('angle', 0)
+		self.transform = kwargs.pop('transform', Transform())
+		self.complex_math = kwargs.pop('complex', True)
+
+		# - Hobby Specific
+		# -- Tension at point (1. by default)
 		self.alpha = kwargs.pop('alpha', 1.) 
 		self.beta = kwargs.pop('beta', 1.)
 		
-		# - Angle at which the path leaves
+		# -- Angle at which the path leaves
 		self.theta = kwargs.pop('theta', 0.)
 		
-		# - Angle at which the path enters
+		# -- Angle at which the path enters
 		self.phi = kwargs.pop('phi', 0.)
 
-		# - Control points of the Bezier curve at this point
+		# -- Control points of the Bezier curve at this point
 		self.v_left = complex(0,0)
 		self.u_right = complex(0,0)
 	
-	# - Angle turned by the polyline at this point
+	# -- Properties -----------------------------
+	@property
+	def index(self):
+		return self.idx
+
+	@property
+	def contour(self):
+		return self.parent
+
+	@property
+	def tuple(self):
+		return (self.x, self.y)
+
+	@property
+	def complex(self):
+		return complex(self.x, self.y)
+
+	@tuple.setter
+	def tuple(self, other):
+		if isinstance(other, (tuple, list)) and len(other)==2:
+			self.x = float(other[0])
+			self.y = float(other[1])
+
+	@property
+	def point(self):
+		return Point(self.x, self.y, angle=self.angle, transform=self.transform, complex=self.complex_math)
+
+	@point.setter
+	def point(self, other):
+		if isinstance(other, (self.__class__, Point)):
+			self.x = other.x 
+			self.y = other.y 
+			self.angle = other.angle 
+			self.transform = other.transform 
+			self.complex_math = other.complex_math 
+	
+	@property
+	def clockwise(self):
+		return not ccw(self.prev.point.tuple, self.point.tuple, self.next.point.tuple)
+		
+	@property
+	def is_on(self):
+		return self.type == node_types['on']
+
+	@property
+	def distance_to_next(self):
+		return self.distance_to(self.next)
+
+	@property
+	def distance_to_prev(self):
+		return self.distance_to(self.prev)
+
+	@property
+	def angle_to_next(self):
+		return self.angle_to(self.next)
+
+	@property
+	def angle_to_prev(self):
+		return self.angle_to(self.prev)
+
+	@property
+	def angle_poly_turn(self):
+		temp_point = (self.next.point - self.point)/(self.point - self.prev.point)
+		return math.atan2(temp_point.y, temp_point.x) # Arg (Argument): math.atan2(z.imag, z.real)
+
+	# -- Angle turned by the polyline at this point
 	@property
 	def xi(self):
 		return self.angle_poly_turn        
 	
-	# - Distance to previous point in the path
+	# -- Distance to previous point in the path
 	@property
 	def d_ant(self):
-		return self.distance_to_prev_on     
+		return self.distance_to_prev   
 	
-	# - Distance to next point in the path
+	# -- Distance to next point in the path
 	@property
 	def d_post(self):
-		return self.distance_to_next_on     
+		return self.distance_to_next
+
+
+	# - Functions ----------------------------
+	def distance_to(self, other):
+		return self.point.diff_to(other.point)
+
+	def angle_to(self, other):
+		return self.point.angle_to(other.point)
+
+	# - Transformation ------------------------
+	def apply_transform(self):
+		self.x, self.y = self.transform.applyTransformation(self.x, self.y)
+		
+	def reloc(self, new_x, new_y):
+		'''Relocate the node to new coordinates'''
+		self.point = Point(new_x, new_y)
+	
+	def shift(self, delta_x, delta_y):
+		'''Shift the node by given amout'''
+		self.point += Point(delta_x, delta_y)
 
 if __name__ == '__main__':
 	# - Test initialization, normal and from VFJ
