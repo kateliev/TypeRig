@@ -13,7 +13,7 @@ from __future__ import absolute_import, print_function, division
 import math, cmath, random
 
 # - Init --------------------------------
-__version__ = '0.26.7'
+__version__ = '0.26.8'
 
 epsilon = 0.000001
 
@@ -241,8 +241,8 @@ def hobby_control_points(z0, z1, theta=0., phi=0., alpha=1., beta=1.):
 	at each one, this function finds the appropiate control points of the
 	Bezier's curve, using John Hobby's algorithm (METAFONT book)'''
 	i = complex(0,1)
-	u = z0 + cmath.exp(i*theta)*(z1 - z0)*hobby_velocity(theta, phi)*alpha
-	v = z1 - cmath.exp(-i*phi)*(z1 - z0)*hobby_velocity(phi, theta)*beta
+	u = z0 + cmath.exp(i*theta)*(z1 - z0)*hobby_velocity(theta, phi)/alpha #was *alpha
+	v = z1 - cmath.exp(-i*phi)*(z1 - z0)*hobby_velocity(phi, theta)/beta #was *beta
 	return (u,v)
 
 # - Test ----------------------------------------------------------------	

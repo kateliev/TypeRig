@@ -26,7 +26,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.node import Node, Knot
 
 # - Init -------------------------------
-__version__ = '0.3.6'
+__version__ = '0.3.8'
 
 # - Classes -----------------------------
 class Contour(Container): 
@@ -283,6 +283,8 @@ class HobbySpline(Container):
 		self.name = kwargs.pop('name', '')
 		self.closed = kwargs.pop('closed', False)
 		self.clockwise = kwargs.pop('clockwise', self.get_winding())
+		self.curl_start = kwargs.pop('curl', 1.)
+		self.curl_end = self.curl_start
 
 	# - Internals ------------------------------
 	def __getitem__(self, index):
@@ -301,14 +303,35 @@ class HobbySpline(Container):
 		
 		# - Init
 		A=[]; B=[]; C=[]; D=[]; R=[];
+
+		if not self.closed:
+			A.append(0) 
+			B.append(0)
+			
+			xi_0 = (self[0].alpha**2) * self.curl_start / (self[1].beta**2)
+			
+			C.append(xi_0*self[0].alpha + 3 - self[1].beta)
+			D.append((3 - self[0].alpha)*xi_0 + self[1].beta)
+			R.append(-D[0]*self[1].xi)
 		
-		for k in range(len(self)):
+		for k in self.knot_count:
 			A.append(   self[k-1].alpha  / ((self[k].beta**2)  * self[k].d_ant))
 			B.append((3-self[k-1].alpha) / ((self[k].beta**2)  * self[k].d_ant))
 			C.append((3-self[k+1].beta)  / ((self[k].alpha**2) * self[k].d_post))
 			D.append(   self[k+1].beta   / ((self[k].alpha**2) * self[k].d_post))
 			R.append(-B[k] * self[k].xi  - D[k] * self[k+1].xi)
 		
+		if not self.closed:
+			n = len(R)
+			C.append(0)
+			D.append(0)
+
+			xi_n = (self[n].beta**2) * self.curl_end / (self[n-1].alpha**2)
+
+			A.append((3 - self[n].beta)*xi_n + self[n-1].alpha)
+			B.append(self[n].beta*xi_n + 3 - self[n-1].alpha)
+			R.append(0)
+
 		return (A, B, C, D, R)
 		
 	# - Procedures ----------------------------
@@ -360,7 +383,7 @@ class HobbySpline(Container):
 		this function computes the control points for each knot and stores
 		it in the path. After this, it is possible to print path to get
 		a string suitable to be feed to tikz.'''
-		
+
 		# - Calculate bezier control points
 		for kid in range(len(self.knots)):
 			z0 = self[kid].complex
@@ -388,7 +411,7 @@ class HobbySpline(Container):
 		'''Check if contour has clockwise winding direction'''
 		return self.get_on_area() > 0
 
-	def get_on_area(self):
+	def get_area(self):
 		'''Get contour area using on curve points only'''
 		polygon_area = []
 
@@ -423,6 +446,12 @@ class HobbySpline(Container):
 					item = self._subclass(item, parent=self)
 					self.data.append(item)
 
+	@property
+	def knot_count(self):
+		if self.closed:
+			return range(len(self.data))
+		else:
+			return range(1, len(self.data) - 1)
 
 	@property
 	def tension(self):
