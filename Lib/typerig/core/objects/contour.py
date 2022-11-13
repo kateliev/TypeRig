@@ -393,10 +393,10 @@ class HobbySpline(Container):
 			alpha = self[kid].alpha
 			beta = self[kid + 1].beta
 
-			u,v = hobby_control_points(z0, z1, theta, phi, alpha, beta)
+			u, v = hobby_control_points(z0, z1, theta, phi, alpha, beta)
 
 			self[kid].u_right = u
-			self[kid+1].v_left = v
+			self[kid + 1].v_left = v
 
 	def reverse(self):
 		self.data = list(reversed(self.data))
@@ -409,7 +409,7 @@ class HobbySpline(Container):
 
 	def get_winding(self):
 		'''Check if contour has clockwise winding direction'''
-		return self.get_on_area() > 0
+		return self.get_area() > 0
 
 	def get_area(self):
 		'''Get contour area using on curve points only'''
