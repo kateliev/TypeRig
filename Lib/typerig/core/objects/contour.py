@@ -283,8 +283,8 @@ class HobbySpline(Container):
 		self.name = kwargs.pop('name', '')
 		self.closed = kwargs.pop('closed', False)
 		self.clockwise = kwargs.pop('clockwise', self.get_winding())
-		self.curl_start = kwargs.pop('curl', 1.)
-		self.curl_end = self.curl_start
+		self.curl_start = kwargs.pop('curl_start', 1.)
+		self.curl_end = kwargs.pop('curl_end', self.curl_start)
 
 	# - Internals ------------------------------
 	def __getitem__(self, index):
