@@ -24,7 +24,7 @@ from typerig.core.objects.point import Point, Void
 from typerig.core.objects.array import PointArray
 
 # - Init -------------------------------
-__version__ = '0.10.8'
+__version__ = '0.10.9'
 
 # - Objects ------------------------------------
 # -- Interpolation -----------------------------
@@ -211,6 +211,26 @@ class DeltaScale(Sequence):
 	def __delta_scale(self, x, y, tx, ty, sx, sy, cx, cy, dx, dy, i):
 		return utils.adaptive_scale(((x[0],y[0]), (x[1],y[1])), (sx, sy), (dx, dy), (tx, ty), (cx,cy), i, (x[2], x[3], y[2], y[3]))
 
+	def _stem_for_time(self, stx, sty, extrapolate=False):
+		tx, ty = 0., 0.
+
+		for sti in range(len(self.stems)):
+			stx0, stx1 = self.stems[sti][0]
+			sty0, sty1 = self.stems[sti][1]
+			#if stx0 <= stx <= stx1 : tx = sti + utils.timer(stx, stx0, stx1, True)
+			#if sty0 <= sty <= sty1 : ty = sti + utils.timer(sty, sty0, sty1, True)
+			if stx0 <= stx: tx = sti + utils.timer(stx, stx0, stx1, True)
+			if sty0 <= sty: ty = sti + utils.timer(sty, sty0, sty1, True)
+
+		if extrapolate:
+			stx0, stx1 = self.stems[0][0]
+			sty0, sty1 = self.stems[0][1]
+
+			if tx == 0 and stx < stx0 :	tx = utils.timer(stx, stx0, stx1, True)
+			if ty == 0 and sty < sty0 :	ty = utils.timer(sty, sty0, sty1, True)
+
+		return tx, ty
+
 	# - IO ---------------------------------------
 	def dump(self):
 		return self.x, self.y, self.stems
@@ -247,37 +267,10 @@ class DeltaScale(Sequence):
 		dx, dy = shift
 		i = italic_angle
 
-		tx, ty = 0., 0.
-		for sti in range(len(self.stems)):
-			stx0, stx1 = self.stems[sti][0]
-			sty0, sty1 = self.stems[sti][1]
-			#if stx0 <= stx <= stx1 : tx = sti + utils.timer(stx, stx0, stx1, True)
-			#if sty0 <= sty <= sty1 : ty = sti + utils.timer(sty, sty0, sty1, True)
-			if stx0 <= stx: tx = sti + utils.timer(stx, stx0, stx1, True)
-			if sty0 <= sty: ty = sti + utils.timer(sty, sty0, sty1, True)
-
-		if extrapolate:
-			stx0, stx1 = self.stems[0][0]
-			sty0, sty1 = self.stems[0][1]
-
-			if tx == 0 and stx < stx0 :	tx = utils.timer(stx, stx0, stx1, True)
-			if ty == 0 and sty < sty0 :	ty = utils.timer(sty, sty0, sty1, True)
-
-		a0, a1, ntx, nty = self.__mixer(tx, ty, extrapolate)
-		process_array = zip(a0, a1)
-
-		if not to_dimension:
-			sx, sy = scale_or_dimension
-		else:
-			w0 = max(a0, key= lambda i: i[0])[0] - min(a0, key= lambda i: i[0])[0]
-			w1 = max(a0, key= lambda i: i[1])[1] - min(a0, key= lambda i: i[1])[1]
-			h0 = max(a1, key= lambda i: i[0])[0] - min(a0, key= lambda i: i[0])[0]
-			h1 = max(a1, key= lambda i: i[1])[1] - min(a0, key= lambda i: i[1])[1]
-			sx, sy = utils.adjuster(((w0, w1), (h0, h1)), scale_or_dimension, (ntx, nty), (dx, dy), (a0[0][2], a0[0][3], a1[0][2], a1[0][3]))
+		tx, ty = self._stem_for_time(stx, sty, extrapolate)
+		result = self.scale_by_time((tx, ty), scale_or_dimension, compensation, shift, italic_angle, extrapolate, to_dimension)
 		
-		result = map(lambda arr: self.__delta_scale(arr[0], arr[1], ntx, nty, sx, sy, cx, cy, dx, dy, i), process_array)
 		return result
-
 
 if __name__ == '__main__':
 	arr = PointArray([Point(10,10), Point(740,570), Point(70,50)])
