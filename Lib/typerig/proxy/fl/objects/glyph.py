@@ -1106,13 +1106,13 @@ class pGlyph(object):
 		'''
 		pLayer = self.layer(layer)
 		pTransform = pLayer.transform
-		pTransform.shear(math.tan(math.radians((deg)), 0))
+		pTransform.shear(math.tan(math.radians((deg))), 0.)
 		pLayer.applyTransform(pTransform)
 
 	def rotate(self, deg, layer=None):
 		'''Rotate outline at given layer.
 		Args:
-			deg (float): degrees of slant
+			deg (float): degrees of rotation
 			layer (int or str): Layer index or name. If None returns ActiveLayer
 		Returns:
 			None
