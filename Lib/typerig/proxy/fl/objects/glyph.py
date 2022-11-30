@@ -32,7 +32,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.30.9'
+__version__ = '0.31.0'
 
 # - Keep compatibility for basestring checks
 try:
@@ -1435,7 +1435,7 @@ class pGlyph(object):
 	def drawContours(self, pen, layer=None):
 		''' Utilizes the Pen protocol'''
 		for contour in self.selectedContours(layer):
-				current_transform = shape.fl_transform.transform
+				current_transform = contour.transform
 				temp_contour = contour.convertToFgContour(current_transform)
 				
 				# - Fix mirrored shapes
