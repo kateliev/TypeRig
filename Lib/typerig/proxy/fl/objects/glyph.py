@@ -32,7 +32,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.31.0'
+__version__ = '0.31.1'
 
 # - Keep compatibility for basestring checks
 try:
@@ -825,8 +825,12 @@ class pGlyph(object):
 		#return [node for node in self.nodes(layer, extend, deep) if node.selected]
 
 	def selectedContours(self, layer=None, allNodesSelected=False, deep=False):
-		selection_mode = 3 if allNodesSelected else 1
-		return [contour for contour in self.contours(layer, deep=deep) if contour.hasSelected(selection_mode)]
+		#selection_mode = 3 if allNodesSelected else 1
+		#return [contour for contour in self.contours(layer, deep=deep) if contour.hasSelected(selection_mode)]
+		all_contours = self.contours(layer, deep=deep)
+		selected_contours = [node.contour for node in self.selectedNodes(layer, deep=deep)]
+		filtered_contours = set([all_contours.index(contour) for contour in selected_contours])
+		return [all_contours[cid] for cid in filtered_contours ]
 
 	def selectedShapes(self, layer=None, allNodesSelected=False, deep=False):
 		selection_mode = 3 if allNodesSelected else 1
