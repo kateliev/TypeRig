@@ -28,7 +28,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '3.02'
+app_name, app_version = 'TypeRig | Nodes', '3.03'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -57,7 +57,7 @@ QPushButton#btn_panel_opt,
 QPushButton#btn_panel {
     color: #212121;
     font-family: "TypeRig Icons";
-    font-size: 18px;
+    font-size: 20px;
     background: none;
     border-radius: 5px;
     /*margin: 2 0 2 0;*/
@@ -125,8 +125,8 @@ class TRNodeBasics(QtGui.QWidget):
 		# - Layout
 		self.lay_main = QtGui.QVBoxLayout()
 		
-		# - Widgets and tools
-		# -- Node tools
+		# - Widgets and tools -------------------------------------------------
+		# -- Node tools -------------------------------------------------------
 		box_node = QtGui.QGroupBox()
 		box_node.setObjectName('box_group')
 		
@@ -161,7 +161,7 @@ class TRNodeBasics(QtGui.QWidget):
 		box_node.setLayout(lay_node)
 		self.lay_main.addWidget(box_node)
 		
-		# -- Corner Tools
+		# -- Corner Tools -------------------------------------------------------
 		box_corner = QtGui.QGroupBox()
 		box_corner.setObjectName('box_group')
 		
@@ -201,7 +201,7 @@ class TRNodeBasics(QtGui.QWidget):
 		box_corner.setLayout(lay_corner)
 		self.lay_main.addWidget(box_corner)
 
-		# -- Align Tools
+		# -- Align Tools -------------------------------------------------------
 		box_align = QtGui.QGroupBox()
 		box_align.setObjectName('box_group')
 
@@ -238,7 +238,7 @@ class TRNodeBasics(QtGui.QWidget):
 		self.grp_align_options_other.addButton(self.chk_node_target, 3)
 		lay_align.addWidget(self.chk_node_target, 0, 4)
 
-		# - Actions
+		# --- Actions
 		tooltip_button = "Align selected nodes left"
 		self.btn_node_align_left = CustomPushButton("node_align_left", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_align_left.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'L', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
@@ -356,7 +356,7 @@ class TRNodeBasics(QtGui.QWidget):
 		box_align.setLayout(lay_align)
 		self.lay_main.addWidget(box_align)
 
-		# - Slope tools
+		# -- Slope tools -------------------------------------------------------
 		box_slope = QtGui.QGroupBox()
 		box_slope.setObjectName('box_group')
 
@@ -365,7 +365,7 @@ class TRNodeBasics(QtGui.QWidget):
 		lay_slope = QtGui.QGridLayout()
 		lay_slope.setContentsMargins(0, 0, 0, 0)
 
-		# - Options
+		# --- Options 
 		tooltip = "Copy slope between selected nodes"
 		self.chk_slope_copy = CustomPushButton("slope_copy", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_slope_options.addButton(self.chk_slope_copy)
@@ -406,7 +406,75 @@ class TRNodeBasics(QtGui.QWidget):
 		box_slope.setLayout(lay_slope)
 		self.lay_main.addWidget(box_slope)
 
-		# - Finish it
+		# -- Copy Nodes ------------------------------------------------------
+		box_copy_nodes = QtGui.QGroupBox()
+		box_copy_nodes.setObjectName('box_group')
+
+		self.grp_copy_nodes_options = QtGui.QButtonGroup()
+
+		lay_copy_nodes = QtGui.QGridLayout()
+		lay_copy_nodes.setContentsMargins(0, 0, 0, 0)
+
+		# --- Options
+		tooltip = "Paste Align Top Left"
+		self.chk_paste_top_left = CustomPushButton("node_align_top_left", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_copy_nodes_options.addButton(self.chk_paste_top_left)
+		lay_copy_nodes.addWidget(self.chk_paste_top_left, 0, 0)
+		#self.chk_paste_top_left.clicked.connect(...)
+
+		tooltip = "Paste: Align Top Right"
+		self.chk_paste_top_right = CustomPushButton("node_align_top_right", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_copy_nodes_options.addButton(self.chk_paste_top_right)
+		lay_copy_nodes.addWidget(self.chk_paste_top_right, 0, 1)
+		#self.chk_paste_top_right.clicked.connect(...)
+
+		tooltip = "Paste: Align Bottom Left"
+		self.chk_paste_bottom_left = CustomPushButton("node_align_bottom_left", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_copy_nodes_options.addButton(self.chk_paste_bottom_left)
+		lay_copy_nodes.addWidget(self.chk_paste_bottom_left, 0, 3)
+		#self.chk_paste_bottom_left.clicked.connect(...)
+
+		tooltip = "Paste: Align Bottom Right"
+		self.chk_paste_bottom_right = CustomPushButton("node_align_bottom_right", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_copy_nodes_options.addButton(self.chk_paste_bottom_right)
+		lay_copy_nodes.addWidget(self.chk_paste_bottom_right, 0, 4)
+		#self.chk_paste_bottom_right.clicked.connect(...)
+
+
+		tooltip = "Paste: Flip horizontally"
+		self.chk_paste_flip_h = CustomPushButton("flip_horizontal", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		#self.grp_paste_nodes_options.addButton(self.chk_paste_flip_h)
+		lay_copy_nodes.addWidget(self.chk_paste_flip_h, 1, 0)
+		#self.chk_paste_flip_h.clicked.connect(...)
+
+		tooltip = "Paste: Flip vertically"
+		self.chk_flip_v = CustomPushButton("flip_vertical", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		#self.grp_paste_nodes_options.addButton(self.chk_flip_v)
+		lay_copy_nodes.addWidget(self.chk_flip_v, 1, 1)
+		#self.chk_flip_v.clicked.connect(...)
+
+		tooltip = "Paste: Reverse Order"
+		self.chk_paste_reverse = CustomPushButton("contour_reverse", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		#self.grp_copy_nodes_options.addButton(self.chk_paste_reverse)
+		lay_copy_nodes.addWidget(self.chk_paste_reverse, 1, 2)
+		#self.chk_paste_reverse.clicked.connect(...)
+
+		tooltip = "Copy: Selected Nodes"
+		self.chk_copy_nodes = CustomPushButton("node_copy", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		#self.grp_copy_nodes_options.addButton(self.chk_copy_nodes)
+		lay_copy_nodes.addWidget(self.chk_copy_nodes, 1, 3)
+		#self.chk_copy_nodes.clicked.connect(...)
+
+		tooltip = "Paste: Nodes stored in Memory"
+		self.chk_copy_nodes = CustomPushButton("node_paste", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		#self.grp_copy_nodes_options.addButton(self.chk_copy_nodes)
+		lay_copy_nodes.addWidget(self.chk_copy_nodes, 1, 4)
+		#self.chk_copy_nodes.clicked.connect(...)
+
+		box_copy_nodes.setLayout(lay_copy_nodes)
+		self.lay_main.addWidget(box_copy_nodes)
+
+		# -- Finish it -------------------------------------------------------
 		self.setLayout(self.lay_main)
 
 	# - Procedures ------------------------------------------------
