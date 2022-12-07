@@ -26,7 +26,7 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.3.6'
+__version__ = '0.3.7'
 
 # - Keep compatibility for basestring checks
 try:
@@ -141,6 +141,22 @@ def FLIconButton(button_text, icon_path, icon_size=32, checkable=False):
 	return new_button
 
 # -- Miniwidgets --------------------------
+class CustomDoubleSpinBox(QtGui.QDoubleSpinBox):
+	def __init__(self, init_values=(0., 100., 0., 1.), tooltip=None, obj_name=None):
+		super(CustomDoubleSpinBox, self).__init__()
+
+		# - Init
+		spb_min, spb_max, spb_value, spb_step = init_values
+
+		# - Set
+		self.setMinimum(spb_min)
+		self.setMaximum(spb_max)
+		self.setValue(spb_value)
+		self.setSingleStep(spb_step)
+
+		if tooltip is not None: self.setToolTip(tooltip)
+		if obj_name is not None: self.setObjectName(obj_name)
+
 class CustomSpinButton(QtGui.QWidget):
 	def __init__(self, button_text, init_values=(0., 100., 0., 1.), tooltip=(None, None), obj_name=(None, None)):
 		super(CustomSpinButton, self).__init__()
