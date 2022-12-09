@@ -32,7 +32,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.31.1'
+__version__ = '0.31.2'
 
 # - Keep compatibility for basestring checks
 try:
@@ -768,7 +768,7 @@ class pGlyph(object):
 			contour.changed()
 		
 		fl6.flItems.notifyPackageContentUpdated(self.fl.fgPackage.id)
-		#fl6.Update()
+		fl6.Update()
 		
 		'''# - Type specific way 
 		# -- Covers flGlyph, flLayer, flShape
