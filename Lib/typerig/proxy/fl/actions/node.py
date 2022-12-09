@@ -34,7 +34,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.69'
+__version__ = '2.70'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -270,7 +270,7 @@ class TRNodeActionCollector(object):
 			return
 
 		radius, curvature = dlg_get_input.values
-		TRNodeActionCollector.corner_round(glyph, pLayers, radius, curvature)
+		TRNodeActionCollector.corner_round(pMode, pLayers, radius, curvature)
 
 	@staticmethod
 	def corner_loop(pMode:int, pLayers:tuple, radius:float):

@@ -21,7 +21,7 @@ from typerig.core.objects.utils import Bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 # - Init ---------------------------------
-__version__ = '0.28.2'
+__version__ = '0.28.3'
 
 # - Keep compatibility for basestring checks
 try:
@@ -492,6 +492,7 @@ class eNode(pNode):
 		# - Calculate unit vectors and shifts
 		nextNode = self.getNextOn(False)
 		prevNode = self.getPrevOn(False)
+		safe_distance = min((self.distanceTo(prevNode), self.distanceTo(nextNode)))
 
 		nextUnit = Coord(nextNode.asCoord() - self.asCoord()).unit
 		prevUnit = Coord(prevNode.asCoord() - self.asCoord()).unit
@@ -505,6 +506,9 @@ class eNode(pNode):
 			radius = abs(float(size)*(math.cos(angle/2)/math.sin(angle/2.))) 
 		else:
 			radius = size
+
+		if radius > safe_distance:
+			radius = safe_distance - 0.1
 
 		nextShift = nextUnit * radius
 		prevShift = prevUnit * radius
