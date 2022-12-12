@@ -28,7 +28,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '3.03'
+app_name, app_version = 'TypeRig | Nodes', '3.04'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -54,7 +54,8 @@ QDoubleSpinBox#spn_panel {
 }
 
 QPushButton#btn_panel_opt,
-QPushButton#btn_panel, QLabel#lbl_panel {
+QPushButton#btn_panel, 
+QLabel#lbl_panel {
     color: #212121;
     font-family: "TypeRig Icons";
     font-size: 20px;
@@ -492,51 +493,79 @@ class TRNodeBasics(QtGui.QWidget):
 		tooltip_button =  "Smart Shift:\n Move off-curve nodes together with on-curve ones"
 		self.chk_shift_smart = CustomPushButton("shift_smart", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_move_nodes_options.addButton(self.chk_shift_smart)
-		lay_move_nodes.addWidget(self.chk_shift_smart, 0, 0)
+		lay_move_nodes.addWidget(self.chk_shift_smart, 0, 0, 1, 1)
 
 		tooltip_button =  "Shift:\n Do not move off-curve nodes together with on-curve ones"
 		self.chk_shift_dumb = CustomPushButton("shift_dumb", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_move_nodes_options.addButton(self.chk_shift_dumb)
-		lay_move_nodes.addWidget(self.chk_shift_dumb, 0, 1)
+		lay_move_nodes.addWidget(self.chk_shift_dumb, 0, 1, 1, 1)
 
 		tooltip_button =  "Interpolated shift"
 		self.chk_shift_lerp = CustomPushButton("shift_interpolate", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_move_nodes_options.addButton(self.chk_shift_lerp)
-		lay_move_nodes.addWidget(self.chk_shift_lerp, 0, 2)
+		lay_move_nodes.addWidget(self.chk_shift_lerp, 0, 2, 1, 1)
 		#self.chk_paste_top_left.clicked.connect(...)
 
 		tooltip_button =  "Italic walker:\n Vertical shift along the font's italic angle"
 		self.chk_shift_italic = CustomPushButton("shift_slope_italik", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_move_nodes_options.addButton(self.chk_shift_italic)
-		lay_move_nodes.addWidget(self.chk_shift_italic, 0,3)
+		lay_move_nodes.addWidget(self.chk_shift_italic, 0, 3, 1, 1)
 		#self.chk_paste_top_left.clicked.connect(...)
 
 		tooltip_button =  "Slope walker:\n Vertical shift along a given slope"
 		self.chk_shift_slope = CustomPushButton("shift_slope_walk", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_move_nodes_options.addButton(self.chk_shift_slope)
-		lay_move_nodes.addWidget(self.chk_shift_slope, 0, 4)
+		lay_move_nodes.addWidget(self.chk_shift_slope, 0, 4, 1, 1)
 		#self.chk_paste_top_left.clicked.connect(...)
 
 		tooltip_button =  "Copy slope between selected nodes"
 		self.chk_shift_italic = CustomPushButton("slope_copy", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		#self.grp_move_nodes_options.addButton(self.chk_shift_italic)
-		lay_move_nodes.addWidget(self.chk_shift_italic, 0, 5)
+		lay_move_nodes.addWidget(self.chk_shift_italic, 0, 5, 1, 1)
 		#self.chk_paste_top_left.clicked.connect(...)
 
 		lbl_x = CustomLabel('X', obj_name='lbl_panel')
-		lay_move_nodes.addWidget(lbl_x, 1, 0)
+		lay_move_nodes.addWidget(lbl_x, 1, 0, 1, 1)
 
 		self.spn_move_x = CustomDoubleSpinBox(init_values=(-999., 999., 0., 1.), tooltip='Horizontal shift value', obj_name='spn_panel')
-		lay_move_nodes.addWidget(self.spn_move_x, 1, 1)
+		lay_move_nodes.addWidget(self.spn_move_x, 1, 1, 1, 2)
 
 		lbl_y = CustomLabel('Y', obj_name='lbl_panel')
-		lay_move_nodes.addWidget(lbl_y, 1, 2)
+		lay_move_nodes.addWidget(lbl_y, 2, 0, 1, 1)
 
-		self.spn_move_y = CustomDoubleSpinBox(init_values=(-999., 999., 0., 1.), tooltip='Horizontal shift value', obj_name='spn_panel')
-		lay_move_nodes.addWidget(self.spn_move_y, 1, 3)
+		self.spn_move_y = CustomDoubleSpinBox(init_values=(-999., 999., 0., 1.), tooltip='Vertical shift value', obj_name='spn_panel')
+		lay_move_nodes.addWidget(self.spn_move_y, 2, 1, 1, 2)
 
+		tooltip_button = "Shift Left"
+		self.chk_shift_left = CustomPushButton("arrow_left", checkable=False, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		#self.grp_move_nodes_options.addButton(self.chk_shift_left)
+		lay_move_nodes.addWidget(self.chk_shift_left, 1, 3, 1, 1)
+		#self.chk_paste_top_left.clicked.connect(...)
 
-	
+		tooltip_button = "Shift Right"
+		self.chk_shift_right = CustomPushButton("arrow_right", checkable=False, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		#self.grp_move_nodes_options.addButton(self.chk_shift_right)
+		lay_move_nodes.addWidget(self.chk_shift_right, 1, 4, 1, 1)
+		#self.chk_paste_top_left.clicked.connect(...)
+
+		tooltip_button = "Shift Up"
+		self.chk_shift_up = CustomPushButton("arrow_up", checkable=False, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		#self.grp_move_nodes_options.addButton(self.chk_shift_up)
+		lay_move_nodes.addWidget(self.chk_shift_up, 2, 3, 1, 1)
+		#self.chk_paste_top_left.clicked.connect(...)
+
+		tooltip_button = "Shift Down"
+		self.chk_shift_down = CustomPushButton("arrow_down", checkable=False, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		#self.grp_move_nodes_options.addButton(self.chk_shift_down)
+		lay_move_nodes.addWidget(self.chk_shift_down, 2, 4, 1, 1)
+		#self.chk_paste_top_left.clicked.connect(...)
+
+		tooltip_button =  "Capture keyboard:\n Capture input from the keyboard arrow keys"
+		self.chk_shift_capture = CustomPushButton("keyboard_arows", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_move_nodes_options.addButton(self.chk_shift_capture)
+		lay_move_nodes.addWidget(self.chk_shift_capture, 2, 5, 1, 1)
+		#self.chk_paste_top_left.clicked.connect(...)
+
 
 		box_move_nodes.setLayout(lay_move_nodes)
 		self.lay_main.addWidget(box_move_nodes)
