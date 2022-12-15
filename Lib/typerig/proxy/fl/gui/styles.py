@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 
 # -- CSS Styling ------------------------
 css_fl_button = '''
@@ -50,9 +50,9 @@ QLabel#lbl_icon {
 }
 
 QPushButton#btn_mast {
-	color: #212121;
-	font-family: "TypeRig Icons";
-	font-size: 20px;
+    color: #212121;
+    font-family: "TypeRig Icons";
+    font-size: 20px;
     background: none;
     border-radius: 5px;
     margin: 2 0 2 0;
@@ -84,17 +84,46 @@ QPushButton#btn_mast:disabled {
     border: none;
 }
 
-QPushButton#btn_panel {
-    color: #212121;
-    font-family: "TypeRig Icons";
-    font-size: 16px;
-    background: none;
+QGroupBox#box_group {
+    background: #edeeef;
     border-radius: 5px;
-    margin: 2 0 2 0;
-    padding: 2 0 2 0;
-    min-height: 18px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-right: 5px;
+    padding-left: 5px;
+    margin-top: 0px;
+    margin-bottom: 5px;
+    margin-right: 0px;
+    margin-left: 0px;
+    border: none;
 }
 
+QDoubleSpinBox#spn_panel {
+    max-height: 20px;
+    max-width: 60px;
+}
+
+QPushButton#btn_panel_opt,
+QPushButton#btn_panel, 
+QLabel#lbl_panel {
+    color: #212121;
+    font-family: "TypeRig Icons";
+    font-size: 20px;
+    background: none;
+    border-radius: 5px;
+    /*margin: 2 0 2 0;*/
+    /*padding: 2 0 2 0;*/
+    max-height: 26px;
+    max-width: 26px;
+    min-height: 26px;
+    min-width: 26px;
+}
+
+QPushButton#btn_panel_opt{
+    border: 1px solid #d1d2d3;
+}
+
+QPushButton#btn_panel_opt:checked,
 QPushButton#btn_panel:checked {
     background-color: #9c9e9f;
     border: 1px solid #dadbdc;
@@ -102,20 +131,31 @@ QPushButton#btn_panel:checked {
     color: #ffffff;
 }
 
+QPushButton#btn_panel_opt:checked:hover,
+QPushButton#btn_panel:checked:hover {
+    background-color: #9c9e9f;
+    border: 1px solid #dadbdc;
+    border-top-color: #d1d2d3;
+    color: #ffffff;
+   
+}
+
+QPushButton#btn_panel_opt:hover,
 QPushButton#btn_panel:hover {
     background-color: #ffffff;
     color: #212121;
-    /*border: 1px solid #dadbdc;*/
-    border-bottom-color: #d1d2d3;
 }
 
+QPushButton#btn_panel_opt:pressed,
 QPushButton#btn_panel:pressed {
     background-color: #9c9e9f;
     color: #ffffff;
 }
 
+QPushButton#btn_panel_opt:disabled,
 QPushButton#btn_panel:disabled {
     background-color: transparent;
+    color: #9c9e9f;
     border: none;
 }
 

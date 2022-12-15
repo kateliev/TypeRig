@@ -29,15 +29,13 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '3.10'
+app_name, app_version = 'TypeRig | Nodes', '3.11'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
 
 # - Styling ----------------------------
 temp_css = '''
-
-
 '''
 # -- Helpers ------------------------------
 def get_modifier(keyboard_modifier=QtCore.Qt.AltModifier):
