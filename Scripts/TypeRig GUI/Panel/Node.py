@@ -1,6 +1,6 @@
 #FLM: TR: Nodes
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2017-2021 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2017-2022 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 
@@ -9,1029 +9,585 @@
 
 # - Dependencies -----------------
 from __future__ import absolute_import, print_function
-
-import warnings
+from collections import OrderedDict
+from math import degrees
 
 import fontlab as fl6
-import fontgate as fgt
+from PythonQt import QtCore, QtGui
 
-from typerig.proxy.fl.objects.node import eNode, eNodesContainer
-from typerig.proxy.fl.objects.contour import pContour
-from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.objects.font import pFont
-from typerig.proxy.fl.objects.base import Line, Vector
+from typerig.proxy.fl.objects.glyph import eGlyph
 
-from typerig.core.func.collection import group_consecutive
-from typerig.core.base.message import *
-
-from PythonQt import QtCore
-from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import getProcessGlyphs
+from typerig.proxy.fl.actions.node import TRNodeActionCollector
+from typerig.proxy.fl.application.app import pWorkspace
+#from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomLabel, CustomPushButton, CustomSpinButton, CustomDoubleSpinBox
+from typerig.proxy.fl.gui.styles import css_tr_button
 
 # - Init -------------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '2.13'
+app_name, app_version = 'TypeRig | Nodes', '3.10'
 
-# - Helpers ----------------------------
-def filter_consecutive(selection):
-	'''Group the results of selectedAtContours and filter out consecutive nodes.'''
-	selection_dict = {}
-	map_dict = {}
-				
-	for cID, nID in selection:
-		selection_dict.setdefault(cID,[]).append(nID)
-		map_dict.setdefault(cID, []).append(nID - 1 in selection_dict[cID])
+TRToolFont = getTRIconFontPath()
+font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
 
-	return {key: [value[i] for i in range(len(value)) if not map_dict[key][i]] for key, value in selection_dict.items()}
+# - Styling ----------------------------
+temp_css = '''
+
+
+'''
+# -- Helpers ------------------------------
+def get_modifier(keyboard_modifier=QtCore.Qt.AltModifier):
+	modifiers = QtGui.QApplication.keyboardModifiers()
+	return modifiers == keyboard_modifier
 
 # - Sub widgets ------------------------
-class basicOps(QtGui.QGridLayout):
-	# - Basic Node operations
+class TRNodeBasics(QtGui.QWidget):
 	def __init__(self):
-		super(basicOps, self).__init__()
+		super(TRNodeBasics, self).__init__()
 		
-		# - Basic operations
-		self.btn_insert = QtGui.QPushButton('&Insert')
-		self.btn_remove = QtGui.QPushButton('&Remove')
-		self.btn_mitre = QtGui.QPushButton('&Mitre')
-		self.btn_knot = QtGui.QPushButton('&Overlap')
-		self.btn_trapA = QtGui.QPushButton('&Trap')
-		self.btn_rebuild = QtGui.QPushButton('Rebuil&d')
-						
-		self.btn_insert.setMinimumWidth(80)
-		self.btn_remove.setMinimumWidth(80)
-		self.btn_mitre.setMinimumWidth(80)
-		self.btn_knot.setMinimumWidth(80)
-		self.btn_trapA.setMinimumWidth(80)
-		self.btn_rebuild.setMinimumWidth(80)
-
-		self.btn_insert.setToolTip('Insert Node:\n- Click - Insert between selected nodes at given time T;\n- Click + ALT - Insert after each node in selection at given time T.')
-		self.btn_remove.setToolTip('Remove Selected Nodes!\nFor proper curve node deletion\nalso select the associated handles!')
-		self.btn_mitre.setToolTip('Mitre corner using size X.')
-		self.btn_knot.setToolTip('Overlap corner using radius -X.')
-		self.btn_trapA.setToolTip('Insert Angular (generic) Ink Trap at node selected')
-		self.btn_rebuild.setToolTip('Rebuild corner from nodes selected.')
-		
-		self.btn_insert.clicked.connect(self.insertNode)
-		self.btn_remove.clicked.connect(self.removeNode)
-		self.btn_mitre.clicked.connect(lambda: self.cornerMitre(False))
-		self.btn_knot.clicked.connect(lambda: self.cornerMitre(True))
-		self.btn_trapA.clicked.connect(lambda: self.cornerTrap())
-		self.btn_rebuild.clicked.connect(lambda: self.cornerRebuild())
-
-		# - Edit fields
-		self.edt_time = QtGui.QLineEdit('0.5')
-		self.edt_radius = QtGui.QLineEdit('5')
-		self.edt_trap = QtGui.QLineEdit('5, 30, 2')
-		
-		self.edt_time.setToolTip('Insertion Time.')
-		self.edt_radius.setToolTip('Mitre size/Overlap or Round Radius.')
-		self.edt_trap.setToolTip('Ink trap: Incision into glyphs flesh, Side depth, Trap size')
-
-		# -- Build: Basic Ops
-		self.addWidget(self.btn_insert, 	0, 0, 1, 1)
-		self.addWidget(QtGui.QLabel('T:'), 	0, 1, 1, 1)
-		self.addWidget(self.edt_time, 		0, 2, 1, 1)
-		self.addWidget(self.btn_remove, 	0, 3, 1, 1)
-
-		self.addWidget(self.btn_mitre,		1, 0, 1, 1)
-		self.addWidget(QtGui.QLabel('X:'), 	1, 1, 1, 1)
-		self.addWidget(self.edt_radius,		1, 2, 1, 1)
-		self.addWidget(self.btn_knot,		1, 3, 1, 1)
-
-		self.addWidget(self.btn_trapA,		2, 0, 1, 1)
-		self.addWidget(QtGui.QLabel('P:'),	2, 1, 1, 1)
-		self.addWidget(self.edt_trap,		2, 2, 1, 1)
-		self.addWidget(self.btn_rebuild,	2, 3, 1, 1)
-
-	def insertNode(self):
-		glyph = eGlyph()
-		selection = glyph.selectedAtContours(True)
-		wLayers = glyph._prepareLayers(pLayers)
-		modifiers = QtGui.QApplication.keyboardModifiers()
-
-		# - Get selected nodes. 
-		# - NOTE: Only the fist node in every selected segment is important, so we filter for that
-		selection = glyph.selectedAtContours(True, filterOn=True)
-		selection_dict, selection_filtered = {}, {}
-		
-		for cID, nID in selection:
-			selection_dict.setdefault(cID,[]).append(nID)
-				
-		if modifiers != QtCore.Qt.AltModifier: 
-			for cID, sNodes in selection_dict.items():
-				onNodes = glyph.contours(extend=pContour)[cID].indexOn()
-				segments = zip(onNodes, onNodes[1:] + [onNodes[0]]) # Shift and zip so that we have the last segment working
-				onSelected = []
-
-				for pair in segments:
-					if pair[0] in sNodes and pair[1] in sNodes:
-						onSelected.append(pair[0] )
-
-				selection_filtered[cID] = onSelected
-		else:
-			selection_filtered = selection_dict
-
-		# - Process
-		for layer in wLayers:
-			nodeMap = glyph._mapOn(layer)
-							
-			for cID, nID_list in selection_filtered.items():
-				for nID in reversed(nID_list):
-					glyph.insertNodeAt(cID, nodeMap[cID][nID] + float(self.edt_time.text), layer)
-
-		glyph.updateObject(glyph.fl, 'Insert Node @ %s.' %'; '.join(wLayers))
-		glyph.update()
-
-	def removeNode(self):
-		glyph = eGlyph()
-		wLayers = glyph._prepareLayers(pLayers)
-
-		selection = glyph.selectedAtContours(filterOn=True)
-		tempDict = {}
-
-		for cID, nID in selection:
-			tempDict.setdefault(cID, []).append(nID)
-
-		for layer in wLayers:
-			for cID, nidList in tempDict.items():
-				for nID in reversed(nidList):
-					nodeA = eNode(glyph.contours(layer)[cID].nodes()[nID]).getNextOn()
-					nodeB = eNode(glyph.contours(layer)[cID].nodes()[nID]).getPrevOn()
-					glyph.contours(layer)[cID].removeNodesBetween(nodeB, nodeA)
-
-		glyph.update()
-		glyph.updateObject(glyph.fl, 'Remove Node @ %s.' %'; '.join(wLayers))
-
-	def cornerMitre(self, doKnot=False):
-		glyph = eGlyph()
-		wLayers = glyph._prepareLayers(pLayers)
-		
-		for layer in wLayers:
-			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
-			
-			for node in reversed(selection):
-				if not doKnot:
-					node.cornerMitre(float(self.edt_radius.text))
-				else:
-					node.cornerMitre(-float(self.edt_radius.text), True)
-
-
-		action = 'Mitre Corner' if not doKnot else 'Overlap Corner'
-		glyph.update()
-		glyph.updateObject(glyph.fl, '%s @ %s.' %(action, '; '.join(wLayers)))
-
-	def cornerTrap(self):
-		glyph = eGlyph()
-		wLayers = glyph._prepareLayers(pLayers)
-		parameters = tuple([float(value.strip()) for value in self.edt_trap.text.split(',')])
-		
-		for layer in wLayers:
-			selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
-			
-			for node in reversed(selection):
-				node.cornerTrapInc(*parameters)
-
-		glyph.update()
-		glyph.updateObject(glyph.fl, '%s @ %s.' %('Trap Corner', '; '.join(wLayers)))
-
-	def cornerRebuild(self):
-		glyph = eGlyph()
-		wLayers = glyph._prepareLayers(pLayers)
-		selection_layers = {layer:glyph.selectedNodes(layer, filterOn=True, extend=eNode) for layer in wLayers}
-
-		for layer, selection in selection_layers.items():			
-			if len(selection) > 1:
-				node_first = selection[0]
-				node_last = selection[-1]
-				
-				line_in = node_first.getPrevLine() if node_first.getPrevOn(False) not in selection else node_first.getNextLine()
-				line_out = node_last.getNextLine() if node_last.getNextOn(False) not in selection else node_last.getPrevLine()
-
-				crossing = line_in.intersect_line(line_out, True)
-
-				node_first.smartReloc(*crossing.tuple)
-				node_first.parent.removeNodesBetween(node_first.fl, node_last.getNextOn())
-
-		glyph.update()
-		glyph.updateObject(glyph.fl, 'Rebuild corner: %s nodes reduced; At layers: %s' %(len(selection), '; '.join(wLayers)))
-
-
-class alignNodes(QtGui.QGridLayout):
-	# - Basic Node operations
-	def __init__(self):
-		super(alignNodes, self).__init__()
-		
-		# - Init
-		self.copyLine = {}
-
-		# - Buttons
-		self.btn_left = QtGui.QPushButton('Left')
-		self.btn_centerX = QtGui.QPushButton('Selection: Center X')
-		self.btn_right = QtGui.QPushButton('Right')
-		self.btn_top = QtGui.QPushButton('Top')
-		self.btn_centerY = QtGui.QPushButton('Selection: Center Y')
-		self.btn_bottom = QtGui.QPushButton('Bottom')
-		self.btn_bboxCenterX = QtGui.QPushButton('Outline: Center X')
-		self.btn_bboxCenterY = QtGui.QPushButton('Outline: Center Y')
-		self.btn_peerCenterX = QtGui.QPushButton('Neighbors: Center X')
-		self.btn_peerCenterY = QtGui.QPushButton('Neighbors: Center Y')
-		self.btn_toAscender = QtGui.QPushButton('Asc.')
-		self.btn_toCapsHeight = QtGui.QPushButton('Caps')
-		self.btn_toDescender = QtGui.QPushButton('Desc.')
-		self.btn_toXHeight = QtGui.QPushButton('X Hgt.')
-		self.btn_toBaseline = QtGui.QPushButton('Base')
-		self.btn_toYpos = QtGui.QPushButton('Y Pos')
-		self.btn_toMpos = QtGui.QPushButton('Measure')
-		self.btn_solveY = QtGui.QPushButton('Lineup Min/Max Y')
-		self.btn_solveX = QtGui.QPushButton('Lineup Min/Max X')
-		
-		self.btn_pasteMinY = QtGui.QPushButton('Min Y')
-		self.btn_pasteMaxY = QtGui.QPushButton('Max Y')
-		self.btn_pasteFMinY = QtGui.QPushButton('Flip Min')
-		self.btn_pasteFMaxY = QtGui.QPushButton('Flip Max')
-		self.btn_alignLayer_V = QtGui.QPushButton('Vertical')
-		self.btn_alignLayer_H = QtGui.QPushButton('Horizontal')
-
-		# - Check buttons
-		self.chk_intercept = QtGui.QPushButton('Intercept')
-		self.chk_relations = QtGui.QPushButton('Keep Relations')
-		self.chk_copy = QtGui.QPushButton('Copy Slope')
-		self.chk_italic = QtGui.QPushButton('Italic')
-		self.chk_smartShift = QtGui.QPushButton('Smart shift')
-		
-		self.chk_copy.setCheckable(True)
-		self.chk_italic.setCheckable(True)
-		self.chk_intercept.setCheckable(True)
-		self.chk_relations.setCheckable(True)
-		self.chk_smartShift.setCheckable(True)
-		
-		# - Help 
-		self.btn_left.setToolTip('Align nodes LEFT.')
-		self.btn_centerX.setToolTip('Align nodes CENTER Horizontally.')
-		self.btn_right.setToolTip('Align nodes RIGHT.')
-		self.btn_top.setToolTip('Align nodes TOP.')
-		self.btn_centerY.setToolTip('Align nodes CENTER Verticallylly.')
-		self.btn_bottom.setToolTip('Align nodes BOTTOM.')
-		self.chk_intercept.setToolTip('Find intersections of selected font metric\nwith slopes on which selected nodes resign.')
-		self.chk_relations.setToolTip('Keep relations between selected nodes.')
-		self.chk_smartShift.setToolTip('Move OFF-curve points together with ON-curve points.')
-
-		self.btn_solveY.setToolTip('Channel Process selected nodes according to Y values')
-		self.btn_solveX.setToolTip('Channel Process selected nodes according to X values')
-
-		self.chk_copy.setToolTip('Copy slope between lowest and highest of selected nodes.')
-		self.chk_italic.setToolTip('Use Italic Angle as slope.')
-
-		self.btn_pasteMinY.setToolTip('Apply slope to selected nodes.\nReference at MIN Y value.')
-		self.btn_pasteMaxY.setToolTip('Apply slope to selected nodes.\nReference at MAX Y value.')
-		self.btn_pasteFMinY.setToolTip('Apply X flipped slope to selected nodes.\nReference at MIN Y value.')
-		self.btn_pasteFMaxY.setToolTip('Apply X flipped slope to selected nodes.\nReference at MAX Y value.')
-
-		
-		self.btn_toAscender.setToolTip('Send selected nodes to Ascender height.')
-		self.btn_toCapsHeight.setToolTip('Send selected nodes to Caps Height.')
-		self.btn_toDescender.setToolTip('Send selected nodes to Descender height.')
-		self.btn_toXHeight.setToolTip('Send selected nodes to X Height.')
-		self.btn_toBaseline.setToolTip('Send selected nodes to Baseline.')
-		self.btn_toYpos.setToolTip('Send selected nodes to Y coordinate.')
-		self.btn_toMpos.setToolTip('Send selected nodes to Measurment Line.\nSHIFT + Click switch intercept.')
-
-		self.btn_alignLayer_V.setToolTip('If Keep Relations is on:\n - Click: Align Top\n - SHIFT + Click: Align Bottom\n - Alt + Click: Align Center')
-		self.btn_alignLayer_H.setToolTip('If Keep Relations is on:\n - Click: Align Right\n - SHIFT + Click: Align Left\n - Alt + Click: Align Center')
-
-		# - Combo boxes
-		self.cmb_select_V = QtGui.QComboBox()
-		self.cmb_select_H = QtGui.QComboBox()
-		self.cmb_select_V.addItems(['BBox width', 'Adv. width'])
-		self.cmb_select_H.addItems(['BBox height', 'X-Height', 'Caps Height', 'Ascender', 'Descender', 'Adv. height'])
-
-		# - Spin Boxes
-		self.edt_toYpos = QtGui.QSpinBox()
-		self.edt_toYpos.setToolTip('Destination Y Coordinate')
-		self.edt_toYpos.setMaximum(3000)
-		self.edt_toYpos.setMinimum(-3000)
-
-		self.spb_prc_V =  QtGui.QSpinBox()
-		self.spb_prc_V.setMaximum(100)
-		self.spb_prc_V.setSuffix('%')
-		self.spb_prc_V.setMinimumWidth(40)
-
-		self.spb_prc_H =  QtGui.QSpinBox()
-		self.spb_prc_H.setMaximum(100)
-		self.spb_prc_H.setSuffix('%')
-		self.spb_prc_H.setMinimumWidth(40)
-
-		self.spb_unit_V =  QtGui.QSpinBox()
-		self.spb_unit_V.setMaximum(100)
-		self.spb_unit_V.setMinimum(-100)
-		self.spb_unit_V.setSuffix(' U')
-		self.spb_unit_V.setMinimumWidth(40)
-
-		self.spb_unit_H =  QtGui.QSpinBox()
-		self.spb_unit_H.setMaximum(100)
-		self.spb_unit_H.setMinimum(-100)
-		self.spb_unit_H.setSuffix(' U')
-		self.spb_unit_H.setMinimumWidth(40)
-
-		# - Properties
-		self.btn_left.setMinimumWidth(40)
-		self.btn_right.setMinimumWidth(40)
-		self.btn_top.setMinimumWidth(40)
-		self.btn_bottom.setMinimumWidth(40)
-		self.btn_pasteFMinY.setMinimumWidth(40)
-		self.btn_pasteFMaxY.setMinimumWidth(40)
-		self.btn_pasteMinY.setMinimumWidth(40)
-		self.btn_pasteMaxY.setMinimumWidth(40)
-		self.btn_toAscender.setMinimumWidth(40)
-		self.btn_toCapsHeight.setMinimumWidth(40)
-		self.btn_toDescender.setMinimumWidth(40)
-		self.btn_toXHeight.setMinimumWidth(40)
-		self.btn_toYpos.setMinimumWidth(40)
-		self.edt_toYpos.setMinimumWidth(40)
-				
-		self.chk_copy.clicked.connect(self.copySlope)
-		self.btn_left.clicked.connect(lambda: self.alignNodes('L'))
-		self.btn_right.clicked.connect(lambda: self.alignNodes('R'))
-		self.btn_top.clicked.connect(lambda: self.alignNodes('T'))
-		self.btn_bottom.clicked.connect(lambda: self.alignNodes('B'))
-		self.btn_centerX.clicked.connect(lambda: self.alignNodes('C'))
-		self.btn_centerY.clicked.connect(lambda: self.alignNodes('E'))
-		self.btn_solveY.clicked.connect(lambda: self.alignNodes('Y'))
-		self.btn_solveX.clicked.connect(lambda: self.alignNodes('X'))
-		self.btn_pasteMinY.clicked.connect(lambda: self.pasteSlope('MinY'))
-		self.btn_pasteMaxY.clicked.connect(lambda: self.pasteSlope('MaxY'))
-		self.btn_pasteFMinY.clicked.connect(lambda: self.pasteSlope('FLMinY'))
-		self.btn_pasteFMaxY.clicked.connect(lambda: self.pasteSlope('FLMaxY'))
-		self.btn_bboxCenterX.clicked.connect(lambda: self.alignNodes('BBoxCenterX'))
-		self.btn_bboxCenterY.clicked.connect(lambda: self.alignNodes('BBoxCenterY'))
-		self.btn_peerCenterX.clicked.connect(lambda: self.alignNodes('peerCenterX'))
-		self.btn_peerCenterY.clicked.connect(lambda: self.alignNodes('peerCenterY'))
-		self.btn_toAscender.clicked.connect(lambda: self.alignNodes('FontMetrics_0'))
-		self.btn_toCapsHeight.clicked.connect(lambda: self.alignNodes('FontMetrics_1'))
-		self.btn_toDescender.clicked.connect(lambda: self.alignNodes('FontMetrics_2'))
-		self.btn_toXHeight.clicked.connect(lambda: self.alignNodes('FontMetrics_3'))
-		self.btn_toBaseline.clicked.connect(lambda: self.alignNodes('FontMetrics_4'))
-		self.btn_toYpos.clicked.connect(lambda: self.alignNodes('FontMetrics_5'))
-		self.btn_toMpos.clicked.connect(lambda: self.alignNodes('FontMetrics_6'))
-		self.btn_alignLayer_V.clicked.connect(lambda: self.alignNodes('Layer_V'))
-		self.btn_alignLayer_H.clicked.connect(lambda: self.alignNodes('Layer_H'))
-
-		# - Build Layout
-		self.addWidget(self.btn_left, 			0, 0, 1, 1)
-		self.addWidget(self.btn_right, 			0, 1, 1, 1)
-		self.addWidget(self.btn_top, 			0, 2, 1, 1)
-		self.addWidget(self.btn_bottom,	 		0, 3, 1, 1)
-		self.addWidget(self.btn_centerX,		1, 0, 1, 2)
-		self.addWidget(self.btn_centerY,		1, 2, 1, 2)
-		self.addWidget(self.btn_bboxCenterX,	2, 0, 1, 2)
-		self.addWidget(self.btn_bboxCenterY,	2, 2, 1, 2)
-		self.addWidget(self.btn_peerCenterX,	3, 0, 1, 2)
-		self.addWidget(self.btn_peerCenterY,	3, 2, 1, 2)
-		self.addWidget(self.chk_smartShift,		4, 0, 1, 4)
-		
-		self.addWidget(QtGui.QLabel('Nodes: Align to Font and Glyph metrics'), 5, 0, 1, 4)
-		self.addWidget(self.btn_toAscender,		6, 0, 1, 1)
-		self.addWidget(self.btn_toCapsHeight,	6, 1, 1, 1)
-		self.addWidget(self.btn_toDescender,	6, 2, 1, 1)
-		self.addWidget(self.btn_toXHeight,		6, 3, 1, 1)
-		self.addWidget(self.btn_toBaseline,		7, 0, 1, 1)
-		self.addWidget(self.edt_toYpos,			7, 1, 1, 1)
-		self.addWidget(self.btn_toYpos,			7, 2, 1, 1)
-		self.addWidget(self.btn_toMpos, 		7, 3, 1, 1)
-		self.addWidget(self.chk_relations, 		8, 0, 1, 2)
-		self.addWidget(self.chk_intercept, 		8, 2, 1, 2)
-
-		#self.addWidget(QtGui.QLabel('Align to Glyph Layer'), 	6, 0, 1, 4)
-		self.addWidget(self.cmb_select_V, 		9, 0, 1, 1)
-		self.addWidget(self.spb_prc_V, 			9, 1, 1, 1)
-		self.addWidget(self.spb_unit_V, 		9, 2, 1, 1)
-		self.addWidget(self.btn_alignLayer_V, 	9, 3, 1, 1)
-		self.addWidget(self.cmb_select_H, 		10, 0, 1, 1)
-		self.addWidget(self.spb_prc_H, 			10, 1, 1, 1)
-		self.addWidget(self.spb_unit_H, 		10, 2, 1, 1)
-		self.addWidget(self.btn_alignLayer_H, 	10, 3, 1, 1)
-		
-		self.addWidget(QtGui.QLabel('Nodes: Channel processing and slopes'), 11,0,1,4)
-		self.addWidget(self.btn_solveY, 		12, 0, 1, 2)
-		self.addWidget(self.btn_solveX, 		12, 2, 1, 2)
-		self.addWidget(self.chk_copy,			13, 0, 1, 3)
-		self.addWidget(self.chk_italic,			13, 3, 1, 1)
-		self.addWidget(self.btn_pasteMinY,		14, 0, 1, 1)
-		self.addWidget(self.btn_pasteMaxY,		14, 1, 1, 1)
-		self.addWidget(self.btn_pasteFMinY,		14, 2, 1, 1)
-		self.addWidget(self.btn_pasteFMaxY,		14, 3, 1, 1)
-
-	def copySlope(self):
-		if self.chk_copy.isChecked():
-			self.chk_copy.setText('Reset Slope')
-			self.chk_italic.setChecked(False)
-
-			glyph = eGlyph()
-			wLayers = glyph._prepareLayers(pLayers)
-			
-			for layer in wLayers:
-				selection = glyph.selectedNodes(layer)
-				self.copyLine[layer] = Vector(selection[0], selection[-1])
-		else:
-			self.chk_copy.setText('Copy Slope')
-			self.chk_italic.setChecked(False)
-
-	def pasteSlope(self, mode):
-		if self.chk_copy.isChecked() or self.chk_italic.isChecked():
-			glyph = eGlyph()
-			wLayers = glyph._prepareLayers(pLayers)
-			italicAngle = glyph.package.italicAngle_value
-			control = (True, False)
-			
-			for layer in wLayers:
-				selection = [eNode(node) for node in glyph.selectedNodes(layer)]
-				srcLine = self.copyLine[layer] if not self.chk_italic.isChecked() else None
-
-				if mode == 'MinY':
-					dstVector = Vector(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
-					
-					if not self.chk_italic.isChecked():
-						dstVector.slope = srcLine.slope
-					else:
-						dstVector.angle = -1*italicAngle
-
-				elif mode == 'MaxY':
-					dstVector = Vector(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
-					
-					if not self.chk_italic.isChecked():
-						dstVector.slope = srcLine.slope
-					else:
-						dstVector.angle = -1*italicAngle
-
-				elif mode == 'FLMinY':
-					dstVector = Vector(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
-					
-					if not self.chk_italic.isChecked():
-						dstVector.slope = -1.*srcLine.slope
-					else:
-						dstVector.angle = italicAngle
-
-				elif mode == 'FLMaxY':
-					dstVector = Vector(max(selection, key=lambda item: item.y).fl, min(selection, key=lambda item: item.y).fl)
-					
-					if not self.chk_italic.isChecked():
-						dstVector.slope = -1.*srcLine.slope
-					else:
-						dstVector.angle = italicAngle
-				
-				for node in selection:
-					node.alignTo(dstVector, control)
-
-			glyph.updateObject(glyph.fl, 'Paste Slope @ %s.' %'; '.join(wLayers))
-			glyph.update()
-
-
-	def alignNodes(self, mode):
-		process_glyphs = getProcessGlyphs(pMode)
-		modifiers = QtGui.QApplication.keyboardModifiers()
-
-		for glyph in process_glyphs:
-			wLayers = glyph._prepareLayers(pLayers)
-			
-			for layer in wLayers:
-				extend_nodes = None if self.chk_relations.isChecked() else eNode
-				selection = glyph.selectedNodes(layer, extend=extend_nodes)
-				italicAngle = glyph.package.italicAngle_value
-
-				if mode == 'L':
-					target = min(selection, key=lambda item: item.x)
-					control = (True, False)
-
-				elif mode == 'R':
-					target = max(selection, key=lambda item: item.x)
-					control = (True, False)
-				
-				elif mode == 'T':
-					temp_target = max(selection, key=lambda item: item.y)
-					newX = temp_target.x
-					newY = temp_target.y
-					toMaxY = True if modifiers == QtCore.Qt.ShiftModifier else False 
-					control = (False, True)
-				
-				elif mode == 'B':
-					temp_target = min(selection, key=lambda item: item.y)
-					newX = temp_target.x
-					newY = temp_target.y
-					toMaxY = False if modifiers == QtCore.Qt.ShiftModifier else True 
-					control = (False, True)
-				
-				elif mode == 'C':
-					newX = (min(selection, key=lambda item: item.x).x + max(selection, key=lambda item: item.x).x)/2
-					newY = 0.
-					target = fl6.flNode(newX, newY)
-					control = (True, False)
-
-				elif mode == 'E':
-					newY = (min(selection, key=lambda item: item.y).y + max(selection, key=lambda item: item.y).y)/2
-					newX = 0.
-					target = fl6.flNode(newX, newY)
-					control = (False, True)
-
-				elif mode == 'Y':
-					target = Vector(min(selection, key=lambda item: item.y).fl, max(selection, key=lambda item: item.y).fl)
-					control = (True, False)
-
-				elif mode == 'X':
-					target = Vector(min(selection, key=lambda item: item.x).fl, max(selection, key=lambda item: item.x).fl)
-					control = (False, True)
-
-				elif mode == 'BBoxCenterX':
-					newX = glyph.layer(layer).boundingBox.x() + glyph.layer(layer).boundingBox.width()/2
-					newY = 0.
-					target = fl6.flNode(newX, newY)
-					control = (True, False)
-
-				elif mode == 'BBoxCenterY':
-					newX = 0.
-					newY = glyph.layer(layer).boundingBox.y() + glyph.layer(layer).boundingBox.height()/2
-					target = fl6.flNode(newX, newY)
-					control = (False, True)
-
-				elif 'FontMetrics' in mode:
-					layerMetrics = glyph.fontMetricsInfo(layer)
-					italicAngle = glyph.package.italicAngle_value
-					
-					newX = 0.
-					toMaxY = True
-
-					if '0' in mode:
-						newY = layerMetrics.ascender
-						toMaxY = True if modifiers == QtCore.Qt.ShiftModifier else False 
-						container_mode = 'LB' if modifiers == QtCore.Qt.ShiftModifier else 'LT'
-
-					elif '1' in mode:
-						newY = layerMetrics.capsHeight
-						toMaxY = True if modifiers == QtCore.Qt.ShiftModifier else False 
-						container_mode = 'LB' if modifiers == QtCore.Qt.ShiftModifier else 'LT'
-
-					elif '2' in mode:
-						newY = layerMetrics.descender
-						toMaxY = False if modifiers == QtCore.Qt.ShiftModifier else True 
-						container_mode = 'LT' if modifiers == QtCore.Qt.ShiftModifier else 'LB'
-
-					elif '3' in mode:
-						newY = layerMetrics.xHeight
-						toMaxY = True if modifiers == QtCore.Qt.ShiftModifier else False 
-						container_mode = 'LB' if modifiers == QtCore.Qt.ShiftModifier else 'LT'
-
-					elif '4' in mode:
-						newY = 0
-						toMaxY = False if modifiers == QtCore.Qt.ShiftModifier else True 
-						container_mode = 'LT' if modifiers == QtCore.Qt.ShiftModifier else 'LB'
-
-					elif '5' in mode:
-						newY = self.edt_toYpos.value
-						toMaxY = False if modifiers == QtCore.Qt.ShiftModifier else True 
-						container_mode = 'LT' if modifiers == QtCore.Qt.ShiftModifier else 'LB'
-
-					elif '6' in mode:
-						newY = glyph.mLine()
-						toMaxY = newY >= 0 
-						container_mode = 'LB' if modifiers == QtCore.Qt.ShiftModifier else 'LT'
-						if modifiers == QtCore.Qt.ShiftModifier: toMaxY = not toMaxY
-
-				elif mode == 'Layer_V':
-					if 'BBox' in self.cmb_select_V.currentText:
-						width = glyph.layer(layer).boundingBox.width()
-						origin = glyph.layer(layer).boundingBox.x()
-				
-					elif 'Adv' in self.cmb_select_V.currentText:
-						width = glyph.getAdvance(layer)
-						origin = 0.
-
-					target = fl6.flNode(float(width)*self.spb_prc_V.value/100 + origin + self.spb_unit_V.value, 0)
-					container_mode = 'LB' if modifiers == QtCore.Qt.ShiftModifier else 'RB'
-					control = (True, False)
-
-					container_mode_H = ['R','L'][modifiers == QtCore.Qt.ShiftModifier]
-					container_mode_H = [container_mode_H,'C'][modifiers == QtCore.Qt.AltModifier]
-					container_mode_V = 'B'
-					container_mode = container_mode_H + container_mode_V
-
-				elif mode == 'Layer_H':
-					metrics = pFontMetrics(glyph.package)
-
-					if 'BBox' in self.cmb_select_H.currentText:
-						height = glyph.layer(layer).boundingBox.height()
-						origin = glyph.layer(layer).boundingBox.y()
-					
-					elif 'Adv' in self.cmb_select_H.currentText:
-						height = glyph.layer(layer).advanceHeight
-						origin = 0.
-
-					elif 'X-H' in self.cmb_select_H.currentText:
-						height = metrics.getXHeight(layer)
-						origin = 0.
-
-					elif 'Caps' in self.cmb_select_H.currentText:
-						height = metrics.getCapsHeight(layer)
-						origin = 0.
-
-					elif 'Ascender' in self.cmb_select_H.currentText:
-						height = metrics.getAscender(layer)
-						origin = 0.			
-
-					elif 'Descender' in self.cmb_select_H.currentText:
-						height = metrics.getDescender(layer)
-						origin = 0.		
-
-					target = fl6.flNode(0, float(height)*self.spb_prc_H.value/100 + origin + self.spb_unit_H.value)
-					
-					container_mode_H = 'L'
-					container_mode_V = ['T','B'][modifiers == QtCore.Qt.ShiftModifier]
-					container_mode_V = [container_mode_V,'E'][modifiers == QtCore.Qt.AltModifier]
-					container_mode = container_mode_H + container_mode_V
-
-					control = (False, True)
-
-				if self.chk_relations.isChecked():
-					container = eNodesContainer(selection)
-					
-					if 'FontMetrics' in mode:
-						target = fl6.flNode(newX, newY)
-						control = (False, True)												
-					
-					container.alignTo(target, container_mode, control)
-
-				else:
-					for node in selection:
-						if 'FontMetrics' in mode or mode == 'T' or mode == 'B':
-							if italicAngle != 0 and not self.chk_intercept.isChecked():
-								tempTarget = Coord(node.fl)
-								tempTarget.setAngle(italicAngle)
-
-								target = fl6.flNode(tempTarget.getWidth(newY), newY)
-								control = (True, True)
-							
-							elif self.chk_intercept.isChecked():
-								pairUp = node.getMaxY().position
-								pairDown = node.getMinY().position
-								pairPos = pairUp if toMaxY else pairDown
-								newLine = Line(node.fl.position, pairPos)
-								newX = newLine.solve_x(newY)
-
-								target = fl6.flNode(newX, newY)
-								control = (True, True)
-
-							else:
-								target = fl6.flNode(newX, newY)
-								control = (False, True)
-
-						if mode == 'peerCenterX':
-							newX = node.x + (node.getPrevOn().x + node.getNextOn().x - 2*node.x)/2.
-							newY = node.y
-							target = fl6.flNode(newX, newY)
-							control = (True, False)
-
-						elif mode == 'peerCenterY':
-							newX = node.x
-							newY = node.y + (node.getPrevOn().y + node.getNextOn().y - 2*node.y)/2.
-							target = fl6.flNode(newX, newY)
-							control = (False, True)
-
-						# - Execute Align ----------
-						node.alignTo(target, control, self.chk_smartShift.isChecked())
-
-			glyph.updateObject(glyph.fl, 'Align Nodes @ %s.' %'; '.join(wLayers))
-			glyph.update()
-
-
-class copyNodes(QtGui.QGridLayout):
-	# - Split/Break contour 
-	def __init__(self):
-		super(copyNodes, self).__init__()
-
-		# - Init
-		self.copy_align_state = None
+		# - Init 
+		self.ext_target = {}
+		self.slope_bank = {}
+		self.angle_bank = {}
 		self.node_bank = {}
-
-		# - Buttons
-		self.chk_BL = QtGui.QPushButton('B L')
-		self.chk_TL = QtGui.QPushButton('T L')
-		self.chk_BR = QtGui.QPushButton('B R')
-		self.chk_TR = QtGui.QPushButton('T R')
-
-		self.chk_flipH = QtGui.QPushButton('Flip H')
-		self.chk_flipV = QtGui.QPushButton('Flip V')
-		self.chk_reverse = QtGui.QPushButton('Reverse')
-
-		self.chk_copy = QtGui.QPushButton('Copy')
-		self.btn_paste = QtGui.QPushButton('Paste')
-		self.btn_inject = QtGui.QPushButton('Inject')
-
-		self.btn_inject.setEnabled(False)
-
-		self.chk_BL.setCheckable(True)
-		self.chk_TL.setCheckable(True)
-		self.chk_BR.setCheckable(True)
-		self.chk_TR.setCheckable(True)
-		self.chk_copy.setCheckable(True)
-		self.chk_flipH.setCheckable(True)
-		self.chk_flipV.setCheckable(True)
-		self.chk_reverse.setCheckable(True)
-
-		self.chk_BL.setChecked(False)
-		self.chk_TL.setChecked(False)
-		self.chk_BR.setChecked(False)
-		self.chk_TR.setChecked(False)
-		self.chk_flipH.setChecked(False)
-		self.chk_flipV.setChecked(False)
-		self.chk_reverse.setChecked(False)
-		
-		self.chk_BL.setMinimumWidth(40)
-		self.chk_TL.setMinimumWidth(40)
-		self.chk_BR.setMinimumWidth(40)
-		self.chk_TR.setMinimumWidth(40)
-		self.chk_flipH.setMinimumWidth(40)
-		self.chk_flipV.setMinimumWidth(40)
-		self.chk_reverse.setMinimumWidth(40)
-		self.chk_copy.setMinimumWidth(80)
-		self.btn_paste.setMinimumWidth(80)
-		self.btn_inject.setMinimumWidth(80)
-
-		self.chk_BL.setToolTip('Align:\nTo Bottom Left bounding box of selection.') 
-		self.chk_TL.setToolTip('Align:\nTo Top Left bounding box of selection.') 
-		self.chk_BR.setToolTip('Align:\nTo Bottom Right bounding box of selection.') 
-		self.chk_TR.setToolTip('Align:\nTo Top Right bounding box of selection.') 
-		self.chk_copy.setToolTip('Copy selected nodes to memory.')
-		self.btn_paste.setToolTip('Paste nodes.\nAdvanced operations:\n - Shift + Click: Inject source behind first node selected;\n - Alt + Click: Replace selection with source;') 
-		self.btn_inject.setToolTip('Inject nodes') 
-		
-		self.chk_BL.clicked.connect(lambda: self.setAlignStates('LB'))
-		self.chk_TL.clicked.connect(lambda: self.setAlignStates('LT'))
-		self.chk_BR.clicked.connect(lambda: self.setAlignStates('RB'))
-		self.chk_TR.clicked.connect(lambda: self.setAlignStates('RT'))
-		
-		self.chk_copy.clicked.connect(lambda: self.copyNodes())
-		self.btn_paste.clicked.connect(lambda: self.pasteNodes())
-		#self.btn_inject.clicked.connect(lambda : self.setDirection(True))
-
-		#self.addWidget(self.btn_inject, 0, 3, 1, 1)
-
-		self.addWidget(self.chk_TL, 		0, 0, 1, 1)
-		self.addWidget(self.chk_TR, 		0, 1, 1, 1)
-		self.addWidget(self.chk_flipH, 		0, 2, 1, 1)
-		self.addWidget(self.chk_flipV, 		0, 3, 1, 1)
-		self.addWidget(self.chk_BL, 		1, 0, 1, 1)
-		self.addWidget(self.chk_BR, 		1, 1, 1, 1)
-		self.addWidget(self.chk_reverse,	1, 2, 1, 2)
-	
-		self.addWidget(self.chk_copy, 		3, 0, 1, 2)
-		self.addWidget(self.btn_paste, 		3, 2, 1, 2)
-
-	def setAlignStates(self, align_state):
-		self.copy_align_state = align_state
-		if align_state != 'LB' and self.chk_BL.isChecked(): self.chk_BL.setChecked(False)
-		if align_state != 'LT' and self.chk_TL.isChecked(): self.chk_TL.setChecked(False)
-		if align_state != 'RB' and self.chk_BR.isChecked(): self.chk_BR.setChecked(False)
-		if align_state != 'RT' and self.chk_TR.isChecked(): self.chk_TR.setChecked(False)
-		
-		if all([not self.chk_BL.isChecked(), 
-				not self.chk_TL.isChecked(), 
-				not self.chk_BR.isChecked(), 
-				not self.chk_TR.isChecked()]): 
-			self.copy_align_state = None
-
-	def copyNodes(self):
-		if self.chk_copy.isChecked():
-			glyph = eGlyph()
-			self.chk_copy.setText('Reset')
-			wLayers = glyph._prepareLayers(pLayers)
-			self.node_bank = {layer : eNodesContainer([node.clone() for node in glyph.selectedNodes(layer)], extend=eNode) for layer in wLayers}
-		else:
-			self.node_bank = {}
-			self.chk_copy.setText('Copy')
-
-	def pasteNodes(self):
-		if self.chk_copy.isChecked():
-			process_glyphs = getProcessGlyphs(pMode)
-			modifiers = QtGui.QApplication.keyboardModifiers()
-			update_flag = False
-
-			for glyph in process_glyphs:
-				wLayers = glyph._prepareLayers(pLayers)
-				
-				for layer in wLayers:
-					if layer in self.node_bank.keys():
-						dst_container = eNodesContainer(glyph.selectedNodes(layer), extend=eNode)
-
-						if len(dst_container):
-							src_container = self.node_bank[layer].clone()
-							src_transform = QtGui.QTransform()
-																		
-							# - Transform
-							if self.chk_flipH.isChecked() or self.chk_flipV.isChecked():
-								scaleX = -1 if self.chk_flipH.isChecked() else 1
-								scaleY = -1 if self.chk_flipV.isChecked() else 1
-								dX = src_container.x() + src_container.width()/2.
-								dY = src_container.y() + src_container.height()/2.
-
-								src_transform.translate(dX, dY)
-								src_transform.scale(scaleX, scaleY)
-								src_transform.translate(-dX, -dY)
-								src_container.applyTransform(src_transform)
-								
-
-							# - Align source
-							if self.copy_align_state is None:
-								src_container.shift(*src_container[0].diffTo(dst_container[0]))
-							else:
-								src_container.alignTo(dst_container, self.copy_align_state, align=(True,True))
-
-							if self.chk_reverse.isChecked(): 
-								src_container = src_container.reverse()
-
-							# - Process
-							if modifiers == QtCore.Qt.ShiftModifier: # - Inject mode - insert source after first node index
-								dst_container[0].contour.insert(dst_container[0].index, [node.fl for node in src_container.nodes])
-								update_flag = True
-
-							elif modifiers == QtCore.Qt.AltModifier: # - Overwrite mode - delete all nodes in selection and replace with source
-								insert_index = dst_container[0].index
-								insert_contour = dst_container[0].contour
-								insert_contour.removeNodesBetween(dst_container[0].fl, dst_container[-1].getNextOn())
-								insert_contour.insert(dst_container[0].index, [node.fl for node in src_container.nodes])
-								insert_contour.removeAt(insert_index + len(src_container))
-
-								update_flag = True
-
-							elif modifiers == QtCore.Qt.ControlModifier: # - Overwrite mode - copy node coordinates only
-								for nid in range(len(dst_container)):
-									dst_container.nodes[nid].x = src_container.nodes[nid].x
-									dst_container.nodes[nid].y = src_container.nodes[nid].y
-
-								update_flag = True
-
-							else: # - Paste mode - remap node by node
-								if len(dst_container) == len(self.node_bank[layer]):
-									for nid in range(len(dst_container)):
-										dst_container[nid].fl.x = src_container[nid].x 
-										dst_container[nid].fl.y = src_container[nid].y 
-
-									update_flag = True
-								else:
-									update_flag = False
-									warnings.warn('Layer: {};\tCount Mismatch: Selected nodes [{}]; Source nodes [{}].'.format(layer, len(dst_container), len(src_container)), NodeWarning)
-							
-				# - Done							
-				if update_flag:	
-					glyph.updateObject(glyph.fl, 'Paste Nodes @ %s.' %'; '.join(wLayers))
-					glyph.update()
-
-class advMovement(QtGui.QVBoxLayout):
-	def __init__(self, aux):
-		super(advMovement, self).__init__()
-
-		# - Init
-		self.aux = aux
-		self.methodList = ['Move', 'Simple Move', 'Interpolated Move', 'Slanted Grid Move', 'Slope walker']
-		
-		# - Methods
-		self.cmb_methodSelector = QtGui.QComboBox()
-		self.cmb_methodSelector.addItems(self.methodList)
-		self.cmb_methodSelector.setToolTip('Select movement method')
-		self.chk_percent = QtGui.QCheckBox('% of BBox')
-		self.chk_percent.setToolTip('Interpret new positional coordinates as if they were scaled by percent given in (X,Y)\nEquivalent to affine scaling of selected nodes in respect to the Layers BoundingBox')
-		
-		# - Arrow buttons
-		self.btn_up = QtGui.QPushButton('Up')
-		self.btn_down = QtGui.QPushButton('Down')
-		self.btn_left = QtGui.QPushButton('Left')
-		self.btn_right = QtGui.QPushButton('Right')
-		
-		self.btn_up.setMinimumWidth(80)
-		self.btn_down.setMinimumWidth(80)
-		self.btn_left.setMinimumWidth(80)
-		self.btn_right.setMinimumWidth(80)
-
-		self.btn_up.clicked.connect(self.onUp)
-		self.btn_down.clicked.connect(self.onDown)
-		self.btn_left.clicked.connect(self.onLeft)
-		self.btn_right.clicked.connect(self.onRight)
-		self.chk_percent.clicked.connect(self.toggleInput)
-		
-		self.edt_offX = QtGui.QLineEdit('1.0')
-		self.edt_offY = QtGui.QLineEdit('1.0')
-		self.edt_offX.setToolTip('X offset')
-		self.edt_offY.setToolTip('Y offset')
+		self.node_align_state = 'LT'
 
 		# - Layout
-		self.lay_btn = QtGui.QGridLayout()
-
-		self.lay_btn.addWidget(self.cmb_methodSelector, 0, 0, 1, 5)
-		self.lay_btn.addWidget(self.chk_percent, 		0, 5, 1, 1)
-		self.lay_btn.addWidget(QtGui.QLabel('X:'), 		1, 0, 1, 1)
-		self.lay_btn.addWidget(self.edt_offX, 			1, 1, 1, 1)
-		self.lay_btn.addWidget(self.btn_up, 			1, 2, 1, 2)
-		self.lay_btn.addWidget(QtGui.QLabel('Y:'), 		1, 4, 1, 1)
-		self.lay_btn.addWidget(self.edt_offY, 			1, 5, 1, 1)
-		self.lay_btn.addWidget(self.btn_left, 			2, 0, 1, 2)
-		self.lay_btn.addWidget(self.btn_down, 			2, 2, 1, 2)
-		self.lay_btn.addWidget(self.btn_right, 			2, 4, 1, 2)
-
-		self.addLayout(self.lay_btn)
-
+		self.lay_main = QtGui.QVBoxLayout()
 		
-	def toggleInput(self):
-		if self.chk_percent.isChecked():
-			self.edt_offX.setText(str(float(self.edt_offX.text)/100)) 
-			self.edt_offY.setText(str(float(self.edt_offY.text)/100))
+		# - Widgets and tools -------------------------------------------------
+		# -- Node tools -------------------------------------------------------
+		box_node = QtGui.QGroupBox()
+		box_node.setObjectName('box_group')
+		
+		lay_node = QtGui.QHBoxLayout()
+		lay_node.setContentsMargins(0, 0, 0, 0)
+
+		tooltip_button = 'Insert Node'
+		self.btn_node_add = CustomSpinButton('node_add', (0., 1., .5, .01), (tooltip_button + ' time', tooltip_button), ('spn_panel', 'btn_panel'))
+		lay_node.addWidget(self.btn_node_add)
+		self.btn_node_add.button.clicked.connect(lambda: TRNodeActionCollector.node_insert(pMode, pLayers, self.btn_node_add.input.value, get_modifier()))
+
+		tooltip_button = 'Remove Node'
+		self.btn_node_remove = CustomPushButton('node_remove', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_node.addWidget(self.btn_node_remove)
+		self.btn_node_remove.clicked.connect(lambda: TRNodeActionCollector.node_remove(pMode, pLayers))
+
+		tooltip_button = 'Insert Node at the beginning of a bezier.\n<ALT + Mouse Left> Use single node mode.'
+		self.btn_node_add_0 = CustomPushButton('node_add_bgn', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_node.addWidget(self.btn_node_add_0)
+		self.btn_node_add_0.clicked.connect(lambda: TRNodeActionCollector.node_insert(pMode, pLayers, 0., get_modifier()))
+
+		tooltip_button = 'Insert Node at the middle of a bezier.\n<ALT + Mouse Left> Use single node mode.'
+		self.btn_node_add_5 = CustomPushButton('node_add_mid', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_node.addWidget(self.btn_node_add_5)
+		self.btn_node_add_5.clicked.connect(lambda: TRNodeActionCollector.node_insert(pMode, pLayers, .5, get_modifier()))
+
+		tooltip_button = 'Insert Node at the end of a bezier.\n<ALT + Mouse Left> Use single node mode.'
+		self.btn_node_add_1 = CustomPushButton('node_add_end', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_node.addWidget(self.btn_node_add_1)
+		self.btn_node_add_1.clicked.connect(lambda: TRNodeActionCollector.node_insert(pMode, pLayers, 1., get_modifier()))
+		
+		box_node.setLayout(lay_node)
+		self.lay_main.addWidget(box_node)
+		
+		# -- Corner Tools -------------------------------------------------------
+		box_corner = QtGui.QGroupBox()
+		box_corner.setObjectName('box_group')
+		
+		lay_corner = QtGui.QGridLayout()
+		lay_corner.setContentsMargins(0, 0, 0, 0)
+
+		tooltip_button = 'Corner Mitre'
+		self.btn_corner_mitre = CustomSpinButton('corner_mitre', (0., 300., 0., 1.), (tooltip_button + ' value', tooltip_button), ('spn_panel', 'btn_panel'))
+		lay_corner.addWidget(self.btn_corner_mitre, 1, 0, 1, 3)
+		self.btn_corner_mitre.button.clicked.connect(lambda: TRNodeActionCollector.corner_mitre(pMode, pLayers, self.btn_corner_mitre.input.value))
+
+		tooltip_button = 'Corner Round'
+		self.btn_corner_round = CustomSpinButton('corner_round', (0., 300., 0., 1.), (tooltip_button + ' value', tooltip_button), ('spn_panel', 'btn_panel'))
+		lay_corner.addWidget(self.btn_corner_round, 1, 3, 1, 3)
+		self.btn_corner_round.button.clicked.connect(lambda: TRNodeActionCollector.corner_round(pMode, pLayers, self.btn_corner_round.input.value))
+
+		tooltip_button = 'Rebuild Corner'
+		self.btn_corner_rebuild = CustomPushButton('corner_rebuild', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_corner.addWidget(self.btn_corner_rebuild, 1, 6, 1, 1)
+		self.btn_corner_rebuild.clicked.connect(lambda: TRNodeActionCollector.corner_rebuild(pMode, pLayers))
+		
+		tooltip_button = 'Corner Loop'
+		self.btn_corner_loop = CustomSpinButton('corner_loop', (0., 300., 0., 1.), (tooltip_button + ' value', tooltip_button), ('spn_panel', 'btn_panel'))
+		lay_corner.addWidget(self.btn_corner_loop, 2, 0, 1, 3)
+		self.btn_corner_loop.button.clicked.connect(lambda: TRNodeActionCollector.corner_loop(pMode, pLayers, self.btn_corner_loop.input.value))
+		
+		tooltip_button = 'Create Ink Trap\n<ALT + Mouse Left> Create non-smooth basic trap.'
+		self.btn_corner_trap = CustomPushButton('corner_trap', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_corner.addWidget(self.btn_corner_trap, 2, 3, 1, 1)
+		self.btn_corner_trap.clicked.connect(lambda: TRNodeActionCollector.corner_trap_dlg(pMode, pLayers, get_modifier()))
+
+		tooltip_button = 'Round cap\nCreate a rounded cap between selected two nodes.'
+		self.btn_cap_round = CustomPushButton('cap_round', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_corner.addWidget(self.btn_cap_round, 2, 4, 1, 1)
+		#self.btn_cap_round.clicked.connect(...)
+		self.btn_cap_round.setEnabled(False)
+
+		tooltip_button = 'Square cap\nCreate/resore a rounded cap to square form between all selected round cap nodes.'
+		self.btn_cap_square = CustomPushButton('cap_restore', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_corner.addWidget(self.btn_cap_square, 2, 5, 1, 1)
+		#self.btn_cap_square.clicked.connect(...)
+		self.btn_cap_square.setEnabled(False)
+
+		box_corner.setLayout(lay_corner)
+		self.lay_main.addWidget(box_corner)
+
+		# -- Align Tools -------------------------------------------------------
+		box_align = QtGui.QGroupBox()
+		box_align.setObjectName('box_group')
+
+		self.grp_align_options_shift = QtGui.QButtonGroup()
+		self.grp_align_options_other = QtGui.QButtonGroup()
+		self.grp_align_actions = QtGui.QButtonGroup()
+
+		lay_align = QtGui.QGridLayout()
+		lay_align.setContentsMargins(0, 0, 0, 0)
+
+		tooltip_button = "Smart Shift: Shift oncurve nodes together with their respective offcurve nodes even when they are not explicitly selected,"
+		self.chk_shift_smart = CustomPushButton("shift_smart", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_align_options_shift.addButton(self.chk_shift_smart, 1)
+		lay_align.addWidget(self.chk_shift_smart, 0, 0)
+
+		tooltip_button = "Simple Shift: Shift only selected nodes."
+		self.chk_shift_dumb = CustomPushButton("shift_dumb", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_align_options_shift.addButton(self.chk_shift_dumb, 2)
+		lay_align.addWidget(self.chk_shift_dumb, 0, 1)
+
+		tooltip_button = "Keep relations between selected nodes"
+		self.chk_shift_keep_dimension = CustomPushButton("shift_keep_dimension", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_align_options_other.addButton(self.chk_shift_keep_dimension, 1)
+		lay_align.addWidget(self.chk_shift_keep_dimension, 0, 2)
+
+		tooltip_button = "Intercept vertical position"
+		self.chk_shift_intercept = CustomPushButton("shift_intercept", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_align_options_other.addButton(self.chk_shift_intercept, 2)
+		lay_align.addWidget(self.chk_shift_intercept, 0, 3)
+
+		tooltip_button = "Pick target node for alignment"
+		self.chk_node_target = CustomPushButton("node_target", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_node_target.clicked.connect(self.target_set)
+		self.grp_align_options_other.addButton(self.chk_node_target, 3)
+		lay_align.addWidget(self.chk_node_target, 0, 4)
+
+		# --- Actions
+		tooltip_button = "Align selected nodes left"
+		self.btn_node_align_left = CustomPushButton("node_align_left", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_align_left.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'L', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_align_left)
+		lay_align.addWidget(self.btn_node_align_left, 1, 0)
+
+		tooltip_button = "Align selected nodes right"
+		self.btn_node_align_right = CustomPushButton("node_align_right", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_align_right.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'R', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_align_right)
+		lay_align.addWidget(self.btn_node_align_right, 1, 1)
+
+		tooltip_button = "Align selected nodes top"
+		self.btn_node_align_top = CustomPushButton("node_align_top", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_align_top.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'T', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_align_top)
+		lay_align.addWidget(self.btn_node_align_top, 1, 2)
+
+		tooltip_button = "Align selected nodes bottom"
+		self.btn_node_align_bottom = CustomPushButton("node_align_bottom", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_align_bottom.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'B', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_align_bottom)
+		lay_align.addWidget(self.btn_node_align_bottom, 1, 3)
+
+		tooltip_button = "Collapse all selected nodes to target"
+		self.btn_node_target_collapse = CustomPushButton("node_target_collapse", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_target_collapse.clicked.connect(self.target_collapse)
+		self.grp_align_actions.addButton(self.btn_node_target_collapse)
+		lay_align.addWidget(self.btn_node_target_collapse, 1, 4)
+
+		tooltip_button = "Align selected nodes to horizontal center of selection"
+		self.btn_node_align_selection_x = CustomPushButton("node_align_selection_x", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_align_selection_x.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'C', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_align_selection_x)
+		lay_align.addWidget(self.btn_node_align_selection_x, 2, 0)
+
+		tooltip_button = "Align selected nodes to vertical center of selection"
+		self.btn_node_align_selection_y = CustomPushButton("node_align_selection_y", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_align_selection_y.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'E', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_align_selection_y)
+		lay_align.addWidget(self.btn_node_align_selection_y, 2, 1)
+
+		tooltip_button = "Align selected nodes to the horizontal middle of outline bounding box."
+		self.btn_node_align_outline_x = CustomPushButton("node_align_outline_x", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_align_outline_x.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'BBoxCenterX', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_align_outline_x)
+		lay_align.addWidget(self.btn_node_align_outline_x, 2, 2)
+
+		tooltip_button = "Align selected nodes to the vertical middle of outline bounding box."
+		self.btn_node_align_outline_y = CustomPushButton("node_align_outline_y", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_align_outline_y.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'BBoxCenterY', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_align_outline_y)
+		lay_align.addWidget(self.btn_node_align_outline_y, 2, 3)
+
+		tooltip_button = "Align selected nodes to Measurment line"
+		self.btn_node_dimension_guide = CustomPushButton("dimension_guide", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_dimension_guide.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'FontMetrics_5', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_dimension_guide)
+		lay_align.addWidget(self.btn_node_dimension_guide, 2, 4)
+		
+		tooltip_button = "Align selected node in the horizontal middle of its direct neighbors"
+		self.btn_node_align_neigh_x = CustomPushButton("node_align_neigh_x", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_align_neigh_x.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'peerCenterX', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_align_neigh_x)
+		lay_align.addWidget(self.btn_node_align_neigh_x, 3, 0)
+
+		tooltip_button = "Align selected node in the vertical middle of its direct neighbors"
+		self.btn_node_align_neigh_y = CustomPushButton("node_align_neigh_y", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_align_neigh_y.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'peerCenterY', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_align_neigh_y)
+		lay_align.addWidget(self.btn_node_align_neigh_y, 3, 1)
+
+		tooltip_button = "Align selected nodes to an imaginary line runnig between highest and lowest node in selection"
+		self.btn_node_align_min_max_Y = CustomPushButton("node_align_min_max_Y", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_align_min_max_Y.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'Y', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_align_min_max_Y)
+		lay_align.addWidget(self.btn_node_align_min_max_Y, 3, 2)
+
+		tooltip_button = "Align selected nodes to an imaginary line runnig between lowest and highest node in selection"
+		self.btn_node_align_min_max_X = CustomPushButton("node_align_min_max_X", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_align_min_max_X.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'X', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_align_min_max_X)
+		lay_align.addWidget(self.btn_node_align_min_max_X, 3, 3)
+
+		tooltip_button = 'Align selected nodes to integer grid (Round coordinates).\n<Mouse Left> Ceil.\n<ALT + Mouse Left> Floor.\n<... + Shift> Round all nodes.'
+		self.btn_node_round = CustomPushButton('node_round', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_align.addWidget(self.btn_node_round, 3, 4)
+		self.btn_node_round.clicked.connect(lambda: TRNodeActionCollector.node_round(pMode, pLayers, get_modifier(QtCore.Qt.AltModifier), get_modifier(QtCore.Qt.ShiftModifier)))
+
+		tooltip_button = "Align selected nodes to Font metrics: Ascender height"
+		self.btn_node_dimension_ascender = CustomPushButton("dimension_ascender", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_dimension_ascender.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'FontMetrics_0', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_dimension_ascender)
+		lay_align.addWidget(self.btn_node_dimension_ascender, 5, 0)
+
+		tooltip_button = "Align selected nodes to Font metrics: Caps height"
+		self.btn_node_dimension_caps = CustomPushButton("dimension_caps", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_dimension_caps.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'FontMetrics_1', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_dimension_caps)
+		lay_align.addWidget(self.btn_node_dimension_caps, 5, 1)
+
+		tooltip_button = "Align selected nodes to Font metrics: X height"
+		self.btn_node_dimension_xheight = CustomPushButton("dimension_xheight", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_dimension_xheight.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'FontMetrics_3', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_dimension_xheight)
+		lay_align.addWidget(self.btn_node_dimension_xheight, 5, 2)
+
+		tooltip_button = "Align selected nodes to Font metrics: Baseline"
+		self.btn_node_dimension_baseline = CustomPushButton("dimension_baseline", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_dimension_baseline.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'FontMetrics_4', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_dimension_baseline)
+		lay_align.addWidget(self.btn_node_dimension_baseline, 5, 3)
+
+		tooltip_button = "Align selected nodes to Font metrics: Descender"
+		self.btn_node_dimension_descender = CustomPushButton("dimension_descender", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_dimension_descender.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'FontMetrics_2', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_dimension_descender)
+		lay_align.addWidget(self.btn_node_dimension_descender, 5, 4)
+
+		box_align.setLayout(lay_align)
+		self.lay_main.addWidget(box_align)
+
+		# -- Slope tools -------------------------------------------------------
+		box_slope = QtGui.QGroupBox()
+		box_slope.setObjectName('box_group')
+
+		self.grp_slope_options = QtGui.QButtonGroup()
+
+		lay_slope = QtGui.QGridLayout()
+		lay_slope.setContentsMargins(0, 0, 0, 0)
+
+		# --- Options 
+		tooltip_button =  "Copy slope between selected nodes"
+		self.chk_slope_copy = CustomPushButton("slope_copy", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_slope_options.addButton(self.chk_slope_copy)
+		lay_slope.addWidget(self.chk_slope_copy, 0, 0)
+		self.chk_slope_copy.clicked.connect(self.act_slope_copy)
+
+		tooltip_button =  "Use fonts italic angle as slope"
+		self.chk_slope_italic = CustomPushButton("slope_italic", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_slope_options.addButton(self.chk_slope_italic)
+		lay_slope.addWidget(self.chk_slope_italic, 0, 1)
+		self.chk_slope_italic.clicked.connect(self.act_slope_italic)
+
+		# - Actions
+		tooltip_button =  "Paste slope to selected nodes pivoting around the one with lowest vertical coordinates"
+		self.btn_slope_paste_min = CustomPushButton("slope_paste_min", tooltip=tooltip_button, obj_name='btn_panel')
+		self.grp_slope_options.addButton(self.btn_slope_paste_min)
+		lay_slope.addWidget(self.btn_slope_paste_min, 0, 2)
+		self.btn_slope_paste_min.clicked.connect(lambda: TRNodeActionCollector.slope_paste(pMode, pLayers, self.slope_bank, (False, False)))
+
+		tooltip_button =  "Paste slope to selected nodes pivoting around the one with highest vertical coordinates"
+		self.btn_slope_paste_max = CustomPushButton("slope_paste_max", tooltip=tooltip_button, obj_name='btn_panel')
+		self.grp_slope_options.addButton(self.btn_slope_paste_max)
+		lay_slope.addWidget(self.btn_slope_paste_max, 0, 3)
+		self.btn_slope_paste_max.clicked.connect(lambda: TRNodeActionCollector.slope_paste(pMode, pLayers, self.slope_bank, (True, False)))
+
+		tooltip_button =  "Paste horizontally flipped slope to selected nodes pivoting around the one with lowest vertical coordinates"
+		self.btn_slope_paste_min_flip = CustomPushButton("slope_paste_min_flip", tooltip=tooltip_button, obj_name='btn_panel')
+		self.grp_slope_options.addButton(self.btn_slope_paste_min_flip)
+		lay_slope.addWidget(self.btn_slope_paste_min_flip, 0, 4)
+		self.btn_slope_paste_min_flip.clicked.connect(lambda: TRNodeActionCollector.slope_paste(pMode, pLayers, self.slope_bank, (False, True)))
+
+		tooltip_button =  "Paste horizontally flipped slope to selected nodes pivoting around the one with highest vertical coordinates"
+		self.btn_slope_paste_max_flip = CustomPushButton("slope_paste_max_flip", tooltip=tooltip_button, obj_name='btn_panel')
+		self.grp_slope_options.addButton(self.btn_slope_paste_max_flip)
+		lay_slope.addWidget(self.btn_slope_paste_max_flip, 0, 5)
+		self.btn_slope_paste_max_flip.clicked.connect(lambda: TRNodeActionCollector.slope_paste(pMode, pLayers, self.slope_bank, (True, True)))
+
+		box_slope.setLayout(lay_slope)
+		self.lay_main.addWidget(box_slope)
+
+		# -- Copy Nodes ------------------------------------------------------
+		box_copy_nodes = QtGui.QGroupBox()
+		box_copy_nodes.setObjectName('box_group')
+
+		self.grp_copy_nodes_options = QtGui.QButtonGroup()
+
+		lay_copy_nodes = QtGui.QGridLayout()
+		lay_copy_nodes.setContentsMargins(0, 0, 0, 0)
+
+		# --- Options
+		tooltip_button =  "Paste Align Top Left"
+		self.chk_paste_top_left = CustomPushButton("node_align_top_left", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_copy_nodes_options.addButton(self.chk_paste_top_left)
+		lay_copy_nodes.addWidget(self.chk_paste_top_left, 0, 0)
+		self.chk_paste_top_left.clicked.connect(lambda: self.act_node_align_state('LT'))
+
+		tooltip_button =  "Paste: Align Top Right"
+		self.chk_paste_top_right = CustomPushButton("node_align_top_right", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_copy_nodes_options.addButton(self.chk_paste_top_right)
+		lay_copy_nodes.addWidget(self.chk_paste_top_right, 0, 1)
+		self.chk_paste_top_right.clicked.connect(lambda: self.act_node_align_state('RT'))
+
+		tooltip_button =  "Paste: Align Center"
+		self.chk_paste_center = CustomPushButton("node_center", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_copy_nodes_options.addButton(self.chk_paste_center)
+		lay_copy_nodes.addWidget(self.chk_paste_center, 0, 2)
+		self.chk_paste_top_right.clicked.connect(lambda: self.act_node_align_state('CE'))
+
+		tooltip_button =  "Paste: Align Bottom Left"
+		self.chk_paste_bottom_left = CustomPushButton("node_align_bottom_left", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_copy_nodes_options.addButton(self.chk_paste_bottom_left)
+		lay_copy_nodes.addWidget(self.chk_paste_bottom_left, 0, 3)
+		self.chk_paste_bottom_left.clicked.connect(lambda: self.act_node_align_state('LB'))
+
+		tooltip_button =  "Paste: Align Bottom Right"
+		self.chk_paste_bottom_right = CustomPushButton("node_align_bottom_right", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_copy_nodes_options.addButton(self.chk_paste_bottom_right)
+		lay_copy_nodes.addWidget(self.chk_paste_bottom_right, 0, 4)
+		self.chk_paste_bottom_right.clicked.connect(lambda: self.act_node_align_state('RB'))
+
+		tooltip_button =  "Paste: Flip horizontally"
+		self.chk_paste_flip_h = CustomPushButton("flip_horizontal", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		#self.grp_paste_nodes_options.addButton(self.chk_paste_flip_h)
+		lay_copy_nodes.addWidget(self.chk_paste_flip_h, 1, 0)
+		#self.chk_paste_flip_h.clicked.connect(...)
+
+		tooltip_button =  "Paste: Flip vertically"
+		self.chk_paste_flip_v = CustomPushButton("flip_vertical", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		#self.grp_paste_nodes_options.addButton(self.chk_paste_flip_v)
+		lay_copy_nodes.addWidget(self.chk_paste_flip_v, 1, 1)
+		#self.chk_paste_flip_v.clicked.connect(...)
+
+		tooltip_button =  "Paste: Reverse Order"
+		self.chk_paste_reverse = CustomPushButton("contour_reverse", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		#self.grp_copy_nodes_options.addButton(self.chk_paste_reverse)
+		lay_copy_nodes.addWidget(self.chk_paste_reverse, 1, 2)
+		#self.chk_paste_reverse.clicked.connect(...)
+
+		tooltip_button =  "Copy: Selected Nodes to Memory"
+		self.chk_copy_nodes = CustomPushButton("node_copy", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		#self.grp_copy_nodes_options.addButton(self.chk_copy_nodes)
+		lay_copy_nodes.addWidget(self.chk_copy_nodes, 1, 3)
+		self.chk_copy_nodes.clicked.connect(self.act_node_copy)
+
+		tooltip_button =  "Paste: Nodes stored in Memory"
+		self.btn_paste_nodes = CustomPushButton("node_paste", checkable=False, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		#self.grp_copy_nodes_options.addButton(self.btn_paste_nodes)
+		lay_copy_nodes.addWidget(self.btn_paste_nodes, 1, 4)
+		self.btn_paste_nodes.clicked.connect(lambda: TRNodeActionCollector.nodes_paste(eGlyph(), pLayers, self.node_bank, self.node_align_state, (self.chk_paste_flip_h.isChecked(), self.chk_paste_flip_v.isChecked(), self.chk_paste_reverse.isChecked(), False, False, False)))
+		box_copy_nodes.setLayout(lay_copy_nodes)
+		self.lay_main.addWidget(box_copy_nodes)
+
+		# -- Move Nodes ------------------------------------------------------
+		box_move_nodes = QtGui.QGroupBox()
+		box_move_nodes.setObjectName('box_group')
+
+		self.grp_move_nodes_options = QtGui.QButtonGroup()
+
+		lay_move_nodes = QtGui.QGridLayout()
+		lay_move_nodes.setContentsMargins(0, 0, 0, 0)
+
+		# --- Options
+		tooltip_button =  "Smart Shift:\n Move off-curve nodes together with on-curve ones"
+		self.chk_shift_smart = CustomPushButton("shift_smart", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_move_nodes_options.addButton(self.chk_shift_smart)
+		lay_move_nodes.addWidget(self.chk_shift_smart, 0, 0, 1, 1)
+
+		tooltip_button =  "Shift:\n Do not move off-curve nodes together with on-curve ones"
+		self.chk_shift_dumb = CustomPushButton("shift_dumb", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_move_nodes_options.addButton(self.chk_shift_dumb)
+		lay_move_nodes.addWidget(self.chk_shift_dumb, 0, 1, 1, 1)
+
+		tooltip_button =  "Interpolated shift"
+		self.chk_shift_lerp = CustomPushButton("shift_interpolate", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_move_nodes_options.addButton(self.chk_shift_lerp)
+		lay_move_nodes.addWidget(self.chk_shift_lerp, 0, 2, 1, 1)
+		#self.chk_paste_top_left.clicked.connect(...)
+
+		tooltip_button =  "Italic walker:\n Vertical shift along the font's italic angle"
+		self.chk_shift_italic = CustomPushButton("shift_slope_italik", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_move_nodes_options.addButton(self.chk_shift_italic)
+		lay_move_nodes.addWidget(self.chk_shift_italic, 0, 3, 1, 1)
+
+		tooltip_button =  "Slope walker:\n Vertical shift along a given slope"
+		self.chk_shift_slope = CustomPushButton("shift_slope_walk", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_move_nodes_options.addButton(self.chk_shift_slope)
+		lay_move_nodes.addWidget(self.chk_shift_slope, 0, 4, 1, 1)
+
+		tooltip_button =  "Copy slope between selected nodes"
+		self.btn_shift_slope_copy = CustomPushButton("slope_copy", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_move_nodes.addWidget(self.btn_shift_slope_copy, 0, 5, 1, 1)
+		self.btn_shift_slope_copy.clicked.connect( self.act_shift_angle_copy)
+
+		lbl_x = CustomLabel('width_x', obj_name='lbl_panel')
+		lay_move_nodes.addWidget(lbl_x, 1, 0, 1, 1)
+
+		self.spn_move_x = CustomDoubleSpinBox(init_values=(-999., 999., 1., 1.), tooltip='Horizontal shift value', obj_name='spn_panel')
+		lay_move_nodes.addWidget(self.spn_move_x, 1, 1, 1, 2)
+
+		lbl_y = CustomLabel('width_y', obj_name='lbl_panel')
+		lay_move_nodes.addWidget(lbl_y, 2, 0, 1, 1)
+
+		self.spn_move_y = CustomDoubleSpinBox(init_values=(-999., 999., 1., 1.), tooltip='Vertical shift value', obj_name='spn_panel')
+		lay_move_nodes.addWidget(self.spn_move_y, 2, 1, 1, 2)
+
+		tooltip_button = "Shift Left"
+		self.btn_shift_left = CustomPushButton("arrow_left", checkable=False, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		lay_move_nodes.addWidget(self.btn_shift_left, 1, 3, 1, 1)
+		self.btn_shift_left.clicked.connect(lambda: self.act_node_move(-self.spn_move_x.value, 0)) 
+
+		tooltip_button = "Shift Right"
+		self.btn_shift_right = CustomPushButton("arrow_right", checkable=False, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		lay_move_nodes.addWidget(self.btn_shift_right, 1, 4, 1, 1)
+		self.btn_shift_right.clicked.connect(lambda: self.act_node_move(self.spn_move_x.value, 0))
+
+		tooltip_button = "Shift Up"
+		self.btn_shift_up = CustomPushButton("arrow_up", checkable=False, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		lay_move_nodes.addWidget(self.btn_shift_up, 2, 3, 1, 1)
+		self.btn_shift_up.clicked.connect(lambda: self.act_node_move(0, self.spn_move_y.value))
+
+		tooltip_button = "Shift Down"
+		self.btn_shift_down = CustomPushButton("arrow_down", checkable=False, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		lay_move_nodes.addWidget(self.btn_shift_down, 2, 4, 1, 1)
+		self.btn_shift_down.clicked.connect(lambda: self.act_node_move(0, -self.spn_move_y.value))
+
+		tooltip_button =  "Percent of BBox:\n Interpret new positional coordinates as if they were scaled by percent given in (X,Y)\nEquivalent to affine scaling of selected nodes in respect to the Layers BoundingBox"
+		self.chk_shift_bbox_percent = CustomPushButton("bbox_percent", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_move_nodes.addWidget(self.chk_shift_bbox_percent, 1, 5, 1, 1)
+		
+		tooltip_button =  "Capture keyboard:\n Capture input from the keyboard arrow keys"
+		self.chk_shift_capture = CustomPushButton("keyboard_arows", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_shift_capture.setEnabled(False)
+		lay_move_nodes.addWidget(self.chk_shift_capture, 2, 5, 1, 1)
+		
+		box_move_nodes.setLayout(lay_move_nodes)
+		self.lay_main.addWidget(box_move_nodes)
+		
+		# -- Finish it -------------------------------------------------------
+		self.setLayout(self.lay_main)
+
+	# - Procedures ------------------------------------------------
+	def target_set(self):
+		if self.chk_node_target.isChecked():
+			glyph = eGlyph()
+			wLayers = glyph._prepareLayers(pLayers)
+			
+			for layer in wLayers:
+				self.ext_target[layer] = glyph.selectedNodes(layer)[0]
+
 		else:
-			self.edt_offX.setText(str(float(self.edt_offX.text)*100)) 
-			self.edt_offY.setText(str(float(self.edt_offY.text)*100))
+			self.ext_target = {}
 
-	def moveNodes(self, offset_x, offset_y, method, inPercent):
-		# - Init
-		font = pFont()
-		glyph = eGlyph()
-		italic_angle = font.getItalicAngle()
-
-		process_glyphs = getProcessGlyphs(pMode)
-
-		for glyph in process_glyphs:
+	def target_collapse(self):
+		if self.chk_node_target.isChecked() and len(self.ext_target.keys()):
+			glyph = eGlyph()
 			wLayers = glyph._prepareLayers(pLayers)
 
 			for layer in wLayers:
-				selectedNodes = glyph.selectedNodes(layer=layer, extend=eNode)
-				
-				
-				# -- Scaling move - coordinates as percent of position
-				def scaleOffset(node, off_x, off_y):
-					return (-node.x + width*(float(node.x)/width + offset_x), -node.y + height*(float(node.y)/height + offset_y))
+				if layer in self.ext_target.keys():
+					for node in glyph.selectedNodes(layer):
+						node.x = self.ext_target[layer].x
+						node.y = self.ext_target[layer].y
 
-				width = glyph.layer(layer).boundingBox.width() # glyph.layer().advanceWidth
-				height = glyph.layer(layer).boundingBox.height() # glyph.layer().advanceHeight
-
-				# - Process
-				if method == self.methodList[0]:
-					for node in selectedNodes:
-						if node.isOn:
-							if inPercent:						
-								node.smartShift(*scaleOffset(node, offset_x, offset_y))
-							else:
-								node.smartShift(offset_x, offset_y)
-
-				elif method == self.methodList[1]:
-					for node in selectedNodes:
-						if inPercent:						
-							node.shift(*scaleOffset(node, offset_x, offset_y))
-						else:
-							node.shift(offset_x, offset_y)
-
-				elif method == self.methodList[2]:
-					for node in selectedNodes:
-						if inPercent:						
-							node.interpShift(*scaleOffset(node, offset_x, offset_y))
-						else:
-							node.interpShift(offset_x, offset_y)
-
-				elif method == self.methodList[3]:
-					if italic_angle != 0:
-						for node in selectedNodes:
-							if inPercent:						
-								node.slantShift(*scaleOffset(node, offset_x, offset_y))
-							else:
-								node.slantShift(offset_x, offset_y, italic_angle)
-					else:
-						for node in selectedNodes:
-							if inPercent:						
-								node.smartShift(*scaleOffset(node, offset_x, offset_y))
-							else:
-								node.smartShift(offset_x, offset_y)
-
-				elif method == self.methodList[4]:			
-					current_layer = glyph.activeLayer().name
-
-					if len(self.aux.copyLine) and current_layer in self.aux.copyLine:
-						for node in selectedNodes:
-							node.slantShift(offset_x, offset_y, -90 + self.aux.copyLine[current_layer].angle)				
-					else:
-						warnings.warn('No slope information for layer found!\nNOTE:\tPlease <<Copy Slope>> first using TypeRig Node align toolbox.', LayerWarning)
-
-			# - Finish it
 			glyph.update()
-			glyph.updateObject(glyph.fl, 'Node: %s @ %s.' %(method, '; '.join(wLayers)))
+			glyph.updateObject(glyph.fl, 'Glyph: {}; Nodes collapsed; Layers:\t {}'.format(glyph.name, '; '.join(wLayers)))
 
-	def onUp(self):
-		self.moveNodes(.0, float(self.edt_offY.text), method=str(self.cmb_methodSelector.currentText), inPercent=self.chk_percent.isChecked())
+	def act_slope_copy(self):
+		if self.chk_slope_copy.isChecked():
+			self.slope_bank = TRNodeActionCollector.slope_copy(eGlyph(), pLayers)
+		else:
+			self.slope_bank = {}
 
-	def onDown(self):
-		self.moveNodes(.0, -float(self.edt_offY.text), method=str(self.cmb_methodSelector.currentText), inPercent=self.chk_percent.isChecked())
-			
-	def onLeft(self):
-		self.moveNodes(-float(self.edt_offX.text), .0, method=str(self.cmb_methodSelector.currentText), inPercent=self.chk_percent.isChecked())
-			
-	def onRight(self):
-		self.moveNodes(float(self.edt_offX.text), .0, method=str(self.cmb_methodSelector.currentText), inPercent=self.chk_percent.isChecked())
+	def act_shift_angle_copy(self):
+		if self.btn_shift_slope_copy.isChecked():
+			self.angle_bank = TRNodeActionCollector.angle_copy(eGlyph(), pLayers)
+		else:
+			self.angle_bank = {}
+		print(self.angle_bank)
+
+	def act_slope_italic(self):
+		if self.chk_slope_italic.isChecked():
+			self.slope_bank = TRNodeActionCollector.slope_italic(eGlyph(), pLayers)
+		else:
+			self.slope_bank = {}
+
+	def act_node_copy(self):
+		if self.chk_copy_nodes.isChecked():
+			self.node_bank = TRNodeActionCollector.nodes_copy(eGlyph(), pLayers)
+		else:
+			self.node_bank = {}
+
+	def act_node_align_state(self, align_state):
+		self.node_align_state = align_state
+
+	def act_node_move(self, offset_x, offset_y):
+		if self.chk_shift_smart.isChecked():
+			method = 'SMART'
+		elif self.chk_shift_dumb.isChecked():
+			method = 'MOVE'
+		elif self.chk_shift_lerp.isChecked():
+			method = 'LERP'
+		elif self.chk_shift_italic.isChecked():
+			method = 'SLANT'
+		elif self.chk_shift_slope.isChecked():
+			method = 'SLOPE'
+		else:
+			method = None
+
+		if self.chk_shift_bbox_percent.isChecked():
+			percent_of_bbox = True
+			offset_x /= 100
+			offset_y /= 100
+		else:
+			percent_of_bbox = False
+
+		TRNodeActionCollector.nodes_move(eGlyph(), pLayers, offset_x, offset_y, method, self.angle_bank, percent_of_bbox)
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
@@ -1039,94 +595,17 @@ class tool_tab(QtGui.QWidget):
 		super(tool_tab, self).__init__()
 
 		# - Init
+		self.setStyleSheet(css_tr_button)
 		layoutV = QtGui.QVBoxLayout()
-		self.KeyboardOverride = False
+		layoutV.setContentsMargins(0, 0, 0, 0)
+
 		
 		# - Add widgets to main dialog -------------------------
-		layoutV.addWidget(QtGui.QLabel('Nodes: Basic Operations'))
-		layoutV.addLayout(basicOps())
-
-		layoutV.addWidget(QtGui.QLabel('Nodes: Align'))
-		self.alignNodes = alignNodes()
-		layoutV.addLayout(self.alignNodes)
-
-		layoutV.addWidget(QtGui.QLabel('Nodes: Copy/Paste'))
-		layoutV.addLayout(copyNodes())
-
-		layoutV.addWidget(QtGui.QLabel('Nodes: Movement'))
-		self.advMovement = advMovement(self.alignNodes)
-		layoutV.addLayout(self.advMovement)  
-
-		# - Capture Kyaboard ----------------------------------
-		self.btn_capture = QtGui.QPushButton('Capture Keyboard')
-		self.btn_capture.setCheckable(True)
-		self.btn_capture.setToolTip('Click to capture keyboard arrows input.\nNote:\n+10 SHIFT\n+100 CTRL\n Exit ESC')
-		self.btn_capture.clicked.connect(self.captureKeyaboard)
-
-		layoutV.addWidget(self.btn_capture)
+		layoutV.addWidget(TRNodeBasics())
 
 		# - Build ---------------------------
 		layoutV.addStretch()
 		self.setLayout(layoutV)
-
-		# !!! Hotfix FL7 7355 
-		self.setMinimumSize(300,self.sizeHint.height())
-
-	# - Capture keyboard -------------------------------------
-	def keyPressEvent(self, eventQKeyEvent):
-		if self.KeyboardOverride:
-			#self.setFocus()
-			key = eventQKeyEvent.key()
-			modifier = int(eventQKeyEvent.modifiers())
-			addon = .0
-			
-			if key == QtCore.Qt.Key_Escape:
-				#self.close()
-				self.releaseKeyboard()
-				self.KeyboardOverride = False
-				self.btn_capture.setChecked(False)
-				self.btn_capture.setText('Capture Keyboard')
-				
-			# - Keyboard listener
-			# -- Modifier addon
-			if modifier == QtCore.Qt.ShiftModifier:
-				addon = 10.0 if not self.advMovement.chk_percent.isChecked() else 0.1
-			elif modifier == QtCore.Qt.ControlModifier:
-				addon = 100.0 if not self.advMovement.chk_percent.isChecked() else 1.0
-			else:
-				addon = .0
-			
-			# -- Standard movement keys	
-			if key == QtCore.Qt.Key_Up:
-				shiftXY = (.0, float(self.advMovement.edt_offY.text) + addon)
-			
-			elif key == QtCore.Qt.Key_Down:
-				shiftXY = (.0, -float(self.advMovement.edt_offY.text) - addon)
-			
-			elif key == QtCore.Qt.Key_Left:
-				shiftXY = (-float(self.advMovement.edt_offX.text) - addon, .0)
-			
-			elif key == QtCore.Qt.Key_Right:
-				shiftXY = (float(self.advMovement.edt_offX.text) + addon, .0)
-			
-			else:
-				shiftXY = (.0,.0)
-			
-			# - Move
-			self.advMovement.moveNodes(*shiftXY, method=str(self.advMovement.cmb_methodSelector.currentText),  inPercent=self.advMovement.chk_percent.isChecked())
-
-	def captureKeyaboard(self):
-		if not self.KeyboardOverride:
-			self.KeyboardOverride = True
-			self.btn_capture.setChecked(True)
-			self.btn_capture.setText('Keyboard Capture Active. [ESC] Exit')
-			self.grabKeyboard()
-		else:
-			self.KeyboardOverride = False
-			self.btn_capture.setChecked(False)
-			self.btn_capture.setText('Capture Keyboard')
-			self.releaseKeyboard()
-	
 
 # - Test ----------------------
 if __name__ == '__main__':
