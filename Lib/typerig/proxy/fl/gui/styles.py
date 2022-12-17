@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.2'
+__version__ = '0.0.3'
 
 # -- CSS Styling ------------------------
 css_fl_button = '''
@@ -101,22 +101,30 @@ QGroupBox#box_group {
 QDoubleSpinBox#spn_panel {
     max-height: 20px;
     max-width: 60px;
+    min-height: 20px;
+    min-width: 60px;
 }
 
 QPushButton#btn_panel_opt,
 QPushButton#btn_panel, 
 QLabel#lbl_panel {
+    /*margin: 2 0 2 0;*/
+    /*padding: 2 0 2 0;*/
+    background: none;
+    border-radius: 5px;
+    border: 1px solid transparent;
     color: #212121;
     font-family: "TypeRig Icons";
     font-size: 20px;
-    background: none;
-    border-radius: 5px;
-    /*margin: 2 0 2 0;*/
-    /*padding: 2 0 2 0;*/
     max-height: 26px;
     max-width: 26px;
     min-height: 26px;
     min-width: 26px;
+    text-align: center;
+}
+
+QLabel#lbl_panel {
+    border: none;
 }
 
 QPushButton#btn_panel_opt{

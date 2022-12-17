@@ -26,7 +26,7 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.3.7'
+__version__ = '0.3.9'
 
 # - Keep compatibility for basestring checks
 try:
@@ -193,6 +193,7 @@ class CustomSpinButton(QtGui.QWidget):
 		self.box.addWidget(self.input)
 		self.box.addWidget(self.button)
 		self.setLayout(self.box)
+		self.setSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
 
 # -- Sub Dialogs --------------------------
 class TRLayerSelectDLG(QtGui.QDialog):
@@ -923,7 +924,6 @@ class TRVTabWidget(QtGui.QTabWidget):
 			''')
 
 # - Layouts ----------------------------------------
-'''
 class TRFlowLayout(QtGui.QLayout):
 	# As adapted from https://stackoverflow.com/questions/60398756/pyqt-oriented-flow-layout
 	
@@ -935,7 +935,6 @@ class TRFlowLayout(QtGui.QLayout):
 			self.setContentsMargins(margin, margin, margin, margin)
 
 		self.setSpacing(spacing)
-
 		self.itemList = []
 
 	def __del__(self):
@@ -968,16 +967,16 @@ class TRFlowLayout(QtGui.QLayout):
 		return self.orientation == QtCore.Qt.Horizontal
 
 	def heightForWidth(self, width):
-		return self.doLayout(QRect(0, 0, width, 0), True)
+		return self.doLayout(QtCore.QRect(0, 0, width, 0), True)
 
 	def hasWidthForHeight(self):
 		return self.orientation == QtCore.Qt.Vertical
 
 	def widthForHeight(self, height):
-		return self.doLayout(QRect(0, 0, 0, height), True)
+		return self.doLayout(QtCore.QRect(0, 0, 0, height), True)
 
 	def setGeometry(self, rect):
-		super().setGeometry(rect)
+		#super().setGeometry(rect)
 		self.doLayout(rect, False)
 
 	def sizeHint(self):
@@ -989,9 +988,8 @@ class TRFlowLayout(QtGui.QLayout):
 		for item in self.itemList:
 			size = size.expandedTo(item.minimumSize())
 
-		margin, _, _, _ = self.getContentsMargins()
+		size += QtCore.QSize(2 * self.margin, 2 * self.margin)
 
-		size += QtCore.QSize(2 * margin, 2 * margin)
 		return size
 
 	def doLayout(self, rect, testOnly):
@@ -1000,11 +998,13 @@ class TRFlowLayout(QtGui.QLayout):
 		lineHeight = columnWidth = heightForWidth = 0
 
 		for item in self.itemList:
-			wid = item.widget()
-			spaceX = self.spacing() + wid.style().layoutSpacing(QtGui.QSizePolicy.PushButton, QtGui.QSizePolicy.PushButton, QtCore.Qt.Horizontal)
-			spaceY = self.spacing() + wid.style().layoutSpacing(QtGui.QSizePolicy.PushButton, QtGui.QSizePolicy.PushButton, QtCore.Qt.Vertical)
+			widget = item.widget()
+			spaceX = self.spacing + widget.style().layoutSpacing(QtGui.QSizePolicy.PushButton, QtGui.QSizePolicy.PushButton, QtCore.Qt.Horizontal)
+			spaceY = self.spacing + widget.style().layoutSpacing(QtGui.QSizePolicy.PushButton, QtGui.QSizePolicy.PushButton, QtCore.Qt.Vertical)
+			
 			if self.orientation == QtCore.Qt.Horizontal:
 				nextX = x + item.sizeHint().width() + spaceX
+				
 				if nextX - spaceX > rect.right() and lineHeight > 0:
 					x = rect.x()
 					y = y + lineHeight + spaceY
@@ -1016,8 +1016,10 @@ class TRFlowLayout(QtGui.QLayout):
 
 				x = nextX
 				lineHeight = max(lineHeight, item.sizeHint().height())
+			
 			else:
 				nextY = y + item.sizeHint().height() + spaceY
+				
 				if nextY - spaceY > rect.bottom() and columnWidth > 0:
 					x = x + columnWidth + spaceX
 					y = rect.y()
@@ -1033,6 +1035,6 @@ class TRFlowLayout(QtGui.QLayout):
 
 		if self.orientation == QtCore.Qt.Horizontal:
 			return y + lineHeight - rect.y()
+		
 		else:
 			return heightForWidth - rect.y()
-'''
