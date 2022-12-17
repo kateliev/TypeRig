@@ -55,7 +55,7 @@ def filter_consecutive(selection):
 
 	return {key: [value[i] for i in range(len(value)) if not map_dict[key][i]] for key, value in selection_dict.items()}
 
-def scale_offset(node, off_x, off_y, width, height):
+def scale_offset(node, offset_x, offset_y, width, height):
 	'''Scaling move - coordinates as percent of position'''
 	return (-node.x + width*(float(node.x)/width + offset_x), -node.y + height*(float(node.y)/height + offset_y))
 
@@ -379,6 +379,17 @@ class TRNodeActionCollector(object):
 
 		return slope_dict
 
+	@staticmethod
+	def angle_copy(glyph:eGlyph, pLayers:tuple) -> dict:
+		wLayers = glyph._prepareLayers(pLayers)
+		slope_dict = {}
+		
+		for layer in wLayers:
+			selection = glyph.selectedNodes(layer)
+			slope_dict[layer] = Vector(selection[0], selection[-1]).angle
+
+		return slope_dict
+
 	def slope_italic(glyph:eGlyph, pLayers:tuple) -> dict:
 		wLayers = glyph._prepareLayers(pLayers)
 		italicAngle = glyph.package.italicAngle_value
@@ -687,7 +698,8 @@ class TRNodeActionCollector(object):
 	@staticmethod
 	def nodes_paste(glyph:eGlyph, pLayers:tuple, node_bank:dict, align:str=None, mode:tuple=(False, False, False, False, False, False)):
 		wLayers = glyph._prepareLayers(pLayers)
-		flip_h, flip_v, reverse, inject_nodes, overwrite_nodes, overwrite_coordinates = flip_reverse
+		flip_h, flip_v, reverse, inject_nodes, overwrite_nodes, overwrite_coordinates = mode
+		update_flag = False
 		
 		for layer in wLayers:
 			if layer in node_bank.keys():

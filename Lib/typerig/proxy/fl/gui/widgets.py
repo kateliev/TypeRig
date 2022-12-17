@@ -18,15 +18,15 @@ from platform import system
 import os
 import fontlab as fl6
 
-from PythonQt import QtCore
-from typerig.proxy.fl.gui import QtGui
+from PythonQt import QtCore, QtGui
+#from typerig.proxy.fl.gui import QtGui
 
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.3.4'
+__version__ = '0.3.9'
 
 # - Keep compatibility for basestring checks
 try:
@@ -141,8 +141,24 @@ def FLIconButton(button_text, icon_path, icon_size=32, checkable=False):
 	return new_button
 
 # -- Miniwidgets --------------------------
+class CustomDoubleSpinBox(QtGui.QDoubleSpinBox):
+	def __init__(self, init_values=(0., 100., 0., 1.), tooltip=None, obj_name=None):
+		super(CustomDoubleSpinBox, self).__init__()
+
+		# - Init
+		spb_min, spb_max, spb_value, spb_step = init_values
+
+		# - Set
+		self.setMinimum(spb_min)
+		self.setMaximum(spb_max)
+		self.setValue(spb_value)
+		self.setSingleStep(spb_step)
+
+		if tooltip is not None: self.setToolTip(tooltip)
+		if obj_name is not None: self.setObjectName(obj_name)
+
 class CustomSpinButton(QtGui.QWidget):
-	def __init__(button_text, init_values=(0., 100., 0., 1.), tooltip=(None, None), obj_name=(None, None)):
+	def __init__(self, button_text, init_values=(0., 100., 0., 1.), tooltip=(None, None), obj_name=(None, None)):
 		super(CustomSpinButton, self).__init__()
 
 		# - Init
@@ -151,7 +167,7 @@ class CustomSpinButton(QtGui.QWidget):
 		# - Widgets
 		self.button = QtGui.QPushButton(button_text)
 
-		self.input = QtGui.QtGui.QDoubleSpinBox()
+		self.input = QtGui.QDoubleSpinBox()
 		self.input.setMinimum(spb_min)
 		self.input.setMaximum(spb_max)
 		self.input.setValue(spb_value)
@@ -159,22 +175,25 @@ class CustomSpinButton(QtGui.QWidget):
 
 		if len(tooltip) == 2:
 			if tooltip[0] is not None:
-				self.input.setToolTip(tooltip)
+				self.input.setToolTip(tooltip[0])
 
 			if tooltip[1] is not None:
-				self.button.setToolTip(tooltip)
+				self.button.setToolTip(tooltip[1])
 
-		if len(tooltip) == 2:
+		if len(obj_name) == 2:
 			if obj_name[0] is not None:
-				self.input.setObjectName(obj_name)
+				self.input.setObjectName(obj_name[0])
 
 			if obj_name[1] is not None:
-				self.button.setObjectName(obj_name)
+				self.button.setObjectName(obj_name[1])
 
 		# - Layout
 		self.box = QtGui.QHBoxLayout()
+		self.box.setContentsMargins(0, 0, 0, 0)
 		self.box.addWidget(self.input)
 		self.box.addWidget(self.button)
+		self.setLayout(self.box)
+		self.setSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
 
 # -- Sub Dialogs --------------------------
 class TRLayerSelectDLG(QtGui.QDialog):
@@ -903,3 +922,119 @@ class TRVTabWidget(QtGui.QTabWidget):
 				background-color: #808080; 
 			}
 			''')
+
+# - Layouts ----------------------------------------
+class TRFlowLayout(QtGui.QLayout):
+	# As adapted from https://stackoverflow.com/questions/60398756/pyqt-oriented-flow-layout
+	
+	def __init__(self, orientation=QtCore.Qt.Horizontal, parent=None, margin=0, spacing=-1):
+		super(TRFlowLayout, self).__init__(parent)
+		self.orientation = orientation
+
+		if parent is not None:
+			self.setContentsMargins(margin, margin, margin, margin)
+
+		self.setSpacing(spacing)
+		self.itemList = []
+
+	def __del__(self):
+		item = self.takeAt(0)
+		while item:
+			item = self.takeAt(0)
+
+	def addItem(self, item):
+		self.itemList.append(item)
+
+	def count(self):
+		return len(self.itemList)
+
+	def itemAt(self, index):
+		if index >= 0 and index < len(self.itemList):
+			return self.itemList[index]
+
+		return None
+
+	def takeAt(self, index):
+		if index >= 0 and index < len(self.itemList):
+			return self.itemList.pop(index)
+
+		return None
+
+	def expandingDirections(self):
+		return QtCore.Qt.Orientations(QtCore.Qt.Orientation(0))
+
+	def hasHeightForWidth(self):
+		return self.orientation == QtCore.Qt.Horizontal
+
+	def heightForWidth(self, width):
+		return self.doLayout(QtCore.QRect(0, 0, width, 0), True)
+
+	def hasWidthForHeight(self):
+		return self.orientation == QtCore.Qt.Vertical
+
+	def widthForHeight(self, height):
+		return self.doLayout(QtCore.QRect(0, 0, 0, height), True)
+
+	def setGeometry(self, rect):
+		#super().setGeometry(rect)
+		self.doLayout(rect, False)
+
+	def sizeHint(self):
+		return self.minimumSize()
+
+	def minimumSize(self):
+		size = QtCore.QSize()
+
+		for item in self.itemList:
+			size = size.expandedTo(item.minimumSize())
+
+		size += QtCore.QSize(2 * self.margin, 2 * self.margin)
+
+		return size
+
+	def doLayout(self, rect, testOnly):
+		x = rect.x()
+		y = rect.y()
+		lineHeight = columnWidth = heightForWidth = 0
+
+		for item in self.itemList:
+			widget = item.widget()
+			spaceX = self.spacing + widget.style().layoutSpacing(QtGui.QSizePolicy.PushButton, QtGui.QSizePolicy.PushButton, QtCore.Qt.Horizontal)
+			spaceY = self.spacing + widget.style().layoutSpacing(QtGui.QSizePolicy.PushButton, QtGui.QSizePolicy.PushButton, QtCore.Qt.Vertical)
+			
+			if self.orientation == QtCore.Qt.Horizontal:
+				nextX = x + item.sizeHint().width() + spaceX
+				
+				if nextX - spaceX > rect.right() and lineHeight > 0:
+					x = rect.x()
+					y = y + lineHeight + spaceY
+					nextX = x + item.sizeHint().width() + spaceX
+					lineHeight = 0
+
+				if not testOnly:
+					item.setGeometry(QtCore.QRect(QtCore.QPoint(x, y), item.sizeHint()))
+
+				x = nextX
+				lineHeight = max(lineHeight, item.sizeHint().height())
+			
+			else:
+				nextY = y + item.sizeHint().height() + spaceY
+				
+				if nextY - spaceY > rect.bottom() and columnWidth > 0:
+					x = x + columnWidth + spaceX
+					y = rect.y()
+					nextY = y + item.sizeHint().height() + spaceY
+					columnWidth = 0
+
+				heightForWidth += item.sizeHint().height() + spaceY
+				if not testOnly:
+					item.setGeometry(QtCore.QRect(QtCore.QPoint(x, y), item.sizeHint()))
+
+				y = nextY
+				columnWidth = max(columnWidth, item.sizeHint().width())
+
+		if self.orientation == QtCore.Qt.Horizontal:
+			return y + lineHeight - rect.y()
+		
+		else:
+			return heightForWidth - rect.y()

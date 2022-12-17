@@ -124,7 +124,7 @@ class TRMainPanel(QtGui.QDialog):
 		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 
 		# !!! Hotfix FL7 7355 
-		self.setMinimumSize(330, self.sizeHint.height())
+		#self.setMinimumSize(330, self.sizeHint.height())
 		
 		self.layers_refresh()
 		self.show()
