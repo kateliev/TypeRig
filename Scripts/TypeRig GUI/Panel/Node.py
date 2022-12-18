@@ -19,6 +19,7 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 from typerig.proxy.fl.actions.node import TRNodeActionCollector
+from typerig.proxy.fl.actions.curve import TRCurveActionCollector
 from typerig.proxy.fl.application.app import pWorkspace
 #from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomLabel, CustomPushButton, CustomSpinButton, CustomDoubleSpinBox, TRFlowLayout
@@ -29,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '3.11'
+app_name, app_version = 'TypeRig | Nodes', '3.20'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -92,6 +93,81 @@ class TRNodeBasics(QtGui.QWidget):
 		box_node.setLayout(lay_node)
 		self.lay_main.addWidget(box_node)
 		
+		# -- Curve Tools -------------------------------------------------------
+		box_curve = QtGui.QGroupBox()
+		box_curve.setObjectName('box_group')
+		
+		lay_curve = TRFlowLayout(spacing=10)
+
+		# - Actions
+		tooltip_button = "Convert node to smooth"
+		self.btn_node_smooth = CustomPushButton("node_smooth", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_curve.addWidget(self.btn_node_smooth)
+		self.btn_node_smooth.clicked.connect(lambda: TRNodeActionCollector.node_smooth(pMode, pLayers, True))
+
+		tooltip_button = "Convert node to sharp"
+		self.btn_node_sharp = CustomPushButton("node_sharp", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_curve.addWidget(self.btn_node_sharp)
+		self.btn_node_sharp.clicked.connect(lambda: TRNodeActionCollector.node_smooth(pMode, pLayers, False))
+
+		tooltip_button = "Convert selected segment to curve"
+		self.btn_line_to_curve = CustomPushButton("line_to_curve", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_curve.addWidget(self.btn_line_to_curve)
+		self.btn_line_to_curve.clicked.connect(lambda: TRCurveActionCollector.segment_convert(pMode, pLayers, True))
+
+		tooltip_button = "Convert selected segment to line"
+		self.btn_curve_to_line = CustomPushButton("curve_to_line", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_curve.addWidget(self.btn_curve_to_line)
+		self.btn_curve_to_line.clicked.connect(lambda: TRCurveActionCollector.segment_convert(pMode, pLayers, False))
+
+		tooltip_button = "Optimize curve: Tunni"
+		self.btn_curve_tunni = CustomPushButton("curve_tunni", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_curve.addWidget(self.btn_curve_tunni)
+		self.btn_curve_tunni.clicked.connect(lambda: TRCurveActionCollector.curve_optimize_dlg(pMode, pLayers, 'tunni'))
+
+		tooltip_button = "Optimize curve: Set Hobby curvature"
+		self.btn_curve_hobby = CustomPushButton("curve_hobby", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_curve.addWidget(self.btn_curve_hobby)
+		self.btn_curve_hobby.clicked.connect(lambda: TRCurveActionCollector.curve_optimize_dlg(pMode, pLayers, 'hobby'))
+
+		tooltip_button = "Optimize curve: Set Hobby curvature to 1."
+		self.btn_curve_hobby_1 = CustomPushButton("curve_hobby_1", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_curve.addWidget(self.btn_curve_hobby_1)
+		self.btn_curve_hobby_1.clicked.connect(lambda: TRCurveActionCollector.curve_optimize(pMode, pLayers, ('hobby', 1., 1.)))
+
+		tooltip_button = "Optimize curve: Set Hobby curvature to .95"
+		self.btn_curve_hobby_95 = CustomPushButton("curve_hobby_95", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_curve.addWidget(self.btn_curve_hobby_95)
+		self.btn_curve_hobby_95.clicked.connect(lambda: TRCurveActionCollector.curve_optimize(pMode, pLayers, ('hobby', .95, .95)))
+
+		tooltip_button = "Optimize curve: Set Hobby curvature to .90"
+		self.btn_curve_hobby_90 = CustomPushButton("curve_hobby_90", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_curve.addWidget(self.btn_curve_hobby_90)
+		self.btn_curve_hobby_90.clicked.connect(lambda: TRCurveActionCollector.curve_optimize(pMode, pLayers, ('hobby', .90, .90)))
+
+		tooltip_button = "Optimize curve: Set handle proportion relative to curve length"
+		self.btn_curve_prop = CustomPushButton("curve_prop_alt", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_curve.addWidget(self.btn_curve_prop)
+		self.btn_curve_prop.clicked.connect(lambda: TRCurveActionCollector.curve_optimize_dlg(pMode, pLayers, 'proportional'))
+
+		tooltip_button = "Optimize curve: Set handle proportion to 30%% of curve length"
+		self.btn_curve_prop_30 = CustomPushButton("curve_prop_30", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_curve.addWidget(self.btn_curve_prop_30)
+		self.btn_curve_prop_30.clicked.connect(lambda: TRCurveActionCollector.curve_optimize(pMode, pLayers, ('proportional', .3, .3)))
+
+		tooltip_button = "Optimize curve: Set handle proportion to 50%% of curve length"
+		self.btn_curve_prop_50 = CustomPushButton("curve_prop_50", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_curve.addWidget(self.btn_curve_prop_50)
+		self.btn_curve_prop_50.clicked.connect(lambda: TRCurveActionCollector.curve_optimize(pMode, pLayers, ('proportional', .5, .5)))
+
+		tooltip_button = "Retract curve handles"
+		self.btn_curve_prop_0 = CustomPushButton("curve_retract_alt", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_curve.addWidget(self.btn_curve_prop_0)
+		self.btn_curve_prop_0.clicked.connect(lambda: TRCurveActionCollector.curve_optimize(pMode, pLayers, ('proportional', 0., 0.)))
+
+		box_curve.setLayout(lay_curve)
+		self.lay_main.addWidget(box_curve)
+
 		# -- Corner Tools -------------------------------------------------------
 		box_corner = QtGui.QGroupBox()
 		box_corner.setObjectName('box_group')
@@ -148,154 +224,160 @@ class TRNodeBasics(QtGui.QWidget):
 		self.grp_align_options_other = QtGui.QButtonGroup()
 		self.grp_align_actions = QtGui.QButtonGroup()
 
-		lay_align = TRFlowLayout(spacing=10)
+		lay_align = QtGui.QVBoxLayout()
+		lay_align_options = QtGui.QHBoxLayout()
+		lay_align_options.setSpacing(9)
+		lay_align_actions = TRFlowLayout(spacing=10)
 
 		tooltip_button = "Smart Shift: Shift oncurve nodes together with their respective offcurve nodes even when they are not explicitly selected,"
 		self.chk_shift_smart = CustomPushButton("shift_smart", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options_shift.addButton(self.chk_shift_smart, 1)
-		lay_align.addWidget(self.chk_shift_smart)
+		lay_align_options.addWidget(self.chk_shift_smart)
 
 		tooltip_button = "Simple Shift: Shift only selected nodes."
 		self.chk_shift_dumb = CustomPushButton("shift_dumb", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options_shift.addButton(self.chk_shift_dumb, 2)
-		lay_align.addWidget(self.chk_shift_dumb)
+		lay_align_options.addWidget(self.chk_shift_dumb)
 
 		tooltip_button = "Keep relations between selected nodes"
 		self.chk_shift_keep_dimension = CustomPushButton("shift_keep_dimension", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options_other.addButton(self.chk_shift_keep_dimension, 1)
-		lay_align.addWidget(self.chk_shift_keep_dimension)
+		lay_align_options.addWidget(self.chk_shift_keep_dimension)
 
 		tooltip_button = "Intercept vertical position"
 		self.chk_shift_intercept = CustomPushButton("shift_intercept", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options_other.addButton(self.chk_shift_intercept, 2)
-		lay_align.addWidget(self.chk_shift_intercept)
+		lay_align_options.addWidget(self.chk_shift_intercept)
 
 		tooltip_button = "Pick target node for alignment"
 		self.chk_node_target = CustomPushButton("node_target", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.chk_node_target.clicked.connect(self.target_set)
 		self.grp_align_options_other.addButton(self.chk_node_target, 3)
-		lay_align.addWidget(self.chk_node_target)
+		lay_align_options.addWidget(self.chk_node_target)
 
 		# --- Actions
 		tooltip_button = "Align selected nodes left"
 		self.btn_node_align_left = CustomPushButton("node_align_left", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_align_left.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'L', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_align_left)
-		lay_align.addWidget(self.btn_node_align_left)
+		lay_align_actions.addWidget(self.btn_node_align_left)
 
 		tooltip_button = "Align selected nodes right"
 		self.btn_node_align_right = CustomPushButton("node_align_right", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_align_right.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'R', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_align_right)
-		lay_align.addWidget(self.btn_node_align_right)
+		lay_align_actions.addWidget(self.btn_node_align_right)
 
 		tooltip_button = "Align selected nodes top"
 		self.btn_node_align_top = CustomPushButton("node_align_top", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_align_top.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'T', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_align_top)
-		lay_align.addWidget(self.btn_node_align_top)
+		lay_align_actions.addWidget(self.btn_node_align_top)
 
 		tooltip_button = "Align selected nodes bottom"
 		self.btn_node_align_bottom = CustomPushButton("node_align_bottom", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_align_bottom.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'B', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_align_bottom)
-		lay_align.addWidget(self.btn_node_align_bottom)
+		lay_align_actions.addWidget(self.btn_node_align_bottom)
 
 		tooltip_button = "Collapse all selected nodes to target"
 		self.btn_node_target_collapse = CustomPushButton("node_target_collapse", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_target_collapse.clicked.connect(self.target_collapse)
 		self.grp_align_actions.addButton(self.btn_node_target_collapse)
-		lay_align.addWidget(self.btn_node_target_collapse)
+		lay_align_actions.addWidget(self.btn_node_target_collapse)
 
 		tooltip_button = "Align selected nodes to horizontal center of selection"
 		self.btn_node_align_selection_x = CustomPushButton("node_align_selection_x", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_align_selection_x.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'C', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_align_selection_x)
-		lay_align.addWidget(self.btn_node_align_selection_x)
+		lay_align_actions.addWidget(self.btn_node_align_selection_x)
 
 		tooltip_button = "Align selected nodes to vertical center of selection"
 		self.btn_node_align_selection_y = CustomPushButton("node_align_selection_y", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_align_selection_y.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'E', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_align_selection_y)
-		lay_align.addWidget(self.btn_node_align_selection_y)
+		lay_align_actions.addWidget(self.btn_node_align_selection_y)
 
 		tooltip_button = "Align selected nodes to the horizontal middle of outline bounding box."
 		self.btn_node_align_outline_x = CustomPushButton("node_align_outline_x", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_align_outline_x.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'BBoxCenterX', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_align_outline_x)
-		lay_align.addWidget(self.btn_node_align_outline_x)
+		lay_align_actions.addWidget(self.btn_node_align_outline_x)
 
 		tooltip_button = "Align selected nodes to the vertical middle of outline bounding box."
 		self.btn_node_align_outline_y = CustomPushButton("node_align_outline_y", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_align_outline_y.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'BBoxCenterY', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_align_outline_y)
-		lay_align.addWidget(self.btn_node_align_outline_y)
-
-		tooltip_button = "Align selected nodes to Measurment line"
-		self.btn_node_dimension_guide = CustomPushButton("dimension_guide", tooltip=tooltip_button, obj_name='btn_panel')
-		self.btn_node_dimension_guide.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'FontMetrics_5', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
-		self.grp_align_actions.addButton(self.btn_node_dimension_guide)
-		lay_align.addWidget(self.btn_node_dimension_guide)
+		lay_align_actions.addWidget(self.btn_node_align_outline_y)
 		
 		tooltip_button = "Align selected node in the horizontal middle of its direct neighbors"
 		self.btn_node_align_neigh_x = CustomPushButton("node_align_neigh_x", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_align_neigh_x.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'peerCenterX', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_align_neigh_x)
-		lay_align.addWidget(self.btn_node_align_neigh_x)
+		lay_align_actions.addWidget(self.btn_node_align_neigh_x)
 
 		tooltip_button = "Align selected node in the vertical middle of its direct neighbors"
 		self.btn_node_align_neigh_y = CustomPushButton("node_align_neigh_y", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_align_neigh_y.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'peerCenterY', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_align_neigh_y)
-		lay_align.addWidget(self.btn_node_align_neigh_y)
+		lay_align_actions.addWidget(self.btn_node_align_neigh_y)
 
 		tooltip_button = "Align selected nodes to an imaginary line runnig between highest and lowest node in selection"
 		self.btn_node_align_min_max_Y = CustomPushButton("node_align_min_max_Y", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_align_min_max_Y.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'Y', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_align_min_max_Y)
-		lay_align.addWidget(self.btn_node_align_min_max_Y)
+		lay_align_actions.addWidget(self.btn_node_align_min_max_Y)
 
 		tooltip_button = "Align selected nodes to an imaginary line runnig between lowest and highest node in selection"
 		self.btn_node_align_min_max_X = CustomPushButton("node_align_min_max_X", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_align_min_max_X.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'X', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_align_min_max_X)
-		lay_align.addWidget(self.btn_node_align_min_max_X)
+		lay_align_actions.addWidget(self.btn_node_align_min_max_X)
 
 		tooltip_button = 'Align selected nodes to integer grid (Round coordinates).\n<Mouse Left> Ceil.\n<ALT + Mouse Left> Floor.\n<... + Shift> Round all nodes.'
 		self.btn_node_round = CustomPushButton('node_round', tooltip=tooltip_button, obj_name='btn_panel')
-		lay_align.addWidget(self.btn_node_round)
+		lay_align_actions.addWidget(self.btn_node_round)
 		self.btn_node_round.clicked.connect(lambda: TRNodeActionCollector.node_round(pMode, pLayers, get_modifier(QtCore.Qt.AltModifier), get_modifier(QtCore.Qt.ShiftModifier)))
 
 		tooltip_button = "Align selected nodes to Font metrics: Ascender height"
 		self.btn_node_dimension_ascender = CustomPushButton("dimension_ascender", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_dimension_ascender.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'FontMetrics_0', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_dimension_ascender)
-		lay_align.addWidget(self.btn_node_dimension_ascender)
+		lay_align_actions.addWidget(self.btn_node_dimension_ascender)
 
 		tooltip_button = "Align selected nodes to Font metrics: Caps height"
 		self.btn_node_dimension_caps = CustomPushButton("dimension_caps", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_dimension_caps.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'FontMetrics_1', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_dimension_caps)
-		lay_align.addWidget(self.btn_node_dimension_caps)
+		lay_align_actions.addWidget(self.btn_node_dimension_caps)
 
 		tooltip_button = "Align selected nodes to Font metrics: X height"
 		self.btn_node_dimension_xheight = CustomPushButton("dimension_xheight", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_dimension_xheight.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'FontMetrics_3', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_dimension_xheight)
-		lay_align.addWidget(self.btn_node_dimension_xheight)
+		lay_align_actions.addWidget(self.btn_node_dimension_xheight)
 
 		tooltip_button = "Align selected nodes to Font metrics: Baseline"
 		self.btn_node_dimension_baseline = CustomPushButton("dimension_baseline", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_dimension_baseline.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'FontMetrics_4', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_dimension_baseline)
-		lay_align.addWidget(self.btn_node_dimension_baseline)
+		lay_align_actions.addWidget(self.btn_node_dimension_baseline)
 
 		tooltip_button = "Align selected nodes to Font metrics: Descender"
 		self.btn_node_dimension_descender = CustomPushButton("dimension_descender", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_dimension_descender.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'FontMetrics_2', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_dimension_descender)
-		lay_align.addWidget(self.btn_node_dimension_descender)
+		lay_align_actions.addWidget(self.btn_node_dimension_descender)
 
+		tooltip_button = "Align selected nodes to Measurment line"
+		self.btn_node_dimension_guide = CustomPushButton("dimension_guide", tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_node_dimension_guide.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'FontMetrics_5', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart.isChecked(), self.ext_target))
+		self.grp_align_actions.addButton(self.btn_node_dimension_guide)
+		lay_align_actions.addWidget(self.btn_node_dimension_guide)
+
+		lay_align_options.addStretch()
+		lay_align.addLayout(lay_align_options)
+		lay_align.addLayout(lay_align_actions)
 		box_align.setLayout(lay_align)
 		self.lay_main.addWidget(box_align)
 
