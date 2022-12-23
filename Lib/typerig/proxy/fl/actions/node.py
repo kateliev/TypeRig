@@ -18,9 +18,10 @@ import fontgate as fgt
 
 from typerig.proxy.fl.objects.node import eNode, eNodesContainer
 from typerig.proxy.fl.objects.contour import pContour
+from typerig.proxy.fl.objects.curve import eCurveEx
 from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.objects.font import pFont, pFontMetrics
-from typerig.proxy.fl.objects.base import Line, Vector, Coord
+from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 from typerig.core.func.collection import group_consecutive
 from typerig.core.objects.point import Void
@@ -34,7 +35,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.70'
+__version__ = '2.71'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -827,4 +828,157 @@ class TRNodeActionCollector(object):
 
 		# - Finish it
 		glyph.updateObject(glyph.fl, '{};\tNode: {} @ {}.'.format(glyph.name, method, '; '.join(wLayers)))
+		active_workspace.getCanvas(True).refreshAll()
+
+	# -- Caps ---------------------------------------------------------------
+	@staticmethod
+	def cap_round(glyph:eGlyph, pLayers:tuple, keep_nodes:bool=False):
+		wLayers = glyph._prepareLayers(pLayers)
+		modifiers = QtGui.QApplication.keyboardModifiers()
+		
+		selection_per_layer = {layer:glyph.selectedNodes(layer, filterOn=True, extend=eNode) for layer in wLayers}
+		do_update = False
+		
+		# - Process
+		for layer, selection in selection_per_layer.items():		
+			if len(selection) == 2:
+				node_A, node_B = selection
+				
+				# - Get Angle and radius
+				nextNode = node_A.getNextOn(False)
+				prevNode = node_A.getPrevOn(False)
+
+				nextUnit = Coord(nextNode.asCoord() - node_A.asCoord()).unit
+				prevUnit = Coord(prevNode.asCoord() - node_A.asCoord()).unit
+
+				angle = math.atan2(nextUnit | prevUnit, nextUnit & prevUnit)
+				radius = abs(node_A.distanceToNext()*math.sin(angle))/2.
+
+				segment_A = node_A.getPrevOn(False).getSegmentNodes(0)
+				segment_B = node_B.getSegmentNodes(0)
+
+				if len(segment_A) != 4 or len(segment_B) != 4:
+					# - A stright segment: no Bezier curves
+					# - Round segments
+					segment_A = node_A.cornerRound(radius, curvature=1., isRadius=False)
+					segment_B = node_B.cornerRound(radius-.1, curvature=1., isRadius=False) # Little hack -.1 
+
+					# - Cleanup
+					remove_node = segment_B[0]
+					
+					if not keep_nodes: # Keep nodes for 5A SOFT compatibility
+						segment_B[0].contour.removeOne(remove_node)
+
+					do_update = True
+
+				else:
+					if modifiers == QtCore.Qt.AltModifier:
+						# -- Find distance and normal
+						# --- Init
+						curve_A = Curve(*segment_A)
+						curve_B = Curve(*segment_B)
+						
+						# --- Initial segmentation
+						time_A = curve_A.solve_distance_end(radius, .01)
+						time_B = curve_B.solve_distance_start(radius, .01)
+						
+						# --- Get Normals
+						normal_A = curve_A.solve_normal_at_time(1)
+						normal_B = curve_B.solve_normal_at_time(0)
+						
+						line_normal_A = Line(curve_A.p3.tuple, (curve_A.p3 + normal_A).tuple)
+						line_normal_B = Line(curve_B.p0.tuple, (curve_B.p0 + normal_B).tuple)
+
+						# --- create two stright segments and intersect the normals to them (to get new radius)
+						line_A = Line(curve_A.p3.tuple, curve_A.solve_point(time_A).tuple)
+						line_B = Line(curve_B.p0.tuple, curve_B.solve_point(time_B).tuple)
+
+						intersect_points_A = line_normal_A.intersect_line(line_B, True)
+						intersect_points_B = line_normal_B.intersect_line(line_A, True)
+
+						if not isinstance(intersect_points_A, Void):
+							radius = Line(line_A.p0.tuple, intersect_points_A.tuple).length/2
+							print(radius)
+
+						if not isinstance(intersect_points_B, Void):
+							radius = Line(line_B.p0.tuple, intersect_points_B.tuple).length/2
+							print(radius)
+						
+					# - Round Cap 
+					curve_A = Curve(*segment_A)
+					curve_B = Curve(*segment_B)
+					new_time_A = curve_A.solve_distance_end(radius, .01)
+					new_time_B = curve_B.solve_distance_start(radius, .01)
+					
+					# -- Make the cap and update contour
+					new_A = node_A.insertBefore(new_time_A)
+					new_B = node_B.insertAfter(new_time_B)
+					new_C = node_A.insertAfter(.5)
+					new_C.contour.removeOne(node_A.fl)
+					new_C.contour.removeOne(node_B.fl)
+					new_C.smooth = True
+					new_C.contour.update()
+					
+					handle_A = new_A.nextNode().nextNode()
+					handle_B = new_A.nextNode().nextNode().nextNode().nextNode()
+
+					handle_A.x = node_A.x
+					handle_A.y = node_A.y
+					handle_B.x = node_B.x
+					handle_B.y = node_B.y
+
+					# -- Optimize contour
+					ext_A = eCurveEx(*eNode(new_A).getSegmentNodes(0))
+					ext_C = eCurveEx(eNode(new_C).getSegmentNodes(0))
+					ext_A.eqHobbySpline((1.,1.))
+					ext_C.eqHobbySpline((1.,1.))
+
+					do_update = True
+
+		if do_update:
+			glyph.updateObject(glyph.fl, '{};\tRound Cap @ {}.'.format(glyph.name, '; '.join(wLayers)))
+			active_workspace.getCanvas(True).refreshAll()
+
+	@staticmethod
+	def cap_rebuild(glyph:eGlyph, pLayers:tuple, keep_nodes:bool=False):
+		# - Helpers
+		def rebuild_cap(node_list, keep_nodes):
+			# - Get crossing for each rounded corner
+			crossing_A = get_crossing_handles(node_list[:4])
+			crossing_B = get_crossing_handles(node_list[3:])
+
+			# - Reloacate nodes
+			node_list[0].reloc(*crossing_A.tuple)
+			node_list[1].reloc(*crossing_A.tuple)
+			node_list[2].reloc(*node_list[3].tuple)
+			# node_list[3] < mid node >
+			node_list[4].reloc(*node_list[3].tuple)
+			node_list[5].reloc(*crossing_B.tuple)
+			node_list[6].reloc(*crossing_B.tuple)
+
+			for node in node_list:
+				node.fl.smooth = False
+
+			if not keep_nodes:
+				node_list[0].contour.removeNodesBetween(node_list[0].fl, node_list[6].fl)
+				node_list[0].contour.update()
+
+		def get_crossing_handles(node_list):
+			fisrt_node, bcp_out, bcp_in, second_node = node_list
+
+			line_out_A = Line(fisrt_node.tuple, bcp_out.tuple)
+			line_in_B = Line(bcp_in.tuple, second_node.tuple)
+			
+			return line_out_A.intersect_line(line_in_B, True)
+
+		# - Init
+		wLayers = glyph._prepareLayers(pLayers)
+		selection_per_layer = [glyph.selectedNodes(layer, extend=eNode) for layer in wLayers]
+		
+		# - Process
+		for selection in selection_per_layer:	
+			if len(selection) != 7: continue
+			rebuild_cap(selection, keep_nodes)
+
+		glyph.updateObject(glyph.fl, '{};\tRebuild Cap @ {}.'.format(glyph.name, '; '.join(wLayers)))
 		active_workspace.getCanvas(True).refreshAll()

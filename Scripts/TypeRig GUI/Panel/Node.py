@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '3.20'
+app_name, app_version = 'TypeRig | Nodes', '3.26'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -203,14 +203,12 @@ class TRNodeBasics(QtGui.QWidget):
 		tooltip_button = 'Round cap\nCreate a rounded cap between selected two nodes.'
 		self.btn_cap_round = CustomPushButton('cap_round', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_corner.addWidget(self.btn_cap_round)
-		#self.btn_cap_round.clicked.connect(...)
-		self.btn_cap_round.setEnabled(False)
+		self.btn_cap_round.clicked.connect(lambda: TRNodeActionCollector.cap_round(eGlyph(), pLayers, get_modifier()))
 
 		tooltip_button = 'Square cap\nCreate/resore a rounded cap to square form between all selected round cap nodes.'
 		self.btn_cap_square = CustomPushButton('cap_restore', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_corner.addWidget(self.btn_cap_square)
-		#self.btn_cap_square.clicked.connect(...)
-		self.btn_cap_square.setEnabled(False)
+		self.btn_cap_square.clicked.connect(lambda: TRNodeActionCollector.cap_rebuild(eGlyph(), pLayers))
 
 		#lay_corner.setColumnStretch(lay_corner.columnCount(), 1)
 		box_corner.setLayout(lay_corner)
@@ -694,7 +692,7 @@ class tool_tab(QtGui.QWidget):
 if __name__ == '__main__':
 	test = tool_tab()
 	test.setWindowTitle('%s %s' %(app_name, app_version))
-	test.setGeometry(100, 100, 200, 400)
+	test.setGeometry(100, 100, 300, 400)
 	test.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 	
 	test.show()
