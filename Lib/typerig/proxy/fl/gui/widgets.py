@@ -26,7 +26,7 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.3.9'
+__version__ = '0.4.0'
 
 # - Keep compatibility for basestring checks
 try:
@@ -315,6 +315,131 @@ class TRLayerSelectDLG(QtGui.QDialog):
 			table_dict = {n:OrderedDict(zip(self.column_names, data)) for n, data in enumerate(init_data)}
 			self.tab_masters.clear()
 			self.tab_masters.setTable(table_dict, color_dict=self.color_dict, enable_check=True)	
+
+# -- Trees --------------------------------
+class TRDeltaLayerTree(QtGui.QTreeWidget):
+	def __init__(self, data=None, headers=None):
+		super(TRDeltaLayerTree, self).__init__()
+		
+		# - Init
+		if data is not None: self.setTree(data, headers)
+		self.itemChanged.connect(self._redecorateItem)
+		self.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+		self.expandAll()
+		self.setAlternatingRowColors(True)
+
+		# - Drag and drop
+		self.setDragDropMode(self.InternalMove)
+		self.setDragEnabled(True)
+		self.setDropIndicatorShown(True)
+
+		# - Contextual Menu
+		self.menu = QtGui.QMenu(self)
+		self.menu.setTitle('Actions:')
+
+		act_addItem = QtGui.QAction('Add', self)
+		act_delItem = QtGui.QAction('Remove', self)
+		act_dupItem = QtGui.QAction('Duplicate', self)
+		act_uneItem = QtGui.QAction('Unnest', self)
+
+		self.menu.addAction(act_addItem)
+		self.menu.addAction(act_dupItem)
+		self.menu.addAction(act_uneItem)
+		self.menu.addAction(act_delItem)
+		
+		act_addItem.triggered.connect(lambda: self._addItem())
+		act_dupItem.triggered.connect(lambda: self._duplicateItems())
+		act_uneItem.triggered.connect(lambda: self._unnestItem())
+		act_delItem.triggered.connect(lambda: self._removeItems())
+
+	# - Internals --------------------------
+	def _rand_hex(self):
+		rand_color = lambda: random.randint(0,255)
+		return '#%02X%02X%02X' %(rand_color(), rand_color(), rand_color())
+
+	def _removeItems(self):
+		root = self.invisibleRootItem()
+		
+		for item in self.selectedItems():
+			(item.parent() or root).removeChild(item)
+
+	def _addItem(self, parent=None, data=None):
+		new_item_data = ['New', '', '', default_sx, default_sy, self._rand_hex()] if data is None else data
+
+		if parent is None:
+			root = self.selectedItems()[0].parent() if len(self.selectedItems()) else self.invisibleRootItem()
+		else:
+			root = parent
+
+		new_item = QtGui.QTreeWidgetItem(root, new_item_data)
+		color_decorator = QtGui.QColor(new_item_data[-1]) if not isinstance(new_item_data[-1], QtGui.QColor) else new_item_data[-1]
+		new_item.setData(0, QtCore.Qt.DecorationRole, color_decorator)
+		new_item.setFlags(new_item.flags() & ~QtCore.Qt.ItemIsDropEnabled | QtCore.Qt.ItemIsEditable)
+
+	def _duplicateItems(self):
+		root = self.invisibleRootItem()
+		
+		for item in self.selectedItems():
+			data = [item.text(c) for c in range(item.columnCount())]
+			self._addItem(data)
+		
+	def _unnestItem(self):
+		root = self.invisibleRootItem()
+		
+		for item in reversed(self.selectedItems()):
+			old_parent = item.parent()
+			new_parent = old_parent.parent()
+			ix = old_parent.indexOfChild(item)
+			item_without_parent = old_parent.takeChild(ix)
+			root.addChild(item_without_parent)
+
+	def _setItemData(self, data, column, position=1, strip=False):
+		for item in self.selectedItems():
+			old_text = item.text(column)
+
+			if position == 1:
+				item.setText(column, data if not strip else old_text.strip(data))
+			if position == 0:
+				item.setText(column, data + old_text)
+			if position == -1:
+				item.setText(column, old_text + data)
+
+	def _redecorateItem(self, item):
+		color_decorator = QtGui.QColor(item.text(item.columnCount()-1))
+		item.setData(0, QtCore.Qt.DecorationRole, color_decorator)
+		#item.setFlags(item.flags() & ~QtCore.Qt.ItemIsDropEnabled | QtCore.Qt.ItemIsEditable)
+
+	# - Getter/Setter -----------------------
+	def setTree(self, data, headers):
+		self.blockSignals(True)
+		self.clear()
+		self.setHeaderLabels(headers)
+
+		# - Insert 
+		for key, value in data.items():
+			master = QtGui.QTreeWidgetItem(self, [key])
+
+			for data in value:
+				self._addItem(master, data)
+				
+		# - Fit data
+		for c in range(self.columnCount):
+			self.resizeColumnToContents(c)	
+
+		self.invisibleRootItem().setFlags(self.invisibleRootItem().flags() & ~QtCore.Qt.ItemIsDropEnabled)
+		self.expandAll()
+		self.hideColumn(5)
+		self.blockSignals(False)
+
+	def getTree(self):
+		returnDict = OrderedDict()
+		root = self.invisibleRootItem()
+
+		for i in range(root.childCount()):
+			item = root.child(i)
+			returnDict[item.text(0)] = [[item.child(n).text(c) for c in range(item.child(n).columnCount())] for n in range(item.childCount())]
+		
+		return returnDict
 
 # -- ListViews ----------------------------
 class TRGlyphSelect(QtGui.QWidget):

@@ -35,7 +35,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Delta', '4.47'
+app_name, app_version = 'TypeRig | Delta', '4.48'
 
 # -- Strings
 tree_column_names = ('Layer','X', 'Y', 'Width', 'Height', 'Color')
@@ -46,114 +46,6 @@ fileFormats = 'TypeRig Delta Panel Target (*.json);;'
 
 default_sx = '100.'
 default_sy = '100.'
-
-# - Helpers ----------------------------
-def _rand_hex():
-	rand_color = lambda: random.randint(0,255)
-	return '#%02X%02X%02X' %(rand_color(), rand_color(), rand_color())
-
-# - Sub widgets ------------------------
-class TRWLayerTree(QtGui.QTreeWidget):
-	def __init__(self, data=None, headers=None):
-		super(TRWLayerTree, self).__init__()
-		
-		if data is not None: self.setTree(data, headers)
-
-		self.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
-		self.setDragDropMode(self.InternalMove)
-		#self.setDragDropMode(self.DragDrop)
-		self.setDragEnabled(True)
-		self.setDropIndicatorShown(True)
-
-		self.itemChanged.connect(self._redecorateItem)
-
-		self.expandAll()
-		self.setAlternatingRowColors(True)
-
-	# - Internals --------------------------
-	def _removeItems(self):
-		root = self.invisibleRootItem()
-		
-		for item in self.selectedItems():
-			(item.parent() or root).removeChild(item)
-
-	def _addItem(self, data=None):
-		new_item_data = ['New', '', '', default_sx, default_sy, _rand_hex()] if data is None else data
-
-		root = self.selectedItems()[0].parent() if len(self.selectedItems()) else self.invisibleRootItem()
-		new_item = QtGui.QTreeWidgetItem(root, new_item_data)
-		color_decorator = QtGui.QColor(new_item_data[-1])
-		new_item.setData(0, QtCore.Qt.DecorationRole, color_decorator)
-		new_item.setFlags(new_item.flags() & ~QtCore.Qt.ItemIsDropEnabled | QtCore.Qt.ItemIsEditable)
-
-	def _duplicateItems(self):
-		root = self.invisibleRootItem()
-		
-		for item in self.selectedItems():
-			data = [item.text(c) for c in range(item.columnCount())]
-			self._addItem(data)
-		
-	def _unnestItem(self):
-		root = self.invisibleRootItem()
-		
-		for item in reversed(self.selectedItems()):
-			old_parent = item.parent()
-			new_parent = old_parent.parent()
-			ix = old_parent.indexOfChild(item)
-			item_without_parent = old_parent.takeChild(ix)
-			root.addChild(item_without_parent)
-
-	def _setItemData(self, data, column, position=1, strip=False):
-		for item in self.selectedItems():
-			old_text = item.text(column)
-
-			if position == 1:
-				item.setText(column, data if not strip else old_text.strip(data))
-			if position == 0:
-				item.setText(column, data + old_text)
-			if position == -1:
-				item.setText(column, old_text + data)
-
-	def _redecorateItem(self, item):
-		color_decorator = QtGui.QColor(item.text(item.columnCount()-1))
-		item.setData(0, QtCore.Qt.DecorationRole, color_decorator)
-		#item.setFlags(item.flags() & ~QtCore.Qt.ItemIsDropEnabled | QtCore.Qt.ItemIsEditable)
-
-
-	# - Getter/Setter -----------------------
-	def setTree(self, data, headers):
-		self.blockSignals(True)
-		self.clear()
-		self.setHeaderLabels(headers)
-
-		# - Insert 
-		for key, value in data.items():
-			master = QtGui.QTreeWidgetItem(self, [key])
-
-			for item in value:
-				new_item = QtGui.QTreeWidgetItem(master, item)
-				color_decorator = QtGui.QColor(item[-1]) if not isinstance(item[-1], QtGui.QColor) else item[-1]
-				new_item.setData(0, QtCore.Qt.DecorationRole, color_decorator)
-				new_item.setFlags(new_item.flags() & ~QtCore.Qt.ItemIsDropEnabled | QtCore.Qt.ItemIsEditable)
-				
-		# - Fit data
-		for c in range(self.columnCount):
-			self.resizeColumnToContents(c)	
-
-		self.invisibleRootItem().setFlags(self.invisibleRootItem().flags() & ~QtCore.Qt.ItemIsDropEnabled)
-		self.expandAll()
-		#self.hideColumn(5)
-		self.blockSignals(False)
-
-	def getTree(self):
-		returnDict = OrderedDict()
-		root = self.invisibleRootItem()
-
-		for i in range(root.childCount()):
-			item = root.child(i)
-			returnDict[item.text(0)] = [[item.child(n).text(c) for c in range(item.child(n).columnCount())] for n in range(item.childCount())]
-		
-		return returnDict
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
@@ -214,17 +106,9 @@ class tool_tab(QtGui.QWidget):
 		self.btn_file_load_patchboard.clicked.connect(self.file_load_patchboard)
 
 		# -- Layer selector
-		self.tree_layer = TRWLayerTree()
+		self.tree_layer = TRDeltaLayerTree()
 
-		# -- Actions (Context Menu)
-		self.tree_layer.menu = QtGui.QMenu(self)
-		self.tree_layer.menu.setTitle('Actions:')
-
-		act_addItem = QtGui.QAction('Add', self)
-		act_delItem = QtGui.QAction('Remove', self)
-		act_dupItem = QtGui.QAction('Duplicate', self)
-		act_uneItem = QtGui.QAction('Unnest', self)
-
+		# -- Additional Actions (Context Menu)
 		act_setItem_mask = QtGui.QAction('Set mask', self)
 		act_setItem_unmask = QtGui.QAction('Remove mask', self)
 		act_setItem_value = QtGui.QAction('Set value', self)
@@ -234,10 +118,6 @@ class tool_tab(QtGui.QWidget):
 		act_getVstem = QtGui.QAction('Get Vertical Stems', self)
 		act_getHstem = QtGui.QAction('Get Horizontal Stems', self)
 
-		self.tree_layer.menu.addAction(act_addItem)
-		self.tree_layer.menu.addAction(act_dupItem)
-		self.tree_layer.menu.addAction(act_uneItem)
-		self.tree_layer.menu.addAction(act_delItem)
 		self.tree_layer.menu.addSeparator()	
 		self.tree_layer.menu.addAction(act_setItem_mask )
 		self.tree_layer.menu.addAction(act_setItem_unmask )
@@ -249,11 +129,6 @@ class tool_tab(QtGui.QWidget):
 		self.tree_layer.menu.addAction(act_setAxis)
 		self.tree_layer.menu.addAction(act_resetAxis)
 
-		act_addItem.triggered.connect(lambda: self.tree_layer._addItem())
-		act_dupItem.triggered.connect(lambda: self.tree_layer._duplicateItems())
-		act_uneItem.triggered.connect(lambda: self.tree_layer._unnestItem())
-		act_delItem.triggered.connect(lambda: self.tree_layer._removeItems())
-		
 		act_setItem_mask.triggered.connect(lambda: self.tree_layer._setItemData('mask.', 0, 0, False))
 		act_setItem_unmask.triggered.connect(lambda: self.tree_layer._setItemData('mask.', 0, 1, True))
 		act_setItem_value.triggered.connect(lambda: self.tree_layer._setItemData(*TR2ComboDLG('Delta Setup', 'Please enter new value for selected columns', 'Value:', 'Column:', tree_column_names).values))
@@ -394,7 +269,7 @@ class tool_tab(QtGui.QWidget):
 
 	def __init_tree(self):
 		return_data = []
-		return_data.append((tree_masters_group_name, [(layer, '', '', default_sx, default_sy, _rand_hex()) for layer in reversed(self.active_font.masters())]))
+		return_data.append((tree_masters_group_name, [(layer, '', '', default_sx, default_sy, eGlyph().layer(layer).wireframeColor) for layer in self.active_font.masters()]))
 		return_data.append((tree_axis_group_name,[]))
 		return_data.append((tree_axis_target_name,[]))
 		return OrderedDict(return_data)
