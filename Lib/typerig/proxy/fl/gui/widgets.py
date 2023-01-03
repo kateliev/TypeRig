@@ -353,6 +353,9 @@ class TRDeltaLayerTree(QtGui.QTreeWidget):
 		act_delItem.triggered.connect(lambda: self._removeItems())
 
 	# - Internals --------------------------
+	def contextMenuEvent(self, event):
+		self.menu.popup(QtGui.QCursor.pos())	
+
 	def _rand_hex(self):
 		rand_color = lambda: random.randint(0,255)
 		return '#%02X%02X%02X' %(rand_color(), rand_color(), rand_color())

@@ -233,10 +233,6 @@ class tool_tab(QtGui.QWidget):
 		self.setMinimumSize(300, self.sizeHint.height())
 		
 	# - Functions -----------------------------------------
-	# -- Internal
-	def contextMenuEvent(self, event):
-		self.tree_layer.menu.popup(QtGui.QCursor.pos())	
-
 	# - File operations
 	def file_save_patchboard(self):
 		fontPath = os.path.split(self.active_font.fg.path)[0]
