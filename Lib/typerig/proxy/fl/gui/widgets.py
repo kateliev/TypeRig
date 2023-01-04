@@ -13,6 +13,7 @@
 from __future__ import absolute_import
 from collections import OrderedDict
 from math import radians
+from random import randint
 from platform import system
 
 import os
@@ -26,7 +27,7 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Init ----------------------------------
-__version__ = '0.4.0'
+__version__ = '0.4.1'
 
 # - Keep compatibility for basestring checks
 try:
@@ -357,7 +358,7 @@ class TRDeltaLayerTree(QtGui.QTreeWidget):
 		self.menu.popup(QtGui.QCursor.pos())	
 
 	def _rand_hex(self):
-		rand_color = lambda: random.randint(0,255)
+		rand_color = lambda: randint(0,255)
 		return '#%02X%02X%02X' %(rand_color(), rand_color(), rand_color())
 
 	def _removeItems(self):
@@ -367,7 +368,7 @@ class TRDeltaLayerTree(QtGui.QTreeWidget):
 			(item.parent() or root).removeChild(item)
 
 	def _addItem(self, parent=None, data=None):
-		new_item_data = ['New', '', '', default_sx, default_sy, self._rand_hex()] if data is None else data
+		new_item_data = ['New', '', '', 100., 100., self._rand_hex()] if data is None else data
 
 		if parent is None:
 			root = self.selectedItems()[0].parent() if len(self.selectedItems()) else self.invisibleRootItem()
@@ -383,8 +384,8 @@ class TRDeltaLayerTree(QtGui.QTreeWidget):
 		root = self.invisibleRootItem()
 		
 		for item in self.selectedItems():
-			data = [item.text(c) for c in range(item.columnCount())]
-			self._addItem(data)
+			duplicate_data = [item.text(c) for c in range(item.columnCount())]
+			self._addItem(item.parent(), duplicate_data)
 		
 	def _unnestItem(self):
 		root = self.invisibleRootItem()
