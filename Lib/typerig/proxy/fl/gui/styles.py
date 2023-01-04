@@ -92,7 +92,7 @@ QGroupBox#box_group {
     padding-right: 5px;
     padding-left: 5px;
     margin-top: 0px;
-    margin-bottom: 5px;
+    margin-bottom: 0px;
     margin-right: 0px;
     margin-left: 0px;
     border: none;

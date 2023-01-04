@@ -25,9 +25,10 @@ from PythonQt import QtCore, QtGui
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
+from typerig.proxy.fl.gui.styles import css_tr_button
 
 # - Init ----------------------------------
-__version__ = '0.4.1'
+__version__ = '0.4.2'
 
 # - Keep compatibility for basestring checks
 try:
@@ -142,6 +143,22 @@ def FLIconButton(button_text, icon_path, icon_size=32, checkable=False):
 	return new_button
 
 # -- Miniwidgets --------------------------
+class CustomSpinBox(QtGui.QSpinBox):
+	def __init__(self, init_values=(0., 100., 0., 1.), tooltip=None, obj_name=None):
+		super(CustomSpinBox, self).__init__()
+
+		# - Init
+		spb_min, spb_max, spb_value, spb_step = init_values
+
+		# - Set
+		self.setMinimum(spb_min)
+		self.setMaximum(spb_max)
+		self.setValue(spb_value)
+		self.setSingleStep(spb_step)
+
+		if tooltip is not None: self.setToolTip(tooltip)
+		if obj_name is not None: self.setObjectName(obj_name)
+
 class CustomDoubleSpinBox(QtGui.QDoubleSpinBox):
 	def __init__(self, init_values=(0., 100., 0., 1.), tooltip=None, obj_name=None):
 		super(CustomDoubleSpinBox, self).__init__()
@@ -195,6 +212,72 @@ class CustomSpinButton(QtGui.QWidget):
 		self.box.addWidget(self.button)
 		self.setLayout(self.box)
 		self.setSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
+
+class TRCustomSpinController(QtGui.QWidget):
+	def __init__(self, control_name, control_values, control_suffix, control_tooltip, double=False):
+		super(TRCustomSpinController, self).__init__()		
+		
+		# - Helper
+		func_change_value = lambda spn_object, value: spn_object.setValue(spn_object.value + value)
+
+		# - Controls
+		ctrl_lbl = CustomLabel(control_name, obj_name='lbl_panel')
+		
+		if double:
+			self.spin_box = CustomDoubleSpinBox(init_values=control_values, tooltip=control_tooltip, obj_name='spn_panel')
+		else:
+			self.spin_box = CustomSpinBox(init_values=control_values, tooltip=control_tooltip, obj_name='spn_panel')
+
+		self.spin_box.setSuffix(control_suffix)
+		self.spin_box.setMinimumWidth(70)
+
+		self.ctrl_btn_dec_10 = CustomPushButton('value_decrease_double', checkable=False, cheked=False, tooltip='-10', obj_name='btn_panel')
+		self.ctrl_btn_dec_1 = CustomPushButton('value_decrease', checkable=False, cheked=False, tooltip='-1', obj_name='btn_panel')
+		self.ctrl_btn_inc_1 = CustomPushButton('value_increase', checkable=False, cheked=False, tooltip='+1', obj_name='btn_panel')
+		self.ctrl_btn_inc_10 = CustomPushButton('value_increase_double', checkable=False, cheked=False, tooltip='+10', obj_name='btn_panel')
+
+		self.ctrl_btn_dec_10.clicked.connect(lambda: func_change_value(self.spin_box, -10))
+		self.ctrl_btn_dec_1.clicked.connect(lambda: func_change_value(self.spin_box, -1))
+		self.ctrl_btn_inc_1.clicked.connect(lambda: func_change_value(self.spin_box, 1))
+		self.ctrl_btn_inc_10.clicked.connect(lambda: func_change_value(self.spin_box, 10))
+
+		# - Layout
+		lay_controls = QtGui.QHBoxLayout()
+
+		lay_controls.addWidget(ctrl_lbl)
+		lay_controls.addWidget(self.spin_box)
+		lay_controls.addWidget(self.ctrl_btn_dec_10)
+		lay_controls.addWidget(self.ctrl_btn_dec_1)
+		lay_controls.addWidget(self.ctrl_btn_inc_1)
+		lay_controls.addWidget(self.ctrl_btn_inc_10)
+		lay_controls.setContentsMargins(0, 0, 0, 0)
+		
+		box_controls = QtGui.QGroupBox()
+		box_controls.setObjectName('box_group')
+		box_controls.setLayout(lay_controls)
+		
+		lay_main = QtGui.QHBoxLayout()
+		lay_main.addWidget(box_controls)
+		lay_main.setContentsMargins(0, 0, 0, 0)
+		self.setLayout(lay_main)
+
+	def contract(self):
+		self.ctrl_btn_dec_10.hide()
+		self.ctrl_btn_dec_1.hide()
+		self.ctrl_btn_inc_1.hide()
+		self.ctrl_btn_inc_10.hide()
+
+	def expand(self):
+		self.ctrl_btn_dec_10.show()
+		self.ctrl_btn_dec_1.show()
+		self.ctrl_btn_inc_1.show()
+		self.ctrl_btn_inc_10.show()	
+
+	def setValue(self, value):
+		self.spin_box.setValue(value)
+
+	def getValue(self):
+		return self.spin_box.value
 
 # -- Sub Dialogs --------------------------
 class TRLayerSelectDLG(QtGui.QDialog):
