@@ -1,7 +1,7 @@
 #FLM: TR: Delta
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2020-2021 	(http://www.kateliev.com)
-# (C) Karandash Type Foundry 		(http://www.karandash.eu)
+# (C) Vassil Kateliev, 2020-2023 	(http://www.kateliev.com)
+# (C) TypeRig 						(http://www.typerig.com)
 #------------------------------------------------------------
 
 # No warranties. By using this you agree
@@ -9,8 +9,10 @@
 
 # - Dependencies -----------------
 from __future__ import absolute_import, print_function
-import warnings, os, json, random
-from math import radians
+import json
+import math
+import os
+import warnings
 from collections import OrderedDict
 
 import fontlab as fl6
@@ -20,242 +22,225 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 from typerig.core.base.message import *
-from typerig.core.func.math import linInterp, ratfrac
 from typerig.core.func import transform
-from typerig.core.objects.array import PointArray
 from typerig.core.objects.delta import DeltaArray, DeltaScale
+from typerig.core.objects.transform import Transform
 
-from PythonQt import QtCore
-from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import * 
-from typerig.proxy.fl.gui.dialogs import TR2ComboDLG
+from PythonQt import QtCore, QtGui
+from typerig.proxy.fl.application.app import pWorkspace
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs, getTRIconFontPath, CustomPushButton, TRFlowLayout, TRDeltaLayerTree, TRCustomSpinController
+from typerig.proxy.fl.gui.styles import css_tr_button
 
 # - Init -------------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Delta', '4.48'
+app_name, app_version = 'TypeRig | Delta', '5.2'
 
-# -- Strings
-tree_column_names = ('Layer','X', 'Y', 'Width', 'Height', 'Color')
+TRToolFont = getTRIconFontPath()
+font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
+
+# -- Strings ---------------------------
+tree_column_names = ('Master Layers','V st.', 'H st.', 'Width', 'Height', 'Color')
 tree_masters_group_name = 'Master Layers'
 tree_axis_group_name = 'Virtual Axis'
 tree_axis_target_name = 'Target Layers'
 fileFormats = 'TypeRig Delta Panel Target (*.json);;'
 
+# - Configuration ----------------------
 default_sx = '100.'
 default_sy = '100.'
 
 # - Tabs -------------------------------
-class tool_tab(QtGui.QWidget):
+class TRDeltaPanel(QtGui.QWidget):
 	def __init__(self):
-		super(tool_tab, self).__init__()
+		super(TRDeltaPanel, self).__init__()
 
 		# - Init
+		self.active_font = pFont()
+		self.active_workspace = pWorkspace()
+		self.active_layer = None
+		self.axis_data = []
+		self.axis_stems = []
+		self.glyph_arrays = {}
+		self.value_array = None
 
-		# - Widgets
-		# - Glyph list
-		self.lst_glyphName = QtGui.QListWidget()
-		self.lst_glyphName.setMinimumHeight(50)
-		self.lst_glyphName.setAlternatingRowColors(True)
-		
-		# -- Buttons
-		self.btn_refresh = QtGui.QPushButton('&Refresh')
-		self.btn_setAxis = QtGui.QPushButton('Set &Axis')
-		self.btn_setAxis_c = QtGui.QPushButton('Set &Axis')
-		self.btn_resetAxis = QtGui.QPushButton('Reset Axis')
-		self.btn_getVstem = QtGui.QPushButton('Get &Vertical Stems')
-		self.btn_getHstem = QtGui.QPushButton('Get &Horizontal Stems')
-		self.btn_setLayer = QtGui.QPushButton('Layer changed')
-		self.btn_execute = QtGui.QPushButton('Execute')
-		self.btn_file_load_patchboard = QtGui.QPushButton('Load')
-		self.btn_file_save_patchboard = QtGui.QPushButton('Save')
-		
-		# -- Options
-		self.btn_opt_extrapolate = QtGui.QPushButton('Extrapolate')
-		self.btn_opt_italic = QtGui.QPushButton('Italic')
-		self.btn_opt_update_preview = QtGui.QPushButton('Live preview')
-		self.btn_opt_keep_center = QtGui.QPushButton('Keep Center')
-		self.btn_opt_metrics = QtGui.QPushButton('Metrics')
-		self.btn_opt_anchors = QtGui.QPushButton('Anchors')
-		self.btn_opt_target = QtGui.QPushButton('Use Target')		
-
-		self.btn_opt_extrapolate.setCheckable(True)
-		self.btn_opt_italic.setCheckable(True) 
-		self.btn_opt_update_preview.setCheckable(True)
-		self.btn_opt_keep_center.setCheckable(True)
-		self.btn_opt_metrics.setCheckable(True)
-		self.btn_opt_anchors.setCheckable(True)
-		self.btn_opt_target.setCheckable(True)
-
-		#self.btn_opt_extrapolate.setChecked(True)
-		#self.btn_opt_keep_center.setChecked(True)
-		#self.btn_opt_target.setChecked(True)
-
-		self.btn_refresh.clicked.connect(self.refresh)
-		self.btn_setAxis.clicked.connect(self.set_axis)
-		self.btn_setAxis_c.clicked.connect(self.set_axis)
-		self.btn_resetAxis.clicked.connect(self.reset_axis)
-		self.btn_getVstem.clicked.connect(lambda: self.get_stem(False))
-		self.btn_getHstem.clicked.connect(lambda: self.get_stem(True))
-		self.btn_setLayer.clicked.connect(self.set_current_layer)
-		self.btn_execute.clicked.connect(lambda: self.execute_scale(True))
-
-		self.btn_file_save_patchboard.clicked.connect(self.file_save_patchboard)
-		self.btn_file_load_patchboard.clicked.connect(self.file_load_patchboard)
+		# - Build Layout
+		lay_main = QtGui.QVBoxLayout()
 
 		# -- Layer selector
 		self.tree_layer = TRDeltaLayerTree()
 
-		# -- Additional Actions (Context Menu)
-		act_setItem_mask = QtGui.QAction('Set mask', self)
-		act_setItem_unmask = QtGui.QAction('Remove mask', self)
-		act_setItem_value = QtGui.QAction('Set value', self)
-
-		act_setAxis = QtGui.QAction('Set Axis', self)
+		# --- Layer selector: Actions (Context Menu)
 		act_resetAxis = QtGui.QAction('Reset Axis', self)
 		act_getVstem = QtGui.QAction('Get Vertical Stems', self)
 		act_getHstem = QtGui.QAction('Get Horizontal Stems', self)
 
 		self.tree_layer.menu.addSeparator()	
-		self.tree_layer.menu.addAction(act_setItem_mask )
-		self.tree_layer.menu.addAction(act_setItem_unmask )
-		self.tree_layer.menu.addAction(act_setItem_value )
-		self.tree_layer.menu.addSeparator()	
 		self.tree_layer.menu.addAction(act_getVstem)
 		self.tree_layer.menu.addAction(act_getHstem)
 		self.tree_layer.menu.addSeparator()	
-		self.tree_layer.menu.addAction(act_setAxis)
 		self.tree_layer.menu.addAction(act_resetAxis)
 
-		act_setItem_mask.triggered.connect(lambda: self.tree_layer._setItemData('mask.', 0, 0, False))
-		act_setItem_unmask.triggered.connect(lambda: self.tree_layer._setItemData('mask.', 0, 1, True))
-		act_setItem_value.triggered.connect(lambda: self.tree_layer._setItemData(*TR2ComboDLG('Delta Setup', 'Please enter new value for selected columns', 'Value:', 'Column:', tree_column_names).values))
-		
-		act_setAxis.triggered.connect(lambda: self.set_axis())
-		act_resetAxis.triggered.connect(lambda: self.reset_axis())
-		
+		act_resetAxis.triggered.connect(lambda: self.__reset_axis())
 		act_getVstem.triggered.connect(lambda: self.get_stem(False))
 		act_getHstem.triggered.connect(lambda: self.get_stem(True))
-		
-		# - Build Layout
-		layoutV = QtGui.QVBoxLayout()
 
-		# -- Layer selector
-		layoutV.addWidget(self.tree_layer)
-
-		# -- Set Glyph list
-		self.fld_glyphs = TRCollapsibleBox('Process Glyphs')
-		lay_glyphs = QtGui.QVBoxLayout()
-		lay_glyphs_b = QtGui.QHBoxLayout()
-		lay_glyphs.addWidget(self.lst_glyphName)
-		lay_glyphs_b.addWidget(self.btn_refresh)
-		lay_glyphs_b.addWidget(self.btn_setAxis_c)
-		lay_glyphs.addLayout(lay_glyphs_b)
-		self.fld_glyphs.setContentLayout(lay_glyphs)
-		layoutV.addWidget(self.fld_glyphs)
-		
-		# -- Delta Setup controls
-		self.fld_setup = TRCollapsibleBox('Delta Setup') 
-		layoutG = QtGui.QGridLayout()
-		layoutG.addWidget(QtGui.QLabel('Axis Setup:'),		0, 0, 1, 10)
-		layoutG.addWidget(self.btn_getVstem, 				1, 0, 1, 5)
-		layoutG.addWidget(self.btn_getHstem, 				1, 5, 1, 5)
-		layoutG.addWidget(self.btn_resetAxis, 				2, 0, 1, 5)
-		layoutG.addWidget(self.btn_setAxis, 				2, 5, 1, 5)
-		layoutG.addWidget(self.btn_file_save_patchboard,	3, 0, 1, 5)
-		layoutG.addWidget(self.btn_file_load_patchboard,	3, 5, 1, 5)
-
-		layoutG.addWidget(QtGui.QLabel('Options:'),			4, 0, 1, 10)
-		layoutG.addWidget(self.btn_opt_extrapolate, 		5, 0, 1, 5)
-		layoutG.addWidget(self.btn_opt_italic, 				5, 5, 1, 5)
-		layoutG.addWidget(self.btn_opt_anchors, 			6, 0, 1, 5)
-		layoutG.addWidget(self.btn_opt_metrics, 			6, 5, 1, 5)
-		layoutG.addWidget(self.btn_opt_target, 				8, 0, 1, 5)
-		layoutG.addWidget(self.btn_opt_keep_center, 		8, 5, 1, 5)
-		layoutG.addWidget(self.btn_opt_update_preview, 		9, 0, 1, 10)
-		
-		self.fld_setup.setContentLayout(layoutG)
-		layoutV.addWidget(self.fld_setup)
-
-		# -- Set Sliders
-		self.fld_weight = TRCollapsibleBox('Stem Weight Control')
-		self.fld_scale = TRCollapsibleBox('Compensative scaler')
-
-		lay_weight = QtGui.QVBoxLayout()
-		lay_scale = QtGui.QVBoxLayout()
-		
-		# --- Mixer
-		lay_weight.addWidget(QtGui.QLabel('Vertical Stem Weight (X):'))
-		self.mixer_dx = TRSliderCtrl('1', '1000', '0', 1)
-		self.mixer_dx.sld_axis.valueChanged.connect(self.execute_scale)		
-		lay_weight.addLayout(self.mixer_dx)
-		lay_weight.addSpacing(10)
-		
-		lay_weight.addWidget(QtGui.QLabel('Horizontal Stem Weight (Y):'))
-		self.mixer_dy = TRSliderCtrl('1', '1000', '0', 1)
-		self.mixer_dy.sld_axis.valueChanged.connect(self.execute_scale)		
-		lay_weight.addLayout(self.mixer_dy)
-		
-		self.fld_weight.setContentLayout(lay_weight)
-		layoutV.addWidget(self.fld_weight)
-
-		# --- Scaler
-		lay_scale.addWidget(QtGui.QLabel('Width'))
-		self.scalerX = TRSliderCtrl('1', '200', '100', 1)
-		self.scalerX.sld_axis.valueChanged.connect(self.execute_scale)		
-		lay_scale.addLayout(self.scalerX)
-		lay_scale.addSpacing(10)
-
-		lay_scale.addWidget(QtGui.QLabel('Height'))
-		self.scalerY = TRSliderCtrl('1', '200', '100', 1)
-		self.scalerY.sld_axis.valueChanged.connect(self.execute_scale)		
-		lay_scale.addLayout(self.scalerY)
-
-		self.fld_scale.setContentLayout(lay_scale)
-		layoutV.addWidget(self.fld_scale)
-
-		# -- Tail 
-		layoutE = QtGui.QHBoxLayout()
-		layoutE.addWidget(self.btn_setLayer)
-		layoutE.addWidget(self.btn_execute)
-		layoutV.addLayout(layoutE)
-
-		self.__lbl_warn = QtGui.QLabel('')
-		layoutV.addWidget(self.__lbl_warn)
-		self.__lbl_warn.hide()
-
-		# -- Finish
-		self.refresh()
+		# --  Layer selector: Set
 		self.tree_layer.setTree(self.__init_tree(), tree_column_names)
-		self.setLayout(layoutV)
+		lay_main.addWidget(self.tree_layer)
+
+		# -- Buttons: Delta Actions
+		box_delta_actions = QtGui.QGroupBox()
+		box_delta_actions.setObjectName('box_group')
+
+		lay_actions = TRFlowLayout(spacing=10)
+
+		tooltip_button = 'Get vertical stems'
+		self.btn_get_stem_x = CustomPushButton('stem_vertical_alt', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_actions.addWidget(self.btn_get_stem_x)
+		self.btn_get_stem_x.clicked.connect(lambda: self.get_stem(False))
+
+		tooltip_button = 'Get horizontal stems'
+		self.btn_get_stem_y = CustomPushButton('stem_horizontal_alt', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_actions.addWidget(self.btn_get_stem_y)
+		self.btn_get_stem_y.clicked.connect(lambda: self.get_stem(True))
+
+		tooltip_button = 'Reset axis data'
+		self.btn_axis_reset = CustomPushButton('refresh', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_actions.addWidget(self.btn_axis_reset)
+		self.btn_axis_reset.clicked.connect(lambda: self.__reset_axis())
+
+		tooltip_button = 'Save axis data to external file'
+		self.btn_file_save = CustomPushButton('file_save', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_actions.addWidget(self.btn_file_save)
+		self.btn_file_save.clicked.connect(lambda: self.file_save_axis_data())
+
+		tooltip_button = 'Load axis data from external file'
+		self.btn_file_open = CustomPushButton('file_open', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_actions.addWidget(self.btn_file_open)
+		self.btn_file_open.clicked.connect(lambda: self.file_open_axis_data())
+
+		tooltip_button = 'Save axis data to font file'
+		self.btn_font_save = CustomPushButton('font_save', tooltip=tooltip_button, enabled=False, obj_name='btn_panel')
+		lay_actions.addWidget(self.btn_font_save)
+		#self.btn_font_save.clicked.connect(lambda: self.__reset_axis())
+
+		tooltip_button = 'Load axis data from font file'
+		self.btn_font_open = CustomPushButton('font_open', tooltip=tooltip_button, enabled=False, obj_name='btn_panel')
+		lay_actions.addWidget(self.btn_font_open)
+		#self.btn_file_open.clicked.connect(lambda: self.__reset_axis())
+
+		box_delta_actions.setLayout(lay_actions)
+		lay_main.addWidget(box_delta_actions)
+
+		# -- Buttons: Delta options
+		box_delta_options = QtGui.QGroupBox()
+		box_delta_options.setObjectName('box_group')
+
+		lay_options = TRFlowLayout(spacing=10)
+
+		tooltip_button = 'Process metrics'
+		self.chk_metrics = CustomPushButton("metrics_advance_alt", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_metrics)
+		#self.chk_metrics.clicked.connect(lambda: self.__toggle_controls())
+
+		tooltip_button = 'Process anchors'
+		self.chk_anchors = CustomPushButton("icon_anchor", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_anchors)
+		#self.chk_anchors.clicked.connect(lambda: self.__toggle_controls())
+
+		tooltip_button = 'Allow extrapolation'
+		self.chk_extrapolate = CustomPushButton("extrapolate", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_extrapolate)
+		#self.chk_extrapolate.clicked.connect(lambda: self.__toggle_controls())
+
+		tooltip_button = 'Use target'
+		self.chk_target = CustomPushButton("node_target", checkable=True, cheked=False, enabled=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_target)
+		#self.chk_target.clicked.connect(lambda: self.__toggle_controls())
+
+		tooltip_button = 'Proportional mode'
+		self.chk_proportional = CustomPushButton("diagonal_bottom_up", checkable=True, cheked=False, enabled=False,tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_proportional)
+		#self.chk_proportional.clicked.connect(lambda: self.__toggle_controls())
+		
+		tooltip_button = 'Scale from center'
+		self.chk_center = CustomPushButton("node_target_expand", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_center)
+		#self.chk_center.clicked.connect(lambda: self.__toggle_controls())
+		
+		tooltip_button = 'Show extended controls'
+		self.chk_toggle_controls = CustomPushButton("value_controls", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_toggle_controls)
+		self.chk_toggle_controls.clicked.connect(lambda: self.__toggle_controls())
+
+		box_delta_options.setLayout(lay_options)
+		lay_main.addWidget(box_delta_options)
+
+		# -- Delta controls
+		lay_controls = TRFlowLayout(spacing=10)
+
+		self.cpn_value_width = TRCustomSpinController('width', (-999., 999., 100, 1.), ' %', 'Width')
+		lay_controls.addWidget(self.cpn_value_width)
+		self.cpn_value_width.spin_box.valueChanged.connect(lambda: self.execute_scale())
+		
+		self.cpn_value_height = TRCustomSpinController('height', (-999., 999., 100, 1.), ' %', 'Height')
+		lay_controls.addWidget(self.cpn_value_height)
+		self.cpn_value_height.spin_box.valueChanged.connect(lambda: self.execute_scale())
+
+		self.cpn_value_stem_x = TRCustomSpinController('stem_vertical_alt', (-300., 300., 1, 1.), ' u', 'Vertical stem width')
+		lay_controls.addWidget(self.cpn_value_stem_x)
+		self.cpn_value_stem_x.spin_box.valueChanged.connect(lambda: self.execute_scale())
+
+		self.cpn_value_stem_y = TRCustomSpinController('stem_horizontal_alt', (-300., 300., 1, 1.), ' u', 'Horizontal stem width')
+		lay_controls.addWidget(self.cpn_value_stem_y)
+		self.cpn_value_stem_y.spin_box.valueChanged.connect(lambda: self.execute_scale())
+
+		self.cpn_value_lerp_t = TRCustomSpinController('interpolate', (-300., 300., 0, 1.), ' %', 'Time along axis')
+		lay_controls.addWidget(self.cpn_value_lerp_t)
+		self.cpn_value_lerp_t.spin_box.valueChanged.connect(lambda: self.execute_scale(True))
+
+		self.cpn_value_ital = TRCustomSpinController('slope_italic', (-20., 20., self.active_font.italic_angle, 1.), ' °', 'Italic angle')
+		lay_controls.addWidget(self.cpn_value_ital)
+		self.cpn_value_ital.spin_box.valueChanged.connect(lambda: self.execute_scale())
+
+		lay_main.addLayout(lay_controls)
+		self.__toggle_controls()
+
+		# --- Set styling 
+		self.setStyleSheet(css_tr_button)
+		self.setLayout(lay_main)
 		self.setMinimumSize(300, self.sizeHint.height())
+		self.setWindowTitle('%s %s' %(app_name, app_version))
+		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
 		
 	# - Functions -----------------------------------------
-	# - File operations
-	def file_save_patchboard(self):
-		fontPath = os.path.split(self.active_font.fg.path)[0]
-		fname = QtGui.QFileDialog.getSaveFileName(self, 'Save Axis Patch-board to file', fontPath, fileFormats)
+	# -- Events and triggers
+	def contextMenuEvent(self, event):
+		self.tree_layer.menu.popup(QtGui.QCursor.pos())	
+	
+	# -- Internal
+	def __toggle_controls(self):
+		if self.chk_toggle_controls.isChecked():
+			self.cpn_value_width.expand()
+			self.cpn_value_height.expand()
+			self.cpn_value_ital.expand()
+			self.cpn_value_stem_x.expand()
+			self.cpn_value_stem_y.expand()
+			self.cpn_value_lerp_t.expand()
+		else:
+			self.cpn_value_width.contract()
+			self.cpn_value_height.contract()
+			self.cpn_value_ital.contract()
+			self.cpn_value_stem_x.contract()
+			self.cpn_value_stem_y.contract()
+			self.cpn_value_lerp_t.contract()
 
-		if fname != None:
-			with open(fname, 'w') as exportFile:
-				json.dump(self.tree_layer.getTree(), exportFile)
-				output(7, app_name, 'Font: %s; Patch-board saved to: %s.' %(self.active_font.name, fname))
-				
-	def file_load_patchboard(self):
-		fontPath = os.path.split(self.active_font.fg.path)[0]
-		fname = QtGui.QFileDialog.getOpenFileName(self, 'Load Axis Patch-board from file', fontPath, fileFormats)
-			
-		if fname != None:
-			with open(fname, 'r') as importFile:
-				imported_data = json.load(importFile)
-								
-				self.masters_data = imported_data
-				self.tree_layer.setTree(self.masters_data, tree_column_names)
-				output(6, app_name, 'Font: %s; Patch-board loaded from: %s.' %(self.active_font.name, fname))
+	def __change_value(self, cpn_object, value):
+		cpn_object.setValue(cpn_object.getValue() + value)
 
-	# -- Special
 	def __where(self, data, search, ret=1):
 		for item in data:
 			if search == item[0]: return item[ret]
@@ -270,215 +255,243 @@ class tool_tab(QtGui.QWidget):
 		return_data.append((tree_axis_target_name,[]))
 		return OrderedDict(return_data)
 
-	def __doCheck(self):
-		if pMode > 0: return 1
-		if self.active_glyph.fg.id != fl6.CurrentGlyph().id and self.active_glyph.fl.name != fl6.CurrentGlyph().name:
-			warnings.warn('Glyph mismatch! No action taken! Forcing refresh!', GlyphWarning)
-			self.refresh()
-			return 0
-		return 1
+	def __prepare_delta(self):
+		# - Tests
+		if not len(self.axis_data):
+			self.__set_axis()
+			self.__refresh_ui()
+			warnings.warn('Axis not set! Setting axis automatically...', TRDeltaAxisWarning)
+			return False
 
-	# -- Operation
-	def refresh(self):
+		if not len(self.glyph_arrays):
+			self.__refresh_arrays()
+			self.__refresh_ui()
+			warnings.warn('Deltas not set! Setting delta arrays automatically...', TRDeltaArrayWarning)
+			return False
+
+		if pMode == 0:
+			if fl6.CurrentGlyph().name not in self.glyph_arrays.keys():
+				warnings.warn('Active glyph changed! Forcing refresh...', GlyphWarning)
+				self.__refresh_arrays()
+				self.__refresh_ui()
+				return False
+
+		if pMode == 1:
+			active_glyph_names = [glyph.name for glyph in self.active_workspace.getTextBlockGlyphs()]
+			if sorted(active_glyph_names) != sorted(self.glyph_arrays.keys()):
+				warnings.warn('Glyph(s) changed! Forcing refresh...', GlyphWarning)
+				self.__refresh_arrays()
+				self.__refresh_ui()
+				return False
+
+		elif self.active_glyph.layer().name != self.active_layer:
+			self.__refresh_ui()
+			self.active_layer = self.active_glyph.layer().name
+			warnings.warn('Layer changed! Forcing refresh...', LayerWarning)
+			return False
+
+		# - Default
+		return True
+
+	def __refresh_ui(self):
+		self.cpn_value_width.setValue(100)
+		self.cpn_value_height.setValue(100)
+		self.value_array = DeltaScale(self.axis_stems, self.axis_stems)
+		
+		if len(self.axis_data):
+			self.cpn_value_stem_x.setValue(float(self.__where(self.axis_data, self.active_glyph.layer().name, 1)))
+			self.cpn_value_stem_y.setValue(float(self.__where(self.axis_data, self.active_glyph.layer().name, 2)))
+		
+		self.cpn_value_ital.setValue(self.active_font.italic_angle)
+
+	def __refresh_arrays(self):
 		# - Init
-		self.axis_points = []
-		self.axis_stems = []
-		self.data_glyphs = getProcessGlyphs(pMode)
-		self.data_glyphs = [glyph for glyph in self.data_glyphs if not glyph.isEmpty()]
-		self.glyph_arrays = {}
-		self.glyph_arrays_service = {}
-
-		self.active_glyph = eGlyph()
-		self.active_font = pFont()
-		self.active_workspace = pWorkspace()
 		self.active_canvas = self.active_workspace.getCanvas(True)
 
-		self.working_names = [glyph.name for glyph in self.data_glyphs] if len(self.data_glyphs) > 1 else [self.active_glyph.name]
-		self.lst_glyphName.clear()
-		self.lst_glyphName.addItems(self.working_names)
-				
-		if len(self.active_font.masters()) > 1:
-			# - Activate
-			self.__lbl_warn.setText('')
-			self.__lbl_warn.setStyleSheet('')
-			self.btn_setAxis.setEnabled(True)
-			self.btn_getVstem.setEnabled(True)
-			self.btn_getHstem.setEnabled(True)
+		process_glyphs = getProcessGlyphs(pMode)
 
-			self.mixer_dx.reset()
-			self.mixer_dy.reset()
-			self.scalerX.reset()
-			self.scalerY.reset()
-		else:
-			# - Deactivate
-			self.__lbl_warn.show()
-			self.__lbl_warn.setText('<b>Insufficient number of Master layers!</b><br>Delta Panel is currently disabled!')
-			self.__lbl_warn.setStyleSheet('padding: 10; font-size: 10pt; background: lightpink;')
-			self.btn_setAxis.setEnabled(False)
-			self.btn_getVstem.setEnabled(False)
-			self.btn_getHstem.setEnabled(False)
+		for glyph in process_glyphs:
+			temp_outline = [glyph._getPointArray(layer_data[0]) for layer_data in self.axis_data]
+			temp_service = [glyph._getServiceArray(layer_data[0]) for layer_data in self.axis_data]
+			self.glyph_arrays[glyph.name] = [glyph, DeltaScale(temp_outline, self.axis_stems), DeltaScale(temp_service, self.axis_stems)]
 
-	def get_stem(self, get_y=False):
-		if self.__doCheck():
-			self.masters_data = self.tree_layer.getTree()
-			self.active_glyph = eGlyph()
+	def __reset_axis(self):
+		self.tree_layer.setTree(self.__init_tree(), tree_column_names)
+		self.axis_data = []
+		self.axis_stems = []
+		self.glyph_arrays = {}
 
-			for group, data in self.masters_data.items():
-				for layer_data in data:
-					try:
-						selection = self.active_glyph.selectedNodes(layer_data[0], True)
-						
-						if get_y:
-							layer_data[2] = abs(selection[0].y - selection[-1].y)
-						else:
-							layer_data[1] = abs(selection[0].x - selection[-1].x)
-					except IndexError:
-						warnings.warn('Missing or incompatible layer: %s!' %layer_data[0], LayerWarning)
-						continue
+		self.cpn_value_width.setValue(100)
+		self.cpn_value_height.setValue(100)
+		self.cpn_value_stem_x.setValue(100)
+		self.cpn_value_stem_y.setValue(100)
+		self.cpn_value_lerp_t.setValue(0)
+		self.cpn_value_ital.setValue(self.active_font.italic_angle)
 
-			self.tree_layer.setTree(OrderedDict(self.masters_data), tree_column_names)
-	
-	def set_current_layer(self):
-		try:
-			if not self.btn_opt_target.isChecked():
-				max_dx = max(self.axis_data, key=lambda i: float(i[1]))[1]
-				max_dy = max(self.axis_data, key=lambda i: float(i[2]))[2]
-				min_dx = min(self.axis_data, key=lambda i: float(i[1]))[1]
-				min_dy = min(self.axis_data, key=lambda i: float(i[2]))[2]
-				self.mixer_dx.edt_pos.setText(round(float(self.__where(self.axis_data, self.active_glyph.layer().name, 1))))
-				self.mixer_dy.edt_pos.setText(round(float(self.__where(self.axis_data, self.active_glyph.layer().name, 2))))
-			else:
-				max_dx = max(self.masters_data[tree_axis_target_name], key=lambda i: float(i[1]))[1]
-				max_dy = max(self.masters_data[tree_axis_target_name], key=lambda i: float(i[2]))[2]
-				min_dx = min(self.masters_data[tree_axis_target_name], key=lambda i: float(i[1]))[1]
-				min_dy = min(self.masters_data[tree_axis_target_name], key=lambda i: float(i[2]))[2]
-				self.mixer_dx.edt_pos.setText(round(float(self.__where(self.masters_data[tree_axis_target_name], self.active_glyph.layer().name, 1))))
-				self.mixer_dy.edt_pos.setText(round(float(self.__where(self.masters_data[tree_axis_target_name], self.active_glyph.layer().name, 2))))
-		
-		
-			self.mixer_dx.edt_1.setText(min_dx)
-			self.mixer_dy.edt_1.setText(min_dy)
-			self.mixer_dx.edt_1.setText(max_dx)
-			self.mixer_dy.edt_1.setText(max_dy)
-
-			self.mixer_dx.refreshSlider()
-			self.mixer_dy.refreshSlider()
-		
-		except (ValueError, IndexError):
-			warnings.warn('Invalid Axis/Target or Axis/Target not set!', TRDeltaAxisWarning)
-
-	def reset_axis(self):
-		self.masters_data = self.tree_layer.getTree()
-		#self.masters_data[tree_masters_group_name] += self.masters_data[tree_axis_group_name]
-		self.masters_data[tree_axis_group_name] = []
-		self.masters_data[tree_axis_target_name] = []
-		self.tree_layer.setTree(self.masters_data, tree_column_names)
-
-	def set_axis(self):
+	def __set_axis(self):
 		self.masters_data = self.tree_layer.getTree()
 		self.axis_data = self.masters_data[tree_axis_group_name]
+		self.axis_stems = []
+		
+		for layer_data in self.axis_data:
+			try:
+				x_stem, y_stem = float(layer_data[1]), float(layer_data[2])
+				self.axis_stems.append([(x_stem, y_stem)])
 
-		if len(self.axis_data):
-			# - Init
-			self.axis_stems = []
-			for layer_data in self.axis_data:
-				try:
-					x_stem, y_stem = float(layer_data[1]), float(layer_data[2])
-					self.axis_stems.append([(x_stem, y_stem)])
+			except ValueError:
+				warnings.warn('Missing or invalid stem data!', TRDeltaStemWarning)
+				return
 
-				except ValueError:
-					warnings.warn('Missing or invalid stem data!', TRDeltaStemWarning)
-					return
+	def __apply_scale(self):
+		if pMode == 0:
+			glyph, _delta_outline, _delta_service = self.glyph_arrays[fl6.CurrentGlyph().name]
+			glyph.updateObject(glyph.fl, '{} {} | \tGlyph: {}; Layer: {}'.format(app_name, app_version, glyph.name, self.active_layer))
+		else:
+			self.active_font.updateObject(glyph.fl, '{} {} | \tGlyphs: {}; Layer: {}'.format(app_name, app_version, '; '.join(list(self.glyph_arrays.keys())), self.active_layer))
 
-			for wGlyph in self.data_glyphs:
-				temp_outline = [wGlyph._getPointArray(layer_data[0]) for layer_data in self.axis_data]
-				temp_service = [wGlyph._getServiceArray(layer_data[0]) for layer_data in self.axis_data]
-				self.glyph_arrays[wGlyph.name] = DeltaScale(temp_outline, self.axis_stems)
-				self.glyph_arrays_service[wGlyph.name] = DeltaScale(temp_service, self.axis_stems)
+	# -- File operations
+	def file_save_axis_data(self):
+		fontPath = os.path.split(self.active_font.fg.path)[0]
+		fname = QtGui.QFileDialog.getSaveFileName(self, 'Save axis data to file', fontPath, fileFormats)
 
-			# - Set Sliders
-			# -- X
-			self.mixer_dx.edt_0.setText(round(float(self.axis_data[0][1])))
-			self.mixer_dx.edt_1.setText(round(float(self.axis_data[-1][1])))
-			self.mixer_dx.edt_pos.setText(round(float(self.__where(self.axis_data, self.active_glyph.layer().name, 1))))
-			self.mixer_dx.refreshSlider()
-			# -- Y
-			self.mixer_dy.edt_0.setText(round(float(self.axis_data[0][2])))
-			self.mixer_dy.edt_1.setText(round(float(self.axis_data[-1][2])))
-			self.mixer_dy.edt_pos.setText(round(float(self.__where(self.axis_data, self.active_glyph.layer().name, 2))))
-			self.mixer_dy.refreshSlider()
-
-			# - Build
-			self.active_font.updateObject(self.active_font.fl, 'Glyph(s): {} Axis :{} @ {}'.format('; '.join(self.working_names), ' :'.join([item[0] for item in self.axis_data]), self.active_glyph.layer().name))
-	
-	def execute_scale(self, force_preview=False):
-		if len(self.glyph_arrays.keys()):
-			if self.btn_opt_update_preview.isChecked() or force_preview:
-				# - Stems
-				curr_sw_dx = float(self.mixer_dx.sld_axis.value)
-				curr_sw_dy = float(self.mixer_dy.sld_axis.value)
-
-				# - Scaling
-				sx = float(self.scalerX.sld_axis.value)/100.
-				sy = float(self.scalerY.sld_axis.value)/100.
+		if fname != None:
+			with open(fname, 'w') as exportFile:
+				json.dump(self.tree_layer.getTree(), exportFile)
+				output(7, app_name, 'Font: %s; Axis data saved to: %s.' %(self.active_font.name, fname))
 				
-				# - Options
-				opt_extrapolate = self.btn_opt_extrapolate.isChecked()
-				opt_italic = radians(-float(self.active_font.italic_angle)) if self.btn_opt_italic.isChecked() else 0.
-				opt_metrics = self.btn_opt_metrics.isChecked()
-				opt_anchors = self.btn_opt_anchors.isChecked()
+	def file_open_axis_data(self):
+		fontPath = os.path.split(self.active_font.fg.path)[0]
+		fname = QtGui.QFileDialog.getOpenFileName(self, 'Load axis data from file', fontPath, fileFormats)
+			
+		if fname != None:
+			with open(fname, 'r') as importFile:
+				imported_data = json.load(importFile)
+								
+				self.masters_data = imported_data
+				self.tree_layer.setTree(self.masters_data, tree_column_names)
+				output(6, app_name, 'Font: %s; Axis data loaded from: %s.' %(self.active_font.name, fname))
+
+	# -- Delta operation
+	def get_stem(self, get_y=False):
+		self.masters_data = self.tree_layer.getTree()
+		self.active_glyph = eGlyph()
+
+		for group, data in self.masters_data.items():
+			for layer_data in data:
+				try:
+					selection = self.active_glyph.selectedNodes(layer_data[0], True)
+					
+					if get_y:
+						layer_data[2] = round(abs(selection[0].y - selection[-1].y), 2)
+					else:
+						layer_data[1] = round(abs(selection[0].x - selection[-1].x), 2)
+				except IndexError:
+					warnings.warn('Missing or incompatible layer: %s!' %layer_data[0], LayerWarning)
+					continue
+
+		self.tree_layer.setTree(OrderedDict(self.masters_data), tree_column_names)
+
+	def execute_scale(self, use_time=False):
+		# - Init
+		system_ready = self.__prepare_delta()
+		if not system_ready: return
+
+		if pMode == 0:
+			system_process = [self.glyph_arrays[fl6.CurrentGlyph().name]]
+		else:
+			system_process = self.glyph_arrays.values()
+		
+		# - Process
+		for glyph, delta_outline, delta_service in system_process:
+
+			# - Init
+			intervals = len(delta_outline)
+
+			# - Scaling
+			sx = float(self.cpn_value_width.getValue())/100.
+			sy = float(self.cpn_value_height.getValue())/100.
+			
+			# - Italic
+			#it = radians(-float(self.cpn_value_ital.getValue())) self.active_font.italic_angle
+			it = math.radians(-float(self.active_font.italic_angle)) # Use italic only in the context of Delta calculation not for actuall slanting
+
+			# - Options
+			opt_extrapolate = self.chk_extrapolate.isChecked()
+			opt_center = self.chk_center.isChecked()
+			opt_metrics = self.chk_metrics.isChecked()
+			opt_anchors = self.chk_anchors.isChecked()
+
+			if not use_time:
+				# - Use Stems
+				curr_sw_dx = float(self.cpn_value_stem_x.getValue())
+				curr_sw_dy = float(self.cpn_value_stem_y.getValue())
 
 				# - Process
-				for wGlyph in self.data_glyphs:
-					if self.btn_opt_target.isChecked():
-						process_target = self.masters_data[tree_axis_target_name]
-						
-						if len(process_target):
-							for process_layer_data in process_target:
-								layer_name, layer_dx, layer_dy, layer_width, layer_height, _color = process_layer_data
-
-								if not self.btn_opt_update_preview.isChecked():
-									# - Stems
-									curr_sw_dx = float(layer_dx)
-									curr_sw_dy = float(layer_dy)
-
-									# - Scaling
-									sx = float(layer_width)/100.
-									sy = float(layer_height)/100.
-								
-								outline_scale = self.glyph_arrays[wGlyph.name].scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), opt_italic, extrapolate=opt_extrapolate)
-								wGlyph._setPointArray(outline_scale, layer_name, keep_center=self.btn_opt_keep_center.isChecked())
-						
-								service_scale = self.glyph_arrays_service[wGlyph.name].scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), opt_italic, extrapolate=opt_extrapolate)
-								wGlyph._setServiceArray(service_scale, layer_name, opt_metrics, opt_anchors)
-
-							if not self.btn_opt_update_preview.isChecked():
-								output(0, app_name, 'Processed: %s' %wGlyph.name)
-
-						else:
-							warnings.warn('Empty/Invalid Target Table provided! No action taken!', GlyphWarning)
-					else:
-						outline_scale = self.glyph_arrays[wGlyph.name].scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), opt_italic, extrapolate=opt_extrapolate)
-						wGlyph._setPointArray(outline_scale, keep_center=self.btn_opt_keep_center.isChecked())
-						
-						service_scale = self.glyph_arrays_service[wGlyph.name].scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), opt_italic, extrapolate=opt_extrapolate)
-						wGlyph._setServiceArray(service_scale, set_metrics=opt_metrics, set_anchors=opt_anchors)
-						
-					wGlyph.update()
-					
-					try:
-						self.active_canvas.refreshAll()
-					except:
-						pass
+				outline_scale = delta_outline.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), it, extrapolate=opt_extrapolate)
+				service_scale = delta_service.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), it, extrapolate=opt_extrapolate)
 				
-				if opt_metrics: self.active_font.fl.changed()
+				tx, ty = delta_outline._stem_for_time(curr_sw_dx, curr_sw_dy, opt_extrapolate)
 
-	
+				self.cpn_value_lerp_t.blockSignals(True)
+				self.cpn_value_lerp_t.setValue(round(tx / intervals * 100))
+				self.cpn_value_lerp_t.blockSignals(False)
+
+			else:
+				# - Use Times
+				curr_tx = curr_ty = float(self.cpn_value_lerp_t.getValue()) * intervals / 100
+
+				# - Process
+				outline_scale = map(lambda i: (round(i[0]), round(i[1])), delta_outline.scale_by_time((curr_tx, curr_ty), (sx,sy), (0.,0.), (0.,0.), it, extrapolate=opt_extrapolate))
+				service_scale = map(lambda i: (round(i[0]), round(i[1])), delta_service.scale_by_time((curr_tx, curr_ty), (sx,sy), (0.,0.), (0.,0.), it, extrapolate=opt_extrapolate))
+				
+				# - Set stem values to controls
+				curr_sw_dx, curr_sw_dy = list(self.value_array.scale_by_time((curr_tx, curr_ty), (sx,sy), (0.,0.), (0.,0.), it, extrapolate=opt_extrapolate))[0]
+
+				self.cpn_value_stem_x.blockSignals(True)
+				self.cpn_value_stem_y.blockSignals(True)
+				self.cpn_value_stem_x.setValue(round(curr_sw_dx))
+				self.cpn_value_stem_y.setValue(round(curr_sw_dy))
+				self.cpn_value_stem_x.blockSignals(False)
+				self.cpn_value_stem_y.blockSignals(False)
+			
+			# - Process slant transform
+			new_transform = Transform()
+			new_transform = new_transform.skew(self.cpn_value_ital.getValue(), 0.)
+			outline_scale = list(map(lambda i: (new_transform.applyTransformation(*i)), outline_scale))
+			service_scale = list(map(lambda i: (new_transform.applyTransformation(*i)), service_scale))
+
+			# - Apply transformations
+			glyph._setPointArray(outline_scale, keep_center=opt_center)
+			glyph._setServiceArray(service_scale, set_metrics=opt_metrics, set_anchors=opt_anchors)
+
+			glyph.update()
+
+		try:
+			self.active_canvas.refreshAll()
+		except:
+			pass
+					
+# - Tabs -------------------------------
+class tool_tab(QtGui.QWidget):
+	def __init__(self):
+		super(tool_tab, self).__init__()
+
+		# - Init
+		self.setStyleSheet(css_tr_button)
+		lay_main = QtGui.QVBoxLayout()
+		lay_main.setContentsMargins(0, 0, 0, 0)
+		
+		# - Add widgets to main dialog 
+		lay_main.addWidget(TRDeltaPanel())
+
+		# - Build 
+		self.setLayout(lay_main)
+
 # - Test ----------------------
 if __name__ == '__main__':
-	test = tool_tab()
-	test.setWindowTitle('%s %s' %(app_name, app_version))
-	test.setGeometry(100, 100, 280, 800)
-	test.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
+	delta_panel = tool_tab()
+	delta_panel.setWindowTitle('%s %s' %(app_name, app_version))
+	delta_panel.setGeometry(100, 100, 300, 400)
+	delta_panel.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
 	
-	test.show()
+	delta_panel.show()
