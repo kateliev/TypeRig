@@ -144,17 +144,14 @@ class TRDeltaPanel(QtGui.QWidget):
 		tooltip_button = 'Process metrics'
 		self.chk_metrics = CustomPushButton("metrics_advance_alt", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_metrics)
-		#self.chk_metrics.clicked.connect(lambda: self.__toggle_controls())
 
 		tooltip_button = 'Process anchors'
 		self.chk_anchors = CustomPushButton("icon_anchor", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_anchors)
-		#self.chk_anchors.clicked.connect(lambda: self.__toggle_controls())
 
 		tooltip_button = 'Allow extrapolation'
 		self.chk_extrapolate = CustomPushButton("extrapolate", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_extrapolate)
-		#self.chk_extrapolate.clicked.connect(lambda: self.__toggle_controls())
 
 		tooltip_button = 'Use target'
 		self.chk_target = CustomPushButton("node_target", checkable=True, cheked=False, enabled=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
@@ -164,12 +161,10 @@ class TRDeltaPanel(QtGui.QWidget):
 		tooltip_button = 'Proportional mode'
 		self.chk_proportional = CustomPushButton("diagonal_bottom_up", checkable=True, cheked=False, enabled=False,tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_proportional)
-		#self.chk_proportional.clicked.connect(lambda: self.__toggle_controls())
 		
 		tooltip_button = 'Scale from center'
 		self.chk_center = CustomPushButton("node_target_expand", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_center)
-		#self.chk_center.clicked.connect(lambda: self.__toggle_controls())
 		
 		tooltip_button = 'Show extended controls'
 		self.chk_toggle_controls = CustomPushButton("value_controls", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
@@ -427,8 +422,8 @@ class TRDeltaPanel(QtGui.QWidget):
 				curr_sw_dy = float(self.cpn_value_stem_y.getValue())
 
 				# - Process
-				outline_scale = delta_outline.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), it, extrapolate=opt_extrapolate)
-				service_scale = delta_service.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx,sy), (0.,0.), (0.,0.), it, extrapolate=opt_extrapolate)
+				outline_scale = delta_outline.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=opt_extrapolate)
+				service_scale = delta_service.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=opt_extrapolate)
 				
 				tx, ty = delta_outline._stem_for_time(curr_sw_dx, curr_sw_dy, opt_extrapolate)
 
@@ -441,8 +436,8 @@ class TRDeltaPanel(QtGui.QWidget):
 				curr_tx = curr_ty = float(self.cpn_value_lerp_t.getValue()) * intervals / 100
 
 				# - Process
-				outline_scale = map(lambda i: (round(i[0]), round(i[1])), delta_outline.scale_by_time((curr_tx, curr_ty), (sx,sy), (0.,0.), (0.,0.), it, extrapolate=opt_extrapolate))
-				service_scale = map(lambda i: (round(i[0]), round(i[1])), delta_service.scale_by_time((curr_tx, curr_ty), (sx,sy), (0.,0.), (0.,0.), it, extrapolate=opt_extrapolate))
+				outline_scale = map(lambda i: (round(i[0]), round(i[1])), delta_outline.scale_by_time((curr_tx, curr_ty), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=opt_extrapolate))
+				service_scale = map(lambda i: (round(i[0]), round(i[1])), delta_service.scale_by_time((curr_tx, curr_ty), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=opt_extrapolate))
 				
 				# - Set stem values to controls
 				curr_sw_dx, curr_sw_dy = list(self.value_array.scale_by_time((curr_tx, curr_ty), (sx,sy), (0.,0.), (0.,0.), it, extrapolate=opt_extrapolate))[0]

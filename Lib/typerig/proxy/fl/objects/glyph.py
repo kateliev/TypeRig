@@ -32,7 +32,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.31.2'
+__version__ = '0.31.3'
 
 # - Keep compatibility for basestring checks
 try:
@@ -1542,7 +1542,7 @@ class eGlyph(pGlyph):
 			layer_advance = PointArray[0]
 			self.setAdvance(layer_advance[0], layer)
 
-		if set_anchors and len(PointArray) > 2:
+		if set_anchors and len(PointArray) > 1:
 			layer_anchors = PointArray[1:]
 			anchorArray = self.anchors(layer)
 
