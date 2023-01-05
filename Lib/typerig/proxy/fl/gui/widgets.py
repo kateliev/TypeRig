@@ -28,7 +28,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.gui.styles import css_tr_button
 
 # - Init ----------------------------------
-__version__ = '0.4.2'
+__version__ = '0.4.5'
 
 # - Keep compatibility for basestring checks
 try:
@@ -213,6 +213,23 @@ class CustomSpinButton(QtGui.QWidget):
 		self.setLayout(self.box)
 		self.setSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
 
+class CustomHorizontalSlider(QtGui.QSlider):
+	def __init__(self, init_values=(0., 100., 0., 1.), tooltip=None, obj_name=None):
+		super(CustomHorizontalSlider, self).__init__(QtCore.Qt.Horizontal)
+
+		# - Init
+		spb_min, spb_max, spb_value, spb_step = init_values
+
+		# - Set
+		self.setMinimum(spb_min)
+		self.setMaximum(spb_max)
+		self.setValue(spb_value)
+		self.setSingleStep(spb_step)
+
+		if tooltip is not None: self.setToolTip(tooltip)
+		if obj_name is not None: self.setObjectName(obj_name)
+
+# - Controlles ------------------------------------------------
 class TRCustomSpinController(QtGui.QWidget):
 	def __init__(self, control_name, control_values, control_suffix, control_tooltip, double=False):
 		super(TRCustomSpinController, self).__init__()		
@@ -220,9 +237,14 @@ class TRCustomSpinController(QtGui.QWidget):
 		# - Helper
 		func_change_value = lambda spn_object, value: spn_object.setValue(spn_object.value + value)
 
-		# - Controls
+		# - Label
 		ctrl_lbl = CustomLabel(control_name, obj_name='lbl_panel')
 		
+		# - Controls
+		# -- Slider
+		self.ctrl_slider = CustomHorizontalSlider(init_values=control_values, tooltip=control_tooltip, obj_name='sld_panel')
+		
+		# -- Spinbox
 		if double:
 			self.spin_box = CustomDoubleSpinBox(init_values=control_values, tooltip=control_tooltip, obj_name='spn_panel')
 		else:
@@ -230,18 +252,27 @@ class TRCustomSpinController(QtGui.QWidget):
 
 		self.spin_box.setSuffix(control_suffix)
 		self.spin_box.setMinimumWidth(70)
+		self.spin_box.valueChanged.connect(lambda: self.__set_slider_no_signal(self.spin_box.value))
 
+		self.ctrl_slider.valueChanged.connect(lambda: self.setValue(self.ctrl_slider.value))
+
+		# -- Buttons
 		self.ctrl_btn_dec_10 = CustomPushButton('value_decrease_double', checkable=False, cheked=False, tooltip='-10', obj_name='btn_panel')
 		self.ctrl_btn_dec_1 = CustomPushButton('value_decrease', checkable=False, cheked=False, tooltip='-1', obj_name='btn_panel')
 		self.ctrl_btn_inc_1 = CustomPushButton('value_increase', checkable=False, cheked=False, tooltip='+1', obj_name='btn_panel')
 		self.ctrl_btn_inc_10 = CustomPushButton('value_increase_double', checkable=False, cheked=False, tooltip='+10', obj_name='btn_panel')
+		self.opt_sliders = CustomPushButton('value_sliders', checkable=True, cheked=False, tooltip='Show Slider Controls', obj_name='btn_panel_opt')
 
 		self.ctrl_btn_dec_10.clicked.connect(lambda: func_change_value(self.spin_box, -10))
 		self.ctrl_btn_dec_1.clicked.connect(lambda: func_change_value(self.spin_box, -1))
 		self.ctrl_btn_inc_1.clicked.connect(lambda: func_change_value(self.spin_box, 1))
 		self.ctrl_btn_inc_10.clicked.connect(lambda: func_change_value(self.spin_box, 10))
+		self.opt_sliders.clicked.connect(lambda: self.__toggle_slider())
+
+		self.__toggle_slider()
 
 		# - Layout
+		lay_box = QtGui.QVBoxLayout()
 		lay_controls = QtGui.QHBoxLayout()
 
 		lay_controls.addWidget(ctrl_lbl)
@@ -250,31 +281,60 @@ class TRCustomSpinController(QtGui.QWidget):
 		lay_controls.addWidget(self.ctrl_btn_dec_1)
 		lay_controls.addWidget(self.ctrl_btn_inc_1)
 		lay_controls.addWidget(self.ctrl_btn_inc_10)
+		lay_controls.addWidget(self.opt_sliders)
 		lay_controls.setContentsMargins(0, 0, 0, 0)
+
+		lay_box.addLayout(lay_controls)
+		lay_box.addWidget(self.ctrl_slider)
+		lay_box.setContentsMargins(0, 0, 0, 0)
 		
 		box_controls = QtGui.QGroupBox()
 		box_controls.setObjectName('box_group')
-		box_controls.setLayout(lay_controls)
+		box_controls.setLayout(lay_box)
 		
 		lay_main = QtGui.QHBoxLayout()
 		lay_main.addWidget(box_controls)
 		lay_main.setContentsMargins(0, 0, 0, 0)
+
 		self.setLayout(lay_main)
 
+	# - Functions
+	# -- Internal
+	def __set_slider_no_signal(self, value):
+		self.ctrl_slider.blockSignals(True)
+		self.ctrl_slider.setValue(value)
+		self.ctrl_slider.blockSignals(False)
+
+	def __toggle_slider(self):
+		if self.opt_sliders.isChecked():
+			self.ctrl_slider.show()
+		else:
+			self.ctrl_slider.hide()
+
+	# -- External
 	def contract(self):
+		self.spin_box.setMinimumWidth(45)
+		self.spin_box.setMaximumWidth(45)
 		self.ctrl_btn_dec_10.hide()
 		self.ctrl_btn_dec_1.hide()
 		self.ctrl_btn_inc_1.hide()
 		self.ctrl_btn_inc_10.hide()
+		self.opt_sliders.hide()
+		self.ctrl_slider.hide()
 
 	def expand(self):
+		self.spin_box.setMinimumWidth(70)
+		self.spin_box.setMaximumWidth(70)
 		self.ctrl_btn_dec_10.show()
 		self.ctrl_btn_dec_1.show()
 		self.ctrl_btn_inc_1.show()
 		self.ctrl_btn_inc_10.show()	
+		self.opt_sliders.show()
+		self.__toggle_slider()
 
 	def setValue(self, value):
 		self.spin_box.setValue(value)
+		self.__set_slider_no_signal(value)
 
 	def getValue(self):
 		return self.spin_box.value

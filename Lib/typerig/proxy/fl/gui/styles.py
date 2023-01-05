@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.3'
+__version__ = '0.0.5'
 
 # -- CSS Styling ------------------------
 css_fl_button = '''
@@ -167,4 +167,32 @@ QPushButton#btn_panel:disabled {
     border: none;
 }
 
+QSlider#sld_panel:groove:horizontal {
+    border: 0px;
+    height: 2px;
+    background: #9c9e9f;
+    margin: 2px 0;
+}
+
+QSlider#sld_panel:handle:horizontal {
+    background: #9c9e9f;
+    border: 1px solid #9c9e9f;
+    width: 8px;
+    margin: -4px 0;
+    border-radius: 4px;
+}
+
+QSlider#sld_panel:add-page:horizontal {
+    border: 0px;
+    height: 2px;
+    background: #d1d2d3;
+    margin: 2px 0;
+}
+
+QSlider#sld_panel:sub-page:horizontal {
+   border: 0px;
+    height: 2px;
+    background: #9c9e9f;
+    margin: 2px 0;
+}
 '''
