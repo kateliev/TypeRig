@@ -28,7 +28,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.gui.styles import css_tr_button
 
 # - Init ----------------------------------
-__version__ = '0.4.5'
+__version__ = '0.4.6'
 
 # - Keep compatibility for basestring checks
 try:
@@ -331,6 +331,23 @@ class TRCustomSpinController(QtGui.QWidget):
 		self.ctrl_btn_inc_10.show()	
 		self.opt_sliders.show()
 		self.__toggle_slider()
+
+	def blockSignals(self, state):
+		self.spin_box.blockSignals(state)
+		self.ctrl_btn_dec_10.blockSignals(state)
+		self.ctrl_btn_dec_1.blockSignals(state)
+		self.ctrl_btn_inc_1.blockSignals(state)
+		self.ctrl_btn_inc_10.blockSignals(state)
+		self.ctrl_slider.blockSignals(state)
+
+	def setEnabled(self, state):
+		self.spin_box.setEnabled(state)
+		self.ctrl_btn_dec_10.setEnabled(state)
+		self.ctrl_btn_dec_1.setEnabled(state)
+		self.ctrl_btn_inc_1.setEnabled(state)
+		self.ctrl_btn_inc_10.setEnabled(state)
+		self.opt_sliders.setEnabled(state)
+		self.ctrl_slider.setEnabled(state)
 
 	def setValue(self, value):
 		self.spin_box.setValue(value)

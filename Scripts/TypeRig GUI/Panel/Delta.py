@@ -36,7 +36,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Delta', '5.2'
+app_name, app_version = 'TypeRig | Delta', '5.3'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -73,7 +73,7 @@ class TRDeltaPanel(QtGui.QWidget):
 		self.tree_layer = TRDeltaLayerTree()
 
 		# --- Layer selector: Actions (Context Menu)
-		act_resetAxis = QtGui.QAction('Reset Axis', self)
+		act_resetAxis = QtGui.QAction('Clear all', self)
 		act_getVstem = QtGui.QAction('Get Vertical Stems', self)
 		act_getHstem = QtGui.QAction('Get Horizontal Stems', self)
 
@@ -83,7 +83,7 @@ class TRDeltaPanel(QtGui.QWidget):
 		self.tree_layer.menu.addSeparator()	
 		self.tree_layer.menu.addAction(act_resetAxis)
 
-		act_resetAxis.triggered.connect(lambda: self.__reset_axis())
+		act_resetAxis.triggered.connect(lambda: self.__reset_all())
 		act_getVstem.triggered.connect(lambda: self.get_stem(False))
 		act_getHstem.triggered.connect(lambda: self.get_stem(True))
 
@@ -97,6 +97,11 @@ class TRDeltaPanel(QtGui.QWidget):
 
 		lay_actions = TRFlowLayout(spacing=10)
 
+		tooltip_button = 'Execute delta scale'
+		self.btn_execute_scale = CustomPushButton('action_play', tooltip=tooltip_button, enabled=False, obj_name='btn_panel')
+		lay_actions.addWidget(self.btn_execute_scale)
+		self.btn_execute_scale.clicked.connect(lambda: self.execute_target())
+
 		tooltip_button = 'Get vertical stems'
 		self.btn_get_stem_x = CustomPushButton('stem_vertical_alt', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_actions.addWidget(self.btn_get_stem_x)
@@ -107,10 +112,25 @@ class TRDeltaPanel(QtGui.QWidget):
 		lay_actions.addWidget(self.btn_get_stem_y)
 		self.btn_get_stem_y.clicked.connect(lambda: self.get_stem(True))
 
-		tooltip_button = 'Reset axis data'
-		self.btn_axis_reset = CustomPushButton('refresh', tooltip=tooltip_button, obj_name='btn_panel')
+		tooltip_button = 'Make undo snapshot'
+		self.btn_undo_snapshot = CustomPushButton('undo_snapshot', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_actions.addWidget(self.btn_undo_snapshot)
+		self.btn_undo_snapshot.clicked.connect(lambda: self.__undo_snapshot())
+
+		tooltip_button = 'Set axis'
+		self.btn_axis_set = CustomPushButton('axis_set', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_actions.addWidget(self.btn_axis_set)
+		self.btn_axis_set.clicked.connect(lambda: self.__set_axis(True))
+
+		tooltip_button = 'Reset axis'
+		self.btn_axis_reset = CustomPushButton('axis_remove', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_actions.addWidget(self.btn_axis_reset)
-		self.btn_axis_reset.clicked.connect(lambda: self.__reset_axis())
+		self.btn_axis_reset.clicked.connect(lambda: self.__reset_axis(True))
+
+		tooltip_button = 'Reset all data'
+		self.btn_axis_reset_all = CustomPushButton('refresh', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_actions.addWidget(self.btn_axis_reset_all)
+		self.btn_axis_reset_all.clicked.connect(lambda: self.__reset_all(True))
 
 		tooltip_button = 'Save axis data to external file'
 		self.btn_file_save = CustomPushButton('file_save', tooltip=tooltip_button, obj_name='btn_panel')
@@ -125,12 +145,12 @@ class TRDeltaPanel(QtGui.QWidget):
 		tooltip_button = 'Save axis data to font file'
 		self.btn_font_save = CustomPushButton('font_save', tooltip=tooltip_button, enabled=False, obj_name='btn_panel')
 		lay_actions.addWidget(self.btn_font_save)
-		#self.btn_font_save.clicked.connect(lambda: self.__reset_axis())
+		#self.btn_font_save.clicked.connect(lambda: self.__reset_all())
 
 		tooltip_button = 'Load axis data from font file'
 		self.btn_font_open = CustomPushButton('font_open', tooltip=tooltip_button, enabled=False, obj_name='btn_panel')
 		lay_actions.addWidget(self.btn_font_open)
-		#self.btn_file_open.clicked.connect(lambda: self.__reset_axis())
+		#self.btn_file_open.clicked.connect(lambda: self.__reset_all())
 
 		box_delta_actions.setLayout(lay_actions)
 		lay_main.addWidget(box_delta_actions)
@@ -154,13 +174,14 @@ class TRDeltaPanel(QtGui.QWidget):
 		lay_options.addWidget(self.chk_extrapolate)
 
 		tooltip_button = 'Use target'
-		self.chk_target = CustomPushButton("node_target", checkable=True, cheked=False, enabled=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_target = CustomPushButton("node_target", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_target)
-		#self.chk_target.clicked.connect(lambda: self.__toggle_controls())
+		self.chk_target.clicked.connect(lambda: self.__prepare_target())
 
-		tooltip_button = 'Proportional mode'
-		self.chk_proportional = CustomPushButton("diagonal_bottom_up", checkable=True, cheked=False, enabled=False,tooltip=tooltip_button, obj_name='btn_panel_opt')
+		tooltip_button = 'Proportional scale mode'
+		self.chk_proportional = CustomPushButton("diagonal_bottom_up", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_proportional)
+		self.chk_proportional.clicked.connect(lambda: self.__toggle_proportional_scale())
 		
 		tooltip_button = 'Scale from center'
 		self.chk_center = CustomPushButton("node_target_expand", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
@@ -233,6 +254,12 @@ class TRDeltaPanel(QtGui.QWidget):
 			self.cpn_value_stem_y.contract()
 			self.cpn_value_lerp_t.contract()
 
+	def __toggle_proportional_scale(self):
+		if self.chk_proportional.isChecked():
+			self.cpn_value_height.setEnabled(False)
+		else:
+			self.cpn_value_height.setEnabled(True)
+
 	def __change_value(self, cpn_object, value):
 		cpn_object.setValue(cpn_object.getValue() + value)
 
@@ -288,6 +315,26 @@ class TRDeltaPanel(QtGui.QWidget):
 		# - Default
 		return True
 
+	def __prepare_target(self):
+		if self.chk_target.isChecked():
+			self.cpn_value_width.setEnabled(False)
+			self.cpn_value_height.setEnabled(False)
+			self.cpn_value_stem_x.setEnabled(False)
+			self.cpn_value_stem_y.setEnabled(False)
+			self.cpn_value_lerp_t.setEnabled(False)
+			self.cpn_value_ital.setEnabled(False)
+
+			self.btn_execute_scale.setEnabled(True)
+		else:
+			self.cpn_value_width.setEnabled(True)
+			self.cpn_value_height.setEnabled(True)
+			self.cpn_value_stem_x.setEnabled(True)
+			self.cpn_value_stem_y.setEnabled(True)
+			self.cpn_value_lerp_t.setEnabled(True)
+			self.cpn_value_ital.setEnabled(True)
+
+			self.btn_execute_scale.setEnabled(False)
+
 	def __refresh_ui(self):
 		self.cpn_value_width.setValue(100)
 		self.cpn_value_height.setValue(100)
@@ -310,20 +357,7 @@ class TRDeltaPanel(QtGui.QWidget):
 			temp_service = [glyph._getServiceArray(layer_data[0]) for layer_data in self.axis_data]
 			self.glyph_arrays[glyph.name] = [glyph, DeltaScale(temp_outline, self.axis_stems), DeltaScale(temp_service, self.axis_stems)]
 
-	def __reset_axis(self):
-		self.tree_layer.setTree(self.__init_tree(), tree_column_names)
-		self.axis_data = []
-		self.axis_stems = []
-		self.glyph_arrays = {}
-
-		self.cpn_value_width.setValue(100)
-		self.cpn_value_height.setValue(100)
-		self.cpn_value_stem_x.setValue(100)
-		self.cpn_value_stem_y.setValue(100)
-		self.cpn_value_lerp_t.setValue(0)
-		self.cpn_value_ital.setValue(self.active_font.italic_angle)
-
-	def __set_axis(self):
+	def __set_axis(self, verbose=False):
 		self.masters_data = self.tree_layer.getTree()
 		self.axis_data = self.masters_data[tree_axis_group_name]
 		self.axis_stems = []
@@ -337,12 +371,54 @@ class TRDeltaPanel(QtGui.QWidget):
 				warnings.warn('Missing or invalid stem data!', TRDeltaStemWarning)
 				return
 
-	def __apply_scale(self):
-		if pMode == 0:
-			glyph, _delta_outline, _delta_service = self.glyph_arrays[fl6.CurrentGlyph().name]
-			glyph.updateObject(glyph.fl, '{} {} | \tGlyph: {}; Layer: {}'.format(app_name, app_version, glyph.name, self.active_layer))
+		if verbose: output(0, '%s %s' %(app_name, app_version), 'Font: %s; Axis set.' %(self.active_font.name))
+
+	def __reset_axis(self, verbose=False):
+		self.axis_data = []
+		self.axis_stems = []
+		self.glyph_arrays = {}
+
+		if verbose: output(0, '%s %s' %(app_name, app_version), 'Font: %s; Axis data cleared.' %(self.active_font.name))
+
+	def __reset_all(self, verbose=False):
+		self.tree_layer.setTree(self.__init_tree(), tree_column_names)
+		self.__reset_axis()
+
+		self.cpn_value_width.blockSignals(True)
+		self.cpn_value_height.blockSignals(True)
+		self.cpn_value_stem_x.blockSignals(True)
+		self.cpn_value_stem_y.blockSignals(True)
+		self.cpn_value_lerp_t.blockSignals(True)
+		self.cpn_value_ital.blockSignals(True)
+
+		self.cpn_value_width.setValue(100)
+		self.cpn_value_height.setValue(100)
+		self.cpn_value_stem_x.setValue(100)
+		self.cpn_value_stem_y.setValue(100)
+		self.cpn_value_lerp_t.setValue(0)
+		self.cpn_value_ital.setValue(self.active_font.italic_angle)
+
+		self.cpn_value_width.blockSignals(False)
+		self.cpn_value_height.blockSignals(False)
+		self.cpn_value_stem_x.blockSignals(False)
+		self.cpn_value_stem_y.blockSignals(False)
+		self.cpn_value_lerp_t.blockSignals(False)
+		self.cpn_value_ital.blockSignals(False)
+
+		if verbose: output(0, '%s %s' %(app_name, app_version), 'Reset.')
+
+	def __undo_snapshot(self, verbose=True):
+		# - Init
+		process_glyphs = getProcessGlyphs(pMode)
+		process_glyphs_names = [glyph.name for glyph in process_glyphs]
+		undo_message = '{} {} | Undo Snapshot for glyphs: {};'.format(app_name, app_version, '; '.join(process_glyphs_names))
+
+		# - Set undo 
+		if len(process_glyphs) > 2:
+			self.active_font.updateObject(self.active_font.fl, undo_message, verbose)
 		else:
-			self.active_font.updateObject(glyph.fl, '{} {} | \tGlyphs: {}; Layer: {}'.format(app_name, app_version, '; '.join(list(self.glyph_arrays.keys())), self.active_layer))
+			glyph = process_glyphs[0]
+			glyph.updateObject(glyph.fl, undo_message, verbose)
 
 	# -- File operations
 	def file_save_axis_data(self):
@@ -404,11 +480,18 @@ class TRDeltaPanel(QtGui.QWidget):
 
 			# - Scaling
 			sx = float(self.cpn_value_width.getValue())/100.
-			sy = float(self.cpn_value_height.getValue())/100.
+
+			if self.chk_proportional.isChecked():
+				sy = sx
+				self.cpn_value_height.blockSignals(True)
+				self.cpn_value_height.setValue(self.cpn_value_width.getValue())
+				self.cpn_value_height.blockSignals(False)
+			else:
+				sy = float(self.cpn_value_height.getValue())/100.
 			
 			# - Italic
-			#it = radians(-float(self.cpn_value_ital.getValue())) self.active_font.italic_angle
-			it = math.radians(-float(self.active_font.italic_angle)) # Use italic only in the context of Delta calculation not for actuall slanting
+			# Note: Use italic only in the context of Delta calculation not for actuall slanting
+			it = math.radians(-float(self.active_font.italic_angle)) 
 
 			# - Options
 			opt_extrapolate = self.chk_extrapolate.isChecked()
@@ -461,10 +544,66 @@ class TRDeltaPanel(QtGui.QWidget):
 
 			glyph.update()
 
+		# - Update viewport
 		try:
 			self.active_canvas.refreshAll()
 		except:
 			pass
+
+	def execute_target(self):
+		# - Init
+		glyphs_done = []
+
+		system_ready = self.__prepare_delta()
+		if not system_ready: return
+
+		process_target = self.masters_data[tree_axis_target_name]
+		if not len(process_target): return
+
+		if pMode == 0:
+			system_process = [self.glyph_arrays[fl6.CurrentGlyph().name]]
+		else:
+			system_process = self.glyph_arrays.values()
+			
+		# - Process
+		for glyph, delta_outline, delta_service in system_process:
+			for process_layer_data in process_target:
+				# - Unpack axis data
+				layer_name, curr_sw_dx, curr_sw_dy, sx, sy, _ = process_layer_data
+
+				curr_sw_dx = float(curr_sw_dx)
+				curr_sw_dy = float(curr_sw_dy)
+				sx = float(sx)/100.
+				sy = float(sy)/100.
+				it = math.radians(-float(self.active_font.italic_angle)) 
+
+				# - Options
+				opt_extrapolate = self.chk_extrapolate.isChecked()
+				opt_center = self.chk_center.isChecked()
+				opt_metrics = self.chk_metrics.isChecked()
+				opt_anchors = self.chk_anchors.isChecked()
+
+				# - Process
+				outline_scale = delta_outline.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=opt_extrapolate)
+				service_scale = delta_service.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=opt_extrapolate)
+
+				# - Apply transformations
+				glyph._setPointArray(outline_scale, layer=layer_name, keep_center=opt_center)
+				glyph._setServiceArray(service_scale, layer=layer_name, set_metrics=opt_metrics, set_anchors=opt_anchors)
+
+			glyphs_done.append(glyph.name)
+			glyph.update()
+
+		# - Update viewport
+		try:
+			self.active_canvas.refreshAll()
+		except:
+			pass
+
+		# - Finish it
+		self.__undo_snapshot(False)
+		output(0, '%s %s' %(app_name, app_version), 'Font: %s;' %(self.active_font.name))
+		output(0, '%s %s' %(app_name, app_version), 'Glyph(s): %s.' %('; '.join(glyphs_done)))
 					
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
