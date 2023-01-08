@@ -1,6 +1,6 @@
 #FLM: TR: Contour
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2018-2021 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2017-2023 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 
@@ -13,605 +13,275 @@ from collections import OrderedDict
 from itertools import groupby
 
 import fontlab as fl6
-import fontgate as fgt
+from PythonQt import QtCore, QtGui
 
-from typerig.core.base.message import *
-from typerig.proxy.fl.objects.base import Coord
+from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
-from typerig.proxy.fl.objects.shape import eShape
-from typerig.proxy.fl.objects.contour import eContour
-from typerig.proxy.fl.objects.font import pFontMetrics
 
-from PythonQt import QtCore
-from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRTransformCtrl
+from typerig.proxy.fl.actions.contour import TRContourActionCollector
+from typerig.proxy.fl.application.app import pWorkspace
+#from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomLabel, CustomPushButton, TRFlowLayout
+from typerig.proxy.fl.gui.styles import css_tr_button
 
-# - Init -------------------------
+# - Init -------------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '2.4'
+app_name, app_version = 'TypeRig | Contour', '3.0'
+
+TRToolFont = getTRIconFontPath()
+font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
+
+# - Styling ----------------------------
+temp_css = '''
+'''
+# -- Helpers ------------------------------
+def get_modifier(keyboard_modifier=QtCore.Qt.AltModifier):
+	modifiers = QtGui.QApplication.keyboardModifiers()
+	return modifiers == keyboard_modifier
 
 # - Sub widgets ------------------------
-class breakContour(QtGui.QGridLayout):
-	# - Split/Break contour 
+class TRContourBasics(QtGui.QWidget):
 	def __init__(self):
-		super(breakContour, self).__init__()
-			 
-		# -- Split button
-		self.btn_splitContour = QtGui.QPushButton('&Break')
-		self.btn_splitContourClose = QtGui.QPushButton('&Break && Close')
+		super(TRContourBasics, self).__init__()
 		
-		self.btn_splitContour.clicked.connect(self.splitContour)
-		self.btn_splitContourClose.clicked.connect(self.splitContourClose)
+		# - Init 
+
+		# - Layout
+		self.lay_main = QtGui.QVBoxLayout()
 		
-		self.btn_splitContour.setMinimumWidth(80)
-		self.btn_splitContourClose.setMinimumWidth(80)
+		# - Widgets and tools -------------------------------------------------
+		# -- Contour basics -----------------------------------------------
+		box_basic = QtGui.QGroupBox()
+		box_basic.setObjectName('box_group')
+		
+		lay_basic = TRFlowLayout(spacing=10)
 
-		self.btn_splitContour.setToolTip('Break contour at selected Node(s).')
-		self.btn_splitContourClose.setToolTip('Break contour and close open contours!\nUseful for cutting stems and etc.')
+		tooltip_button = "Set clockwise winding direction (TrueType)"
+		self.btn_contour_cw = CustomPushButton("contour_cw_alt", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_basic.addWidget(self.btn_contour_cw)
+		self.btn_contour_cw.clicked.connect(lambda: TRContourActionCollector.contour_set_winding(pMode, pLayers, False))
 
-		# -- Extrapolate value
-		self.edt_expand = QtGui.QLineEdit('0.0')
-		#self.edt_expand.setMinimumWidth(30)
+		tooltip_button = "Set counterclockwise winding direction (PostScript)"
+		self.btn_contour_ccw = CustomPushButton("contour_ccw_alt", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_basic.addWidget(self.btn_contour_ccw)
+		self.btn_contour_ccw.clicked.connect(lambda: TRContourActionCollector.contour_set_winding(pMode, pLayers, True))
 
-		self.edt_expand.setToolTip('Extrapolate endings.')
-								
-		# -- Build: Split/Break contour
-		self.addWidget(self.btn_splitContour, 0, 0)
-		self.addWidget(QtGui.QLabel('E:'), 0, 1)
-		self.addWidget(self.edt_expand, 0, 2)
-		self.addWidget(self.btn_splitContourClose, 0, 3)
-				
-	def splitContour(self):
-		glyph = eGlyph()
-		glyph.splitContour(layers=pLayers, expand=float(self.edt_expand.text), close=False)
-		glyph.updateObject(glyph.fl, 'Break Contour @ %s.' %'; '.join(glyph._prepareLayers(pLayers)))
-		glyph.update()
+		tooltip_button = "Set start node"
+		self.btn_contour_set_start = CustomPushButton("node_start", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_basic.addWidget(self.btn_contour_set_start)
+		self.btn_contour_set_start.clicked.connect(lambda: TRContourActionCollector.contour_set_start(pMode, pLayers))
 
-	def splitContourClose(self):
-		glyph = eGlyph()
-		glyph.splitContour(layers=pLayers, expand=float(self.edt_expand.text), close=True)
-		glyph.updateObject(glyph.fl, 'Break Contour & Close @ %s.' %'; '.join(glyph._prepareLayers(pLayers)))
-		glyph.update()        
+		tooltip_button = "Set start node to bottom left"
+		self.btn_contour_set_start_bottom_left = CustomPushButton("node_bottom_left", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_basic.addWidget(self.btn_contour_set_start_bottom_left)
+		self.btn_contour_set_start_bottom_left.clicked.connect(lambda: TRContourActionCollector.contour_smart_start(pMode, pLayers, (0, 0)))
 
-class basicContour(QtGui.QGridLayout):
-	# - Split/Break contour 
+		tooltip_button = "Set start node to bottom right"
+		self.btn_contour_set_start_bottom_right = CustomPushButton("node_bottom_right", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_basic.addWidget(self.btn_contour_set_start_bottom_right)
+		self.btn_contour_set_start_bottom_right.clicked.connect(lambda: TRContourActionCollector.contour_smart_start(pMode, pLayers, (1, 0)))
+
+		tooltip_button = "Set start node to top left"
+		self.btn_contour_set_start_top_left = CustomPushButton("node_top_left", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_basic.addWidget(self.btn_contour_set_start_top_left)
+		self.btn_contour_set_start_top_left.clicked.connect(lambda: TRContourActionCollector.contour_smart_start(pMode, pLayers, (0, 1)))
+
+		tooltip_button = "Set start node to top right"
+		self.btn_contour_set_start_top_right = CustomPushButton("node_top_right", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_basic.addWidget(self.btn_contour_set_start_top_right)
+		self.btn_contour_set_start_top_right.clicked.connect(lambda: TRContourActionCollector.contour_smart_start(pMode, pLayers, (1, 1)))
+
+		tooltip_button = "Reorder contours from top to bottom"
+		self.btn_contour_sort_y = CustomPushButton("contour_sort_y", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_basic.addWidget(self.btn_contour_sort_y)
+		self.btn_contour_sort_y.clicked.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (True, None), False))
+
+		tooltip_button = "Reorder contours from left to right"
+		self.btn_contour_sort_x = CustomPushButton("contour_sort_x", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_basic.addWidget(self.btn_contour_sort_x)
+		self.btn_contour_sort_x.clicked.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (None, True), False))
+
+		tooltip_button = "Reorder contours from bottom to top"
+		self.btn_contour_sort_y_rev = CustomPushButton("contour_sort_y_rev", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_basic.addWidget(self.btn_contour_sort_y_rev)
+		self.btn_contour_sort_y_rev.clicked.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (True, None), True))
+
+		tooltip_button = "Reorder contours from right to left"
+		self.btn_contour_sort_x_rev = CustomPushButton("contour_sort_x_rev", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_basic.addWidget(self.btn_contour_sort_x_rev)
+		self.btn_contour_sort_x_rev.clicked.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (None, True), True))
+
+		box_basic.setLayout(lay_basic)
+		self.lay_main.addWidget(box_basic)
+
+		# -- Contour operations (boolean and etc.) ----------------------------
+		box_operation = QtGui.QGroupBox()
+		box_operation.setObjectName('box_group')
+		
+		lay_operations = TRFlowLayout(spacing=10)
+		
+		tooltip_button = "Close selected contours"
+		self.btn_contour_close = CustomPushButton("contour_close", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_operations.addWidget(self.btn_contour_close)
+		self.btn_contour_close.clicked.connect(lambda: TRContourActionCollector.contour_close(pMode, pLayers))
+
+		tooltip_button = "Boolean Add operation for selected contours"
+		self.btn_contour_union = CustomPushButton("contour_union", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_operations.addWidget(self.btn_contour_union)
+		self.btn_contour_union.clicked.connect(lambda: TRContourActionCollector.contour_bool(pMode, pLayers, 'add', get_modifier()))
+
+		tooltip_button = "Boolean Subtract operation for selected contours"
+		self.btn_contour_subtract = CustomPushButton("contour_subtract", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_operations.addWidget(self.btn_contour_subtract)
+		self.btn_contour_subtract.clicked.connect(lambda: TRContourActionCollector.contour_bool(pMode, pLayers, 'subtract', get_modifier()))
+		
+		tooltip_button = "Boolean Intersect operation for selected contours"
+		self.btn_contour_intersect = CustomPushButton("contour_intersect", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_operations.addWidget(self.btn_contour_intersect)
+		self.btn_contour_intersect.clicked.connect(lambda: TRContourActionCollector.contour_bool(pMode, pLayers, 'intersect', get_modifier()))
+
+		tooltip_button = "Boolean Exclude operation for selected contours"
+		self.btn_contour_difference = CustomPushButton("contour_difference", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_operations.addWidget(self.btn_contour_difference)
+		self.btn_contour_difference.clicked.connect(lambda: TRContourActionCollector.contour_bool(pMode, pLayers, 'exclude', get_modifier()))
+
+		box_operation.setLayout(lay_operations)
+		self.lay_main.addWidget(box_operation)
+
+		# -- Finish it -------------------------------------------------------
+		self.setLayout(self.lay_main)
+
+class TRContourAlign(QtGui.QWidget):
 	def __init__(self):
-
-		# - Init
-		self.var_bool_A = {}
-		self.var_bool_B = {}
-
-		# - Widgets
-		# -- Buttons
-		super(basicContour, self).__init__()
-		self.btn_BL = QtGui.QPushButton('B L')
-		self.btn_TL = QtGui.QPushButton('T L')
-		self.btn_BR = QtGui.QPushButton('B R')
-		self.btn_TR = QtGui.QPushButton('T R')
-		self.btn_sort_x = QtGui.QPushButton('Sort X')
-		self.btn_sort_y = QtGui.QPushButton('Sort Y')
-		self.btn_close = QtGui.QPushButton('C&lose')
-		self.btn_start = QtGui.QPushButton('&Start')
-		self.btn_CW = QtGui.QPushButton('CW')
-		self.btn_CCW = QtGui.QPushButton('CCW')
-		self.btn_overlap = QtGui.QPushButton('Remove Overlap')
-
-		self.btn_bool_setA = QtGui.QPushButton('A')
-		self.btn_bool_setB = QtGui.QPushButton('B')
-		self.btn_bool_subtract = QtGui.QPushButton('A - B')
-
-		self.btn_bool_setA.setCheckable(True)
-		self.btn_bool_setB.setCheckable(True)
-		self.btn_bool_subtract.setEnabled(False)
-
-		self.btn_close.setMinimumWidth(40)
-		self.btn_BL.setMinimumWidth(40)
-		self.btn_TL.setMinimumWidth(40)
-		self.btn_BR.setMinimumWidth(40)
-		self.btn_TR.setMinimumWidth(40)
-		self.btn_start.setMinimumWidth(40)
-		self.btn_CW.setMinimumWidth(40)
-		self.btn_CCW.setMinimumWidth(40)
-
-		self.btn_close.setToolTip('Close selected contour')
-		self.btn_start.setToolTip('Set start point:\n Selected Node') 
-		self.btn_BL.setToolTip('Set start point:\nBottom Left Node') 
-		self.btn_TL.setToolTip('Set start point:\nTop Left Node') 
-		self.btn_BR.setToolTip('Set start point:\nBottom Right Node') 
-		self.btn_TR.setToolTip('Set start point:\nTop Right Node') 
-		self.btn_CW.setToolTip('Set direction:\nClockwise (TT)') 
-		self.btn_CCW.setToolTip('Set direction:\nCounterclockwise (PS)') 
-		self.btn_sort_x.setToolTip('Reorder contours within shapes based on their X coordinate.\nSHIFT+Click reverses order!')
-		self.btn_sort_y.setToolTip('Reorder contours within shapes based on their Y coordinate.\nSHIFT+Click reverses order!')
+		super(TRContourAlign, self).__init__()
 		
-		self.btn_start.clicked.connect(lambda : self.setStartSelection())
-		self.btn_BL.clicked.connect(lambda : self.setStart((0,0)))
-		self.btn_TL.clicked.connect(lambda : self.setStart((0,1)))
-		self.btn_BR.clicked.connect(lambda : self.setStart((1,0)))
-		self.btn_TR.clicked.connect(lambda : self.setStart((1,1)))
-		self.btn_CW.clicked.connect(lambda : self.setDirection(False))
-		self.btn_CCW.clicked.connect(lambda : self.setDirection(True))
-		self.btn_close.clicked.connect(self.closeContour)
-		self.btn_overlap.clicked.connect(self.removeOverlap)
-		self.btn_sort_x.clicked.connect(lambda : self.setOrder(False))
-		self.btn_sort_y.clicked.connect(lambda : self.setOrder(True))
-		self.btn_bool_setA.clicked.connect(lambda: self.bool_set_shape(False))
-		self.btn_bool_setB.clicked.connect(lambda: self.bool_set_shape(True))
-		self.btn_bool_subtract.clicked.connect(lambda: self.bool_subtract())
+		# - Init 
 
-		self.addWidget(self.btn_close, 						0, 0, 1, 1)
-		self.addWidget(self.btn_start, 						0, 1, 1, 1)
-		self.addWidget(self.btn_CW, 						1, 0, 1, 1)
-		self.addWidget(self.btn_CCW, 						1, 1, 1, 1)
-
-		self.addWidget(self.btn_TL, 						0, 2, 1, 1)
-		self.addWidget(self.btn_TR, 						0, 3, 1, 1)
-		self.addWidget(self.btn_BL, 						1, 2, 1, 1)
-		self.addWidget(self.btn_BR, 						1, 3, 1, 1)
-		self.addWidget(self.btn_sort_x, 					2, 0, 1, 2)
-		self.addWidget(self.btn_sort_y, 					2, 2, 1, 2)
-
-		self.addWidget(QtGui.QLabel('Boolean Operations:'), 3, 0, 1, 4)
-		self.addWidget(self.btn_overlap, 					4, 0, 1, 4)
-		self.addWidget(self.btn_bool_setA, 					5, 0, 1, 1)
-		self.addWidget(self.btn_bool_setB, 					5, 1, 1, 1)
-		self.addWidget(self.btn_bool_subtract, 				5, 2, 1, 2)
+		# - Layout
+		self.lay_main = QtGui.QVBoxLayout()
 		
-	def closeContour(self):
-		glyph = eGlyph()
-		wLayers = glyph._prepareLayers(pLayers)
-		selection = glyph.selectedAtContours()
-
-		for layerName in wLayers:
-			contours = glyph.contours(layerName)
-
-			for cID, nID in reversed(selection):
-				if not contours[cID].closed: contours[cID].closed = True
-
-		glyph.updateObject(glyph.fl, 'Close Contour @ %s.' %'; '.join(wLayers))
-		glyph.update()
-
-	def bool_set_shape(self, isB=False):
-		# - Init
-		glyph = eGlyph()
-		selection = glyph.selectedAtShapes()
-		work_selection = {}
-		reset_value = False
-
-		# - Prepare
-		for sid, cid, nid in selection:
-			work_selection.setdefault(sid, set([])).add(cid)
-
-		# - Set
-		if self.btn_bool_setA.isChecked() and not isB:
-			self.var_bool_A = work_selection
+		# - Widgets and tools -------------------------------------------------
+		# -- Contour alignment -----------------------------------------------
+		box_align = QtGui.QGroupBox()
+		box_align.setObjectName('box_group')
+		self.grp_align_options = QtGui.QButtonGroup()
+		self.grp_align_options.setExclusive(True)
 		
-		elif not self.btn_bool_setA.isChecked() and not isB:
-			self.var_bool_A = {}
-			reset_value = True
+		lay_box = QtGui.QVBoxLayout()
 		
-		if self.btn_bool_setB.isChecked() and isB:
-			self.var_bool_B = work_selection
+		# -- Alignment options
+		lay_options_all = TRFlowLayout(spacing=10)
 
-		elif not self.btn_bool_setB.isChecked() and isB:
-			self.var_bool_B = {}
-			reset_value = True
+		tooltip_button = 'Align selected contours to Layers BoundingBox'
+		self.chk_align_contour_to_layer = CustomPushButton("align_contour_to_layer", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_align_options.addButton(self.chk_align_contour_to_layer, 6)
+		lay_options_all.addWidget(self.chk_align_contour_to_layer)
 
-		if not reset_value:
-			output(0, app_name, 'Boolean Operations | Set {} for contours: {}'.format(['A', 'B'][isB], work_selection))
-		else:
-			output(0, app_name, 'Boolean Operations | Reset {}'.format(['A', 'B'][isB]))
+		tooltip_button = 'Align selected contours'
+		self.chk_align_contour_to_contour = CustomPushButton("align_contour_to_contour", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_align_options.addButton(self.chk_align_contour_to_contour, 7)
+		lay_options_all.addWidget(self.chk_align_contour_to_contour)
 
-	def bool_subtract(self):
-		glyph = eGlyph()
-		wLayers = glyph._prepareLayers(pLayers)
+		tooltip_button = 'Align selected contours to a node selected'
+		self.chk_align_contour_to_node = CustomPushButton("align_contour_to_node", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_align_options.addButton(self.chk_align_contour_to_node, 8)
+		lay_options_all.addWidget(self.chk_align_contour_to_node)
 
-		# - Get contours
-		process_shapes = []
+		tooltip_button = 'Align selected contours groups A to B'
+		self.chk_align_group_to_group = CustomPushButton("align_group_to_group", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_align_options.addButton(self.chk_align_group_to_group, 9)
+		lay_options_all.addWidget(self.chk_align_group_to_group)
 
-		if len(self.var_bool_A.keys()) and len(self.var_bool_B.keys()):
-			for layerName in wLayers:
-				process_shapes_A = []
-				process_shapes_B = []
+		tooltip_button = 'Set selected contours as group A'
+		self.chk_align_group_A = CustomPushButton("A", checkable=True, cheked=False, enabled=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_options_all.addWidget(self.chk_align_group_A)
 
-				for sid, cid_list in self.var_bool_A.items():
-					process_shapes_A.append((glyph.shapes(layerName)[sid], [glyph.contours(layerName)[cid] for cid in cid_list]))
+		tooltip_button = 'Set selected contours as group B'
+		self.chk_align_group_B = CustomPushButton("B", checkable=True, cheked=False, enabled=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_options_all.addWidget(self.chk_align_group_B)
 
-				for sid, cid_list in self.var_bool_B.items():
-					process_shapes_B.append((glyph.shapes(layerName)[sid], [glyph.contours(layerName)[cid] for cid in cid_list]))
+		lay_options_vert = TRFlowLayout(spacing=10)
 
-				process_shapes.append(zip(process_shapes_A, process_shapes_B))
-
-		for source_A, source_B in sum(process_shapes, []):
-			# - A
-			shape_A, contours_A = source_A
-			shape_A.removeContours(contours_A)
-			new_shape_A = fl6.flShape()
-			new_fg_shape_A = fgt.fgShape()
-			new_shape_A.contours = contours_A
-			new_shape_A.convertToFgShape(new_fg_shape_A)
-
-			# - B
-			shape_B, contours_B = source_B
-			shape_B.removeContours(contours_B)
-			new_shape_B = fl6.flShape()
-			new_fg_shape_B = fgt.fgShape()
-			new_shape_B.contours = contours_B
-			new_shape_B.convertToFgShape(new_fg_shape_B)
-
-			print(new_fg_shape_A.contours, new_fg_shape_B.contours)
-
-			# - Boolean
-			result = new_fg_shape_A.subtractShape(new_fg_shape_B, 0)
-			shape_A.addContours(fl6.flShape(new_fg_shape_A).contours, True)
-			shape_B.addContours(fl6.flShape(new_fg_shape_B).contours, True)
-
-		glyph.updateObject(glyph.fl, 'Boolean Operations @ %s.' %'; '.join(wLayers))
-		glyph.update()
-
-	def removeOverlap(self):
-		glyph = eGlyph()
-		wLayers = glyph._prepareLayers(pLayers)
+		tooltip_button = 'Align selected contours to Caps Height'
+		self.chk_dimension_caps = CustomPushButton("dimension_caps", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_align_options.addButton(self.chk_dimension_caps, 2)
+		lay_options_vert.addWidget(self.chk_dimension_caps)
 		
-		# - Prepare selection
-		tmp = {}
-		selection = glyph.selectedAtShapes()
+		tooltip_button = 'Align selected contours to Ascender'
+		self.chk_dimension_ascender = CustomPushButton("dimension_ascender", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_align_options.addButton(self.chk_dimension_ascender, 5)
+		lay_options_vert.addWidget(self.chk_dimension_ascender)
 
-		for sid, cid, nid in selection:
-			tmp.setdefault(sid,[]).append(cid)
+		tooltip_button = 'Align selected contours to X Height'
+		self.chk_dimension_xheight = CustomPushButton("dimension_xheight", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_align_options.addButton(self.chk_dimension_xheight, 1)
+		lay_options_vert.addWidget(self.chk_dimension_xheight)
 
-		selection = {key:list(set(value)) for key, value in tmp.items()}
-
-		# - Get contours
-		process_shapes = []
+		tooltip_button = 'Align selected contours to Baseline'
+		self.chk_dimension_baseline = CustomPushButton("dimension_baseline", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_align_options.addButton(self.chk_dimension_baseline, 3)
+		lay_options_vert.addWidget(self.chk_dimension_baseline)
 		
-		for layerName in wLayers:
-			for sid, cid_list in selection.items():
-				process_shapes.append((glyph.shapes(layerName)[sid], [glyph.contours(layerName)[cid] for cid in cid_list]))
+		tooltip_button = 'Align selected contours to Descender'
+		self.chk_dimension_descender = CustomPushButton("dimension_descender", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_align_options.addButton(self.chk_dimension_descender, 4)
+		lay_options_vert.addWidget(self.chk_dimension_descender)
 
-		for shape, contours in process_shapes:
-			shape.removeContours(contours)
-			new_shape = fl6.flShape()
-			new_fg_shape = fgt.fgShape()
-			new_shape.contours = contours
-			new_shape.convertToFgShape(new_fg_shape)
-			new_fg_shape.removeOverlap()
-			shape.addContours(fl6.flShape(new_fg_shape).contours, True)
+		lay_box.addLayout(lay_options_all)
+		lay_box.addLayout(lay_options_vert)
 
-		glyph.updateObject(glyph.fl, 'Remove Overlap @ %s.' %'; '.join(wLayers))
-		glyph.update()
+		# -- Align Actions
+		lay_actions = TRFlowLayout(spacing=10)
 
-	def setStartSelection(self):
-		process_glyphs = getProcessGlyphs(pMode)
+		tooltip_button = "Align left"
+		self.btn_contour_align_left = CustomPushButton("contour_align_left", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_actions.addWidget(self.btn_contour_align_left)
+		#self.btn_contour_align_left.clicked.connect(lambda: TRContourActionCollector.contour_bool(pMode, pLayers, 'exclude', get_modifier()))
 
-		for glyph in process_glyphs:
-			wLayers = glyph._prepareLayers(pLayers, False)
-			
-			selected_contours = {layer:glyph.selectedAtContours(layer)[0] for layer in wLayers}
+		tooltip_button = "Align horizontal"
+		self.btn_contour_align_center_horizontal = CustomPushButton("contour_align_center_horizontal", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_actions.addWidget(self.btn_contour_align_center_horizontal)
+		#self.btn_contour_align_center_horizontal.clicked.connect(lambda: TRContourActionCollector.contour_bool(pMode, pLayers, 'exclude', get_modifier()))
+		
+		tooltip_button = "Align right"
+		self.btn_contour_align_right = CustomPushButton("contour_align_right", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_actions.addWidget(self.btn_contour_align_right)
+		#self.btn_contour_align_right.clicked.connect(lambda: TRContourActionCollector.contour_bool(pMode, pLayers, 'exclude', get_modifier()))
 
-			for layer, selection in selected_contours.items():
-				cid, nid = selection
-				glyph.contours(layer)[cid].setStartPoint(nid)
+		tooltip_button = "Align top"
+		self.btn_contour_align_top = CustomPushButton("contour_align_top", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_actions.addWidget(self.btn_contour_align_top)
+		#self.btn_contour_align_top.clicked.connect(lambda: TRContourActionCollector.contour_bool(pMode, pLayers, 'exclude', get_modifier()))
 
-			glyph.update()
-			glyph.updateObject(glyph.fl, 'Glyph: %s;\tManual: Set Start Point @ %s.' %(glyph.name, '; '.join(wLayers)))
+		tooltip_button = "Align vertical"
+		self.btn_contour_align_center_vertical = CustomPushButton("contour_align_center_vertical", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_actions.addWidget(self.btn_contour_align_center_vertical)
+		#self.btn_contour_align_center_vertical.clicked.connect(lambda: TRContourActionCollector.contour_bool(pMode, pLayers, 'exclude', get_modifier()))
+		
+		tooltip_button = "Align bottom"
+		self.btn_contour_align_bottom = CustomPushButton("contour_align_bottom", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_actions.addWidget(self.btn_contour_align_bottom)
+		#self.btn_contour_align_bottom.clicked.connect(lambda: TRContourActionCollector.contour_bool(pMode, pLayers, 'exclude', get_modifier()))
 
-	def setOrder(self, sort_y=False):
-		process_glyphs = getProcessGlyphs(pMode)
-		modifiers = QtGui.QApplication.keyboardModifiers()
+		lay_box.addLayout(lay_actions)
 
-		for glyph in process_glyphs:
-			wLayers = glyph._prepareLayers(pLayers, False)
+		box_align.setLayout(lay_box)
+		self.lay_main.addWidget(box_align)
 
-			for layerName in wLayers:
-				wShapes = glyph.shapes(layerName, extend=eShape)
+		# -- Finish it -------------------------------------------------------
+		self.setLayout(self.lay_main)
 
-				for shape in wShapes:
-					if sort_y:
-						shape.contourOrder((None, not modifiers == QtCore.Qt.ShiftModifier)) # Shift reverses
-					else:
-						shape.contourOrder((True, not modifiers == QtCore.Qt.ShiftModifier))
-
-			glyph.update()
-			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Reorder contours @ %s.' %(glyph.name, '; '.join(wLayers)))
-
-	def setStart(self, control=(0,0)):
-		process_glyphs = getProcessGlyphs(pMode)
-
-		for glyph in process_glyphs:
-			wLayers = glyph._prepareLayers(pLayers, False)
-
-			if control == (0,0): 	# BL
-				criteria = lambda node : (node.y, node.x)
-			elif control == (0,1): 	# TL
-				criteria = lambda node : (-node.y, node.x)
-			elif control == (1,0): 	# BR
-				criteria = lambda node : (node.y, -node.x)
-			elif control == (1,1): 	# TR
-				criteria = lambda node : (-node.y, -node.x)
-			
-			for layerName in wLayers:
-				contours = glyph.contours(layerName)
-
-				for contour in contours:
-					onNodes = [node for node in contour.nodes() if node.isOn()]
-					newFirstNode = sorted(onNodes, key=criteria)[0]
-					contour.setStartPoint(newFirstNode.index)
-
-			glyph.update()
-			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Set Start Points @ %s.' %(glyph.name, '; '.join(wLayers)))
-
-	def setDirection(self, ccw=True):
-		process_glyphs = getProcessGlyphs(pMode)
-
-		for glyph in process_glyphs:
-			selection = glyph.selectedAtContours()
-
-			wLayers = glyph._prepareLayers(pLayers, False)
-
-			for layerName in wLayers:
-				all_contours = glyph.contours(layerName)
-
-				if len(selection):
-					process_contours = [eContour(all_contours[item[0]]) for item in selection]
-				else:
-					process_contours = [eContour(contour) for contour in all_contours]
-
-				for contour in process_contours:
-					if ccw:
-						contour.setCCW()
-					else:
-						contour.setCW()
-
-			glyph.update()
-			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Set contour direction @ %s.' %(glyph.name, '; '.join(wLayers)))
-
-class alignContours(QtGui.QGridLayout):
+class TRContourCopy(QtGui.QWidget):
 	# - Align Contours
 	def __init__(self):
-		super(alignContours, self).__init__()
-				
-		# - Init
-		self.align_x = OrderedDict([('Left','L'), ('Right','R'), ('Center','C'), ('Keep','K')])
-		self.align_y = OrderedDict([('Top','T'), ('Bottom','B'), ('Center','E'), ('Keep','X')])
-		self.align_mode = OrderedDict([	('Layer','CL'), 
-										('Base to X-Height','CMX'),
-										('Base to Caps','CMC'),
-										('Base Ascender','CMA'),
-										('Descender to Base','CMD'),
-										('Contour to Contour','CC'),
-										('Contour to Contour (REV)','RC'),
-										('Contour to Node','CN'),
-										('Contour to Node (REV)','RN'),
-										('Contours Groups A to B','AB')
-									])
-		
-		# !!! To be implemented
-		#self.align_mode = OrderedDict([('Layer','CL'), ('Contour to Contour','CC'), ('Contour to Contour (REV)','RC'), ('Contour to Node','CN'),('Node to Node','NN')])
-
-		# - Widgets
-		self.cmb_align_x = QtGui.QComboBox()
-		self.cmb_align_y = QtGui.QComboBox()
-		self.cmb_align_mode = QtGui.QComboBox()
-		self.cmb_align_x.addItems(list(self.align_x.keys()))
-		self.cmb_align_y.addItems(list(self.align_y.keys()))
-		self.cmb_align_mode.addItems(list(self.align_mode.keys()))
-
-		self.cmb_align_x.setToolTip('Horizontal Alignment')
-		self.cmb_align_y.setToolTip('Vertical Alignment')
-		self.cmb_align_mode.setToolTip('Alignment Mode')
-
-		self.btn_align = QtGui.QPushButton('Align')
-		self.btn_bool_setA = QtGui.QPushButton('A')
-		self.btn_bool_setB = QtGui.QPushButton('B')
-		self.btn_bool_setA.setCheckable(True)
-		self.btn_bool_setB.setCheckable(True)
-
-		self.btn_align.clicked.connect(self.alignContours)
-		self.btn_bool_setA.clicked.connect(lambda: self.get_contours(False))
-		self.btn_bool_setB.clicked.connect(lambda: self.get_contours(True))
-
-		self.addWidget(self.btn_bool_setA, 		0, 0, 1, 2)
-		self.addWidget(self.btn_bool_setB, 		0, 2, 1, 2)
-		self.addWidget(self.cmb_align_mode, 	1, 0, 1, 2)
-		self.addWidget(self.cmb_align_x, 		1, 2, 1, 1)
-		self.addWidget(self.cmb_align_y, 		1, 3, 1, 1)
-		self.addWidget(self.btn_align, 			2, 0, 1, 4)
-
-	def get_contours(self, isB=False):
-		# - Init
-		glyph = eGlyph()
-		selection = glyph.selectedAtContours()
-		reset_value = False
-		work_selection = {}
-
-		# - Prepare
-		wLayers = glyph._prepareLayers(pLayers)
-		for layerName in wLayers:
-			glyph_contours = glyph.contours(layerName, extend=eContour)
-			layer_selection = [glyph_contours[index] for index in list(set([item[0] for item in selection]))]
-			work_selection.setdefault(layerName, []).extend(layer_selection)
-
-		# - Set
-		if self.btn_bool_setA.isChecked() and not isB:
-			self.var_bool_A = work_selection
-		
-		elif not self.btn_bool_setA.isChecked() and not isB:
-			self.var_bool_A = {}
-			reset_value = True
-		
-		if self.btn_bool_setB.isChecked() and isB:
-			self.var_bool_B = work_selection
-
-		elif not self.btn_bool_setB.isChecked() and isB:
-			self.var_bool_B = {}
-			reset_value = True
-
-		if not reset_value:
-			output(0, app_name, 'Align Contours | Set {} for contours: {}'.format(['A', 'B'][isB], len(list(work_selection.values())[0])))
-		else:
-			output(0, app_name, 'Align Contours | Reset {}'.format(['A', 'B'][isB]))
-
-	def alignContours(self):
-		# - Helpers
-		def getContourBonds(work_contours):
-			tmp_bounds = [contour.bounds for contour in work_contours]
-			cont_min_X, cont_min_Y, cont_max_X, cont_max_Y = map(set, zip(*tmp_bounds))
-			return (min(cont_min_X), min(cont_min_Y), max(cont_max_X), max(cont_max_Y))
-
-		def getAlignDict(bounds_tuple):
-			align_dict = {	'L': bounds_tuple[0], 
-							'R': bounds_tuple[2],
-							'C': bounds_tuple[0] + (bounds_tuple[2] - bounds_tuple[0])/2,
-							'B': bounds_tuple[1], 
-							'T': bounds_tuple[3], 
-							'E': bounds_tuple[1] + (bounds_tuple[3] - bounds_tuple[1])/2
-						}
-
-			return align_dict
-
-		def reset_buttons():
-			if self.btn_bool_setA.isChecked(): self.btn_bool_setA.setChecked(False)
-			if self.btn_bool_setB.isChecked(): self.btn_bool_setB.setChecked(False)
-			self.var_bool_A = {}
-			self.var_bool_B = {}
-
-		# - Init
-		user_mode =  self.align_mode[self.cmb_align_mode.currentText]
-		user_x = self.align_x[self.cmb_align_x.currentText]
-		user_y = self.align_y[self.cmb_align_y.currentText]
-		keep_x, keep_y = True, True	
-
-		if user_x == 'K': keep_x = False; user_x = 'L'
-		if user_y == 'X': keep_y = False; user_y = 'B'		
-		
-		process_glyphs = getProcessGlyphs(pMode)
-
-		# - Process
-		for glyph in process_glyphs:
-			selection = glyph.selectedAtContours()
-			wLayers = glyph._prepareLayers(pLayers)
-
-			for layerName in wLayers:
-				glyph_contours = glyph.contours(layerName, extend=eContour)
-				work_contours = [glyph_contours[index] for index in list(set([item[0] for item in selection]))]
-				
-				if user_mode =='CC': # Align contours to contours
-					if 1 < len(work_contours) < 3:
-						c1, c2 = work_contours
-						c1.alignTo(c2, user_x + user_y, (keep_x, keep_y))
-
-					elif len(work_contours) > 2:
-						cont_bounds = getContourBonds(work_contours)
-						align_type = getAlignDict(cont_bounds)
-						target = Coord(align_type[user_x], align_type[user_y])
-
-						for contour in work_contours:
-							contour.alignTo(target, user_x + user_y, (keep_x, keep_y))
-					
-				elif user_mode == 'RC': # Align contours to contours in reverse order
-					if 1 < len(work_contours) < 3:
-						c1, c2 = work_contours
-						c2.alignTo(c1, user_x + user_y, (keep_x, keep_y))
-
-					elif len(work_contours) > 2:
-						cont_bounds = getContourBonds(work_contours)
-						align_type = getAlignDict(cont_bounds)
-						target = Coord(align_type[user_x], align_type[user_y])
-
-						for contour in reversed(work_contours):
-							contour.alignTo(target, user_x + user_y, (keep_x, keep_y))	
-
-				# !!! To be implemented
-				elif user_mode == 'CN': # Align contour to node
-					target = work_contours.pop(0)
-					target_node_index = selection[0][1]
-					target_node = target.fl.nodes()[target_node_index]
-
-					for contour in work_contours:
-							contour.alignTo(target_node, user_x + user_y, (keep_x, keep_y))
-
-				elif user_mode == 'RN': # Align contour to node reversed
-					target = work_contours.pop()
-					target_node_index = selection[-1][1]
-					target_node = target.fl.nodes()[target_node_index]
-
-					for contour in work_contours:
-							contour.alignTo(target_node, user_x + user_y, (keep_x, keep_y))
-
-				elif user_mode == 'NN': # Align a node on contour to node on another
-					pass
-
-				elif user_mode == 'AB': # Align contours A to B
-					if len(self.var_bool_A.keys()) and len(self.var_bool_B.keys()):
-						cont_bounds_A = getContourBonds(self.var_bool_A[layerName])
-						align_type_A = getAlignDict(cont_bounds_A)
-
-						cont_bounds_B = getContourBonds(self.var_bool_B[layerName])
-						align_type_B = getAlignDict(cont_bounds_B)
-						
-						target = Coord(align_type_B[user_x], align_type_B[user_y])
-						group_base = Coord(align_type_A[user_x], align_type_A[user_y])
-
-						for contour in reversed(self.var_bool_A[layerName]):
-							align_temp =  getAlignDict(contour.bounds)
-							contour_base = Coord(align_temp[user_x], align_temp[user_y])
-							contour_delta = group_base - contour_base
-
-							contour.alignTo(target - contour_delta, user_x + user_y, (keep_x, keep_y))
-
-				else:
-					metrics = pFontMetrics(glyph.package)
-					max_layer_y = max([metrics.getXHeight(layerName), metrics.getCapsHeight(layerName), metrics.getAscender(layerName)])
-					min_layer_y = min([0, metrics.getDescender(layerName)])
-					layer_bounds = QtCore.QRect(0, 0, glyph.getAdvance(layerName), abs(max_layer_y) + abs(min_layer_y))
-
-					if user_mode == 'CL': # Align all contours in given Layer
-						cont_bounds = (layer_bounds.x(), layer_bounds.y(), layer_bounds.x() + layer_bounds.width(), layer_bounds.y() + layer_bounds.height())
-					
-					elif user_mode == 'CMX': # Align all contours to X height
-						height = metrics.getXHeight(layerName)
-						cont_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
-
-					elif user_mode == 'CMC': # Align all contours to Caps height
-						height = metrics.getCapsHeight(layerName)
-						cont_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
-
-					elif user_mode == 'CMA': # Align all contours to Ascender height
-						height = metrics.getAscender(layerName)
-						cont_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
-
-					elif user_mode == 'CMD': # Align all contours to Ascender height
-						height = metrics.getDescender(layerName)
-						cont_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
-
-					align_type = getAlignDict(cont_bounds)
-					target = Coord(align_type[user_x], align_type[user_y])					
-
-					if len(self.var_bool_A): work_contours += self.var_bool_A[layerName]
-					if len(self.var_bool_B): work_contours += self.var_bool_B[layerName]
-
-					for contour in work_contours:
-						contour.alignTo(target, user_x + user_y, (keep_x, keep_y))
-
-
-			reset_buttons()
-			glyph.update()
-			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Align Contours @ %s.' %(glyph.name, '; '.join(wLayers)))
-
-class copyContours(QtGui.QGridLayout):
-	# - Align Contours
-	def __init__(self):
-		super(copyContours, self).__init__()
+		super(TRContourCopy, self).__init__()
 
 		# - Init
 		self.contourClipboard = []
-
-		# -- Custom controls
-		self.tr_trans_ctrl = TRTransformCtrl()
+		lay_main = QtGui.QVBoxLayout()
 
 		# -- Listview
 		self.lst_contours = QtGui.QListView()
@@ -621,20 +291,31 @@ class copyContours(QtGui.QGridLayout):
 		self.lst_contours.setMinimumHeight(350)
 
 		# -- Quick Tool buttons
-		self.btn_copy_contour = QtGui.QPushButton('Copy')
-		self.btn_paste_contour = QtGui.QPushButton('Paste')
-		self.btn_clear = QtGui.QPushButton('Clear')
+		box_contour_copy = QtGui.QGroupBox()
+		box_contour_copy.setObjectName('box_group')
+		
+		lay_contour_copy = TRFlowLayout(spacing=10)
 
+		tooltip_button = "Copy selected contours to bank"
+		self.btn_copy_contour = CustomPushButton("clipboard_copy", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_contour_copy.addWidget(self.btn_copy_contour)
 		self.btn_copy_contour.clicked.connect(self.copy_contour)
-		self.btn_paste_contour.clicked.connect(self.paste_contour)
-		self.btn_clear.clicked.connect(self.__reset)
-				
-		self.addWidget(self.btn_copy_contour,		0, 0, 1, 4)
-		self.addWidget(self.btn_paste_contour,		0, 4, 1, 4)
-		self.addWidget(self.lst_contours,			1, 0, 18, 8)
-		self.addWidget(self.btn_clear,				20, 0, 1, 8)
 
-		self.tr_trans_ctrl.lay_controls.setMargin(0)
+		tooltip_button = "Paste selected contours from bank"
+		self.btn_paste_contour = CustomPushButton("clipboard_paste", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_contour_copy.addWidget(self.btn_paste_contour)
+		self.btn_paste_contour.clicked.connect(self.paste_contour)
+
+		tooltip_button = "Clear contour bank"
+		self.btn_clear = CustomPushButton("clipboard_clear", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_contour_copy.addWidget(self.btn_clear)
+		self.btn_clear.clicked.connect(self.__reset)
+
+		box_contour_copy.setLayout(lay_contour_copy)
+		lay_main.addWidget(box_contour_copy)
+		lay_main.addWidget(self.lst_contours)
+		
+		self.setLayout(lay_main)
 
 	def __reset(self):
 		self.contourClipboard = []
@@ -647,7 +328,6 @@ class copyContours(QtGui.QGridLayout):
 		new_shape = fl6.flShape()
 		for contour in cloned_contours:
 			new_shape.addContour(contour, True)
-
 
 		new_painter = QtGui.QPainter()
 		new_icon = QtGui.QIcon()
@@ -753,64 +433,6 @@ class copyContours(QtGui.QGridLayout):
 		
 			wGlyph.updateObject(wGlyph.fl, 'Paste contours; Glyph: %s; Layers: %s' %(wGlyph.name, '; '.join(wLayers)))
 
-class transformContours(QtGui.QGridLayout):
-	# - Align Contours
-	def __init__(self):
-		super(transformContours, self).__init__()
-
-		# - Init
-		# -- Custom controls
-		self.tr_trans_ctrl = TRTransformCtrl()
-
-		# -- Quick Tool buttons
-		self.btn_transform_contour = QtGui.QPushButton('Transform')
-		self.btn_transform_contour.clicked.connect(self.transform_contour)
-				
-		self.addWidget(self.tr_trans_ctrl, 			0, 0, 2, 8)
-		self.addWidget(self.btn_transform_contour,	3, 0, 1, 8)
-		
-		self.tr_trans_ctrl.lay_controls.setMargin(0)
-
-	def transform_contour(self):
-		# - Init
-		wGlyph = eGlyph()
-		wContours = wGlyph.contours()
-		wLayers = wGlyph._prepareLayers(pLayers)
-		export_clipboard = OrderedDict()
-		
-		# - Build initial contour information
-		selectionTuples = wGlyph.selectedAtContours()
-		selection = [cid for cid, nodes in groupby(selectionTuples, lambda x:x[0])]
-
-		# - Process
-		if len(selection):
-			for layer_name in wLayers:
-				# - Init
-				wContours = wGlyph.contours(layer_name)
-
-				# - Get Bounding box
-				temp_shape = fl6.flShape()
-				temp_contours = [wContours[cid].clone() for cid in selection]
-				temp_shape.addContours(temp_contours, True)
-
-				wBBox = temp_shape.boundingBox
-
-				# - Set transformation
-				new_transform, org_transform, rev_transform = self.tr_trans_ctrl.getTransform(wBBox)
-				
-				# - Transform contours
-				for cid in selection:
-					wContour = wContours[cid]
-					wContour.transform = org_transform
-					wContour.applyTransform()
-					wContour.transform = new_transform
-					wContour.applyTransform()
-					wContour.transform = rev_transform
-					wContour.applyTransform()
-					wContour.update()
-			
-			# - Done
-			wGlyph.updateObject(wGlyph.fl, 'Transform contours; Glyph: %s; Layers: %s' %(wGlyph.name, '; '.join(wLayers)))
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
@@ -818,34 +440,24 @@ class tool_tab(QtGui.QWidget):
 		super(tool_tab, self).__init__()
 
 		# - Init
+		self.setStyleSheet(css_tr_button)
 		layoutV = QtGui.QVBoxLayout()
+		layoutV.setContentsMargins(0, 0, 0, 0)
+
 		
-		layoutV.addWidget(QtGui.QLabel('Basic Operations:'))
-		layoutV.addLayout(basicContour())
-
-		#layoutV.addWidget(QtGui.QLabel('Break/Knot Contour'))
-		#layoutV.addLayout(breakContour())
-
-		layoutV.addWidget(QtGui.QLabel('Align:'))
-		layoutV.addLayout(alignContours())
-		layoutV.addWidget(QtGui.QLabel('Transform:'))
-		layoutV.addLayout(transformContours())
-		layoutV.addWidget(QtGui.QLabel('Clipboard:'))
-		layoutV.addLayout(copyContours())
+		# - Add widgets to main dialog -------------------------
+		layoutV.addWidget(TRContourBasics())
+		layoutV.addWidget(TRContourAlign())
+		layoutV.addWidget(TRContourCopy())
 
 		# - Build ---------------------------
-		layoutV.addStretch()
 		self.setLayout(layoutV)
-
-		# !!! Hotfix FL7 7355 
-		self.setMinimumSize(300,self.sizeHint.height())
-
 
 # - Test ----------------------
 if __name__ == '__main__':
 	test = tool_tab()
 	test.setWindowTitle('%s %s' %(app_name, app_version))
-	test.setGeometry(100, 100, 200, 400)
+	test.setGeometry(100, 100, 300, 400)
 	test.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 	
 	test.show()
