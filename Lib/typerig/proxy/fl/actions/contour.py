@@ -402,7 +402,7 @@ class TRContourActionCollector(object):
 						height = metrics.getAscender(layer_name)
 						cont_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
 
-					elif align_mode == 'CMD': # Align all contours to Ascender height
+					elif align_mode == 'CMD': # Align all contours to Descender depth
 						height = metrics.getDescender(layer_name)
 						cont_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
 
