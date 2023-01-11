@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '0.0.5'
+__version__ = '0.0.6'
 
 # -- CSS Styling ------------------------
 css_fl_button = '''
@@ -98,11 +98,19 @@ QGroupBox#box_group {
     border: none;
 }
 
-QDoubleSpinBox#spn_panel {
+QSpinBox#spn_panel,
+QSpinBox#spn_panel_inf,
+QDoubleSpinBox#spn_panel,
+QDoubleSpinBox#spn_panel_inf {
     max-height: 20px;
     max-width: 60px;
     min-height: 20px;
     min-width: 60px;
+}
+
+QSpinBox#spn_panel_inf,
+QDoubleSpinBox#spn_panel_inf {
+    max-width: 70px;
 }
 
 QPushButton#btn_panel_opt,

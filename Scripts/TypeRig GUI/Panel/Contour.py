@@ -11,6 +11,7 @@
 from __future__ import absolute_import, print_function
 from collections import OrderedDict
 from itertools import groupby
+from math import radians
 
 import fontlab as fl6
 from PythonQt import QtCore, QtGui
@@ -22,7 +23,7 @@ from typerig.proxy.fl.objects.contour import eContour
 from typerig.core.base.message import *
 from typerig.proxy.fl.actions.contour import TRContourActionCollector
 from typerig.proxy.fl.application.app import pWorkspace
-from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomLabel, CustomPushButton, TRFlowLayout
+from typerig.proxy.fl.gui.widgets import getTRIconFontPath, TRTransformCtrl, CustomLabel, CustomPushButton, TRFlowLayout
 from typerig.proxy.fl.gui.styles import css_tr_button
 
 # - Init -------------------------------
@@ -35,9 +36,6 @@ app_name, app_version = 'TypeRig | Contour', '3.1'
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
 
-# - Styling ----------------------------
-temp_css = '''
-'''
 # -- Helpers ------------------------------
 def get_modifier(keyboard_modifier=QtCore.Qt.AltModifier):
 	modifiers = QtGui.QApplication.keyboardModifiers()
@@ -49,6 +47,8 @@ class TRContourBasics(QtGui.QWidget):
 		super(TRContourBasics, self).__init__()
 		
 		# - Init 
+		self.contour_group_A = {}
+		self.contour_group_B = {}
 
 		# - Layout
 		self.lay_main = QtGui.QVBoxLayout()
@@ -152,121 +152,117 @@ class TRContourBasics(QtGui.QWidget):
 		box_operation.setLayout(lay_operations)
 		self.lay_main.addWidget(box_operation)
 
-		# -- Finish it -------------------------------------------------------
-		self.setLayout(self.lay_main)
-
-class TRContourAlign(QtGui.QWidget):
-	def __init__(self):
-		super(TRContourAlign, self).__init__()
-		
-		# - Init 
-		self.contour_group_A = {}
-		self.contour_group_B = {}
-
-		# - Layout
-		self.lay_main = QtGui.QVBoxLayout()
-		
-		# - Widgets and tools -------------------------------------------------
 		# -- Contour alignment -----------------------------------------------
 		box_align = QtGui.QGroupBox()
 		box_align.setObjectName('box_group')
+		
 		self.grp_align_options = QtGui.QButtonGroup()
 		self.grp_align_options.setExclusive(True)
 		
 		lay_box = QtGui.QVBoxLayout()
+		lay_box.setContentsMargins(0,0,0,0)
 		
 		# -- Alignment options
-		lay_options_all = TRFlowLayout(spacing=10)
+		lay_align_options = TRFlowLayout(spacing=10)
 
 		tooltip_button = 'Align selected contours to Layers BoundingBox'
-		self.chk_align_contour_to_layer = CustomPushButton("align_contour_to_layer", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_align_contour_to_layer = CustomPushButton("align_contour_to_layer", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options.addButton(self.chk_align_contour_to_layer, 6)
-		lay_options_all.addWidget(self.chk_align_contour_to_layer)
+		lay_align_options.addWidget(self.chk_align_contour_to_layer)
 
 		tooltip_button = 'Align selected contours'
-		self.chk_align_contour_to_contour = CustomPushButton("align_contour_to_contour", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_align_contour_to_contour = CustomPushButton("align_contour_to_contour", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options.addButton(self.chk_align_contour_to_contour, 7)
-		lay_options_all.addWidget(self.chk_align_contour_to_contour)
+		lay_align_options.addWidget(self.chk_align_contour_to_contour)
 
 		tooltip_button = 'Align selected contours to a node selected'
-		self.chk_align_contour_to_node = CustomPushButton("align_contour_to_node", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_align_contour_to_node = CustomPushButton("align_contour_to_node", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options.addButton(self.chk_align_contour_to_node, 8)
-		lay_options_all.addWidget(self.chk_align_contour_to_node)
+		lay_align_options.addWidget(self.chk_align_contour_to_node)
 
 		tooltip_button = 'Align selected contours to Caps Height'
-		self.chk_dimension_caps = CustomPushButton("dimension_caps", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_dimension_caps = CustomPushButton("dimension_caps", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options.addButton(self.chk_dimension_caps, 2)
-		lay_options_all.addWidget(self.chk_dimension_caps)
+		lay_align_options.addWidget(self.chk_dimension_caps)
 		
 		tooltip_button = 'Align selected contours to Ascender'
-		self.chk_dimension_ascender = CustomPushButton("dimension_ascender", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_dimension_ascender = CustomPushButton("dimension_ascender", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options.addButton(self.chk_dimension_ascender, 4)
-		lay_options_all.addWidget(self.chk_dimension_ascender)
+		lay_align_options.addWidget(self.chk_dimension_ascender)
 
 		tooltip_button = 'Align selected contours to X Height'
-		self.chk_dimension_xheight = CustomPushButton("dimension_xheight", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_dimension_xheight = CustomPushButton("dimension_xheight", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options.addButton(self.chk_dimension_xheight, 1)
-		lay_options_all.addWidget(self.chk_dimension_xheight)
+		lay_align_options.addWidget(self.chk_dimension_xheight)
 		
 		tooltip_button = 'Align selected contours to Descender'
-		self.chk_dimension_descender = CustomPushButton("dimension_descender", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_dimension_descender = CustomPushButton("dimension_descender", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options.addButton(self.chk_dimension_descender, 3)
-		lay_options_all.addWidget(self.chk_dimension_descender)
+		lay_align_options.addWidget(self.chk_dimension_descender)
 
 		tooltip_button = 'Align selected contours groups A to B'
-		self.chk_align_group_to_group = CustomPushButton("align_group_to_group", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_align_group_to_group = CustomPushButton("align_group_to_group", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options.addButton(self.chk_align_group_to_group, 9)
-		lay_options_all.addWidget(self.chk_align_group_to_group)
+		lay_align_options.addWidget(self.chk_align_group_to_group)
 
 		tooltip_button = 'Set selected contours as group A'
-		self.chk_align_group_A = CustomPushButton("A", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
-		lay_options_all.addWidget(self.chk_align_group_A)
+		self.chk_align_group_A = CustomPushButton("A", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_align_options.addWidget(self.chk_align_group_A)
 		self.chk_align_group_A.clicked.connect(lambda: self.get_contour_groups(False))
 
 		tooltip_button = 'Set selected contours as group B'
-		self.chk_align_group_B = CustomPushButton("B", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
-		lay_options_all.addWidget(self.chk_align_group_B)
+		self.chk_align_group_B = CustomPushButton("B", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_align_options.addWidget(self.chk_align_group_B)
 		self.chk_align_group_B.clicked.connect(lambda: self.get_contour_groups(True))
 
-		lay_box.addLayout(lay_options_all)
+		lay_box.addLayout(lay_align_options)
 
 		# -- Align Actions
-		lay_actions = TRFlowLayout(spacing=10)
+		lay_align_actions = TRFlowLayout(spacing=10)
 
 		tooltip_button = "Align left\nMouse Left + Alt: Reverse order"
 		self.btn_contour_align_left = CustomPushButton("contour_align_left", tooltip=tooltip_button, obj_name='btn_panel')
-		lay_actions.addWidget(self.btn_contour_align_left)
+		lay_align_actions.addWidget(self.btn_contour_align_left)
 		self.btn_contour_align_left.clicked.connect(lambda: self.aling_contours('L', 'X'))
 
 		tooltip_button = "Align horizontal\nMouse Left + Alt: Reverse order"
 		self.btn_contour_align_center_horizontal = CustomPushButton("contour_align_center_horizontal", tooltip=tooltip_button, obj_name='btn_panel')
-		lay_actions.addWidget(self.btn_contour_align_center_horizontal)
+		lay_align_actions.addWidget(self.btn_contour_align_center_horizontal)
 		self.btn_contour_align_center_horizontal.clicked.connect(lambda: self.aling_contours('C', 'X'))
 		
 		tooltip_button = "Align right\nMouse Left + Alt: Reverse order"
 		self.btn_contour_align_right = CustomPushButton("contour_align_right", tooltip=tooltip_button, obj_name='btn_panel')
-		lay_actions.addWidget(self.btn_contour_align_right)
+		lay_align_actions.addWidget(self.btn_contour_align_right)
 		self.btn_contour_align_right.clicked.connect(lambda: self.aling_contours('R', 'X'))
 
 		tooltip_button = "Align bottom\nMouse Left + Alt: Reverse order"
 		self.btn_contour_align_bottom = CustomPushButton("contour_align_bottom", tooltip=tooltip_button, obj_name='btn_panel')
-		lay_actions.addWidget(self.btn_contour_align_bottom)
+		lay_align_actions.addWidget(self.btn_contour_align_bottom)
 		self.btn_contour_align_bottom.clicked.connect(lambda: self.aling_contours('K', 'B'))
 
 		tooltip_button = "Align vertical\nMouse Left + Alt: Reverse order"
 		self.btn_contour_align_center_vertical = CustomPushButton("contour_align_center_vertical", tooltip=tooltip_button, obj_name='btn_panel')
-		lay_actions.addWidget(self.btn_contour_align_center_vertical)
+		lay_align_actions.addWidget(self.btn_contour_align_center_vertical)
 		self.btn_contour_align_center_vertical.clicked.connect(lambda: self.aling_contours('K', 'E'))
 
 		tooltip_button = "Align top\nMouse Left + Alt: Reverse order"
 		self.btn_contour_align_top = CustomPushButton("contour_align_top", tooltip=tooltip_button, obj_name='btn_panel')
-		lay_actions.addWidget(self.btn_contour_align_top)
+		lay_align_actions.addWidget(self.btn_contour_align_top)
 		self.btn_contour_align_top.clicked.connect(lambda: self.aling_contours('K', 'T'))
 
-		lay_box.addLayout(lay_actions)
+		lay_box.addLayout(lay_align_actions)
 
 		box_align.setLayout(lay_box)
 		self.lay_main.addWidget(box_align)
+
+		# -- Contour Transform ---------------------------
+		self.ctrl_transform = TRTransformCtrl()
+		self.lay_main.addWidget(self.ctrl_transform)
+
+		tooltip_button = "Transform selected contours"
+		self.btn_transform = CustomPushButton("action_play", tooltip=tooltip_button, obj_name='btn_panel')
+		self.ctrl_transform.lay_options.addWidget(self.btn_transform)
+		self.btn_transform.clicked.connect(self.transform_contour)
 
 		# -- Finish it -------------------------------------------------------
 		self.setLayout(self.lay_main)
@@ -328,7 +324,46 @@ class TRContourAlign(QtGui.QWidget):
 		# - Align
 		TRContourActionCollector.contour_align(pMode, pLayers, align_mode, align_x, align_y, get_modifier(), self.contour_group_A, self.contour_group_B)
 
+	def transform_contour(self):
+		# - Init
+		wGlyph = eGlyph()
+		wContours = wGlyph.contours()
+		wLayers = wGlyph._prepareLayers(pLayers)
+		export_clipboard = OrderedDict()
+		
+		# - Build initial contour information
+		selectionTuples = wGlyph.selectedAtContours()
+		selection = [cid for cid, nodes in groupby(selectionTuples, lambda x:x[0])]
 
+		# - Process
+		if len(selection):
+			for layer_name in wLayers:
+				# - Init
+				wContours = wGlyph.contours(layer_name)
+
+				# - Get Bounding box
+				temp_shape = fl6.flShape()
+				temp_contours = [wContours[cid].clone() for cid in selection]
+				temp_shape.addContours(temp_contours, True)
+
+				wBBox = temp_shape.boundingBox
+
+				# - Set transformation
+				new_transform, org_transform, rev_transform = self.ctrl_transform.getTransform(wBBox)
+				
+				# - Transform contours
+				for cid in selection:
+					wContour = wContours[cid]
+					wContour.transform = org_transform
+					wContour.applyTransform()
+					wContour.transform = new_transform
+					wContour.applyTransform()
+					wContour.transform = rev_transform
+					wContour.applyTransform()
+					wContour.update()
+			
+			# - Done
+			wGlyph.updateObject(wGlyph.fl, 'Transform contours; Glyph: %s; Layers: %s' %(wGlyph.name, '; '.join(wLayers)))
 
 class TRContourCopy(QtGui.QWidget):
 	# - Align Contours
@@ -405,6 +440,7 @@ class TRContourCopy(QtGui.QWidget):
 		new_shape.ensurePaths()
 		new_painter.drawPath(new_shape.closedPath)
 		new_icon.addPixmap(new_pixmap.transformed(QtGui.QTransform().scale(1, -1)))
+		
 		return new_icon
 
 	def copy_contour(self):
@@ -486,7 +522,6 @@ class TRContourCopy(QtGui.QWidget):
 
 						selected_shape.addContours(cloned_contours, True)
 					
-		
 			wGlyph.updateObject(wGlyph.fl, 'Paste contours; Glyph: %s; Layers: %s' %(wGlyph.name, '; '.join(wLayers)))
 
 
@@ -502,7 +537,6 @@ class tool_tab(QtGui.QWidget):
 		
 		# - Add widgets to main dialog -------------------------
 		layoutV.addWidget(TRContourBasics())
-		layoutV.addWidget(TRContourAlign())
 		layoutV.addWidget(TRContourCopy())
 
 		# - Build ---------------------------

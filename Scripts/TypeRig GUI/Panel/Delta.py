@@ -162,33 +162,33 @@ class TRDeltaPanel(QtGui.QWidget):
 		lay_options = TRFlowLayout(spacing=10)
 
 		tooltip_button = 'Process metrics'
-		self.chk_metrics = CustomPushButton("metrics_advance_alt", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_metrics = CustomPushButton("metrics_advance_alt", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_metrics)
 
 		tooltip_button = 'Process anchors'
-		self.chk_anchors = CustomPushButton("icon_anchor", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_anchors = CustomPushButton("icon_anchor", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_anchors)
 
 		tooltip_button = 'Allow extrapolation'
-		self.chk_extrapolate = CustomPushButton("extrapolate", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_extrapolate = CustomPushButton("extrapolate", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_extrapolate)
 
 		tooltip_button = 'Use target'
-		self.chk_target = CustomPushButton("node_target", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_target = CustomPushButton("node_target", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_target)
 		self.chk_target.clicked.connect(lambda: self.__prepare_target())
 
 		tooltip_button = 'Proportional scale mode'
-		self.chk_proportional = CustomPushButton("diagonal_bottom_up", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_proportional = CustomPushButton("diagonal_bottom_up", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_proportional)
 		self.chk_proportional.clicked.connect(lambda: self.__toggle_proportional_scale())
 		
 		tooltip_button = 'Scale from center'
-		self.chk_center = CustomPushButton("node_target_expand", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_center = CustomPushButton("node_target_expand", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_center)
 		
 		tooltip_button = 'Show extended controls'
-		self.chk_toggle_controls = CustomPushButton("value_controls", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_toggle_controls = CustomPushButton("value_controls", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_toggle_controls)
 		self.chk_toggle_controls.clicked.connect(lambda: self.__toggle_controls())
 

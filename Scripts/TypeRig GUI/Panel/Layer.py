@@ -327,9 +327,12 @@ class tool_tab(QtGui.QWidget):
 
 		layoutV.addLayout(self.layerSelector)
 		
+		'''
+		# !!! Hide until UI facelift 
 		self.tools_multiedit = TRCollapsibleBox('Transform (Layers selected)')
 		self.tools_multiedit.setContentLayout(self.unfoldLayers)
 		layoutV.addWidget(self.tools_multiedit)
+		'''
 
 		self.tools_blend = TRCollapsibleBox('Blend (Selection to Active Layer)')
 		self.tools_blend.setContentLayout(self.blendTools)

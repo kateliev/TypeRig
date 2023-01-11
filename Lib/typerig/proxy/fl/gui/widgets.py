@@ -28,7 +28,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.gui.styles import css_tr_button
 
 # - Init ----------------------------------
-__version__ = '0.4.6'
+__version__ = '0.4.8'
 
 # - Keep compatibility for basestring checks
 try:
@@ -105,10 +105,10 @@ def getProcessGlyphs(mode=0, font=None, workspace=None):
 	
 # - Classes -------------------------------
 # -- Basics -------------------------------
-def CustomPushButton(button_text, checkable=False, cheked=False, enabled=True, tooltip=None, obj_name=None):
+def CustomPushButton(button_text, checkable=False, checked=False, enabled=True, tooltip=None, obj_name=None):
 	new_button = QtGui.QPushButton(button_text)
 	new_button.setCheckable(checkable)
-	new_button.setChecked(cheked)
+	new_button.setChecked(checked)
 	new_button.setEnabled(enabled)
 
 	if tooltip is not None:
@@ -174,6 +174,44 @@ class CustomDoubleSpinBox(QtGui.QDoubleSpinBox):
 
 		if tooltip is not None: self.setToolTip(tooltip)
 		if obj_name is not None: self.setObjectName(obj_name)
+
+class CustomSpinLabel(QtGui.QWidget):
+	def __init__(self, label_text, init_values=(0., 100., 0., 1.), tooltip=None, suffix=None, obj_name=(None, None)):
+		super(CustomSpinLabel, self).__init__()
+
+		# - Init
+		spb_min, spb_max, spb_value, spb_step = init_values
+
+		# - Widgets
+		self.label = QtGui.QLabel(label_text)
+
+		self.input = QtGui.QSpinBox()
+		self.input.setMinimum(spb_min)
+		self.input.setMaximum(spb_max)
+		self.input.setValue(spb_value)
+		self.input.setSingleStep(spb_step)
+
+		if tooltip is not None:
+			self.input.setToolTip(tooltip)
+			self.label.setToolTip(tooltip)
+
+		if suffix is not None:
+			self.input.setSuffix(suffix)
+
+		if len(obj_name) == 2:
+			if obj_name[0] is not None:
+				self.input.setObjectName(obj_name[0])
+
+			if obj_name[1] is not None:
+				self.label.setObjectName(obj_name[1])
+
+		# - Layout
+		self.box = QtGui.QHBoxLayout()
+		self.box.setContentsMargins(0, 0, 0, 0)
+		self.box.addWidget(self.label)
+		self.box.addWidget(self.input)
+		self.setLayout(self.box)
+		self.setSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
 
 class CustomSpinButton(QtGui.QWidget):
 	def __init__(self, button_text, init_values=(0., 100., 0., 1.), tooltip=(None, None), obj_name=(None, None)):
@@ -257,11 +295,11 @@ class TRCustomSpinController(QtGui.QWidget):
 		self.ctrl_slider.valueChanged.connect(lambda: self.setValue(self.ctrl_slider.value))
 
 		# -- Buttons
-		self.ctrl_btn_dec_10 = CustomPushButton('value_decrease_double', checkable=False, cheked=False, tooltip='-10', obj_name='btn_panel')
-		self.ctrl_btn_dec_1 = CustomPushButton('value_decrease', checkable=False, cheked=False, tooltip='-1', obj_name='btn_panel')
-		self.ctrl_btn_inc_1 = CustomPushButton('value_increase', checkable=False, cheked=False, tooltip='+1', obj_name='btn_panel')
-		self.ctrl_btn_inc_10 = CustomPushButton('value_increase_double', checkable=False, cheked=False, tooltip='+10', obj_name='btn_panel')
-		self.opt_sliders = CustomPushButton('value_sliders', checkable=True, cheked=False, tooltip='Show Slider Controls', obj_name='btn_panel_opt')
+		self.ctrl_btn_dec_10 = CustomPushButton('value_decrease_double', checkable=False, checked=False, tooltip='-10', obj_name='btn_panel')
+		self.ctrl_btn_dec_1 = CustomPushButton('value_decrease', checkable=False, checked=False, tooltip='-1', obj_name='btn_panel')
+		self.ctrl_btn_inc_1 = CustomPushButton('value_increase', checkable=False, checked=False, tooltip='+1', obj_name='btn_panel')
+		self.ctrl_btn_inc_10 = CustomPushButton('value_increase_double', checkable=False, checked=False, tooltip='+10', obj_name='btn_panel')
+		self.opt_sliders = CustomPushButton('value_sliders', checkable=True, checked=False, tooltip='Show Slider Controls', obj_name='btn_panel_opt')
 
 		self.ctrl_btn_dec_10.clicked.connect(lambda: func_change_value(self.spin_box, -10))
 		self.ctrl_btn_dec_1.clicked.connect(lambda: func_change_value(self.spin_box, -1))
@@ -821,98 +859,138 @@ class TRTransformCtrl(QtGui.QWidget):
 	def __init__(self):
 		super(TRTransformCtrl, self).__init__()
 
-		# - Combos 
-		self.rad_or = QtGui.QRadioButton('ORG')
-		self.rad_bl = QtGui.QRadioButton('BL')
-		self.rad_tl = QtGui.QRadioButton('TL')
-		self.rad_br = QtGui.QRadioButton('BR')
-		self.rad_tr = QtGui.QRadioButton('TR')
-		self.rad_ce = QtGui.QRadioButton('CEN')
+		# - Init
+		self.lay_main = QtGui.QVBoxLayout()
+		self.lay_main.setContentsMargins(0,0,0,0)
+		
+		self.lay_box = QtGui.QVBoxLayout()
+		self.lay_box.setContentsMargins(0,0,0,0)
+		
+		box_transform = QtGui.QGroupBox()
+		box_transform.setObjectName('box_group')
+
+		# - Origin of transformation 
+		self.grp_options = QtGui.QButtonGroup()
+		self.grp_options.setExclusive(True)
+
+		self.lay_options = TRFlowLayout(spacing=10)
+
+		tooltip_button = "Transform at Origin"
+		self.chk_or = CustomPushButton("node_align_bottom_left", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_options.addButton(self.chk_or, 1)
+		self.lay_options.addWidget(self.chk_or)
+
+		tooltip_button = "Transform at Bottom Left corner"
+		self.chk_bl = CustomPushButton("node_bottom_left", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_options.addButton(self.chk_bl, 2)
+		self.lay_options.addWidget(self.chk_bl)
+
+		tooltip_button = "Transform at Bottom Right corner"
+		self.chk_br = CustomPushButton("node_bottom_right", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_options.addButton(self.chk_br, 4)
+		self.lay_options.addWidget(self.chk_br)
+		
+		tooltip_button = "Transform at Center"
+		self.chk_ce = CustomPushButton("node_center", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_options.addButton(self.chk_ce, 6)
+		self.lay_options.addWidget(self.chk_ce)
+
+		tooltip_button = "Transform at Top Left corner"
+		self.chk_tl = CustomPushButton("node_top_left", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_options.addButton(self.chk_tl, 3)
+		self.lay_options.addWidget(self.chk_tl)
+
+
+		tooltip_button = "Transform at Top Right corner"
+		self.chk_tr = CustomPushButton("node_top_right", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_options.addButton(self.chk_tr, 5)
+		self.lay_options.addWidget(self.chk_tr)
+
+		self.lay_box.addLayout(self.lay_options)
 
 		# - Spinboxes
-		self.spb_scale_x = QtGui.QSpinBox()
-		self.spb_scale_y = QtGui.QSpinBox()
-		self.spb_translate_x = QtGui.QSpinBox()
-		self.spb_translate_y = QtGui.QSpinBox()
-		self.spb_shear = QtGui.QSpinBox()
-		self.spb_rotate = QtGui.QSpinBox()
+		self.lay_controls = TRFlowLayout(spacing=10) 
 
-		self.spb_scale_x.setMinimum(-999)
-		self.spb_scale_y.setMinimum(-999)
-		self.spb_translate_x.setMinimum(-9999)
-		self.spb_translate_y.setMinimum(-9999)
-		self.spb_shear.setMinimum(-90)
-		self.spb_rotate.setMinimum(-360)
+		tooltip_button = "Scale X"
+		self.spb_scale_x = CustomSpinLabel('scale_x', (-999, 999, 0, 1), tooltip_button, ' %', ('spn_panel_inf', 'lbl_panel'))
+		self.lay_controls.addWidget(self.spb_scale_x)
 
-		self.spb_scale_x.setMaximum(999)
-		self.spb_scale_y.setMaximum(999)
-		self.spb_translate_x.setMaximum(9999)
-		self.spb_translate_y.setMaximum(9999)
-		self.spb_shear.setMaximum(90)
-		self.spb_rotate.setMaximum(360)
+		tooltip_button = "Scale Y"
+		self.spb_scale_y = CustomSpinLabel('scale_y', (-999, 999, 0, 1), tooltip_button, ' %', ('spn_panel_inf', 'lbl_panel'))
+		self.lay_controls.addWidget(self.spb_scale_y)
+
+		tooltip_button = "Translate X"
+		self.spb_translate_x = CustomSpinLabel('translate_x', (-999, 999, 0, 1), tooltip_button, ' u', ('spn_panel_inf', 'lbl_panel'))
+		self.lay_controls.addWidget(self.spb_translate_x)
+
+		tooltip_button = "Translate Y"
+		self.spb_translate_y = CustomSpinLabel('translate_y', (-999, 999, 0, 1), tooltip_button, ' u', ('spn_panel_inf', 'lbl_panel'))
+		self.lay_controls.addWidget(self.spb_translate_y)
+
+		tooltip_button = "Skew/Slant"
+		self.spb_shear = CustomSpinLabel('skew', (-90, 90, 0, 1), tooltip_button, ' °', ('spn_panel_inf', 'lbl_panel'))
+		self.lay_controls.addWidget(self.spb_shear)
+
+		tooltip_button = "Rotate"
+		self.spb_rotate = CustomSpinLabel('rotate', (-30, 360, 0, 1), tooltip_button, ' °', ('spn_panel_inf', 'lbl_panel'))
+		self.lay_controls.addWidget(self.spb_rotate)
+
+		self.lay_box.addLayout(self.lay_controls)
+
+		box_transform.setLayout(self.lay_box)
+		self.lay_main.addWidget(box_transform)
 
 		self.reset()
-
-		# - Build
-		self.lay_controls = QtGui.QGridLayout()
-		self.lay_controls.addWidget(QtGui.QLabel('Scale X:'),			0, 0, 1, 1)
-		self.lay_controls.addWidget(QtGui.QLabel('Scale Y:'),			0, 1, 1, 1)
-		self.lay_controls.addWidget(QtGui.QLabel('Trans. X:'),			0, 2, 1, 1)
-		self.lay_controls.addWidget(QtGui.QLabel('Trans. Y:'),			0, 3, 1, 1)
-		self.lay_controls.addWidget(QtGui.QLabel('Shear:'),				0, 4, 1, 1)
-		self.lay_controls.addWidget(QtGui.QLabel('Rotate:'),			0, 5, 1, 1)
-		self.lay_controls.addWidget(self.spb_scale_x,					1, 0, 1, 1)
-		self.lay_controls.addWidget(self.spb_scale_y,					1, 1, 1, 1)
-		self.lay_controls.addWidget(self.spb_translate_x,				1, 2, 1, 1)
-		self.lay_controls.addWidget(self.spb_translate_y,				1, 3, 1, 1)
-		self.lay_controls.addWidget(self.spb_shear,						1, 4, 1, 1)
-		self.lay_controls.addWidget(self.spb_rotate,					1, 5, 1, 1)
-		self.lay_controls.addWidget(self.rad_or,						2, 0, 1, 1)
-		self.lay_controls.addWidget(self.rad_bl,						2, 1, 1, 1)
-		self.lay_controls.addWidget(self.rad_tl,						2, 2, 1, 1)
-		self.lay_controls.addWidget(self.rad_br,						2, 3, 1, 1)
-		self.lay_controls.addWidget(self.rad_tr,						2, 4, 1, 1)
-		self.lay_controls.addWidget(self.rad_ce,						2, 5, 1, 2)
-				
-		self.setLayout(self.lay_controls)
+		self.setLayout(self.lay_main)
 		
 	def reset(self):
-		self.spb_scale_x.setValue(100)
-		self.spb_scale_y.setValue(100)
-		self.spb_translate_x.setValue(0)
-		self.spb_translate_y.setValue(0)
-		self.spb_shear.setValue(0)
-		self.spb_rotate.setValue(0)
-		self.rad_or.setChecked(True)
+		self.spb_scale_x.input.setValue(100)
+		self.spb_scale_y.input.setValue(100)
+		self.spb_translate_x.input.setValue(0)
+		self.spb_translate_y.input.setValue(0)
+		self.spb_shear.input.setValue(0)
+		self.spb_rotate.input.setValue(0)
 
-	def getTransform(self, obj_rect=QtCore.QRectF(.0, .0, .0, .0)):
+	def calcTransform(self, transform_values, obj_rect=QtCore.QRectF(.0, .0, .0, .0)):
 		# - Init
+		scale_x, scale_y, translate_x, translate_y, shear, rotate = transform_values
+
 		origin_transform = QtGui.QTransform()
 		rev_origin_transform = QtGui.QTransform()
 		return_transform = QtGui.QTransform()
 		
-		m11 = float(self.spb_scale_x.value)/100.
-		m13 = float(self.spb_translate_x.value)
-		m22 = float(self.spb_scale_y.value)/100.
-		m23 = float(self.spb_translate_y.value)
+		m11 = float(scale_x)/100.
+		m13 = float(translate_x)
+		m22 = float(scale_y)/100.
+		m23 = float(translate_y)
 
 		# - Transform
-		if self.rad_or.isChecked():	transform_origin = QtCore.QPointF(.0, .0)
-		if self.rad_bl.isChecked():	transform_origin = obj_rect.topLeft()
-		if self.rad_br.isChecked():	transform_origin = obj_rect.topRight()
-		if self.rad_tl.isChecked():	transform_origin = obj_rect.bottomLeft()
-		if self.rad_tr.isChecked():	transform_origin = obj_rect.bottomRight()
-		if self.rad_ce.isChecked():	transform_origin = obj_rect.center()
+		if self.chk_or.isChecked():	transform_origin = QtCore.QPointF(.0, .0)
+		if self.chk_bl.isChecked():	transform_origin = obj_rect.topLeft()
+		if self.chk_br.isChecked():	transform_origin = obj_rect.topRight()
+		if self.chk_tl.isChecked():	transform_origin = obj_rect.bottomLeft()
+		if self.chk_tr.isChecked():	transform_origin = obj_rect.bottomRight()
+		if self.chk_ce.isChecked():	transform_origin = obj_rect.center()
 		
 		origin_transform.translate(-transform_origin.x(), -transform_origin.y())
 		rev_origin_transform.translate(transform_origin.x(), transform_origin.y())
 
 		return_transform.scale(m11, m22)
-		return_transform.rotate(-float(self.spb_rotate.value))
-		return_transform.shear(radians(float(self.spb_shear.value)), 0.)
+		return_transform.rotate(-float(rotate))
+		return_transform.shear(radians(float(shear)), 0.)
 		return_transform.translate(m13, m23)
 
 		return return_transform, origin_transform, rev_origin_transform
+
+	def getTransform(self, obj_rect=QtCore.QRectF(.0, .0, .0, .0)):
+		transform_values = (self.spb_scale_x.input.value,
+							self.spb_scale_y.input.value,
+							self.spb_translate_x.input.value,
+							self.spb_translate_y.input.value,
+							self.spb_shear.input.value,
+							self.spb_rotate.input.value,
+							)
+		return self.calcTransform(transform_values, obj_rect)
 
 # -- Sliders --------------------------------------------------------------
 class TRSliderCtrl(QtGui.QGridLayout):

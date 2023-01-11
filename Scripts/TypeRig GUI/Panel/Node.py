@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '3.26'
+app_name, app_version = 'TypeRig | Nodes', '3.27'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -228,27 +228,27 @@ class TRNodeBasics(QtGui.QWidget):
 		lay_align_actions = TRFlowLayout(spacing=10)
 
 		tooltip_button = "Smart Shift: Shift oncurve nodes together with their respective offcurve nodes even when they are not explicitly selected,"
-		self.chk_shift_smart = CustomPushButton("shift_smart", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_shift_smart = CustomPushButton("shift_smart", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options_shift.addButton(self.chk_shift_smart, 1)
 		lay_align_options.addWidget(self.chk_shift_smart)
 
 		tooltip_button = "Simple Shift: Shift only selected nodes."
-		self.chk_shift_dumb = CustomPushButton("shift_dumb", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_shift_dumb = CustomPushButton("shift_dumb", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options_shift.addButton(self.chk_shift_dumb, 2)
 		lay_align_options.addWidget(self.chk_shift_dumb)
 
 		tooltip_button = "Keep relations between selected nodes"
-		self.chk_shift_keep_dimension = CustomPushButton("shift_keep_dimension", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_shift_keep_dimension = CustomPushButton("shift_keep_dimension", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options_other.addButton(self.chk_shift_keep_dimension, 1)
 		lay_align_options.addWidget(self.chk_shift_keep_dimension)
 
 		tooltip_button = "Intercept vertical position"
-		self.chk_shift_intercept = CustomPushButton("shift_intercept", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_shift_intercept = CustomPushButton("shift_intercept", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options_other.addButton(self.chk_shift_intercept, 2)
 		lay_align_options.addWidget(self.chk_shift_intercept)
 
 		tooltip_button = "Pick target node for alignment"
-		self.chk_node_target = CustomPushButton("node_target", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_node_target = CustomPushButton("node_target", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.chk_node_target.clicked.connect(self.target_set)
 		self.grp_align_options_other.addButton(self.chk_node_target, 3)
 		lay_align_options.addWidget(self.chk_node_target)
@@ -390,13 +390,13 @@ class TRNodeBasics(QtGui.QWidget):
 
 		# --- Options 
 		tooltip_button =  "Copy slope between selected nodes"
-		self.chk_slope_copy = CustomPushButton("slope_copy", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_slope_copy = CustomPushButton("slope_copy", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_slope_options.addButton(self.chk_slope_copy)
 		lay_slope.addWidget(self.chk_slope_copy)
 		self.chk_slope_copy.clicked.connect(self.act_slope_copy)
 
 		tooltip_button =  "Use fonts italic angle as slope"
-		self.chk_slope_italic = CustomPushButton("slope_italic", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_slope_italic = CustomPushButton("slope_italic", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_slope_options.addButton(self.chk_slope_italic)
 		lay_slope.addWidget(self.chk_slope_italic)
 		self.chk_slope_italic.clicked.connect(self.act_slope_italic)
@@ -441,61 +441,61 @@ class TRNodeBasics(QtGui.QWidget):
 
 		# --- Options
 		tooltip_button =  "Paste Align Top Left"
-		self.chk_paste_top_left = CustomPushButton("node_align_top_left", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_paste_top_left = CustomPushButton("node_align_top_left", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_copy_nodes_options.addButton(self.chk_paste_top_left)
 		lay_copy_nodes.addWidget(self.chk_paste_top_left)
 		self.chk_paste_top_left.clicked.connect(lambda: self.act_node_align_state('LT'))
 
 		tooltip_button =  "Paste: Align Top Right"
-		self.chk_paste_top_right = CustomPushButton("node_align_top_right", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_paste_top_right = CustomPushButton("node_align_top_right", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_copy_nodes_options.addButton(self.chk_paste_top_right)
 		lay_copy_nodes.addWidget(self.chk_paste_top_right)
 		self.chk_paste_top_right.clicked.connect(lambda: self.act_node_align_state('RT'))
 
 		tooltip_button =  "Paste: Align Center"
-		self.chk_paste_center = CustomPushButton("node_center", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_paste_center = CustomPushButton("node_center", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_copy_nodes_options.addButton(self.chk_paste_center)
 		lay_copy_nodes.addWidget(self.chk_paste_center)
 		self.chk_paste_top_right.clicked.connect(lambda: self.act_node_align_state('CE'))
 
 		tooltip_button =  "Paste: Align Bottom Left"
-		self.chk_paste_bottom_left = CustomPushButton("node_align_bottom_left", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_paste_bottom_left = CustomPushButton("node_align_bottom_left", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_copy_nodes_options.addButton(self.chk_paste_bottom_left)
 		lay_copy_nodes.addWidget(self.chk_paste_bottom_left)
 		self.chk_paste_bottom_left.clicked.connect(lambda: self.act_node_align_state('LB'))
 
 		tooltip_button =  "Paste: Align Bottom Right"
-		self.chk_paste_bottom_right = CustomPushButton("node_align_bottom_right", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_paste_bottom_right = CustomPushButton("node_align_bottom_right", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_copy_nodes_options.addButton(self.chk_paste_bottom_right)
 		lay_copy_nodes.addWidget(self.chk_paste_bottom_right)
 		self.chk_paste_bottom_right.clicked.connect(lambda: self.act_node_align_state('RB'))
 
 		tooltip_button =  "Paste: Flip horizontally"
-		self.chk_paste_flip_h = CustomPushButton("flip_horizontal", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_paste_flip_h = CustomPushButton("flip_horizontal", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		#self.grp_paste_nodes_options.addButton(self.chk_paste_flip_h)
 		lay_copy_nodes.addWidget(self.chk_paste_flip_h)
 		#self.chk_paste_flip_h.clicked.connect(...)
 
 		tooltip_button =  "Paste: Flip vertically"
-		self.chk_paste_flip_v = CustomPushButton("flip_vertical", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_paste_flip_v = CustomPushButton("flip_vertical", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		#self.grp_paste_nodes_options.addButton(self.chk_paste_flip_v)
 		lay_copy_nodes.addWidget(self.chk_paste_flip_v)
 		#self.chk_paste_flip_v.clicked.connect(...)
 
 		tooltip_button =  "Paste: Reverse Order"
-		self.chk_paste_reverse = CustomPushButton("contour_reverse", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_paste_reverse = CustomPushButton("contour_reverse", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		#self.grp_copy_nodes_options.addButton(self.chk_paste_reverse)
 		lay_copy_nodes.addWidget(self.chk_paste_reverse)
 		#self.chk_paste_reverse.clicked.connect(...)
 
 		tooltip_button =  "Copy: Selected Nodes to Memory"
-		self.chk_copy_nodes = CustomPushButton("node_copy", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		self.chk_copy_nodes = CustomPushButton("node_copy", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel')
 		#self.grp_copy_nodes_options.addButton(self.chk_copy_nodes)
 		lay_copy_nodes.addWidget(self.chk_copy_nodes)
 		self.chk_copy_nodes.clicked.connect(self.act_node_copy)
 
 		tooltip_button =  "Paste: Nodes stored in Memory"
-		self.btn_paste_nodes = CustomPushButton("node_paste", checkable=False, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_paste_nodes = CustomPushButton("node_paste", checkable=False, checked=False, tooltip=tooltip_button, obj_name='btn_panel')
 		#self.grp_copy_nodes_options.addButton(self.btn_paste_nodes)
 		lay_copy_nodes.addWidget(self.btn_paste_nodes)
 		self.btn_paste_nodes.clicked.connect(lambda: TRNodeActionCollector.nodes_paste(eGlyph(), pLayers, self.node_bank, self.node_align_state, (self.chk_paste_flip_h.isChecked(), self.chk_paste_flip_v.isChecked(), self.chk_paste_reverse.isChecked(), False, False, False)))
@@ -515,33 +515,33 @@ class TRNodeBasics(QtGui.QWidget):
 
 		# --- Options
 		tooltip_button =  "Smart Shift:\n Move off-curve nodes together with on-curve ones"
-		self.chk_shift_smart = CustomPushButton("shift_smart", checkable=True, cheked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_shift_smart = CustomPushButton("shift_smart", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_move_nodes_options.addButton(self.chk_shift_smart)
 		lay_move_nodes.addWidget(self.chk_shift_smart, 0, 0, 1, 1)
 
 		tooltip_button =  "Shift:\n Do not move off-curve nodes together with on-curve ones"
-		self.chk_shift_dumb = CustomPushButton("shift_dumb", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_shift_dumb = CustomPushButton("shift_dumb", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_move_nodes_options.addButton(self.chk_shift_dumb)
 		lay_move_nodes.addWidget(self.chk_shift_dumb, 0, 1, 1, 1)
 
 		tooltip_button =  "Interpolated shift"
-		self.chk_shift_lerp = CustomPushButton("shift_interpolate", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_shift_lerp = CustomPushButton("shift_interpolate", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_move_nodes_options.addButton(self.chk_shift_lerp)
 		lay_move_nodes.addWidget(self.chk_shift_lerp, 0, 2, 1, 1)
 		#self.chk_paste_top_left.clicked.connect(...)
 
 		tooltip_button =  "Italic walker:\n Vertical shift along the font's italic angle"
-		self.chk_shift_italic = CustomPushButton("shift_slope_italik", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_shift_italic = CustomPushButton("shift_slope_italik", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_move_nodes_options.addButton(self.chk_shift_italic)
 		lay_move_nodes.addWidget(self.chk_shift_italic, 0, 3, 1, 1)
 
 		tooltip_button =  "Slope walker:\n Vertical shift along a given slope"
-		self.chk_shift_slope = CustomPushButton("shift_slope_walk", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_shift_slope = CustomPushButton("shift_slope_walk", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_move_nodes_options.addButton(self.chk_shift_slope)
 		lay_move_nodes.addWidget(self.chk_shift_slope, 0, 4, 1, 1)
 
 		tooltip_button =  "Copy slope between selected nodes"
-		self.btn_shift_slope_copy = CustomPushButton("slope_copy", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.btn_shift_slope_copy = CustomPushButton("slope_copy", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_move_nodes.addWidget(self.btn_shift_slope_copy, 0, 5, 1, 1)
 		self.btn_shift_slope_copy.clicked.connect( self.act_shift_angle_copy)
 
@@ -558,31 +558,31 @@ class TRNodeBasics(QtGui.QWidget):
 		lay_move_nodes.addWidget(self.spn_move_y, 2, 1, 1, 2)
 
 		tooltip_button = "Shift Left"
-		self.btn_shift_left = CustomPushButton("arrow_left", checkable=False, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_shift_left = CustomPushButton("arrow_left", checkable=False, checked=False, tooltip=tooltip_button, obj_name='btn_panel')
 		lay_move_nodes.addWidget(self.btn_shift_left, 1, 3, 1, 1)
 		self.btn_shift_left.clicked.connect(lambda: self.act_node_move(-self.spn_move_x.value, 0)) 
 
 		tooltip_button = "Shift Right"
-		self.btn_shift_right = CustomPushButton("arrow_right", checkable=False, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_shift_right = CustomPushButton("arrow_right", checkable=False, checked=False, tooltip=tooltip_button, obj_name='btn_panel')
 		lay_move_nodes.addWidget(self.btn_shift_right, 1, 4, 1, 1)
 		self.btn_shift_right.clicked.connect(lambda: self.act_node_move(self.spn_move_x.value, 0))
 
 		tooltip_button = "Shift Up"
-		self.btn_shift_up = CustomPushButton("arrow_up", checkable=False, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_shift_up = CustomPushButton("arrow_up", checkable=False, checked=False, tooltip=tooltip_button, obj_name='btn_panel')
 		lay_move_nodes.addWidget(self.btn_shift_up, 2, 3, 1, 1)
 		self.btn_shift_up.clicked.connect(lambda: self.act_node_move(0, self.spn_move_y.value))
 
 		tooltip_button = "Shift Down"
-		self.btn_shift_down = CustomPushButton("arrow_down", checkable=False, cheked=False, tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_shift_down = CustomPushButton("arrow_down", checkable=False, checked=False, tooltip=tooltip_button, obj_name='btn_panel')
 		lay_move_nodes.addWidget(self.btn_shift_down, 2, 4, 1, 1)
 		self.btn_shift_down.clicked.connect(lambda: self.act_node_move(0, -self.spn_move_y.value))
 
 		tooltip_button =  "Percent of BBox:\n Interpret new positional coordinates as if they were scaled by percent given in (X,Y)\nEquivalent to affine scaling of selected nodes in respect to the Layers BoundingBox"
-		self.chk_shift_bbox_percent = CustomPushButton("bbox_percent", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_shift_bbox_percent = CustomPushButton("bbox_percent", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_move_nodes.addWidget(self.chk_shift_bbox_percent, 0, 6, 1, 1)
 		
 		tooltip_button =  "Capture keyboard:\n Capture input from the keyboard arrow keys"
-		self.chk_shift_capture = CustomPushButton("keyboard_arows", checkable=True, cheked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_shift_capture = CustomPushButton("keyboard_arows", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.chk_shift_capture.setEnabled(False)
 		lay_move_nodes.addWidget(self.chk_shift_capture, 2, 5, 1, 1)
 		
