@@ -759,16 +759,16 @@ class pGlyph(object):
 			flObject (flGlyph, flLayer, flShape, flNode, flContour): Object to be update and set undo state
 			undoMessage (string): Message to be added in undo/history list.'''
 		
-		# - General way ---- pre 6774 worked fine!
-		fl6.flItems.notifyChangesApplied(undoMessage[:20], flObject, True)
-		if verbose: print('DONE:\t{}'.format(undoMessage))
-		
 		# - New from 6774 on
 		for contour in self.contours():
 			contour.changed()
 		
-		fl6.flItems.notifyPackageContentUpdated(self.fl.fgPackage.id)
-		fl6.Update()
+		# - General way ---- pre 6774 worked fine!
+		fl6.flItems.notifyChangesApplied(undoMessage[:20], flObject, True)
+		if verbose: print('DONE:\t{}'.format(undoMessage))
+		
+		#fl6.flItems.notifyPackageContentUpdated(self.fl.fgPackage.id)
+		fl6.UpdateAll()
 		
 		'''# - Type specific way 
 		# -- Covers flGlyph, flLayer, flShape
