@@ -28,7 +28,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.gui.styles import css_tr_button
 
 # - Init ----------------------------------
-__version__ = '0.4.8'
+__version__ = '0.5.0'
 
 # - Keep compatibility for basestring checks
 try:
@@ -179,13 +179,18 @@ class CustomSpinLabel(QtGui.QWidget):
 	def __init__(self, label_text, init_values=(0., 100., 0., 1.), tooltip=None, suffix=None, obj_name=(None, None)):
 		super(CustomSpinLabel, self).__init__()
 
-		# - Init
-		spb_min, spb_max, spb_value, spb_step = init_values
-
 		# - Widgets
 		self.label = QtGui.QLabel(label_text)
 
-		self.input = QtGui.QSpinBox()
+		if any([isinstance(n, float) for n in init_values]):
+			self.input = QtGui.QDoubleSpinBox()
+			init_values = [float(n) for n in init_values]
+		else:
+			self.input = QtGui.QSpinBox()
+		
+		# - Init
+		spb_min, spb_max, spb_value, spb_step = init_values
+
 		self.input.setMinimum(spb_min)
 		self.input.setMaximum(spb_max)
 		self.input.setValue(spb_value)
@@ -310,7 +315,7 @@ class TRCustomSpinController(QtGui.QWidget):
 		self.__toggle_slider()
 
 		# - Layout
-		lay_box = QtGui.QVBoxLayout()
+		self.lay_box = QtGui.QVBoxLayout()
 		lay_controls = QtGui.QHBoxLayout()
 
 		lay_controls.addWidget(ctrl_lbl)
@@ -322,13 +327,13 @@ class TRCustomSpinController(QtGui.QWidget):
 		lay_controls.addWidget(self.opt_sliders)
 		lay_controls.setContentsMargins(0, 0, 0, 0)
 
-		lay_box.addLayout(lay_controls)
-		lay_box.addWidget(self.ctrl_slider)
-		lay_box.setContentsMargins(0, 0, 0, 0)
+		self.lay_box.addLayout(lay_controls)
+		self.lay_box.addWidget(self.ctrl_slider)
+		self.lay_box.setContentsMargins(0, 0, 0, 0)
 		
 		box_controls = QtGui.QGroupBox()
 		box_controls.setObjectName('box_group')
-		box_controls.setLayout(lay_box)
+		box_controls.setLayout(self.lay_box)
 		
 		lay_main = QtGui.QHBoxLayout()
 		lay_main.addWidget(box_controls)
@@ -932,7 +937,7 @@ class TRTransformCtrl(QtGui.QWidget):
 		self.lay_controls.addWidget(self.spb_shear)
 
 		tooltip_button = "Rotate"
-		self.spb_rotate = CustomSpinLabel('rotate', (-30, 360, 0, 1), tooltip_button, ' °', ('spn_panel_inf', 'lbl_panel'))
+		self.spb_rotate = CustomSpinLabel('rotate', (-360, 360, 0, 1), tooltip_button, ' °', ('spn_panel_inf', 'lbl_panel'))
 		self.lay_controls.addWidget(self.spb_rotate)
 
 		self.lay_box.addLayout(self.lay_controls)
