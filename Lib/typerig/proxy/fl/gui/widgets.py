@@ -28,7 +28,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.gui.styles import css_tr_button
 
 # - Init ----------------------------------
-__version__ = '0.5.0'
+__version__ = '0.5.5'
 
 # - Keep compatibility for basestring checks
 try:
@@ -103,30 +103,6 @@ def getProcessGlyphs(mode=0, font=None, workspace=None):
 	
 	return process_glyphs
 	
-# - Classes -------------------------------
-# -- Basics -------------------------------
-def CustomPushButton(button_text, checkable=False, checked=False, enabled=True, tooltip=None, obj_name=None):
-	new_button = QtGui.QPushButton(button_text)
-	new_button.setCheckable(checkable)
-	new_button.setChecked(checked)
-	new_button.setEnabled(enabled)
-
-	if tooltip is not None:
-		new_button.setToolTip(tooltip)
-
-	if obj_name is not None:
-		new_button.setObjectName(obj_name)
-
-	return new_button
-
-def CustomLabel(label_text, obj_name=None):
-	new_label = QtGui.QLabel(label_text)
-
-	if obj_name is not None:
-		new_label.setObjectName(obj_name)
-		
-	return new_label
-
 def FLIcon(icon_path, icon_size):
 	new_label = QtGui.QLabel()
 	new_label.setPixmap(QtGui.QIcon(icon_path).pixmap(icon_size))
@@ -142,45 +118,29 @@ def FLIconButton(button_text, icon_path, icon_size=32, checkable=False):
 		new_button.setIconSize(QtCore.QSize(icon_size,icon_size))
 	return new_button
 
-# -- Miniwidgets --------------------------
+# - Classes -------------------------------
+# -- Basics -------------------------------
+class CustomPushButton(QtGui.QPushButton):
+	def __init__(self, button_text, checkable=False, checked=False, enabled=True, tooltip=None, obj_name=None):
+		super(CustomPushButton, self).__init__(button_text)
+
+		self.setCheckable(checkable)
+		self.setChecked(checked)
+		self.setEnabled(enabled)
+
+		if tooltip is not None:	self.setToolTip(tooltip)
+		if obj_name is not None: self.setObjectName(obj_name)
+
+class CustomLabel(QtGui.QLabel):
+	def __init__(self, label_text, tooltip=None, obj_name=None):
+		super(CustomLabel, self).__init__(label_text)
+
+		if tooltip is not None: self.setToolTip(tooltip)
+		if obj_name is not None: self.setObjectName(obj_name)
+
 class CustomSpinBox(QtGui.QSpinBox):
-	def __init__(self, init_values=(0., 100., 0., 1.), tooltip=None, obj_name=None):
+	def __init__(self, init_values=(0., 100., 0., 1.), tooltip=None, suffix=None, obj_name=None):
 		super(CustomSpinBox, self).__init__()
-
-		# - Init
-		spb_min, spb_max, spb_value, spb_step = init_values
-
-		# - Set
-		self.setMinimum(spb_min)
-		self.setMaximum(spb_max)
-		self.setValue(spb_value)
-		self.setSingleStep(spb_step)
-
-		if tooltip is not None: self.setToolTip(tooltip)
-		if obj_name is not None: self.setObjectName(obj_name)
-
-class CustomDoubleSpinBox(QtGui.QDoubleSpinBox):
-	def __init__(self, init_values=(0., 100., 0., 1.), tooltip=None, obj_name=None):
-		super(CustomDoubleSpinBox, self).__init__()
-
-		# - Init
-		spb_min, spb_max, spb_value, spb_step = init_values
-
-		# - Set
-		self.setMinimum(spb_min)
-		self.setMaximum(spb_max)
-		self.setValue(spb_value)
-		self.setSingleStep(spb_step)
-
-		if tooltip is not None: self.setToolTip(tooltip)
-		if obj_name is not None: self.setObjectName(obj_name)
-
-class CustomSpinLabel(QtGui.QWidget):
-	def __init__(self, label_text, init_values=(0., 100., 0., 1.), tooltip=None, suffix=None, obj_name=(None, None)):
-		super(CustomSpinLabel, self).__init__()
-
-		# - Widgets
-		self.label = QtGui.QLabel(label_text)
 
 		if any([isinstance(n, float) for n in init_values]):
 			self.input = QtGui.QDoubleSpinBox()
@@ -191,24 +151,30 @@ class CustomSpinLabel(QtGui.QWidget):
 		# - Init
 		spb_min, spb_max, spb_value, spb_step = init_values
 
-		self.input.setMinimum(spb_min)
-		self.input.setMaximum(spb_max)
-		self.input.setValue(spb_value)
-		self.input.setSingleStep(spb_step)
+		# - Set
+		self.setMinimum(spb_min)
+		self.setMaximum(spb_max)
+		self.setValue(spb_value)
+		self.setSingleStep(spb_step)
 
-		if tooltip is not None:
-			self.input.setToolTip(tooltip)
-			self.label.setToolTip(tooltip)
+		if tooltip is not None: self.setToolTip(tooltip)
+		if suffix is not None: self.setSuffix(suffix)
+		if obj_name is not None: self.setObjectName(obj_name)
 
-		if suffix is not None:
-			self.input.setSuffix(suffix)
+# -- Miniwidgets --------------------------
+class CustomSpinLabel(QtGui.QWidget):
+	def __init__(self, label_text, init_values=(0., 100., 0., 1.), tooltip=None, suffix=None, obj_name=(None, None)):
+		super(CustomSpinLabel, self).__init__()
 
-		if len(obj_name) == 2:
-			if obj_name[0] is not None:
-				self.input.setObjectName(obj_name[0])
+		# - Init
+		input_obj_name, lbl_obj_name = None, None
+		
+		if len(obj_name) == 2:	
+			input_obj_name, lbl_obj_name = obj_name
 
-			if obj_name[1] is not None:
-				self.label.setObjectName(obj_name[1])
+		# - Widgets
+		self.label =CustomLabel(label_text, tooltip, lbl_obj_name)
+		self.input = CustomSpinBox(init_values, tooltip, suffix, input_obj_name)
 
 		# - Layout
 		self.box = QtGui.QHBoxLayout()
@@ -223,30 +189,18 @@ class CustomSpinButton(QtGui.QWidget):
 		super(CustomSpinButton, self).__init__()
 
 		# - Init
-		spb_min, spb_max, spb_value, spb_step = init_values
-
-		# - Widgets
-		self.button = QtGui.QPushButton(button_text)
-
-		self.input = QtGui.QDoubleSpinBox()
-		self.input.setMinimum(spb_min)
-		self.input.setMaximum(spb_max)
-		self.input.setValue(spb_value)
-		self.input.setSingleStep(spb_step)
+		input_obj_name, btn_obj_name = None, None
+		input_obj_tooltip, btn_obj_tooltip = None, None
+		
+		if len(obj_name) == 2:	
+			input_obj_name, btn_obj_name = obj_name
 
 		if len(tooltip) == 2:
-			if tooltip[0] is not None:
-				self.input.setToolTip(tooltip[0])
+			input_obj_tooltip, btn_obj_tooltip = tooltip
 
-			if tooltip[1] is not None:
-				self.button.setToolTip(tooltip[1])
-
-		if len(obj_name) == 2:
-			if obj_name[0] is not None:
-				self.input.setObjectName(obj_name[0])
-
-			if obj_name[1] is not None:
-				self.button.setObjectName(obj_name[1])
+		# - Widgets
+		self.button = CustomPushButton(button_text, tooltip=btn_obj_tooltip, obj_name=btn_obj_name)
+		self.input = CustomSpinBox(init_values, input_obj_tooltip, None, input_obj_name)
 
 		# - Layout
 		self.box = QtGui.QHBoxLayout()
@@ -289,7 +243,7 @@ class TRCustomSpinController(QtGui.QWidget):
 		
 		# -- Spinbox
 		if double:
-			self.spin_box = CustomDoubleSpinBox(init_values=control_values, tooltip=control_tooltip, obj_name='spn_panel')
+			self.spin_box = CustomSpinBox(init_values=control_values, tooltip=control_tooltip, obj_name='spn_panel')
 		else:
 			self.spin_box = CustomSpinBox(init_values=control_values, tooltip=control_tooltip, obj_name='spn_panel')
 
@@ -917,27 +871,27 @@ class TRTransformCtrl(QtGui.QWidget):
 		self.lay_controls = TRFlowLayout(spacing=10) 
 
 		tooltip_button = "Scale X"
-		self.spb_scale_x = CustomSpinLabel('scale_x', (-999, 999, 0, 1), tooltip_button, ' %', ('spn_panel_inf', 'lbl_panel'))
+		self.spb_scale_x = CustomSpinLabel('scale_x', (-999., 999, 0, 1), tooltip_button, ' %', ('spn_panel_inf', 'lbl_panel'))
 		self.lay_controls.addWidget(self.spb_scale_x)
 
 		tooltip_button = "Scale Y"
-		self.spb_scale_y = CustomSpinLabel('scale_y', (-999, 999, 0, 1), tooltip_button, ' %', ('spn_panel_inf', 'lbl_panel'))
+		self.spb_scale_y = CustomSpinLabel('scale_y', (-999., 999, 0, 1), tooltip_button, ' %', ('spn_panel_inf', 'lbl_panel'))
 		self.lay_controls.addWidget(self.spb_scale_y)
 
 		tooltip_button = "Translate X"
-		self.spb_translate_x = CustomSpinLabel('translate_x', (-999, 999, 0, 1), tooltip_button, ' u', ('spn_panel_inf', 'lbl_panel'))
+		self.spb_translate_x = CustomSpinLabel('translate_x', (-999., 999, 0, 1), tooltip_button, ' u', ('spn_panel_inf', 'lbl_panel'))
 		self.lay_controls.addWidget(self.spb_translate_x)
 
 		tooltip_button = "Translate Y"
-		self.spb_translate_y = CustomSpinLabel('translate_y', (-999, 999, 0, 1), tooltip_button, ' u', ('spn_panel_inf', 'lbl_panel'))
+		self.spb_translate_y = CustomSpinLabel('translate_y', (-999., 999, 0, 1), tooltip_button, ' u', ('spn_panel_inf', 'lbl_panel'))
 		self.lay_controls.addWidget(self.spb_translate_y)
 
 		tooltip_button = "Skew/Slant"
-		self.spb_shear = CustomSpinLabel('skew', (-90, 90, 0, 1), tooltip_button, ' °', ('spn_panel_inf', 'lbl_panel'))
+		self.spb_shear = CustomSpinLabel('skew', (-90., 90, 0, 1), tooltip_button, ' °', ('spn_panel_inf', 'lbl_panel'))
 		self.lay_controls.addWidget(self.spb_shear)
 
 		tooltip_button = "Rotate"
-		self.spb_rotate = CustomSpinLabel('rotate', (-360, 360, 0, 1), tooltip_button, ' °', ('spn_panel_inf', 'lbl_panel'))
+		self.spb_rotate = CustomSpinLabel('rotate', (-360., 360, 0, 1), tooltip_button, ' °', ('spn_panel_inf', 'lbl_panel'))
 		self.lay_controls.addWidget(self.spb_rotate)
 
 		self.lay_box.addLayout(self.lay_controls)

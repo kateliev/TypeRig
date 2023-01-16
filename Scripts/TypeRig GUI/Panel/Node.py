@@ -22,7 +22,7 @@ from typerig.proxy.fl.actions.node import TRNodeActionCollector
 from typerig.proxy.fl.actions.curve import TRCurveActionCollector
 from typerig.proxy.fl.application.app import pWorkspace
 #from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomLabel, CustomPushButton, CustomSpinButton, CustomDoubleSpinBox, TRFlowLayout
+from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomLabel, CustomPushButton, CustomSpinButton, CustomSpinBox, TRFlowLayout
 from typerig.proxy.fl.gui.styles import css_tr_button
 
 # - Init -------------------------------
@@ -176,17 +176,17 @@ class TRNodeBasics(QtGui.QWidget):
 		lay_corner.setContentsMargins(0, 0, 0, 0)
 
 		tooltip_button = 'Corner Mitre'
-		self.btn_corner_mitre = CustomSpinButton('corner_mitre', (0., 300., 0., 1.), (tooltip_button + ' value', tooltip_button), ('spn_panel', 'btn_panel'))
+		self.btn_corner_mitre = CustomSpinButton('corner_mitre', (0, 300, 0, 1), (tooltip_button + ' value', tooltip_button), ('spn_panel', 'btn_panel'))
 		lay_corner.addWidget(self.btn_corner_mitre)
 		self.btn_corner_mitre.button.clicked.connect(lambda: TRNodeActionCollector.corner_mitre(pMode, pLayers, self.btn_corner_mitre.input.value))
 
 		tooltip_button = 'Corner Round'
-		self.btn_corner_round = CustomSpinButton('corner_round', (0., 300., 0., 1.), (tooltip_button + ' value', tooltip_button), ('spn_panel', 'btn_panel'))
+		self.btn_corner_round = CustomSpinButton('corner_round', (0, 300, 0, 1), (tooltip_button + ' value', tooltip_button), ('spn_panel', 'btn_panel'))
 		lay_corner.addWidget(self.btn_corner_round)
 		self.btn_corner_round.button.clicked.connect(lambda: TRNodeActionCollector.corner_round(pMode, pLayers, self.btn_corner_round.input.value))
 
 		tooltip_button = 'Corner Loop'
-		self.btn_corner_loop = CustomSpinButton('corner_loop', (0., 300., 0., 1.), (tooltip_button + ' value', tooltip_button), ('spn_panel', 'btn_panel'))
+		self.btn_corner_loop = CustomSpinButton('corner_loop', (0, 300, 0, 1), (tooltip_button + ' value', tooltip_button), ('spn_panel', 'btn_panel'))
 		lay_corner.addWidget(self.btn_corner_loop)
 		self.btn_corner_loop.button.clicked.connect(lambda: TRNodeActionCollector.corner_loop(pMode, pLayers, self.btn_corner_loop.input.value))
 		
@@ -548,13 +548,13 @@ class TRNodeBasics(QtGui.QWidget):
 		lbl_x = CustomLabel('width_x', obj_name='lbl_panel')
 		lay_move_nodes.addWidget(lbl_x, 1, 0, 1, 1)
 
-		self.spn_move_x = CustomDoubleSpinBox(init_values=(-999., 999., 1., 1.), tooltip='Horizontal shift value', obj_name='spn_panel')
+		self.spn_move_x = CustomSpinBox(init_values=(-999, 999, 1, 1), tooltip='Horizontal shift value', obj_name='spn_panel')
 		lay_move_nodes.addWidget(self.spn_move_x, 1, 1, 1, 2)
 
 		lbl_y = CustomLabel('width_y', obj_name='lbl_panel')
 		lay_move_nodes.addWidget(lbl_y, 2, 0, 1, 1)
 
-		self.spn_move_y = CustomDoubleSpinBox(init_values=(-999., 999., 1., 1.), tooltip='Vertical shift value', obj_name='spn_panel')
+		self.spn_move_y = CustomSpinBox(init_values=(-999, 999, 1, 1), tooltip='Vertical shift value', obj_name='spn_panel')
 		lay_move_nodes.addWidget(self.spn_move_y, 2, 1, 1, 2)
 
 		tooltip_button = "Shift Left"
