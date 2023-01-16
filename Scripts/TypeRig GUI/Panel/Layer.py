@@ -34,7 +34,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '2.55'
+app_name, app_version = 'TypeRig | Layers', '2.56'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -159,7 +159,7 @@ class TRLayerActions(QtGui.QWidget):
 
 		lay_options = TRFlowLayout(spacing=10)
 
-		'''
+		
 		tooltip_button = 'Outline'
 		self.chk_outline = CustomPushButton("bbox", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_outline)
@@ -183,8 +183,7 @@ class TRLayerActions(QtGui.QWidget):
 		tooltip_button = 'Metrics RSB'
 		self.chk_rsb = CustomPushButton("metrics_rsb", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_rsb)
-		'''
-
+		
 		tooltip_button = 'Show interpolation controls'
 		self.chk_interpolate = CustomPushButton("interpolate", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_interpolate)
