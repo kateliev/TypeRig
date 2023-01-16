@@ -30,7 +30,7 @@ from typerig.proxy.fl.gui.dialogs import TRMsgSimple, TR2FieldDLG
 from typerig.proxy.fl.application.app import pItems
 
 # - Init ---------------------------------
-__version__ = '2.5'
+__version__ = '2.6'
 
 # - Keep compatibility for basestring checks
 try:
@@ -158,8 +158,24 @@ class TRLayerActionCollector(object):
 			for layer_name in parent.lst_layers.getTable():
 				wLayer = parent.glyph.layer(layer_name)
 
-				if type == 'Service': wLayer.isService is not wLayer.isService
-				if type == 'Wireframe': wLayer.isWireframe is not wLayer.isWireframe
+				if type == 'Service': 
+					wLayer.isService = not wLayer.isService
+
+				if type == 'Wireframe': 
+					wLayer.isWireframe = not wLayer.isWireframe
+				
+				if type == 'Mask': 
+					if wLayer.isMaskLayer:
+						wLayer.isService = False
+						wLayer.isWireframe = False
+					
+						if 'mask.' in wLayer.name: 
+							wLayer.name = wLayer.name.replace('mask.', '')
+					
+					else:
+						wLayer.name = 'mask.' + wLayer.name
+						wLayer.isService = True
+						wLayer.isWireframe = True
 
 			parent.glyph.updateObject(parent.glyph.fl, 'Set Layer as <%s>: %s.' %(type, '; '.join([layer_name for layer_name in parent.lst_layers.getTable()])))
 			parent.refresh()

@@ -34,7 +34,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '2.50'
+app_name, app_version = 'TypeRig | Layers', '2.55'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -309,6 +309,7 @@ class TRLayerActions(QtGui.QWidget):
 		self.act_layer_visible_on.triggered.connect(lambda: TRLayerActionCollector.layer_set_visible(self, True))
 		self.act_layer_visible_off.triggered.connect(lambda: TRLayerActionCollector.layer_set_visible(self, False))
 		
+		act_layer_set_type_mask.triggered.connect(lambda: TRLayerActionCollector.layer_set_type(self, 'Mask'))
 		act_layer_set_type_wireframe.triggered.connect(lambda: TRLayerActionCollector.layer_set_type(self, 'Wireframe'))
 		act_layer_set_type_service.triggered.connect(lambda: TRLayerActionCollector.layer_set_type(self, 'Service'))
 
@@ -399,7 +400,7 @@ class TRLayerActions(QtGui.QWidget):
 			src_array_t0 = self.glyph._getPointArray(selection[0])
 			src_array_t1 = self.glyph._getPointArray(selection[1])
 			
-			self.lerp_array = zip(src_array_t0, src_array_t1)
+			self.lerp_array = list(zip(src_array_t0, src_array_t1))
 		else:
 			warnings.warn('Axis requires exactly two layers to be selected: %s.' %app_name, TRPanelWarning)
 			self.btn_axis_set.setChecked(False)
@@ -438,11 +439,15 @@ class TRLayerActions(QtGui.QWidget):
 				tx = 0.
 				ty = 0
 			
-			dst_array = [self.__lerp_function(item[0], item[1], tx, ty) for item in self.lerp_array]
-			self.glyph._setPointArray(dst_array)
-			
-			self.glyph.update()
-			self.active_canvas.refreshAll()
+			try:
+				dst_array = [self.__lerp_function(item[0], item[1], tx, ty) for item in self.lerp_array]
+				self.glyph._setPointArray(dst_array)
+				
+				self.glyph.update()
+				self.active_canvas.refreshAll()
+
+			except IndexError:
+				warnings.warn('Current layer is not compatible to axis masers: %s.' %app_name, TRPanelWarning)
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
