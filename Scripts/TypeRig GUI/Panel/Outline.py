@@ -11,24 +11,31 @@
 from __future__ import absolute_import, print_function
 import warnings
 from collections import OrderedDict
+from math import degrees
 
 import fontlab as fl6
 import fontgate as fgt
 
 from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.objects.node import eNode
+from typerig.proxy.fl.application.app import pWorkspace
 
-from PythonQt import QtCore
-from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRTableView
+from PythonQt import QtCore, QtGui
+from typerig.proxy.fl.application.app import pWorkspace
+from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomLabel, CustomPushButton, TRFlowLayout, getProcessGlyphs, TRTableView
+from typerig.proxy.fl.gui.styles import css_tr_button
 
 # - Init --------------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Outline', '2.00'
+app_name, app_version = 'TypeRig | Outline', '3.00'
 
+TRToolFont = getTRIconFontPath()
+font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
+
+active_workspace = pWorkspace()
 # - Sub widgets ------------------------
 class TRContourSelect(QtGui.QVBoxLayout):
 	# - Split/Break contour 
@@ -38,26 +45,38 @@ class TRContourSelect(QtGui.QVBoxLayout):
 		# -- Init
 		self.table_dict = {0:{0:None}} # Empty table
 		self.layer_names = [] # Empty layer list
-		self.table_columns = 'N,Sh,Cn,X,Y,Type,Rel'.split(',')
+		self.table_columns = 'Index, Shape, Contour, X, Y, Type, Distance, Angle'.split(', ')
 
 		# -- Widgets
-		self.lay_head = QtGui.QGridLayout()
+		# --- Head
+		box_head = QtGui.QGroupBox()
+		box_head.setObjectName('box_group')
 		
-		self.edt_glyphName = QtGui.QLineEdit()
-		self.cmb_layer = QtGui.QComboBox()
-			
-		self.btn_refresh = QtGui.QPushButton('&Refresh')
-		self.btn_apply = QtGui.QPushButton('&Apply')
-		self.btn_apply.setEnabled(False)
+		lay_head = QtGui.QGridLayout()
+		lay_head.setContentsMargins(0, 0, 0, 0)
 
-		# -- Build Layout
-		self.lay_head.addWidget(QtGui.QLabel('G:'),	0,0,1,1)
-		self.lay_head.addWidget(self.edt_glyphName,	0,1,1,5)
-		self.lay_head.addWidget(self.btn_refresh,	0,6,1,2)
-		self.lay_head.addWidget(QtGui.QLabel('L:'),	1,0,1,1)
-		self.lay_head.addWidget(self.cmb_layer,		1,1,1,5)
-		self.lay_head.addWidget(self.btn_apply,		1,6,1,2)
-		self.addLayout(self.lay_head)
+		lbl_head = CustomLabel('label', obj_name='lbl_panel')
+		lay_head.addWidget(lbl_head, 0,0,1,1)
+
+		self.edt_glyphName = QtGui.QLineEdit()
+		lay_head.addWidget(self.edt_glyphName, 0,1,1,5)
+
+		self.btn_refresh = CustomPushButton('refresh', tooltip='Refresh', obj_name='btn_panel')
+		self.btn_refresh.clicked.connect(self.refresh)
+		lay_head.addWidget(self.btn_refresh, 0,6,1,1)
+
+		lbl_layer = CustomLabel('layer_master', obj_name='lbl_panel')
+		lay_head.addWidget(lbl_layer, 1,0,1,1)
+		
+		self.cmb_layer = QtGui.QComboBox()
+		lay_head.addWidget(self.cmb_layer,	1,1,1,5)
+
+		self.btn_apply = CustomPushButton('action_play', tooltip='Refresh', obj_name='btn_panel')
+		self.btn_apply.clicked.connect(self.refresh)
+		lay_head.addWidget(self.btn_apply, 1,6,1,1)
+
+		box_head.setLayout(lay_head)
+		self.addWidget(box_head)
 
 		# -- Node List Table
 		self.tab_nodes = TRTableView(self.table_dict)
@@ -95,8 +114,16 @@ class TRContourSelect(QtGui.QVBoxLayout):
 			for sID, shape in enumerate(self.glyph.shapes(layer)):
 				for cID, contour in enumerate(shape.contours):
 					for nID, node in enumerate(contour.nodes()):
+						x = round(node.x, 2)
+						y = round(node.y, 2)
+
+						node_type = node.type
+						if node_type == 'on': node_type = ['sharp', 'smooth'][node.smooth]
+							
+						distance = round(eNode(node).distanceToPrev(),2)
+						angle = round(degrees(eNode(node).angleToPrev()),1)
 						
-						table_values = [node_count, sID, cID, round(node.x, 2), round(node.y, 2), node.type, round(eNode(node).distanceToPrev(),2)]
+						table_values = [node_count, sID, cID, x, y, node_type, distance, angle]
 						
 						self.table_dict[node_count] = OrderedDict(zip(self.table_columns, table_values))
 						node_count += 1
@@ -130,7 +157,9 @@ class TRContourSelect(QtGui.QVBoxLayout):
 					self.glyph.nodes(self.cmb_layer.currentText)[selected_nid].selected = True
 				
 				# - Finish
-				self.glyph.updateObject(self.glyph.fl, verbose=False)
+				self.glyph.update()
+				active_workspace.getCanvas(True).refreshAll()
+				#self.glyph.updateObject(self.glyph.fl, verbose=False)
 
 	def valueChanged(self, item):
 		if self.doCheck():
@@ -159,7 +188,9 @@ class tool_tab(QtGui.QWidget):
 	def __init__(self):
 		super(tool_tab, self).__init__()
 
-		# - Init
+		# - Init 
+		self.setStyleSheet(css_tr_button)
+
 		layoutV = QtGui.QVBoxLayout()
 		self.outline = TRContourSelect()
 		layoutV.addLayout(self.outline)
