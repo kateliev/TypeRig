@@ -138,15 +138,15 @@ class CustomLabel(QtGui.QLabel):
 		if tooltip is not None: self.setToolTip(tooltip)
 		if obj_name is not None: self.setObjectName(obj_name)
 
-class CustomSpinBox(QtGui.QSpinBox):
+class CustomSpinBox(QtGui.QDoubleSpinBox):
 	def __init__(self, init_values=(0., 100., 0., 1.), tooltip=None, suffix=None, obj_name=None):
 		super(CustomSpinBox, self).__init__()
 
 		if any([isinstance(n, float) for n in init_values]):
-			self.input = QtGui.QDoubleSpinBox()
+			self.setDecimals(2)
 			init_values = [float(n) for n in init_values]
 		else:
-			self.input = QtGui.QSpinBox()
+			self.setDecimals(0)
 		
 		# - Init
 		spb_min, spb_max, spb_value, spb_step = init_values
@@ -173,7 +173,7 @@ class CustomSpinLabel(QtGui.QWidget):
 			input_obj_name, lbl_obj_name = obj_name
 
 		# - Widgets
-		self.label =CustomLabel(label_text, tooltip, lbl_obj_name)
+		self.label = CustomLabel(label_text, tooltip, lbl_obj_name)
 		self.input = CustomSpinBox(init_values, tooltip, suffix, input_obj_name)
 
 		# - Layout
@@ -871,27 +871,27 @@ class TRTransformCtrl(QtGui.QWidget):
 		self.lay_controls = TRFlowLayout(spacing=10) 
 
 		tooltip_button = "Scale X"
-		self.spb_scale_x = CustomSpinLabel('scale_x', (-999., 999, 0, 1), tooltip_button, ' %', ('spn_panel_inf', 'lbl_panel'))
+		self.spb_scale_x = CustomSpinLabel('scale_x', (-999., 999., 100., 1.), tooltip_button, ' %', ('spn_panel_inf', 'lbl_panel'))
 		self.lay_controls.addWidget(self.spb_scale_x)
 
 		tooltip_button = "Scale Y"
-		self.spb_scale_y = CustomSpinLabel('scale_y', (-999., 999, 0, 1), tooltip_button, ' %', ('spn_panel_inf', 'lbl_panel'))
+		self.spb_scale_y = CustomSpinLabel('scale_y', (-999., 999., 100., 1.), tooltip_button, ' %', ('spn_panel_inf', 'lbl_panel'))
 		self.lay_controls.addWidget(self.spb_scale_y)
 
 		tooltip_button = "Translate X"
-		self.spb_translate_x = CustomSpinLabel('translate_x', (-999., 999, 0, 1), tooltip_button, ' u', ('spn_panel_inf', 'lbl_panel'))
+		self.spb_translate_x = CustomSpinLabel('translate_x', (-999., 999, 0., 1.), tooltip_button, ' u', ('spn_panel_inf', 'lbl_panel'))
 		self.lay_controls.addWidget(self.spb_translate_x)
 
 		tooltip_button = "Translate Y"
-		self.spb_translate_y = CustomSpinLabel('translate_y', (-999., 999, 0, 1), tooltip_button, ' u', ('spn_panel_inf', 'lbl_panel'))
+		self.spb_translate_y = CustomSpinLabel('translate_y', (-999., 999., 0., 1.), tooltip_button, ' u', ('spn_panel_inf', 'lbl_panel'))
 		self.lay_controls.addWidget(self.spb_translate_y)
 
 		tooltip_button = "Skew/Slant"
-		self.spb_shear = CustomSpinLabel('skew', (-90., 90, 0, 1), tooltip_button, ' °', ('spn_panel_inf', 'lbl_panel'))
+		self.spb_shear = CustomSpinLabel('skew', (-90., 90., 0., 1.), tooltip_button, ' °', ('spn_panel_inf', 'lbl_panel'))
 		self.lay_controls.addWidget(self.spb_shear)
 
 		tooltip_button = "Rotate"
-		self.spb_rotate = CustomSpinLabel('rotate', (-360., 360, 0, 1), tooltip_button, ' °', ('spn_panel_inf', 'lbl_panel'))
+		self.spb_rotate = CustomSpinLabel('rotate', (-360., 360., 0., 1.), tooltip_button, ' °', ('spn_panel_inf', 'lbl_panel'))
 		self.lay_controls.addWidget(self.spb_rotate)
 
 		self.lay_box.addLayout(self.lay_controls)
@@ -899,7 +899,6 @@ class TRTransformCtrl(QtGui.QWidget):
 		box_transform.setLayout(self.lay_box)
 		self.lay_main.addWidget(box_transform)
 
-		self.reset()
 		self.setLayout(self.lay_main)
 		
 	def reset(self):

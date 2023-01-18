@@ -36,7 +36,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Delta', '5.3'
+app_name, app_version = 'TypeRig | Delta', '5.4'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -198,27 +198,27 @@ class TRDeltaPanel(QtGui.QWidget):
 		# -- Delta controls
 		lay_controls = TRFlowLayout(spacing=10)
 
-		self.cpn_value_width = TRCustomSpinController('width', (-999., 999., 100, 1.), ' %', 'Width')
+		self.cpn_value_width = TRCustomSpinController('width', (-999, 999, 100, 1), ' %', 'Width')
 		lay_controls.addWidget(self.cpn_value_width)
 		self.cpn_value_width.spin_box.valueChanged.connect(lambda: self.execute_scale())
 		
-		self.cpn_value_height = TRCustomSpinController('height', (-999., 999., 100, 1.), ' %', 'Height')
+		self.cpn_value_height = TRCustomSpinController('height', (-999, 999, 100, 1), ' %', 'Height')
 		lay_controls.addWidget(self.cpn_value_height)
 		self.cpn_value_height.spin_box.valueChanged.connect(lambda: self.execute_scale())
 
-		self.cpn_value_stem_x = TRCustomSpinController('stem_vertical_alt', (-300., 300., 1, 1.), ' u', 'Vertical stem width')
+		self.cpn_value_stem_x = TRCustomSpinController('stem_vertical_alt', (-300, 300, 1, 1), ' u', 'Vertical stem width')
 		lay_controls.addWidget(self.cpn_value_stem_x)
 		self.cpn_value_stem_x.spin_box.valueChanged.connect(lambda: self.execute_scale())
 
-		self.cpn_value_stem_y = TRCustomSpinController('stem_horizontal_alt', (-300., 300., 1, 1.), ' u', 'Horizontal stem width')
+		self.cpn_value_stem_y = TRCustomSpinController('stem_horizontal_alt', (-300, 300, 1, 1), ' u', 'Horizontal stem width')
 		lay_controls.addWidget(self.cpn_value_stem_y)
 		self.cpn_value_stem_y.spin_box.valueChanged.connect(lambda: self.execute_scale())
 
-		self.cpn_value_lerp_t = TRCustomSpinController('interpolate', (-300., 300., 0, 1.), ' %', 'Time along axis')
+		self.cpn_value_lerp_t = TRCustomSpinController('interpolate', (-300, 300, 0, 1), ' %', 'Time along axis')
 		lay_controls.addWidget(self.cpn_value_lerp_t)
 		self.cpn_value_lerp_t.spin_box.valueChanged.connect(lambda: self.execute_scale(True))
 
-		self.cpn_value_ital = TRCustomSpinController('slope_italic', (-20., 20., self.active_font.italic_angle, 1.), ' °', 'Italic angle')
+		self.cpn_value_ital = TRCustomSpinController('slope_italic', (-20, 20, self.active_font.italic_angle, 1), ' °', 'Italic angle')
 		lay_controls.addWidget(self.cpn_value_ital)
 		self.cpn_value_ital.spin_box.valueChanged.connect(lambda: self.execute_scale())
 
@@ -306,7 +306,7 @@ class TRDeltaPanel(QtGui.QWidget):
 				self.__refresh_ui()
 				return False
 
-		elif self.active_glyph.layer().name != self.active_layer:
+		if self.active_glyph.layer().name != self.active_layer:
 			self.__refresh_ui()
 			self.active_layer = self.active_glyph.layer().name
 			warnings.warn('Layer changed! Forcing refresh...', LayerWarning)
@@ -339,10 +339,11 @@ class TRDeltaPanel(QtGui.QWidget):
 		self.cpn_value_width.setValue(100)
 		self.cpn_value_height.setValue(100)
 		self.value_array = DeltaScale(self.axis_stems, self.axis_stems)
+		all_layers = sum(self.masters_data.values(),[])
 		
 		if len(self.axis_data):
-			self.cpn_value_stem_x.setValue(float(self.__where(self.axis_data, self.active_glyph.layer().name, 1)))
-			self.cpn_value_stem_y.setValue(float(self.__where(self.axis_data, self.active_glyph.layer().name, 2)))
+			self.cpn_value_stem_x.setValue(float(self.__where(all_layers, self.active_glyph.layer().name, 1)))
+			self.cpn_value_stem_y.setValue(float(self.__where(all_layers, self.active_glyph.layer().name, 2)))
 		
 		self.cpn_value_ital.setValue(self.active_font.italic_angle)
 
@@ -361,6 +362,10 @@ class TRDeltaPanel(QtGui.QWidget):
 		self.masters_data = self.tree_layer.getTree()
 		self.axis_data = self.masters_data[tree_axis_group_name]
 		self.axis_stems = []
+
+		if not len(self.axis_data):
+			warnings.warn('Axis not set! Please add two or more layers!', TRDeltaAxisWarning)
+			return
 		
 		for layer_data in self.axis_data:
 			try:
@@ -371,6 +376,7 @@ class TRDeltaPanel(QtGui.QWidget):
 				warnings.warn('Missing or invalid stem data!', TRDeltaStemWarning)
 				return
 
+		self.__refresh_ui()
 		if verbose: output(0, '%s %s' %(app_name, app_version), 'Font: %s; Axis set.' %(self.active_font.name))
 
 	def __reset_axis(self, verbose=False):
