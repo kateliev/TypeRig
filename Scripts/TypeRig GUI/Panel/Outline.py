@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Outline', '3.00'
+app_name, app_version = 'TypeRig | Outline', '3.1'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -77,6 +77,51 @@ class TRContourSelect(QtGui.QVBoxLayout):
 
 		box_head.setLayout(lay_head)
 		self.addWidget(box_head)
+		
+		# -- Row options
+		box_opt = QtGui.QGroupBox()
+		box_opt.setObjectName('box_group')
+		
+		self.lay_opt = TRFlowLayout(spacing=10)
+		self.lay_opt.setContentsMargins(0, 0, 0, 0)
+
+		tooltip_button = 'Node Index'
+		self.opt_view_index = CustomPushButton('select_list', checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.lay_opt.addWidget(self.opt_view_index)
+		self.opt_view_index.clicked.connect(lambda: self.toggle_columns())
+
+		tooltip_button = 'Element Index'
+		self.opt_view_shape = CustomPushButton('shape', checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.lay_opt.addWidget(self.opt_view_shape)
+		self.opt_view_shape.clicked.connect(lambda: self.toggle_columns())
+
+		tooltip_button = 'Contour Index'
+		self.opt_view_contour = CustomPushButton('contour', checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.lay_opt.addWidget(self.opt_view_contour)
+		self.opt_view_contour.clicked.connect(lambda: self.toggle_columns())
+
+		tooltip_button = 'Node Coordinates'
+		self.opt_view_coords = CustomPushButton('coordinates', checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.lay_opt.addWidget(self.opt_view_coords)
+		self.opt_view_coords.clicked.connect(lambda: self.toggle_columns())
+
+		tooltip_button = 'Node Type'
+		self.opt_view_type = CustomPushButton('node', checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.lay_opt.addWidget(self.opt_view_type)
+		self.opt_view_type.clicked.connect(lambda: self.toggle_columns())
+
+		tooltip_button = 'Distance to previous node'
+		self.opt_view_dist = CustomPushButton('distance', checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.lay_opt.addWidget(self.opt_view_dist)
+		self.opt_view_dist.clicked.connect(lambda: self.toggle_columns())
+
+		tooltip_button = 'Angle to previous node'
+		self.opt_view_angle = CustomPushButton('angle', checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.lay_opt.addWidget(self.opt_view_angle)
+		self.opt_view_angle.clicked.connect(lambda: self.toggle_columns())
+
+		box_opt.setLayout(self.lay_opt)
+		self.addWidget(box_opt)
 
 		# -- Node List Table
 		self.tab_nodes = TRTableView(self.table_dict)
@@ -93,6 +138,46 @@ class TRContourSelect(QtGui.QVBoxLayout):
 		self.tab_nodes.resizeColumnsToContents()
 		self.tab_nodes.selectionModel().selectionChanged.connect(self.selectionChanged)
 		self.tab_nodes.itemChanged.connect(self.valueChanged)
+
+	def toggle_columns(self):
+		if len(self.table_dict):
+			if self.opt_view_index.isChecked():
+				self.tab_nodes.showColumn(0)
+			else:
+				self.tab_nodes.hideColumn(0)
+
+			if self.opt_view_shape.isChecked():
+				self.tab_nodes.showColumn(1)
+			else:
+				self.tab_nodes.hideColumn(1)
+
+			if self.opt_view_contour.isChecked():
+				self.tab_nodes.showColumn(2)
+			else:
+				self.tab_nodes.hideColumn(2)
+
+			if self.opt_view_coords.isChecked():
+				self.tab_nodes.showColumn(3)
+				self.tab_nodes.showColumn(4)
+			else:
+				self.tab_nodes.hideColumn(3)
+				self.tab_nodes.hideColumn(4)
+
+			if self.opt_view_type.isChecked():
+				self.tab_nodes.showColumn(5)
+			else:
+				self.tab_nodes.hideColumn(5)
+
+			if self.opt_view_dist.isChecked():
+				self.tab_nodes.showColumn(6)
+			else:
+				self.tab_nodes.hideColumn(6)
+
+			if self.opt_view_angle.isChecked():
+				self.tab_nodes.showColumn(7)
+			else:
+				self.tab_nodes.hideColumn(7)
+
 
 	def refresh(self, layer=None):
 		# - Init
