@@ -20,7 +20,7 @@ from typerig.proxy.fl.objects.glyph import pGlyph
 
 #from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getTRIconFontPath, getProcessGlyphs, CustomPushButton, TRVTabWidget, TRCheckTableView
-from typerig.proxy.fl.gui.dialogs import TRLayerSelectDLG
+from typerig.proxy.fl.gui.dialogs import TRLayerSelectNEW
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.gui.styles import css_tr_button
 
@@ -54,7 +54,7 @@ class TRMainPanel(QtGui.QDialog):
 		self.flag_fold = False
 		
 		# - Masthead/controller ------------
-		self.dlg_layer = TRLayerSelectDLG(self, pMode)
+		self.dlg_layer = TRLayerSelectNEW(self, pMode)
 		self.dlg_layer.hide()
 
 		self.chk_ActiveLayer = CustomPushButton('layer_active', True, True, True, 'Active layer', 'btn_mast')

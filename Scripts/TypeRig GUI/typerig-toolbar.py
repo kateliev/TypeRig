@@ -22,7 +22,7 @@ from typerig.proxy.fl.objects.glyph import pGlyph
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getTRIconFont, getProcessGlyphs, TRVTabWidget, TRCheckTableView
 from typerig.proxy.fl.application.app import pWorkspace
-from typerig.proxy.fl.gui.dialogs import TRLayerSelectDLG
+from typerig.proxy.fl.gui.dialogs import TRLayerSelectNEW
 
 import Toolbar
 
@@ -49,7 +49,7 @@ class TRToolbarController(QtGui.QToolBar):
 		self.layers_selected = []
 		
 		# - Dialogs 
-		self.dlg_layer = TRLayerSelectDLG(self, pMode)
+		self.dlg_layer = TRLayerSelectNEW(self, pMode)
 		self.dlg_layer.hide()
 
 		# - Actions and groups 

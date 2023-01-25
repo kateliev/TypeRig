@@ -472,7 +472,7 @@ class TRLayerSelectDLG(QtGui.QDialog):
 			
 			table_dict = {n:OrderedDict(zip(self.column_names, data)) for n, data in enumerate(init_data)}
 			self.tab_masters.clear()
-			self.tab_masters.setTable(table_dict, color_dict=self.color_dict, enable_check=True)	
+			self.tab_masters.setTable(table_dict, color_dict=self.color_dict, enable_check=True)		
 
 # -- Trees --------------------------------
 class TRDeltaLayerTree(QtGui.QTreeWidget):

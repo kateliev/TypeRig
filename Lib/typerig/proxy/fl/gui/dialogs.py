@@ -20,10 +20,11 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import TRCheckTableView, TRSliderCtrl
+from typerig.proxy.fl.gui.widgets import TRCheckTableView, TRSliderCtrl, CustomPushButton, CustomLabel, TRFlowLayout
+from typerig.proxy.fl.gui.styles import css_tr_button
 
 # - Init ----------------------------------
-__version__ = '0.1.3'
+__version__ = '0.1.5'
 
 # - Keep compatibility for basestring checks
 try:
@@ -394,6 +395,147 @@ class TRLayerSelectDLG(QtGui.QDialog):
 
 		# - Set Widget
 		self.setLayout(layoutV)
+		self.setWindowTitle('Select Layers')
+		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
+		self.setGeometry(500, 200, 300, 600)
+
+	# - Table operations
+	def table_filter(self):
+		search_string = self.edt_search_field.text
+
+		for row in range(self.tab_masters.rowCount):
+			if len(search_string):
+				if search_string.lower() not in self.tab_masters.item(row, 0).text().lower():
+					self.tab_masters.hideRow(row)
+			else:
+				self.tab_masters.showRow(row)
+
+	def table_check_all(self, layer_type=None, do_swap=False):
+		modifiers = QtGui.QApplication.keyboardModifiers() # Listen to Shift - reverses the ratio
+
+		for row in range(self.tab_masters.rowCount):
+			if modifiers == QtCore.Qt.AltModifier or do_swap: # Toggle state
+				if self.tab_masters.item(row, 0).checkState() == QtCore.Qt.Checked:
+					self.tab_masters.item(row, 0).setCheckState(QtCore.Qt.Unchecked)
+				else:
+					self.tab_masters.item(row, 0).setCheckState(QtCore.Qt.Checked)		
+
+			elif modifiers == QtCore.Qt.ShiftModifier: # Uncheck all
+				if not self.tab_masters.isRowHidden(row):
+					self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Unchecked)								
+
+			else: # Check all
+				if layer_type is None or self.tab_masters.item(row,1).text() == layer_type:
+					if not self.tab_masters.isRowHidden(row):
+						self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Checked)
+	
+	def table_populate(self, mode, font=None, glyph=None):
+		if mode !=0:
+			self.btn_tableCheckMasters.hide()
+			self.btn_tableCheckMasks.hide()
+			self.btn_tableCheckServices.hide()
+		else:
+			self.btn_tableCheckMasters.show()
+			self.btn_tableCheckMasks.show()
+			self.btn_tableCheckServices.show()
+
+		# - Helper	
+		def check_type(layer):
+			if layer.isMaskLayer: return 'Mask'
+			if layer.isMasterLayer: return 'Master'
+			if layer.isService: return 'Service'
+		
+		# - Set Table
+		if fl6.CurrentFont() is not None and fl6.CurrentGlyph() is not None:
+			active_font = pFont() if font is None else font
+			active_glyph = eGlyph() if glyph is None else glyph
+
+			if mode == 0:
+				init_data = [(layer.name, check_type(layer)) for layer in active_glyph.layers() if '#' not in layer.name]
+			else:
+				init_data = [(master, 'Master') for master in active_font.pMasters.names]
+			
+			table_dict = {n:OrderedDict(zip(self.column_names, data)) for n, data in enumerate(init_data)}
+			self.tab_masters.clear()
+			self.tab_masters.setTable(table_dict, color_dict=self.color_dict, enable_check=True)
+
+class TRLayerSelectNEW(QtGui.QDialog):
+	def __init__(self, parent, mode, font=None, glyph=None):
+		super(TRLayerSelectNEW, self).__init__()
+	
+		# - Init
+		self.parent_widget = parent
+		self.column_names = ('Layer Name', 'Layer Type')
+		self.color_dict = {'Master': QtGui.QColor(0, 255, 0, 20), 'Service': QtGui.QColor(0, 0, 255, 20), 'Mask': QtGui.QColor(255, 0, 0, 20)}
+		column_init = (None, None)
+		table_dict = {1:OrderedDict(zip(self.column_names, column_init))}
+		
+		# - Basic Widgets
+		box_head = QtGui.QGroupBox()
+		box_head.setObjectName('box_group')
+
+		lay_main = QtGui.QVBoxLayout()
+		
+		lay_head = QtGui.QVBoxLayout() 
+		lay_head.setContentsMargins(0, 0, 0, 0)
+		
+		lay_actions = QtGui.QHBoxLayout() 
+		lay_actions.setContentsMargins(0, 0, 0, 0)
+		
+		lay_search = QtGui.QHBoxLayout() 
+		lay_search.setContentsMargins(0, 0, 0, 0)
+	
+		# - Search Box
+		self.edt_search_field = QtGui.QLineEdit()
+		self.edt_search_field.setPlaceholderText('Filter: Layer Name')
+		self.edt_search_field.textChanged.connect(self.table_filter)
+		self.btn_search_field = CustomPushButton("close", tooltip='Clear search', obj_name='btn_panel')
+		self.btn_search_field.clicked.connect(lambda: self.edt_search_field.setText(''))
+
+		# -- Layer Buttons
+		self.btn_tableCheck = CustomPushButton("select_all", tooltip='Select all\n<Shift> + Click deselect all.', obj_name='btn_panel')
+		self.btn_tableSwap = CustomPushButton("select_swap", tooltip='Swap selection', obj_name='btn_panel')
+		self.btn_tableCheckMasters = CustomPushButton("layer_master", tooltip='Master layers\n<Shift> + Click deselect all.', obj_name='btn_panel')
+		self.btn_tableCheckMasks = CustomPushButton("layer_mask", tooltip='Mask layers\n<Shift> + Click deselect all.', obj_name='btn_panel')
+		self.btn_tableCheckServices = CustomPushButton("layer_service", tooltip='Service layers\n<Shift> + Click deselect all.', obj_name='btn_panel')
+		self.btn_table_refresh = CustomPushButton("refresh", tooltip='Refresh layer list', obj_name='btn_panel')
+		
+		self.btn_tableCheck.clicked.connect(lambda: self.table_check_all())
+		self.btn_tableSwap.clicked.connect(lambda: self.table_check_all(do_swap=True))
+		self.btn_tableCheckMasters.clicked.connect(lambda: self.table_check_all('Master'))
+		self.btn_tableCheckMasks.clicked.connect(lambda: self.table_check_all('Mask'))
+		self.btn_tableCheckServices.clicked.connect(lambda: self.table_check_all('Service'))
+		self.btn_table_refresh.clicked.connect(lambda: self.table_populate(0))
+
+		# -- Table 
+		self.tab_masters = TRCheckTableView(table_dict)
+		self.tab_masters.verticalHeader().hide()
+		self.table_populate(mode, font, glyph)
+		self.tab_masters.cellChanged.connect(lambda: self.parent_widget.layers_refresh())
+
+		# - Build layout
+		lay_actions.addWidget(self.btn_tableCheck) 	
+		lay_actions.addWidget(self.btn_tableSwap) 		
+		lay_actions.addWidget(self.btn_tableCheckMasters) 
+		lay_actions.addWidget(self.btn_tableCheckMasks) 
+		lay_actions.addWidget(self.btn_tableCheckServices)
+		lay_actions.addStretch()
+		lay_actions.addWidget(self.btn_table_refresh)
+		
+		lay_search.addWidget(CustomLabel('search', obj_name='lbl_panel'))
+		lay_search.addWidget(self.edt_search_field)
+		lay_search.addWidget(self.btn_search_field)
+
+		lay_head.addLayout(lay_actions)
+		lay_head.addLayout(lay_search)
+		
+		box_head.setLayout(lay_head)
+		lay_main.addWidget(box_head)
+		lay_main.addWidget(self.tab_masters)
+
+		# - Set Widget
+		self.setLayout(lay_main)
+		self.setStyleSheet(css_tr_button)
 		self.setWindowTitle('Select Layers')
 		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 		self.setGeometry(500, 200, 300, 600)
