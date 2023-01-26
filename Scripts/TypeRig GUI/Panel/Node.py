@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '3.27'
+app_name, app_version = 'TypeRig | Nodes', '3.28'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -456,7 +456,7 @@ class TRNodeBasics(QtGui.QWidget):
 		self.chk_paste_center = CustomPushButton("node_center", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_copy_nodes_options.addButton(self.chk_paste_center)
 		lay_copy_nodes.addWidget(self.chk_paste_center)
-		self.chk_paste_top_right.clicked.connect(lambda: self.act_node_align_state('CE'))
+		self.chk_paste_center.clicked.connect(lambda: self.act_node_align_state('CE'))
 
 		tooltip_button =  "Paste: Align Bottom Left"
 		self.chk_paste_bottom_left = CustomPushButton("node_align_bottom_left", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
