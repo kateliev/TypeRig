@@ -11,15 +11,18 @@
 # - Dependencies -----------------
 from __future__ import absolute_import, print_function
 from collections import OrderedDict
+import os
+import json
 
 import fontlab as fl6
 from PythonQt import QtCore, QtGui
 
+from typerig.core.base.message import *
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import pGlyph
 
 #from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import getTRIconFontPath, getProcessGlyphs, CustomPushButton, TRVTabWidget, TRCheckTableView
+from typerig.proxy.fl.gui.widgets import getTRIconFontPath, getProcessGlyphs, CustomPushButton, TRVTabWidget, TRCheckTableView, TRFlowLayout
 from typerig.proxy.fl.gui.dialogs import TRLayerSelectNEW
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.gui.styles import css_tr_button
@@ -28,9 +31,11 @@ from typerig.proxy.fl.gui.styles import css_tr_button
 import Panel 
 
 # - Init --------------------------
-app_version = '3.00'
+app_version = '3.10'
 app_name = 'TypeRig Panel'
-ignorePanel = '__'
+ignore_panel = '__'
+panel_path = 'Panel' # ./Panel/
+panel_cfg_filename = 'typerig-panel-config.json'
 
 app = pWorkspace()
 TRToolFont = getTRIconFontPath()
@@ -40,7 +45,135 @@ font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
 pMode = 0
 pLayers = (True, False, False, False)
 
-# - Style -------------------------
+# - Sub widget ----------------------------
+class TROptionsPanel(QtGui.QWidget):
+	def __init__(self, config=None):
+		super(TROptionsPanel, self).__init__()
+
+		# - Init
+		lay_main = QtGui.QVBoxLayout()
+
+		# - Panel visibility options
+		self.options = QtGui.QTableWidget()
+		self.set_table(config)
+		lay_main.addWidget(self.options)
+		
+		# - Save/load config files
+		box_main_cfg = QtGui.QGroupBox()
+		box_main_cfg.setObjectName('box_group')
+
+		lay_main_cfg = TRFlowLayout(spacing=10)
+
+		tooltip_button = 'Save panel configuration'
+		self.btn_file_save = CustomPushButton('file_save', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_main_cfg.addWidget(self.btn_file_save)
+		self.btn_file_save.clicked.connect(lambda: self.file_save_config())
+
+		tooltip_button = 'Load panel configuration'
+		self.btn_file_open = CustomPushButton('file_open', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_main_cfg.addWidget(self.btn_file_open)
+		self.btn_file_open.clicked.connect(lambda: self.file_open_config())
+
+		lbl_note = QtGui.QLabel('')
+		lay_main_cfg.addWidget(lbl_note)
+
+		box_main_cfg.setLayout(lay_main_cfg)
+		lay_main.addWidget(box_main_cfg)
+
+		# - Set
+		self.setLayout(lay_main)
+
+	# -- Tool/panel config 
+	def set_table(self, data):
+		name_row, name_column = [], []
+		self.options.blockSignals(True)
+
+		self.options.setColumnCount(max(map(len, data.values())))
+		self.options.setRowCount(len(data.keys()))
+
+		options_header = self.options.horizontalHeader()
+		options_header.setStretchLastSection(True)
+		options_header.setDefaultAlignment(QtCore.Qt.AlignLeft)
+		self.options.verticalHeader().hide()
+		
+		self.options.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
+		self.options.setAlternatingRowColors(True)
+		self.options.setShowGrid(False)
+		
+		self.options.resizeColumnsToContents()
+		self.options.resizeRowsToContents()
+
+		# - Populate
+		for row, value in enumerate(data.keys()):
+			name_row.append(value)
+			
+			for col, key in enumerate(data[value].keys()):
+				name_column.append(key)
+				rowData = data[value][key]
+				
+				newitem = QtGui.QTableWidgetItem(str(rowData))
+				
+				if col == 0:
+					newitem.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled)
+					newitem.setCheckState(QtCore.Qt.Unchecked)
+
+				self.options.setItem(row, col, newitem)
+
+		self.options.setHorizontalHeaderLabels(name_column)
+		self.options.setVerticalHeaderLabels(name_row)
+		self.options.blockSignals(False)
+
+		options_header.setSectionResizeMode(0, QtGui.QHeaderView.Stretch)
+		options_header.setSectionResizeMode(1, QtGui.QHeaderView.ResizeToContents)
+
+	# - Getter/setters --------------------------------
+	def get_table(self):
+		return [(self.options.item(row, 0).text(), self.options.item(row, 1).text(), self.options.item(row, 0).checkState()) for row in range(self.options.rowCount)]
+
+	def get_states(self):
+		return [(self.options.item(row, 0).text(), self.options.item(row, 0).checkState()) for row in range(self.options.rowCount)]
+
+	def set_states(self, data):
+		panel_names = [self.options.item(row, 0).text() for row in range(self.options.rowCount)]
+
+		for panel, state in data:
+			try:
+				panel_index = panel_names.index(panel)
+
+				if state:
+					self.options.item(panel_index, 0).setCheckState(QtCore.Qt.Checked) 
+				else:
+					self.options.item(panel_index, 0).setCheckState(QtCore.Qt.Unchecked)
+
+			except ValueError: 
+				# !!! TODO: Add some subroutine for adding mising pannels to list
+				pass
+
+	# -- File operations
+	def file_save_config(self):
+		config_path = os.path.join(os.path.split(__file__)[0], panel_path)
+		fname = QtGui.QFileDialog.getSaveFileName(self, 'Save TypeRig panel configuration', config_path, 'TypeRig panel config (*.json);;')
+		exported_data = self.get_states()
+
+		if fname != None:
+			with open(fname, 'w') as export_file:
+				json.dump(exported_data, export_file)
+				output(7, app_name, 'TypeRig panel configuration saved to: %s.' %(fname))
+				output(1, app_name, 'Script restart is required for changes to take effect! %s.' %(fname))
+				
+	def file_open_config(self):
+		config_path = os.path.join(os.path.split(__file__)[0], panel_path)
+		fname = QtGui.QFileDialog.getOpenFileName(self, 'Load TypeRig panel configuration', config_path, 'TypeRig panel config (*.json);;')
+			
+		if fname != None:
+			with open(fname, 'r') as import_file:
+				imported_data = json.load(import_file)
+								
+				self.set_states(imported_data)
+				output(6, app_name, 'TypeRig panel configuration loaded from: %s.' %(fname))
+				output(1, app_name, 'Script restart is required for changes to take effect! %s.' %(fname))
+
+		return imported_data
 
 
 # -- Main Widget --------------------------
@@ -93,20 +226,32 @@ class TRMainPanel(QtGui.QDialog):
 			self.lay_mast.addWidget(button)
 				
 		# - Tabs --------------------------
-		panel_vers = {n:OrderedDict([	('Panel', toolName), ('Version', eval('Panel.%s.app_version' %toolName))])
-										for n, toolName in enumerate(Panel.modules)} 
+		panel_vers = {n:{'Panel':panel_tool_name, 'Version': eval('Panel.%s.app_version' %panel_tool_name)}	for n, panel_tool_name in enumerate(Panel.modules)} 
 
-		self.options = TRCheckTableView(panel_vers)
-		self.options.verticalHeader().hide()
+		# - Panel Configuiration
+		self.options = TROptionsPanel(panel_vers)
+		
+		# -- Load panel config
+		config_file = os.path.join(os.path.split(__file__)[0], panel_path, panel_cfg_filename)
+		
+		if os.path.isfile(config_file):
+			with open(config_file, 'r') as import_file:
+				config_enabled_panels = json.load(import_file)
+		else:
+			config_enabled_panels = []
+
+		self.options.set_states(config_enabled_panels)
+		config_enabled_panels_dict = dict(config_enabled_panels)
 
 		# -- Dynamically load all tabs
 		self.tabs = TRVTabWidget()
 
 		# --- Load all tabs from this directory as modules. Check __init__.py 
 		# --- <dirName>.modules tabs/modules manifest in list format
-		for toolName in Panel.modules:
-			if ignorePanel not in toolName:
-				self.tabs.addTab(eval('Panel.%s.tool_tab()' %toolName), toolName)
+		for panel_tool_name in Panel.modules:
+			if ignore_panel not in panel_tool_name:
+				if panel_tool_name in config_enabled_panels_dict and config_enabled_panels_dict[panel_tool_name]:
+					self.tabs.addTab(eval('Panel.%s.tool_tab()' %panel_tool_name), panel_tool_name)
 
 		# --- Add options tab
 		self.tabs.addTab(self.options, '...')
@@ -140,8 +285,8 @@ class TRMainPanel(QtGui.QDialog):
 
 		self.dlg_layer.table_populate(pMode)
 
-		for toolName in Panel.modules:
-			exec('Panel.%s.pMode = %s' %(toolName, pMode))
+		for panel_tool_name in Panel.modules:
+			exec('Panel.%s.pMode = %s' %(panel_tool_name, pMode))
 
 	def layers_refresh(self):
 		global pLayers
@@ -154,8 +299,8 @@ class TRMainPanel(QtGui.QDialog):
 			self.dlg_layer.hide()
 			pLayers = (self.chk_ActiveLayer.isChecked(), self.chk_Masters.isChecked(), False, False)
 
-		for toolName in Panel.modules:
-			exec('Panel.%s.pLayers = %s' %(toolName, pLayers))
+		for panel_tool_name in Panel.modules:
+			exec('Panel.%s.pLayers = %s' %(panel_tool_name, pLayers))
 
 	def fold(self):
 		# - Init

@@ -1072,7 +1072,7 @@ class TRTableView(QtGui.QTableWidget):
 		item.setBackground(self.flag_valueChanged)
 
 class TRCheckTableView(QtGui.QTableWidget):
-	def __init__(self, data):
+	def __init__(self, data, color_dict=None, enable_check=False):
 		super(TRCheckTableView, self).__init__()
 		
 		# - Init
@@ -1080,7 +1080,8 @@ class TRCheckTableView(QtGui.QTableWidget):
 		self.setRowCount(len(data.keys()))
 	
 		# - Set 
-		self.setTable(data)		
+		if data is not None:
+			self.setTable(data, color_dict, enable_check)		
 	
 		# - Styling
 		#self.setSortingEnabled(True)
@@ -1129,8 +1130,7 @@ class TRCheckTableView(QtGui.QTableWidget):
 						newitem.setBackground(color_dict[data[layer]['Layer Type']])
 					except KeyError:
 						pass
-				
-
+		
 				self.setItem(n, m, newitem)
 
 		self.setHorizontalHeaderLabels(name_column)
@@ -1145,7 +1145,6 @@ class TRCheckTableView(QtGui.QTableWidget):
 
 	def getTable(self):
 		return [self.item(row, 0).text() for row in range(self.rowCount) if self.item(row, 0).checkState() == QtCore.Qt.Checked]
-
 
 # - Folder/collapsible widgets ---------------------------------------
 class TRCollapsibleBox(QtGui.QWidget):
