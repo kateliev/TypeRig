@@ -1,1 +1,1 @@
-[["Anchor", 0], ["AutoMetrics", 0], ["CleanKerning", 0], ["Contour", 2], ["CopyKerning", 0], ["Corner", 0], ["Delta", 2], ["Element", 0], ["Glyph", 0], ["Guide", 0], ["Layer", 2], ["Metrics", 0], ["Node", 2], ["Outline", 2], ["Pairs", 0], ["Stats", 0]]
+[["Anchor", true], ["AutoMetrics", false], ["CleanKerning", false], ["Contour", true], ["CopyKerning", false], ["Corner", false], ["Delta", true], ["Element", true], ["Glyph", false], ["Guide", true], ["Layer", true], ["Metrics", true], ["Node", true], ["Outline", true], ["Pairs", false], ["Stats", true]]

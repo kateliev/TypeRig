@@ -31,7 +31,7 @@ from typerig.proxy.fl.gui.styles import css_tr_button
 import Panel 
 
 # - Init --------------------------
-app_version = '3.10'
+app_version = '3.11'
 app_name = 'TypeRig Panel'
 ignore_panel = '__'
 panel_path = 'Panel' # ./Panel/
@@ -73,6 +73,16 @@ class TROptionsPanel(QtGui.QWidget):
 		self.btn_file_open = CustomPushButton('file_open', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_main_cfg.addWidget(self.btn_file_open)
 		self.btn_file_open.clicked.connect(lambda: self.file_open_config())
+
+		tooltip_button = 'Check all'
+		self.btn_select_all = CustomPushButton('select_all', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_main_cfg.addWidget(self.btn_select_all)
+		self.btn_select_all.clicked.connect(lambda: self.__set_states_all(True))
+
+		tooltip_button = 'Deselect all'
+		self.btn_select_none = CustomPushButton('select_option', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_main_cfg.addWidget(self.btn_select_none)
+		self.btn_select_none.clicked.connect(lambda: self.__set_states_all(False))
 
 		lbl_note = QtGui.QLabel('')
 		lay_main_cfg.addWidget(lbl_note)
@@ -131,7 +141,14 @@ class TROptionsPanel(QtGui.QWidget):
 		return [(self.options.item(row, 0).text(), self.options.item(row, 1).text(), self.options.item(row, 0).checkState()) for row in range(self.options.rowCount)]
 
 	def get_states(self):
-		return [(self.options.item(row, 0).text(), self.options.item(row, 0).checkState()) for row in range(self.options.rowCount)]
+		return [(self.options.item(row, 0).text(), self.options.item(row, 0).checkState() == QtCore.Qt.Checked) for row in range(self.options.rowCount)]
+
+	def __set_states_all(self, state):
+		for row in range(self.options.rowCount):
+			if state:
+				self.options.item(row, 0).setCheckState(QtCore.Qt.Checked) 
+			else:
+				self.options.item(row, 0).setCheckState(QtCore.Qt.Unchecked)
 
 	def set_states(self, data):
 		panel_names = [self.options.item(row, 0).text() for row in range(self.options.rowCount)]
