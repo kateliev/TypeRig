@@ -34,7 +34,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '2.56'
+app_name, app_version = 'TypeRig | Layers', '2.60'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -158,7 +158,6 @@ class TRLayerActions(QtGui.QWidget):
 		box_options.setObjectName('box_group')
 
 		lay_options = TRFlowLayout(spacing=10)
-
 		
 		tooltip_button = 'Outline'
 		self.chk_outline = CustomPushButton("bbox", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
@@ -184,18 +183,90 @@ class TRLayerActions(QtGui.QWidget):
 		self.chk_rsb = CustomPushButton("metrics_rsb", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_rsb)
 		
+		tooltip_button = 'Show layer actions'
+		self.chk_actions = CustomPushButton("layer_actions", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_actions)
+		
 		tooltip_button = 'Show interpolation controls'
 		self.chk_interpolate = CustomPushButton("interpolate", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_interpolate)
 		
-
 		tooltip_button = 'Show transformation controls'
 		self.chk_transform = CustomPushButton("diagonal_bottom_up", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_transform)
 
-
 		box_options.setLayout(lay_options)
 		lay_main.addWidget(box_options)
+
+		# - Layer Actions
+		self.box_actions = QtGui.QGroupBox()
+		self.box_actions.setObjectName('box_group')
+
+		lay_actions = TRFlowLayout(spacing=10)
+
+		btn_layer_add = CustomPushButton("layer_add_alt", tooltip='Add new layer', obj_name='btn_panel') 
+		lay_actions.addWidget(btn_layer_add)
+
+		btn_layer_delete = CustomPushButton("layer_remove_alt", tooltip='Remove layer', obj_name='btn_panel') 
+		lay_actions.addWidget(btn_layer_delete)
+
+		btn_layer_duplicate = CustomPushButton("layer_duplicate", tooltip='Duplicate layer', obj_name='btn_panel') 
+		lay_actions.addWidget(btn_layer_duplicate)
+
+		btn_layer_duplicate_mask = CustomPushButton("layer_mask_add", tooltip='Duplicate layer as mask', obj_name='btn_panel') 
+		lay_actions.addWidget(btn_layer_duplicate_mask)
+
+		btn_layer_visible_on = CustomPushButton("visible", tooltip='Set layer visible', obj_name='btn_panel') 
+		lay_actions.addWidget(btn_layer_visible_on)
+
+		btn_layer_visible_off = CustomPushButton("visible_off", tooltip='Set layer as invisible', obj_name='btn_panel') 
+		lay_actions.addWidget(btn_layer_visible_off)
+
+		btn_layer_side_by_side = CustomPushButton("visible_sbs", tooltip='Show layers side by side', obj_name='btn_panel')
+		lay_actions.addWidget(btn_layer_side_by_side)
+
+		btn_layer_set_type_mask = CustomPushButton("layer_mask", tooltip='Set layer as mask', obj_name='btn_panel') 
+		lay_actions.addWidget(btn_layer_set_type_mask)
+
+		btn_layer_set_type_service = CustomPushButton("layer_service", tooltip='Set layer as service', obj_name='btn_panel') 
+		lay_actions.addWidget(btn_layer_set_type_service)
+
+		btn_layer_element_swap = CustomPushButton("layer_swap", tooltip='Swap layer contents', obj_name='btn_panel') 
+		lay_actions.addWidget(btn_layer_element_swap)
+
+		btn_layer_element_pull = CustomPushButton("layer_pull", tooltip='Pull layer contents', obj_name='btn_panel')  
+		lay_actions.addWidget(btn_layer_element_pull)
+
+		btn_layer_element_push = CustomPushButton("layer_push", tooltip='Push layer contents', obj_name='btn_panel')  
+		lay_actions.addWidget(btn_layer_element_push)
+
+		btn_layer_element_clean = CustomPushButton("layer_clean", tooltip='Clear layer contents', obj_name='btn_panel')  
+		lay_actions.addWidget(btn_layer_element_clean)
+
+		btn_layer_unlock = CustomPushButton("layer_lock", tooltip='Lock layer contents', obj_name='btn_panel')  
+		lay_actions.addWidget(btn_layer_unlock)
+
+		btn_layer_lock = CustomPushButton("layer_lock_off", tooltip='Unlock layer contents', obj_name='btn_panel')  
+		lay_actions.addWidget(btn_layer_lock)
+
+		btn_layer_contour_pull = CustomPushButton("nodes_pull", tooltip='Push selected nodes', obj_name='btn_panel')  
+		lay_actions.addWidget(btn_layer_contour_pull)
+
+		btn_layer_contour_push = CustomPushButton("nodes_push", tooltip='Pull selected nodes', obj_name='btn_panel')  
+		lay_actions.addWidget(btn_layer_contour_push)
+
+		btn_layer_contour_copy = CustomPushButton("clipboard_copy_nodes", tooltip='Copy selected nodes to clipboard', obj_name='btn_panel')  
+		lay_actions.addWidget(btn_layer_contour_copy)
+
+		btn_layer_contour_paste = CustomPushButton("clipboard_paste_nodes", tooltip='Paste selected nodes from clipboard', obj_name='btn_panel')  
+		lay_actions.addWidget(btn_layer_contour_paste)
+
+		btn_layer_contour_paste_byName = CustomPushButton("clipboard_paste_exact", tooltip='Paste selected nodes from clipboard by layer name', obj_name='btn_panel') 
+		lay_actions.addWidget(btn_layer_contour_paste_byName)
+
+		self.box_actions.setLayout(lay_actions)
+		lay_main.addWidget(self.box_actions)
+		self.box_actions.hide()
 
 		# - Transform controls -------------------
 		self.ctrl_transform = TRTransformCtrl()
@@ -239,6 +310,7 @@ class TRLayerActions(QtGui.QWidget):
 		self.cpn_lerp.hide()
 		self.chk_interpolate.clicked.connect(lambda: self.__toggle(self.chk_interpolate, self.cpn_lerp))
 		self.chk_transform.clicked.connect(lambda: self.__toggle(self.chk_transform, self.ctrl_transform))
+		self.chk_actions.clicked.connect(lambda: self.__toggle(self.chk_actions, self.box_actions))
 		
 		# - Layer actions and menu
 		# --- Layer operations
@@ -248,7 +320,7 @@ class TRLayerActions(QtGui.QWidget):
 		self.act_layer_delete = QtGui.QAction('Remove', self)
 		self.act_layer_visible = QtGui.QAction('Toggle Visible', self)
 		self.act_layer_visible_on = QtGui.QAction('Set Visible', self)
-		self.act_layer_visible_off = QtGui.QAction('Set Invisible', self)
+		self.act_layer_visible_off = QtGui.QAction('Set Invisible', self) 
 
 		self.menu_layer_type = QtGui.QMenu('Type', self)
 		act_layer_set_type_mask = QtGui.QAction('Set as Mask', self)
@@ -326,6 +398,28 @@ class TRLayerActions(QtGui.QWidget):
 		act_layer_contour_paste_byName.triggered.connect(lambda: TRLayerActionCollector.layer_paste_outline(self))
 		act_layer_contour_paste.triggered.connect(lambda: TRLayerActionCollector.layer_paste_outline_selection(self))
 		act_layer_side_by_side.triggered.connect(lambda: TRLayerActionCollector.layer_side_by_side(self))
+
+		# -- Set button actions --------------------------------
+		btn_layer_add.clicked.connect(lambda: TRLayerActionCollector.layer_add(self))
+		btn_layer_duplicate.clicked.connect(lambda: TRLayerActionCollector.layer_duplicate(self, True))
+		btn_layer_duplicate_mask.clicked.connect(lambda: TRLayerActionCollector.layer_duplicate_mask(self))
+		btn_layer_delete.clicked.connect(lambda: TRLayerActionCollector.layer_delete(self))
+		btn_layer_visible_on.clicked.connect(lambda: TRLayerActionCollector.layer_set_visible(self, True))
+		btn_layer_visible_off.clicked.connect(lambda: TRLayerActionCollector.layer_set_visible(self, False))
+		btn_layer_set_type_mask.clicked.connect(lambda: TRLayerActionCollector.layer_set_type(self, 'Mask'))
+		btn_layer_set_type_service.clicked.connect(lambda: TRLayerActionCollector.layer_set_type(self, 'Service'))
+		btn_layer_element_swap.clicked.connect(lambda: TRLayerActionCollector.layer_swap(self))
+		btn_layer_element_pull.clicked.connect(lambda: TRLayerActionCollector.layer_pull(self))
+		btn_layer_element_push.clicked.connect(lambda: TRLayerActionCollector.layer_push(self))
+		btn_layer_element_clean.clicked.connect(lambda: TRLayerActionCollector.layer_clean(self))
+		btn_layer_unlock.clicked.connect(lambda: TRLayerActionCollector.layer_unlock(self, True))
+		btn_layer_lock.clicked.connect(lambda: TRLayerActionCollector.layer_unlock(self, False))
+		btn_layer_contour_pull.clicked.connect(lambda: TRLayerActionCollector.layer_ditto(self, False))
+		btn_layer_contour_push.clicked.connect(lambda: TRLayerActionCollector.layer_ditto(self, True))
+		btn_layer_contour_copy.clicked.connect(lambda: TRLayerActionCollector.layer_copy_outline(self))
+		btn_layer_contour_paste_byName.clicked.connect(lambda: TRLayerActionCollector.layer_paste_outline(self))
+		btn_layer_contour_paste.clicked.connect(lambda: TRLayerActionCollector.layer_paste_outline_selection(self))
+		btn_layer_side_by_side.clicked.connect(lambda: TRLayerActionCollector.layer_side_by_side(self))
 
 		# -- Set Menu 
 		self.menu = QtGui.QMenu(self)
