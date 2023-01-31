@@ -27,7 +27,7 @@ Run FontLab 7+, choose _Scripts > Update / Install Scripts_. Click _OK_ in the d
 The _Scripts_ menu should now show the _Delta Machine_ and _TypeRig GUI_ sub-menus.
 
 ## Developer
-TypeRig FDK is developed by: **Vassil Kateliev** (2017-2022) and **Adam Twardoch** (2019-2022)
+TypeRig FDK is developed by: **Vassil Kateliev** (2017-2023) and **Adam Twardoch** (2019-2022)
 
 For contact and inquiries: vassil(at)kateliev(dot)com
 
