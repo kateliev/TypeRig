@@ -31,7 +31,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '3.1'
+app_name, app_version = 'TypeRig | Contour', '3.2'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -258,11 +258,7 @@ class TRContourBasics(QtGui.QWidget):
 		# -- Contour Transform ---------------------------
 		self.ctrl_transform = TRTransformCtrl()
 		self.lay_main.addWidget(self.ctrl_transform)
-
-		tooltip_button = "Transform selected contours"
-		self.btn_transform = CustomPushButton("action_play", tooltip=tooltip_button, obj_name='btn_panel')
-		self.ctrl_transform.lay_options.addWidget(self.btn_transform)
-		self.btn_transform.clicked.connect(self.transform_contour)
+		self.ctrl_transform.btn_transform.clicked.connect(self.transform_contour)
 
 		# -- Finish it -------------------------------------------------------
 		self.setLayout(self.lay_main)

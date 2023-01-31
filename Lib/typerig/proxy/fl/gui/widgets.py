@@ -28,7 +28,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.gui.styles import css_tr_button
 
 # - Init ----------------------------------
-__version__ = '0.5.5'
+__version__ = '0.5.6'
 
 # - Keep compatibility for basestring checks
 try:
@@ -893,6 +893,15 @@ class TRTransformCtrl(QtGui.QWidget):
 		tooltip_button = "Rotate"
 		self.spb_rotate = CustomSpinLabel('rotate', (-360., 360., 0., 1.), tooltip_button, ' °', ('spn_panel_inf', 'lbl_panel'))
 		self.lay_controls.addWidget(self.spb_rotate)
+
+		tooltip_button = "Reset fields"
+		self.btn_reset = CustomPushButton("refresh", tooltip=tooltip_button, obj_name='btn_panel')
+		self.lay_options.addWidget(self.btn_reset)
+		self.btn_reset.clicked.connect(self.reset)
+
+		tooltip_button = "Transform selected contours"
+		self.btn_transform = CustomPushButton("action_play", tooltip=tooltip_button, obj_name='btn_panel')
+		self.lay_controls.addWidget(self.btn_transform)
 
 		self.lay_box.addLayout(self.lay_controls)
 
