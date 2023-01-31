@@ -23,7 +23,7 @@ from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 
 # - Init --------------------------------
-app_name, app_version = 'Copy Kernig', '2.1'
+app_name, app_version = 'Copy Kernig', '2.2'
 
 # -- Strings 
 str_help = '''
@@ -136,7 +136,7 @@ class tool_tab(QtGui.QWidget):
 		
 		if fname != None:
 			with open(fname, 'r') as importFile:
-				self.txt_editor.setPlainText(importFile.read().decode('utf8'))			
+				self.txt_editor.setPlainText(importFile.read())			
 
 			output(6, app_name, 'Font:%s; Class Kerning expressions loaded from: %s.' %(self.active_font.name, fname))
 			
@@ -146,7 +146,7 @@ class tool_tab(QtGui.QWidget):
 		
 		if fname != None:
 			with open(fname, 'w') as importFile:
-				importFile.writelines(self.txt_editor.toPlainText().encode('utf-8'))
+				importFile.writelines(self.txt_editor.toPlainText())
 
 			output(7, app_name, 'Font:%s; Class Kerning expressions saved to: %s.' %(self.active_font.name, fname))
 
