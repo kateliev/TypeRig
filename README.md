@@ -1,6 +1,6 @@
 ![TR Core](https://img.shields.io/badge/TR%20Core%20--%20Python-3%2B-green) ![TR GUI](https://img.shields.io/badge/TR%20GUI%20--%20Python-3.10-orange) ![GitHub last commit](https://img.shields.io/github/last-commit/kateliev/TypeRig)
 # TypeRig
-**TypeRig** is a Python library aimed at simplifying the current FontLab API while offering some additional functionality that is heavily biased towards a simultaneous multi-layered workflow. As TypeRig (TR) is under rapid development in the last couple of years, please do update frequently. 
+**TypeRig** is a Python library that streamlines the FontLab API and provides extra features focused on multiple master and variable fonts. It is undergoing rapid development, so it's recommended to keep it updated regularly.
 
 ### Important note
 If you are experiencing any trouble running your scripts after February 2022 please refer to our [latest Py2.7 release](https://github.com/kateliev/TypeRig/releases/tag/v1.9.0-Py2.7). It is a snapshot of TR that is both Py2.7 and Py3.10 compatible. 
