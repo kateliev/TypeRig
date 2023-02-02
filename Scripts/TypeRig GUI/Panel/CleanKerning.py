@@ -11,6 +11,8 @@
 from __future__ import absolute_import, print_function
 import os, warnings
 
+from functools import reduce
+
 import fontlab as fl6
 import fontgate as fgt
 
