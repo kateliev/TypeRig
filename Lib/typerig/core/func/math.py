@@ -13,7 +13,7 @@ from __future__ import absolute_import, print_function, division
 import math, cmath, random
 
 # - Init --------------------------------
-__version__ = '0.26.8'
+__version__ = '0.26.9'
 
 epsilon = 0.000001
 
@@ -211,6 +211,17 @@ def bilinInterp(x, y, points):
 		   ) / ((x2 - x1) * (y2 - y1) + 0.0)
 	
 # -- Drawing ---------------------------------------------------------
+def two_point_circle(p1, p2):
+	'''Calculate the center point and radius of a circle 
+	based on two points on the circle's diameter'''
+
+	cx = (p1[0] + p2[0]) / 2
+	cy = (p1[1] + p2[1]) / 2
+	distance = ((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)**0.5
+	radius = distance / 2
+
+	return ((cx, cy), radius)
+
 def three_point_circle(p1, p2, p3):
 	'''Three point circle implementation: Return the center and 
 	radius of a circle that passes through three given points p1, p2, p3.
