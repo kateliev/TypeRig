@@ -28,7 +28,7 @@ from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRTransformCtrl
 
 # - Init ---------------------------------------------------
-__version__ = '2.6'
+__version__ = '2.7'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -380,6 +380,36 @@ class TRContourActionCollector(object):
 							contour_delta = group_base - contour_base
 
 							contour.alignTo(target - contour_delta, align_x + align_y, (keep_x, keep_y))
+
+				elif align_mode == 'DH': # Distribute contours in A horizontally into B's width
+					if len(contour_A.keys()) and len(contour_B.keys()):
+						cont_bounds_B = getContourBonds(contour_B[layer_name])
+						cont_B_width = cont_bounds_B[2] - cont_bounds_B[0]
+
+						cont_A_widths = [contour.width for contour in contour_A[layer_name]]
+						cont_A_gap = (cont_B_width - sum(cont_A_widths))/len(cont_A_widths)
+						cont_A_new_X = [cont_bounds_B[0]] + [cont_bounds_B[0] + contour_width + cont_A_gap for contour_width in cont_A_widths][:-1]
+
+						for cid in range(len(contour_A[layer_name])):
+							contour = contour_A[layer_name][cid]
+							align_temp =  getAlignDict(contour.bounds)
+							contour_align_Coord = Coord(cont_A_new_X[cid] - align_temp['L'], align_temp['B'])
+							contour.alignTo(contour_align_Coord, 'LB', (False, True))
+
+				elif align_mode == 'DV': # Distribute contours in A vertically into B's height
+					if len(contour_A.keys()) and len(contour_B.keys()):
+						cont_bounds_B = getContourBonds(contour_B[layer_name])
+						cont_B_height = cont_bounds_B[3] - cont_bounds_B[1]
+
+						cont_A_heights = [contour.height for contour in contour_A[layer_name]]
+						cont_A_gap = (cont_B_height - sum(cont_A_heights))/len(cont_A_heights)
+						cont_A_new_Y = [cont_bounds_B[1]] + [cont_bounds_B[1] + contour_height + cont_A_gap for contour_height in cont_A_heights][:-1]
+
+						for cid in range(len(contour_A[layer_name])):
+							contour = contour_A[layer_name][cid]
+							align_temp =  getAlignDict(contour.bounds)
+							contour_align_Coord = Coord(align_temp['B'], cont_A_new_Y[cid] - align_temp['B'])
+							contour.alignTo(contour_align_Coord, 'LB', (True, False))
 
 				else:
 					metrics = pFontMetrics(glyph.package)
