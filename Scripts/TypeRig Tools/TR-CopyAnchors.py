@@ -132,7 +132,7 @@ class dlg_copy_anchors(QtGui.QDialog):
 		layout_dst.addWidget(QtGui.QLabel('Destination Layer:'), 	3, 0, 1, 1)
 		layout_dst.addWidget(self.cmb_select_layer_B, 				3, 1, 1, 5)
 		layout_dst.addWidget(self.btn_cmb_layer_B_refresh,			3, 6, 1, 1)
-		layout_dst.addWidget(QtGui.QLabel('Loacation:'), 			4, 0, 1, 1)
+		layout_dst.addWidget(QtGui.QLabel('Location:'), 			4, 0, 1, 1)
 		layout_dst.addWidget(self.rad_location_absolute,  			4, 1, 1, 3)
 		layout_dst.addWidget(self.rad_location_relative, 			4, 4, 1, 3)
 		layout_dst.addWidget(QtGui.QLabel('Handle Collision:'), 	5, 0, 1, 1)
