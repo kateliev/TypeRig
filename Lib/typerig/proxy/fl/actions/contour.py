@@ -28,7 +28,7 @@ from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRTransformCtrl
 
 # - Init ---------------------------------------------------
-__version__ = '2.7'
+__version__ = '2.8'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -381,35 +381,55 @@ class TRContourActionCollector(object):
 
 							contour.alignTo(target - contour_delta, align_x + align_y, (keep_x, keep_y))
 
-				elif align_mode == 'DH': # Distribute contours in A horizontally into B's width
-					if len(contour_A.keys()) and len(contour_B.keys()):
-						cont_bounds_B = getContourBonds(contour_B[layer_name])
-						cont_B_width = cont_bounds_B[2] - cont_bounds_B[0]
+				elif align_mode == 'DH': # Distribute contours horizontally
+						cont_bounds = getContourBonds(work_contours)
+						cont_width = cont_bounds[2] - cont_bounds[0]
+						
+						sorted_contours = sorted(work_contours, key=lambda c: c.x)
+						
+						cont_widths = [contour.width for contour in sorted_contours]
+						cont_gap = (cont_width - sum(cont_widths))/(len(cont_widths) - 1)
+						
+						cont_x = []
+						curr_width = cont_bounds[0]
+						
+						while len(cont_widths):
+							cont_width = cont_widths.pop(0)
+							curr_width += cont_width + cont_gap
+							cont_x.append(curr_width)
 
-						cont_A_widths = [contour.width for contour in contour_A[layer_name]]
-						cont_A_gap = (cont_B_width - sum(cont_A_widths))/len(cont_A_widths)
-						cont_A_new_X = [cont_bounds_B[0]] + [cont_bounds_B[0] + contour_width + cont_A_gap for contour_width in cont_A_widths][:-1]
+						cont_x = [cont_bounds[0]] + cont_x[:-1]
 
-						for cid in range(len(contour_A[layer_name])):
-							contour = contour_A[layer_name][cid]
+						for cid in range(len(sorted_contours)):
+							contour = sorted_contours[cid]
 							align_temp =  getAlignDict(contour.bounds)
-							contour_align_Coord = Coord(cont_A_new_X[cid] - align_temp['L'], align_temp['B'])
-							contour.alignTo(contour_align_Coord, 'LB', (False, True))
+							align_target = Coord(cont_x[cid], align_temp['B'])
+							contour.alignTo(align_target, 'LB', (True, False))
 
-				elif align_mode == 'DV': # Distribute contours in A vertically into B's height
-					if len(contour_A.keys()) and len(contour_B.keys()):
-						cont_bounds_B = getContourBonds(contour_B[layer_name])
-						cont_B_height = cont_bounds_B[3] - cont_bounds_B[1]
+				elif align_mode == 'DV': # Distribute contours vertically
+						cont_bounds = getContourBonds(work_contours)
+						cont_height = cont_bounds[3] - cont_bounds[1]
+						
+						sorted_contours = sorted(work_contours, key=lambda c: c.y)
+						
+						cont_heights = [contour.height for contour in sorted_contours]
+						cont_gap = (cont_height - sum(cont_heights))/(len(cont_heights) - 1)
+						
+						cont_y = []
+						curr_height = cont_bounds[1]
+						
+						while len(cont_heights):
+							cont_height = cont_heights.pop(0)
+							curr_height += cont_height + cont_gap
+							cont_y.append(curr_height)
 
-						cont_A_heights = [contour.height for contour in contour_A[layer_name]]
-						cont_A_gap = (cont_B_height - sum(cont_A_heights))/len(cont_A_heights)
-						cont_A_new_Y = [cont_bounds_B[1]] + [cont_bounds_B[1] + contour_height + cont_A_gap for contour_height in cont_A_heights][:-1]
+						cont_y = [cont_bounds[1]] + cont_y[:-1]
 
-						for cid in range(len(contour_A[layer_name])):
-							contour = contour_A[layer_name][cid]
+						for cid in range(len(sorted_contours)):
+							contour = sorted_contours[cid]
 							align_temp =  getAlignDict(contour.bounds)
-							contour_align_Coord = Coord(align_temp['B'], cont_A_new_Y[cid] - align_temp['B'])
-							contour.alignTo(contour_align_Coord, 'LB', (True, False))
+							align_target = Coord(align_temp['L'], cont_y[cid])
+							contour.alignTo(align_target, 'LB', (False, True))
 
 				else:
 					metrics = pFontMetrics(glyph.package)
