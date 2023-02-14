@@ -1,9 +1,9 @@
 #FLM: TypeRig: Copy Anchors
 #NOTE: Copy selected anchors between two fonts
-# ----------------------------------------
-# (C) Vassil Kateliev, 2021  (http://www.kateliev.com)
-# (C) Karandash Type Foundry (http://www.karandash.eu)
-#-----------------------------------------
+# -----------------------------------------------------------
+# (C) Vassil Kateliev, 2022-2023 	(http://www.kateliev.com)
+# (C) TypeRig 						(http://www.typerig.com)
+#------------------------------------------------------------
 # www.typerig.com
 
 # No warranties. By using this you agree
@@ -24,7 +24,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.core.base.message import *
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Copy Anchors', '1.8'
+app_name, app_version = 'TR | Copy Anchors', '1.9'
 str_all_masters = '*All masters*'
 
 # - Interface -----------------------------
@@ -56,11 +56,14 @@ class dlg_copy_anchors(QtGui.QDialog):
 		self.rad_group_collide = QtGui.QButtonGroup()
 		self.rad_group_rename = QtGui.QButtonGroup()
 		self.rad_group_source = QtGui.QButtonGroup()
+		self.rad_group_position = QtGui.QButtonGroup()
 
 		self.rad_source_font = QtGui.QRadioButton('All glyphs')
 		self.rad_source_sellected = QtGui.QRadioButton('Selected glyphs')
 		self.rad_copy_all = QtGui.QRadioButton('All anchors')
 		self.rad_copy_specific = QtGui.QRadioButton('Specific anchors')
+		self.rad_location_absolute = QtGui.QRadioButton('Absolute')
+		self.rad_location_relative = QtGui.QRadioButton('Relative')
 		self.rad_collide_write = QtGui.QRadioButton('Overwrite')
 		self.rad_collide_rename = QtGui.QRadioButton('Rename')
 		self.rad_collide_src = QtGui.QRadioButton('Incoming')
@@ -70,6 +73,7 @@ class dlg_copy_anchors(QtGui.QDialog):
 		self.rad_collide_dst.setChecked(True)
 		self.rad_source_font.setChecked(True)
 		self.rad_collide_rename.setChecked(True)
+		self.rad_location_absolute.setChecked(True)
 
 		self.rad_group_source.addButton(self.rad_source_font, 1)
 		self.rad_group_source.addButton(self.rad_source_sellected, 2)
@@ -79,6 +83,8 @@ class dlg_copy_anchors(QtGui.QDialog):
 		self.rad_group_rename.addButton(self.rad_collide_dst, 2)
 		self.rad_group_collide.addButton(self.rad_collide_write, 1)
 		self.rad_group_collide.addButton(self.rad_collide_rename, 2)
+		self.rad_group_position.addButton(self.rad_location_absolute, 1)
+		self.rad_group_position.addButton(self.rad_location_relative, 2)
 
 		# - Edit
 		self.edt_anchors_list = QtGui.QLineEdit()
@@ -126,14 +132,17 @@ class dlg_copy_anchors(QtGui.QDialog):
 		layout_dst.addWidget(QtGui.QLabel('Destination Layer:'), 	3, 0, 1, 1)
 		layout_dst.addWidget(self.cmb_select_layer_B, 				3, 1, 1, 5)
 		layout_dst.addWidget(self.btn_cmb_layer_B_refresh,			3, 6, 1, 1)
-		layout_dst.addWidget(QtGui.QLabel('Handle Collision:'), 	4, 0, 1, 1)
-		layout_dst.addWidget(self.rad_collide_write, 				4, 1, 1, 3)
-		layout_dst.addWidget(self.rad_collide_rename, 				4, 4, 1, 3)
-		layout_dst.addWidget(QtGui.QLabel('Collision rename:'), 	5, 0, 1, 1)
-		layout_dst.addWidget(self.rad_collide_src, 					5, 1, 1, 3)
-		layout_dst.addWidget(self.rad_collide_dst, 					5, 4, 1, 3)
-		layout_dst.addWidget(QtGui.QLabel('Addon suffix:'), 		6, 0, 1, 1)
-		layout_dst.addWidget(self.edt_collide_suffix, 				6, 1, 1, 6)
+		layout_dst.addWidget(QtGui.QLabel('Loacation:'), 			4, 0, 1, 1)
+		layout_dst.addWidget(self.rad_location_absolute,  			4, 1, 1, 3)
+		layout_dst.addWidget(self.rad_location_relative, 			4, 4, 1, 3)
+		layout_dst.addWidget(QtGui.QLabel('Handle Collision:'), 	5, 0, 1, 1)
+		layout_dst.addWidget(self.rad_collide_write, 				5, 1, 1, 3)
+		layout_dst.addWidget(self.rad_collide_rename, 				5, 4, 1, 3)
+		layout_dst.addWidget(QtGui.QLabel('Collision rename:'), 	6, 0, 1, 1)
+		layout_dst.addWidget(self.rad_collide_src, 					6, 1, 1, 3)
+		layout_dst.addWidget(self.rad_collide_dst, 					6, 4, 1, 3)
+		layout_dst.addWidget(QtGui.QLabel('Addon suffix:'), 		7, 0, 1, 1)
+		layout_dst.addWidget(self.edt_collide_suffix, 				7, 1, 1, 6)
 		self.box_dst.setLayout(layout_dst)
 
 		# -- Main
@@ -233,6 +242,11 @@ class dlg_copy_anchors(QtGui.QDialog):
 					# - Process anchors
 					for anchor in process_anchors_list:
 						tmp_anchor = anchor.clone()
+
+						# - Handle relative positioning
+						if self.rad_location_relative.isChecked():
+							location_prop = tmp_anchor.point.x()/src_glyph.getAdvance(layer_source)
+							tmp_anchor.point = QtCore.QPointF(location_prop * src_glyph.getAdvance(layer_destination), tmp_anchor.point.y())
 						
 						# - Handle collision
 						if mode_collide: # Rename mode
@@ -244,10 +258,15 @@ class dlg_copy_anchors(QtGui.QDialog):
 								
 								else: # Rename destination
 									dst_anchor = dst_glyph.layer(layer_destination).findAnchor(tmp_anchor.name)
-									dst_anchor.name += replace_suffix
+									
+									if dst_anchor is not None: 
+										dst_anchor.name += replace_suffix
+
 						else: # Overwrite mode
 							dst_anchor = dst_glyph.layer(layer_destination).findAnchor(tmp_anchor.name)
-							dst_glyph.layer(layer_destination).removeAnchor(dst_anchor)
+							
+							if dst_anchor is not None: 
+								dst_glyph.layer(layer_destination).removeAnchor(dst_anchor)
 
 						# - Do Copy
 						dst_glyph.layer(layer_destination).addAnchor(tmp_anchor)
@@ -260,7 +279,5 @@ class dlg_copy_anchors(QtGui.QDialog):
 		if do_update:
 			font_dst.updateObject(font_dst.fl, 'Copying anchors! Glyphs processed: %s' %len(glyphs_source))
 		
-
-	
 # - RUN ------------------------------
 dialog = dlg_copy_anchors()
