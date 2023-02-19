@@ -24,7 +24,7 @@ from typerig.core.objects.collection import extBiDict
 from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
 
 # - Init ---------------------------------
-__version__ = '0.28.6'
+__version__ = '0.28.7'
 
 # - Keep compatibility for basestring checks
 try:
@@ -919,11 +919,19 @@ class pFont(object):
 		Returns:
 			dict
 		'''
+		# - Helper
+		def uni_sorter(glyph_name):
+			last_known_unicode_int = 1114111
+			glyph_unicode = self.glyph(glyph_name).unicode
+			if glyph_unicode is None: glyph_unicode =  last_known_unicode_int + 1 
+			return glyph_unicode
+
+		# - Process
 		kern_groups = self.kerning_groups(layer).asDict()
 		if sortUnicode:
 			temp_groups = {}
 			for groupName, groupData in kern_groups.items():
-				temp_groups[groupName] = (sorted(groupData[0], key=lambda glyph_name: self.glyph(glyph_name).unicode), groupData[1])
+				temp_groups[groupName] = (sorted(groupData[0], key=lambda glyph_name: (uni_sorter(glyph_name), glyph_name)), groupData[1])
 
 			kern_groups = temp_groups
 
