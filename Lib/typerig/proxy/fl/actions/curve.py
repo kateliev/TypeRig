@@ -30,7 +30,7 @@ from typerig.core.base.message import *
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init -------------------------
-__version__ = '2.69'
+__version__ = '2.70'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -148,5 +148,49 @@ class TRCurveActionCollector(object):
 			method_values = (method_name, p0_value, p1_value)
 
 		TRCurveActionCollector.curve_optimize(pMode, pLayers, method_values)
+
+	@staticmethod
+	def hobby_tension_copy(glyph:eGlyph, pLayers:tuple) -> dict:
+		wLayers = glyph._prepareLayers(pLayers)
+		hobby_tension_dict = {}
+		
+		for layer in wLayers:
+			selSegment = eCurveEx(eNode(glyph.selectedNodes(layer)[0]).getSegmentNodes())
+			hobby_tension_dict[layer] = selSegment.curve.solve_hobby_curvature()
+		
+		return hobby_tension_dict
+
+	def curve_optimize_by_dict(pMode:int, pLayers:tuple, method_name:basestring, method_dict:dict, swap_values:bool=False):
+		'''Layer specific curve optimization, best used together with copy'''
+		# - Get list of glyphs to be processed
+		process_glyphs = getProcessGlyphs(pMode)
+
+		# - Process
+		for glyph in process_glyphs:	
+			wLayers = glyph._prepareLayers(pLayers)
+
+			for layer in wLayers:
+				selection = glyph.selectedNodes(layer, filterOn=True)
+				
+				for node in selection:
+					work_node = eNode(node)
+					work_segment = eCurveEx(work_node.getSegmentNodes())
+					
+					if len(work_segment.nodes) == 4:
+						if work_segment.n0.fl in selection and work_segment.n3.fl in selection:
+							if method_name == 'hobby':
+								if layer in method_dict and len(method_dict[layer]) == 2:
+									curvature = method_dict[layer] if not swap_values else (method_dict[layer][1], method_dict[layer][0])
+									work_segment.eqHobbySpline(curvature)
+
+							elif method_name == 'proportional':
+								if layer in method_dict and len(method_dict[layer]) == 2:
+									tension = method_dict[layer] if not swap_values else (method_dict[layer][1], method_dict[layer][0])
+									work_segment.eqProportionalHandles(tension)
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, '{};\tOptimize curve: {} @ {}.'.format(glyph.name, method_name.title(), '; '.join(wLayers)))
+
+		active_workspace.getCanvas(True).refreshAll()
 
 

@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '3.28'
+app_name, app_version = 'TypeRig | Nodes', '3.29'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -53,6 +53,7 @@ class TRNodeBasics(QtGui.QWidget):
 		self.slope_bank = {}
 		self.angle_bank = {}
 		self.node_bank = {}
+		self.curve_bank = {}
 		self.node_align_state = 'LT'
 
 		# - Layout
@@ -144,6 +145,16 @@ class TRNodeBasics(QtGui.QWidget):
 		self.btn_curve_hobby_90 = CustomPushButton("curve_hobby_90", tooltip=tooltip_button, obj_name='btn_panel')
 		lay_curve.addWidget(self.btn_curve_hobby_90)
 		self.btn_curve_hobby_90.clicked.connect(lambda: TRCurveActionCollector.curve_optimize(pMode, pLayers, ('hobby', .90, .90)))
+
+		tooltip_button = "Optimize curve: Copy Hobby curvature (per layer)"
+		self.chk_curve_copy = CustomPushButton("curve_hobby_copy", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_curve.addWidget(self.chk_curve_copy)
+		self.chk_curve_copy.clicked.connect(self.act_tension_copy)
+
+		tooltip_button = "Optimize curve: Paste Hobby curvature (per layer)\n<ALT + Mouse Left> Swaps tensions at nodes"
+		self.btn_curve_paste = CustomPushButton("curve_hobby_paste", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_curve.addWidget(self.btn_curve_paste)
+		self.btn_curve_paste.clicked.connect(lambda: TRCurveActionCollector.curve_optimize_by_dict(pMode, pLayers, 'hobby', self.curve_bank, get_modifier()))
 
 		tooltip_button = "Optimize curve: Set handle proportion relative to curve length"
 		self.btn_curve_prop = CustomPushButton("curve_prop_alt", tooltip=tooltip_button, obj_name='btn_panel')
@@ -618,6 +629,12 @@ class TRNodeBasics(QtGui.QWidget):
 
 			glyph.update()
 			glyph.updateObject(glyph.fl, 'Glyph: {}; Nodes collapsed; Layers:\t {}'.format(glyph.name, '; '.join(wLayers)))
+
+	def act_tension_copy(self):
+		if self.chk_curve_copy.isChecked():
+			self.curve_bank = TRCurveActionCollector.hobby_tension_copy(eGlyph(), pLayers)
+		else:
+			self.curve_bank = {}
 
 	def act_slope_copy(self):
 		if self.chk_slope_copy.isChecked():
