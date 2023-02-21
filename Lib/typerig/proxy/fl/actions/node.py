@@ -35,7 +35,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.71'
+__version__ = '2.72'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -799,11 +799,12 @@ class TRNodeActionCollector(object):
 						node.shift(offset_x, offset_y)
 
 			elif method == 'LERP':
-				for node in selectedNodes:
-					if in_percent_of_advance:						
-						node.interpShift(*scale_offset(node, offset_x, offset_y, width, height))
-					else:
-						node.interpShift(offset_x, offset_y)
+				for node in sorted(selectedNodes, key= lambda n: (n.x, n.y)):
+					if node.isOn:
+						if in_percent_of_advance:						
+							node.interpShift(*scale_offset(node, offset_x, offset_y, width, height))
+						else:
+							node.interpShift(offset_x, offset_y)
 
 			elif method == 'SLANT':
 				if italic_angle != 0:

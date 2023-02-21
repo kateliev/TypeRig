@@ -21,7 +21,7 @@ from typerig.core.objects.utils import Bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 # - Init ---------------------------------
-__version__ = '0.28.3'
+__version__ = '0.28.4'
 
 # - Keep compatibility for basestring checks
 try:
@@ -245,15 +245,15 @@ class pNode(object):
 	# - Transformation -----------------------------------------------
 	def reloc(self, newX, newY):
 		'''Relocate the node to new coordinates'''
-		self.fl.x, self.fl.y = newX, newY
+		#self.fl.x, self.fl.y = newX, newY
 		self.x, self.y = newX, newY	
 		#self.update()
 	
 	def shift(self, deltaX, deltaY):
 		'''Shift the node by given amout'''
-		self.fl.x += deltaX
-		self.fl.y += deltaY
-		self.x, self.y = self.fl.x, self.fl.y 
+		self.x += deltaX
+		self.y += deltaY
+		#self.x, self.y = self.fl.x, self.fl.y 
 		#self.update()
 
 	def smartReloc(self, newX, newY):
@@ -710,13 +710,14 @@ class eNode(pNode):
 				
 				currNode_bcpOut = self.getNext(False)
 				nextNode_bcpIn = currNode_bcpOut.getNext(False)
-				nextNode = nextNode_bcpIn.getOn(False)
+				nextNode = self.getNextOn(False)
 
 				currSegmetNodes = [self, currNode_bcpOut, nextNode_bcpIn, nextNode]
-				
+			
 				# - Set node positions
 				for i in range(len(currSegmetNodes)):
-					currSegmetNodes[i].smartReloc(*new_currCurve.points[i].tuple)
+					
+					currSegmetNodes[i].reloc(*new_currCurve.tuple[i])
 
 			if len(prevSegment) == 4:
 				prevCurve = Curve(prevSegment)
@@ -724,13 +725,13 @@ class eNode(pNode):
 
 				currNode_bcpIn = self.getPrev(False)
 				prevNode_bcpOut = currNode_bcpIn.getPrev(False)
-				prevNode = prevNode_bcpOut.getOn(False)
+				prevNode = self.getPrevOn(False)
 
 				prevSegmentNodes = [prevNode, prevNode_bcpOut, currNode_bcpIn, self]
 				
 				# - Set node positions
 				for i in range(len(prevSegmentNodes)-1,-1,-1):
-					prevSegmentNodes[i].smartReloc(*new_prevCurve.points[i].tuple)
+					prevSegmentNodes[i].reloc(*new_prevCurve.points[i].tuple)
 
 			if len(currSegmet) == 2 and len(prevSegment) == 2:
 				self.smartShift(*shift.tuple)

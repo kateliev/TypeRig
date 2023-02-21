@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '3.29'
+app_name, app_version = 'TypeRig | Nodes', '3.30'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -250,18 +250,18 @@ class TRNodeBasics(QtGui.QWidget):
 
 		tooltip_button = "Keep relations between selected nodes"
 		self.chk_shift_keep_dimension = CustomPushButton("shift_keep_dimension", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
-		self.grp_align_options_other.addButton(self.chk_shift_keep_dimension, 1)
+		#self.grp_align_options_other.addButton(self.chk_shift_keep_dimension, 1)
 		lay_align_options.addWidget(self.chk_shift_keep_dimension)
 
 		tooltip_button = "Intercept vertical position"
 		self.chk_shift_intercept = CustomPushButton("shift_intercept", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
-		self.grp_align_options_other.addButton(self.chk_shift_intercept, 2)
+		#self.grp_align_options_other.addButton(self.chk_shift_intercept, 2)
 		lay_align_options.addWidget(self.chk_shift_intercept)
 
 		tooltip_button = "Pick target node for alignment"
 		self.chk_node_target = CustomPushButton("node_target", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.chk_node_target.clicked.connect(self.target_set)
-		self.grp_align_options_other.addButton(self.chk_node_target, 3)
+		#self.grp_align_options_other.addButton(self.chk_node_target, 3)
 		lay_align_options.addWidget(self.chk_node_target)
 
 		# --- Actions
