@@ -18,8 +18,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
-from PythonQt import QtCore
-from typerig.proxy.fl.gui import QtGui
+from PythonQt import QtCore, QtGui
 from typerig.proxy.fl.gui.widgets import TRCheckTableView, TRSliderCtrl, CustomPushButton, CustomLabel, TRFlowLayout
 from typerig.proxy.fl.gui.styles import css_tr_button
 

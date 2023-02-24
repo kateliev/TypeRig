@@ -22,13 +22,13 @@ import fontlab as fl6
 
 from PythonQt.QtGui import *
 from PythonQt.QtCore import QSize
-from platform import system
+
 
 # - Init --------------------------------
 MAC_VSPACING = 2
 MAC_VMARGIN = 2
 
-fl_runtime_platform = system()
+fl_runtime_platform = 'Darwin'
 fl_app = fl6.flWorkspace.instance()
 fl_app_version = fl_app.mainWindow.windowTitle
 

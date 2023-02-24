@@ -14,7 +14,7 @@ from __future__ import absolute_import
 from collections import OrderedDict
 from math import radians
 from random import randint
-from platform import system
+
 
 import os
 import fontlab as fl6
@@ -1219,42 +1219,14 @@ class TRCollapsibleBox(QtGui.QWidget):
 class TRHTabWidget(QtGui.QTabWidget):
 	def __init__(self, *args, **kwargs):
 		super(QtGui.QTabWidget, self).__init__(*args, **kwargs)
-		if system() == 'Darwin':
-			self.setStyleSheet('''
-			QTabBar::tab { 
-				margin-bottom: 10px;
-				padding: 5px 7px 4px 7px; 
-				margin-right: 1px;
-				color: black; 
-				background-color: white; 
-				border: none; 
-			}
-			QTabBar::tab:selected { 
-				color: white; 
-				background-color: #808080; 
-			}
-			''')
+		
 
 class TRVTabWidget(QtGui.QTabWidget):
 	def __init__(self, *args, **kwargs):
 		super(QtGui.QTabWidget, self).__init__(*args, **kwargs)
 		self.setUsesScrollButtons(True)
 		self.setTabPosition(QtGui.QTabWidget.East)
-		if system() == 'Darwin':
-			self.setStyleSheet('''
-			QTabBar::tab { 
-				margin-left: 11px;
-				padding: 5px 4px 5px 5px; 
-				margin-bottom: 1px;
-				color: black; 
-				background-color: white; 
-				border: none; 
-			}
-			QTabBar::tab:selected { 
-				color: white; 
-				background-color: #808080; 
-			}
-			''')
+		
 
 # - Layouts ----------------------------------------
 class TRFlowLayout(QtGui.QLayout):
