@@ -1,0 +1,222 @@
+#FLM: TypeRig: Diagnostics utility
+# -------------------------------------------------------------------------
+#  ___ ___ ____
+# |   |   |   /\   TypeRig
+# |___|___|__/__\  
+#     |   | /   /  (C) Font development kit for FontLab
+#     |___|/___/   (C) Vassil Kateliev, 2017-2021 (http://www.kateliev.com)
+#     |   |\   \   
+#     |___| \___\  www.typerig.com 
+# 
+# -------------------------------------------------------------------------
+# (C) Vassil Kateliev, 2023  (http://www.kateliev.com)
+# (C) Karandash Type Foundry (http://www.karandash.eu)
+#--------------------------------------------------------------------------
+# www.typerig.com
+
+# No warranties. By using this you agree
+# that you use it at your own risk!
+
+# - Dependencies -----------------
+from __future__ import print_function
+
+import os
+import sys
+import shutil
+import re
+import sysconfig
+import site
+import json
+
+from PythonQt import QtCore, QtGui
+
+# - Init --------------------------------
+app_name, app_version = 'TR | Module diagnostics', '1.2'
+
+# - Config ------------------------------
+module_name = 'typerig'
+module_path = 'lib'
+file_ext = '.py'
+file_skip = 'init'
+version_pattern = r"__version__\s*=\s*['\"](.+)['\"]"           # match __version__ = "x.y.z"
+
+msg_installed = 'TypeRig Core is <b> Installed </b> on your system!\n\n'
+msg_not_installed = 'TypeRig Core is <b> Not Installed </b> on your system!\n\n'
+
+current_folder = os.path.dirname(__file__)
+libary_folder = os.path.normpath(os.path.join(current_folder, module_path))
+python_folder = site.USER_SITE
+if python_folder is None: python_folder = sysconfig.get_paths()['purelib']
+
+# - Functions --------------------------
+def get_path_versions(path):
+	# - Init
+	module_versions = []                                         
+
+	# - Process
+	for root, dirs, files in os.walk(path):                 
+		for file in files:
+			
+			if file.endswith(file_ext) and file_skip not in file:
+				file_full_path = os.path.join(root, file)               
+				
+				with open(file_full_path) as f:
+					content = f.read()                   
+					match = re.search(version_pattern, content)  
+					
+					if match:                            
+						version = match.group(1)         
+						module_versions.append((file_full_path, version))
+
+	return module_versions
+
+# - Widgets ---------------------
+class dlg_diagnose(QtGui.QDialog):
+	def __init__(self):
+		super(dlg_diagnose, self).__init__()
+	
+		# - Init
+		self.path_core = None
+
+		# - Images
+		img_logo = QtGui.QPixmap(os.path.join(current_folder, 'typerig-logo.png'))
+
+		# - Labels
+		'''
+		self.lbl_logo = QtGui.QLabel()
+		self.lbl_logo.setPixmap(img_logo.scaled(200, 200, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
+		self.lbl_logo.setAlignment(QtCore.Qt.AlignCenter)
+		'''
+		self.lbl_desc = QtGui.QLabel('TypeRig Core diagnostics tool:')
+
+		# - Edit
+		self.edt_python_path = QtGui.QLineEdit()
+		self.edt_python_path.setText(python_folder)
+
+		self.edt_core_path = QtGui.QLineEdit()
+		self.edt_core_path.setText(self.path_core)
+
+		# - Table
+		self.tab_versions = QtGui.QTableWidget()
+		
+		# - Buttons 
+		self.btn_version_get = QtGui.QPushButton('Get core component versions')
+		self.btn_version_save = QtGui.QPushButton('Save core component versions')
+		self.btn_unistall = QtGui.QPushButton('Unistall TypeRig')
+		self.btn_unistall.setEnabled(False)
+
+		self.btn_version_get.clicked.connect(lambda: self.version_get())
+		self.btn_version_save.clicked.connect(lambda: self.version_save())
+		#self.btn_unistall.clicked.connect(lambda: self.unistall_core())
+				
+		# - Build layouts 
+		lay_main = QtGui.QVBoxLayout() 
+		
+		box_info = QtGui.QGroupBox('Installation:')
+		lay_info = QtGui.QVBoxLayout() 
+		
+		box_actions = QtGui.QGroupBox('Components:')
+		lay_actions = QtGui.QVBoxLayout() 
+		
+		lay_info.addWidget(QtGui.QLabel('Python installation path:'))
+		lay_info.addWidget(self.edt_python_path)
+		lay_info.addWidget(QtGui.QLabel('TypeRig installation path:'))
+		lay_info.addWidget(self.edt_core_path)
+		lay_info.addWidget(QtGui.QLabel('Status:'))
+		lay_info.addWidget(self.lbl_desc)
+		box_info.setLayout(lay_info)
+
+		lay_actions.addWidget(self.btn_version_get)
+		lay_actions.addWidget(self.btn_version_save)
+		lay_actions.addWidget(self.tab_versions)
+		box_actions.setLayout(lay_actions)
+		
+		#lay_main.addWidget(self.lbl_logo)
+		lay_main.addWidget(box_info)
+		lay_main.addWidget(box_actions)
+		lay_main.addWidget(self.btn_unistall)
+
+		# - Set Widget
+		self.setLayout(lay_main)
+		self.setWindowTitle('%s %s' %(app_name, app_version))
+		self.setGeometry(300, 300, 600, 600)
+		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
+
+		# - Run
+		self.module_present()
+		self.show()
+
+	# - Functions -----------------------
+	def module_present(self):
+		try:
+			import typerig
+			self.lbl_desc.setText(msg_installed)
+			self.path_core = os.path.dirname(typerig.__file__)
+			self.edt_core_path.setText(self.path_core)
+		
+		except ModuleNotFoundError:
+			self.lbl_desc.setText(msg_not_installed)
+			self.btn_version_get.setEnabled(False)
+			self.btn_version_save.setEnabled(False)
+			self.btn_unistall.setEnabled(False)
+			self.tab_versions.setEnabled(False)
+			self.edt_core_path.setEnabled(False)
+			self.edt_core_path.setText('Module not found!')
+
+	# -- Getter/setters -----------------
+	def set_table(self, data):
+		name_row, name_column = [], []
+		self.tab_versions.blockSignals(True)
+
+		self.tab_versions.setColumnCount(len(data[0]))
+		self.tab_versions.setRowCount(len(data))
+
+		tab_versions_header = self.tab_versions.horizontalHeader()
+		tab_versions_header.setDefaultAlignment(QtCore.Qt.AlignLeft)
+		self.tab_versions.verticalHeader().hide()
+		
+		self.tab_versions.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
+		self.tab_versions.setAlternatingRowColors(True)
+		self.tab_versions.setShowGrid(False)
+
+		# - Populate
+		for row, value in enumerate(data):
+			name_row.append(value)
+			
+			for col, key in enumerate(data[row]):
+				name_column.append(key)
+				rowData = data[row][col]
+				
+				newitem = QtGui.QTableWidgetItem(str(rowData))
+				self.tab_versions.setItem(row, col, newitem)
+
+		self.tab_versions.setHorizontalHeaderLabels(('Module path', 'Version'))
+		self.tab_versions.resizeColumnsToContents()
+		self.tab_versions.resizeRowsToContents()
+
+	def get_table(self):
+		return [(self.tab_versions.item(row, 0).text(), self.tab_versions.item(row, 1).text()) for row in range(self.tab_versions.rowCount)]
+
+	# -- Actions --------------------------------------
+	def version_get(self):
+		module_versions = get_path_versions(self.path_core)
+		self.set_table(module_versions)
+
+	def version_save(self):
+		fname = QtGui.QFileDialog.getSaveFileName(self, 'Save TypeRig Core component version information', os.path.split(__file__)[0], 'JSON (*.json);;')
+		exported_data = self.get_table()
+
+		if not len(exported_data):
+			self.version_get()
+			exported_data = self.get_table()
+
+		try:
+			with open(fname, 'w') as export_file:
+				json.dump(exported_data, export_file)
+
+			print('DONE:\tTypeRig Core component version saved to: %s' %fname)
+		except FileNotFoundError:
+			print('ABORT:\tNo file selected!')
+
+# - RUN ------------------------------
+dialog = dlg_diagnose()
