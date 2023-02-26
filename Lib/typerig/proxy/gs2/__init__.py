@@ -1,4 +1,4 @@
-# MODULE: TypeRig / Glyphs App Proxy
+# MODULE: TypeRig / Glyphs App 2 Proxy
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2022 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)

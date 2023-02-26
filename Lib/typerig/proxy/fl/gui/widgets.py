@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # MODULE: Typerig / GUI / Widgets
 # NOTE	: Assorted Gui Elements
 # ----------------------------------------
