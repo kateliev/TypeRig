@@ -31,7 +31,7 @@ import json
 from PythonQt import QtCore, QtGui
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Module diagnostics', '1.2'
+app_name, app_version = 'TR | Module diagnostics', '1.3'
 
 # - Config ------------------------------
 module_name = 'typerig'
@@ -58,9 +58,10 @@ def get_path_versions(path):
 		for file in files:
 			
 			if file.endswith(file_ext) and file_skip not in file:
-				file_full_path = os.path.join(root, file)               
+				file_full_path = os.path.join(root, file)  
+				print('READ:\t' + file_full_path)             
 				
-				with open(file_full_path) as f:
+				with open(file_full_path, encoding="utf-8") as f:
 					content = f.read()                   
 					match = re.search(version_pattern, content)  
 					
