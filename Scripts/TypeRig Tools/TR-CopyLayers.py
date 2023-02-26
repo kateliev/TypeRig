@@ -24,7 +24,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.core.base.message import *
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Copy Layers', '1.6'
+app_name, app_version = 'TR | Copy Layers', '1.7'
 
 # - Interface -----------------------------
 class dlg_copy_layers(QtGui.QDialog):
@@ -32,8 +32,8 @@ class dlg_copy_layers(QtGui.QDialog):
 		super(dlg_copy_layers, self).__init__()
 	
 		# - Init
-		self.all_fonts = fl6.AllFonts()
-		self.font_files = [os.path.split(font.path)[1] for font in self.all_fonts]
+		self.all_fonts = None
+		self.font_files = None
 
 		# - Group box
 		self.box_src = QtGui.QGroupBox('Source')
@@ -42,9 +42,8 @@ class dlg_copy_layers(QtGui.QDialog):
 		# - Combos
 		self.cmb_select_font_A = QtGui.QComboBox()
 		self.cmb_select_font_B = QtGui.QComboBox()
-		self.cmb_select_font_A.addItems(self.font_files)
-		self.cmb_select_font_B.addItems(self.font_files)
 		self.cmb_mark = TRColorCombo()
+		self.refresh_fonts_list()
 
 		self.cmb_select_layer_A = QtGui.QComboBox()
 		self.cmb_select_layer_B = QtGui.QComboBox()
@@ -87,6 +86,8 @@ class dlg_copy_layers(QtGui.QDialog):
 		self.edt_collide_suffix.setText('.bak')
 
 		# - Buttons 
+		self.btn_cmb_font_A_refresh = QtGui.QPushButton('<<')
+		self.btn_cmb_font_B_refresh = QtGui.QPushButton('<<')
 		self.btn_cmb_layer_A_refresh = QtGui.QPushButton('<<')
 		self.btn_cmb_layer_B_refresh = QtGui.QPushButton('<<')
 		self.btn_copy_layers = QtGui.QPushButton('Copy layers')
@@ -99,12 +100,15 @@ class dlg_copy_layers(QtGui.QDialog):
 		self.btn_copy_layers.clicked.connect(lambda: self.action_copy_layers())
 		self.btn_cmb_layer_A_refresh.clicked.connect(lambda: self.refresh_layers_list('A'))
 		self.btn_cmb_layer_B_refresh.clicked.connect(lambda: self.refresh_layers_list('B'))
+		self.btn_cmb_font_A_refresh.clicked.connect(lambda: self.refresh_fonts_list())
+		self.btn_cmb_font_B_refresh.clicked.connect(lambda: self.refresh_fonts_list())
 				
 		# - Build layouts 
 		# -- Soource 
 		layout_src = QtGui.QGridLayout() 
 		#layout_src.addWidget(QtGui.QLabel('Source font:'), 			1, 0, 1, 6)
-		layout_src.addWidget(self.cmb_select_font_A,	 			2, 0, 1, 7)
+		layout_src.addWidget(self.cmb_select_font_A,	 			2, 0, 1, 6)
+		layout_src.addWidget(self.btn_cmb_font_A_refresh,			2, 6, 1, 1)
 		layout_src.addWidget(QtGui.QLabel('Source Layer:'), 		3, 0, 1, 1)
 		layout_src.addWidget(self.cmb_select_layer_A, 				3, 1, 1, 5)
 		layout_src.addWidget(self.btn_cmb_layer_A_refresh,			3, 6, 1, 1)
@@ -116,7 +120,8 @@ class dlg_copy_layers(QtGui.QDialog):
 		# -- Destination 
 		layout_dst = QtGui.QGridLayout() 
 		#layout_dst.addWidget(QtGui.QLabel('\nDestination font:'), 	1, 0, 1, 6)
-		layout_dst.addWidget(self.cmb_select_font_B,	 			2, 0, 1, 7)
+		layout_dst.addWidget(self.cmb_select_font_B,	 			2, 0, 1, 6)
+		layout_dst.addWidget(self.btn_cmb_font_B_refresh,			2, 6, 1, 1)
 		layout_dst.addWidget(QtGui.QLabel('Destination Layer:'), 	3, 0, 1, 1)
 		layout_dst.addWidget(self.cmb_select_layer_B, 				3, 1, 1, 5)
 		layout_dst.addWidget(self.btn_cmb_layer_B_refresh,			3, 6, 1, 1)
@@ -151,6 +156,17 @@ class dlg_copy_layers(QtGui.QDialog):
 		self.show()
 
 	# - Functions --------------------------------
+	def refresh_fonts_list(self):
+		self.all_fonts = fl6.AllFonts()
+		self.font_files = [os.path.split(font.path)[1] for font in self.all_fonts]
+		self.cmb_select_font_A.clear()
+		self.cmb_select_font_B.clear()
+		self.cmb_select_font_A.addItems(self.font_files)
+		self.cmb_select_font_B.addItems(self.font_files)
+
+		output(0, app_name, 'Font lists updated!')
+
+
 	def refresh_layers_list(self, control):
 		if control == 'A':
 			tmp_font = pFont(self.all_fonts[self.font_files.index(self.cmb_select_font_A.currentText)])

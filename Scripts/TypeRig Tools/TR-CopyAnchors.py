@@ -24,7 +24,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.core.base.message import *
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Copy Anchors', '1.9'
+app_name, app_version = 'TR | Copy Anchors', '2.0'
 str_all_masters = '*All masters*'
 
 # - Interface -----------------------------
@@ -33,23 +33,40 @@ class dlg_copy_anchors(QtGui.QDialog):
 		super(dlg_copy_anchors, self).__init__()
 	
 		# - Init
-		self.all_fonts = fl6.AllFonts()
-		self.font_files = [os.path.split(font.path)[1] for font in self.all_fonts]
+		self.all_fonts = None
+		self.font_files = None
 
 		# - Group box
 		self.box_src = QtGui.QGroupBox('Source')
 		self.box_dst = QtGui.QGroupBox('Destination')
 
+		# - Buttons 
+		self.btn_cmb_layer_A_refresh = QtGui.QPushButton('<<')
+		self.btn_cmb_layer_B_refresh = QtGui.QPushButton('<<')
+		self.btn_cmb_font_A_refresh = QtGui.QPushButton('<<')
+		self.btn_cmb_font_B_refresh = QtGui.QPushButton('<<')
+		self.btn_copy_anchors = QtGui.QPushButton('Copy Anchors')
+
+		self.btn_cmb_layer_A_refresh.setToolTip('Refresh layers list')
+		self.btn_cmb_layer_B_refresh.setToolTip('Refresh layers list')
+		self.btn_cmb_font_A_refresh.setToolTip('Refresh font list')
+		self.btn_cmb_font_B_refresh.setToolTip('Refresh font list')
+		self.btn_cmb_layer_A_refresh.setMaximumWidth(30)
+		self.btn_cmb_layer_B_refresh.setMaximumWidth(30)
+		
+		self.btn_copy_anchors.clicked.connect(lambda: self.action_copy_anchors())
+		self.btn_cmb_layer_A_refresh.clicked.connect(lambda: self.refresh_layers_list('A'))
+		self.btn_cmb_layer_B_refresh.clicked.connect(lambda: self.refresh_layers_list('B'))
+		self.btn_cmb_font_A_refresh.clicked.connect(lambda: self.refresh_fonts_list())
+		self.btn_cmb_font_B_refresh.clicked.connect(lambda: self.refresh_fonts_list())
+
 		# - Combos
 		self.cmb_select_font_A = QtGui.QComboBox()
 		self.cmb_select_font_B = QtGui.QComboBox()
-		self.cmb_select_font_A.addItems(self.font_files)
-		self.cmb_select_font_B.addItems(self.font_files)
 
 		self.cmb_select_layer_A = QtGui.QComboBox()
 		self.cmb_select_layer_B = QtGui.QComboBox()
-		self.cmb_select_layer_A.addItems([str_all_masters])
-		self.cmb_select_layer_B.addItems([str_all_masters])
+		self.refresh_fonts_list()
 		
 		# - Radios
 		self.rad_group_copy = QtGui.QButtonGroup()
@@ -92,26 +109,13 @@ class dlg_copy_anchors(QtGui.QDialog):
 		self.edt_anchors_list.setPlaceholderText('Comma separated list of anchors: top, left')
 		self.edt_collide_suffix.setPlaceholderText('Examples: .new, .bak, .1')
 		self.edt_collide_suffix.setText('.bak')
-
-		# - Buttons 
-		self.btn_cmb_layer_A_refresh = QtGui.QPushButton('<<')
-		self.btn_cmb_layer_B_refresh = QtGui.QPushButton('<<')
-		self.btn_copy_anchors = QtGui.QPushButton('Copy Anchors')
-
-		self.btn_cmb_layer_A_refresh.setToolTip('Refresh layers list')
-		self.btn_cmb_layer_B_refresh.setToolTip('Refresh layers list')
-		self.btn_cmb_layer_A_refresh.setMaximumWidth(30)
-		self.btn_cmb_layer_B_refresh.setMaximumWidth(30)
-		
-		self.btn_copy_anchors.clicked.connect(lambda: self.action_copy_anchors())
-		self.btn_cmb_layer_A_refresh.clicked.connect(lambda: self.refresh_layers_list('A'))
-		self.btn_cmb_layer_B_refresh.clicked.connect(lambda: self.refresh_layers_list('B'))
 				
 		# - Build layouts 
 		# -- Soource 
 		layout_src = QtGui.QGridLayout() 
-		#layout_src.addWidget(QtGui.QLabel('Source font:'), 			1, 0, 1, 6)
-		layout_src.addWidget(self.cmb_select_font_A,	 			2, 0, 1, 7)
+		#layout_src.addWidget(QtGui.QLabel('Source font:'), 		1, 0, 1, 6)
+		layout_src.addWidget(self.cmb_select_font_A,	 			2, 0, 1, 6)
+		layout_src.addWidget(self.btn_cmb_font_A_refresh,			2, 6, 1, 1)
 		layout_src.addWidget(QtGui.QLabel('Source Layer:'), 		3, 0, 1, 1)
 		layout_src.addWidget(self.cmb_select_layer_A, 				3, 1, 1, 5)
 		layout_src.addWidget(self.btn_cmb_layer_A_refresh,			3, 6, 1, 1)
@@ -128,7 +132,8 @@ class dlg_copy_anchors(QtGui.QDialog):
 		# -- Destination 
 		layout_dst = QtGui.QGridLayout() 
 		#layout_dst.addWidget(QtGui.QLabel('\nDestination font:'), 	1, 0, 1, 6)
-		layout_dst.addWidget(self.cmb_select_font_B,	 			2, 0, 1, 7)
+		layout_dst.addWidget(self.cmb_select_font_B,	 			2, 0, 1, 6)
+		layout_dst.addWidget(self.btn_cmb_font_B_refresh,			2, 6, 1, 1)
 		layout_dst.addWidget(QtGui.QLabel('Destination Layer:'), 	3, 0, 1, 1)
 		layout_dst.addWidget(self.cmb_select_layer_B, 				3, 1, 1, 5)
 		layout_dst.addWidget(self.btn_cmb_layer_B_refresh,			3, 6, 1, 1)
@@ -161,22 +166,69 @@ class dlg_copy_anchors(QtGui.QDialog):
 		self.show()
 
 	# - Functions --------------------------------
+	def refresh_fonts_list(self):
+		curr_fonts = fl6.AllFonts()
+		self.cmb_select_font_A.clear()
+		self.cmb_select_font_B.clear()
+		
+		self.cmb_select_layer_A.clear()
+		self.cmb_select_layer_B.clear()
+		self.cmb_select_layer_A.addItems([str_all_masters])
+		self.cmb_select_layer_B.addItems([str_all_masters])
+
+		if len(curr_fonts):
+			self.all_fonts = curr_fonts
+			self.font_files = [os.path.split(font.path)[1] for font in self.all_fonts]
+			self.cmb_select_font_A.addItems(self.font_files)
+			self.cmb_select_font_B.addItems(self.font_files)
+
+			self.btn_copy_anchors.setEnabled(True)
+			output(0, app_name, 'Font lists updated!')
+		
+		else:
+			self.all_fonts = None
+			self.font_files = []
+			self.btn_copy_anchors.setEnabled(False)
+			output(1, app_name, 'No open font files found!')
+
 	def refresh_layers_list(self, control):
+		try:
+			font_src_idx = self.font_files.index(self.cmb_select_font_A.currentText)
+			font_dst_idx = self.font_files.index(self.cmb_select_font_B.currentText)
+		
+		except ValueError:
+			self.refresh_fonts_list()
+			return
+
 		if control == 'A':
-			tmp_font = pFont(self.all_fonts[self.font_files.index(self.cmb_select_font_A.currentText)])
+			tmp_font = pFont(self.all_fonts[font_src_idx])
 			self.cmb_select_layer_A.clear()
 			self.cmb_select_layer_A.addItems([str_all_masters] + tmp_font.masters())
 		else:
-			tmp_font = pFont(self.all_fonts[self.font_files.index(self.cmb_select_font_B.currentText)])
+			tmp_font = pFont(self.all_fonts[font_dst_idx])
 			self.cmb_select_layer_B.clear()
 			self.cmb_select_layer_B.addItems([str_all_masters] + tmp_font.masters())
 
 		output(0, app_name, 'Layers list updated!')
 
 	def action_copy_anchors(self):
+
+		# - Test 
+		if len(fl6.AllFonts()) == 0:
+			self.refresh_fonts_list()
+			return
+
+		try:
+			font_src_idx = self.font_files.index(self.cmb_select_font_A.currentText)
+			font_dst_idx = self.font_files.index(self.cmb_select_font_B.currentText)
+		
+		except ValueError:
+			self.refresh_fonts_list()
+			return
+		
 		# - Init
-		font_src_fl = self.all_fonts[self.font_files.index(self.cmb_select_font_A.currentText)]
-		font_dst_fl = self.all_fonts[self.font_files.index(self.cmb_select_font_B.currentText)]
+		font_src_fl = self.all_fonts[font_src_idx]
+		font_dst_fl = self.all_fonts[font_dst_idx]
 
 		font_src = pFont(font_src_fl)
 		font_dst = pFont(font_dst_fl)
@@ -192,6 +244,11 @@ class dlg_copy_anchors(QtGui.QDialog):
 		#glyphs_source = getProcessGlyphs(mode=mode_source, font=font_src_fl)
 		glyphs_source_names = []
 
+		# - Unpack all data
+		font_src.fl.completeData() 
+		font_dst.fl.completeData()
+		
+		# - Process
 		for glyph in getProcessGlyphs(mode=mode_source):
 			if font_src.hasGlyph(glyph.name):
 				glyphs_source_names.append(glyph.name)
@@ -246,7 +303,7 @@ class dlg_copy_anchors(QtGui.QDialog):
 						# - Handle relative positioning
 						if self.rad_location_relative.isChecked():
 							location_prop = tmp_anchor.point.x()/src_glyph.getAdvance(layer_source)
-							tmp_anchor.point = QtCore.QPointF(location_prop * src_glyph.getAdvance(layer_destination), tmp_anchor.point.y())
+							tmp_anchor.point = QtCore.QPointF(location_prop * dst_glyph.getAdvance(layer_destination), tmp_anchor.point.y())
 						
 						# - Handle collision
 						if mode_collide: # Rename mode

@@ -27,11 +27,12 @@ import re
 import sysconfig
 import site
 import json
+from pprint import pprint
 
 from PythonQt import QtCore, QtGui
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Module diagnostics', '1.3'
+app_name, app_version = 'TR | Module diagnostics', '1.4'
 
 # - Config ------------------------------
 module_name = 'typerig'
@@ -49,6 +50,11 @@ python_folder = site.USER_SITE
 if python_folder is None: python_folder = sysconfig.get_paths()['purelib']
 
 # - Functions --------------------------
+def rev_path(path):
+	normalized_path = os.path.normpath(path)
+	split_path = normalized_path.split(os.sep)
+	return os.sep.join(reversed(split_path))
+
 def get_path_versions(path):
 	# - Init
 	module_versions = []                                         
@@ -103,11 +109,13 @@ class dlg_diagnose(QtGui.QDialog):
 		# - Buttons 
 		self.btn_version_get = QtGui.QPushButton('Get core component versions')
 		self.btn_version_save = QtGui.QPushButton('Save core component versions')
+		self.btn_version_diff = QtGui.QPushButton('Compare component versions')
 		self.btn_unistall = QtGui.QPushButton('Unistall TypeRig')
 		self.btn_unistall.setEnabled(False)
 
 		self.btn_version_get.clicked.connect(lambda: self.version_get())
 		self.btn_version_save.clicked.connect(lambda: self.version_save())
+		self.btn_version_diff.clicked.connect(lambda: self.version_load())
 		#self.btn_unistall.clicked.connect(lambda: self.unistall_core())
 				
 		# - Build layouts 
@@ -129,6 +137,7 @@ class dlg_diagnose(QtGui.QDialog):
 
 		lay_actions.addWidget(self.btn_version_get)
 		lay_actions.addWidget(self.btn_version_save)
+		lay_actions.addWidget(self.btn_version_diff)
 		lay_actions.addWidget(self.tab_versions)
 		box_actions.setLayout(lay_actions)
 		
@@ -216,8 +225,28 @@ class dlg_diagnose(QtGui.QDialog):
 				json.dump(exported_data, export_file)
 
 			print('DONE:\tTypeRig Core component version saved to: %s' %fname)
+		
 		except FileNotFoundError:
 			print('ABORT:\tNo file selected!')
+
+	def version_load(self):
+		fname = QtGui.QFileDialog.getOpenFileName(self, 'Load TypeRig Core component version information', os.path.split(__file__)[0], 'JSON (*.json);;')
+		imported_data = None
+
+		try:
+			with open(fname, 'r') as import_file:
+				imported_data = json.load(import_file)
+								
+				print('DONE:\tTypeRig Core component version data loaded from: %s' %fname)
+
+		except FileNotFoundError:
+			print('ABORT:\tNo file selected!')
+
+		if imported_data is not None:
+			current_data = self.get_table()
+			current_vers = list(sorted([(rev_path(item_path), item_ver) for item_path, item_ver in current_data], key= lambda i: i[0]))
+			other_vers = list(sorted([(rev_path(item_path), item_ver) for item_path, item_ver in imported_data], key= lambda i: i[0]))
+			pprint(list(zip(current_vers, other_vers)))
 
 # - RUN ------------------------------
 dialog = dlg_diagnose()
