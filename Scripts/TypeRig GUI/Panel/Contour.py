@@ -31,7 +31,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '3.3'
+app_name, app_version = 'TypeRig | Contour', '3.4'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -256,6 +256,16 @@ class TRContourBasics(QtGui.QWidget):
 		lay_align.addWidget(self.btn_contour_distribute_v)
 		self.btn_contour_distribute_v.clicked.connect(lambda: TRContourActionCollector.contour_align(pMode, pLayers, 'DV', 'K', 'K'))
 
+		tooltip_button = "Flip horizontally"
+		self.btn_flip_horiz = CustomPushButton("flip_horizontal", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_align.addWidget(self.btn_flip_horiz)
+		self.btn_flip_horiz.clicked.connect(lambda: self.flip_contour(False))
+
+		tooltip_button = "Flip vertically"
+		self.btn_flip_vert = CustomPushButton("flip_vertical", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_align.addWidget(self.btn_flip_vert)
+		self.btn_flip_vert.clicked.connect(lambda: self.flip_contour(True))
+
 		lay_box.addLayout(lay_align)
 
 		box_align.setLayout(lay_box)
@@ -325,6 +335,65 @@ class TRContourBasics(QtGui.QWidget):
 
 		# - Align
 		TRContourActionCollector.contour_align(pMode, pLayers, align_mode, align_x, align_y, get_modifier(), self.contour_group_A, self.contour_group_B)
+
+	def __get_transform_flip(self, vertical, obj_rect):
+		# - Init
+		origin_transform = QtGui.QTransform()
+		rev_origin_transform = QtGui.QTransform()
+		return_transform = QtGui.QTransform()
+		
+		m11 = 1. if vertical else -1.
+		m22 = -1. if vertical else 1.
+
+		transform_origin = obj_rect.center()
+		
+		# - Prepare transformation data
+		origin_transform.translate(-transform_origin.x(), -transform_origin.y())
+		rev_origin_transform.translate(transform_origin.x(), transform_origin.y())
+		return_transform.scale(m11, m22)
+
+		return return_transform, origin_transform, rev_origin_transform
+
+	def flip_contour(self, vertical=False):
+		# - Init
+		wGlyph = eGlyph()
+		wContours = wGlyph.contours()
+		wLayers = wGlyph._prepareLayers(pLayers)
+		export_clipboard = OrderedDict()
+		
+		# - Build initial contour information
+		selectionTuples = wGlyph.selectedAtContours()
+		selection = [cid for cid, nodes in groupby(selectionTuples, lambda x:x[0])]
+
+		# - Process
+		if len(selection):
+			for layer_name in wLayers:
+				# - Init
+				wContours = wGlyph.contours(layer_name)
+
+				# - Get Bounding box
+				temp_shape = fl6.flShape()
+				temp_contours = [wContours[cid].clone() for cid in selection]
+				temp_shape.addContours(temp_contours, True)
+
+				wBBox = temp_shape.boundingBox
+
+				# - Set transformation
+				new_transform, org_transform, rev_transform = self.__get_transform_flip(vertical, wBBox)
+				
+				# - Transform contours
+				for cid in selection:
+					wContour = wContours[cid]
+					wContour.transform = org_transform
+					wContour.applyTransform()
+					wContour.transform = new_transform
+					wContour.applyTransform()
+					wContour.transform = rev_transform
+					wContour.applyTransform()
+					wContour.update()
+			
+			# - Done
+			wGlyph.updateObject(wGlyph.fl, 'Flip contours; Glyph: %s; Layers: %s' %(wGlyph.name, '; '.join(wLayers)))
 
 	def transform_contour(self):
 		# - Init
