@@ -32,7 +32,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.31.3'
+__version__ = '0.31.4'
 
 # - Keep compatibility for basestring checks
 try:
@@ -832,10 +832,6 @@ class pGlyph(object):
 		filtered_contours = set([all_contours.index(contour) for contour in selected_contours])
 		return [all_contours[cid] for cid in filtered_contours ]
 
-	def selectedShapes(self, layer=None, allNodesSelected=False, deep=False):
-		selection_mode = 3 if allNodesSelected else 1
-		return [shape for shape in self.shapes(layer, deep=deep) if shape.hasSelected(selection_mode)]
-
 	def nodesForIndices(self, indices, layer=None, filterOn=False, extend=None, deep=False):
 		return [self.nodes(layer, extend, deep)[nid] for nid in indices]
 	
@@ -886,16 +882,20 @@ class pGlyph(object):
 
 		return [all_shapes.index(shape) for shape in all_shapes if shape.hasSelected(selection_mode)]
 		
-	def selectedShapes(self, layer=None, select_all=False, deep=False, extend=None):
+	def selectedShapes(self, layer=None, deep=False, extend=None):
 		'''Return all shapes that have a node selected.
 		'''
-		selection_mode = ['AnyNodeSelected', 'AllContourSelected'][select_all]
+		all_contours = self.contours(layer=layer, deep=deep)
 		all_shapes = self.shapes(layer, deep=deep)
+		selected_nodes = self.selectedNodes(layer=layer, filterOn=False, deep=deep)
+
+		selected_shapes = [all_shapes.index(shape) for shape in all_shapes for contour in shape.contours for node in contour.nodes() if node in selected_nodes]
+		unique_shapes = list(set(selected_shapes))
 
 		if extend is None:
-			return [all_shapes[sid] for sid in self.selectedShapeIndices(layer, select_all=select_all, deep=deep)]
+			return [all_shapes[sid] for sid in unique_shapes]
 		else:
-			return [extend(all_shapes[sid]) for sid in self.selectedShapeIndices(layer, select_all=select_all, deep=deep)]
+			return [extend(all_shapes[sid]) for sid in unique_shapes]
 
 	def selectedCoords(self, layer=None, filterOn=False, applyTransform=False, deep=False):
 		'''Return the coordinates of all selected nodes at the current layer or other.
