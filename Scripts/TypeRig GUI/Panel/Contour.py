@@ -23,7 +23,7 @@ from typerig.proxy.fl.objects.contour import eContour
 from typerig.core.base.message import *
 from typerig.proxy.fl.actions.contour import TRContourActionCollector
 from typerig.proxy.fl.application.app import pWorkspace
-from typerig.proxy.fl.gui.widgets import getTRIconFontPath, TRTransformCtrl, CustomLabel, CustomPushButton, TRFlowLayout
+from typerig.proxy.fl.gui.widgets import getTRIconFontPath, getTRIconFont, TRTransformCtrl, CustomLabel, CustomPushButton, TRFlowLayout
 from typerig.proxy.fl.gui.styles import css_tr_button
 
 # - Init -------------------------------
@@ -31,10 +31,13 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '3.4'
+app_name, app_version = 'TypeRig | Contour', '3.6'
 
-TRToolFont = getTRIconFontPath()
-font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
+TRToolFont_path = getTRIconFontPath()
+font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont_path)
+families = QtGui.QFontDatabase.applicationFontFamilies(font_loaded)
+TRFont = QtGui.QFont(families[0], 20)
+TRFont.setPixelSize(20)
 
 # -- Helpers ------------------------------
 def get_modifier(keyboard_modifier=QtCore.Qt.AltModifier):
@@ -398,8 +401,8 @@ class TRContourBasics(QtGui.QWidget):
 	def transform_contour(self):
 		# - Init
 		wGlyph = eGlyph()
-		wContours = wGlyph.contours()
-		wLayers = wGlyph._prepareLayers(pLayers)
+		process_contours = wGlyph.contours()
+		process_layers = wGlyph._prepareLayers(pLayers)
 		export_clipboard = OrderedDict()
 		
 		# - Build initial contour information
@@ -408,13 +411,13 @@ class TRContourBasics(QtGui.QWidget):
 
 		# - Process
 		if len(selection):
-			for layer_name in wLayers:
+			for layer_name in process_layers:
 				# - Init
-				wContours = wGlyph.contours(layer_name)
+				process_contours = wGlyph.contours(layer_name)
 
 				# - Get Bounding box
 				temp_shape = fl6.flShape()
-				temp_contours = [wContours[cid].clone() for cid in selection]
+				temp_contours = [process_contours[cid].clone() for cid in selection]
 				temp_shape.addContours(temp_contours, True)
 
 				wBBox = temp_shape.boundingBox
@@ -424,7 +427,7 @@ class TRContourBasics(QtGui.QWidget):
 				
 				# - Transform contours
 				for cid in selection:
-					wContour = wContours[cid]
+					wContour = process_contours[cid]
 					wContour.transform = org_transform
 					wContour.applyTransform()
 					wContour.transform = new_transform
@@ -468,11 +471,30 @@ class TRContourCopy(QtGui.QWidget):
 		lay_contour_copy.addWidget(self.btn_paste_contour)
 		self.btn_paste_contour.clicked.connect(self.paste_contour)
 
-		tooltip_button = "Clear contour bank"
+		tooltip_button = "Remove selected items from contour bank"
 		self.btn_clear = CustomPushButton("clipboard_clear", tooltip=tooltip_button, obj_name='btn_panel')
 		lay_contour_copy.addWidget(self.btn_clear)
-		self.btn_clear.clicked.connect(self.__reset)
+		self.btn_clear.clicked.connect(self.__clear_selected)
 
+		tooltip_button =  "Trace nodes for selected path items"
+		self.btn_trace = CustomPushButton("node_trace", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_contour_copy.addWidget(self.btn_trace)
+		self.btn_trace.clicked.connect(self.paste_path)
+
+		tooltip_button =  "Reverse nodes of selected path item"
+		self.btn_reverse = CustomPushButton("contour_reverse", enabled=False, tooltip=tooltip_button, obj_name='btn_panel')
+		lay_contour_copy.addWidget(self.btn_reverse)
+
+		tooltip_button =  "Auto close traced contour"
+		self.opt_trace_close = CustomPushButton("contour_close", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_contour_copy.addWidget(self.opt_trace_close)
+
+		tooltip_button = "Reset contour bank"
+		self.btn_reset = CustomPushButton("close", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_contour_copy.addWidget(self.btn_reset)
+		self.btn_reset.clicked.connect(self.__reset)
+
+		
 		box_contour_copy.setLayout(lay_contour_copy)
 		lay_main.addWidget(box_contour_copy)
 		lay_main.addWidget(self.lst_contours)
@@ -482,6 +504,15 @@ class TRContourCopy(QtGui.QWidget):
 	def __reset(self):
 		self.contourClipboard = []
 		self.mod_contours.removeRows(0, self.mod_contours.rowCount())
+
+	def __clear_selected(self):
+		gallery_selection = [qidx.row() for qidx in self.lst_contours.selectedIndexes()]
+		
+		for idx in gallery_selection:
+			self.mod_contours.removeRow(idx)
+
+		self.contourClipboard = [self.contourClipboard[i] for i in range(len(self.contourClipboard)) if i not in gallery_selection]
+
 
 	def __drawIcon(self, contours, foreground='black', background='white'):
 		# - Init
@@ -514,54 +545,107 @@ class TRContourCopy(QtGui.QWidget):
 		
 		return new_icon
 
+	def __drawFontIcon(self, text_string, foreground='black', background='white'):
+		# - Init
+		draw_dimension = TRFont.pixelSize()
+		new_icon = QtGui.QIcon()
+		new_painter = QtGui.QPainter()
+		new_pixmap = QtGui.QPixmap(draw_dimension, draw_dimension)
+		
+
+		# - Paint
+		new_painter.begin(new_pixmap)
+		new_painter.setFont(TRFont)
+
+		# -- Background
+		new_painter.setBrush(QtGui.QBrush(QtGui.QColor(background)))
+		new_painter.drawRect(QtCore.QRectF(-1, -1, draw_dimension + 1, draw_dimension + 1))
+
+		# -- Render text
+		new_painter.setPen(QtGui.QColor(foreground))
+		new_painter.drawText(0, 0, draw_dimension, draw_dimension, 0, text_string)
+		new_painter.end()
+
+		new_icon.addPixmap(new_pixmap)
+
+		return new_icon
+
 	def copy_contour(self):
 		# - Init
 		wGlyph = eGlyph()
-		wContours = wGlyph.contours()
-		wLayers = wGlyph._prepareLayers(pLayers)
+		current_contours = wGlyph.contours()
+		process_layers = wGlyph._prepareLayers(pLayers)
 		export_clipboard = OrderedDict()
+		partial_path_mode = False
 		
 		# - Build initial contour information
-		selectionTuples = wGlyph.selectedAtContours()
-		selection = {key:[layer_name[1] for layer_name in value] if not wContours[key].isAllNodesSelected() else [] for key, value in groupby(selectionTuples, lambda x:x[0])}
+		selection_tuples = wGlyph.selectedAtContours()
+		selection = {}
+
+		for cid, node_selection in groupby(selection_tuples, lambda x:x[0]):
+			node_list = []
+
+			if not current_contours[cid].isAllNodesSelected():
+				node_list = [node[1] for node in node_selection]
+				partial_path_mode = True
+
+			selection[cid] = node_list
 
 		# - Process
 		if len(selection.keys()):
-			# -- Add to gallery
-			draw_contours = [wGlyph.contours()[cid] for cid in selection.keys()]
-			draw_count = sum([contour.nodesCount for contour in draw_contours])
-			new_item = QtGui.QStandardItem('{} Nodes | Source: {}'.format(draw_count, wGlyph.name))
 			
-			if len(wLayers) == len(wGlyph.masters()):
+			# -- Add to gallery
+			# --- Indicate layer selections
+			if len(process_layers) == len(wGlyph.masters()):
 				conditional_color = 'green'
-			elif len(wLayers) == 1:
+
+			elif len(process_layers) == 1:
 				conditional_color = 'red'
+
 			else:
 				conditional_color = 'blue'
 
-			new_icon = self.__drawIcon(draw_contours, conditional_color)
+			# --- Prepare icon and bank entry
+			
+			if not partial_path_mode:
+				draw_contours = [wGlyph.contours()[cid] for cid in selection.keys()]
+				draw_count = sum([contour.nodesCount for contour in draw_contours])
+				new_item = QtGui.QStandardItem('Contour: {} Nodes | Source: {}'.format(draw_count, wGlyph.name))
+
+				new_icon = self.__drawIcon(draw_contours, conditional_color)
+			else:
+				draw_count = sum([len(value) for value in selection.values()])
+				new_item = QtGui.QStandardItem('Path: {} Nodes | Source: {}'.format(draw_count, wGlyph.name))
+				new_icon = self.__drawFontIcon('node_trace', conditional_color)
+			
 			new_item.setIcon(new_icon)
 			new_item.setSelectable(True)
 			self.mod_contours.appendRow(new_item)
 
 			# -- Add to clipboard
-			for layer_name in wLayers:
-				wLayer = layer_name
-				export_clipboard[wLayer] = []
+			for layer_name in process_layers:
+				export_clipboard[layer_name] = []
+				all_contours = wGlyph.contours(layer_name)
 
-				for cid, nList in selection.items():
-					if len(nList):
-						 export_clipboard[wLayer].append(fl6.flContour([wGlyph.nodes(wLayer)[nid].clone() for nid in nList]))
-					else:
-						export_clipboard[wLayer].append(wGlyph.contours(wLayer)[cid].clone())
+				if not partial_path_mode:
+					for cid in selection.keys():
+						export_clipboard[layer_name].append(all_contours[cid].clone())
+				else:
+					new_nodes = []
+
+					for cid, node_list in selection.items():
+						contour_nodes = all_contours[cid].nodes()
+						new_nodes += [contour_nodes[nid].clone() for nid in node_list]
+					
+					export_clipboard[layer_name].append(new_nodes)
+						
 
 			self.contourClipboard.append(export_clipboard)
-			output(0, app_name, 'Copy contours; Glyph: %s; Layers: %s.' %(wGlyph.name, '; '.join(wLayers)))
+			output(0, app_name, 'Copy contours; Glyph: %s; Layers: %s.' %(wGlyph.name, '; '.join(process_layers)))
 		
 	def paste_contour(self):
 		# - Init
 		wGlyph = eGlyph()
-		wContours = wGlyph.contours()
 		wLayers = wGlyph._prepareLayers(pLayers)
 		gallery_selection = [qidx.row() for qidx in self.lst_contours.selectedIndexes()]
 
@@ -578,6 +662,11 @@ class TRContourCopy(QtGui.QWidget):
 
 				for layerName, contours in paste_data.items():
 					wLayer = wGlyph.layer(layerName)
+
+					# - Skip if wrong data type is being fed
+					if not isinstance(contours[0], fl6.flContour): 
+						output(3, app_name, '< Paste partial path > selected during < Paste contours > operation!')
+						return
 					
 					if wLayer is not None:	
 						# - Process transform
@@ -592,6 +681,47 @@ class TRContourCopy(QtGui.QWidget):
 							wLayer.addShape(selected_shape)
 
 						selected_shape.addContours(cloned_contours, True)
+					
+			wGlyph.updateObject(wGlyph.fl, 'Paste contours; Glyph: %s; Layers: %s' %(wGlyph.name, '; '.join(wLayers)))
+
+	def paste_path(self):
+		# - Init
+		wGlyph = eGlyph()
+		wLayers = wGlyph._prepareLayers(pLayers)
+		gallery_selection = [qidx.row() for qidx in self.lst_contours.selectedIndexes()]
+
+		# - Helper
+		def add_new_shape(layer, contours):
+			newShape = fl6.flShape()
+			newShape.addContours(contours, True)
+			layer.addShape(newShape)
+
+		# - Process
+		if len(self.contourClipboard) and len(gallery_selection):
+			combined_data = {}
+			
+			for idx in gallery_selection:
+				for layer_name, contours in self.contourClipboard[idx].items():
+					combined_data.setdefault(layer_name, []).extend(contours)
+
+			for layer_name, nodes in combined_data.items():
+				wLayer = wGlyph.layer(layer_name)
+
+				if wLayer is not None:	
+					# - Process nodes
+					flat_nodes = [node.clone() for node in sum(nodes,[])]
+					new_contour = fl6.flContour(flat_nodes)
+					new_contour.closed = self.opt_trace_close.isChecked()
+
+					# - Insert contours into currently selected shape
+					try:
+						selected_shape = wGlyph.shapes(layer_name)[0]
+					
+					except IndexError:
+						selected_shape = fl6.flShape()
+						wLayer.addShape(selected_shape)
+
+					selected_shape.addContours([new_contour], True)
 					
 			wGlyph.updateObject(wGlyph.fl, 'Paste contours; Glyph: %s; Layers: %s' %(wGlyph.name, '; '.join(wLayers)))
 
