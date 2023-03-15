@@ -12,6 +12,7 @@ from __future__ import absolute_import, print_function
 from collections import OrderedDict
 from itertools import groupby
 from math import radians
+import random
 
 import fontlab as fl6
 from PythonQt import QtCore, QtGui
@@ -31,7 +32,9 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '3.7'
+app_name, app_version = 'TypeRig | Contour', '3.8'
+
+cfg_addon_reversed = ' (Reversed)'
 
 TRToolFont_path = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont_path)
@@ -43,46 +46,6 @@ TRFont.setPixelSize(20)
 def get_modifier(keyboard_modifier=QtCore.Qt.AltModifier):
 	modifiers = QtGui.QApplication.keyboardModifiers()
 	return modifiers == keyboard_modifier
-
-# - Classes ----------------------------
-class TRContourClipboardItem(QtGui.QStandardItem):
-	def __init__(self, *args, **kwargs):
-		super(TRContourClipboardItem, self).__init__(*args, **kwargs)
-
-		# - Init
-		self.setDropEnabled(False)
-		self.setSelectable(True)
-
-		self._clipboard_data = {}
-		self._mode_path = False
-		self.__addon_reversed = ' (Reversed)'
-
-	def clone(self):
-		return self #!!! Ugly hack! But not working, proper clone still crashing the app!!!
-
-	def _reverse(self):
-		tmp_clipboard = {}
-		
-		for layer, data in self._clipboard_data.items():
-			new_data = []
-
-			if self._mode_path:
-				tmp_clipboard[layer] = list(reversed(data))
-			else:
-				for contour in data:
-					contour_clone = contour.clone()
-					contour_clone.reverse()
-					new_data.append(contour_clone)
-					tmp_clipboard[layer] = new_data
-
-		self._clipboard_data = tmp_clipboard
-
-		if self.__addon_reversed in self.text():
-			new_caption = self.text().replace(self.__addon_reversed, '')
-		else:
-			new_caption = self.text() + self.__addon_reversed
-
-		self.setText(new_caption)
 
 # - Sub widgets ------------------------
 class TRContourBasics(QtGui.QWidget):
@@ -486,16 +449,17 @@ class TRContourCopy(QtGui.QWidget):
 
 		# - Init
 		lay_main = QtGui.QVBoxLayout()
+		self.contour_clipboard = {}
 
 		# -- Listview
 		self.lst_contours = QtGui.QListView()
 		self.mod_contours = QtGui.QStandardItemModel(self.lst_contours)
-		self.mod_contours.setItemPrototype(TRContourClipboardItem())
+		#self.mod_contours.setItemPrototype(TRContourClipboardItem())
 		self.lst_contours.setMinimumHeight(350)
 
 		self.lst_contours.setModel(self.mod_contours)
 		self.lst_contours.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
-		#self.lst_contours.setDragDropMode(QtGui.QAbstractItemView.InternalMove)
+		self.lst_contours.setDragDropMode(QtGui.QAbstractItemView.InternalMove)
 		self.lst_contours.setDefaultDropAction(QtCore.Qt.MoveAction)
 
 		# -- Quick Tool buttons
@@ -555,8 +519,36 @@ class TRContourCopy(QtGui.QWidget):
 			self.mod_contours.removeRow(idx)
 
 	def __reverse_selected(self):
-		for qidx in self.lst_contours.selectedIndexes():
-			self.lst_contours.model().itemFromIndex(qidx)._reverse()
+		gallery_selection = [self.lst_contours.model().itemFromIndex(qidx) for qidx in self.lst_contours.selectedIndexes()]
+		
+		for clipboard_item in gallery_selection:
+			item_uid = clipboard_item.data(QtCore.Qt.UserRole + 1000)
+			clipboard_item_data = self.contour_clipboard[item_uid]
+			temp_item = {}
+
+			# - Reverse data item
+			for layer, data in clipboard_item_data.items():
+				temp_data = []
+
+				if 'path' in clipboard_item.text().lower():
+					temp_data = list(reversed(data))
+				else:
+					for contour in data:
+						cloned_contour = contour.clone()
+						cloned_contour.reverse()
+						temp_data.append(cloned_contour)
+
+				temp_item[layer] = temp_data
+
+			# - Modify caption
+			if cfg_addon_reversed in clipboard_item.text():
+				new_caption = clipboard_item.text().replace(cfg_addon_reversed, '')
+			else:
+				new_caption = clipboard_item.text() + cfg_addon_reversed
+
+			# - Set new clipboard data
+			clipboard_item.setText(new_caption)
+			self.contour_clipboard[item_uid] = temp_item
 
 	def __drawIcon(self, contours, foreground='black', background='white'):
 		# - Init
@@ -652,12 +644,12 @@ class TRContourCopy(QtGui.QWidget):
 			if not partial_path_mode:
 				draw_contours = [wGlyph.contours()[cid] for cid in selection.keys()]
 				draw_count = sum([contour.nodesCount for contour in draw_contours])
-				new_item = TRContourClipboardItem('Contour: {} Nodes | Source: {}'.format(draw_count, wGlyph.name))
+				new_item = QtGui.QStandardItem('Contour: {} Nodes | Source: {}'.format(draw_count, wGlyph.name))
 
 				new_icon = self.__drawIcon(draw_contours, conditional_color)
 			else:
 				draw_count = sum([len(value) for value in selection.values()])
-				new_item = TRContourClipboardItem('Path: {} Nodes | Source: {}'.format(draw_count, wGlyph.name))
+				new_item = QtGui.QStandardItem('Path: {} Nodes | Source: {}'.format(draw_count, wGlyph.name))
 				new_icon = self.__drawFontIcon('node_trace', conditional_color)
 			
 			new_item.setIcon(new_icon)
@@ -681,9 +673,16 @@ class TRContourCopy(QtGui.QWidget):
 					export_clipboard[layer_name] = new_nodes
 						
 
+			# - Clipboard data item
+			new_item.setDropEnabled(False)
+			new_item.setSelectable(True)
+
+			# -- Generate unique identifier
+			copy_uid = hash(random.getrandbits(128))
+			
 			# - Set clipboard data
-			new_item._clipboard_data = export_clipboard
-			new_item._mode_path = partial_path_mode
+			self.contour_clipboard[copy_uid] = export_clipboard
+			new_item.setData(copy_uid, QtCore.Qt.UserRole + 1000)
 
 			output(0, app_name, 'Copy contours; Glyph: %s; Layers: %s.' %(wGlyph.name, '; '.join(process_layers)))
 		
@@ -702,14 +701,15 @@ class TRContourCopy(QtGui.QWidget):
 		# - Process
 		if len(gallery_selection):
 			for clipboard_item in gallery_selection:
-				paste_data = clipboard_item._clipboard_data
+				paste_uid = clipboard_item.data(QtCore.Qt.UserRole + 1000)
+				paste_data = self.contour_clipboard[paste_uid]
 
 				for layerName, contours in paste_data.items():
 					wLayer = wGlyph.layer(layerName)
 
 					# - Skip if wrong data type is being fed
 					if not isinstance(contours[0], fl6.flContour): 
-						output(3, app_name, '< Paste partial path > selected during < Paste contours > operation!')
+						output(3, app_name, '< Partial path > not suitable for < Paste contours > operation!')
 						return
 					
 					if wLayer is not None:	
@@ -745,11 +745,18 @@ class TRContourCopy(QtGui.QWidget):
 			combined_data = {}
 			
 			for clipboard_item in gallery_selection:
-				for layer_name, contours in clipboard_item._clipboard_data.items():
+				paste_uid = clipboard_item.data(QtCore.Qt.UserRole + 1000)
+				paste_data = self.contour_clipboard[paste_uid]
+
+				for layer_name, contours in paste_data.items():
 					combined_data.setdefault(layer_name, []).extend(contours)
 
 			for layer_name, nodes in combined_data.items():
 				wLayer = wGlyph.layer(layer_name)
+
+				if not isinstance(contours[0], fl6.flNode): 
+						output(3, app_name, '< Contour > not suitable for < Paste partial path > operation!')
+						return
 
 				if wLayer is not None:	
 					# - Process nodes
