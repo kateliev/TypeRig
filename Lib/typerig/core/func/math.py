@@ -13,7 +13,7 @@ from __future__ import absolute_import, print_function, division
 import math, cmath, random
 
 # - Init --------------------------------
-__version__ = '0.26.9'
+__version__ = '0.27.0'
 
 epsilon = 0.000001
 
@@ -241,6 +241,60 @@ def three_point_circle(p1, p2, p3):
 	radius = math.sqrt((cx - p1[0])**2 + (cy - p1[1])**2)
 	return ((cx, cy), radius)
 
+def two_point_square(p1, p2):
+	'''Two point square implementation, where the two points given p1 and p2 form the square's diagonal.
+	Source: https://math.stackexchange.com/questions/506785/given-two-diagonally-opposite-points-on-a-square-how-to-calculate-the-other-two
+	'''
+	x1, y1 = p1 	 # First corner
+	x2, y2 = p2 	 # Third corner
+
+	xc = (x1 + x2)/2    
+	yc = (y1 + y2)/2 # Center point
+
+	xd = (x1 - x2)/2    
+	yd = (y1 - y2)/2 # Half-diagonal
+
+	x3 = xc - yd  	 # Second corner
+	y3 = yc + xd
+
+	x4 = xc + yd 	 # Fourth corner
+	y4 = yc - xd 	
+
+	return (p1, (x3,y3), p2, (x4, y4))
+
+def two_mid_square(m1, m2):
+	'''Find a square by given midpoints m1 and m2 of two adjacent sides. 
+	Ideal for finding squares that inscribe a circle 
+	'''
+	mx1, my1 = m1 # First midpoint
+	mx2, my2 = m2 # Second midpoint
+
+	mxc = (mx1 + mx2)/2    
+	myc = (my1 + my2)/2  
+
+	mxd = (mx1 - mx2)/2    
+	myd = (my1 - my2)/2 
+
+	xc = mxc + myd 	# Square center
+	yc = myc - mxd 	
+	
+	x2 = mxc - myd	# Second corner
+	y2 = myc + mxd
+
+	xd = xc - x2   
+	yd = yc - y2
+
+	x1 = xc - yd	# First corner
+	y1 = yc + xd
+
+	x3 = xc + yd	# Third corner
+	y3 = yc - xd
+
+	x4 = xc + xd	# Forth corner
+	y4 = yc + yd
+
+	return ((x1,y1), (x2,y2), (x3,y3), (x4,y4))
+
 def hobby_velocity(theta, phi):
 	'''From John Hobby and METAFONT book'''
 	n = 2 + math.sqrt(2)*(math.sin(theta) - math.sin(phi)/16)*(math.sin(phi) - math.sin(theta)/16)*(math.cos(theta) - math.cos(phi))
@@ -255,6 +309,7 @@ def hobby_control_points(z0, z1, theta=0., phi=0., alpha=1., beta=1.):
 	u = z0 + cmath.exp(i*theta)*(z1 - z0)*hobby_velocity(theta, phi)/alpha #was *alpha
 	v = z1 - cmath.exp(-i*phi)*(z1 - z0)*hobby_velocity(phi, theta)/beta #was *beta
 	return (u,v)
+
 
 # - Test ----------------------------------------------------------------	
 if __name__ == '__main__':
@@ -280,4 +335,8 @@ if __name__ == '__main__':
 	print(bilinInterp(12, 5.5, points))
 	print(maploc(axis_range, 140))
 	print(three_point_circle((10,10), (20,20), (3,5)))
+	print(two_point_square((0,0), (10,10)))
+	print(find_square((50,0), (100,50)))
+	print(two_point_square((0,0), (34,138)))
+	print(find_square((60,95), (-9,112)))
 
