@@ -22,8 +22,9 @@ from typerig.proxy.fl.objects.curve import eCurveEx
 from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
-from typerig.core.func.math import three_point_circle, two_point_circle
+from typerig.core.func.math import three_point_circle, two_point_circle, two_point_square, two_mid_square
 from typerig.core.objects.contour import HobbySpline
+from typerig.core.objects.node import Knot
 from typerig.core.base.message import *
 
 from PythonQt import QtCore, QtGui
@@ -33,7 +34,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '1.10'
+__version__ = '1.16'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -43,20 +44,30 @@ except NameError:
 	basestring = (str, bytes)
 
 # - Functions ------------------------------------------------------------------------
-def make_contour_circle(center, radius):
+def make_contour_circle(center:tuple, radius:float):
 	x, y = center
 	new_spline = HobbySpline([Knot(x, y - radius), Knot(x + radius, y), Knot(x, y + radius), Knot(x - radius, y)], closed=True)
 	new_contour = fl6.flContour([fl6.flNode(n.x, n.y, nodeType=n.type) for n in new_spline.nodes], closed=True)
 	return new_contour
 
-def make_contour_circle_from_points(node_list):
-	if len(node_list) == 2:
+def make_contour_circle_from_points(node_list:list, mode:int=1):
+	if len(node_list) == 2 or mode == 0: # Two point circle (diameter)
 		c, r = two_point_circle(node_list[0].tuple, node_list[1].tuple)
 	
-	if len(node_list) >= 3:
+	if len(node_list) >= 3 and mode > 0: # Three point circle
 		c, r = three_point_circle(node_list[0].tuple, node_list[1].tuple, node_list[2].tuple)
 	
 	return make_contour_circle(c, r)
+
+def make_contour_square_from_points(node_list:list, mode:int=0):
+	if len(node_list) >= 2:
+		if mode == 0: # From two nodes forming the square's diagonal
+			square_points = two_point_square(node_list[0].tuple, node_list[1].tuple)	
+		elif mode == 1:  # From midpoints of two adjacent sides
+			square_points = two_mid_square(node_list[0].tuple, node_list[1].tuple)
+
+		new_contour = fl6.flContour([fl6.flNode(n[0], n[1]) for n in square_points], closed=True)
+		return new_contour
 
 # - Actions ---------------------------------------------------------------------------
 class TRDrawActionCollector(object):
@@ -64,7 +75,7 @@ class TRDrawActionCollector(object):
 
 	# -- Primitive drawing tools ------------------------------------------------------
 	@staticmethod
-	def draw_circle_from_selection(pMode:int, pLayers:tuple):
+	def draw_circle_from_selection(pMode:int, pLayers:tuple, mode:int=1):
 		# - Get list of glyphs to be processed
 		process_glyphs = getProcessGlyphs(pMode)
 
@@ -78,7 +89,7 @@ class TRDrawActionCollector(object):
 				node_selection = glyph.selectedNodes(layer_name, filterOn=True, extend=eNode)
 
 				if len(node_selection) >= 2:
-					new_circle = make_contour_circle_from_points(node_selection)
+					new_circle = make_contour_circle_from_points(node_selection, mode)
 					active_shape = glyph.shapes(layer_name)[0]
 					active_shape.addContour(new_circle, True)
 				
@@ -86,6 +97,32 @@ class TRDrawActionCollector(object):
 					break
 
 			glyph.updateObject(glyph.fl, 'Glyph: {}; Created circle on: {}'.format(glyph.name, '; '.join(wLayers)))
+		
+		active_workspace.getCanvas(True).refreshAll()
+
+	@staticmethod
+	def draw_square_from_selection(pMode:int, pLayers:tuple, mode:int=0):
+		# - Get list of glyphs to be processed
+		process_glyphs = getProcessGlyphs(pMode)
+
+		# - Process
+		for glyph in process_glyphs:
+			# - Init		
+			wLayers = glyph._prepareLayers(pLayers)
+
+			# - Draw
+			for layer_name in wLayers:
+				node_selection = glyph.selectedNodes(layer_name, filterOn=True, extend=eNode)
+
+				if len(node_selection) >= 2:
+					new_square = make_contour_square_from_points(node_selection, mode)
+					active_shape = glyph.shapes(layer_name)[0]
+					active_shape.addContour(new_square, True)
+				
+				else:
+					break
+
+			glyph.updateObject(glyph.fl, 'Glyph: {}; Created square on: {}'.format(glyph.name, '; '.join(wLayers)))
 		
 		active_workspace.getCanvas(True).refreshAll()
 
@@ -97,34 +134,51 @@ class TRDrawActionCollector(object):
 		nodes_bank = {}
 
 		# - Process
-		for glyph in process_glyphs:
+		for glyph in process_glyphs:	
 			# - Init		
-			wLayers = wGlyph._prepareLayers(pLayers)
+			wLayers = glyph._prepareLayers(pLayers)
 
 			for layer_name in wLayers:
-				node_selection = wGlyph.selectedNodes(layer_name)
+				node_selection = glyph.selectedNodes(layer_name)
 				nodes_bank.setdefault(layer_name, []).extend(node_selection)
 
 		return nodes_bank
 
 	@staticmethod
-	def nodes_trace(pMode:int, pLayers:tuple, nodes_bank:dict):
+	def nodes_trace(pMode:int, pLayers:tuple, nodes_bank:dict, mode:int=0):
+		'''Where mode:
+			0 = Keep nodes as they are
+			1 = Draw lines only
+			2 = Draw hobby splines
+		'''
+
 		# - Get list of glyphs to be processed
 		process_glyphs = getProcessGlyphs(pMode)
 
 		# - Process
 		for glyph in process_glyphs:
+			wLayers = glyph._prepareLayers(pLayers)
+
 			# - Init		
-			if not len(nodes_bank):
-				nodes_bank = {layer_name : wGlyph.selectedNodes(layer_name) for layer_name in wLayers}
+			if not len(nodes_bank.keys()):
+				nodes_bank = {layer_name : glyph.selectedNodes(layer_name) for layer_name in wLayers}
 
 			for layer_name, layer_nodes	in nodes_bank.items():
 				new_contour = fl6.flContour()
-				new_contour.append([fl6.flNode(node.position, nodeType=node.type) for node in layer_nodes])
-				new_contour.closed = True
-				wGlyph.shapes(layer_name)[0].addContour(new_contour, True)
+				
+				if mode == 0: #
+					new_nodes_list = [fl6.flNode(node.position, nodeType=node.type) for node in layer_nodes]
+				if mode == 1:
+					new_nodes_list = [fl6.flNode(node.position, nodeType=node.type) for node in layer_nodes if node.isOn()]
+				if mode == 2:
+					new_spline = HobbySpline([Knot(node.x, node.y) for node in layer_nodes if node.isOn()], closed=True)
+					new_nodes_list =[fl6.flNode(n.x, n.y, nodeType=n.type) for n in new_spline.nodes]
 
-			wGlyph.updateObject(wGlyph.fl, 'Glyph: {}; Trace Nodes:\t Layers:\t {}'.format(wGlyph.name, '; '.join(wLayers)))
+				new_contour.append(new_nodes_list)
+				new_contour.closed = True
+				glyph.shapes(layer_name)[0].addContour(new_contour, True)
+
+			glyph.updateObject(glyph.fl, 'Glyph: {}; Trace Nodes:\t Layers:\t {}'.format(glyph.name, '; '.join(wLayers)))
 		
 		active_workspace.getCanvas(True).refreshAll()
 

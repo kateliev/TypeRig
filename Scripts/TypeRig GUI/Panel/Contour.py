@@ -23,6 +23,7 @@ from typerig.proxy.fl.objects.contour import eContour
 
 from typerig.core.base.message import *
 from typerig.proxy.fl.actions.contour import TRContourActionCollector
+from typerig.proxy.fl.actions.draw import TRDrawActionCollector
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.gui.widgets import getTRIconFontPath, getTRIconFont, TRTransformCtrl, CustomLabel, CustomPushButton, TRFlowLayout
 from typerig.proxy.fl.gui.styles import css_tr_button
@@ -32,7 +33,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '3.8'
+app_name, app_version = 'TypeRig | Contour', '3.9'
 
 cfg_addon_reversed = ' (Reversed)'
 
@@ -130,6 +131,11 @@ class TRContourBasics(QtGui.QWidget):
 		
 		lay_operations = TRFlowLayout(spacing=10)
 		
+		tooltip_button = "Open/cut selected contours"
+		self.btn_contour_cut = CustomPushButton("contour_cut", enabled=False, tooltip=tooltip_button, obj_name='btn_panel')
+		lay_operations.addWidget(self.btn_contour_cut)
+		#self.btn_contour_cut.clicked.connect(lambda: TRContourActionCollector.contour_close(pMode, pLayers))
+
 		tooltip_button = "Close selected contours"
 		self.btn_contour_close = CustomPushButton("contour_close", tooltip=tooltip_button, obj_name='btn_panel')
 		lay_operations.addWidget(self.btn_contour_close)
@@ -157,6 +163,50 @@ class TRContourBasics(QtGui.QWidget):
 
 		box_operation.setLayout(lay_operations)
 		self.lay_main.addWidget(box_operation)
+
+		# -- Contour drawing ----------------------------
+		box_draw = QtGui.QGroupBox()
+		box_draw.setObjectName('box_group')
+		
+		lay_draw = TRFlowLayout(spacing=10)
+
+		tooltip_button = "Draw two point square/nWhere two points selected form one of square's diagonal lines"
+		self.btn_draw_square_2p = CustomPushButton("draw_square_2p", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_draw.addWidget(self.btn_draw_square_2p)
+		self.btn_draw_square_2p.clicked.connect(lambda: TRDrawActionCollector.draw_square_from_selection(pMode, pLayers, mode=0))
+
+		tooltip_button = "Draw two mid-point square/nWhere two points selected are the middle points of the adjacent sides"
+		self.btn_draw_square_2m = CustomPushButton("draw_square_2m", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_draw.addWidget(self.btn_draw_square_2m)
+		self.btn_draw_square_2m.clicked.connect(lambda: TRDrawActionCollector.draw_square_from_selection(pMode, pLayers, mode=1))
+
+		tooltip_button = "Draw two point circle/nWhere two points selected form circle's diameter"
+		self.btn_draw_circle_2p = CustomPushButton("draw_circle_2p", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_draw.addWidget(self.btn_draw_circle_2p)
+		self.btn_draw_circle_2p.clicked.connect(lambda: TRDrawActionCollector.draw_circle_from_selection(pMode, pLayers, mode=0))
+
+		tooltip_button = "Draw three point circle/nWhere points selected lay anywhere on the circle"
+		self.btn_draw_circle_3p = CustomPushButton("draw_circle_3p", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_draw.addWidget(self.btn_draw_circle_3p)
+		self.btn_draw_circle_3p.clicked.connect(lambda: TRDrawActionCollector.draw_circle_from_selection(pMode, pLayers, mode=1))
+
+		tooltip_button = "Draw/trace selected nodes"
+		self.btn_draw_nodes = CustomPushButton("draw_nodes", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_draw.addWidget(self.btn_draw_nodes)
+		self.btn_draw_nodes.clicked.connect(lambda: TRDrawActionCollector.nodes_trace(pMode, pLayers, {}, mode=0))
+
+		tooltip_button = "Draw/trace selected nodes as line segments"
+		self.btn_draw_lines = CustomPushButton("draw_lines", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_draw.addWidget(self.btn_draw_lines)
+		self.btn_draw_lines.clicked.connect(lambda: TRDrawActionCollector.nodes_trace(pMode, pLayers, {}, mode=1))
+
+		tooltip_button = "Draw/trace selected nodes as Hobby splines"
+		self.btn_draw_hobby = CustomPushButton("draw_hobby", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_draw.addWidget(self.btn_draw_hobby)
+		self.btn_draw_hobby.clicked.connect(lambda: TRDrawActionCollector.nodes_trace(pMode, pLayers, {}, mode=2))
+
+		box_draw.setLayout(lay_draw)
+		self.lay_main.addWidget(box_draw)
 
 		# -- Contour alignment -----------------------------------------------
 		box_align = QtGui.QGroupBox()
