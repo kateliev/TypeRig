@@ -226,7 +226,6 @@ class TRDeltaPanel(QtGui.QWidget):
 		self.__toggle_controls()
 
 		# --- Set styling 
-		self.setStyleSheet(css_tr_button)
 		self.setLayout(lay_main)
 		self.setMinimumSize(300, self.sizeHint.height())
 		self.setWindowTitle('%s %s' %(app_name, app_version))

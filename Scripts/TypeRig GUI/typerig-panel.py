@@ -25,7 +25,7 @@ from typerig.proxy.fl.objects.glyph import pGlyph
 from typerig.proxy.fl.gui.widgets import getTRIconFontPath, getProcessGlyphs, CustomPushButton, TRVTabWidget, TRCheckTableView, TRFlowLayout
 from typerig.proxy.fl.gui.dialogs import TRLayerSelectNEW
 from typerig.proxy.fl.application.app import pWorkspace
-from typerig.proxy.fl.gui.styles import css_tr_button
+from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 
 # -- Internals - Load tool panels 
 import Panel 
@@ -83,6 +83,11 @@ class TROptionsPanel(QtGui.QWidget):
 		self.btn_select_none = CustomPushButton('select_option', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_main_cfg.addWidget(self.btn_select_none)
 		self.btn_select_none.clicked.connect(lambda: self.__set_states_all(False))
+
+		tooltip_button = 'Switch GUI color mode'
+		self.btn_gui_mode = CustomPushButton('delta_machine', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_main_cfg.addWidget(self.btn_gui_mode)
+		self.btn_gui_mode.clicked.connect(self.__set_gui_mode)
 
 		lbl_note = QtGui.QLabel('')
 		lay_main_cfg.addWidget(lbl_note)
@@ -149,6 +154,13 @@ class TROptionsPanel(QtGui.QWidget):
 				self.options.item(row, 0).setCheckState(QtCore.Qt.Checked) 
 			else:
 				self.options.item(row, 0).setCheckState(QtCore.Qt.Unchecked)
+
+	def __set_gui_mode(self):
+		parent_dialog = self.parent().parent().parent()
+		parent_dialog.setStyleSheet(css_tr_button_dark)
+
+		for tab_index in range(parent_dialog.tabs.count):
+			parent_dialog.tabs.widget(tab_index).setStyleSheet(css_tr_button_dark)
 
 	def set_states(self, data):
 		panel_names = [self.options.item(row, 0).text() for row in range(self.options.rowCount)]
