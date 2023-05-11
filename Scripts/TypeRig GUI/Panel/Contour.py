@@ -33,7 +33,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '3.9'
+app_name, app_version = 'TypeRig | Contour', '4.0'
 
 cfg_addon_reversed = ' (Reversed)'
 
@@ -102,6 +102,16 @@ class TRContourBasics(QtGui.QWidget):
 		lay_basic.addWidget(self.btn_contour_set_start_top_right)
 		self.btn_contour_set_start_top_right.clicked.connect(lambda: TRContourActionCollector.contour_smart_start(pMode, pLayers, (1, 1)))
 
+		tooltip_button = "Move start to next node"
+		self.btn_contour_set_start_next = CustomPushButton("node_next", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_basic.addWidget(self.btn_contour_set_start_next)
+		self.btn_contour_set_start_next.clicked.connect(lambda: TRContourActionCollector.contour_set_start_next(pMode, pLayers, False))
+
+		tooltip_button = "Move start to previous node"
+		self.btn_contour_set_start_prev = CustomPushButton("node_previous", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_basic.addWidget(self.btn_contour_set_start_prev)
+		self.btn_contour_set_start_prev.clicked.connect(lambda: TRContourActionCollector.contour_set_start_next(pMode, pLayers, True))
+
 		tooltip_button = "Reorder contours from top to bottom"
 		self.btn_contour_sort_y = CustomPushButton("contour_sort_y", tooltip=tooltip_button, obj_name='btn_panel')
 		lay_basic.addWidget(self.btn_contour_sort_y)
@@ -131,10 +141,10 @@ class TRContourBasics(QtGui.QWidget):
 		
 		lay_operations = TRFlowLayout(spacing=10)
 		
-		tooltip_button = "Open/cut selected contours"
-		self.btn_contour_cut = CustomPushButton("contour_cut", enabled=False, tooltip=tooltip_button, obj_name='btn_panel')
+		tooltip_button = "Slice selected contours\nSlice and then join two conturs each having a node selected"
+		self.btn_contour_cut = CustomPushButton("contour_cut", tooltip=tooltip_button, obj_name='btn_panel')
 		lay_operations.addWidget(self.btn_contour_cut)
-		#self.btn_contour_cut.clicked.connect(lambda: TRContourActionCollector.contour_close(pMode, pLayers))
+		self.btn_contour_cut.clicked.connect(lambda: TRContourActionCollector.contour_slice(pMode, pLayers))
 
 		tooltip_button = "Close selected contours"
 		self.btn_contour_close = CustomPushButton("contour_close", tooltip=tooltip_button, obj_name='btn_panel')

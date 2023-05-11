@@ -28,7 +28,7 @@ from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRTransformCtrl
 
 # - Init ---------------------------------------------------
-__version__ = '2.8'
+__version__ = '2.9'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -72,6 +72,37 @@ class TRContourActionCollector(object):
 
 			glyph.update()
 			glyph.updateObject(glyph.fl, '{};\tClose contour @ {}.'.format(glyph.name, '; '.join(work_layers)))
+
+		active_workspace.getCanvas(True).refreshAll()
+
+	@staticmethod	
+	def contour_slice(pMode:int, pLayers:tuple):
+		# - Get list of glyphs to be processed
+		process_glyphs = getProcessGlyphs(pMode)
+
+		# - Process
+		for glyph in process_glyphs:
+			do_update = False
+			work_layers = glyph._prepareLayers(pLayers)
+			selection = [(layer_name, glyph.selectedNodes(layer_name)) for layer_name in work_layers]
+
+			for layer_name, selected_nodes in selection:
+				if len(selection) > 1:
+					node_first, node_last = selected_nodes[0], selected_nodes[-1]
+					contour_first = node_first.contour
+					contour_last = node_last.contour.clone()
+
+					if contour_first != contour_last:
+						contour_first.setStartPoint(node_first.index)
+						contour_last.setStartPoint(node_last.index)
+						contour_last.closed = False
+						contour_first.closed = False
+						contour_first.append(contour_last)
+						contour_first.closed = True
+						do_update = True
+
+			if do_update:	
+				glyph.updateObject(glyph.fl, '%s: Slice contour @ {}.'.format(glyph.name, '; '.join(work_layers)))
 
 		active_workspace.getCanvas(True).refreshAll()
 
@@ -204,6 +235,30 @@ class TRContourActionCollector(object):
 
 			glyph.update()
 			glyph.updateObject(glyph.fl, '{};\tSet start point @ {}.'.format(glyph.name, '; '.join(work_layers)))
+
+		active_workspace.getCanvas(True).refreshAll()
+
+	@staticmethod
+	def contour_set_start_next(pMode:int, pLayers:tuple, set_previous=False):
+		# - Get list of glyphs to be processed
+		process_glyphs = getProcessGlyphs(pMode)
+
+		# - Process
+		for glyph in process_glyphs:
+			work_layers = glyph._prepareLayers(pLayers, False)
+			
+			for layer in work_layers:
+				for contour in glyph.selectedContours(layer):
+					contour_nodes = contour.nodes()[1:]
+					if set_previous: contour_nodes = reversed(contour_nodes)
+
+					for node in contour_nodes:
+						if node.isOn():
+							contour.setStartPoint(node.index)
+							break
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, '{};\tMove start point @ {}.'.format(glyph.name, '; '.join(work_layers)))
 
 		active_workspace.getCanvas(True).refreshAll()
 
