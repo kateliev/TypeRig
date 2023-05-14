@@ -29,14 +29,14 @@ from typerig.core.objects.transform import Transform
 from PythonQt import QtCore, QtGui
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs, getTRIconFontPath, CustomPushButton, TRFlowLayout, TRDeltaLayerTree, TRCustomSpinController
-from typerig.proxy.fl.gui.styles import css_tr_button
+from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 
 # - Init -------------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Delta', '5.4'
+app_name, app_version = 'TypeRig | Delta', '5.5'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -616,7 +616,9 @@ class tool_tab(QtGui.QWidget):
 		super(tool_tab, self).__init__()
 
 		# - Init
-		self.setStyleSheet(css_tr_button)
+		set_stylesheet = css_tr_button_dark if fl6.flPreferences().isDark else css_tr_button
+		self.setStyleSheet(set_stylesheet)
+		
 		lay_main = QtGui.QVBoxLayout()
 		lay_main.setContentsMargins(0, 0, 0, 0)
 		

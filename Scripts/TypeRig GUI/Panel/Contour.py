@@ -26,14 +26,14 @@ from typerig.proxy.fl.actions.contour import TRContourActionCollector
 from typerig.proxy.fl.actions.draw import TRDrawActionCollector
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.gui.widgets import getTRIconFontPath, getTRIconFont, TRTransformCtrl, CustomLabel, CustomPushButton, TRFlowLayout
-from typerig.proxy.fl.gui.styles import css_tr_button
+from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 
 # - Init -------------------------------
 global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '4.0'
+app_name, app_version = 'TypeRig | Contour', '4.1'
 
 cfg_addon_reversed = ' (Reversed)'
 
@@ -843,7 +843,9 @@ class tool_tab(QtGui.QWidget):
 		super(tool_tab, self).__init__()
 
 		# - Init
-		self.setStyleSheet(css_tr_button)
+		set_stylesheet = css_tr_button_dark if fl6.flPreferences().isDark else css_tr_button
+		self.setStyleSheet(set_stylesheet)
+		
 		layoutV = QtGui.QVBoxLayout()
 		layoutV.setContentsMargins(0, 0, 0, 0)
 		

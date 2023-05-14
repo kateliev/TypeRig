@@ -87,12 +87,12 @@ class TROptionsPanel(QtGui.QWidget):
 		tooltip_button = 'Switch to light mode'
 		self.btn_gui_mode_light = CustomPushButton('gui_mode_light', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_main_cfg.addWidget(self.btn_gui_mode_light)
-		self.btn_gui_mode_light.clicked.connect(lambda: self.__set_gui_mode(False))
+		self.btn_gui_mode_light.clicked.connect(lambda: self.set_gui_mode(False))
 
 		tooltip_button = 'Switch to dark mode'
 		self.btn_gui_mode_dark = CustomPushButton('gui_mode_dark', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_main_cfg.addWidget(self.btn_gui_mode_dark)
-		self.btn_gui_mode_dark.clicked.connect(lambda: self.__set_gui_mode(True))
+		self.btn_gui_mode_dark.clicked.connect(lambda: self.set_gui_mode(True))
 
 		lbl_note = QtGui.QLabel('')
 		lay_main_cfg.addWidget(lbl_note)
@@ -160,7 +160,7 @@ class TROptionsPanel(QtGui.QWidget):
 			else:
 				self.options.item(row, 0).setCheckState(QtCore.Qt.Unchecked)
 
-	def __set_gui_mode(self, to_dark=False):
+	def set_gui_mode(self, to_dark=False):
 		set_stylesheet = css_tr_button_dark if to_dark else css_tr_button
 
 		parent_dialog = self.parent().parent().parent()
@@ -219,7 +219,6 @@ class TRMainPanel(QtGui.QDialog):
 		super(TRMainPanel, self).__init__()
 
 		# - Init ----------------------------
-		self.setStyleSheet(css_tr_button)
 		self.layers_selected = []
 		self.flag_fold = False
 		
@@ -308,6 +307,7 @@ class TRMainPanel(QtGui.QDialog):
 		# !!! Hotfix FL7 7355 
 		#self.setMinimumSize(330, self.sizeHint.height())
 		
+		self.options.set_gui_mode(fl6.flPreferences().isDark)
 		self.layers_refresh()
 		self.show()
 

@@ -23,7 +23,7 @@ from typerig.proxy.fl.actions.curve import TRCurveActionCollector
 from typerig.proxy.fl.application.app import pWorkspace
 #from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomLabel, CustomPushButton, CustomSpinButton, CustomSpinBox, TRFlowLayout
-from typerig.proxy.fl.gui.styles import css_tr_button
+from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 
 # - Init -------------------------------
 global pLayers
@@ -693,7 +693,9 @@ class tool_tab(QtGui.QWidget):
 		super(tool_tab, self).__init__()
 
 		# - Init
-		self.setStyleSheet(css_tr_button)
+		set_stylesheet = css_tr_button_dark if fl6.flPreferences().isDark else css_tr_button
+		self.setStyleSheet(set_stylesheet)
+		
 		layoutV = QtGui.QVBoxLayout()
 		layoutV.setContentsMargins(0, 0, 0, 0)
 
