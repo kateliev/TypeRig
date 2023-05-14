@@ -31,7 +31,7 @@ from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 import Panel 
 
 # - Init --------------------------
-app_version = '3.11'
+app_version = '3.12'
 app_name = 'TypeRig Panel'
 ignore_panel = '__'
 panel_path = 'Panel' # ./Panel/
@@ -84,10 +84,15 @@ class TROptionsPanel(QtGui.QWidget):
 		lay_main_cfg.addWidget(self.btn_select_none)
 		self.btn_select_none.clicked.connect(lambda: self.__set_states_all(False))
 
-		tooltip_button = 'Switch GUI color mode'
-		self.btn_gui_mode = CustomPushButton('delta_machine', tooltip=tooltip_button, obj_name='btn_panel')
-		lay_main_cfg.addWidget(self.btn_gui_mode)
-		self.btn_gui_mode.clicked.connect(self.__set_gui_mode)
+		tooltip_button = 'Switch to light mode'
+		self.btn_gui_mode_light = CustomPushButton('gui_mode_light', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_main_cfg.addWidget(self.btn_gui_mode_light)
+		self.btn_gui_mode_light.clicked.connect(lambda: self.__set_gui_mode(False))
+
+		tooltip_button = 'Switch to dark mode'
+		self.btn_gui_mode_dark = CustomPushButton('gui_mode_dark', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_main_cfg.addWidget(self.btn_gui_mode_dark)
+		self.btn_gui_mode_dark.clicked.connect(lambda: self.__set_gui_mode(True))
 
 		lbl_note = QtGui.QLabel('')
 		lay_main_cfg.addWidget(lbl_note)
@@ -155,12 +160,15 @@ class TROptionsPanel(QtGui.QWidget):
 			else:
 				self.options.item(row, 0).setCheckState(QtCore.Qt.Unchecked)
 
-	def __set_gui_mode(self):
+	def __set_gui_mode(self, to_dark=False):
+		set_stylesheet = css_tr_button_dark if to_dark else css_tr_button
+
 		parent_dialog = self.parent().parent().parent()
-		parent_dialog.setStyleSheet(css_tr_button_dark)
+		parent_dialog.setStyleSheet(set_stylesheet)
+		parent_dialog.dlg_layer.setStyleSheet(set_stylesheet)
 
 		for tab_index in range(parent_dialog.tabs.count):
-			parent_dialog.tabs.widget(tab_index).setStyleSheet(css_tr_button_dark)
+			parent_dialog.tabs.widget(tab_index).setStyleSheet(set_stylesheet)
 
 	def set_states(self, data):
 		panel_names = [self.options.item(row, 0).text() for row in range(self.options.rowCount)]
