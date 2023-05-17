@@ -31,9 +31,9 @@ from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 # - Init -------------------------------
 global pLayers
 global pMode
-pLayers = None
+pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '4.1'
+app_name, app_version = 'TypeRig | Contour', '4.2'
 
 cfg_addon_reversed = ' (Reversed)'
 
@@ -533,10 +533,10 @@ class TRContourCopy(QtGui.QWidget):
 		lay_contour_copy.addWidget(self.btn_copy_contour)
 		self.btn_copy_contour.clicked.connect(self.copy_contour)
 
-		tooltip_button = "Paste selected contours from bank"
+		tooltip_button = "Paste selected contours from bank\nALT + Click: Paste to mask"
 		self.btn_paste_contour = CustomPushButton("clipboard_paste", tooltip=tooltip_button, obj_name='btn_panel')
 		lay_contour_copy.addWidget(self.btn_paste_contour)
-		self.btn_paste_contour.clicked.connect(self.paste_contour)
+		self.btn_paste_contour.clicked.connect(lambda: self.paste_contour(to_mask=get_modifier()))
 
 		tooltip_button = "Remove selected items from contour bank"
 		self.btn_clear = CustomPushButton("clipboard_clear", tooltip=tooltip_button, obj_name='btn_panel')
@@ -746,7 +746,7 @@ class TRContourCopy(QtGui.QWidget):
 
 			output(0, app_name, 'Copy contours; Glyph: %s; Layers: %s.' %(wGlyph.name, '; '.join(process_layers)))
 		
-	def paste_contour(self):
+	def paste_contour(self, to_mask=False):
 		# - Init
 		wGlyph = eGlyph()
 		wLayers = wGlyph._prepareLayers(pLayers)
@@ -765,7 +765,12 @@ class TRContourCopy(QtGui.QWidget):
 				paste_data = self.contour_clipboard[paste_uid]
 
 				for layerName, contours in paste_data.items():
+					# - Get destination layer or mask. If mask is missing create it
 					wLayer = wGlyph.layer(layerName)
+
+					if to_mask:
+						wLayer = wGlyph.mask(layerName, force_create=True)
+						layerName = wLayer.name
 
 					# - Skip if wrong data type is being fed
 					if not isinstance(contours[0], fl6.flContour): 
