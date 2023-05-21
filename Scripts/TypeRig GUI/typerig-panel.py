@@ -31,7 +31,7 @@ from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 import Panel 
 
 # - Init --------------------------
-app_version = '3.12'
+app_version = '3.14'
 app_name = 'TypeRig Panel'
 ignore_panel = '__'
 panel_path = 'Panel' # ./Panel/
@@ -64,15 +64,10 @@ class TROptionsPanel(QtGui.QWidget):
 
 		lay_main_cfg = TRFlowLayout(spacing=10)
 
-		tooltip_button = 'Save panel configuration'
-		self.btn_file_save = CustomPushButton('file_save', tooltip=tooltip_button, obj_name='btn_panel')
-		lay_main_cfg.addWidget(self.btn_file_save)
-		self.btn_file_save.clicked.connect(lambda: self.file_save_config())
-
-		tooltip_button = 'Load panel configuration'
-		self.btn_file_open = CustomPushButton('file_open', tooltip=tooltip_button, obj_name='btn_panel')
-		lay_main_cfg.addWidget(self.btn_file_open)
-		self.btn_file_open.clicked.connect(lambda: self.file_open_config())
+		tooltip_button = 'Apply'
+		self.btn_apply = CustomPushButton('check', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_main_cfg.addWidget(self.btn_apply)
+		self.btn_apply.clicked.connect(lambda: self.set_visible_panels())
 
 		tooltip_button = 'Check all'
 		self.btn_select_all = CustomPushButton('select_all', tooltip=tooltip_button, obj_name='btn_panel')
@@ -93,6 +88,16 @@ class TROptionsPanel(QtGui.QWidget):
 		self.btn_gui_mode_dark = CustomPushButton('gui_mode_dark', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_main_cfg.addWidget(self.btn_gui_mode_dark)
 		self.btn_gui_mode_dark.clicked.connect(lambda: self.set_gui_mode(True))
+
+		tooltip_button = 'Save panel configuration'
+		self.btn_file_save = CustomPushButton('file_save', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_main_cfg.addWidget(self.btn_file_save)
+		self.btn_file_save.clicked.connect(lambda: self.file_save_config())
+
+		tooltip_button = 'Load panel configuration'
+		self.btn_file_open = CustomPushButton('file_open', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_main_cfg.addWidget(self.btn_file_open)
+		self.btn_file_open.clicked.connect(lambda: self.file_open_config())
 
 		lbl_note = QtGui.QLabel('')
 		lay_main_cfg.addWidget(lbl_note)
@@ -178,7 +183,7 @@ class TROptionsPanel(QtGui.QWidget):
 				panel_index = panel_names.index(panel)
 
 				if state:
-					self.options.item(panel_index, 0).setCheckState(QtCore.Qt.Checked) 
+					self.options.item(panel_index, 0).setCheckState(QtCore.Qt.Checked)
 				else:
 					self.options.item(panel_index, 0).setCheckState(QtCore.Qt.Unchecked)
 
@@ -186,6 +191,26 @@ class TROptionsPanel(QtGui.QWidget):
 				# !!! TODO: Add some subroutine for adding mising pannels to list
 				pass
 
+	def set_visible_panels(self):
+		current_states = dict(self.get_states())
+		tab_parent = self.parent().parent().parent()
+		current_tabs = [tab_parent.tabs.tabText(wid) for wid in range(tab_parent.tabs.count)]
+		remove_tabs = []
+
+		# - Add new tabs
+		for tab_name, tab_widget in tab_parent.tab_bank.items():
+			if tab_name in current_states.keys():
+				if current_states[tab_name] and tab_name not in current_tabs:
+					tab_parent.tabs.addTab(tab_widget.tool_tab(), tab_name)
+
+		# - Remove tabs
+		for wid in range(tab_parent.tabs.count,0, -1):
+			tab_name = tab_parent.tabs.tabText(wid)
+			
+			if tab_name in current_states.keys() and not current_states[tab_name]:
+				tab_parent.tabs.removeTab(wid)
+			
+				
 	# -- File operations
 	def file_save_config(self):
 		config_path = os.path.join(os.path.split(__file__)[0], panel_path)
@@ -220,7 +245,19 @@ class TRMainPanel(QtGui.QDialog):
 
 		# - Init ----------------------------
 		self.layers_selected = []
+		self.tab_bank = {}
 		self.flag_fold = False
+
+		# -- Load panel config
+		config_file = os.path.join(os.path.split(__file__)[0], panel_path, panel_cfg_filename)
+		
+		if os.path.isfile(config_file):
+			with open(config_file, 'r') as import_file:
+				config_enabled_panels = json.load(import_file)
+		else:
+			config_enabled_panels = []
+
+		config_enabled_panels_dict = dict(config_enabled_panels)
 		
 		# - Masthead/controller ------------
 		self.dlg_layer = TRLayerSelectNEW(self, pMode)
@@ -264,21 +301,6 @@ class TRMainPanel(QtGui.QDialog):
 		# - Tabs --------------------------
 		panel_vers = {n:{'Panel':panel_tool_name, 'Version': eval('Panel.%s.app_version' %panel_tool_name)}	for n, panel_tool_name in enumerate(Panel.modules)} 
 
-		# - Panel Configuiration
-		self.options = TROptionsPanel(panel_vers)
-		
-		# -- Load panel config
-		config_file = os.path.join(os.path.split(__file__)[0], panel_path, panel_cfg_filename)
-		
-		if os.path.isfile(config_file):
-			with open(config_file, 'r') as import_file:
-				config_enabled_panels = json.load(import_file)
-		else:
-			config_enabled_panels = []
-
-		self.options.set_states(config_enabled_panels)
-		config_enabled_panels_dict = dict(config_enabled_panels)
-
 		# -- Dynamically load all tabs
 		self.tabs = TRVTabWidget()
 
@@ -286,11 +308,15 @@ class TRMainPanel(QtGui.QDialog):
 		# --- <dirName>.modules tabs/modules manifest in list format
 		for panel_tool_name in Panel.modules:
 			if ignore_panel not in panel_tool_name:
-				if panel_tool_name in config_enabled_panels_dict and config_enabled_panels_dict[panel_tool_name]:
-					self.tabs.addTab(eval('Panel.%s.tool_tab()' %panel_tool_name), panel_tool_name)
+				new_tab_widget = eval('Panel.%s' %panel_tool_name)
+				self.tab_bank[panel_tool_name] = new_tab_widget
 
+		# - Panel Configuiration
+		self.options = TROptionsPanel(panel_vers)
+		self.options.set_states(config_enabled_panels)
+		
 		# --- Add options tab
-		self.tabs.addTab(self.options, '...')
+		self.tabs.addTab(self.options, '|||')
 
 		# - Layouts -------------------------------
 		self.lay_main = QtGui.QVBoxLayout() 
@@ -308,6 +334,7 @@ class TRMainPanel(QtGui.QDialog):
 		#self.setMinimumSize(330, self.sizeHint.height())
 		
 		self.options.set_gui_mode(fl6.flPreferences().isDark)
+		self.options.set_visible_panels()
 		self.layers_refresh()
 		self.show()
 
@@ -338,6 +365,7 @@ class TRMainPanel(QtGui.QDialog):
 
 		for panel_tool_name in Panel.modules:
 			exec('Panel.%s.pLayers = %s' %(panel_tool_name, pLayers))
+
 
 	def fold(self):
 		# - Init
