@@ -24,7 +24,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.core.base.message import *
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Copy Anchors', '2.0'
+app_name, app_version = 'TR | Copy Anchors', '2.1'
 str_all_masters = '*All masters*'
 
 # - Interface -----------------------------
@@ -302,8 +302,12 @@ class dlg_copy_anchors(QtGui.QDialog):
 
 						# - Handle relative positioning
 						if self.rad_location_relative.isChecked():
-							location_prop = tmp_anchor.point.x()/src_glyph.getAdvance(layer_source)
-							tmp_anchor.point = QtCore.QPointF(location_prop * dst_glyph.getAdvance(layer_destination), tmp_anchor.point.y())
+							try:
+								location_prop = tmp_anchor.point.x()/src_glyph.getAdvance(layer_source)
+								tmp_anchor.point = QtCore.QPointF(location_prop * dst_glyph.getAdvance(layer_destination), tmp_anchor.point.y())
+							
+							except ZeroDivisionError:
+								output(1, app_name, 'Source layer has zero advance width! Cannot calculate proportional anchor position - fallback to absolute!\t Font: {}; Glyph: {}; Layer:{}; Anchor: {}.'.format(self.cmb_select_font_B.currentText, src_glyph.name, layer_source, tmp_anchor.name))
 						
 						# - Handle collision
 						if mode_collide: # Rename mode
@@ -334,7 +338,15 @@ class dlg_copy_anchors(QtGui.QDialog):
 
 		# - Finish it
 		if do_update:
-			font_dst.updateObject(font_dst.fl, 'Copying anchors! Glyphs processed: %s' %len(glyphs_source))
+			if mode_source == 3:
+				font_dst.updateObject(font_dst.fl, 'Copying anchors! Font: {}; Glyphs processed: {}'.format(self.cmb_select_font_B.currentText, len(glyphs_source)))
+			else:
+				for update_glyph in glyphs_source:
+					update_glyph.updateObject(update_glyph.fl, verbose=False)
+
+				output(0, app_name, 'Copying anchors! Font: {}; Glyphs processed: {}'.format(self.cmb_select_font_B.currentText, len(glyphs_source)))
+
+
 		
 # - RUN ------------------------------
 dialog = dlg_copy_anchors()
