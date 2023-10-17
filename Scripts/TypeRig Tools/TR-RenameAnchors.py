@@ -23,7 +23,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.core.base.message import *
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Rename Anchors', '1.2'
+app_name, app_version = 'TR | Rename Anchors', '1.3'
 str_all_masters = '*All masters*'
 
 # - Interface -----------------------------
@@ -141,7 +141,7 @@ class dlg_copy_anchors(QtGui.QDialog):
 				pass
 				
 		# - Finish it
-		if process_glyphs > 0:
+		if len(process_glyphs) > 0:
 			font_src.updateObject(font_src.fl, 'Renaming anchors\tFind: %s; Replace: %s\tGlyphs processed: %s' %(anchor_name_find, anchor_name_replace, len(process_glyphs)))
 		
 
