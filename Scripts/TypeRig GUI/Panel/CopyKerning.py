@@ -23,7 +23,7 @@ from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 
 # - Init --------------------------------
-app_name, app_version = 'Copy Kernig', '2.5'
+app_name, app_version = 'Copy Kernig', '2.6'
 
 # -- Strings 
 str_help = '''
@@ -210,57 +210,60 @@ class tool_tab(QtGui.QWidget):
 						# - Build Destination pairs
 						for pair in dst_names:
 							left, right = pair
-							modeLeft, modeRight = 0, 0
+							modeLeft, modeRight = False, False
 							
 							if len(self.class_data[layer].keys()):
 								if left in self.class_data[layer]['KernLeft'].inverse:
 									left = self.class_data[layer]['KernLeft'].inverse[left]
-									modeLeft = 1
+									modeLeft = True
 
 								elif left in self.class_data[layer]['KernBothSide'].inverse:
 									left = self.class_data[layer]['KernBothSide'].inverse[left]
-									modeLeft = 1
+									modeLeft = True
 
 								if right in self.class_data[layer]['KernRight'].inverse:
 									right = self.class_data[layer]['KernRight'].inverse[right]
-									modeRight = 1
+									modeRight = True
 
 								elif right in self.class_data[layer]['KernBothSide'].inverse:
 									right = self.class_data[layer]['KernBothSide'].inverse[right]
-									modeRight = 1
+									modeRight = True
 
-							dst_pairs.append(self.active_font.newKernPair(left[0], right[0], modeLeft, modeRight))
+							#dst_pairs.append(self.active_font.newKernPair(left[0], right[0], modeLeft, modeRight))
+							dst_pairs.append(((left[0], modeLeft), (right[0], modeRight)))
 
 						# - Build Source pairs
 						for pair in src_names: # Ugly boilerplate... but may be useful in future
 							left, right = pair
-							modeLeft, modeRight = 0, 0
+							modeLeft, modeRight = False, False
 							
 							if len(self.class_data[layer].keys()):
 								if left in self.class_data[layer]['KernLeft'].inverse:
 									left = self.class_data[layer]['KernLeft'].inverse[left]
-									modeLeft = 1
+									modeLeft = True
 
 								elif left in self.class_data[layer]['KernBothSide'].inverse:
 									left = self.class_data[layer]['KernBothSide'].inverse[left]
-									modeLeft = 1
+									modeLeft = True
 
 								if right in self.class_data[layer]['KernRight'].inverse:
 									right = self.class_data[layer]['KernRight'].inverse[right]
-									modeRight = 1
+									modeRight = True
 
 								elif right in self.class_data[layer]['KernBothSide'].inverse:
 									right = self.class_data[layer]['KernBothSide'].inverse[right]
-									modeRight = 1
+									modeRight = True
 
 							
-							src_pairs.append(self.active_font.newKernPair(left[0], right[0], modeLeft, modeRight))
+							#src_pairs.append(self.active_font.newKernPair(left[0], right[0], modeLeft, modeRight))
+							src_pairs.append(((left[0], modeLeft), (right[0], modeRight)))
 
 						# !!! Add only as plain pairs supported - No class kerning trough python in build 6927
 						# !!! Syntax fgKerning.setPlainPairs([(('A','V'),-30)])
 					
+						print(src_pairs[0])
 						layer_kerning = self.active_font.kerning(layer)
-						src_value = layer_kerning.get(src_names[0])
+						src_value = layer_kerning.get(src_pairs[0])
 
 						# !!! NOT WORKING: 8.3.+ or who knows how long !!!
 						# !!! fgKerning.get is not working... also the below code is also not working
