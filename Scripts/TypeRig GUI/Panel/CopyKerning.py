@@ -23,7 +23,7 @@ from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 
 # - Init --------------------------------
-app_name, app_version = 'Copy Kernig', '2.2'
+app_name, app_version = 'Copy Kernig', '2.5'
 
 # -- Strings 
 str_help = '''
@@ -47,17 +47,17 @@ fileFormats = ['TypeRig JSON Raw Classes (*.json)', 'FontLab JSON Classes (*.jso
 def json_class_dumb_decoder(jsonData):
 	retund_dict = {}
 	pos_dict = {(True, False):'KernLeft', (False, True):'KernRight', (True, True):'KernBothSide'}
-	getPos = lambda d: (d['1st'] if d.has_key('1st') else False , d['2nd'] if d.has_key('2nd') else False)
+	getPos = lambda d: (d['1st'] if '1st' in d else False , d['2nd'] if '2nd' in d else False)
 
 	if len(jsonData.keys()):
-		if jsonData.has_key('masters') and len(jsonData['masters']):
+		if 'masters' in jsonData and len(jsonData['masters']):
 			for master in jsonData['masters']:
 				if len(master.keys()):
-					if master.has_key('kerningClasses') and len(master['kerningClasses']):
+					if 'kerningClasses' in master and len(master['kerningClasses']):
 						temp_dict = {}
 
 						for group in master['kerningClasses']:
-							if group.has_key('names'):
+							if 'names' in group:
 								temp_dict[group['name']] = (group['names'], pos_dict[getPos(group)])
 
 						retund_dict[master['name']] = temp_dict
@@ -122,7 +122,7 @@ class tool_tab(QtGui.QWidget):
 		self.class_data, temp_data = {}, {}
 
 		for layer in self.active_font.masters():
-			if source.has_key(layer):
+			if layer in source:
 				for key, value in source[layer].items():
 					temp_data.setdefault(value[1], {}).update({key : value[0]})
 
@@ -158,7 +158,7 @@ class tool_tab(QtGui.QWidget):
 			with open(fname, 'r') as importFile:
 				source_data = json.load(importFile)
 
-				if source_data.has_key('masters'): # A Fontlab JSON Class kerning file
+				if 'masters' in source_data: # A Fontlab JSON Class kerning file
 					self.update_data(json_class_dumb_decoder(source_data))
 					output(6, app_name, 'Font:%s; Fontlab JSON Kerning classes loaded from: %s.' %(self.active_font.name, fname))
 
@@ -197,7 +197,7 @@ class tool_tab(QtGui.QWidget):
 				for layer in process_layers:
 					dst_pairs, src_pairs = [], []
 
-					if self.class_data.has_key(layer):
+					if layer in self.class_data:
 						dst_names, src_names = line.split(syn_equal)
 						
 						dst_names = [item.split(syn_pair) for item in dst_names.strip().split(' ')]
@@ -213,19 +213,19 @@ class tool_tab(QtGui.QWidget):
 							modeLeft, modeRight = 0, 0
 							
 							if len(self.class_data[layer].keys()):
-								if self.class_data[layer]['KernLeft'].inverse.has_key(left):
+								if left in self.class_data[layer]['KernLeft'].inverse:
 									left = self.class_data[layer]['KernLeft'].inverse[left]
 									modeLeft = 1
 
-								elif self.class_data[layer]['KernBothSide'].inverse.has_key(left):
+								elif left in self.class_data[layer]['KernBothSide'].inverse:
 									left = self.class_data[layer]['KernBothSide'].inverse[left]
 									modeLeft = 1
 
-								if self.class_data[layer]['KernRight'].inverse.has_key(right):
+								if right in self.class_data[layer]['KernRight'].inverse:
 									right = self.class_data[layer]['KernRight'].inverse[right]
 									modeRight = 1
 
-								elif self.class_data[layer]['KernBothSide'].inverse.has_key(right):
+								elif right in self.class_data[layer]['KernBothSide'].inverse:
 									right = self.class_data[layer]['KernBothSide'].inverse[right]
 									modeRight = 1
 
@@ -237,19 +237,19 @@ class tool_tab(QtGui.QWidget):
 							modeLeft, modeRight = 0, 0
 							
 							if len(self.class_data[layer].keys()):
-								if self.class_data[layer]['KernLeft'].inverse.has_key(left):
+								if left in self.class_data[layer]['KernLeft'].inverse:
 									left = self.class_data[layer]['KernLeft'].inverse[left]
 									modeLeft = 1
 
-								elif self.class_data[layer]['KernBothSide'].inverse.has_key(left):
+								elif left in self.class_data[layer]['KernBothSide'].inverse:
 									left = self.class_data[layer]['KernBothSide'].inverse[left]
 									modeLeft = 1
 
-								if self.class_data[layer]['KernRight'].inverse.has_key(right):
+								if right in self.class_data[layer]['KernRight'].inverse:
 									right = self.class_data[layer]['KernRight'].inverse[right]
 									modeRight = 1
 
-								elif self.class_data[layer]['KernBothSide'].inverse.has_key(right):
+								elif right in self.class_data[layer]['KernBothSide'].inverse:
 									right = self.class_data[layer]['KernBothSide'].inverse[right]
 									modeRight = 1
 
@@ -261,6 +261,10 @@ class tool_tab(QtGui.QWidget):
 					
 						layer_kerning = self.active_font.kerning(layer)
 						src_value = layer_kerning.get(src_names[0])
+
+						# !!! NOT WORKING: 8.3.+ or who knows how long !!!
+						# !!! fgKerning.get is not working... also the below code is also not working
+						# !!! refactor using tuple(left, right) comparison by fgKerningObjectPair.asTuple()
 
 						if src_pairs[0] in layer_kerning.keys():
 							src_value = layer_kerning.values()[layer_kerning.keys().index(src_pairs[0])]
