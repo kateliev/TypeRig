@@ -23,7 +23,7 @@ from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 
 # - Init --------------------------------
-app_name, app_version = 'Copy Kernig', '2.6'
+app_name, app_version = 'Copy Kernig', '2.7'
 
 # -- Strings 
 str_help = '''
@@ -189,6 +189,7 @@ class tool_tab(QtGui.QWidget):
 
 			return self.active_font.fl.findUnicode(ord(char)).name
 		
+		do_update = False
 		process_layers = [self.cmb_layer.currentText] if self.cmb_layer.currentText != 'All masters' else self.active_font.masters()	
 		
 		# - Process
@@ -214,22 +215,17 @@ class tool_tab(QtGui.QWidget):
 							
 							if len(self.class_data[layer].keys()):
 								if left in self.class_data[layer]['KernLeft'].inverse:
-									left = self.class_data[layer]['KernLeft'].inverse[left]
 									modeLeft = True
 
 								elif left in self.class_data[layer]['KernBothSide'].inverse:
-									left = self.class_data[layer]['KernBothSide'].inverse[left]
 									modeLeft = True
 
 								if right in self.class_data[layer]['KernRight'].inverse:
-									right = self.class_data[layer]['KernRight'].inverse[right]
 									modeRight = True
 
 								elif right in self.class_data[layer]['KernBothSide'].inverse:
-									right = self.class_data[layer]['KernBothSide'].inverse[right]
 									modeRight = True
 
-							#dst_pairs.append(self.active_font.newKernPair(left[0], right[0], modeLeft, modeRight))
 							dst_pairs.append(((left[0], modeLeft), (right[0], modeRight)))
 
 						# - Build Source pairs
@@ -239,35 +235,21 @@ class tool_tab(QtGui.QWidget):
 							
 							if len(self.class_data[layer].keys()):
 								if left in self.class_data[layer]['KernLeft'].inverse:
-									left = self.class_data[layer]['KernLeft'].inverse[left]
 									modeLeft = True
 
 								elif left in self.class_data[layer]['KernBothSide'].inverse:
-									left = self.class_data[layer]['KernBothSide'].inverse[left]
 									modeLeft = True
 
 								if right in self.class_data[layer]['KernRight'].inverse:
-									right = self.class_data[layer]['KernRight'].inverse[right]
 									modeRight = True
 
 								elif right in self.class_data[layer]['KernBothSide'].inverse:
-									right = self.class_data[layer]['KernBothSide'].inverse[right]
 									modeRight = True
 
-							
-							#src_pairs.append(self.active_font.newKernPair(left[0], right[0], modeLeft, modeRight))
 							src_pairs.append(((left[0], modeLeft), (right[0], modeRight)))
-
-						# !!! Add only as plain pairs supported - No class kerning trough python in build 6927
-						# !!! Syntax fgKerning.setPlainPairs([(('A','V'),-30)])
 					
-						print(src_pairs[0])
 						layer_kerning = self.active_font.kerning(layer)
 						src_value = layer_kerning.get(src_pairs[0])
-
-						# !!! NOT WORKING: 8.3.+ or who knows how long !!!
-						# !!! fgKerning.get is not working... also the below code is also not working
-						# !!! refactor using tuple(left, right) comparison by fgKerningObjectPair.asTuple()
 
 						if src_pairs[0] in layer_kerning.keys():
 							src_value = layer_kerning.values()[layer_kerning.keys().index(src_pairs[0])]
@@ -280,24 +262,20 @@ class tool_tab(QtGui.QWidget):
 								work_pair = dst_pairs[wID]
 								work_name = dst_names[wID]
 								
-								# - Check if class already exists and change value
-								if work_pair in layer_kerning.keys():
-									if layer_kerning[layer_kerning.keys().index(work_pair)] != src_value:
-										layer_kerning[layer_kerning.keys().index(work_pair)] = src_value
-										output(1, app_name,'Existing Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer))
-
-								else: # Class does not exist, add as plain pair due to FL6 limitation 
-									if self.btn_classKern.isChecked():
-										left, right = work_pair.asTuple()
-										work_name = (left.asTuple()[0], right.asTuple()[0])
-										layer_kerning[work_name] = src_value
-										output(4, app_name, 'Class Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer))
-									else:
-										layer_kerning.setPlainPairs([(work_name, src_value)])
-										output(4, app_name, 'Plain Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer))
+								if self.btn_classKern.isChecked():
+									layer_kerning.set(work_pair, src_value)
+									output(4, app_name, 'Class Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer))
+									do_update = True
+								else:
+									layer_kerning.setPlainPairs([(work_name, src_value)])
+									output(4, app_name, 'Plain Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer))
+									do_update = True
 						
 					else:
 						warnings.warn('Class kering not found for Master: %s' %layer, KernClassWarning)
+
+		if do_update:
+			self.active_font.updateObject(self.active_font.fl, 'Font kerning updated!')
 
 # - RUN ------------------------------
 if __name__ == '__main__':
