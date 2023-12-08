@@ -23,7 +23,7 @@ from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 
 # - Init --------------------------------
-app_name, app_version = 'Copy Kernig', '2.7'
+app_name, app_version = 'Copy Kernig', '2.9'
 
 # -- Strings 
 str_help = '''
@@ -182,13 +182,14 @@ class tool_tab(QtGui.QWidget):
 		self.btn_loadFont.setChecked(True)
 
 	def process(self):
-		# - Init
+		# - Helper
 		def getUniGlyph(char):
 			if '/' in char and char != '//':
 				return char.replace('/','')
 
 			return self.active_font.fl.findUnicode(ord(char)).name
 		
+		# - Init
 		do_update = False
 		process_layers = [self.cmb_layer.currentText] if self.cmb_layer.currentText != 'All masters' else self.active_font.masters()	
 		
@@ -196,88 +197,96 @@ class tool_tab(QtGui.QWidget):
 		for line in self.txt_editor.toPlainText().splitlines():
 			if syn_equal in line and syn_comment not in line:
 				for layer in process_layers:
-					dst_pairs, src_pairs = [], []
+					dst_pairs = []
+					src_pair = None
 
-					if layer in self.class_data:
-						dst_names, src_names = line.split(syn_equal)
-						
-						dst_names = [item.split(syn_pair) for item in dst_names.strip().split(' ')]
-						src_raw = [item.split(syn_pair) for item in src_names.strip().split(syn_adjust)]
-
-						# - Build Destination names from actual glyph names in the font
-						dst_names = [(getUniGlyph(pair[0]), getUniGlyph(pair[1])) for pair in dst_names]
-						src_names = [(getUniGlyph(src_raw[0][0]), getUniGlyph(src_raw[0][1]))]
-
-						# - Build Destination pairs
-						for pair in dst_names:
-							left, right = pair
-							modeLeft, modeRight = False, False
-							
-							if len(self.class_data[layer].keys()):
-								if left in self.class_data[layer]['KernLeft'].inverse:
-									modeLeft = True
-
-								elif left in self.class_data[layer]['KernBothSide'].inverse:
-									modeLeft = True
-
-								if right in self.class_data[layer]['KernRight'].inverse:
-									modeRight = True
-
-								elif right in self.class_data[layer]['KernBothSide'].inverse:
-									modeRight = True
-
-							dst_pairs.append(((left[0], modeLeft), (right[0], modeRight)))
-
-						# - Build Source pairs
-						for pair in src_names: # Ugly boilerplate... but may be useful in future
-							left, right = pair
-							modeLeft, modeRight = False, False
-							
-							if len(self.class_data[layer].keys()):
-								if left in self.class_data[layer]['KernLeft'].inverse:
-									modeLeft = True
-
-								elif left in self.class_data[layer]['KernBothSide'].inverse:
-									modeLeft = True
-
-								if right in self.class_data[layer]['KernRight'].inverse:
-									modeRight = True
-
-								elif right in self.class_data[layer]['KernBothSide'].inverse:
-									modeRight = True
-
-							src_pairs.append(((left[0], modeLeft), (right[0], modeRight)))
+					# - Init
+					layer_kerning = self.active_font.kerning(layer)
+					dst_names, src_names = line.split(syn_equal)
 					
-						layer_kerning = self.active_font.kerning(layer)
-						src_value = layer_kerning.get(src_pairs[0])
+					dst_names = [item.split(syn_pair) for item in dst_names.strip().split(' ')]
+					src_raw = [item.split(syn_pair) for item in src_names.strip().split(syn_adjust)]
 
-						if src_pairs[0] in layer_kerning.keys():
-							src_value = layer_kerning.values()[layer_kerning.keys().index(src_pairs[0])]
+					# - Build Destination names from actual glyph names in the font
+					dst_names = [(getUniGlyph(pair[0]), getUniGlyph(pair[1])) for pair in dst_names]
+					src_names = (getUniGlyph(src_raw[0][0]), getUniGlyph(src_raw[0][1]))
 
-						if src_value is not None:
-							if len(src_raw) > 1 and len(src_raw[1]):
-								src_value = int(eval(str(src_value) + str(src_raw[1][0])))
-
-							for wID in range(len(dst_pairs)):
-								work_pair = dst_pairs[wID]
-								work_name = dst_names[wID]
-								
-								if self.btn_classKern.isChecked():
-									layer_kerning.set(work_pair, src_value)
-									output(4, app_name, 'Class Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer))
-									do_update = True
-								else:
-									layer_kerning.setPlainPairs([(work_name, src_value)])
-									output(4, app_name, 'Plain Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer))
-									do_update = True
-						else:
-							warnings.warn('Layer: %s; Value not found: %s;' %(layer, src_pairs[0]), KernClassWarning)
+					# - Build Destination pairs
+					for pair in dst_names:
+						left, right = pair
+						modeLeft, modeRight = False, False
 						
+						if len(self.class_data.keys()) and len(self.class_data[layer].keys()):
+							if left in self.class_data[layer]['KernLeft'].inverse:
+								left = self.class_data[layer]['KernLeft'].inverse[left][0]
+								modeLeft = True
+
+							elif 'KernBothSide' in self.class_data and left in self.class_data[layer]['KernBothSide'].inverse:
+								left = self.class_data[layer]['KernBothSide'].inverse[left][0]
+								modeLeft = True
+
+							if right in self.class_data[layer]['KernRight'].inverse:
+								right = self.class_data[layer]['KernRight'].inverse[right][0]
+								modeRight = True
+
+							elif 'KernBothSide' in self.class_data and right in self.class_data[layer]['KernBothSide'].inverse:
+								right = self.class_data[layer]['KernBothSide'].inverse[right][0]
+								modeRight = True
+
+						if self.btn_classKern.isChecked(): 
+							dst_pairs.append(((left, modeLeft), (right, modeRight)))
+						else:
+							dst_pairs.append((left, right))
+
+					# - Build Source pair for group kerning
+					src_left, src_right = src_names
+					src_mode_left, src_mode_right = False, False
+					
+					if  len(self.class_data.keys()) and len(self.class_data[layer].keys()):
+						if src_left in self.class_data[layer]['KernLeft'].inverse:
+							src_left = self.class_data[layer]['KernLeft'].inverse[src_left][0]
+							src_mode_left = True
+
+						elif 'KernBothSide' in self.class_data and src_left in self.class_data[layer]['KernBothSide'].inverse:
+							src_left = self.class_data[layer]['KernBothSide'].inverse[src_left][0]
+							src_mode_left = True
+
+						if src_right in self.class_data[layer]['KernRight'].inverse:
+							src_right = self.class_data[layer]['KernRight'].inverse[src_right][0]
+							src_mode_right = True
+
+						elif 'KernBothSide' in self.class_data and src_right in self.class_data[layer]['KernBothSide'].inverse:
+							src_right = self.class_data[layer]['KernBothSide'].inverse[src_right][0]
+							src_mode_right = True
+
+						src_pair = ((src_left, src_mode_left), (src_right, src_mode_right))
+					
+					# - Get source kern value
+					if self.btn_classKern.isChecked() and src_pair is not None:
+						src_value = layer_kerning.get(src_pair)
 					else:
-						warnings.warn('Class kering not found for Master: %s' %layer, KernClassWarning)
+						src_value = layer_kerning.get(src_names)
+
+					# - Copy kerning value to destination
+					if src_value is not None:
+						if len(src_raw) > 1 and len(src_raw[1]):
+							src_value = int(eval(str(src_value) + str(src_raw[1][0])))
+
+						for wID in range(len(dst_pairs)):
+							work_pair = dst_pairs[wID]
+							work_name = dst_names[wID]
+							
+							layer_kerning.set(work_pair, src_value)
+							output(4, app_name, 'Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer))
+							
+						do_update = True
+					
+					else:
+						warnings.warn('Layer: %s; Value not found: %s;' %(layer, src_names), KernClassWarning)
 
 		if do_update:
-			self.active_font.updateObject(self.active_font.fl, 'Font kerning updated!')
+			self.active_font.updateObject(self.active_font.fl, 'Font kerning updated!', verbose=True)
+			output(4, app_name, 'Font kerning updated!')
 
 # - RUN ------------------------------
 if __name__ == '__main__':
