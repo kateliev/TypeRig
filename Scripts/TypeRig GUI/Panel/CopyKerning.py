@@ -270,6 +270,8 @@ class tool_tab(QtGui.QWidget):
 									layer_kerning.setPlainPairs([(work_name, src_value)])
 									output(4, app_name, 'Plain Kern pair: %s; Value: %s; Layer: %s.' %(work_name, src_value, layer))
 									do_update = True
+						else:
+							warnings.warn('Layer: %s; Value not found: %s;' %(layer, src_pairs[0]), KernClassWarning)
 						
 					else:
 						warnings.warn('Class kering not found for Master: %s' %layer, KernClassWarning)
