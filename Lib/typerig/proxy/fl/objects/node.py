@@ -488,6 +488,78 @@ class eNode(pNode):
 
 		return (self.fl, nextNode.fl)
 
+	def new_cornerRound(self, size=5., proportion=None, curvature=None, isRadius=False):
+		# - Calculate unit vectors and radii
+		nextNode = self.getNextOn(False)
+		prevNode = self.getPrevOn(False)
+		safe_distance = min((self.distanceTo(prevNode), self.distanceTo(nextNode)))
+
+		nextUnit = Coord(nextNode.asCoord() - self.asCoord()).unit
+		prevUnit = Coord(prevNode.asCoord() - self.asCoord()).unit
+		
+		if not isRadius:
+			angle = math.atan2(nextUnit | prevUnit, nextUnit & prevUnit)
+			# !!! SRC: https://math.stackexchange.com/questions/109250/how-to-calculate-the-two-tangent-points-to-a-circle-with-radius-r-from-two-lines
+			radius = abs(float(size)*(math.cos(angle/2.)/math.sin(angle/2.))) 
+		else:
+			radius = float(size)
+
+		if radius > safe_distance:
+			radius = safe_distance - 0.1
+
+		# - Prepare segments
+		this_segment_nodes = self.getSegmentNodes()
+		prev_segment_nodes = prevNode.getSegmentNodes()
+
+		if len(this_segment_nodes) > 2:
+			this_segment = Curve(this_segment_nodes)
+		else:
+			this_segment = Line(this_segment_nodes)
+
+		if len(prev_segment_nodes) > 2:
+			prev_segment = Curve(prev_segment_nodes)
+		else:
+			prev_segment = Line(prev_segment_nodes)
+
+		# - Execute slicing
+		this_slice_head, this_slice_tail = this_segment.solve_slice_distance(radius, from_start=True)
+		prev_slice_head, prev_slice_tail = prev_segment.solve_slice_distance(radius, from_start=False)
+
+		# - Prepare fillet and curves
+		fillet_off_points = []
+
+		if len(prev_segment_nodes) > 2:
+			fillet_off_points.append(prev_slice_tail.asflNode()[2])
+		else:
+			fillet_off_points.append(fl6.flNode(prev_slice_tail.asQPoint()[-1], nodeType=4))
+
+		if len(this_segment_nodes) > 2:
+			fillet_off_points.append(this_slice_head.asflNode()[2])
+		else:
+			fillet_off_points.append(fl6.flNode(this_slice_head.asQPoint()[-1], nodeType=4))
+
+		fillet_nodes = [prev_slice_head.asflNode()[-1]] + fillet_off_points + [this_slice_tail.asflNode()[0]]
+		new_curve = prev_slice_head.asflNode() + fillet_off_points + this_slice_tail.asflNode()
+		
+		# - Insert and cleanup
+		prevNode.contour.insert(prevNode.getTime(), new_curve)
+		#prevNode.contour.removeNodesBetween(new_curve[-1], nextNode.fl)
+
+		# - Optimize
+		fillet_curve = Curve(fillet_nodes)
+
+		if proportion is not None: 
+			new_fillet_curve = fillet_curve.solve_proportional_handles(proportion)
+			fillet_nodes[1].x = new_fillet_curve.p1.x; fillet_nodes[1].y = new_fillet_curve.p1.y
+			fillet_nodes[2].x = new_fillet_curve.p2.x; fillet_nodes[2].y = new_fillet_curve.p2.y
+					
+		if curvature is not None: 
+			new_fillet_curve = fillet_curve.solve_hobby(curvature)
+			fillet_nodes[1].x = new_fillet_curve.p1.x; fillet_nodes[1].y = new_fillet_curve.p1.y
+			fillet_nodes[2].x = new_fillet_curve.p2.x; fillet_nodes[2].y = new_fillet_curve.p2.y
+
+		return new_curve
+
 	def cornerRound(self, size=5, proportion=None, curvature=None, isRadius=False):
 		# - Calculate unit vectors and shifts
 		nextNode = self.getNextOn(False)
@@ -499,11 +571,8 @@ class eNode(pNode):
 		
 		if not isRadius:
 			angle = math.atan2(nextUnit | prevUnit, nextUnit & prevUnit)
-			# !!! Old:
-			#radius = abs((float(size)/2)/math.sin(angle/2))
-			
-			# !!! New: https://math.stackexchange.com/questions/109250/how-to-calculate-the-two-tangent-points-to-a-circle-with-radius-r-from-two-lines
-			radius = abs(float(size)*(math.cos(angle/2)/math.sin(angle/2.))) 
+			# !!! SRC: https://math.stackexchange.com/questions/109250/how-to-calculate-the-two-tangent-points-to-a-circle-with-radius-r-from-two-lines
+			radius = abs(float(size)*(math.cos(angle/2.)/math.sin(angle/2.))) 
 		else:
 			radius = size
 

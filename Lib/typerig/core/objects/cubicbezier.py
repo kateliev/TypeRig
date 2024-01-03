@@ -1,6 +1,6 @@
 # MODULE: TypeRig / Core / Cubic Bezier (Object)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2016-2021 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2016-2024 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -20,7 +20,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.27.8'
+__version__ = '0.27.9'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -291,7 +291,7 @@ class CubicBezier(object):
 		
 		return slices
 
-	def solve_distance_start(self, distance, timeStep = .01 ):
+	def solve_distance_start(self, distance, timeStep = .01):
 		'''Returns time at which the given distance to beginning of bezier is met. 
 		Probing is executed withing timeStep in range from 0 to 1. The finer the step the preciser the results.
 		'''
@@ -318,6 +318,13 @@ class CubicBezier(object):
 			time -= timeStep
 
 		return time
+
+	def solve_slice_distance(self, distance, from_start=True, timeStep = .001):
+		'''Slices bezier at time which the given distance is met. 
+		Output: list [(Start), (Start_BCP_out), (Slice_BCP_in), (Slice), (Slice_BCP_out), (End_BCP_in), (End)] of tuples (x,y)
+		'''
+		slice_time = self.solve_distance_start(distance, timeStep) if from_start else self.solve_distance_end(distance, timeStep)
+		return self.solve_slice(slice_time)
 
 	def solve_extremes(self):
 		'''Finds curve extremes and returns [(extreme_01_x, extreme_01_y, extreme_01_t)...(extreme_n_x, extreme_n_y, extreme_n_t)]'''

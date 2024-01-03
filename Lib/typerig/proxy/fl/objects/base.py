@@ -1,6 +1,6 @@
 # MODULE: Typerig / Proxy / Base (Objects)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2018-2020	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2018-2024	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -20,7 +20,7 @@ from typerig.core.objects.line import Line, Vector
 from typerig.core.objects.cubicbezier import CubicBezier
 
 # - Init ----------------------------------------------------
-__version__ = '0.26.5'
+__version__ = '0.26.6'
 
 # - Keep compatibility for basestring checks
 try:
@@ -93,7 +93,10 @@ class Line(Line):
 		return pqt.QtCore.QLineF(*self.tuple)
 
 	def asQPoint(self):
-		return pqt.QtCore.QPointF(*self.tuple)
+		return [pqt.QtCore.QPointF(*n) for n in self.tuple] 
+
+	def asflNode(self):
+		return [fl6.flNode(*self.p0.tuple, nodeType=1), fl6.flNode(*self.p1.tuple, nodeType=1)]
 
 class Vector(Vector):
 	def __init__(self, *argv):
@@ -135,3 +138,5 @@ class Curve(CubicBezier):
 		super(Curve, self).__init__(points)
 		self.parent = argv
 
+	def asflNode(self):
+		return [fl6.flNode(*self.p0.tuple, nodeType=1), fl6.flNode(*self.p1.tuple, nodeType=4), fl6.flNode(*self.p2.tuple, nodeType=4), fl6.flNode(*self.p3.tuple, nodeType=1)]

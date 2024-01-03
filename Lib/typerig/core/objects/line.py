@@ -1,6 +1,6 @@
 # MODULE: TypeRig / Core / Line (Object)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2015-2021 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2015-2024 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -19,7 +19,7 @@ from typerig.core.objects.transform import Transform
 from typerig.core.objects.point import Point, Void
 
 # - Init -------------------------------
-__version__ = '0.26.8'
+__version__ = '0.26.9'
 
 # - Classes -----------------------------
 class Line(object):
@@ -156,6 +156,16 @@ class Line(object):
 		'''Find point on the line at given time'''
 		return self.p0 * (1. - time) + self.p1 * time
 
+	def solve_distance_start(self, distance):
+		'''Find time at which given distance from start is met. 
+		Providing API call similar to the one in cubicbezier.py'''
+		return distance/self.length
+
+	def solve_distance_end(self, distance):
+		'''Find time at which given distance from start is met. 
+		Providing API call similar to the one in cubicbezier.py'''
+		return 1 - distance/self.length	
+
 	def solve_length(self, length, mode=0):
 		'''Find a indentical line with different length. Solve for anchored p0 (mode = 0), p1 (mode = 1) or center (mode = -1)'''
 		time = length/self.length
@@ -180,6 +190,10 @@ class Line(object):
 	def solve_slice(self, time):
 		'''Slice line at given time'''
 		return self.__class__(self.p0.tuple, self.solve_point(time).tuple), self.__class__(self.solve_point(time).tuple, self.p1.tuple)
+
+	def solve_slice_distance(self, distance, from_start=True):
+		slice_time = distance/self.length if from_start else 1 - distance/self.length
+		return self.solve_slice(slice_time)
 
 	def lerp(self, time):
 		return self.solve_point(time)
