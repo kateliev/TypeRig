@@ -1,6 +1,6 @@
 # MODULE: Typerig / Proxy / FontLab / Actions / Node
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2017-2022 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2017-2024 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 
@@ -35,7 +35,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.72'
+__version__ = '2.74'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -221,11 +221,11 @@ class TRNodeActionCollector(object):
 			# - Init		
 			wLayers = glyph._prepareLayers(pLayers)
 			
-			for layer in wLayers:
-				selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
+			# - Process	
+			selection = [glyph.selectedNodes(layer, filterOn=True, extend=eNode)[0] for layer in wLayers]
 				
-				for node in reversed(selection):
-					node.cornerMitre(radius)
+			for node in reversed(selection):
+				node.cornerMitre(radius)
 
 			glyph.updateObject(glyph.fl, '{};\tMitre Corner @ {}.'.format(glyph.name, '; '.join(wLayers)))
 		
@@ -252,11 +252,10 @@ class TRNodeActionCollector(object):
 			wLayers = glyph._prepareLayers(pLayers)
 
 			# - Process				
-			for layer in wLayers:
-				selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
-				
-				for node in selection:
-					node.cornerRound(radius, curvature=curvature, isRadius=is_radius)
+			selection = [glyph.selectedNodes(layer, filterOn=True, extend=eNode)[0] for layer in wLayers]
+			
+			for node in selection:
+				node.cornerRound(radius, curvature=curvature, isRadius=is_radius)
 
 			glyph.updateObject(glyph.fl, '{};\tRound Corner @ {}.'.format(glyph.name, '; '.join(wLayers)))
 		
@@ -844,6 +843,50 @@ class TRNodeActionCollector(object):
 		for layer, selection in selection_per_layer.items():		
 			if len(selection) == 2:
 				node_A, node_B = selection
+				parent_contour = node_A.contour
+				
+				# - Get Angle and radius
+				nextNode_A = node_A.getNextOn(False)
+				prevNode_A = node_A.getPrevOn(False)
+				nextNode_B = node_B.getNextOn(False)
+
+				nextUnit = Coord(nextNode_A.asCoord() - node_A.asCoord()).unit
+				prevUnit = Coord(prevNode_A.asCoord() - node_A.asCoord()).unit
+
+				angle = math.atan2(nextUnit | prevUnit, nextUnit & prevUnit)
+				radius = abs(node_A.distanceToNext()*math.sin(angle))/2.
+
+				# - Build cap segments by rounding the corners
+				cap_head_A, cap_fillet_A, cap_tail_A = node_A.cornerRound(radius, curvature=(1.,1.), isRadius=False, insert=False)
+				cap_head_B, cap_fillet_B, cap_tail_B = node_B.cornerRound(radius-.1, curvature=(1.,1.), isRadius=False, insert=False) # Little hack -.1 
+
+				# - Build cap contour 
+				new_cap_contour = cap_head_A + cap_fillet_A + cap_tail_A[:1] + cap_head_B[2:] + cap_fillet_B + cap_tail_B
+				
+				# - Insert and cleanup
+				parent_contour.insert(prevNode_A.index, new_cap_contour)
+				parent_contour.removeOne(prevNode_A.fl)
+				parent_contour.removeNodesBetween(new_cap_contour[-1], nextNode_B.fl)
+				parent_contour.removeOne(nextNode_B.fl)
+			
+				do_update = True			
+
+		if do_update:
+			glyph.updateObject(glyph.fl, '{};\tRound Cap @ {}.'.format(glyph.name, '; '.join(wLayers)))
+			active_workspace.getCanvas(True).refreshAll()
+
+	@staticmethod
+	def old_cap_round(glyph:eGlyph, pLayers:tuple, keep_nodes:bool=False):
+		wLayers = glyph._prepareLayers(pLayers)
+		modifiers = QtGui.QApplication.keyboardModifiers()
+		
+		selection_per_layer = {layer:glyph.selectedNodes(layer, filterOn=True, extend=eNode) for layer in wLayers}
+		do_update = False
+		
+		# - Process
+		for layer, selection in selection_per_layer.items():		
+			if len(selection) == 2:
+				node_A, node_B = selection
 				
 				# - Get Angle and radius
 				nextNode = node_A.getNextOn(False)
@@ -861,8 +904,8 @@ class TRNodeActionCollector(object):
 				if len(segment_A) != 4 or len(segment_B) != 4:
 					# - A stright segment: no Bezier curves
 					# - Round segments
-					segment_A = node_A.cornerRound(radius, curvature=1., isRadius=False)
-					segment_B = node_B.cornerRound(radius-.1, curvature=1., isRadius=False) # Little hack -.1 
+					segment_A = node_A.old_cornerRound(radius, curvature=1., isRadius=False)
+					segment_B = node_B.old_cornerRound(radius-.1, curvature=1., isRadius=False) # Little hack -.1 
 
 					# - Cleanup
 					remove_node = segment_B[0]

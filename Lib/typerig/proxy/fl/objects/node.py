@@ -1,6 +1,6 @@
 # MODULE: Typerig / Proxy / Node (Objects)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2017-2020 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2017-2024 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -488,7 +488,10 @@ class eNode(pNode):
 
 		return (self.fl, nextNode.fl)
 
-	def new_cornerRound(self, size=5., proportion=None, curvature=None, isRadius=False):
+	def cornerRound(self, size=5., proportion=None, curvature=(1.,1.), isRadius=False, insert=True):
+		# - Init
+		parent_contour = self.contour
+
 		# - Calculate unit vectors and radii
 		nextNode = self.getNextOn(False)
 		prevNode = self.getPrevOn(False)
@@ -531,19 +534,18 @@ class eNode(pNode):
 		if len(prev_segment_nodes) > 2:
 			fillet_off_points.append(prev_slice_tail.asflNode()[2])
 		else:
-			fillet_off_points.append(fl6.flNode(prev_slice_tail.asQPoint()[-1], nodeType=4))
+			#fillet_off_points.append(fl6.flNode(prev_slice_tail.asQPoint()[-1], nodeType=4))
+			fillet_off_points.append(fl6.flNode(self.x, self.y, nodeType=4))
 
 		if len(this_segment_nodes) > 2:
 			fillet_off_points.append(this_slice_head.asflNode()[2])
 		else:
-			fillet_off_points.append(fl6.flNode(this_slice_head.asQPoint()[-1], nodeType=4))
+			#fillet_off_points.append(fl6.flNode(this_slice_head.asQPoint()[-1], nodeType=4))
+			fillet_off_points.append(fl6.flNode(self.x, self.y, nodeType=4))
 
 		fillet_nodes = [prev_slice_head.asflNode()[-1]] + fillet_off_points + [this_slice_tail.asflNode()[0]]
-		new_curve = prev_slice_head.asflNode() + fillet_off_points + this_slice_tail.asflNode()
-		
-		# - Insert and cleanup
-		prevNode.contour.insert(prevNode.getTime(), new_curve)
-		#prevNode.contour.removeNodesBetween(new_curve[-1], nextNode.fl)
+		curve_parts = [prev_slice_head.asflNode(), fillet_off_points, this_slice_tail.asflNode()]
+		new_curve = sum(curve_parts,[])
 
 		# - Optimize
 		fillet_curve = Curve(fillet_nodes)
@@ -558,9 +560,16 @@ class eNode(pNode):
 			fillet_nodes[1].x = new_fillet_curve.p1.x; fillet_nodes[1].y = new_fillet_curve.p1.y
 			fillet_nodes[2].x = new_fillet_curve.p2.x; fillet_nodes[2].y = new_fillet_curve.p2.y
 
-		return new_curve
+		# - Insert and cleanup
+		if insert:
+			parent_contour.insert(prevNode.index, new_curve)
+			parent_contour.removeOne(prevNode.fl)
+			parent_contour.removeNodesBetween(new_curve[-1], nextNode.fl)
+			parent_contour.removeOne(nextNode.fl)
 
-	def cornerRound(self, size=5, proportion=None, curvature=None, isRadius=False):
+		return curve_parts
+
+	def old_cornerRound(self, size=5, proportion=None, curvature=None, isRadius=False):
 		# - Calculate unit vectors and shifts
 		nextNode = self.getNextOn(False)
 		prevNode = self.getPrevOn(False)

@@ -19,7 +19,7 @@ from typerig.core.objects.transform import Transform
 from typerig.core.objects.point import Point, Void
 
 # - Init -------------------------------
-__version__ = '0.26.9'
+__version__ = '0.27.0'
 
 # - Classes -----------------------------
 class Line(object):
@@ -192,6 +192,7 @@ class Line(object):
 		return self.__class__(self.p0.tuple, self.solve_point(time).tuple), self.__class__(self.solve_point(time).tuple, self.p1.tuple)
 
 	def solve_slice_distance(self, distance, from_start=True):
+		if distance == 0: distance = .000001 # Nasty hack: avoid Zero devision but get slice at all cost
 		slice_time = distance/self.length if from_start else 1 - distance/self.length
 		return self.solve_slice(slice_time)
 

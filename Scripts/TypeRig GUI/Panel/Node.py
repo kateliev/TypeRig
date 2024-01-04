@@ -1,6 +1,6 @@
 #FLM: TR: Nodes
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2017-2022 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2017-2024 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 
