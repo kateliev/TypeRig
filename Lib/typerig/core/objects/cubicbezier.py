@@ -20,7 +20,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.27.9'
+__version__ = '0.28.0'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -110,7 +110,7 @@ class CubicBezier(object):
 	def align_to(self, other_line):
 		tx = other_line.p0.x
 		ty = other_line.p0.y
-		angle = -other_line.angle
+		angle = -other_line.angler
 		result = []
 
 		for p in self.points:
