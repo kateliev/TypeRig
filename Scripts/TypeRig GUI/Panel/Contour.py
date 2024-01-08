@@ -33,7 +33,7 @@ global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '4.2'
+app_name, app_version = 'TypeRig | Contour', '4.3'
 
 cfg_addon_reversed = ' (Reversed)'
 
@@ -193,7 +193,7 @@ class TRContourBasics(QtGui.QWidget):
 		tooltip_button = "Draw two point circle/nWhere two points selected form circle's diameter"
 		self.btn_draw_circle_2p = CustomPushButton("draw_circle_2p", tooltip=tooltip_button, obj_name='btn_panel')
 		lay_draw.addWidget(self.btn_draw_circle_2p)
-		self.btn_draw_circle_2p.clicked.connect(lambda: TRDrawActionCollector.draw_circle_from_selection(pMode, pLayers, mode=0))
+		self.btn_draw_circle_2p.clicked.connect(lambda: TRDrawActionCollector.draw_circle_from_selection(pMode, pLayers, mode=0, rotated=get_modifier()))
 
 		tooltip_button = "Draw three point circle/nWhere points selected lay anywhere on the circle"
 		self.btn_draw_circle_3p = CustomPushButton("draw_circle_3p", tooltip=tooltip_button, obj_name='btn_panel')

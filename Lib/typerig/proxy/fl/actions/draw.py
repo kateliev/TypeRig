@@ -34,7 +34,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '1.17'
+__version__ = '1.18'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -48,6 +48,7 @@ def make_contour_circle(center:tuple, radius:float):
 	x, y = center
 	new_spline = HobbySpline([Knot(x, y - radius), Knot(x + radius, y), Knot(x, y + radius), Knot(x - radius, y)], closed=True)
 	new_contour = fl6.flContour([fl6.flNode(n.x, n.y, nodeType=n.type) for n in new_spline.nodes], closed=True)
+	new_contour.removeOne(new_contour.nodes()[-1])
 	return new_contour
 
 def make_contour_circle_from_points(node_list:list, mode:int=1):
@@ -75,7 +76,7 @@ class TRDrawActionCollector(object):
 
 	# -- Primitive drawing tools ------------------------------------------------------
 	@staticmethod
-	def draw_circle_from_selection(pMode:int, pLayers:tuple, mode:int=1):
+	def draw_circle_from_selection(pMode:int, pLayers:tuple, mode:int=1, rotated=False):
 		# - Get list of glyphs to be processed
 		process_glyphs = getProcessGlyphs(pMode)
 
@@ -92,22 +93,23 @@ class TRDrawActionCollector(object):
 					new_circle, center, radius = make_contour_circle_from_points(node_selection, mode)
 					
 					# - Rotate circle so that it matches the angle of the imaginary line between the nodes selected
-					new_line = Line(node_selection[0].tuple, node_selection[-1].tuple)
-					
-					origin_transform = QtGui.QTransform()
-					origin_transform = origin_transform.translate(-center[0], -center[1])
-					new_circle.transform = origin_transform
-					new_circle.applyTransform()
+					if rotated:
+						new_line = Line(node_selection[0].tuple, node_selection[-1].tuple)
+						
+						origin_transform = QtGui.QTransform()
+						origin_transform = origin_transform.translate(-center[0], -center[1])
+						new_circle.transform = origin_transform
+						new_circle.applyTransform()
 
-					temp_transform = QtGui.QTransform()
-					temp_transform = temp_transform.rotate(new_line.angle)
-					new_circle.transform = temp_transform
-					new_circle.applyTransform()
-					
-					return_transform = QtGui.QTransform()
-					return_transform = return_transform.translate(center[0], center[1])
-					new_circle.transform = return_transform
-					new_circle.applyTransform()
+						temp_transform = QtGui.QTransform()
+						temp_transform = temp_transform.rotate(new_line.angle)
+						new_circle.transform = temp_transform
+						new_circle.applyTransform()
+						
+						return_transform = QtGui.QTransform()
+						return_transform = return_transform.translate(center[0], center[1])
+						new_circle.transform = return_transform
+						new_circle.applyTransform()
 
 					# - Add contour to shape
 					active_shape = glyph.shapes(layer_name)[0]
