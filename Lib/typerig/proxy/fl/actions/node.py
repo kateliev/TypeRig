@@ -35,7 +35,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.74'
+__version__ = '2.75'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -832,7 +832,7 @@ class TRNodeActionCollector(object):
 
 	# -- Caps ---------------------------------------------------------------
 	@staticmethod
-	def cap_round(glyph:eGlyph, pLayers:tuple, keep_nodes:bool=False):
+	def new_cap_round(glyph:eGlyph, pLayers:tuple, keep_nodes:bool=False):
 		wLayers = glyph._prepareLayers(pLayers)
 		modifiers = QtGui.QApplication.keyboardModifiers()
 		
@@ -876,7 +876,7 @@ class TRNodeActionCollector(object):
 			active_workspace.getCanvas(True).refreshAll()
 
 	@staticmethod
-	def old_cap_round(glyph:eGlyph, pLayers:tuple, keep_nodes:bool=False):
+	def cap_round(glyph:eGlyph, pLayers:tuple, keep_nodes:bool=False):
 		wLayers = glyph._prepareLayers(pLayers)
 		modifiers = QtGui.QApplication.keyboardModifiers()
 		
@@ -886,14 +886,17 @@ class TRNodeActionCollector(object):
 		# - Process
 		for layer, selection in selection_per_layer.items():		
 			if len(selection) == 2:
+				# - Init
 				node_A, node_B = selection
+				parent_contour = node_A.contour
 				
-				# - Get Angle and radius
-				nextNode = node_A.getNextOn(False)
-				prevNode = node_A.getPrevOn(False)
+				nextNode_A = node_A.getNextOn(False)
+				prevNode_A = node_A.getPrevOn(False)
+				nextNode_B = node_B.getNextOn(False)
 
-				nextUnit = Coord(nextNode.asCoord() - node_A.asCoord()).unit
-				prevUnit = Coord(prevNode.asCoord() - node_A.asCoord()).unit
+				# - Get Angle and radius
+				nextUnit = Coord(nextNode_A.asCoord() - node_A.asCoord()).unit
+				prevUnit = Coord(prevNode_A.asCoord() - node_A.asCoord()).unit
 
 				angle = math.atan2(nextUnit | prevUnit, nextUnit & prevUnit)
 				radius = abs(node_A.distanceToNext()*math.sin(angle))/2.
@@ -902,7 +905,7 @@ class TRNodeActionCollector(object):
 				segment_B = node_B.getSegmentNodes(0)
 
 				if len(segment_A) != 4 or len(segment_B) != 4:
-					# - A stright segment: no Bezier curves
+					# - A straight segment: no Bezier curves
 					# - Round segments
 					segment_A = node_A.old_cornerRound(radius, curvature=1., isRadius=False)
 					segment_B = node_B.old_cornerRound(radius-.1, curvature=1., isRadius=False) # Little hack -.1 
@@ -910,13 +913,15 @@ class TRNodeActionCollector(object):
 					# - Cleanup
 					remove_node = segment_B[0]
 					
-					if not keep_nodes: # Keep nodes for 5A SOFT compatibility
+					if not keep_nodes: # Keep nodes for compatibility
 						segment_B[0].contour.removeOne(remove_node)
 
 					do_update = True
 
 				else:
-					if modifiers == QtCore.Qt.AltModifier:
+					if modifiers == QtCore.Qt.ShiftModifier or modifiers == (QtCore.Qt.ControlModifier | QtCore.Qt.ShiftModifier):
+						# - Calculate radius differently
+
 						# -- Find distance and normal
 						# --- Init
 						curve_A = Curve(*segment_A)
@@ -942,40 +947,57 @@ class TRNodeActionCollector(object):
 
 						if not isinstance(intersect_points_A, Void):
 							radius = Line(line_A.p0.tuple, intersect_points_A.tuple).length/2
-							print(radius)
+							output(1, 'Round Cap', 'Calculated radius:{}'.format(radius))
 
 						if not isinstance(intersect_points_B, Void):
 							radius = Line(line_B.p0.tuple, intersect_points_B.tuple).length/2
-							print(radius)
+							output(1, 'Round Cap', 'Calculated radius:{}'.format(radius))
 						
-					# - Round Cap 
-					curve_A = Curve(*segment_A)
-					curve_B = Curve(*segment_B)
-					new_time_A = curve_A.solve_distance_end(radius, .01)
-					new_time_B = curve_B.solve_distance_start(radius, .01)
-					
-					# -- Make the cap and update contour
-					new_A = node_A.insertBefore(new_time_A)
-					new_B = node_B.insertAfter(new_time_B)
-					new_C = node_A.insertAfter(.5)
-					new_C.contour.removeOne(node_A.fl)
-					new_C.contour.removeOne(node_B.fl)
-					new_C.smooth = True
-					new_C.contour.update()
-					
-					handle_A = new_A.nextNode().nextNode()
-					handle_B = new_A.nextNode().nextNode().nextNode().nextNode()
+					if modifiers == QtCore.Qt.ControlModifier or modifiers == (QtCore.Qt.ControlModifier | QtCore.Qt.ShiftModifier):
+						# - Using newer corner rounding algorithm
+						# - Build cap segments by rounding the corners
+						cap_head_A, cap_fillet_A, cap_tail_A = node_A.cornerRound(radius, curvature=(1.,1.), isRadius=False, insert=False)
+						cap_head_B, cap_fillet_B, cap_tail_B = node_B.cornerRound(radius-.1, curvature=(1.,1.), isRadius=False, insert=False) # Little hack -.1 
 
-					handle_A.x = node_A.x
-					handle_A.y = node_A.y
-					handle_B.x = node_B.x
-					handle_B.y = node_B.y
+						# - Build cap contour 
+						new_cap_contour = cap_head_A + cap_fillet_A + cap_tail_A[:1] + cap_head_B[2:] + cap_fillet_B + cap_tail_B
+						
+						# - Insert and cleanup
+						parent_contour.insert(prevNode_A.index, new_cap_contour)
+						parent_contour.removeOne(prevNode_A.fl)
+						parent_contour.removeNodesBetween(new_cap_contour[-1], nextNode_B.fl)
+						parent_contour.removeOne(nextNode_B.fl)
+					
+					else:
+						# - Using older corner rounding algorithm
+						# - Round Cap 
+						curve_A = Curve(*segment_A)
+						curve_B = Curve(*segment_B)
+						new_time_A = curve_A.solve_distance_end(radius, .001)
+						new_time_B = curve_B.solve_distance_start(radius, .001)
+						
+						# -- Make the cap and update contour
+						new_A = node_A.insertBefore(new_time_A)
+						new_B = node_B.insertAfter(new_time_B)
+						new_C = node_A.insertAfter(.5)
+						new_C.contour.removeOne(node_A.fl)
+						new_C.contour.removeOne(node_B.fl)
+						new_C.smooth = True
+						new_C.contour.update()
+						
+						handle_A = new_A.nextNode().nextNode()
+						handle_B = new_A.nextNode().nextNode().nextNode().nextNode()
 
-					# -- Optimize contour
-					ext_A = eCurveEx(*eNode(new_A).getSegmentNodes(0))
-					ext_C = eCurveEx(eNode(new_C).getSegmentNodes(0))
-					ext_A.eqHobbySpline((1.,1.))
-					ext_C.eqHobbySpline((1.,1.))
+						handle_A.x = node_A.x
+						handle_A.y = node_A.y
+						handle_B.x = node_B.x
+						handle_B.y = node_B.y
+
+						# -- Optimize contour
+						ext_A = eCurveEx(*eNode(new_A).getSegmentNodes(0))
+						ext_C = eCurveEx(eNode(new_C).getSegmentNodes(0))
+						ext_A.eqHobbySpline((1.,1.))
+						ext_C.eqHobbySpline((1.,1.))
 
 					do_update = True
 

@@ -201,7 +201,7 @@ class TRNodeBasics(QtGui.QWidget):
 		lay_corner.addWidget(self.btn_corner_loop)
 		self.btn_corner_loop.button.clicked.connect(lambda: TRNodeActionCollector.corner_loop(pMode, pLayers, self.btn_corner_loop.input.value))
 		
-		tooltip_button = 'Create Ink Trap\n<ALT + Mouse Left> Create non-smooth basic trap.'
+		tooltip_button = 'Create Ink Trap\n+Alt: Create non-smooth basic trap.'
 		self.btn_corner_trap = CustomPushButton('corner_trap', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_corner.addWidget(self.btn_corner_trap)
 		self.btn_corner_trap.clicked.connect(lambda: TRNodeActionCollector.corner_trap_dlg(pMode, pLayers, get_modifier()))
@@ -211,12 +211,12 @@ class TRNodeBasics(QtGui.QWidget):
 		lay_corner.addWidget(self.btn_corner_rebuild)
 		self.btn_corner_rebuild.clicked.connect(lambda: TRNodeActionCollector.corner_rebuild(pMode, pLayers))
 
-		tooltip_button = 'Round cap\nCreate a rounded cap between selected two nodes.'
+		tooltip_button = 'Round cap\nCreate a rounded cap between selected two nodes.\n+Ctrl: Use different algorithm (better for curves)\n+Shift: Use different radius calculation\n+Alt: Do not clean excess nodes.'
 		self.btn_cap_round = CustomPushButton('cap_round', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_corner.addWidget(self.btn_cap_round)
 		self.btn_cap_round.clicked.connect(lambda: TRNodeActionCollector.cap_round(eGlyph(), pLayers, get_modifier()))
 
-		tooltip_button = 'Square cap\nCreate/resore a rounded cap to square form between all selected round cap nodes.'
+		tooltip_button = 'Square cap\nCreate/restore a rounded cap to square form between all selected round cap nodes.'
 		self.btn_cap_square = CustomPushButton('cap_restore', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_corner.addWidget(self.btn_cap_square)
 		self.btn_cap_square.clicked.connect(lambda: TRNodeActionCollector.cap_rebuild(eGlyph(), pLayers))
@@ -238,7 +238,7 @@ class TRNodeBasics(QtGui.QWidget):
 		lay_align_options.setSpacing(9)
 		lay_align_actions = TRFlowLayout(spacing=10)
 
-		tooltip_button = "Smart Shift: Shift oncurve nodes together with their respective offcurve nodes even when they are not explicitly selected,"
+		tooltip_button = "Smart Shift: Shift on-curve nodes together with their respective off-curve nodes even when they are not explicitly selected,"
 		self.chk_shift_smart_align = CustomPushButton("shift_smart", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_align_options_shift.addButton(self.chk_shift_smart_align, 1)
 		lay_align_options.addWidget(self.chk_shift_smart_align)
@@ -331,13 +331,13 @@ class TRNodeBasics(QtGui.QWidget):
 		self.grp_align_actions.addButton(self.btn_node_align_neigh_y)
 		lay_align_actions.addWidget(self.btn_node_align_neigh_y)
 
-		tooltip_button = "Align selected nodes to an imaginary line runnig between highest and lowest node in selection"
+		tooltip_button = "Align selected nodes to an imaginary line running between highest and lowest node in selection"
 		self.btn_node_align_min_max_Y = CustomPushButton("node_align_min_max_Y", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_align_min_max_Y.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'Y', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart_align.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_align_min_max_Y)
 		lay_align_actions.addWidget(self.btn_node_align_min_max_Y)
 
-		tooltip_button = "Align selected nodes to an imaginary line runnig between lowest and highest node in selection"
+		tooltip_button = "Align selected nodes to an imaginary line running between lowest and highest node in selection"
 		self.btn_node_align_min_max_X = CustomPushButton("node_align_min_max_X", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_align_min_max_X.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'X', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart_align.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_align_min_max_X)
@@ -378,7 +378,7 @@ class TRNodeBasics(QtGui.QWidget):
 		self.grp_align_actions.addButton(self.btn_node_dimension_descender)
 		lay_align_actions.addWidget(self.btn_node_dimension_descender)
 
-		tooltip_button = "Align selected nodes to Measurment line"
+		tooltip_button = "Align selected nodes to Measurement line"
 		self.btn_node_dimension_guide = CustomPushButton("dimension_guide", tooltip=tooltip_button, obj_name='btn_panel')
 		self.btn_node_dimension_guide.clicked.connect(lambda: TRNodeActionCollector.nodes_align(pMode, pLayers, 'FontMetrics_5', self.chk_shift_intercept.isChecked(), self.chk_shift_keep_dimension.isChecked(), self.chk_shift_smart_align.isChecked(), self.ext_target))
 		self.grp_align_actions.addButton(self.btn_node_dimension_guide)
