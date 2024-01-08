@@ -34,7 +34,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '1.16'
+__version__ = '1.17'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -57,7 +57,7 @@ def make_contour_circle_from_points(node_list:list, mode:int=1):
 	if len(node_list) >= 3 and mode > 0: # Three point circle
 		c, r = three_point_circle(node_list[0].tuple, node_list[1].tuple, node_list[2].tuple)
 	
-	return make_contour_circle(c, r)
+	return make_contour_circle(c, r), c, r
 
 def make_contour_square_from_points(node_list:list, mode:int=0):
 	if len(node_list) >= 2:
@@ -89,7 +89,27 @@ class TRDrawActionCollector(object):
 				node_selection = glyph.selectedNodes(layer_name, filterOn=True, extend=eNode)
 
 				if len(node_selection) >= 2:
-					new_circle = make_contour_circle_from_points(node_selection, mode)
+					new_circle, center, radius = make_contour_circle_from_points(node_selection, mode)
+					
+					# - Rotate circle so that it matches the angle of the imaginary line between the nodes selected
+					new_line = Line(node_selection[0].tuple, node_selection[-1].tuple)
+					
+					origin_transform = QtGui.QTransform()
+					origin_transform = origin_transform.translate(-center[0], -center[1])
+					new_circle.transform = origin_transform
+					new_circle.applyTransform()
+
+					temp_transform = QtGui.QTransform()
+					temp_transform = temp_transform.rotate(new_line.angle)
+					new_circle.transform = temp_transform
+					new_circle.applyTransform()
+					
+					return_transform = QtGui.QTransform()
+					return_transform = return_transform.translate(center[0], center[1])
+					new_circle.transform = return_transform
+					new_circle.applyTransform()
+
+					# - Add contour to shape
 					active_shape = glyph.shapes(layer_name)[0]
 					active_shape.addContour(new_circle, True)
 				
