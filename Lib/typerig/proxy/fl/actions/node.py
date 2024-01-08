@@ -35,7 +35,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.75'
+__version__ = '2.76'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -921,24 +921,21 @@ class TRNodeActionCollector(object):
 				else:
 					if modifiers == QtCore.Qt.ShiftModifier or modifiers == (QtCore.Qt.ControlModifier | QtCore.Qt.ShiftModifier):
 						# - Calculate radius differently
-
-						# -- Find distance and normal
-						# --- Init
 						curve_A = Curve(*segment_A)
 						curve_B = Curve(*segment_B)
 						
-						# --- Initial segmentation
-						time_A = curve_A.solve_distance_end(radius, .01)
-						time_B = curve_B.solve_distance_start(radius, .01)
+						# -- Initial segmentation
+						time_A = curve_A.solve_distance_end(radius, .001)
+						time_B = curve_B.solve_distance_start(radius, .001)
 						
-						# --- Get Normals
+						# -- Find distance and normal
 						normal_A = curve_A.solve_normal_at_time(1)
 						normal_B = curve_B.solve_normal_at_time(0)
 						
 						line_normal_A = Line(curve_A.p3.tuple, (curve_A.p3 + normal_A).tuple)
 						line_normal_B = Line(curve_B.p0.tuple, (curve_B.p0 + normal_B).tuple)
 
-						# --- create two stright segments and intersect the normals to them (to get new radius)
+						# --- create two straight segments and intersect the normals to them (to get new radius)
 						line_A = Line(curve_A.p3.tuple, curve_A.solve_point(time_A).tuple)
 						line_B = Line(curve_B.p0.tuple, curve_B.solve_point(time_B).tuple)
 
@@ -1048,3 +1045,42 @@ class TRNodeActionCollector(object):
 
 		glyph.updateObject(glyph.fl, '{};\tRebuild Cap @ {}.'.format(glyph.name, '; '.join(wLayers)))
 		active_workspace.getCanvas(True).refreshAll()
+
+	@staticmethod
+	def cap_normal(glyph:eGlyph, pLayers:tuple, keep_nodes:bool=False):
+		wLayers = glyph._prepareLayers(pLayers)
+		modifiers = QtGui.QApplication.keyboardModifiers()
+		
+		selection_per_layer = {layer:glyph.selectedNodes(layer, filterOn=True, extend=eNode) for layer in wLayers}
+		do_update = False
+		
+		# - Process
+		for layer, selection in selection_per_layer.items():		
+			if len(selection) == 2:
+				node_A, node_B = selection
+				parent_contour = node_A.contour
+				
+				# - Get Angle and radius
+				prevNode_A = node_A.getPrevOn(False)
+				nextNode_B = node_B.getNextOn(False)
+				segment_A = prevNode_A.getSegmentNodes()
+				segment_B = node_B.getSegmentNodes()
+				curve_A = Curve(*segment_A)
+				curve_B = Curve(*segment_B)
+				normal_A = curve_A.solve_normal_at_time(1)
+				normal_B = curve_B.solve_normal_at_time(0)
+				normal_line_A = Line(node_A.tuple, (normal_A+node_A.tuple).tuple).solve_length(1000,0)
+				normal_line_B = Line(node_B.tuple, (normal_B+node_B.tuple).tuple).solve_length(1000,0)
+				
+				intersect_A_time, _ = curve_A.intersect_line(normal_line_B)
+				intersect_B_time, _ = curve_B.intersect_line(normal_line_A)
+				intersect_A_time = sum(intersect_A_time, [])
+				intersect_B_time = sum(intersect_B_time, [])
+				
+				if len(intersect_A_time):
+					node_A.insertB(intersect_A_time[0])
+					print('Intersect A:{}'.format(intersect_A_time[0]))
+				
+				if len(intersect_B_time):
+					node_B.insertAfter(1-intersect_B_time[0])
+					print('Intersect B:{}'.format(intersect_B_time[0]))
