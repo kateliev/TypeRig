@@ -190,7 +190,7 @@ class TRContourBasics(QtGui.QWidget):
 		lay_draw.addWidget(self.btn_draw_square_2m)
 		self.btn_draw_square_2m.clicked.connect(lambda: TRDrawActionCollector.draw_square_from_selection(pMode, pLayers, mode=1))
 
-		tooltip_button = "Draw two point circle/nWhere two points selected form circle's diameter"
+		tooltip_button = "Draw two point circle/nWhere two points selected form circle's diameter\nALT+Click rotate and align the circle so that it follows the angle of the imaginary line between selected nodes. "
 		self.btn_draw_circle_2p = CustomPushButton("draw_circle_2p", tooltip=tooltip_button, obj_name='btn_panel')
 		lay_draw.addWidget(self.btn_draw_circle_2p)
 		self.btn_draw_circle_2p.clicked.connect(lambda: TRDrawActionCollector.draw_circle_from_selection(pMode, pLayers, mode=0, rotated=get_modifier()))
