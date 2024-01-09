@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '3.31'
+app_name, app_version = 'TypeRig | Nodes', '3.32'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -184,7 +184,6 @@ class TRNodeBasics(QtGui.QWidget):
 		box_corner.setObjectName('box_group')
 		
 		lay_corner = TRFlowLayout(spacing=10)
-		lay_corner.setContentsMargins(0, 0, 0, 0)
 
 		tooltip_button = 'Corner Mitre'
 		self.btn_corner_mitre = CustomSpinButton('corner_mitre', (0, 300, 0, 1), (tooltip_button + ' value', tooltip_button), ('spn_panel', 'btn_panel'))
@@ -211,19 +210,33 @@ class TRNodeBasics(QtGui.QWidget):
 		lay_corner.addWidget(self.btn_corner_rebuild)
 		self.btn_corner_rebuild.clicked.connect(lambda: TRNodeActionCollector.corner_rebuild(pMode, pLayers))
 
+		box_corner.setLayout(lay_corner)
+		self.lay_main.addWidget(box_corner)
+
+		# - Cap tools ------------------------------------------------------
+		box_cap = QtGui.QGroupBox()
+		box_cap.setObjectName('box_group')
+		
+		lay_cap = TRFlowLayout(spacing=10)
+
 		tooltip_button = 'Round cap\nCreate a rounded cap between selected two nodes.\n+Ctrl: Use different algorithm (better for curves)\n+Shift: Use different radius calculation\n+Alt: Do not clean excess nodes.'
 		self.btn_cap_round = CustomPushButton('cap_round', tooltip=tooltip_button, obj_name='btn_panel')
-		lay_corner.addWidget(self.btn_cap_round)
+		lay_cap.addWidget(self.btn_cap_round)
 		self.btn_cap_round.clicked.connect(lambda: TRNodeActionCollector.cap_round(eGlyph(), pLayers, get_modifier()))
 
 		tooltip_button = 'Square cap\nCreate/restore a rounded cap to square form between all selected round cap nodes.'
 		self.btn_cap_square = CustomPushButton('cap_restore', tooltip=tooltip_button, obj_name='btn_panel')
-		lay_corner.addWidget(self.btn_cap_square)
+		lay_cap.addWidget(self.btn_cap_square)
 		self.btn_cap_square.clicked.connect(lambda: TRNodeActionCollector.cap_rebuild(eGlyph(), pLayers))
 
-		#lay_corner.setColumnStretch(lay_corner.columnCount(), 1)
-		box_corner.setLayout(lay_corner)
-		self.lay_main.addWidget(box_corner)
+		tooltip_button = 'Normalize cap\nNormalize a cap end so that the cap line coincides with the shortest normal at one of the two points selected'
+		self.btn_cap_normal = CustomPushButton('cap_normal', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_cap.addWidget(self.btn_cap_normal)
+		self.btn_cap_normal.clicked.connect(lambda: TRNodeActionCollector.cap_normal(eGlyph(), pLayers))
+
+		#lay_cap.setColumnStretch(lay_cap.columnCount(), 1)
+		box_cap.setLayout(lay_cap)
+		self.lay_main.addWidget(box_cap)
 
 		# -- Align Tools -------------------------------------------------------
 		box_align = QtGui.QGroupBox()
@@ -397,7 +410,6 @@ class TRNodeBasics(QtGui.QWidget):
 		self.grp_slope_options = QtGui.QButtonGroup()
 
 		lay_slope =TRFlowLayout(spacing=10)
-		lay_slope.setContentsMargins(0, 0, 0, 0)
 
 		# --- Options 
 		tooltip_button =  "Copy slope between selected nodes"
@@ -448,7 +460,7 @@ class TRNodeBasics(QtGui.QWidget):
 		self.grp_copy_nodes_options = QtGui.QButtonGroup()
 
 		lay_copy_nodes = TRFlowLayout(spacing=10)
-		lay_copy_nodes.setContentsMargins(0, 0, 0, 0)
+		#lay_copy_nodes.setContentsMargins(0, 0, 0, 0)
 
 		# --- Options
 		tooltip_button =  "Paste Align Top Left"
@@ -522,7 +534,7 @@ class TRNodeBasics(QtGui.QWidget):
 		self.grp_move_nodes_options = QtGui.QButtonGroup()
 
 		lay_move_nodes = QtGui.QGridLayout()
-		lay_move_nodes.setContentsMargins(0, 0, 0, 0)
+		#lay_move_nodes.setContentsMargins(0, 0, 0, 0)
 
 		# --- Options
 		tooltip_button =  "Smart Shift:\n Move off-curve nodes together with on-curve ones"

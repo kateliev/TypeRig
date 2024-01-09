@@ -35,7 +35,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.76'
+__version__ = '2.77'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -833,6 +833,9 @@ class TRNodeActionCollector(object):
 	# -- Caps ---------------------------------------------------------------
 	@staticmethod
 	def new_cap_round(glyph:eGlyph, pLayers:tuple, keep_nodes:bool=False):
+		'''Create round cap'''
+
+		# - Init
 		wLayers = glyph._prepareLayers(pLayers)
 		modifiers = QtGui.QApplication.keyboardModifiers()
 		
@@ -877,6 +880,9 @@ class TRNodeActionCollector(object):
 
 	@staticmethod
 	def cap_round(glyph:eGlyph, pLayers:tuple, keep_nodes:bool=False):
+		'''Create round cap'''
+
+		# - Init
 		wLayers = glyph._prepareLayers(pLayers)
 		modifiers = QtGui.QApplication.keyboardModifiers()
 		
@@ -1004,6 +1010,8 @@ class TRNodeActionCollector(object):
 
 	@staticmethod
 	def cap_rebuild(glyph:eGlyph, pLayers:tuple, keep_nodes:bool=False):
+		''' Rebuild/straighten a rounded/soft cap'''
+
 		# - Helpers
 		def rebuild_cap(node_list, keep_nodes):
 			# - Get crossing for each rounded corner
@@ -1048,6 +1056,10 @@ class TRNodeActionCollector(object):
 
 	@staticmethod
 	def cap_normal(glyph:eGlyph, pLayers:tuple, keep_nodes:bool=False):
+		'''Normalize a cap end so that the cap line coincides with the shortest normal at one of the two points selected'''
+		# !!! Note: Should be made contour direction independent. Currently bit buggy.
+
+		# - Init
 		wLayers = glyph._prepareLayers(pLayers)
 		modifiers = QtGui.QApplication.keyboardModifiers()
 		
@@ -1060,27 +1072,61 @@ class TRNodeActionCollector(object):
 				node_A, node_B = selection
 				parent_contour = node_A.contour
 				
-				# - Get Angle and radius
+				# - Get Nodes and segments they belong to
 				prevNode_A = node_A.getPrevOn(False)
 				nextNode_B = node_B.getNextOn(False)
+				
 				segment_A = prevNode_A.getSegmentNodes()
 				segment_B = node_B.getSegmentNodes()
-				curve_A = Curve(*segment_A)
-				curve_B = Curve(*segment_B)
-				normal_A = curve_A.solve_normal_at_time(1)
-				normal_B = curve_B.solve_normal_at_time(0)
-				normal_line_A = Line(node_A.tuple, (normal_A+node_A.tuple).tuple).solve_length(1000,0)
-				normal_line_B = Line(node_B.tuple, (normal_B+node_B.tuple).tuple).solve_length(1000,0)
 				
-				intersect_A_time, _ = curve_A.intersect_line(normal_line_B)
-				intersect_B_time, _ = curve_B.intersect_line(normal_line_A)
-				intersect_A_time = sum(intersect_A_time, [])
-				intersect_B_time = sum(intersect_B_time, [])
-				
-				if len(intersect_A_time):
-					node_A.insertB(intersect_A_time[0])
-					print('Intersect A:{}'.format(intersect_A_time[0]))
-				
-				if len(intersect_B_time):
-					node_B.insertAfter(1-intersect_B_time[0])
-					print('Intersect B:{}'.format(intersect_B_time[0]))
+				if len(segment_A) >= 4 and len(segment_B) >= 4:
+					# - Set curves and find normals
+					curve_A = Curve(*segment_A)
+					curve_B = Curve(*segment_B)
+					
+					normal_A = curve_A.solve_normal_at_time(1)
+					normal_B = curve_B.solve_normal_at_time(0)
+					
+					
+					# - Build normal lines and find intersections to juxtaposed curves
+					normal_line_A = Line(node_A.tuple, (normal_A + node_A.tuple).tuple).solve_length(1000,0) # Extend the resulting line to 1000 u
+					normal_line_B = Line(node_B.tuple, (normal_B + node_B.tuple).tuple).solve_length(1000,0)
+					
+					intersect_A_time, _ = curve_A.intersect_line(normal_line_B)
+					intersect_B_time, _ = curve_B.intersect_line(normal_line_A)
+					
+					# -- Cleanup and sort intersection results [[x_crossing_times], [y_crossing_times]] reduced to single list.
+					intersect_A_time = sorted(intersect_A_time[0] + intersect_A_time[1])
+					intersect_B_time = sorted([1 - t for t in intersect_B_time[0]] + intersect_B_time[1]) # !!! Reverse the time because of contour direction !!! Find a better way
+					
+					# - Set flags that determine where nodes will be inserted and which of nodes A or B should be removed
+					cap_flags = (False, False)
+					
+					# -- Flag heuristics
+					if len(intersect_A_time) and len(intersect_B_time):
+						cap_1 = Line(node_B.tuple, curve_A.solve_point(intersect_A_time[0]).tuple)
+						cap_2 = Line(node_A.tuple, curve_B.solve_point(intersect_B_time[0]).tuple)
+						cap_flags = (True, False) if cap_1.length < cap_2.length else (False, True)
+						
+					elif len(intersect_A_time):
+						cap_flags = (True, False)
+					
+					elif len(intersect_B_time):
+						cap_flags = (False, True)
+					
+					# - Process according to flag. Insert nodes and clean up redundant ones.
+					if cap_flags[0]:
+						new_node = node_A.insertBefore(intersect_A_time[0])
+						new_node.smooth = False
+						parent_contour.removeNodesBetween(new_node, node_B.fl)
+						do_update = True
+					
+					if cap_flags[1]:
+						new_node = node_B.insertAfter(intersect_B_time[0])
+						new_node.smooth = False
+						parent_contour.removeNodesBetween(node_A.fl, new_node)
+						do_update = True
+
+		if do_update:
+			glyph.updateObject(glyph.fl, '{};\tNormalize Cap @ {}.'.format(glyph.name, '; '.join(wLayers)))
+			active_workspace.getCanvas(True).refreshAll()
