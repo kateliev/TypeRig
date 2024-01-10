@@ -24,7 +24,7 @@ from typerig.proxy.fl.gui.widgets import getTRIconFont, getProcessGlyphs
 
 
 # - Init --------------------------
-tool_version = '1.61'
+tool_version = '1.62'
 tool_name = 'TypeRig Nodes'
 
 TRToolFont = getTRIconFont()
@@ -60,6 +60,12 @@ class TRExternalToolBar(QtGui.QToolBar):
 		self.addAction(self.btn_node_add)
 		self.btn_node_add.triggered.connect(lambda: TRNodeActionCollector.node_insert_dlg(pMode, pLayers, get_modifier()))
 
+		self.btn_node_remove = QtGui.QAction("node_remove", self.grp_nodes)
+		self.btn_node_remove.setToolTip("Remove Node")
+		self.btn_node_remove.setFont(TRToolFont)
+		self.addAction(self.btn_node_remove)
+		self.btn_node_remove.triggered.connect(lambda: TRNodeActionCollector.node_remove(pMode, pLayers))
+		
 		self.btn_node_add_0 = QtGui.QAction("node_add_bgn", self.grp_nodes)
 		self.btn_node_add_0.setToolTip("Insert Node at the beginning of a bezier.\n<ALT + Mouse Left> Use single node mode.")
 		self.btn_node_add_0.setFont(TRToolFont)
@@ -78,11 +84,11 @@ class TRExternalToolBar(QtGui.QToolBar):
 		self.addAction(self.btn_node_add_1)
 		self.btn_node_add_1.triggered.connect(lambda: TRNodeActionCollector.node_insert(pMode, pLayers, 1., get_modifier()))
 
-		self.btn_node_remove = QtGui.QAction("node_remove", self.grp_nodes)
-		self.btn_node_remove.setToolTip("Remove Node")
-		self.btn_node_remove.setFont(TRToolFont)
-		self.addAction(self.btn_node_remove)
-		self.btn_node_remove.triggered.connect(lambda: TRNodeActionCollector.node_remove(pMode, pLayers))
+		self.btn_node_extreme = QtGui.QAction("node_add_extreme_alt", self.grp_nodes)
+		self.btn_node_extreme.setToolTip("Add Node at Extreme")
+		self.btn_node_extreme.setFont(TRToolFont)
+		self.addAction(self.btn_node_extreme)
+		self.btn_node_extreme.triggered.connect(lambda: TRNodeActionCollector.node_insert_extreme(pMode, pLayers))
 
 		self.btn_node_round = QtGui.QAction("node_round", self.grp_nodes)
 		self.btn_node_round.setToolTip("Round selected nodes to integer coordinates.\n<Mouse Left> Ceil.\n<ALT + Mouse Left> Floor.\n<... + Shift> Round all nodes.")

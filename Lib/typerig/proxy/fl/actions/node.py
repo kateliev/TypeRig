@@ -35,7 +35,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.77'
+__version__ = '2.78'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -140,6 +140,42 @@ class TRNodeActionCollector(object):
 			return
 
 		TRNodeActionCollector.node_insert(pMode, pLayers, dlg_node_add.values/100., select_one_node)
+
+	@staticmethod
+	def node_insert_extreme(pMode:int, pLayers:tuple):
+		# - Get list of glyphs to be processed
+		process_glyphs = getProcessGlyphs(pMode)
+
+		# - Process
+		for glyph in process_glyphs:
+			# - Handle selection	
+			wLayers = glyph._prepareLayers(pLayers)
+			selection_per_layer = {layer:glyph.selectedNodes(layer, filterOn=True, extend=eNode) for layer in wLayers}
+			extrema_added = False
+			
+			# - Process 
+			for layer, selection in selection_per_layer.items():		
+				if len(selection) == 2:
+					# - Get selection and associated segment nodes
+					node_A, node_B = selection
+					segment_A = node_A.getSegmentNodes()
+					
+					# - Find and insert extrema
+					if node_B.fl in segment_A: 	# Check whether the second node belongs to the same contour
+						curve_A = Curve(segment_A)
+						extremes = curve_A.solve_extremes()
+						
+						if len(extremes):
+							first_extrema_point, first_exrtrema_t = extremes[0] # !!! Get only the first in list. Make smarter later !!!
+							node_A.insertAfter(first_exrtrema_t)
+							extrema_added = True
+
+						elif extrema_added: # !!! Keep compatibility: Even if only one extrema is found add nodes to the rest of layers...
+							node_A.insertAfter(0.)
+
+			glyph.updateObject(glyph.fl, '{};\tInsert Node at Extreme @ {}.'.format(glyph.name, '; '.join(wLayers)))
+			
+		active_workspace.getCanvas(True).refreshAll()				
 
 	@staticmethod
 	def node_remove(pMode:int, pLayers:tuple):

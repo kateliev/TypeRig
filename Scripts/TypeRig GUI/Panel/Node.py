@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '3.32'
+app_name, app_version = 'TypeRig | Nodes', '3.33'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -67,26 +67,31 @@ class TRNodeBasics(QtGui.QWidget):
 		lay_node = TRFlowLayout(spacing=10)
 
 		tooltip_button = 'Insert Node'
-		self.btn_node_add = CustomSpinButton('node_add', (0., 1., .5, .01), (tooltip_button + ' time', tooltip_button), ('spn_panel', 'btn_panel'))
+		self.btn_node_add = CustomPushButton('node_add', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_node.addWidget(self.btn_node_add)
-		self.btn_node_add.button.clicked.connect(lambda: TRNodeActionCollector.node_insert(pMode, pLayers, self.btn_node_add.input.value, get_modifier()))
+		self.btn_node_add.clicked.connect(lambda: TRNodeActionCollector.node_insert_dlg(pMode, pLayers, get_modifier()))
 
 		tooltip_button = 'Remove Node'
 		self.btn_node_remove = CustomPushButton('node_remove', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_node.addWidget(self.btn_node_remove)
 		self.btn_node_remove.clicked.connect(lambda: TRNodeActionCollector.node_remove(pMode, pLayers))
 
-		tooltip_button = 'Insert Node at the beginning of a bezier.\n<ALT + Mouse Left> Use single node mode.'
+		tooltip_button = 'Insert Node at Extreme'
+		self.btn_node_extreme = CustomPushButton('node_add_extreme_alt', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_node.addWidget(self.btn_node_extreme)
+		self.btn_node_extreme.clicked.connect(lambda: TRNodeActionCollector.node_insert_extreme(pMode, pLayers))
+
+		tooltip_button = 'Insert Node at the beginning of a Bezier.\n<ALT + Mouse Left> Use single node mode.'
 		self.btn_node_add_0 = CustomPushButton('node_add_bgn', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_node.addWidget(self.btn_node_add_0)
 		self.btn_node_add_0.clicked.connect(lambda: TRNodeActionCollector.node_insert(pMode, pLayers, 0., get_modifier()))
 
-		tooltip_button = 'Insert Node at the middle of a bezier.\n<ALT + Mouse Left> Use single node mode.'
+		tooltip_button = 'Insert Node at the middle of a Bezier.\n<ALT + Mouse Left> Use single node mode.'
 		self.btn_node_add_5 = CustomPushButton('node_add_mid', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_node.addWidget(self.btn_node_add_5)
 		self.btn_node_add_5.clicked.connect(lambda: TRNodeActionCollector.node_insert(pMode, pLayers, .5, get_modifier()))
 		
-		tooltip_button = 'Insert Node at the end of a bezier.\n<ALT + Mouse Left> Use single node mode.'
+		tooltip_button = 'Insert Node at the end of a Bezier.\n<ALT + Mouse Left> Use single node mode.'
 		self.btn_node_add_1 = CustomPushButton('node_add_end', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_node.addWidget(self.btn_node_add_1)
 		self.btn_node_add_1.clicked.connect(lambda: TRNodeActionCollector.node_insert(pMode, pLayers, 1., get_modifier()))
