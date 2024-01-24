@@ -24,7 +24,7 @@ from typerig.proxy.fl.gui.widgets import TRTableView
 # - Init ----------------------------
 global pLayers
 pLayers = None
-app_name, app_version = 'TypeRig | Font Metrics', '1.17'
+app_name, app_version = 'TypeRig | Font Metrics', '1.18'
 
 # - Sub widgets ------------------------
 class TRZLineEdit(QtGui.QLineEdit):
@@ -306,10 +306,10 @@ class tool_tab(QtGui.QWidget):
 		layoutV = QtGui.QVBoxLayout()
 		splitter = QtGui.QSplitter(QtCore.Qt.Vertical)
 		
-		self.fontMetrics = WFontMetrics(self)
+		self.font_metrics = WFontMetrics(self)
 		self.fontZones = WFontZones(self)
 
-		splitter.addWidget(self.fontMetrics)
+		splitter.addWidget(self.font_metrics)
 		splitter.addWidget(self.fontZones)
 
 		splitter.setStretchFactor(0,1)
