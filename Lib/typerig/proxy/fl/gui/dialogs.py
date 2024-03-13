@@ -24,7 +24,7 @@ from typerig.proxy.fl.gui.widgets import TRCheckTableView, TRSliderCtrl, CustomP
 from typerig.proxy.fl.gui.styles import css_tr_button
 
 # - Init ----------------------------------
-__version__ = '0.1.5'
+__version__ = '0.1.6'
 
 # - Keep compatibility for basestring checks
 try:
@@ -414,20 +414,20 @@ class TRLayerSelectDLG(QtGui.QDialog):
 		modifiers = QtGui.QApplication.keyboardModifiers() # Listen to Shift - reverses the ratio
 
 		for row in range(self.tab_masters.rowCount):
-			if modifiers == QtCore.Qt.AltModifier or do_swap: # Toggle state
-				if self.tab_masters.item(row, 0).checkState() == QtCore.Qt.Checked:
-					self.tab_masters.item(row, 0).setCheckState(QtCore.Qt.Unchecked)
-				else:
-					self.tab_masters.item(row, 0).setCheckState(QtCore.Qt.Checked)		
+			if layer_type is None or self.tab_masters.item(row,1).text() == layer_type:
+				if modifiers == QtCore.Qt.AltModifier or do_swap: # Toggle state
+					if self.tab_masters.item(row, 0).checkState() == QtCore.Qt.Checked:
+						self.tab_masters.item(row, 0).setCheckState(QtCore.Qt.Unchecked)
+					else:
+						self.tab_masters.item(row, 0).setCheckState(QtCore.Qt.Checked)		
 
-			elif modifiers == QtCore.Qt.ShiftModifier: # Uncheck all
-				if not self.tab_masters.isRowHidden(row):
-					self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Unchecked)								
-
-			else: # Check all
-				if layer_type is None or self.tab_masters.item(row,1).text() == layer_type:
+				elif modifiers == QtCore.Qt.ShiftModifier: # Uncheck all
 					if not self.tab_masters.isRowHidden(row):
-						self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Checked)
+						self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Unchecked)								
+
+				else: # Check all
+						if not self.tab_masters.isRowHidden(row):
+							self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Checked)
 	
 	def table_populate(self, mode, font=None, glyph=None):
 		if mode !=0:
@@ -555,20 +555,20 @@ class TRLayerSelectNEW(QtGui.QDialog):
 		modifiers = QtGui.QApplication.keyboardModifiers() # Listen to Shift - reverses the ratio
 
 		for row in range(self.tab_masters.rowCount):
-			if modifiers == QtCore.Qt.AltModifier or do_swap: # Toggle state
-				if self.tab_masters.item(row, 0).checkState() == QtCore.Qt.Checked:
-					self.tab_masters.item(row, 0).setCheckState(QtCore.Qt.Unchecked)
-				else:
-					self.tab_masters.item(row, 0).setCheckState(QtCore.Qt.Checked)		
+			if layer_type is None or self.tab_masters.item(row,1).text() == layer_type:
+				if modifiers == QtCore.Qt.AltModifier or do_swap: # Toggle state
+					if self.tab_masters.item(row, 0).checkState() == QtCore.Qt.Checked:
+						self.tab_masters.item(row, 0).setCheckState(QtCore.Qt.Unchecked)
+					else:
+						self.tab_masters.item(row, 0).setCheckState(QtCore.Qt.Checked)		
 
-			elif modifiers == QtCore.Qt.ShiftModifier: # Uncheck all
-				if not self.tab_masters.isRowHidden(row):
-					self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Unchecked)								
-
-			else: # Check all
-				if layer_type is None or self.tab_masters.item(row,1).text() == layer_type:
+				elif modifiers == QtCore.Qt.ShiftModifier: # Uncheck all
 					if not self.tab_masters.isRowHidden(row):
-						self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Checked)
+						self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Unchecked)								
+
+				else: # Check all
+						if not self.tab_masters.isRowHidden(row):
+							self.tab_masters.item(row,0).setCheckState(QtCore.Qt.Checked)
 	
 	def table_populate(self, mode, font=None, glyph=None):
 		if mode !=0:
