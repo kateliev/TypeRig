@@ -27,7 +27,7 @@ from typerig.proxy.fl.gui.dialogs import TRLayerSelectNEW
 import Toolbar
 
 # - Init --------------------------
-tool_version = '1.61'
+tool_version = '1.62'
 tool_name = 'TypeRig Controller'
 ignore_toolbar = '__'
 
@@ -139,15 +139,9 @@ class TRToolbarController(QtGui.QToolBar):
 # - Init
 toolbar_control = TRToolbarController()
 
-# -- Platform specific fix for MacOs by Adam Twardoch (2022). Pt.1
-# -- Fixes Mac's lack of visible QMainWindow, thus adding toolbars to invisible item renders them ivisible too :) 
-# -- Note: the fix is temporary, we should find a better solution that suits all platforms...
-
+# -- Fix Mac's lack of visible QMainWindow, thus adding toolbars to invisible item renders them ivisible too 
 if fl_runtime_platform == 'Darwin':
 	app.main.show()
-	app.main.setGeometry(0,0,0,0)
-	toolbar_control.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.FramelessWindowHint)
-	toolbar_control.move(50,50)
 
 app.main.addToolBar(toolbar_control)
 
@@ -159,15 +153,6 @@ for i, toolbar_name in enumerate(Toolbar.modules):
 		
 		new_toolbar = eval('Toolbar.{}.TRExternalToolBar()'.format(toolbar_name))
 		app.main.addToolBar(new_toolbar) 
-
-		# -- The above fix Pt.2
-		if fl_runtime_platform == 'Darwin':
-			new_toolbar.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.FramelessWindowHint) #ADAM-MAC
-			new_toolbar.move(50, 100 + 50 * i) #ADAM_MAC
-
-# -- The above fix Pt.3
-if fl_runtime_platform == 'Darwin':
-	app.main.hide()
 
 
 
