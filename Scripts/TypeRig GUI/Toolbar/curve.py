@@ -1,6 +1,6 @@
 #FLM: TypeRig: Curve Toolbar
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2018-2022  	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2018-2024  	(http://www.kateliev.com)
 #------------------------------------------------------------
 # www.typerig.com
 
@@ -83,6 +83,12 @@ class TRExternalToolBar(QtGui.QToolBar):
 		self.btn_curve_tunni.setFont(TRToolFont)
 		self.addAction(self.btn_curve_tunni)
 		self.btn_curve_tunni.triggered.connect(lambda: TRCurveActionCollector.curve_optimize_dlg(pMode, pLayers, 'tunni'))
+
+		self.btn_curve_tension_push = QtGui.QAction("curve_copy", self.grp_curve_actions)
+		self.btn_curve_tension_push.setToolTip("Optimize curve: Copy handle proportions to masters")
+		self.btn_curve_tension_push.setFont(TRToolFont)
+		self.addAction(self.btn_curve_tension_push)
+		self.btn_curve_tension_push.triggered.connect(lambda: TRCurveActionCollector.hobby_tension_push(pMode, pLayers))
 
 		self.btn_curve_hobby = QtGui.QAction("curve_hobby", self.grp_curve_actions)
 		self.btn_curve_hobby.setToolTip("Optimize curve: Set Hobby curvature")

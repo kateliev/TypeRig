@@ -1,6 +1,6 @@
 # MODULE: Typerig / Proxy / FontLab / Actions / Node
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2017-2022 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2017-2024 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 
@@ -30,7 +30,7 @@ from typerig.core.base.message import *
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init -------------------------
-__version__ = '2.70'
+__version__ = '2.71'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -159,7 +159,8 @@ class TRCurveActionCollector(object):
 			hobby_tension_dict[layer] = selSegment.curve.solve_hobby_curvature()
 		
 		return hobby_tension_dict
-
+	
+	@staticmethod
 	def curve_optimize_by_dict(pMode:int, pLayers:tuple, method_name:basestring, method_dict:dict, swap_values:bool=False):
 		'''Layer specific curve optimization, best used together with copy'''
 		# - Get list of glyphs to be processed
@@ -190,6 +191,45 @@ class TRCurveActionCollector(object):
 
 			glyph.update()
 			glyph.updateObject(glyph.fl, '{};\tOptimize curve: {} @ {}.'.format(glyph.name, method_name.title(), '; '.join(wLayers)))
+
+		active_workspace.getCanvas(True).refreshAll()
+
+	@staticmethod
+	def hobby_tension_push(pMode:int, pLayers:tuple):
+		'''Push current curve proportions (handle lengths) to layers selected'''
+		# - Get list of glyphs to be processed
+		process_glyphs = getProcessGlyphs(pMode)
+
+		# - Process
+		for glyph in process_glyphs:	
+			wLayers = glyph._prepareLayers(pLayers)
+			active_layer_selection = glyph.selectedNodes(None, filterOn=True)
+			
+			for layer in wLayers:
+				node_skip_list = []
+				node_selection = glyph.selectedNodes(layer, filterOn=True)
+				
+				for index, node in enumerate(node_selection):
+					if node in node_skip_list: continue
+
+					work_node = eNode(node)
+					base_node = eNode(active_layer_selection[index])
+
+					work_segment_nodes = work_node.getSegmentNodes()
+					base_segment_nodes = base_node.getSegmentNodes()
+
+					work_segment = eCurveEx(work_segment_nodes)
+					base_segment = eCurveEx(base_segment_nodes)
+					
+					if len(work_segment.nodes) == 4:
+						node_skip_list += list(work_segment_nodes)
+						
+						if work_segment.n0.fl in node_selection and work_segment.n3.fl in node_selection:
+							base_tension = base_segment.curve.solve_hobby_curvature()
+							work_segment.eqHobbySpline(base_tension)
+
+			glyph.update()
+			glyph.updateObject(glyph.fl, '{};\tCopy curve tension @ {}.'.format(glyph.name, '; '.join(wLayers)))
 
 		active_workspace.getCanvas(True).refreshAll()
 

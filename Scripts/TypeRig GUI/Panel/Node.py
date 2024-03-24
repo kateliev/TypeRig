@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '3.33'
+app_name, app_version = 'TypeRig | Nodes', '3.35'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -130,6 +130,11 @@ class TRNodeBasics(QtGui.QWidget):
 		self.btn_curve_tunni = CustomPushButton("curve_tunni", tooltip=tooltip_button, obj_name='btn_panel')
 		lay_curve.addWidget(self.btn_curve_tunni)
 		self.btn_curve_tunni.clicked.connect(lambda: TRCurveActionCollector.curve_optimize_dlg(pMode, pLayers, 'tunni'))
+
+		tooltip_button = "Optimize curve: Copy handle proportions to masters"
+		self.btn_curve_tension_push = CustomPushButton("curve_copy", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_curve.addWidget(self.btn_curve_tension_push)
+		self.btn_curve_tension_push.clicked.connect(lambda: TRCurveActionCollector.hobby_tension_push(pMode, pLayers))
 
 		tooltip_button = "Optimize curve: Set Hobby curvature"
 		self.btn_curve_hobby = CustomPushButton("curve_hobby", tooltip=tooltip_button, obj_name='btn_panel')
