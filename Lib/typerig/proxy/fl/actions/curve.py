@@ -30,7 +30,7 @@ from typerig.core.base.message import *
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init -------------------------
-__version__ = '2.71'
+__version__ = '2.72'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -48,6 +48,7 @@ class TRCurveActionCollector(object):
 	def segment_convert(pMode:int, pLayers:tuple, to_curve:bool=False):
 		# - Get list of glyphs to be processed
 		process_glyphs = getProcessGlyphs(pMode)
+		undo_msg = 'Convert Segment.'
 
 		# - Process
 		for glyph in process_glyphs:
@@ -82,9 +83,11 @@ class TRCurveActionCollector(object):
 						else:
 							glyph.contours(layer)[cID].nodes()[nID].convertToLine()
 
-			glyph.update()
-			glyph.updateObject(glyph.fl, '{};\tConvert Segment @ {}.'.format(glyph.name, '; '.join(wLayers)))
+				glyph.update(layer)
 
+		# - Finish
+		output(0, 'TypeRig Curve', undo_msg + '@ {}'.format('; '.join(wLayers)))
+		fl6.flItems.notifyChangesApplied(undo_msg, [glyph.fl for glyph in process_glyphs], True)
 		active_workspace.getCanvas(True).refreshAll()
 
 	# - Contour optimization -------------------------------------------------
@@ -93,6 +96,7 @@ class TRCurveActionCollector(object):
 		# - Get list of glyphs to be processed
 		process_glyphs = getProcessGlyphs(pMode)
 		method_name, p0_value, p1_value = method_values
+		undo_msg = 'Optimize curve: {} @ {}.'
 
 		# - Process
 		for glyph in process_glyphs:	
@@ -117,9 +121,11 @@ class TRCurveActionCollector(object):
 							elif method_name == 'proportional':
 								work_segment.eqProportionalHandles((p0_value, p1_value))
 
-			glyph.update()
-			glyph.updateObject(glyph.fl, '{};\tOptimize curve: {} @ {}.'.format(glyph.name, method_name.title(), '; '.join(wLayers)))
+				glyph.update(layer)
 
+		# - Finish it
+		output(0, 'TypeRig Curve', undo_msg.format(method_name.title(), '; '.join(wLayers)))
+		fl6.flItems.notifyChangesApplied(undo_msg, [glyph.fl for glyph in process_glyphs], True)
 		active_workspace.getCanvas(True).refreshAll()
 
 	@staticmethod
@@ -165,6 +171,7 @@ class TRCurveActionCollector(object):
 		'''Layer specific curve optimization, best used together with copy'''
 		# - Get list of glyphs to be processed
 		process_glyphs = getProcessGlyphs(pMode)
+		undo_msg = 'Optimize curve'
 
 		# - Process
 		for glyph in process_glyphs:	
@@ -189,9 +196,11 @@ class TRCurveActionCollector(object):
 									tension = method_dict[layer] if not swap_values else (method_dict[layer][1], method_dict[layer][0])
 									work_segment.eqProportionalHandles(tension)
 
-			glyph.update()
-			glyph.updateObject(glyph.fl, '{};\tOptimize curve: {} @ {}.'.format(glyph.name, method_name.title(), '; '.join(wLayers)))
+				glyph.update(layer)
 
+		# - Finish it
+		output(0, 'TypeRig Curve', undo_msg + ': {} @ {}.'.format(method_name.title(), '; '.join(wLayers)))
+		fl6.flItems.notifyChangesApplied(undo_msg, [glyph.fl for glyph in process_glyphs], True)
 		active_workspace.getCanvas(True).refreshAll()
 
 	@staticmethod
@@ -204,6 +213,7 @@ class TRCurveActionCollector(object):
 		for glyph in process_glyphs:	
 			wLayers = glyph._prepareLayers(pLayers)
 			active_layer_selection = glyph.selectedNodes(None, filterOn=True)
+			undo_msg = 'Copy curve tension'
 			
 			for layer in wLayers:
 				node_skip_list = []
@@ -228,9 +238,11 @@ class TRCurveActionCollector(object):
 							base_tension = base_segment.curve.solve_hobby_curvature()
 							work_segment.eqHobbySpline(base_tension)
 
-			glyph.update()
-			glyph.updateObject(glyph.fl, '{};\tCopy curve tension @ {}.'.format(glyph.name, '; '.join(wLayers)))
+				glyph.update(layer)
 
+		# - Finish it
+		output(0, 'TypeRig Curve', undo_msg + ' @ {}.'.format('; '.join(wLayers)))
+		fl6.flItems.notifyChangesApplied(undo_msg, [glyph.fl for glyph in process_glyphs], True)
 		active_workspace.getCanvas(True).refreshAll()
 
 

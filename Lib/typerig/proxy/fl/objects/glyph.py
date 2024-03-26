@@ -32,7 +32,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.31.4'
+__version__ = '0.31.5'
 
 # - Keep compatibility for basestring checks
 try:
@@ -748,9 +748,9 @@ class pGlyph(object):
 		return [(layerA.name, layerB.name, layerA.isCompatible(layerB, strong)) for layerA, layerB in combinations(self.layers(), 2)]
 
 	# - Update ----------------------------------------------
-	def update(self):
+	def update(self, layer):
 		'''Updates the glyph and sends notification to the editor.	'''
-		for contour in self.contours():
+		for contour in self.contours(layer):
 			contour.changed()
 	
 	def updateObject(self, flObject, undoMessage='TypeRig', verbose=True):
@@ -758,27 +758,16 @@ class pGlyph(object):
 		Args:
 			flObject (flGlyph, flLayer, flShape, flNode, flContour): Object to be update and set undo state
 			undoMessage (string): Message to be added in undo/history list.'''
-		
-		# - New from 6774 on
-		for contour in self.contours():
-			contour.changed()
-		
+
+		# !!! QuickFix: Issue #91 Undo... should be removed after all code is fixed
+		for layer in self.masters():
+			self.update(layer.name)
+
 		# - General way ---- pre 6774 worked fine!
 		fl6.flItems.notifyChangesApplied(undoMessage[:20], flObject, True)
 		if verbose: print('DONE:\t{}'.format(undoMessage))
 		
-		#fl6.flItems.notifyPackageContentUpdated(self.fl.fgPackage.id)
 		fl6.UpdateAll()
-		
-		'''# - Type specific way 
-		# -- Covers flGlyph, flLayer, flShape
-		if isinstance(flObject, fl6.flGlyph) or isinstance(flObject, fl6.flLayer) or isinstance(flObject, fl6.flShape):
-			fl6.flItems.notifyChangesApplied(undoMessage, flObject, True)
-		
-		# -- Covers flNode, flContour, (flShape.shapeData)
-		elif isinstance(flObject, fl6.flContour) or isinstance(flObject, fl6.flNode):
-			fl6.flItems.notifyChangesApplied(undoMessage, flObject.shapeData)
-		'''
 
 	# - Glyph Selection -----------------------------------------------
 	def selectedNodesOnCanvas(self, filterOn=False):
