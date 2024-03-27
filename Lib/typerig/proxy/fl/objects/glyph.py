@@ -32,7 +32,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.31.5'
+__version__ = '0.31.6'
 
 # - Keep compatibility for basestring checks
 try:
@@ -748,7 +748,7 @@ class pGlyph(object):
 		return [(layerA.name, layerB.name, layerA.isCompatible(layerB, strong)) for layerA, layerB in combinations(self.layers(), 2)]
 
 	# - Update ----------------------------------------------
-	def update(self, layer):
+	def update(self, layer=None):
 		'''Updates the glyph and sends notification to the editor.	'''
 		for contour in self.contours(layer):
 			contour.changed()
@@ -759,9 +759,12 @@ class pGlyph(object):
 			flObject (flGlyph, flLayer, flShape, flNode, flContour): Object to be update and set undo state
 			undoMessage (string): Message to be added in undo/history list.'''
 
+		'''
 		# !!! QuickFix: Issue #91 Undo... should be removed after all code is fixed
 		for layer in self.masters():
 			self.update(layer.name)
+		'''
+		self.update()
 
 		# - General way ---- pre 6774 worked fine!
 		fl6.flItems.notifyChangesApplied(undoMessage[:20], flObject, True)
