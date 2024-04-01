@@ -24,7 +24,7 @@ from typerig.core.objects.collection import extBiDict
 from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
 
 # - Init ---------------------------------
-__version__ = '0.28.7'
+__version__ = '0.28.8'
 
 # - Keep compatibility for basestring checks
 try:
@@ -330,6 +330,9 @@ class pFont(object):
 	def tt_stems(self):
 		return self.fl.stems(1, True)
 	
+	@property
+	def font_lib(self):
+		return self.fl.packageLib
 
 	# Functions ---------------------------------------------------
 	# - Font Basics -----------------------------------------------

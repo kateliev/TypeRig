@@ -33,7 +33,7 @@ global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '4.3'
+app_name, app_version = 'TypeRig | Contour', '4.4'
 
 cfg_addon_reversed = ' (Reversed)'
 
@@ -500,7 +500,7 @@ class TRContourBasics(QtGui.QWidget):
 					wContour.update()
 			
 			# - Done
-			wGlyph.updateObject(wGlyph.fl, 'Transform contours; Glyph: %s; Layers: %s' %(wGlyph.name, '; '.join(wLayers)))
+			wGlyph.updateObject(wGlyph.fl, 'Transform contours; Glyph: %s; Layers: %s' %(wGlyph.name, '; '.join(process_layers)))
 
 class TRContourCopy(QtGui.QWidget):
 	# - Align Contours
