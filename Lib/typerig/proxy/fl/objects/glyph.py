@@ -32,7 +32,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.31.6'
+__version__ = '0.31.7'
 
 # - Keep compatibility for basestring checks
 try:
@@ -759,12 +759,12 @@ class pGlyph(object):
 			flObject (flGlyph, flLayer, flShape, flNode, flContour): Object to be update and set undo state
 			undoMessage (string): Message to be added in undo/history list.'''
 
-		'''
+		#'''
 		# !!! QuickFix: Issue #91 Undo... should be removed after all code is fixed
 		for layer in self.masters():
 			self.update(layer.name)
-		'''
-		self.update()
+		#'''
+		#self.update()
 
 		# - General way ---- pre 6774 worked fine!
 		fl6.flItems.notifyChangesApplied(undoMessage[:20], flObject, True)

@@ -24,7 +24,7 @@ from typerig.core.objects.collection import extBiDict
 from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
 
 # - Init ---------------------------------
-__version__ = '0.28.8'
+__version__ = '0.28.9'
 
 # - Keep compatibility for basestring checks
 try:
@@ -430,8 +430,8 @@ class pFont(object):
 			flObject (flGlyph, flLayer, flShape, flNode, flContour): Object to be update and set undo state
 			undoMessage (string): Message to be added in undo/history list.
 		'''
-		fl6.flItems.notifyChangesApplied(undoMessage, flObject, True)
-		fl6.flItems.notifyPackageContentUpdated(self.fl.fgPackage.id)
+		#fl6.flItems.notifyChangesApplied(undoMessage, flObject, True) 	# !!! No undo... but
+		fl6.flItems.notifyPackageContentUpdated(self.fl.fgPackage.id) 	# !!! Font wide operations will be applied anyway :)
 		if verbose: print('DONE:\t{}'.format(undoMessage))
 
 	def update(self):
