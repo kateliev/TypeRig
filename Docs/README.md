@@ -33,7 +33,7 @@ _Planned_
 
 ## Installation
 ### FontLab 7 - Manual installation from GitHub
-Download the archived (.zip) package provided from this repository or clone it. Run FontLab 7 and drag the installation file provided in the root folder caleld `install.vfpy` to the application _(as if it was a font)_. The _Output window_ should report if the installation was successful. The **TypeRig library** should now be installed.
+Download the archived (.zip) package provided from this repository or clone it. Run FontLab 7 and drag the installation file provided in the root folder called `install.vfpy` to the application _(as if it was a font)_. The _Output window_ should report if the installation was successful. The **TypeRig library** should now be installed.
 
 If you want to install the **GUI based part of Typerig** _(only after successfully installing the core library)_ please open FonLab, _Scripting panel_. At the bottom of the panel you will see a small black _Plus sign (+)_. Click on it and FontLab will ask you to _Select directory_ where your scripts reside. Point the app towards `./Scripts/Delta Machine` and `./Scripts/GUI`.
 

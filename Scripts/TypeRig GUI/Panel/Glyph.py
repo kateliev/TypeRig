@@ -16,7 +16,7 @@ import fontlab as fl6
 import fontgate as fgt
 
 from typerig.proxy.fl.objects.font import pFont
-from typerig.proxy.fl.objects.glyph import pGlyph
+from typerig.proxy.fl.objects.glyph import eGlyph
 
 from PythonQt import QtCore
 
@@ -31,7 +31,7 @@ global pUndo
 pLayers = None
 pMode = 0
 pUndo = True
-app_name, app_version = 'TypeRig | Glyph', '1.10'
+app_name, app_version = 'TypeRig | Glyph', '1.11'
 
 number_token = '#'
 
@@ -149,19 +149,30 @@ class TRGlyphBasic(QtGui.QGridLayout):
 
 
 	def setStem(self, horizontal=False):
+		# - Init
 		font = pFont()
-		active_glyph = pGlyph()
-		selection = active_glyph.selectedNodes(None, True)
-
-		if horizontal:
-			stem_width = int(abs(selection[0].y - selection[-1].y))
-		else:
-			stem_width = int(abs(selection[0].x - selection[-1].x))
+		active_glyph = eGlyph()
 		
-		stem_name = '{}.{}:{}'.format(['V','H'][horizontal], active_glyph.name, stem_width)
+		# - Prepare selection
+		selection = {layer_name:active_glyph.selectedNodes(layer_name, True) for layer_name in active_glyph._prepareLayers(pLayers)}
+		set_standard_stems = []
+		
+		# - Set name and metadata
+		stem_name = '{}.{}'.format(['V','H'][horizontal], active_glyph.name)
 		stem_type = self.cmb_select_stem.currentIndex
 
-		font.setStem(stem_width, stem_name, horizontal, stem_type)
+		# - Prepare stems
+		for layer_name, layer_selection in selection.items():
+			if horizontal:
+				stem_width = int(abs(layer_selection[0].y - layer_selection[-1].y))
+			else:
+				stem_width = int(abs(layer_selection[0].x - layer_selection[-1].x))
+
+			set_standard_stems.append((stem_width, stem_name, horizontal, stem_type, layer_name))
+		
+		# - Set stems
+		for stem_data in set_standard_stems:
+			font.setStem(*stem_data)
 
 		# - Finish operation
 		global pUndo

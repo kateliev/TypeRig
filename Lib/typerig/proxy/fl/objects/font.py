@@ -438,8 +438,11 @@ class pFont(object):
 		self.updateObject(self.fl, verbose=False)
 
 	# - Hinting --------------------------------------------------------
-	def setStem(self, stem_value, stem_name='', stem_is_horizontal=False, stem_type_TT=False):
+	def setStem(self, stem_value, stem_name='', stem_is_horizontal=False, stem_type_TT=False, layer=None):
 		new_stem = fl6.flStem(stem_value, stem_name)
+
+		if layer is not None:
+			self.fl.setMaster(layer)
 		
 		if stem_type_TT:
 			if stem_is_horizontal:

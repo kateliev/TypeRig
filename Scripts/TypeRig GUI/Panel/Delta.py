@@ -36,7 +36,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Delta', '5.5'
+app_name, app_version = 'TypeRig | Delta', '5.6'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -206,15 +206,15 @@ class TRDeltaPanel(QtGui.QWidget):
 		lay_controls.addWidget(self.cpn_value_height)
 		self.cpn_value_height.spin_box.valueChanged.connect(lambda: self.execute_scale())
 
-		self.cpn_value_stem_x = TRCustomSpinController('stem_vertical_alt', (-300, 300, 1, 1), ' u', 'Vertical stem width')
+		self.cpn_value_stem_x = TRCustomSpinController('stem_vertical_alt', (-999, 999, 1, 1), ' u', 'Vertical stem width')
 		lay_controls.addWidget(self.cpn_value_stem_x)
 		self.cpn_value_stem_x.spin_box.valueChanged.connect(lambda: self.execute_scale())
 
-		self.cpn_value_stem_y = TRCustomSpinController('stem_horizontal_alt', (-300, 300, 1, 1), ' u', 'Horizontal stem width')
+		self.cpn_value_stem_y = TRCustomSpinController('stem_horizontal_alt', (-999, 999, 1, 1), ' u', 'Horizontal stem width')
 		lay_controls.addWidget(self.cpn_value_stem_y)
 		self.cpn_value_stem_y.spin_box.valueChanged.connect(lambda: self.execute_scale())
 
-		self.cpn_value_lerp_t = TRCustomSpinController('interpolate', (-300, 300, 0, 1), ' %', 'Time along axis')
+		self.cpn_value_lerp_t = TRCustomSpinController('interpolate', (-999, 999, 0, 1), ' %', 'Time along axis')
 		lay_controls.addWidget(self.cpn_value_lerp_t)
 		self.cpn_value_lerp_t.spin_box.valueChanged.connect(lambda: self.execute_scale(True))
 
