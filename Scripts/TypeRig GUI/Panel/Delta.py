@@ -36,12 +36,13 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Delta', '5.6'
+app_name, app_version = 'TypeRig | Delta', '5.8'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
 
 # -- Strings ---------------------------
+app_id_key = 'com.typerig.delta.machine.axissetup'
 tree_column_names = ('Master Layers','V st.', 'H st.', 'Width', 'Height', 'Color')
 tree_masters_group_name = 'Master Layers'
 tree_axis_group_name = 'Virtual Axis'
@@ -143,14 +144,14 @@ class TRDeltaPanel(QtGui.QWidget):
 		self.btn_file_open.clicked.connect(lambda: self.file_open_axis_data())
 
 		tooltip_button = 'Save axis data to font file'
-		self.btn_font_save = CustomPushButton('font_save', tooltip=tooltip_button, enabled=False, obj_name='btn_panel')
+		self.btn_font_save = CustomPushButton('font_save', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_actions.addWidget(self.btn_font_save)
-		#self.btn_font_save.clicked.connect(lambda: self.__reset_all())
+		self.btn_font_save.clicked.connect(lambda: self.font_save_axis_data())
 
 		tooltip_button = 'Load axis data from font file'
-		self.btn_font_open = CustomPushButton('font_open', tooltip=tooltip_button, enabled=False, obj_name='btn_panel')
+		self.btn_font_open = CustomPushButton('font_open', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_actions.addWidget(self.btn_font_open)
-		#self.btn_file_open.clicked.connect(lambda: self.__reset_all())
+		self.btn_font_open.clicked.connect(lambda: self.font_open_axis_data())
 
 		box_delta_actions.setLayout(lay_actions)
 		lay_main.addWidget(box_delta_actions)
@@ -376,6 +377,7 @@ class TRDeltaPanel(QtGui.QWidget):
 				return
 
 		self.__refresh_ui()
+		self.btn_execute_scale.setEnabled(True)
 		if verbose: output(0, '%s %s' %(app_name, app_version), 'Font: %s; Axis set.' %(self.active_font.name))
 
 	def __reset_axis(self, verbose=False):
@@ -383,6 +385,7 @@ class TRDeltaPanel(QtGui.QWidget):
 		self.axis_stems = []
 		self.glyph_arrays = {}
 
+		self.btn_execute_scale.setEnabled(False)
 		if verbose: output(0, '%s %s' %(app_name, app_version), 'Font: %s; Axis data cleared.' %(self.active_font.name))
 
 	def __reset_all(self, verbose=False):
@@ -424,6 +427,20 @@ class TRDeltaPanel(QtGui.QWidget):
 		else:
 			glyph = process_glyphs[0]
 			glyph.updateObject(glyph.fl, undo_message, verbose)
+
+	# -- Font Lib operations
+	def font_save_axis_data(self):
+		temp_lib = self.active_font.fl.packageLib
+		temp_lib[app_id_key] = json.dumps(self.tree_layer.getTree())
+		self.active_font.fl.packageLib = temp_lib
+		output(7, app_name, 'Font: %s; Axis data saved to Font Lib key: %s.' %(self.active_font.name, app_id_key))
+				
+	def font_open_axis_data(self):
+		temp_lib = self.active_font.fl.packageLib
+		imported_data = json.loads(temp_lib[app_id_key])
+		self.masters_data = imported_data
+		self.tree_layer.setTree(self.masters_data, tree_column_names)
+		output(6, app_name, 'Font: %s; Axis data loaded from Font Lib key: %s.' %(self.active_font.name, app_id_key))
 
 	# -- File operations
 	def file_save_axis_data(self):
@@ -573,6 +590,11 @@ class TRDeltaPanel(QtGui.QWidget):
 		# - Process
 		for glyph, delta_outline, delta_service in system_process:
 			for process_layer_data in process_target:
+				# - Init
+				layer_names = [layer.name for layer in glyph.layers()]
+				master_names = [master.name for master in glyph.masters()]
+				base_layer = 'Regular' if 'Regular' in master_names else master_names[0]
+
 				# - Unpack axis data
 				layer_name, curr_sw_dx, curr_sw_dy, sx, sy, _ = process_layer_data
 
@@ -591,6 +613,10 @@ class TRDeltaPanel(QtGui.QWidget):
 				# - Process
 				outline_scale = delta_outline.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=opt_extrapolate)
 				service_scale = delta_service.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=opt_extrapolate)
+
+				# - Add layer if it does not exist
+				if layer_name not in layer_names:
+					glyph.duplicateLayer(layer=base_layer, newLayerName=layer_name, references=False)
 
 				# - Apply transformations
 				glyph._setPointArray(outline_scale, layer=layer_name, keep_center=opt_center)
