@@ -13,6 +13,7 @@ import json
 import math
 import os
 import warnings
+import random
 from collections import OrderedDict
 
 import fontlab as fl6
@@ -36,7 +37,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Delta', '5.8'
+app_name, app_version = 'TypeRig | Delta', '5.9'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -272,7 +273,16 @@ class TRDeltaPanel(QtGui.QWidget):
 
 	def __init_tree(self):
 		return_data = []
-		return_data.append((tree_masters_group_name, [(layer, '', '', default_sx, default_sy, eGlyph().layer(layer).wireframeColor) for layer in self.active_font.masters()]))
+		masters_data = []
+		active_glyph = eGlyph()
+		
+		for layer_name in self.active_font.masters():
+			temp_layer = active_glyph.layer(layer_name)
+			deco_color = temp_layer.wireframeColor if temp_layer is not None else QtGui.QColor(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+			
+			masters_data.append((layer_name, '', '', default_sx, default_sy, deco_color))
+		
+		return_data.append((tree_masters_group_name, masters_data))
 		return_data.append((tree_axis_group_name,[]))
 		return_data.append((tree_axis_target_name,[]))
 		return OrderedDict(return_data)
@@ -478,7 +488,7 @@ class TRDeltaPanel(QtGui.QWidget):
 						layer_data[2] = round(abs(selection[0].y - selection[-1].y), 2)
 					else:
 						layer_data[1] = round(abs(selection[0].x - selection[-1].x), 2)
-				except IndexError:
+				except (AttributeError, IndexError):
 					warnings.warn('Missing or incompatible layer: %s!' %layer_data[0], LayerWarning)
 					continue
 
