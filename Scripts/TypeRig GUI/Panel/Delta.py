@@ -37,7 +37,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Delta', '5.9'
+app_name, app_version = 'TypeRig | Delta', '6.0'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -61,6 +61,7 @@ class TRDeltaPanel(QtGui.QWidget):
 
 		# - Init
 		self.active_font = pFont()
+		self.active_glyph = eGlyph()
 		self.active_workspace = pWorkspace()
 		self.active_layer = None
 		self.axis_data = []
@@ -316,6 +317,14 @@ class TRDeltaPanel(QtGui.QWidget):
 				self.__refresh_ui()
 				return False
 
+		if pMode == 2:
+			active_glyph_names = [glyph.name for glyph in self.active_font.selectedGlyphs()]
+			if sorted(active_glyph_names) != sorted(self.glyph_arrays.keys()):
+				warnings.warn('Glyph(s) changed! Forcing refresh...', GlyphWarning)
+				self.__refresh_arrays()
+				self.__refresh_ui()
+				return False
+
 		if self.active_glyph.layer().name != self.active_layer:
 			self.__refresh_ui()
 			self.active_layer = self.active_glyph.layer().name
@@ -441,14 +450,13 @@ class TRDeltaPanel(QtGui.QWidget):
 	# -- Font Lib operations
 	def font_save_axis_data(self):
 		temp_lib = self.active_font.fl.packageLib
-		temp_lib[app_id_key] = json.dumps(self.tree_layer.getTree())
+		temp_lib[app_id_key] = self.tree_layer.getTree()
 		self.active_font.fl.packageLib = temp_lib
 		output(7, app_name, 'Font: %s; Axis data saved to Font Lib key: %s.' %(self.active_font.name, app_id_key))
 				
 	def font_open_axis_data(self):
 		temp_lib = self.active_font.fl.packageLib
-		imported_data = json.loads(temp_lib[app_id_key])
-		self.masters_data = imported_data
+		self.masters_data = temp_lib[app_id_key]
 		self.tree_layer.setTree(self.masters_data, tree_column_names)
 		output(6, app_name, 'Font: %s; Axis data loaded from Font Lib key: %s.' %(self.active_font.name, app_id_key))
 
