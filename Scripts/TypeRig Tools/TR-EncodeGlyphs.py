@@ -26,8 +26,8 @@ from Lib.protoparse import *
 from typerig.core.base.message import *
 
 # - Init --------------------------------
-app_name, app_version = 'TypeRig | Encoder', '3.8'
-app_id_key = 'com.typerig.symbols.data.encoding'
+app_name, app_version = 'TypeRig | Encoder', '3.9'
+app_id_key = 'com.typerig.data.encoding'
 alt_suffix = '.'
 
 root_dir = os.path.dirname(os.path.dirname(__file__))
