@@ -19,7 +19,7 @@ from typerig.core.objects.transform import Transform
 from typerig.core.objects.point import Point, Void
 
 # - Init -------------------------------
-__version__ = '0.27.0'
+__version__ = '0.28.0'
 
 # - Classes -----------------------------
 class Line(object):
@@ -115,6 +115,15 @@ class Line(object):
 	@property
 	def length(self):
 		return math.hypot(self.p0.x - self.p1.x, self.p0.y - self.p1.y)
+
+	@property
+	def unit(self):
+		v = self.p0 - self.p1
+		return self.p0.__class__(v.x/self.length, v.y/self.length)
+
+	@property
+	def perpendicular(self):
+		return self.p0.__class__(-self.unit.y, self.unit.x)
 
 	@property
 	def slope(self):
