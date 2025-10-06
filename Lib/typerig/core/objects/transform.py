@@ -12,11 +12,37 @@
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
 import math
+from enum import Enum
 
 # - Init -------------------------------
-__version__ = '0.26.3'
+__version__ = '0.26.4'
 
 # - Objects ----------------------------------------------------
+class TransformOrigin(Enum):
+	BASELINE 		= ('baseline',		'B')
+	BOTTOM_LEFT 	= ('bottom_left', 	'BL')
+	BOTTOM_MIDDLE 	= ('bottom_middle', 'BM')
+	BOTTOM_RIGHT 	= ('bottom_right', 	'BR')
+	TOP_LEFT 		= ('top_left', 		'TL')
+	TOP_MIDDLE 		= ('top_middle', 	'TM')
+	TOP_RIGHT 		= ('top_right', 	'TR')
+	CENTER_LEFT		= ('center_left', 	'LM')
+	CENTER 			= ('center', 		'C')
+	CENTER_RIGHT	= ('center_right', 	'RM')
+
+	@property
+	def text(self):
+		return self.value[0]
+
+	@property
+	def caption(self):
+		return self.value[0].replace('_',' ').title()
+
+	@property
+	def code(self):
+		return self.value[1]
+
+
 # -- Affine transformations ------------------------------------
 class Transform(object):
 	'''Affine transformations (Object)'''

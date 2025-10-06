@@ -24,8 +24,9 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 
 from typerig.core.base.message import *
 from typerig.core.func import transform
+from typerig.core.objects.utils import Bounds
 from typerig.core.objects.delta import DeltaArray, DeltaScale
-from typerig.core.objects.transform import Transform
+from typerig.core.objects.transform import Transform, TransformOrigin
 
 from PythonQt import QtCore, QtGui
 from typerig.proxy.fl.application.app import pWorkspace
@@ -37,7 +38,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Delta', '6.0'
+app_name, app_version = 'TypeRig | Delta', '6.5'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -182,13 +183,13 @@ class TRDeltaPanel(QtGui.QWidget):
 		self.chk_target.clicked.connect(lambda: self.__prepare_target())
 
 		tooltip_button = 'Proportional scale mode'
-		self.chk_proportional = CustomPushButton("diagonal_bottom_up", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_proportional = CustomPushButton("draw_square_2p", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_proportional)
 		self.chk_proportional.clicked.connect(lambda: self.__toggle_proportional_scale())
-		
-		tooltip_button = 'Scale from center'
-		self.chk_center = CustomPushButton("node_target_expand", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
-		lay_options.addWidget(self.chk_center)
+
+		tooltip_button = 'Selection mode'
+		self.chk_selection = CustomPushButton("align_contour_to_layer", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_selection)
 		
 		tooltip_button = 'Show extended controls'
 		self.chk_toggle_controls = CustomPushButton("value_controls", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
@@ -197,6 +198,48 @@ class TRDeltaPanel(QtGui.QWidget):
 
 		box_delta_options.setLayout(lay_options)
 		lay_main.addWidget(box_delta_options)
+
+		# - Buttons: Transformation controls
+		lay_transform = TRFlowLayout(spacing=10)
+		
+		box_transform = QtGui.QGroupBox()
+		box_transform.setObjectName('box_group')
+		
+		self.grp_btn_transform = QtGui.QButtonGroup()
+		self.grp_btn_transform.setExclusive(True)
+
+		tooltip_button = "Transform at Origin"
+		self.chk_or = CustomPushButton("node_align_bottom_left", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_btn_transform.addButton(self.chk_or, 1)
+		lay_transform.addWidget(self.chk_or)
+
+		tooltip_button = "Transform at Bottom Left corner"
+		self.chk_bl = CustomPushButton("node_bottom_left", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_btn_transform.addButton(self.chk_bl, 2)
+		lay_transform.addWidget(self.chk_bl)
+
+		tooltip_button = "Transform at Bottom Right corner"
+		self.chk_br = CustomPushButton("node_bottom_right", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_btn_transform.addButton(self.chk_br, 4)
+		lay_transform.addWidget(self.chk_br)
+		
+		tooltip_button = "Transform at Center"
+		self.chk_ce = CustomPushButton("node_center", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_btn_transform.addButton(self.chk_ce, 6)
+		lay_transform.addWidget(self.chk_ce)
+
+		tooltip_button = "Transform at Top Left corner"
+		self.chk_tl = CustomPushButton("node_top_left", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_btn_transform.addButton(self.chk_tl, 3)
+		lay_transform.addWidget(self.chk_tl)
+
+		tooltip_button = "Transform at Top Right corner"
+		self.chk_tr = CustomPushButton("node_top_right", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.grp_btn_transform.addButton(self.chk_tr, 5)
+		lay_transform.addWidget(self.chk_tr)
+
+		box_transform.setLayout(lay_transform)
+		lay_main.addWidget(box_transform)
 
 		# -- Delta controls
 		lay_controls = TRFlowLayout(spacing=10)
@@ -226,6 +269,7 @@ class TRDeltaPanel(QtGui.QWidget):
 		self.cpn_value_ital.spin_box.valueChanged.connect(lambda: self.execute_scale())
 
 		lay_main.addLayout(lay_controls)
+		self.__refresh_options()
 		self.__toggle_controls()
 
 		# --- Set styling 
@@ -287,6 +331,25 @@ class TRDeltaPanel(QtGui.QWidget):
 		return_data.append((tree_axis_group_name,[]))
 		return_data.append((tree_axis_target_name,[]))
 		return OrderedDict(return_data)
+
+	def __refresh_options(self):
+		# - Options
+		self.opt_extrapolate = self.chk_extrapolate.isChecked()
+		self.opt_metrics = self.chk_metrics.isChecked()
+		self.opt_anchors = self.chk_anchors.isChecked()
+
+		self.opt_selection = self.chk_selection.isChecked()
+		if self.opt_selection:
+			self.opt_metrics = False
+			self.opt_anchors = False
+
+		# - Transformation origin
+		self.transform_origin = TransformOrigin.BASELINE
+		if self.chk_bl.isChecked():	self.transform_origin = TransformOrigin.BOTTOM_LEFT
+		if self.chk_br.isChecked():	self.transform_origin = TransformOrigin.BOTTOM_RIGHT
+		if self.chk_tl.isChecked():	self.transform_origin = TransformOrigin.TOP_LEFT
+		if self.chk_tr.isChecked():	self.transform_origin = TransformOrigin.TOP_RIGHT
+		if self.chk_ce.isChecked():	self.transform_origin = TransformOrigin.CENTER	
 
 	def __prepare_delta(self):
 		# - Tests
@@ -369,11 +432,11 @@ class TRDeltaPanel(QtGui.QWidget):
 	def __refresh_arrays(self):
 		# - Init
 		self.active_canvas = self.active_workspace.getCanvas(True)
-
+		self.__refresh_options()
 		process_glyphs = getProcessGlyphs(pMode)
 
 		for glyph in process_glyphs:
-			temp_outline = [glyph._getPointArray(layer_data[0]) for layer_data in self.axis_data]
+			temp_outline = [glyph._getPointArray(layer_data[0], selection=self.opt_selection) for layer_data in self.axis_data]
 			temp_service = [glyph._getServiceArray(layer_data[0]) for layer_data in self.axis_data]
 			self.glyph_arrays[glyph.name] = [glyph, DeltaScale(temp_outline, self.axis_stems), DeltaScale(temp_service, self.axis_stems)]
 
@@ -403,6 +466,7 @@ class TRDeltaPanel(QtGui.QWidget):
 		self.axis_data = []
 		self.axis_stems = []
 		self.glyph_arrays = {}
+		self.__refresh_options()
 
 		self.btn_execute_scale.setEnabled(False)
 		if verbose: output(0, '%s %s' %(app_name, app_version), 'Font: %s; Axis data cleared.' %(self.active_font.name))
@@ -410,6 +474,7 @@ class TRDeltaPanel(QtGui.QWidget):
 	def __reset_all(self, verbose=False):
 		self.tree_layer.setTree(self.__init_tree(), tree_column_names)
 		self.__reset_axis()
+		self.__refresh_options()
 
 		self.cpn_value_width.blockSignals(True)
 		self.cpn_value_height.blockSignals(True)
@@ -505,6 +570,7 @@ class TRDeltaPanel(QtGui.QWidget):
 	def execute_scale(self, use_time=False):
 		# - Init
 		system_ready = self.__prepare_delta()
+		self.__refresh_options()
 		if not system_ready: return
 
 		if pMode == 0:
@@ -533,22 +599,16 @@ class TRDeltaPanel(QtGui.QWidget):
 			# Note: Use italic only in the context of Delta calculation not for actuall slanting
 			it = math.radians(-float(self.active_font.italic_angle)) 
 
-			# - Options
-			opt_extrapolate = self.chk_extrapolate.isChecked()
-			opt_center = self.chk_center.isChecked()
-			opt_metrics = self.chk_metrics.isChecked()
-			opt_anchors = self.chk_anchors.isChecked()
-
 			if not use_time:
 				# - Use Stems
 				curr_sw_dx = float(self.cpn_value_stem_x.getValue())
 				curr_sw_dy = float(self.cpn_value_stem_y.getValue())
 
 				# - Process
-				outline_scale = delta_outline.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=opt_extrapolate)
-				service_scale = delta_service.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=opt_extrapolate)
+				outline_scale = delta_outline.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=self.opt_extrapolate)
+				service_scale = delta_service.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=self.opt_extrapolate)
 				
-				tx, ty = delta_outline._stem_for_time(curr_sw_dx, curr_sw_dy, opt_extrapolate)
+				tx, ty = delta_outline._stem_for_time(curr_sw_dx, curr_sw_dy, self.opt_extrapolate)
 
 				self.cpn_value_lerp_t.blockSignals(True)
 				self.cpn_value_lerp_t.setValue(round(tx / intervals * 100))
@@ -559,11 +619,11 @@ class TRDeltaPanel(QtGui.QWidget):
 				curr_tx = curr_ty = float(self.cpn_value_lerp_t.getValue()) * intervals / 100
 
 				# - Process
-				outline_scale = map(lambda i: (round(i[0]), round(i[1])), delta_outline.scale_by_time((curr_tx, curr_ty), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=opt_extrapolate))
-				service_scale = map(lambda i: (round(i[0]), round(i[1])), delta_service.scale_by_time((curr_tx, curr_ty), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=opt_extrapolate))
+				outline_scale = map(lambda i: (round(i[0]), round(i[1])), delta_outline.scale_by_time((curr_tx, curr_ty), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=self.opt_extrapolate))
+				service_scale = map(lambda i: (round(i[0]), round(i[1])), delta_service.scale_by_time((curr_tx, curr_ty), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=self.opt_extrapolate))
 				
 				# - Set stem values to controls
-				curr_sw_dx, curr_sw_dy = list(self.value_array.scale_by_time((curr_tx, curr_ty), (sx,sy), (0.,0.), (0.,0.), it, extrapolate=opt_extrapolate))[0]
+				curr_sw_dx, curr_sw_dy = list(self.value_array.scale_by_time((curr_tx, curr_ty), (sx,sy), (0.,0.), (0.,0.), it, extrapolate=self.opt_extrapolate))[0]
 
 				self.cpn_value_stem_x.blockSignals(True)
 				self.cpn_value_stem_y.blockSignals(True)
@@ -579,8 +639,8 @@ class TRDeltaPanel(QtGui.QWidget):
 			service_scale = list(map(lambda i: (new_transform.applyTransformation(*i)), service_scale))
 
 			# - Apply transformations
-			glyph._setPointArray(outline_scale, keep_center=opt_center)
-			glyph._setServiceArray(service_scale, set_metrics=opt_metrics, set_anchors=opt_anchors)
+			glyph._setPointArray(outline_scale, selection=self.opt_selection, transform_origin=self.transform_origin)
+			glyph._setServiceArray(service_scale, set_metrics=self.opt_metrics, set_anchors=self.opt_anchors)
 
 			glyph.update()
 
@@ -595,6 +655,7 @@ class TRDeltaPanel(QtGui.QWidget):
 		glyphs_done = []
 
 		system_ready = self.__prepare_delta()
+		self.__refresh_options()
 		if not system_ready: return
 
 		process_target = self.masters_data[tree_axis_target_name]
@@ -622,23 +683,17 @@ class TRDeltaPanel(QtGui.QWidget):
 				sy = float(sy)/100.
 				it = math.radians(-float(self.active_font.italic_angle)) 
 
-				# - Options
-				opt_extrapolate = self.chk_extrapolate.isChecked()
-				opt_center = self.chk_center.isChecked()
-				opt_metrics = self.chk_metrics.isChecked()
-				opt_anchors = self.chk_anchors.isChecked()
-
 				# - Process
-				outline_scale = delta_outline.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=opt_extrapolate)
-				service_scale = delta_service.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=opt_extrapolate)
+				outline_scale = delta_outline.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=self.opt_extrapolate)
+				service_scale = delta_service.scale_by_stem((curr_sw_dx, curr_sw_dy), (sx, sy), (0., 0.), (0., 0.), it, extrapolate=self.opt_extrapolate)
 
 				# - Add layer if it does not exist
 				if layer_name not in layer_names:
 					glyph.duplicateLayer(layer=base_layer, newLayerName=layer_name, references=False)
 
 				# - Apply transformations
-				glyph._setPointArray(outline_scale, layer=layer_name, keep_center=opt_center)
-				glyph._setServiceArray(service_scale, layer=layer_name, set_metrics=opt_metrics, set_anchors=opt_anchors)
+				glyph._setPointArray(outline_scale, layer=layer_name, selection=False, transform_origin=self.transform_origin )
+				glyph._setServiceArray(service_scale, layer=layer_name, set_metrics=self.opt_metrics, set_anchors=self.opt_anchors)
 
 			glyphs_done.append(glyph.name)
 			glyph.update()

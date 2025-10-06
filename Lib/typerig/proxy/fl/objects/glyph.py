@@ -26,13 +26,15 @@ except ImportError:
 
 from typerig.core.objects.point import Point
 from typerig.core.func.math import linInterp
+from typerig.core.objects.transform import TransformOrigin
+from typerig.core.objects.utils import Bounds
 
 from typerig.core.base.message import *
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.31.7'
+__version__ = '0.31.8'
 
 # - Keep compatibility for basestring checks
 try:
@@ -1489,32 +1491,32 @@ class eGlyph(pGlyph):
 	def _compatibleLayers(self, layerName=None):
 		return [layer.isCompatible(self.layer(layerName), True) for layer in self.layers()]
 			
-	def _getPointArray(self, layer=None):
-		return [(float(node.x), float(node.y)) for node in self.nodes(layer)]
+	def _getPointArray(self, layer=None, selection=False):
+		nodes = self.selectedNodes(layer) if selection else self.nodes(layer) 
+		return [(float(node.x), float(node.y)) for node in nodes]
 
-	def _setPointArray(self, PointArray, layer=None, keep_center=False):
-		nodeArray = self.nodes(layer)
+	def _setPointArray(self, PointArray, layer=None, selection=False, transform_origin=TransformOrigin.BASELINE):
+		nodeArray = self.selectedNodes(layer) if selection else self.nodes(layer)
 		PointArray = list(PointArray)
 
 		if len(PointArray) != len(nodeArray):
 			warnings.warn('Glyph: {}'.format(self.name), TRPointArrayWarning)
 			return
 		
-		if keep_center:
-			layer_BBox = self.getBounds(layer)
-			array_BBox = (	min(PointArray, key= lambda t: t[0])[0], 
-							min(PointArray, key= lambda t: t[1])[1],
-							max(PointArray, key= lambda t: t[0])[0], 
-							max(PointArray, key= lambda t: t[1])[1])
-
-			layer_center = layer_BBox.center()
-			center_array = pqt.QtCore.QPointF((array_BBox[0] + array_BBox[2])/2., (array_BBox[1] + array_BBox[3])/2)
-			recenter_shift = layer_center - center_array
+		if transform_origin != TransformOrigin.BASELINE:
+			dest_bounds = Bounds(PointArray)
+			dest_coord = pqt.QtCore.QPointF(*dest_bounds.align_matrix[transform_origin.code])
+			
+			source_bounds = Bounds([(node.x, node.y) for node in nodeArray])
+			source_coord = pqt.QtCore.QPointF(*source_bounds.align_matrix[transform_origin.code])
+			
+			print(source_coord, dest_coord)
+			realign_shift = source_coord - dest_coord
 
 		for nid in range(len(PointArray)):
-			if keep_center:
-				nodeArray[nid].x = PointArray[nid][0] + recenter_shift.x()
-				nodeArray[nid].y = PointArray[nid][1] + recenter_shift.y()
+			if transform_origin != TransformOrigin.BASELINE:
+				nodeArray[nid].x = PointArray[nid][0] + realign_shift.x()
+				nodeArray[nid].y = PointArray[nid][1] + realign_shift.y()
 			else:
 				nodeArray[nid].x, nodeArray[nid].y = PointArray[nid]
 
