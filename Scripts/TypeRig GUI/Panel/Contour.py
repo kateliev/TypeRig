@@ -33,7 +33,7 @@ global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '4.4'
+app_name, app_version = 'TypeRig | Contour', '4.5'
 
 cfg_addon_reversed = ' (Reversed)'
 
@@ -516,17 +516,13 @@ class TRContourCopy(QtGui.QWidget):
 		self.mod_contours = QtGui.QStandardItemModel(self.lst_contours)
 		#self.mod_contours.setItemPrototype(TRContourClipboardItem())
 		self.lst_contours.setMinimumHeight(350)
-
 		self.lst_contours.setModel(self.mod_contours)
-		self.lst_contours.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
-		self.lst_contours.setDragDropMode(QtGui.QAbstractItemView.InternalMove)
-		self.lst_contours.setDefaultDropAction(QtCore.Qt.MoveAction)
-
+		
 		# -- Quick Tool buttons
 		box_contour_copy = QtGui.QGroupBox()
 		box_contour_copy.setObjectName('box_group')
 		
-		lay_contour_copy = TRFlowLayout(spacing=10)
+		lay_contour_copy = TRFlowLayout(spacing=7)
 
 		tooltip_button = "Copy selected contours to bank"
 		self.btn_copy_contour = CustomPushButton("clipboard_copy", tooltip=tooltip_button, obj_name='btn_panel')
@@ -557,16 +553,21 @@ class TRContourCopy(QtGui.QWidget):
 		self.opt_trace_close = CustomPushButton("contour_close", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_contour_copy.addWidget(self.opt_trace_close)
 
+		tooltip_button = "Toggle view mode"
+		self.btn_toggle_view = CustomPushButton("select_glyph", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_contour_copy.addWidget(self.btn_toggle_view)
+		self.btn_toggle_view.clicked.connect(self.__toggle_list_view_mode)
+
 		tooltip_button = "Reset contour bank"
 		self.btn_reset = CustomPushButton("close", tooltip=tooltip_button, obj_name='btn_panel')
 		lay_contour_copy.addWidget(self.btn_reset)
 		self.btn_reset.clicked.connect(self.__reset)
 
-		
 		box_contour_copy.setLayout(lay_contour_copy)
 		lay_main.addWidget(box_contour_copy)
 		lay_main.addWidget(self.lst_contours)
 		
+		self.__toggle_list_view_mode()
 		self.setLayout(lay_main)
 
 	def __reset(self):
@@ -577,6 +578,33 @@ class TRContourCopy(QtGui.QWidget):
 		
 		for idx in gallery_selection:
 			self.mod_contours.removeRow(idx)
+
+	def __toggle_list_view_mode(self):
+		if self.btn_toggle_view.isChecked():
+			self.lst_contours.setViewMode(QtGui.QListView.IconMode)
+			self.lst_contours.setResizeMode(QtGui.QListView.Adjust)
+			
+			self.lst_contours.setMovement(QtGui.QListView.Snap)
+			self.lst_contours.setDragDropMode(QtGui.QAbstractItemView.InternalMove)
+			self.lst_contours.setSelectionMode(QtGui.QAbstractItemView.SingleSelection)
+			self.lst_contours.setDropIndicatorShown(True)
+			self.lst_contours.setAcceptDrops(True)
+			self.lst_contours.setDefaultDropAction(QtCore.Qt.MoveAction)
+			
+			self.lst_contours.setIconSize(QtCore.QSize(32, 32))
+			self.lst_contours.setGridSize(QtCore.QSize(64, 64))
+			self.lst_contours.setSpacing(10)
+		else:
+			self.lst_contours.setViewMode(QtGui.QListView.ListMode)
+			self.lst_contours.setResizeMode(QtGui.QListView.Adjust)
+			self.lst_contours.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+			self.lst_contours.setDragDropMode(QtGui.QAbstractItemView.InternalMove)
+			self.lst_contours.setDefaultDropAction(QtCore.Qt.MoveAction)
+			#self.lst_contours.setMovement(QtGui.QListView.Static)
+			
+			self.lst_contours.setIconSize(QtCore.QSize(18, 18))
+			self.lst_contours.setGridSize(QtCore.QSize()) 
+			self.lst_contours.setSpacing(1)
 
 	def __reverse_selected(self):
 		gallery_selection = [self.lst_contours.model().itemFromIndex(qidx) for qidx in self.lst_contours.selectedIndexes()]
@@ -704,12 +732,12 @@ class TRContourCopy(QtGui.QWidget):
 			if not partial_path_mode:
 				draw_contours = [wGlyph.contours()[cid] for cid in selection.keys()]
 				draw_count = sum([contour.nodesCount for contour in draw_contours])
-				new_item = QtGui.QStandardItem('Contour: {} Nodes | Source: {}'.format(draw_count, wGlyph.name))
+				new_item = QtGui.QStandardItem('{} | {} Nodes (Contour)'.format(wGlyph.name, draw_count))
 
 				new_icon = self.__drawIcon(draw_contours, conditional_color)
 			else:
 				draw_count = sum([len(value) for value in selection.values()])
-				new_item = QtGui.QStandardItem('Path: {} Nodes | Source: {}'.format(draw_count, wGlyph.name))
+				new_item = QtGui.QStandardItem('{} | {} Nodes (Path)'.format(wGlyph.name, draw_count))
 				new_icon = self.__drawFontIcon('node_trace', conditional_color)
 			
 			new_item.setIcon(new_icon)
