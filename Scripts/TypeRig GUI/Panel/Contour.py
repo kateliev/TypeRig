@@ -33,7 +33,7 @@ global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '4.5'
+app_name, app_version = 'TypeRig | Contour', '5.0'
 
 cfg_addon_reversed = ' (Reversed)'
 
@@ -591,8 +591,8 @@ class TRContourCopy(QtGui.QWidget):
 			self.lst_contours.setAcceptDrops(True)
 			self.lst_contours.setDefaultDropAction(QtCore.Qt.MoveAction)
 			
-			self.lst_contours.setIconSize(QtCore.QSize(32, 32))
-			self.lst_contours.setGridSize(QtCore.QSize(64, 64))
+			self.lst_contours.setIconSize(QtCore.QSize(48, 48))
+			self.lst_contours.setGridSize(QtCore.QSize(64, 72))
 			self.lst_contours.setSpacing(10)
 		else:
 			self.lst_contours.setViewMode(QtGui.QListView.ListMode)
@@ -618,7 +618,7 @@ class TRContourCopy(QtGui.QWidget):
 			for layer, data in clipboard_item_data.items():
 				temp_data = []
 
-				if 'path' in clipboard_item.text().lower():
+				if isinstance(data, list):
 					temp_data = list(reversed(data))
 				else:
 					for contour in data:
@@ -638,11 +638,12 @@ class TRContourCopy(QtGui.QWidget):
 			clipboard_item.setText(new_caption)
 			self.contour_clipboard[item_uid] = temp_item
 
-	def __drawIcon(self, contours, foreground='black', background='white'):
+	def __drawIcon(self, contours, selection, foreground='black', background='gray'):
 		# - Init
 		# -- Prepare contours
 		cloned_contours = [contour.clone() for contour in contours]
 		new_shape = fl6.flShape()
+
 		for contour in cloned_contours:
 			new_shape.addContour(contour, True)
 
@@ -650,47 +651,55 @@ class TRContourCopy(QtGui.QWidget):
 		new_icon = QtGui.QIcon()
 		shape_bbox = new_shape.boundingBox
 		draw_dimension = max(shape_bbox.width(), shape_bbox.height())
-		new_pixmap = QtGui.QPixmap(draw_dimension, draw_dimension)
+		new_pixmap = QtGui.QPixmap(draw_dimension + 32, draw_dimension + 32)
+		new_pixmap.fill(QtGui.QColor('white'))
 
 		# - Paint
 		new_painter.begin(new_pixmap)
 		
-		# -- Background
-		new_painter.setBrush(QtGui.QBrush(QtGui.QColor(background)))
-		new_painter.drawRect(QtCore.QRectF(0, 0, draw_dimension, draw_dimension))
-		
 		# -- Foreground
-		new_painter.setBrush(QtGui.QBrush(QtGui.QColor(foreground)))
+		draw_color = foreground if not len(selection) else background
+		new_painter.setBrush(QtGui.QBrush(QtGui.QColor(draw_color)))
 		new_transform = new_shape.transform.translate(-shape_bbox.x(), -shape_bbox.y())
 		new_shape.applyTransform(new_transform)
 		new_shape.ensurePaths()
 		new_painter.drawPath(new_shape.closedPath)
+	
+		if len(selection):
+			selection_contour = fl6.flContour()
+			for node in selection:
+				new_node = node.clone()
+				new_node.moveBy(-shape_bbox.x(), -shape_bbox.y())
+				selection_contour.add(new_node)
+
+			# --- Setup pen for outline ---
+			outline_pen = QtGui.QPen(QtGui.QColor(foreground))
+			outline_pen.setWidthF(2.0) 
+			outline_pen.setStyle(QtCore.Qt.SolidLine)
+			outline_pen.setCapStyle(QtCore.Qt.RoundCap)
+			outline_pen.setJoinStyle(QtCore.Qt.RoundJoin)
+
+			new_painter.setPen(outline_pen)
+			new_painter.setBrush(QtGui.QColor(0,0,0,0))
+
+			# --- Draw the closed contour ---
+			new_painter.drawPath(selection_contour.path())
+
+			# --- Draw selected nodes as individual squares ---
+			sel_brush = QtGui.QBrush(QtGui.QColor(foreground))
+			sel_pen = QtGui.QPen(QtGui.QColor(foreground))
+			new_painter.setBrush(sel_brush)
+			new_painter.setPen(sel_pen)
+
+			# - Draw marks at each selected point
+			node_size = max(2, draw_dimension * 0.08)  # Size relative to icon dimension
+			half = node_size / 2.0
+
+			for node in selection:
+				new_painter.drawEllipse(QtCore.QRectF(node.x - shape_bbox.x() - half, node.y - shape_bbox.y() - half, node_size, node_size))
+		
 		new_icon.addPixmap(new_pixmap.transformed(QtGui.QTransform().scale(1, -1)))
 		
-		return new_icon
-
-	def __drawFontIcon(self, text_string, foreground='black', background='white'):
-		# - Init
-		draw_dimension = TRFont.pixelSize()
-		new_icon = QtGui.QIcon()
-		new_painter = QtGui.QPainter()
-		new_pixmap = QtGui.QPixmap(draw_dimension, draw_dimension)
-		
-		# - Paint
-		new_painter.begin(new_pixmap)
-		new_painter.setFont(TRFont)
-
-		# -- Background
-		new_painter.setBrush(QtGui.QBrush(QtGui.QColor(background)))
-		new_painter.drawRect(QtCore.QRectF(-1, -1, draw_dimension + 1, draw_dimension + 1))
-
-		# -- Render text
-		new_painter.setPen(QtGui.QColor(foreground))
-		new_painter.drawText(0, 0, draw_dimension, draw_dimension, 0, text_string)
-		new_painter.end()
-
-		new_icon.addPixmap(new_pixmap)
-
 		return new_icon
 
 	def copy_contour(self):
@@ -729,17 +738,15 @@ class TRContourCopy(QtGui.QWidget):
 				conditional_color = 'blue'
 
 			# --- Prepare icon and bank entry
-			if not partial_path_mode:
-				draw_contours = [wGlyph.contours()[cid] for cid in selection.keys()]
-				draw_count = sum([contour.nodesCount for contour in draw_contours])
-				new_item = QtGui.QStandardItem('{} | {} Nodes (Contour)'.format(wGlyph.name, draw_count))
+			draw_contours = [wGlyph.contours()[cid] for cid in selection.keys()]
+			draw_count = sum([contour.nodesCount for contour in draw_contours])
+			new_item = QtGui.QStandardItem('{} | {} Nodes ({} Contour)'.format(wGlyph.name, draw_count, 'Closed ' if not partial_path_mode else 'Open'))
 
-				new_icon = self.__drawIcon(draw_contours, conditional_color)
+			if not partial_path_mode:
+				new_icon = self.__drawIcon(draw_contours, selection={}, foreground=conditional_color)
 			else:
-				draw_count = sum([len(value) for value in selection.values()])
-				new_item = QtGui.QStandardItem('{} | {} Nodes (Path)'.format(wGlyph.name, draw_count))
-				new_icon = self.__drawFontIcon('node_trace', conditional_color)
-			
+				new_icon = self.__drawIcon(draw_contours, selection=wGlyph.selectedNodes(), foreground=conditional_color, background='LightGray')
+
 			new_item.setIcon(new_icon)
 			self.mod_contours.appendRow(new_item)
 
