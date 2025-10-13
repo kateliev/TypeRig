@@ -35,7 +35,7 @@ global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '5.3'
+app_name, app_version = 'TypeRig | Contour', '5.4'
 
 cfg_addon_reversed = ' (Reversed)'
 
@@ -686,7 +686,7 @@ class TRContourCopy(QtGui.QWidget):
 			for layer, data in clipboard_item_data.items():
 				temp_data = []
 
-				if isinstance(data, list):
+				if 'open' in clipboard_item.text().lower():
 					temp_data = list(reversed(data))
 				else:
 					for contour in data:
