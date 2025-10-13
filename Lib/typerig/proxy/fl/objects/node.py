@@ -21,7 +21,7 @@ from typerig.core.objects.utils import Bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 # - Init ---------------------------------
-__version__ = '0.28.4'
+__version__ = '0.28.5'
 
 # - Keep compatibility for basestring checks
 try:
@@ -308,7 +308,7 @@ class pNodesContainer(object):
 	Attributes:
 		
 	'''
-	def __init__(self, nodeList, extend=pNode):
+	def __init__(self, nodeList=[], extend=pNode):
 		
 		# - Init
 		if extend is not None: 
@@ -317,11 +317,26 @@ class pNodesContainer(object):
 			self.nodes = nodeList
 		
 		self.extender = extend
-		self.bounds = self.getBounds()
-		self.x = lambda : self.getBounds().x
-		self.y = lambda : self.getBounds().y
-		self.width = lambda : self.getBounds().width
-		self.height  = lambda : self.getBounds().height
+
+	@property
+	def bounds(self):
+		return self.getBounds()
+
+	@property
+	def x(self):
+		return self.bounds.x
+	
+	@property
+	def y(self):
+		return self.bounds.y
+	
+	@property
+	def width(self):
+		return self.bounds.width
+	
+	@property
+	def height(self):
+		return self.bounds.height
 
 	def __getitem__(self, index):
 		return self.nodes.__getitem__(index)
