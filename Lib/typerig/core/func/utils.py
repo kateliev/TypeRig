@@ -13,7 +13,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 import math, random
 
 # - Init --------------------------------
-__version__ = '0.26.3'
+__version__ = '0.26.4'
 
 # -- Units ----------------------------------------------------------------------
 def getFunctionName():
@@ -35,3 +35,7 @@ def point2inch(points):
 
 def isMultiInstance(objects, types):
 	return all([isinstance(obj, types) for obj in objects])
+
+def get_cattr(value):
+	# Return value() if callable, else value itself.
+	return value() if callable(value) else value

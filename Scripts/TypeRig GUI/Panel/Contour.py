@@ -18,7 +18,7 @@ import fontlab as fl6
 from PythonQt import QtCore, QtGui
 
 from typerig.proxy.fl.objects.font import pFont
-from typerig.proxy.fl.objects.node import eNodesContainer
+from typerig.proxy.fl.objects.node import eNode, eNodesContainer
 from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.objects.contour import eContour
 
@@ -35,7 +35,7 @@ global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '5.2'
+app_name, app_version = 'TypeRig | Contour', '5.3'
 
 cfg_addon_reversed = ' (Reversed)'
 
@@ -820,14 +820,14 @@ class TRContourCopy(QtGui.QWidget):
 
 			# -- Add to clipboard
 			for layer_name in process_layers:
-				export_clipboard[layer_name] = eNodesContainer()
+				export_clipboard[layer_name] = []
 				all_contours = wGlyph.contours(layer_name)
 
 				if not partial_path_mode:
 					for cid in selection.keys():
 						export_clipboard[layer_name].append(all_contours[cid].clone())
 				else:
-					new_nodes = eNodesContainer()
+					new_nodes = eNodesContainer(extend=eNode)
 
 					for cid, node_list in selection.items():
 						contour_nodes = all_contours[cid].nodes()
@@ -865,7 +865,7 @@ class TRContourCopy(QtGui.QWidget):
 			paste_uid = clipboard_item.data(QtCore.Qt.UserRole + 1000)
 			paste_data = self.contour_clipboard[paste_uid]
 
-			TRNodeActionCollector.nodes_paste(wGlyph, wLayers, paste_data, self.node_align_state, (self.chk_paste_flip_h.isChecked(), self.chk_paste_flip_v.isChecked(), False, False, False, False))
+			TRNodeActionCollector.nodes_paste(wGlyph, wLayers, paste_data, self.node_align_state, (self.chk_paste_flip_h.isChecked(), self.chk_paste_flip_v.isChecked(), False, False, True, False))
 	
 	def paste_contour(self, to_mask=False):
 		# - Init
@@ -937,10 +937,15 @@ class TRContourCopy(QtGui.QWidget):
 				for layer_name, contours in paste_data.items():
 					combined_data.setdefault(layer_name, []).extend(contours)
 
-			for layer_name, nodes in combined_data.items():
+			for layer_name, data in combined_data.items():
 				wLayer = wGlyph.layer(layer_name)
+			
+				if isinstance(data, list) and isinstance(data[0], eNode):
+					nodes = [item.fl for item in data]
+				else:
+					nodes = data
 
-				if not isinstance(contours[0], fl6.flNode): 
+				if not isinstance(nodes[0], fl6.flNode): 
 						output(3, app_name, '< Contour > not suitable for < Paste partial path > operation!')
 						return
 

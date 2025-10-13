@@ -17,11 +17,12 @@ import PythonQt as pqt
 
 from typerig.core.func.math import randomize
 from typerig.core.func.geometry import ccw
+from typerig.core.func.utils import get_cattr
 from typerig.core.objects.utils import Bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 # - Init ---------------------------------
-__version__ = '0.28.5'
+__version__ = '0.29.0'
 
 # - Keep compatibility for basestring checks
 try:
@@ -356,6 +357,13 @@ class pNodesContainer(object):
 	def __hash__(self):
 		return self.nodes.__hash__()
 
+	@property
+	def naked(self):
+		if self.extender is not None:
+			return [node.fl for node in self.nodes]
+		else:
+			return self.nodes
+
 	def clone(self):
 		try:
 			return self.__class__([node.fl.clone() for node in self.nodes], extend=self.extender)
@@ -366,10 +374,20 @@ class pNodesContainer(object):
 		return self.__class__(list(reversed(self.nodes)), extend=None)
 
 	def insert(self, index, value):
-		self.nodes.insert(index, value)
+		if self.extender is not None and not isinstance(value, self.extender):
+			new_value = self.extender(value)
+		else:
+			new_value = value
+		
+		self.nodes.insert(index, new_value)
 
-	def append(self, index):
-		self.nodes.append(index)
+	def append(self, value):
+		if self.extender is not None and not isinstance(value, self.extender):
+			new_value = self.extender(value)
+		else:
+			new_value = value
+
+		self.nodes.append(new_value)
 
 	def getPosition(self):
 		return [(node.x, node.y) for node in self.nodes]
@@ -886,12 +904,12 @@ class eNodesContainer(pNodesContainer):
 			
 		# - Helper
 		def getAlignDict(item):
-			align_dict = {	'L': item.x(), 
-							'R': item.x() + item.width(), 
-							'C': item.x() + item.width()/2,
-							'B': item.y(), 
-							'T': item.y() + item.height(), 
-							'E': item.y() + item.height()/2
+			align_dict = {	'L': get_cattr(item.x), 
+							'R': get_cattr(item.x) + get_cattr(item.width), 
+							'C': get_cattr(item.x) + get_cattr(item.width)/2,
+							'B': get_cattr(item.y), 
+							'T': get_cattr(item.y) + get_cattr(item.height), 
+							'E': get_cattr(item.y) + get_cattr(item.height)/2
 						}
 
 			return align_dict

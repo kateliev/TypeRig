@@ -35,7 +35,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.78'
+__version__ = '2.79'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
