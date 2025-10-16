@@ -35,7 +35,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.79'
+__version__ = '2.80'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -749,8 +749,8 @@ class TRNodeActionCollector(object):
 					if flip_h or flip_v:
 						scaleX = -1 if flip_h else 1
 						scaleY = -1 if flip_v else 1
-						dX = src_container.x() + src_container.width()/2.
-						dY = src_container.y() + src_container.height()/2.
+						dX = src_container.x + src_container.width/2.
+						dY = src_container.y + src_container.height/2.
 
 						src_transform.translate(dX, dY)
 						src_transform.scale(scaleX, scaleY)
