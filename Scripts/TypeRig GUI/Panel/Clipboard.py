@@ -13,6 +13,7 @@ from collections import OrderedDict
 from itertools import groupby
 from math import radians
 import random
+import pickle
 
 import fontlab as fl6
 from PythonQt import QtCore, QtGui
@@ -36,6 +37,7 @@ global pMode
 pLayers = (True, False, False, False)
 pMode = 0
 app_name, app_version = 'TypeRig | Contour', '1.2'
+fileFormats = 'TypeRig binary data (*.dat);;'
 
 cfg_addon_reversed = ' (Reversed)'
 
@@ -57,6 +59,7 @@ class TRContourCopy(QtGui.QWidget):
 		super(TRContourCopy, self).__init__()
 
 		# - Init
+		self.active_font = pFont()
 		lay_main = QtGui.QVBoxLayout()
 		self.contour_clipboard = {}
 		self.node_align_state = 'LT'
@@ -538,12 +541,24 @@ class TRContourCopy(QtGui.QWidget):
 					
 			wGlyph.updateObject(wGlyph.fl, 'Paste contours; Glyph: %s; Layers: %s' %(wGlyph.name, '; '.join(wLayers)))
 
+		# -- File operations
 	def clipboard_save(self):
-		print('Save')
-		print(self.contour_clipboard)
+		fontPath = os.path.split(self.active_font.fg.path)[0]
+		fname = QtGui.QFileDialog.getSaveFileName(self, 'Save clipboard data to file', fontPath, fileFormats)
 
+		if fname != None:
+			with open(fname, 'w') as exportFile:
+				pickle.dump(self.contour_clipboard, exportFile)
+				output(7, app_name, 'Font: %s; Smart clipboard data saved to: %s.' %(self.active_font.name, fname))
+				
 	def clipboard_load(self):
-		print('Load')
+		fontPath = os.path.split(self.active_font.fg.path)[0]
+		fname = QtGui.QFileDialog.getOpenFileName(self, 'Load clipboard data from file', fontPath, fileFormats)
+			
+		if fname != None:
+			with open(fname, 'r') as importFile:
+				imported_data = pickle.load(importFile)
+				output(6, app_name, 'Font: %s; Smart clipboard dat from: %s.' %(self.active_font.name, fname))
 
 
 # - Tabs -------------------------------
