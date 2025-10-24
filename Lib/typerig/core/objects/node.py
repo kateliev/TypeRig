@@ -21,13 +21,13 @@ from typerig.core.objects.line import Line, Vector
 from typerig.core.objects.cubicbezier import CubicBezier
 from typerig.core.objects.transform import Transform
 
-from typerig.core.fileio.ufo import XMLSerializable, register_xml_class
+from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.5.3'
+__version__ = '0.5.2'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -66,9 +66,9 @@ class Node(Member, XMLSerializable):
 		self.complex_math = kwargs.pop('complex', True)
 		self.weight = Point(kwargs.pop('weight', (0.,0.)))
 
-		# - Fontlab specific
+		# - Metadata
 		self.type = kwargs.pop('type', node_types['on'])
-		self.name = kwargs.pop('name', '')
+		self.name = kwargs.pop('name', None)
 		self.identifier = kwargs.pop('identifier', False)
 		self.smooth = kwargs.pop('smooth', False)
 		self.selected = kwargs.pop('selected', False)

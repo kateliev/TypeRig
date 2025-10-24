@@ -18,7 +18,7 @@ from typerig.core.objects.cubicbezier import CubicBezier
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.utils import Bounds
 
-from typerig.core.fileio.ufo import XMLSerializable, register_xml_class
+from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.func.transform import adaptive_scale, lerp
@@ -36,7 +36,7 @@ class Contour(Container, XMLSerializable):
 	__slots__ = ('name', 'closed', 'clockwise', 'transform', 'parent', 'lib')
 
 	XML_TAG = 'contour'
-	XML_ATTRS = ['identifier']
+	XML_ATTRS = ['name', 'identifier']
 	XML_CHILDREN = {'point': 'nodes'}
 	XML_LIB_ATTRS = ['transform', 'closed', 'clockwise']
 
@@ -47,7 +47,7 @@ class Contour(Container, XMLSerializable):
 		self.transform = kwargs.pop('transform', Transform())
 		
 		# - Metadata
-		self.name = kwargs.pop('name', '')
+		self.name = kwargs.pop('name', None)
 		self.closed = kwargs.pop('closed', False)
 		self.clockwise = kwargs.pop('clockwise', self.get_winding())
 

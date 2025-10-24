@@ -16,6 +16,8 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.utils import Bounds
 
+from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
+
 from typerig.core.objects.atom import Container
 from typerig.core.objects.shape import Shape
 
@@ -23,23 +25,30 @@ from typerig.core.objects.shape import Shape
 __version__ = '0.2.0'
 
 # - Classes -----------------------------
-class Layer(Container): 
+@register_xml_class
+class Layer(Container, XMLSerializable): 
 	__slots__ = ('name', 'stx', 'sty', 'transform', 'mark', 'advance_width', 'advance_height', 'identifier', 'parent', 'lib')
+
+	XML_TAG = 'layer'
+	XML_ATTRS = ['name', 'identifier', 'width', 'height']
+	XML_CHILDREN = {'shape': 'shapes'}
+	XML_LIB_ATTRS = ['transform', 'stx', 'sty']
 	
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Shape)
 		super(Layer, self).__init__(data, default_factory=factory, **kwargs)
 		
-		self.stx, self.sty= None, None
 		self.transform = kwargs.pop('transform', Transform())
 		
+		self.stx = kwargs.pop('stx', None) 
+		self.stx = kwargs.pop('sty', None) 
+		
 		# - Metadata
-		if not kwargs.pop('proxy', False): # Initialize in proxy mode
-			self.advance_height = kwargs.pop('height', 1000.) 
-			self.advance_width = kwargs.pop('width', 0.) 
-			self.identifier = kwargs.pop('identifier', None)
-			self.mark = kwargs.pop('mark', 0)
-			self.name = kwargs.pop('name', hash(self))
+		self.name = kwargs.pop('name', hash(self))
+		self.identifier = kwargs.pop('identifier', None)
+		self.mark = kwargs.pop('mark', 0)
+		self.advance_width = kwargs.pop('width', 0.) 
+		self.advance_height = kwargs.pop('height', 1000.) 
 	
 	# -- Internals ------------------------------
 	def __repr__(self):
@@ -63,7 +72,6 @@ class Layer(Container):
 	def shapes(self):
 		return self.data
 
-	
 	@property
 	def nodes(self):
 		layer_nodes = []
@@ -341,23 +349,6 @@ class Layer(Container):
 		for attrib, data in process_axis.items():
 			setattr(self, attrib, data)
 
-	# -- IO Format ------------------------------
-	def to_VFJ(self):
-		raise NotImplementedError
-
-	@staticmethod
-	def from_VFJ(string):
-		raise NotImplementedError
-
-	@staticmethod
-	def to_XML(self):
-		raise NotImplementedError
-
-	@staticmethod
-	def from_XML(string):
-		raise NotImplementedError
-
-
 if __name__ == '__main__':
 	from pprint import pprint
 	section = lambda s: '\n+{0}\n+ {1}\n+{0}'.format('-'*30, s)
@@ -389,15 +380,13 @@ if __name__ == '__main__':
 	pprint(l)
 
 	print(section('Layer Array'))
-	pprint(l.node_array)
+	pprint(l.point_array)
 
-	l.node_array = new_test
-
-	print(section('Updated Layer Array'))
-	pprint(l.node_array)
 
 	print(l.has_stems)
 	print(Bounds([(0,0),(100,200)]))
+
+	print(l.to_XML())
 
 	
 

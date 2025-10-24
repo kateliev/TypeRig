@@ -1,5 +1,5 @@
-# MODULE: Typerig / IO / UFO
-# NOTE: Universal UFO/XML Serialization Module
+# MODULE: Typerig / IO / XML
+# NOTE: Universal XML(UFO) Serialization Module
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2025 		(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)

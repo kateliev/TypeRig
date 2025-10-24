@@ -15,6 +15,8 @@ from typerig.core.objects.transform import Transform
 from typerig.core.objects.utils import Bounds
 from typerig.core.objects.delta import DeltaScale
 
+from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
+
 from typerig.core.objects.atom import Container
 from typerig.core.objects.layer import Layer
 
@@ -22,20 +24,25 @@ from typerig.core.objects.layer import Layer
 __version__ = '0.1.6'
 
 # - Classes -----------------------------
-class Glyph(Container): 
+@register_xml_class
+class Glyph(Container, XMLSerializable): 
 	__slots__ = ('name', 'mark', 'unicodes', 'identifier', 'parent', 'selected')
+
+	XML_TAG = 'glyph'
+	XML_ATTRS = ['name', 'identifier', 'unicodes', 'selected', 'mark']
+	XML_CHILDREN = {'layer': 'layers'}
+	XML_LIB_ATTRS = []
 
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Layer)
 		super(Glyph, self).__init__(data, default_factory=factory, **kwargs)
 		
 		# - Metadata
-		if not kwargs.pop('proxy', False): # Initialize in proxy mode
-			self.identifier = kwargs.pop('identifier', None)
-			self.mark = kwargs.pop('mark', 0)
-			self.name = kwargs.pop('name', hash(self))
-			self.unicodes = kwargs.pop('unicodes', [])
-			self.selected = kwargs.pop('selected', False)
+		self.identifier = kwargs.pop('identifier', None)
+		self.mark = kwargs.pop('mark', 0)
+		self.name = kwargs.pop('name', hash(self))
+		self.unicodes = kwargs.pop('unicodes', [])
+		self.selected = kwargs.pop('selected', False)
 
 		#self.active_layer = kwargs.pop('active_layer', None)
 		
@@ -108,23 +115,6 @@ class Glyph(Container):
 		for layer in self.layers:
 			layer.mark = value
 
-	# -- IO Format ------------------------------
-	def to_VFJ(self):
-		raise NotImplementedError
-
-	@staticmethod
-	def from_VFJ(string):
-		raise NotImplementedError
-
-	@staticmethod
-	def to_XML(self):
-		raise NotImplementedError
-
-	@staticmethod
-	def from_XML(string):
-		raise NotImplementedError
-
-
 if __name__ == '__main__':
 	from pprint import pprint
 	section = lambda s: '\n+{0}\n+ {1}\n+{0}'.format('-'*30, s)
@@ -154,7 +144,10 @@ if __name__ == '__main__':
 	print(section('Glyph Layers'))
 	print(g.nodes('Regular')[0].parent)
 	g.layer('Regular').stems = (100,50)
-	print(g.virtual_axis(('Regular', 'Regular')))
+	#print(g.virtual_axis(('Regular', 'Regular')))
+
+	print(g.to_XML())
+
 
 
 	

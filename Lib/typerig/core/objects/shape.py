@@ -15,15 +15,23 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.utils import Bounds
 
+from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
+
 from typerig.core.objects.atom import Container
 from typerig.core.objects.contour import Contour
 
 # - Init -------------------------------
-__version__ = '0.1.6'
+__version__ = '0.1.7'
 
 # - Classes -----------------------------
-class Shape(Container):
+@register_xml_class
+class Shape(Container, XMLSerializable):
 	__slots__ = ('name', 'transform', 'identifier', 'parent', 'lib')
+
+	XML_TAG = 'shape'
+	XML_ATTRS = ['name', 'identifier']
+	XML_CHILDREN = {'contour': 'contours'}
+	XML_LIB_ATTRS = ['transform']
 
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Contour)
@@ -32,9 +40,8 @@ class Shape(Container):
 		self.transform = kwargs.pop('transform', Transform())
 
 		# - Metadata
-		if not kwargs.pop('proxy', False): # Initialize in proxy mode
-			self.name = kwargs.pop('name', '')
-			self.identifier = kwargs.pop('identifier', None)
+		self.name = kwargs.pop('name', None)
+		self.identifier = kwargs.pop('identifier', None)
 	
 	# -- Internals ------------------------------
 	def __repr__(self):
@@ -152,23 +159,6 @@ class Shape(Container):
 
 		self.shift(delta_x, delta_y)
 
-	# -- IO Format ------------------------------
-	def to_VFJ(self):
-		raise NotImplementedError
-
-	@staticmethod
-	def from_VFJ(string):
-		raise NotImplementedError
-
-	@staticmethod
-	def to_XML(self):
-		raise NotImplementedError
-
-	@staticmethod
-	def from_XML(string):
-		raise NotImplementedError
-
-
 if __name__ == '__main__':
 	from typerig.core.objects.node import Node
 	from pprint import pprint
@@ -208,7 +198,7 @@ if __name__ == '__main__':
 	pprint(s[0].next)
 
 	print(section('Shape Nodes'))
-	print(s.nodes)
+	print(s.to_XML())
 
 	
 
