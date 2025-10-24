@@ -44,11 +44,12 @@ class Layer(Container, XMLSerializable):
 		self.stx = kwargs.pop('sty', None) 
 		
 		# - Metadata
-		self.name = kwargs.pop('name', hash(self))
-		self.identifier = kwargs.pop('identifier', None)
-		self.mark = kwargs.pop('mark', 0)
-		self.advance_width = kwargs.pop('width', 0.) 
-		self.advance_height = kwargs.pop('height', 1000.) 
+		if not kwargs.pop('proxy', False): # Initialize in proxy mode
+			self.name = kwargs.pop('name', hash(self))
+			self.identifier = kwargs.pop('identifier', None)
+			self.mark = kwargs.pop('mark', 0)
+			self.advance_width = kwargs.pop('width', 0.) 
+			self.advance_height = kwargs.pop('height', 1000.) 
 	
 	# -- Internals ------------------------------
 	def __repr__(self):

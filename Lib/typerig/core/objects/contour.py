@@ -47,9 +47,10 @@ class Contour(Container, XMLSerializable):
 		self.transform = kwargs.pop('transform', Transform())
 		
 		# - Metadata
-		self.name = kwargs.pop('name', None)
-		self.closed = kwargs.pop('closed', False)
-		self.clockwise = kwargs.pop('clockwise', self.get_winding())
+		if not kwargs.pop('proxy', False): # Initialize in proxy mode
+			self.name = kwargs.pop('name', None)
+			self.closed = kwargs.pop('closed', False)
+			self.clockwise = kwargs.pop('clockwise', self.get_winding())
 
 	# -- Properties -----------------------------
 	@property

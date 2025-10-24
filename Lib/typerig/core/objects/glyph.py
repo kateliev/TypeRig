@@ -38,11 +38,12 @@ class Glyph(Container, XMLSerializable):
 		super(Glyph, self).__init__(data, default_factory=factory, **kwargs)
 		
 		# - Metadata
-		self.identifier = kwargs.pop('identifier', None)
-		self.mark = kwargs.pop('mark', 0)
-		self.name = kwargs.pop('name', hash(self))
-		self.unicodes = kwargs.pop('unicodes', [])
-		self.selected = kwargs.pop('selected', False)
+		if not kwargs.pop('proxy', False): # Initialize in proxy mode
+			self.identifier = kwargs.pop('identifier', None)
+			self.mark = kwargs.pop('mark', 0)
+			self.name = kwargs.pop('name', hash(self))
+			self.unicodes = kwargs.pop('unicodes', [])
+			self.selected = kwargs.pop('selected', False)
 
 		#self.active_layer = kwargs.pop('active_layer', None)
 		
