@@ -19,7 +19,7 @@ from typerig.proxy.tr.objects.node import trNode
 from typerig.core.objects.contour import Contour
 
 # - Init --------------------------------
-__version__ = '0.1.3'
+__version__ = '0.1.4'
 
 # - Keep compatibility for basestring checks
 try:
@@ -40,6 +40,7 @@ class trContour(Contour):
 	# - Metadata and proxy model
 	#__slots__ = ('host', 'name', 'closed', 'clockwise', 'transform', 'parent', 'lib')
 	__meta__ = {'closed':'closed', 'clockwise':'clockwise', 'name':'name'}
+	__meta_keys = frozenset(__meta__.keys())
 
 	# - Initialize -----------------------------
 	def __init__(self, contour, **kwargs):
@@ -64,13 +65,13 @@ class trContour(Contour):
 
 	# - Internals ------------------------------
 	def __getattribute__(self, name):
-		if name in trContour.__meta__.keys():
+		if name in trContour.__meta_keys:
 			return self.host.__getattribute__(trContour.__meta__[name])
 		else:
 			return Contour.__getattribute__(self, name)
 
 	def __setattr__(self, name, value):
-		if name in trContour.__meta__.keys():
+		if name in trContour.__meta_keys:
 			self.host.__setattr__(trContour.__meta__[name], value)
 		else:
 			Contour.__setattr__(self, name, value)

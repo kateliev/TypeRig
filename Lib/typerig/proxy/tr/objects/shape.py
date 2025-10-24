@@ -42,6 +42,7 @@ class trShape(Shape):
 	# - Metadata and proxy model
 	#__slots__ = ('host', 'name', 'transform', 'identifier', 'parent', 'lib')
 	__meta__ = {'name':'name'}
+	__meta_keys = frozenset(__meta__.keys())
 
 	# - Initialize ------------------------------
 	def __init__(self, shape, **kwargs):
@@ -50,13 +51,13 @@ class trShape(Shape):
 
 	# - Internals ------------------------------
 	def __getattribute__(self, name):
-		if name in trShape.__meta__.keys():
+		if name in trShape.__meta_keys:
 			return self.host.__getattribute__(trShape.__meta__[name])
 		else:
 			return Shape.__getattribute__(self, name)
 
 	def __setattr__(self, name, value):
-		if name in trShape.__meta__.keys():
+		if name in trShape.__meta_keys:
 			self.host.__setattr__(trShape.__meta__[name], value)
 		else:
 			Shape.__setattr__(self, name, value)

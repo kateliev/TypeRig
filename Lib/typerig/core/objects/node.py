@@ -25,7 +25,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.5.0'
+__version__ = '0.5.1'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -584,37 +584,75 @@ class Node(Member):
 		return (self, b, c, d)
 
 	# -- IO Format ------------------------------
-	@property
-	def string(self):
-		x = int(self.x) if isinstance(self.x, float) and self.x.is_integer() else self.x
-		y = int(self.y) if isinstance(self.y, float) and self.y.is_integer() else self.y
-		return '{0}{2}{1}'.format(x, y, ' ')
+		@property
+		def string(self):
+			x = int(self.x) if isinstance(self.x, float) and self.x.is_integer() else self.x
+			y = int(self.y) if isinstance(self.y, float) and self.y.is_integer() else self.y
+			return f'{x} {y}'
 
-	def to_VFJ(self):
-		node_config = []
-		node_config.append(self.string)
-		if self.smooth: node_config.append('s')
-		if not self.is_on: node_config.append('o')
-		if self.g2: node_config.append('g2')
+		def to_VFJ(self):
+			flags = [
+				self.string,
+				's' if self.smooth else None,
+				'o' if not self.is_on else None,
+				'g2' if self.g2 else None
+			]
+			return ' '.join(filter(None, flags))
 
-		return ' '.join(node_config)
+		@staticmethod
+		def from_VFJ(string):
+			parts = string.split()
+			flags = set(parts[2:])  # All parts after x and y coordinates
+			
+			return Node(
+				float(parts[0]),
+				float(parts[1]),
+				type=node_types['off'] if 'o' in flags else node_types['on'],
+				smooth='s' in flags,
+				g2='g2' in flags,
+				name=None,
+				identifier=None
+			)
 
-	@staticmethod
-	def from_VFJ(string):
-		string_list = string.split(' ')
-		node_smooth = True if len(string_list) >= 3 and 's' in string_list else False
-		node_type = node_types['off'] if len(string_list) >= 3 and 'o' in string_list else node_types['on']
-		node_g2 = True if len(string_list) >= 3 and 'g2' in string_list else False
+		def to_XML(self):
+			'''Convert to UFO-compliant XML point element'''
+			x = int(self.x) if isinstance(self.x, float) and self.x.is_integer() else self.x
+			y = int(self.y) if isinstance(self.y, float) and self.y.is_integer() else self.y
+			
+			attrs = {
+				'x': str(x),
+				'y': str(y),
+				'type': 'offcurve' if not self.is_on else 'curve' if self.smooth else 'line',
+			}
+			
+			if self.smooth and self.is_on:
+				attrs['smooth'] = 'yes'
+			
+			attr_str = ' '.join(f'{k}="{v}"' for k, v in attrs.items())
+			return f'<point {attr_str}/>'
 
-		return Node(float(string_list[0]), float(string_list[1]), type=node_type, smooth=node_smooth, g2=node_g2, name=None, identifier=None)
-
-	@staticmethod
-	def to_XML(self):
-		raise NotImplementedError
-
-	@staticmethod
-	def from_XML(string):
-		raise NotImplementedError
+		@staticmethod
+		def from_XML(element):
+			'''Parse from UFO XML point element (accepts xml.etree.ElementTree.Element or string)'''
+			from xml.etree import ElementTree as ET
+			
+			if isinstance(element, str):
+				element = ET.fromstring(element)
+			
+			x = float(element.get('x'))
+			y = float(element.get('y'))
+			point_type = element.get('type', 'line')
+			smooth = element.get('smooth') == 'yes'
+			
+			# Map UFO point types to your node types
+			is_on = point_type != 'offcurve'
+			node_type = node_types['on'] if is_on else node_types['off']
+			
+			# In UFO, 'curve' with smooth='yes' indicates a smooth point
+			if point_type == 'curve' and smooth:
+				smooth = True
+			
+			return Node(x, y, type=node_type, smooth=smooth, g2=False, name=None, identifier=None)
 
 
 class Knot(Member):

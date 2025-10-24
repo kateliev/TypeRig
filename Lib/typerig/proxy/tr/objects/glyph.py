@@ -20,7 +20,7 @@ from typerig.proxy.tr.objects.layer import trLayer
 from typerig.core.objects.glyph import Glyph
 
 # - Init --------------------------------
-__version__ = '0.0.7'
+__version__ = '0.0.8'
 
 # - Classes -----------------------------
 class trGlyph(Glyph):
@@ -35,6 +35,7 @@ class trGlyph(Glyph):
 	# - Metadata and proxy model
 	#__slots__ = ('name', 'unicodes', 'identifier', 'parent')
 	__meta__ = {'name':'name', 'mark':'mark'}
+	__meta_keys = frozenset(__meta__.keys())
 		
 	# -- Some hardcoded properties
 	active_layer = property(lambda self: self.host.activeLayer.name)
@@ -65,13 +66,13 @@ class trGlyph(Glyph):
 
 	# - Internals ------------------------------
 	def __getattribute__(self, name):
-		if name in trGlyph.__meta__.keys():
+		if name in trGlyph.__meta_keys:
 			return self.host.__getattribute__(trGlyph.__meta__[name])
 		else:
 			return Glyph.__getattribute__(self, name)
 
 	def __setattr__(self, name, value):
-		if name in trGlyph.__meta__.keys():
+		if name in trGlyph.__meta_keys:
 			self.host.__setattr__(trGlyph.__meta__[name], value)
 		else:
 			Glyph.__setattr__(self, name, value)

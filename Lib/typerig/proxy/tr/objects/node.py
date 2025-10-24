@@ -18,7 +18,7 @@ from typerig.core.objects.node import Node
 from typerig.core.func.utils import isMultiInstance
 
 # - Init ---------------------------------
-__version__ = '0.2.2'
+__version__ = '0.2.3'
 	
 # - Classes -------------------------------
 class trNode(Node):
@@ -35,6 +35,7 @@ class trNode(Node):
 	# - Metadata and proxy model
 	#__slots__ = ('host', 'x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'identifier','complex_math', 'parent', 'lib')
 	__meta__ = {'x':'x', 'y':'y', 'type':'type', 'g2':'g2', 'smooth':'smooth', 'name':'name', 'selected':'selected'}
+	__meta_keys = frozenset(__meta__.keys())
 
 	# - Initialize ---------------------------
 	def __init__(self, *args, **kwargs):
@@ -63,13 +64,13 @@ class trNode(Node):
 
 	# - Internals ------------------------------
 	def __getattribute__(self, name):
-		if name in trNode.__meta__.keys():
+		if name in trNode.__meta_keys:
 			return self.host.__getattribute__(trNode.__meta__[name])
 		else:
 			return Node.__getattribute__(self, name)
 
 	def __setattr__(self, name, value):
-		if name in trNode.__meta__.keys():
+		if name in trNode.__meta_keys:
 			self.host.__setattr__(trNode.__meta__[name], value)
 		else:
 			Node.__setattr__(self, name, value)

@@ -20,7 +20,7 @@ from typerig.proxy.tr.objects.glyph import trGlyph
 from typerig.core.objects.font import Font
 
 # - Init --------------------------------
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 # - Classes -----------------------------
 class trFont(Font):
@@ -35,6 +35,7 @@ class trFont(Font):
 	# - Metadata and proxy model
 	#__slots__ = ('name', 'unicodes', 'identifier', 'parent')
 	__meta__ = {'masters':'masters', 'info':'info' } #, 'axes':'axes', 'instances':'instances'}
+	__meta_keys = frozenset(__meta__.keys())
 		
 	# -- Some hardcoded properties
 	active_layer = property(lambda self: self.host.activeLayer.name)
@@ -84,7 +85,7 @@ class trFont(Font):
 
 	# - Internals ------------------------------
 	def __getattribute__(self, name):
-		if name in trFont.__meta__.keys():
+		if name in trFont.__meta_keys:
 			return self.__proxy_getattr(self.host, trFont.__meta__[name])
 		else:
 			return Font.__getattribute__(self, name)
@@ -92,7 +93,7 @@ class trFont(Font):
 	def __setattr__(self, name, value):
 		#print('!!!!SET: {}'.format(name))
 		try:
-			if name in trFont.__meta__.keys():
+			if name in trFont.__meta_keys:
 				self.__proxy_setattr(self.host, trFont.__meta__[name], value)
 			else:
 				Font.__setattr__(self, name, value)
