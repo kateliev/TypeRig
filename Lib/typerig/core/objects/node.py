@@ -21,16 +21,23 @@ from typerig.core.objects.line import Line, Vector
 from typerig.core.objects.cubicbezier import CubicBezier
 from typerig.core.objects.transform import Transform
 
+from typerig.core.fileio.ufo import XMLSerializable, register_xml_class
+
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.5.1'
+__version__ = '0.5.3'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
-class Node(Member): 
+@register_xml_class
+class Node(Member, XMLSerializable): 
 	__slots__ = ('x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'identifier','complex_math','weight', 'parent', 'lib')
+
+	XML_TAG = 'point'
+	XML_ATTRS = ['x', 'y', 'type', 'smooth']
+	#XML_LIB_ATTRS = ['g2', 'transform']
 
 	def __init__(self, *args, **kwargs):
 		super(Node, self).__init__(*args, **kwargs)
@@ -39,31 +46,33 @@ class Node(Member):
 		# - Basics
 		if len(args) == 1:
 			if isinstance(args[0], self.__class__): # Clone
-				self.x, self.y = args[0].x, args[0].y
+				x, y = args[0].x, args[0].y
 
 			if isinstance(args[0], (tuple, list)):
-				self.x, self.y = args[0]
+				x, y = args[0]
 
 		elif len(args) == 2:
 			if isMultiInstance(args, (float, int)):
-				self.x, self.y = float(args[0]), float(args[1])
+				x, y = float(args[0]), float(args[1])
 		
 		else:
-			self.x, self.y = 0., 0.
+			x, y = 0., 0.
 
+		# - Basic
+		self.x = kwargs.pop('x', x)
+		self.y = kwargs.pop('y', x)
 		self.angle = kwargs.pop('angle', 0)
 		self.transform = kwargs.pop('transform', Transform())
 		self.complex_math = kwargs.pop('complex', True)
 		self.weight = Point(kwargs.pop('weight', (0.,0.)))
 
-		# - Metadata
-		if not kwargs.pop('proxy', False): # Initialize in proxy mode
-			self.type = kwargs.pop('type', node_types['on'])
-			self.name = kwargs.pop('name', '')
-			self.identifier = kwargs.pop('identifier', False)
-			self.smooth = kwargs.pop('smooth', False)
-			self.selected = kwargs.pop('selected', False)
-			self.g2 = kwargs.pop('g2', False)
+		# - Fontlab specific
+		self.type = kwargs.pop('type', node_types['on'])
+		self.name = kwargs.pop('name', '')
+		self.identifier = kwargs.pop('identifier', False)
+		self.smooth = kwargs.pop('smooth', False)
+		self.selected = kwargs.pop('selected', False)
+		self.g2 = kwargs.pop('g2', False)
 
 	# -- Internals ------------------------------
 	def __repr__(self):
@@ -584,76 +593,35 @@ class Node(Member):
 		return (self, b, c, d)
 
 	# -- IO Format ------------------------------
-		@property
-		def string(self):
-			x = int(self.x) if isinstance(self.x, float) and self.x.is_integer() else self.x
-			y = int(self.y) if isinstance(self.y, float) and self.y.is_integer() else self.y
-			return f'{x} {y}'
+	@property
+	def string(self):
+		x = int(self.x) if isinstance(self.x, float) and self.x.is_integer() else self.x
+		y = int(self.y) if isinstance(self.y, float) and self.y.is_integer() else self.y
+		return f'{x} {y}'
 
-		def to_VFJ(self):
-			flags = [
-				self.string,
-				's' if self.smooth else None,
-				'o' if not self.is_on else None,
-				'g2' if self.g2 else None
-			]
-			return ' '.join(filter(None, flags))
+	def to_VFJ(self):
+		flags = [
+			self.string,
+			's' if self.smooth else None,
+			'o' if not self.is_on else None,
+			'g2' if self.g2 else None
+		]
+		return ' '.join(filter(None, flags))
 
-		@staticmethod
-		def from_VFJ(string):
-			parts = string.split()
-			flags = set(parts[2:])  # All parts after x and y coordinates
-			
-			return Node(
-				float(parts[0]),
-				float(parts[1]),
-				type=node_types['off'] if 'o' in flags else node_types['on'],
-				smooth='s' in flags,
+	@staticmethod
+	def from_VFJ(string):
+		parts = string.split()
+		flags = set(parts[2:])  # All parts after x and y coordinates
+		
+		return Node(
+			float(parts[0]),
+			float(parts[1]),
+			type=node_types['off'] if 'o' in flags else node_types['on'],
+			smooth='s' in flags,
 				g2='g2' in flags,
 				name=None,
 				identifier=None
 			)
-
-		def to_XML(self):
-			'''Convert to UFO-compliant XML point element'''
-			x = int(self.x) if isinstance(self.x, float) and self.x.is_integer() else self.x
-			y = int(self.y) if isinstance(self.y, float) and self.y.is_integer() else self.y
-			
-			attrs = {
-				'x': str(x),
-				'y': str(y),
-				'type': 'offcurve' if not self.is_on else 'curve' if self.smooth else 'line',
-			}
-			
-			if self.smooth and self.is_on:
-				attrs['smooth'] = 'yes'
-			
-			attr_str = ' '.join(f'{k}="{v}"' for k, v in attrs.items())
-			return f'<point {attr_str}/>'
-
-		@staticmethod
-		def from_XML(element):
-			'''Parse from UFO XML point element (accepts xml.etree.ElementTree.Element or string)'''
-			from xml.etree import ElementTree as ET
-			
-			if isinstance(element, str):
-				element = ET.fromstring(element)
-			
-			x = float(element.get('x'))
-			y = float(element.get('y'))
-			point_type = element.get('type', 'line')
-			smooth = element.get('smooth') == 'yes'
-			
-			# Map UFO point types to your node types
-			is_on = point_type != 'offcurve'
-			node_type = node_types['on'] if is_on else node_types['off']
-			
-			# In UFO, 'curve' with smooth='yes' indicates a smooth point
-			if point_type == 'curve' and smooth:
-				smooth = True
-			
-			return Node(x, y, type=node_type, smooth=smooth, g2=False, name=None, identifier=None)
-
 
 class Knot(Member):
 	def __init__(self, *args, **kwargs):
@@ -819,5 +787,8 @@ if __name__ == '__main__':
 	n0.lerp_to(n1, (.5,.5))
 	print(n0)
 	n0.tuple = (1,2)
-	print(n0.tuple)
+	
+	ns = n0.to_XML()
+	nz = Node.from_XML(ns)
+	print(n0, nz)
 	

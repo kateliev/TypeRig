@@ -18,6 +18,8 @@ from typerig.core.objects.cubicbezier import CubicBezier
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.utils import Bounds
 
+from typerig.core.fileio.ufo import XMLSerializable, register_xml_class
+
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.func.transform import adaptive_scale, lerp
 from typerig.core.func.math import zero_matrix, solve_equations, hobby_control_points
@@ -26,11 +28,17 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.node import Node, Knot
 
 # - Init -------------------------------
-__version__ = '0.3.8'
+__version__ = '0.3.9'
 
 # - Classes -----------------------------
-class Contour(Container): 
+@register_xml_class
+class Contour(Container, XMLSerializable): 
 	__slots__ = ('name', 'closed', 'clockwise', 'transform', 'parent', 'lib')
+
+	XML_TAG = 'contour'
+	XML_ATTRS = ['identifier']
+	XML_CHILDREN = {'point': 'nodes'}
+	XML_LIB_ATTRS = ['transform', 'closed', 'clockwise']
 
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Node)
@@ -39,10 +47,9 @@ class Contour(Container):
 		self.transform = kwargs.pop('transform', Transform())
 		
 		# - Metadata
-		if not kwargs.pop('proxy', False): # Initialize in proxy mode
-			self.name = kwargs.pop('name', '')
-			self.closed = kwargs.pop('closed', False)
-			self.clockwise = kwargs.pop('clockwise', self.get_winding())
+		self.name = kwargs.pop('name', '')
+		self.closed = kwargs.pop('closed', False)
+		self.clockwise = kwargs.pop('clockwise', self.get_winding())
 
 	# -- Properties -----------------------------
 	@property
@@ -251,22 +258,6 @@ class Contour(Container):
 				self.nodes[idx].point = Point(adaptive_scale((node_array[idx][0], node_array[idx][1]), scale, transalte, time, compensate, angle, (node_array[idx][2][0], node_array[idx][3][0], node_array[idx][2][1], node_array[idx][3][1])))
 
 		return func
-
-	# -- IO Format ------------------------------
-	def to_VFJ(self):
-		raise NotImplementedError
-
-	@staticmethod
-	def from_VFJ(string):
-		raise NotImplementedError
-
-	@staticmethod
-	def to_XML(self):
-		raise NotImplementedError
-
-	@staticmethod
-	def from_XML(string):
-		raise NotImplementedError
 
 class HobbySpline(Container): 
 	'''Adapted from mp2tikz.py (c) 2012 JL Diaz'''
@@ -597,6 +588,7 @@ if __name__ == '__main__':
 	ss = square.selected_nodes[0].corner_round(10, proportion=.5)
 	pprint(square.nodes)
 	'''
+	'''
 	print(section('Insert After'))
 	#pprint(circle.nodes)
 	print(circle[0].next)
@@ -612,7 +604,9 @@ if __name__ == '__main__':
 	hobby_test.tension = 1.1
 	print(hobby_test.knots)
 	print(hobby_test.nodes)
-
+	'''
+	print(section('Serialization'))
+	print(frame.to_XML())
 	
 
 	
