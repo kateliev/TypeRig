@@ -27,7 +27,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.5.2'
+__version__ = '0.5.3'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -60,19 +60,20 @@ class Node(Member, XMLSerializable):
 
 		# - Basic
 		self.x = kwargs.pop('x', x)
-		self.y = kwargs.pop('y', x)
+		self.y = kwargs.pop('y', y)
 		self.angle = kwargs.pop('angle', 0)
 		self.transform = kwargs.pop('transform', Transform())
 		self.complex_math = kwargs.pop('complex', True)
 		self.weight = Point(kwargs.pop('weight', (0.,0.)))
 
 		# - Metadata
-		self.type = kwargs.pop('type', node_types['on'])
-		self.name = kwargs.pop('name', None)
-		self.identifier = kwargs.pop('identifier', False)
-		self.smooth = kwargs.pop('smooth', False)
-		self.selected = kwargs.pop('selected', False)
-		self.g2 = kwargs.pop('g2', False)
+		if not kwargs.pop('proxy', False): # Initialize in proxy mode
+			self.type = kwargs.pop('type', node_types['on'])
+			self.name = kwargs.pop('name', '')
+			self.identifier = kwargs.pop('identifier', False)
+			self.smooth = kwargs.pop('smooth', False)
+			self.selected = kwargs.pop('selected', False)
+			self.g2 = kwargs.pop('g2', False)
 
 	# -- Internals ------------------------------
 	def __repr__(self):

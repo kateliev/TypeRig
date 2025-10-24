@@ -41,7 +41,7 @@ class Shape(Container, XMLSerializable):
 
 		# - Metadata
 		if not kwargs.pop('proxy', False): # Initialize in proxy mode
-			self.name = kwargs.pop('name', None)
+			self.name = kwargs.pop('name', '')
 			self.identifier = kwargs.pop('identifier', None)
 	
 	# -- Internals ------------------------------

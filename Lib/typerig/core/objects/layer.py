@@ -41,7 +41,7 @@ class Layer(Container, XMLSerializable):
 		self.transform = kwargs.pop('transform', Transform())
 		
 		self.stx = kwargs.pop('stx', None) 
-		self.stx = kwargs.pop('sty', None) 
+		self.sty = kwargs.pop('sty', None) 
 		
 		# - Metadata
 		if not kwargs.pop('proxy', False): # Initialize in proxy mode
