@@ -9,11 +9,11 @@
 
 # - Dependencies -----------------
 from __future__ import absolute_import, print_function
-from collections import OrderedDict
-from itertools import groupby
-from math import radians
-import random
 import os
+import random
+from math import radians
+from itertools import groupby
+from collections import OrderedDict
 
 import fontlab as fl6
 from PythonQt import QtCore, QtGui
@@ -21,7 +21,6 @@ from PythonQt import QtCore, QtGui
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.node import eNode
 from typerig.proxy.fl.objects.glyph import eGlyph
-from typerig.proxy.fl.objects.contour import eContour
 
 # - Core TypeRig objects for storage
 from typerig.core.objects.glyph import Glyph
@@ -43,8 +42,8 @@ global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '2.0'
-fileFormats = 'TypeRig XML data (*.xml);;TypeRig binary data (*.dat);;'
+app_name, app_version = 'TypeRig | Contour', '2.1'
+fileFormats = 'TypeRig XML data (*.xml);;'
 
 cfg_addon_reversed = ' (Reversed)'
 cfg_addon_partial = ' (Partial)'
@@ -60,33 +59,24 @@ def get_modifier(keyboard_modifier=QtCore.Qt.AltModifier):
 	modifiers = QtGui.QApplication.keyboardModifiers()
 	return modifiers == keyboard_modifier
 
-def fl_contour_to_tr_contour(fl_contour):
-	"""Convert flContour to trContour (core Contour object)"""
-	tr_nodes = []
-	for fl_node in fl_contour.nodes():
-		# Convert flNode to Node
-		tr_node = Node(fl_node.x, fl_node.y, type=fl_node.type)
-		tr_nodes.append(tr_node)
-	
-	return Contour(tr_nodes, closed=fl_contour.closed)
-
-def fl_nodes_to_tr_contour(fl_nodes, closed=False):
-	"""Convert list of flNodes to trContour (core Contour object) for partial paths"""
+def flNodes_to_trContour(fl_nodes, is_closed):
+	'''Convert list of flNodes to trContour (core Contour object) for partial paths'''
 	tr_nodes = []
 	for fl_node in fl_nodes:
 		tr_node = Node(fl_node.x, fl_node.y, type=fl_node.type)
 		tr_nodes.append(tr_node)
 	
-	return Contour(tr_nodes, closed=closed)
+	return Contour(tr_nodes, closed=is_closed, proxy=False)
 
-def tr_contour_to_fl_contour(tr_contour):
-	"""Convert trContour (core Contour object) back to flContour"""
+def trContour_to_flContour(tr_contour):
+	'''Convert trContour (core Contour object) back to flContour'''
 	fl_nodes = []
 	for tr_node in tr_contour.nodes:
 		fl_node = fl6.flNode(QtCore.QPointF(tr_node.x, tr_node.y), nodeType=tr_node.type)
 		fl_nodes.append(fl_node)
 	
 	fl_contour = fl6.flContour(fl_nodes)
+	print(tr_contour.closed)
 	fl_contour.closed = tr_contour.closed
 	return fl_contour
 
@@ -312,7 +302,7 @@ class TRContourCopy(QtGui.QWidget):
 			clipboard_item.setText(new_caption)
 
 	def __drawIcon(self, contours, selection, foreground='black', background='gray'):
-		"""Draw icon for gallery. Handles both full contours and partial paths."""
+		'''Draw icon for gallery. Handles both full contours and partial paths.'''
 		# - Init
 		cloned_contours = [contour.clone() for contour in contours]
 		new_shape = fl6.flShape()
@@ -376,7 +366,7 @@ class TRContourCopy(QtGui.QWidget):
 		return new_icon
 
 	def copy_contour(self):
-		"""Copy selected contours or partial paths to clipboard as trGlyph objects."""
+		'''Copy selected contours or partial paths to clipboard as trGlyph objects.'''
 		# - Init
 		wGlyph = eGlyph()
 		current_contours = wGlyph.contours()
@@ -435,7 +425,7 @@ class TRContourCopy(QtGui.QWidget):
 					# Store whole contours
 					for cid in selection.keys():
 						fl_contour = all_contours[cid]
-						tr_contour = fl_contour_to_tr_contour(fl_contour)
+						tr_contour = flNodes_to_trContour(fl_contour.nodes(), True)
 						
 						# Create shape with single contour
 						tr_shape = Shape([tr_contour])
@@ -455,7 +445,7 @@ class TRContourCopy(QtGui.QWidget):
 							partial_nodes.append(fl_node)
 					
 					# Create single contour from partial nodes
-					tr_contour = fl_nodes_to_tr_contour(partial_nodes, closed=False)
+					tr_contour = flNodes_to_trContour(partial_nodes, False)
 					tr_shape = Shape([tr_contour])
 					tr_layer.append(tr_shape)
 				
@@ -472,7 +462,7 @@ class TRContourCopy(QtGui.QWidget):
 			output(0, app_name, 'Copy contours; Glyph: %s; Layers: %s; Type: %s' %(wGlyph.name, '; '.join(process_layers), contour_type))
 		
 	def paste_nodes(self):
-		"""Paste nodes over selection using node action collector."""
+		'''Paste nodes over selection using node action collector.'''
 		wGlyph = eGlyph()
 		wLayers = wGlyph._prepareLayers(pLayers)
 		gallery_selection = [self.lst_contours.model().itemFromIndex(qidx) for qidx in self.lst_contours.selectedIndexes()]
@@ -502,7 +492,7 @@ class TRContourCopy(QtGui.QWidget):
 				(self.chk_paste_flip_h.isChecked(), self.chk_paste_flip_v.isChecked(), False, False, True, False))
 	
 	def paste_contour(self, to_mask=False):
-		"""Paste whole contours from clipboard."""
+		'''Paste whole contours from clipboard.'''
 		# - Init
 		wGlyph = eGlyph()
 		wLayers = wGlyph._prepareLayers(pLayers)
@@ -534,7 +524,7 @@ class TRContourCopy(QtGui.QWidget):
 						fl_contours = []
 						for tr_shape in tr_layer.shapes:
 							for tr_contour in tr_shape.contours:
-								fl_contour = tr_contour_to_fl_contour(tr_contour)
+								fl_contour = trContour_to_flContour(tr_contour)
 								fl_contours.append(fl_contour)
 
 						# Insert contours into currently selected shape
@@ -549,7 +539,7 @@ class TRContourCopy(QtGui.QWidget):
 			wGlyph.updateObject(wGlyph.fl, 'Paste contours; Glyph: %s; Layers: %s' %(wGlyph.name, '; '.join(wLayers)))
 
 	def paste_path(self):
-		"""Paste partial path (trace nodes)."""
+		'''Paste partial path (trace nodes).'''
 		# - Init
 		wGlyph = eGlyph()
 		wLayers = wGlyph._prepareLayers(pLayers)
@@ -599,7 +589,7 @@ class TRContourCopy(QtGui.QWidget):
 
 	# -- File operations
 	def clipboard_save(self):
-		"""Save clipboard to XML or binary file."""
+		'''Save clipboard to XML or binary file.'''
 		fontPath = os.path.split(self.active_font.fg.path)[0]
 		fname = QtGui.QFileDialog.getSaveFileName(self, 'Save clipboard data to file', fontPath, fileFormats)
 
@@ -608,12 +598,12 @@ class TRContourCopy(QtGui.QWidget):
 				# Save as XML
 				with open(fname, 'w') as exportFile:
 					# Create root structure
-					xml_data = '<?xml version="1.0" encoding="UTF-8"?>\n<clipboard>\n'
+					xml_data = '<?xml version="1.0" encoding="UTF-8"?><clipboard>'
 					
 					for uid, tr_glyph in self.contour_clipboard.items():
-						xml_data += '  <item uid="{}">\n'.format(uid)
-						xml_data += tr_glyph.to_XML(indent=4)
-						xml_data += '\n  </item>\n'
+						xml_data += '<item uid="{}">'.format(uid)
+						xml_data += tr_glyph.to_XML()
+						xml_data += '</item>'
 					
 					xml_data += '</clipboard>'
 					exportFile.write(xml_data)
@@ -624,7 +614,7 @@ class TRContourCopy(QtGui.QWidget):
 				output(4, app_name, 'Error saving clipboard: %s' % str(e))
 				
 	def clipboard_load(self):
-		"""Load clipboard from XML"""
+		'''Load clipboard from XML'''
 		fontPath = os.path.split(self.active_font.fg.path)[0]
 		fname = QtGui.QFileDialog.getOpenFileName(self, 'Load clipboard data from file', fontPath, fileFormats)
 			

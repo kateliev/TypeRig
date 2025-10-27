@@ -18,7 +18,7 @@ Each class defines its XML schema using class attributes:
 from xml.etree import ElementTree as ET
 
 # - Init --------------------------------
-__version__ = '0.4.0'
+__version__ = '0.4.2'
 
 # - Classes -----------------------------
 class XMLSerializable:
@@ -60,7 +60,7 @@ class XMLSerializable:
 		for attr_name in self.XML_LIB_ATTRS:
 			value = getattr(self, attr_name, None)
 			# Only include non-default/non-None values
-			if value is not None and not _is_default_value(attr_name, value):
+			if value is not None:
 				lib_data[attr_name] = value
 		
 		# Include custom lib data if object has it
@@ -109,7 +109,18 @@ class XMLSerializable:
 				# Extract known lib attributes
 				for attr_name in cls.XML_LIB_ATTRS:
 					if attr_name in lib_data:
-						attrs[attr_name] = lib_data.pop(attr_name)
+						value = lib_data.pop(attr_name)
+						
+						# Special handling for transform - convert array back to Transform object
+						if attr_name == 'transform' and isinstance(value, list) and len(value) == 6:
+							try:
+								# Import Transform class
+								from typerig.core.objects.transform import Transform
+								value = Transform(*value)
+							except ImportError:
+								pass  # Keep as array if Transform not available
+						
+						attrs[attr_name] = value
 				
 				# Store remaining lib data
 				if lib_data:
@@ -172,17 +183,6 @@ def _format_xml_attr(value):
 	else:
 		return str(value)
 
-def _is_default_value(attr_name, value):
-	'''Check if value is a default that should be skipped in lib'''
-	# Skip None, empty transform, False for closed, etc.
-	if value is None:
-		return True
-	if attr_name == 'transform' and value in (None, [1, 0, 0, 1, 0, 0]):
-		return True
-	if attr_name == 'closed' and value is True:
-		return True
-	return False
-
 
 # Plist helpers
 def _create_lib_element(data):
@@ -199,6 +199,23 @@ def _add_plist_key_value(dict_elem, key, value):
 	'''Add a key-value pair to a plist dict element'''
 	key_elem = ET.SubElement(dict_elem, 'key')
 	key_elem.text = key
+	
+	# Special handling for Transform objects - convert to array
+	if hasattr(value, '__len__') and hasattr(value, '__getitem__') and len(value) == 6:
+		# This looks like a Transform object - serialize as array
+		try:
+			array_elem = ET.SubElement(dict_elem, 'array')
+			for i in range(6):
+				item = value[i]
+				if isinstance(item, float):
+					elem = ET.SubElement(array_elem, 'real')
+					elem.text = str(item)
+				elif isinstance(item, int):
+					elem = ET.SubElement(array_elem, 'integer')
+					elem.text = str(item)
+			return
+		except (TypeError, IndexError):
+			pass  # Not a Transform-like object, continue with normal handling
 	
 	if value is None:
 		# Skip None values - don't add anything
@@ -233,6 +250,9 @@ def _add_plist_key_value(dict_elem, key, value):
 		nested_dict = ET.SubElement(dict_elem, 'dict')
 		for k, v in value.items():
 			_add_plist_key_value(nested_dict, k, v)
+	else:
+		# Unknown type - remove the key element to avoid malformed XML
+		dict_elem.remove(key_elem)
 
 def _parse_plist_dict(dict_elem):
 	'''Parse a plist dict element into a Python dict'''
