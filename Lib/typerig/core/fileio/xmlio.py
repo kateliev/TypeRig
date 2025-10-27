@@ -17,14 +17,17 @@ Each class defines its XML schema using class attributes:
 # - Dependencies ------------------------
 from xml.etree import ElementTree as ET
 
+# - Init --------------------------------
+__version__ = '0.4.0'
+
 # - Classes -----------------------------
 class XMLSerializable:
 	'''Mixin class for XML serialization'''
 	
 	# Override these in subclasses
-	XML_TAG = None 		# e.g., 'contour', 'node', 'glyph'
-	XML_ATTRS = []  	# e.g., ['identifier', 'x', 'y']
-	XML_CHILDREN = {} 	# e.g., {'point': 'nodes', 'component': 'components'}
+	XML_TAG = None  # e.g., 'contour', 'node', 'glyph'
+	XML_ATTRS = []  # e.g., ['identifier', 'x', 'y']
+	XML_CHILDREN = {}  # e.g., {'point': 'nodes', 'component': 'components'}
 	XML_LIB_ATTRS = []  # e.g., ['transform', 'closed', 'clockwise']
 	
 	def to_XML(self):
@@ -40,7 +43,7 @@ class XMLSerializable:
 		for attr_name in self.XML_ATTRS:
 			value = getattr(self, attr_name, None)
 			if value is not None:
-				elem.set(attr_name, str(value))
+				elem.set(attr_name, _format_xml_attr(value))
 		
 		# Add child elements
 		for child_tag, attr_name in self.XML_CHILDREN.items():
@@ -56,12 +59,15 @@ class XMLSerializable:
 		lib_data = {}
 		for attr_name in self.XML_LIB_ATTRS:
 			value = getattr(self, attr_name, None)
-			if value is not None:
+			# Only include non-default/non-None values
+			if value is not None and not _is_default_value(attr_name, value):
 				lib_data[attr_name] = value
 		
 		# Include custom lib data if object has it
 		if hasattr(self, 'lib') and self.lib:
-			lib_data.update(self.lib)
+			for key, value in self.lib.items():
+				if key not in lib_data:  # Don't override extracted attrs
+					lib_data[key] = value
 		
 		if lib_data:
 			lib_elem = _create_lib_element(lib_data)
@@ -80,7 +86,8 @@ class XMLSerializable:
 		for attr_name in cls.XML_ATTRS:
 			value = element.get(attr_name)
 			if value is not None:
-				attrs[attr_name] = value
+				# Type conversion
+				attrs[attr_name] = _convert_xml_attr(value)
 		
 		# Parse child elements
 		for child_tag, attr_name in cls.XML_CHILDREN.items():
@@ -124,6 +131,58 @@ def _find_class_for_tag(tag):
 	'''Find registered class for a given XML tag'''
 	return _XML_REGISTRY.get(tag)
 
+def _convert_xml_attr(value):
+	'''Convert XML attribute string to appropriate Python type'''
+	# Try boolean
+	if value in ('True', 'true', 'yes'):
+		return True
+	if value in ('False', 'false', 'no'):
+		return False
+	
+	# Try integer
+	try:
+		if '.' not in value:
+			return int(value)
+	except ValueError:
+		pass
+	
+	# Try float
+	try:
+		return float(value)
+	except ValueError:
+		pass
+	
+	# Try to parse as list (e.g., "[12032, 19968]")
+	if value.startswith('[') and value.endswith(']'):
+		try:
+			import ast
+			return ast.literal_eval(value)
+		except:
+			pass
+	
+	# Return as string
+	return value
+
+def _format_xml_attr(value):
+	'''Format Python value as XML attribute string'''
+	if isinstance(value, bool):
+		return str(value)
+	elif isinstance(value, (list, tuple)):
+		return str(value)
+	else:
+		return str(value)
+
+def _is_default_value(attr_name, value):
+	'''Check if value is a default that should be skipped in lib'''
+	# Skip None, empty transform, False for closed, etc.
+	if value is None:
+		return True
+	if attr_name == 'transform' and value in (None, [1, 0, 0, 1, 0, 0]):
+		return True
+	if attr_name == 'closed' and value is True:
+		return True
+	return False
+
 
 # Plist helpers
 def _create_lib_element(data):
@@ -141,7 +200,11 @@ def _add_plist_key_value(dict_elem, key, value):
 	key_elem = ET.SubElement(dict_elem, 'key')
 	key_elem.text = key
 	
-	if isinstance(value, bool):
+	if value is None:
+		# Skip None values - don't add anything
+		dict_elem.remove(key_elem)
+		return
+	elif isinstance(value, bool):
 		ET.SubElement(dict_elem, 'true' if value else 'false')
 	elif isinstance(value, int):
 		int_elem = ET.SubElement(dict_elem, 'integer')

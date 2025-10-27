@@ -27,7 +27,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.5.3'
+__version__ = '0.5.4'
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
@@ -35,13 +35,13 @@ node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 class Node(Member, XMLSerializable): 
 	__slots__ = ('x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'identifier','complex_math','weight', 'parent', 'lib')
 
-	XML_TAG = 'point'
+	XML_TAG = 'node'
 	XML_ATTRS = ['x', 'y', 'type', 'smooth']
-	#XML_LIB_ATTRS = ['g2', 'transform']
+	XML_LIB_ATTRS = ['g2', 'transform']
+
 
 	def __init__(self, *args, **kwargs):
 		super(Node, self).__init__(*args, **kwargs)
-		self.parent = kwargs.pop('parent', None)
 
 		# - Basics
 		if len(args) == 1:
@@ -61,6 +61,8 @@ class Node(Member, XMLSerializable):
 		# - Basic
 		self.x = kwargs.pop('x', x)
 		self.y = kwargs.pop('y', y)
+
+		# - Basic
 		self.angle = kwargs.pop('angle', 0)
 		self.transform = kwargs.pop('transform', Transform())
 		self.complex_math = kwargs.pop('complex', True)
@@ -609,12 +611,12 @@ class Node(Member, XMLSerializable):
 		]
 		return ' '.join(filter(None, flags))
 
-	@staticmethod
-	def from_VFJ(string):
+	@classmethod
+	def from_VFJ(cls, string):
 		parts = string.split()
 		flags = set(parts[2:])  # All parts after x and y coordinates
 		
-		return Node(
+		return cls(
 			float(parts[0]),
 			float(parts[1]),
 			type=node_types['off'] if 'o' in flags else node_types['on'],
@@ -624,24 +626,22 @@ class Node(Member, XMLSerializable):
 				identifier=None
 			)
 
+	@classmethod
+	def from_tuple(cls, coords, **kwargs):
+		'''Create Node from tuple/list of coordinates.'''
+		return cls(coords[0], coords[1], **kwargs)
+	
+	@classmethod
+	def from_object(cls, other, **kwargs):
+		'''Clone Node from another Object (Node or Point) instance.'''
+		return cls(other.x, other.y, **kwargs)
+
 class Knot(Member):
-	def __init__(self, *args, **kwargs):
-		super(Knot, self).__init__(*args, **kwargs)
+	def __init__(self, x=0., y=0. , **kwargs):
+		super(Knot, self).__init__(**kwargs)
 
-		# - Basics
-		if len(args) == 1:
-			if isinstance(args[0], self.__class__): # Clone
-				self.x, self.y = args[0].x, args[0].y
-
-			if isinstance(args[0], (tuple, list)):
-				self.x, self.y = args[0]
-
-		elif len(args) == 2:
-			if isMultiInstance(args, (float, int)):
-				self.x, self.y = float(args[0]), float(args[1])
-		
-		else:
-			self.x, self.y = 0., 0.
+		self.x = float(x)
+		self.y = float(y)
 
 		# - Metadata
 		self.type = 'on'
@@ -767,13 +767,24 @@ class Knot(Member):
 		'''Shift the node by given amout'''
 		self.point += Point(delta_x, delta_y)
 
+	# -- IO Format ------------------------------
+	@classmethod
+	def from_tuple(cls, coords, **kwargs):
+		'''Create Node from tuple/list of coordinates.'''
+		return cls(coords[0], coords[1], **kwargs)
+	
+	@classmethod
+	def from_object(cls, other, **kwargs):
+		'''Clone Node from another Object (Node or Point) instance.'''
+		return cls(other.x, other.y, **kwargs)
+
 if __name__ == '__main__':
 	# - Test initialization, normal and from VFJ
 	n0 = Node.from_VFJ('10 20 s g2')
 	n1 = Node.from_VFJ('20 30 s')
 	n2 = Node(35, 55.65)
 	n3 = Node(44, 67, type='smooth')
-	n4 = Node(n3)
+	n4 = Node.from_object(n3)
 	print(n3, n4)
 	
 	# - Test math and VFJ export
@@ -782,8 +793,8 @@ if __name__ == '__main__':
 	print(n3.to_VFJ())
 	
 	# - Test Containers and VFJ export 
-	c = Container([n0, n1, n2, n3, n4], default_factory=Node)
-	c.append((99,99))
+	#c = Container([], default_factory=Node.from_tuple)
+	#c.append((99,99))
 	print(n0)
 	n0.lerp_to(n1, (.5,.5))
 	print(n0)

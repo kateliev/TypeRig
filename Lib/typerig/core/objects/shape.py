@@ -21,7 +21,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.contour import Contour
 
 # - Init -------------------------------
-__version__ = '0.1.7'
+__version__ = '0.1.8'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -33,9 +33,9 @@ class Shape(Container, XMLSerializable):
 	XML_CHILDREN = {'contour': 'contours'}
 	XML_LIB_ATTRS = ['transform']
 
-	def __init__(self, data=None, **kwargs):
+	def __init__(self, contours=None, **kwargs):
 		factory = kwargs.pop('default_factory', Contour)
-		super(Shape, self).__init__(data, default_factory=factory, **kwargs)
+		super(Shape, self).__init__(contours, default_factory=factory, **kwargs)
 		
 		self.transform = kwargs.pop('transform', Transform())
 

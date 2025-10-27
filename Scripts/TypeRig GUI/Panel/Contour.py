@@ -35,7 +35,7 @@ global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '5.5'
+app_name, app_version = 'TypeRig | Contour', '5.6'
 
 cfg_addon_reversed = ' (Reversed)'
 
@@ -345,6 +345,7 @@ class TRContourBasics(QtGui.QWidget):
 		self.ctrl_transform.btn_transform.clicked.connect(self.transform_contour)
 
 		# -- Finish it -------------------------------------------------------
+		self.lay_main.addStretch()
 		self.setLayout(self.lay_main)
 
 	# - Procedures -----------------------------------------------

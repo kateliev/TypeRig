@@ -22,7 +22,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.shape import Shape
 
 # - Init -------------------------------
-__version__ = '0.2.0'
+__version__ = '0.2.1'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -34,9 +34,9 @@ class Layer(Container, XMLSerializable):
 	XML_CHILDREN = {'shape': 'shapes'}
 	XML_LIB_ATTRS = ['transform', 'stx', 'sty']
 	
-	def __init__(self, data=None, **kwargs):
+	def __init__(self, shapes=None, **kwargs):
 		factory = kwargs.pop('default_factory', Shape)
-		super(Layer, self).__init__(data, default_factory=factory, **kwargs)
+		super(Layer, self).__init__(shapes, default_factory=factory, **kwargs)
 		
 		self.transform = kwargs.pop('transform', Transform())
 		

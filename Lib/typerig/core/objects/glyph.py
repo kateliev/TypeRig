@@ -21,7 +21,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.layer import Layer
 
 # - Init -------------------------------
-__version__ = '0.1.6'
+__version__ = '0.1.7'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -33,9 +33,9 @@ class Glyph(Container, XMLSerializable):
 	XML_CHILDREN = {'layer': 'layers'}
 	XML_LIB_ATTRS = []
 
-	def __init__(self, data=None, **kwargs):
+	def __init__(self, layers=None, **kwargs):
 		factory = kwargs.pop('default_factory', Layer)
-		super(Glyph, self).__init__(data, default_factory=factory, **kwargs)
+		super(Glyph, self).__init__(layers, default_factory=factory, **kwargs)
 		
 		# - Metadata
 		if not kwargs.pop('proxy', False): # Initialize in proxy mode
