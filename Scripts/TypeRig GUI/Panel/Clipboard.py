@@ -36,13 +36,14 @@ from typerig.proxy.fl.actions.node import TRNodeActionCollector
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.gui.widgets import getTRIconFontPath, getTRIconFont, TRTransformCtrl, CustomLabel, CustomPushButton, TRFlowLayout
 from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
+from typerig.proxy.fl.gui.drawing import TRDrawIcon
 
 # - Init -------------------------------
 global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '2.1'
+app_name, app_version = 'TypeRig | Contour', '2.2'
 fileFormats = 'TypeRig XML data (*.xml);;'
 
 cfg_addon_reversed = ' (Reversed)'
@@ -71,13 +72,14 @@ def flNodes_to_trContour(fl_nodes, is_closed):
 def trContour_to_flContour(tr_contour):
 	'''Convert trContour (core Contour object) back to flContour'''
 	fl_nodes = []
+	
 	for tr_node in tr_contour.nodes:
 		fl_node = fl6.flNode(QtCore.QPointF(tr_node.x, tr_node.y), nodeType=tr_node.type)
 		fl_nodes.append(fl_node)
 	
 	fl_contour = fl6.flContour(fl_nodes)
-	print(tr_contour.closed)
 	fl_contour.closed = tr_contour.closed
+	
 	return fl_contour
 
 # - Sub widgets ------------------------
@@ -227,6 +229,7 @@ class TRContourCopy(QtGui.QWidget):
 		self.__toggle_list_view_mode()
 		self.setLayout(lay_main)
 
+	# -- Functions --------------------------
 	def __reset(self):
 		self.mod_contours.removeRows(0, self.mod_contours.rowCount())
 		self.contour_clipboard = {}
@@ -237,7 +240,7 @@ class TRContourCopy(QtGui.QWidget):
 	def __clear_selected(self):
 		gallery_selection = [qidx.row() for qidx in self.lst_contours.selectedIndexes()]
 		
-		# Get UIDs before removing to clean up clipboard
+		# - Get UIDs before removing to clean up clipboard
 		uids_to_remove = []
 		for idx in gallery_selection:
 			item = self.mod_contours.item(idx)
@@ -245,11 +248,11 @@ class TRContourCopy(QtGui.QWidget):
 				uid = item.data(QtCore.Qt.UserRole + 1000)
 				uids_to_remove.append(uid)
 		
-		# Remove from model
+		# - Remove from model
 		for idx in sorted(gallery_selection, reverse=True):
 			self.mod_contours.removeRow(idx)
 		
-		# Clean up clipboard
+		# - Clean up clipboard
 		for uid in uids_to_remove:
 			if uid in self.contour_clipboard:
 				del self.contour_clipboard[uid]
@@ -301,69 +304,7 @@ class TRContourCopy(QtGui.QWidget):
 
 			clipboard_item.setText(new_caption)
 
-	def __drawIcon(self, contours, selection, foreground='black', background='gray'):
-		'''Draw icon for gallery. Handles both full contours and partial paths.'''
-		# - Init
-		cloned_contours = [contour.clone() for contour in contours]
-		new_shape = fl6.flShape()
-
-		for contour in cloned_contours:
-			new_shape.addContour(contour, True)
-
-		new_painter = QtGui.QPainter()
-		new_icon = QtGui.QIcon()
-		shape_bbox = new_shape.boundingBox
-		draw_dimension = max(shape_bbox.width(), shape_bbox.height())
-		new_pixmap = QtGui.QPixmap(draw_dimension + 32, draw_dimension + 32)
-		new_pixmap.fill(QtGui.QColor('white'))
-
-		# - Paint
-		new_painter.begin(new_pixmap)
-		
-		# -- Foreground
-		draw_color = foreground if not len(selection) else background
-		new_painter.setBrush(QtGui.QBrush(QtGui.QColor(draw_color)))
-		new_transform = new_shape.transform.translate(-shape_bbox.x(), -shape_bbox.y())
-		new_shape.applyTransform(new_transform)
-		new_shape.ensurePaths()
-		new_painter.drawPath(new_shape.closedPath)
 	
-		if len(selection):
-			selection_contour = fl6.flContour()
-			for node in selection:
-				new_node = node.clone()
-				new_node.moveBy(-shape_bbox.x(), -shape_bbox.y())
-				selection_contour.add(new_node)
-
-			# --- Setup pen for outline ---
-			outline_pen = QtGui.QPen(QtGui.QColor(foreground))
-			outline_pen.setWidthF(8.0) 
-			outline_pen.setStyle(QtCore.Qt.SolidLine)
-			outline_pen.setCapStyle(QtCore.Qt.RoundCap)
-			outline_pen.setJoinStyle(QtCore.Qt.RoundJoin)
-
-			new_painter.setPen(outline_pen)
-			new_painter.setBrush(QtGui.QColor(0,0,0,0))
-
-			# --- Draw the closed contour ---
-			new_painter.drawPath(selection_contour.path())
-
-			# --- Draw selected nodes as individual squares ---
-			sel_brush = QtGui.QBrush(QtGui.QColor(foreground))
-			sel_pen = QtGui.QPen(QtGui.QColor(foreground))
-			new_painter.setBrush(sel_brush)
-			new_painter.setPen(sel_pen)
-
-			# - Draw marks at each selected point
-			node_size = max(2, draw_dimension * 0.08)
-			half = node_size / 2.0
-
-			for node in selection:
-				new_painter.drawEllipse(QtCore.QRectF(node.x - shape_bbox.x() - half, node.y - shape_bbox.y() - half, node_size, node_size))
-		
-		new_icon.addPixmap(new_pixmap.transformed(QtGui.QTransform().scale(1, -1)))
-		
-		return new_icon
 
 	def copy_contour(self):
 		'''Copy selected contours or partial paths to clipboard as trGlyph objects.'''
@@ -388,28 +329,6 @@ class TRContourCopy(QtGui.QWidget):
 
 		# - Process
 		if len(selection.keys()):
-			
-			# -- Prepare display info
-			if len(process_layers) == len(wGlyph.masters()):
-				conditional_color = 'green'
-			elif len(process_layers) == 1:
-				conditional_color = 'red'
-			else:
-				conditional_color = 'blue'
-
-			# --- Prepare icon and bank entry
-			draw_contours = [wGlyph.contours()[cid] for cid in selection.keys()]
-			draw_count = sum([contour.nodesCount for contour in draw_contours])
-			contour_type = 'Partial' if is_partial else 'Closed'
-			new_item = QtGui.QStandardItem('{} | {} Nodes ({} Contour)'.format(wGlyph.name, draw_count, contour_type))
-
-			if not is_partial:
-				new_icon = self.__drawIcon(draw_contours, selection={}, foreground=conditional_color)
-			else:
-				new_icon = self.__drawIcon(draw_contours, selection=wGlyph.selectedNodes(), foreground=conditional_color, background='LightGray')
-
-			new_item.setIcon(new_icon)
-			self.mod_contours.appendRow(new_item)
 
 			# -- Create trGlyph structure for storage
 			tr_glyph = Glyph(name=wGlyph.name)
@@ -454,10 +373,35 @@ class TRContourCopy(QtGui.QWidget):
 			# - Generate unique identifier and store
 			copy_uid = hash(random.getrandbits(128))
 			self.contour_clipboard[copy_uid] = tr_glyph
+			
+			# -- Prepare display info
+			if len(process_layers) == len(wGlyph.masters()):
+				conditional_color = 'green'
+			elif len(process_layers) == 1:
+				conditional_color = 'red'
+			else:
+				conditional_color = 'blue'
+
+			# --- Prepare icon and bank entry
+			draw_contours = [wGlyph.contours()[cid] for cid in selection.keys()]
+			draw_count = sum([contour.nodesCount for contour in draw_contours])
+			contour_type = 'Partial' if is_partial else 'Closed'
+			new_item = QtGui.QStandardItem('{} | {} Nodes ({} Contour)'.format(wGlyph.name, draw_count, contour_type))
+
+			if not is_partial:
+				new_icon = TRDrawIcon(draw_contours, selection=None, foreground=conditional_color)
+			else:
+				new_icon = TRDrawIcon(draw_contours, selection=wGlyph.selectedNodes(), foreground=conditional_color, background='LightGray')
+
+			new_item.setIcon(new_icon)
+
 			new_item.setData(copy_uid, QtCore.Qt.UserRole + 1000)
 			new_item.setData(is_partial, QtCore.Qt.UserRole + 1001)  # Store partial flag
 			new_item.setDropEnabled(False)
 			new_item.setSelectable(True)
+			
+
+			self.mod_contours.appendRow(new_item)
 
 			output(0, app_name, 'Copy contours; Glyph: %s; Layers: %s; Type: %s' %(wGlyph.name, '; '.join(process_layers), contour_type))
 		
