@@ -43,7 +43,7 @@ global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '2.2'
+app_name, app_version = 'TypeRig | Contour', '2.3'
 fileFormats = 'TypeRig XML data (*.xml);;'
 
 cfg_addon_reversed = ' (Reversed)'
@@ -99,6 +99,7 @@ class TRContourCopy(QtGui.QWidget):
 		self.mod_contours = QtGui.QStandardItemModel(self.lst_contours)
 		self.lst_contours.setMinimumHeight(350)
 		self.lst_contours.setModel(self.mod_contours)
+		self.mod_contours.itemChanged.connect(self.__on_item_renamed)
 		
 		# -- Quick Tool buttons
 		box_contour_copy = QtGui.QGroupBox()
@@ -283,6 +284,78 @@ class TRContourCopy(QtGui.QWidget):
 			self.lst_contours.setGridSize(QtCore.QSize()) 
 			self.lst_contours.setSpacing(1)
 
+	def __on_item_renamed(self, item):
+		uid = item.data(QtCore.Qt.UserRole + 1000)
+		
+		if uid in self.contour_clipboard:
+			# Extract the new name from item text
+			item_text = item.text()
+			
+			# Parse format: "Name | N Nodes (Type)"
+			if '|' in item_text:
+				new_name = item_text.split('|')[0].strip()
+			else:
+				new_name = item_text.strip()
+			
+			# Update tr_glyph name
+			tr_glyph = self.contour_clipboard[uid]
+			tr_glyph.name = new_name
+
+	def __create_list_item(self, uid, tr_glyph, fl_glyph=None, selection_dict=None):
+		# - Extract data from first layer (all layers are isomorphic)
+		first_layer = tr_glyph.layers[0]
+		first_shape = first_layer.shapes[0]
+		first_contour = first_shape.contours[0]
+		
+		# - Determine if partial from first contour
+		is_partial = not first_contour.closed
+		
+		# - Calculate node count from first layer
+		draw_count = len(first_layer.nodes)
+		
+		# - Determine color based on layer count
+		masters_count = len(self.active_font.masters())
+		layer_count = len(tr_glyph.layers)
+		
+		if layer_count == masters_count:
+			conditional_color = 'green'
+		elif layer_count == 1:
+			conditional_color = 'red'
+		else:
+			conditional_color = 'blue'
+		
+		# - Create text label
+		contour_type = 'Partial' if is_partial else 'Closed'
+		new_item = QtGui.QStandardItem('{} | {} Nodes ({} Contour)'.format(tr_glyph.name, draw_count, contour_type))
+		
+		# - Create icon
+		if fl_glyph is not None and selection_dict is not None:
+			# - Copy operation: use current glyph contours
+			draw_contours = [fl_glyph.contours()[cid] for cid in selection_dict.keys()]
+			use_selection = fl_glyph.selectedNodes() if is_partial else None
+		else:
+			# - Load operation: convert tr_glyph to flContours
+			draw_contours = []
+			for shape in first_layer.shapes:
+				for tr_contour in shape.contours:
+					fl_contour = trContour_to_flContour(tr_contour)
+					fl_contour.closed = True
+					draw_contours.append(fl_contour)
+			use_selection = None
+		
+		# Draw icon
+		use_background = 'LightGray'
+		new_icon = TRDrawIcon(draw_contours, selection=use_selection, foreground=conditional_color,	background=use_background)
+		new_item.setIcon(new_icon)
+		
+		# Set item data
+		new_item.setData(uid, QtCore.Qt.UserRole + 1000)
+		new_item.setData(is_partial, QtCore.Qt.UserRole + 1001)
+		new_item.setDropEnabled(False)
+		new_item.setSelectable(True)
+		
+		return new_item
+
 	def __reverse_selected(self):
 		gallery_selection = [self.lst_contours.model().itemFromIndex(qidx) for qidx in self.lst_contours.selectedIndexes()]
 		
@@ -303,8 +376,6 @@ class TRContourCopy(QtGui.QWidget):
 				new_caption = clipboard_item.text() + cfg_addon_reversed
 
 			clipboard_item.setText(new_caption)
-
-	
 
 	def copy_contour(self):
 		'''Copy selected contours or partial paths to clipboard as trGlyph objects.'''
@@ -373,37 +444,11 @@ class TRContourCopy(QtGui.QWidget):
 			# - Generate unique identifier and store
 			copy_uid = hash(random.getrandbits(128))
 			self.contour_clipboard[copy_uid] = tr_glyph
-			
-			# -- Prepare display info
-			if len(process_layers) == len(wGlyph.masters()):
-				conditional_color = 'green'
-			elif len(process_layers) == 1:
-				conditional_color = 'red'
-			else:
-				conditional_color = 'blue'
-
-			# --- Prepare icon and bank entry
-			draw_contours = [wGlyph.contours()[cid] for cid in selection.keys()]
-			draw_count = sum([contour.nodesCount for contour in draw_contours])
-			contour_type = 'Partial' if is_partial else 'Closed'
-			new_item = QtGui.QStandardItem('{} | {} Nodes ({} Contour)'.format(wGlyph.name, draw_count, contour_type))
-
-			if not is_partial:
-				new_icon = TRDrawIcon(draw_contours, selection=None, foreground=conditional_color)
-			else:
-				new_icon = TRDrawIcon(draw_contours, selection=wGlyph.selectedNodes(), foreground=conditional_color, background='LightGray')
-
-			new_item.setIcon(new_icon)
-
-			new_item.setData(copy_uid, QtCore.Qt.UserRole + 1000)
-			new_item.setData(is_partial, QtCore.Qt.UserRole + 1001)  # Store partial flag
-			new_item.setDropEnabled(False)
-			new_item.setSelectable(True)
-			
-
+						
+			new_item =  self.__create_list_item(uid=copy_uid, tr_glyph=tr_glyph, fl_glyph=wGlyph, selection_dict=selection)
 			self.mod_contours.appendRow(new_item)
 
-			output(0, app_name, 'Copy contours; Glyph: %s; Layers: %s; Type: %s' %(wGlyph.name, '; '.join(process_layers), contour_type))
+			output(0, app_name, 'Copy contours; Glyph: %s; Layers: %s;' %(wGlyph.name, '; '.join(process_layers)))
 		
 	def paste_nodes(self):
 		'''Paste nodes over selection using node action collector.'''
@@ -432,8 +477,7 @@ class TRContourCopy(QtGui.QWidget):
 				
 				paste_data[tr_layer.name] = all_nodes
 
-			TRNodeActionCollector.nodes_paste(wGlyph, wLayers, paste_data, self.node_align_state, 
-				(self.chk_paste_flip_h.isChecked(), self.chk_paste_flip_v.isChecked(), False, False, True, False))
+			TRNodeActionCollector.nodes_paste(wGlyph, wLayers, paste_data, self.node_align_state, (self.chk_paste_flip_h.isChecked(), self.chk_paste_flip_v.isChecked(), False, False, True, False))
 	
 	def paste_contour(self, to_mask=False):
 		'''Paste whole contours from clipboard.'''
@@ -584,6 +628,7 @@ class TRContourCopy(QtGui.QWidget):
 						self.contour_clipboard[uid] = tr_glyph
 						
 						# Add to gallery
+						'''
 						glyph_name = tr_glyph.name if tr_glyph.name else 'Unnamed'
 						layer_count = len(tr_glyph.layers)
 						contour_count = sum(len(shape.contours) for layer in tr_glyph.layers for shape in layer.shapes)
@@ -592,6 +637,9 @@ class TRContourCopy(QtGui.QWidget):
 						new_item.setData(uid, QtCore.Qt.UserRole + 1000)
 						new_item.setDropEnabled(False)
 						new_item.setSelectable(True)
+						'''
+
+						new_item = self.__create_list_item(uid=uid, tr_glyph=tr_glyph)
 						self.mod_contours.appendRow(new_item)
 				
 				output(6, app_name, 'Font: %s; Clipboard loaded from XML: %s.' %(self.active_font.name, fname))
