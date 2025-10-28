@@ -28,7 +28,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.node import Node, Knot
 
 # - Init -------------------------------
-__version__ = '0.4.0'
+__version__ = '0.4.1'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -162,10 +162,12 @@ class Contour(Container, XMLSerializable):
 		return contour_segments[:-1]
 
 	def reverse(self):
-		self.data = list(reversed(self.data))
-		#self.clockwise = self.get_winding()
+		reversed_data = list(reversed(self.data))
 		self.clockwise = not self.clockwise
-	
+		# - An offcurve could never be first node
+		on_index = next(i for i, node in enumerate(reversed_data) if node.type == 'on')
+		self.data = reversed_data[on_index:] + reversed_data[:on_index]
+		
 	def set_weight(self, wx, wy):
 		'''Set x and y weights (a.k.a. stems) for all nodes'''
 		for node in self.nodes:
