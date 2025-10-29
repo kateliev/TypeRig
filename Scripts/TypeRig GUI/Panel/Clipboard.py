@@ -19,7 +19,7 @@ import fontlab as fl6
 from PythonQt import QtCore, QtGui
 
 from typerig.proxy.fl.objects.font import pFont
-from typerig.proxy.fl.objects.node import eNode
+from typerig.proxy.fl.objects.node import eNode, eNodesContainer
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Core TypeRig objects for storage
@@ -43,7 +43,7 @@ global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '2.4'
+app_name, app_version = 'TypeRig | Contour', '2.5'
 fileFormats = 'TypeRig XML data (*.xml);;'
 
 cfg_addon_reversed = ' (Reversed)'
@@ -69,16 +69,16 @@ def flNodes_to_trContour(fl_nodes, is_closed):
 	
 	return Contour(tr_nodes, closed=is_closed, proxy=False)
 
-def trContour_to_flContour(tr_contour):
+def trNodes_to_flContour(tr_nodes, is_closed):
 	'''Convert trContour (core Contour object) back to flContour'''
 	fl_nodes = []
 	
-	for tr_node in tr_contour.nodes:
+	for tr_node in tr_nodes:
 		fl_node = fl6.flNode(QtCore.QPointF(tr_node.x, tr_node.y), nodeType=tr_node.type)
 		fl_nodes.append(fl_node)
 	
 	fl_contour = fl6.flContour(fl_nodes)
-	fl_contour.closed = tr_contour.closed
+	fl_contour.closed = is_closed
 	
 	return fl_contour
 
@@ -340,7 +340,7 @@ class TRContourCopy(QtGui.QWidget):
 
 			for shape in first_layer.shapes:
 				for tr_contour in shape.contours:
-					fl_contour = trContour_to_flContour(tr_contour)
+					fl_contour = trNodes_to_flContour(tr_contour.nodes, is_closed=tr_contour.closed)
 					
 					if not tr_contour.closed:
 						fl_contour.closed = True
@@ -471,18 +471,10 @@ class TRContourCopy(QtGui.QWidget):
 			# Convert trGlyph to format expected by TRNodeActionCollector
 			# This creates a dict with layer_name: list_of_nodes structure
 			paste_data = {}
-			
+
 			for tr_layer in tr_glyph.layers:
-				all_nodes = []
-				for tr_shape in tr_layer.shapes:
-					for tr_contour in tr_shape.contours:
-						# Convert nodes to eNode for the action collector
-						for tr_node in tr_contour.nodes:
-							node_type = fl6.nOn if tr_node.type == 'on' else fl6.nCurve
-							fl_node = fl6.flNode(fl6.flPoint(tr_node.x, tr_node.y), nodeType=node_type)
-							all_nodes.append(eNode(fl_node))
-				
-				paste_data[tr_layer.name] = all_nodes
+				new_contour = trNodes_to_flContour(tr_layer.nodes, is_closed=False)
+				paste_data[tr_layer.name] = eNodesContainer(new_contour.nodes())
 
 			TRNodeActionCollector.nodes_paste(wGlyph, wLayers, paste_data, self.node_align_state, (self.chk_paste_flip_h.isChecked(), self.chk_paste_flip_v.isChecked(), False, False, True, False))
 	
@@ -508,26 +500,27 @@ class TRContourCopy(QtGui.QWidget):
 					layer_name = tr_layer.name
 					
 					# Get destination layer or mask
-					wLayer = wGlyph.layer(layer_name)
+					work_layer = wGlyph.layer(layer_name)
 
 					if to_mask:
-						wLayer = wGlyph.mask(layer_name, force_create=True)
-						layer_name = wLayer.name
+						work_layer = wGlyph.mask(layer_name, force_create=True)
+						layer_name = work_layer.name
 					
-					if wLayer is not None:
+					if work_layer is not None:
 						# Convert trContours back to flContours
 						fl_contours = []
 						for tr_shape in tr_layer.shapes:
 							for tr_contour in tr_shape.contours:
-								fl_contour = trContour_to_flContour(tr_contour)
+								fl_contour = trNodes_to_flContour(tr_contour.nodes, is_closed=tr_contour.closed)
 								fl_contours.append(fl_contour)
 
 						# Insert contours into currently selected shape
 						try:
 							selected_shape = wGlyph.shapes(layer_name)[0]
+						
 						except IndexError:
 							selected_shape = fl6.flShape()
-							wLayer.addShape(selected_shape)
+							work_layer.addShape(selected_shape)
 
 						selected_shape.addContours(fl_contours, True)
 			
@@ -549,29 +542,16 @@ class TRContourCopy(QtGui.QWidget):
 				tr_glyph = self.contour_clipboard[paste_uid]
 
 				for tr_layer in tr_glyph.layers:
-					layer_name = tr_layer.name
-					
-					# Collect all nodes from all contours
-					for tr_shape in tr_layer.shapes:
-						for tr_contour in tr_shape.contours:
-							# Convert to flNodes
-							fl_nodes = []
-							for tr_node in tr_contour.nodes:
-								fl_node = fl6.flNode(QtCore.QPointF(tr_node.x, tr_node.y), nodeType=tr_node.type)
-								fl_nodes.append(fl_node)
-							
-							combined_data.setdefault(layer_name, []).extend(fl_nodes)
+					combined_data.setdefault(tr_layer.name, []).extend(tr_layer.nodes)
 
-			for layer_name, nodes in combined_data.items():
+			for layer_name, tr_nodes in combined_data.items():
 				wLayer = wGlyph.layer(layer_name)
 
 				if wLayer is not None:
-					# Create new contour from nodes
-					cloned_nodes = [node.clone() for node in nodes]
-					new_contour = fl6.flContour(cloned_nodes)
-					new_contour.closed = self.opt_trace_close.isChecked()
+					# - Create new contour from nodes
+					new_contour = trNodes_to_flContour(tr_nodes, is_closed=self.opt_trace_close.isChecked())
 
-					# Insert contour into currently selected shape
+					# - Insert contour into currently selected shape
 					try:
 						selected_shape = wGlyph.shapes(layer_name)[0]
 					except IndexError:
