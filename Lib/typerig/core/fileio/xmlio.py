@@ -18,7 +18,7 @@ Each class defines its XML schema using class attributes:
 from xml.etree import ElementTree as ET
 
 # - Init --------------------------------
-__version__ = '0.4.2'
+__version__ = '0.4.3'
 
 # - Classes -----------------------------
 class XMLSerializable:
@@ -30,17 +30,21 @@ class XMLSerializable:
 	XML_CHILDREN = {}  # e.g., {'point': 'nodes', 'component': 'components'}
 	XML_LIB_ATTRS = []  # e.g., ['transform', 'closed', 'clockwise']
 	
-	def to_XML(self):
-		'''Convert object to XML string'''
-		element = self._to_xml_element()
+	def to_XML(self, exclude_attrs=[]):
+		'''Convert object to XML string
+		exclude_attrs - list of element attributes to be excluded
+		'''
+		element = self._to_xml_element(exclude_attrs)
 		return ET.tostring(element, encoding='unicode')
 	
-	def _to_xml_element(self):
+	def _to_xml_element(self, exclude_attrs):
 		'''Convert object to XML Element (internal use)'''
 		elem = ET.Element(self.XML_TAG)
 		
 		# Add XML attributes
 		for attr_name in self.XML_ATTRS:
+			if attr_name in exclude_attrs: continue
+
 			value = getattr(self, attr_name, None)
 			if value is not None:
 				elem.set(attr_name, _format_xml_attr(value))
@@ -53,11 +57,13 @@ class XMLSerializable:
 					children = [children]
 				for child in children:
 					if hasattr(child, '_to_xml_element'):
-						elem.append(child._to_xml_element())
+						elem.append(child._to_xml_element(exclude_attrs))
 		
 		# Add lib section if needed
 		lib_data = {}
 		for attr_name in self.XML_LIB_ATTRS:
+			if attr_name in exclude_attrs: continue
+
 			value = getattr(self, attr_name, None)
 			# Only include non-default/non-None values
 			if value is not None:

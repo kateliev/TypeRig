@@ -43,8 +43,10 @@ global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '2.6'
+app_name, app_version = 'TypeRig | Contour', '2.7'
+
 fileFormats = 'TypeRig XML data (*.xml);;'
+exclude_attrs = ['transform', 'g2'] # Exclude some elements for more compact files
 
 cfg_addon_reversed = ' (Reversed)'
 cfg_addon_partial = ' (Partial)'
@@ -64,7 +66,7 @@ def flNodes_to_trContour(fl_nodes, is_closed):
 	'''Convert list of flNodes to trContour (core Contour object) for partial paths'''
 	tr_nodes = []
 	for fl_node in fl_nodes:
-		tr_node = Node(fl_node.x, fl_node.y, type=fl_node.type)
+		tr_node = Node(fl_node.x, fl_node.y, type=fl_node.type, smooth=fl_node.smooth)
 		tr_nodes.append(tr_node)
 	
 	return Contour(tr_nodes, closed=is_closed, proxy=False)
@@ -78,6 +80,17 @@ def trNodes_to_flContour(tr_nodes, is_closed):
 		fl_nodes.append(fl_node)
 	
 	fl_contour = fl6.flContour(fl_nodes)
+	fl_contour_nodes = fl_contour.nodes()
+
+	# - Accurately transfer the smooth flag: 
+	# -- It seems FL requires this to be done,
+	# -- when nodes are organized in contour,
+	# -- not standalone.
+	for nid in range(len(fl_contour_nodes)):
+		if tr_nodes[nid].smooth:
+			fl_contour_nodes[nid].smooth = True
+
+	# - Close the contour if flag is set
 	fl_contour.closed = is_closed
 	
 	return fl_contour
@@ -597,7 +610,7 @@ class TRContourCopy(QtGui.QWidget):
 					
 					for uid, tr_glyph in self.contour_clipboard.items():
 						xml_data += '<item uid="{}">'.format(uid)
-						xml_data += tr_glyph.to_XML()
+						xml_data += tr_glyph.to_XML(exclude_attrs)
 						xml_data += '</item>'
 					
 					xml_data += '</clipboard>'
