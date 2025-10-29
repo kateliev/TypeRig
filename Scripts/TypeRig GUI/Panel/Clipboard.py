@@ -43,7 +43,7 @@ global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '2.5'
+app_name, app_version = 'TypeRig | Contour', '2.6'
 fileFormats = 'TypeRig XML data (*.xml);;'
 
 cfg_addon_reversed = ' (Reversed)'
@@ -93,6 +93,10 @@ class TRContourCopy(QtGui.QWidget):
 		lay_main = QtGui.QVBoxLayout()
 		self.contour_clipboard = {}  # Stores trGlyph objects
 		self.node_align_state = 'LT'
+		
+		# Icon size cycling for grid mode
+		self.icon_sizes = [48, 64, 96, 128]
+		self.current_icon_size_index = 0
 
 		# -- Listview
 		self.lst_contours = QtGui.QListView()
@@ -223,6 +227,11 @@ class TRContourCopy(QtGui.QWidget):
 		lay_options_main.addWidget(self.btn_toggle_view)
 		self.btn_toggle_view.clicked.connect(self.__toggle_list_view_mode)
 
+		tooltip_button = "Cycle icon size (Grid mode only)"
+		self.btn_icon_size = CustomPushButton("search", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_options_main.addWidget(self.btn_icon_size)
+		self.btn_icon_size.clicked.connect(self.__cycle_icon_size)
+
 		box_contour_save.setLayout(lay_options_main)
 		lay_main.addWidget(box_contour_save)
 
@@ -258,6 +267,20 @@ class TRContourCopy(QtGui.QWidget):
 			if uid in self.contour_clipboard:
 				del self.contour_clipboard[uid]
 
+	def __cycle_icon_size(self):
+		'''Cycle through icon sizes in grid mode only'''
+		if self.btn_toggle_view.isChecked():
+			# Advance to next size
+			self.current_icon_size_index = (self.current_icon_size_index + 1) % len(self.icon_sizes)
+			new_size = self.icon_sizes[self.current_icon_size_index]
+			
+			# Calculate grid size (icon size + padding)
+			grid_size = new_size + 16
+			
+			# Apply new sizes
+			self.lst_contours.setIconSize(QtCore.QSize(new_size, new_size))
+			self.lst_contours.setGridSize(QtCore.QSize(grid_size, grid_size + 8))
+
 	def __toggle_list_view_mode(self):
 		if self.btn_toggle_view.isChecked():
 			self.lst_contours.setViewMode(QtGui.QListView.IconMode)
@@ -270,8 +293,11 @@ class TRContourCopy(QtGui.QWidget):
 			self.lst_contours.setAcceptDrops(True)
 			self.lst_contours.setDefaultDropAction(QtCore.Qt.MoveAction)
 			
-			self.lst_contours.setIconSize(QtCore.QSize(48, 48))
-			self.lst_contours.setGridSize(QtCore.QSize(64, 72))
+			# Use current icon size from cycling
+			current_size = self.icon_sizes[self.current_icon_size_index]
+			grid_size = current_size + 16
+			self.lst_contours.setIconSize(QtCore.QSize(current_size, current_size))
+			self.lst_contours.setGridSize(QtCore.QSize(grid_size, grid_size + 8))
 			self.lst_contours.setSpacing(10)
 		else:
 			self.lst_contours.setViewMode(QtGui.QListView.ListMode)
