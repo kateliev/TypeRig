@@ -43,7 +43,7 @@ global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '2.3'
+app_name, app_version = 'TypeRig | Contour', '2.4'
 fileFormats = 'TypeRig XML data (*.xml);;'
 
 cfg_addon_reversed = ' (Reversed)'
@@ -336,12 +336,19 @@ class TRContourCopy(QtGui.QWidget):
 		else:
 			# - Load operation: convert tr_glyph to flContours
 			draw_contours = []
+			open_contours = []
+
 			for shape in first_layer.shapes:
 				for tr_contour in shape.contours:
 					fl_contour = trContour_to_flContour(tr_contour)
-					fl_contour.closed = True
+					
+					if not tr_contour.closed:
+						fl_contour.closed = True
+						open_contours += fl_contour.nodes()
+					
 					draw_contours.append(fl_contour)
-			use_selection = None
+
+			use_selection = open_contours
 		
 		# Draw icon
 		use_background = 'LightGray'
