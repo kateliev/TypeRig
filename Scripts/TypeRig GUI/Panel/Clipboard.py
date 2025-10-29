@@ -467,14 +467,11 @@ class TRContourCopy(QtGui.QWidget):
 			clipboard_item = gallery_selection[0]
 			paste_uid = clipboard_item.data(QtCore.Qt.UserRole + 1000)
 			tr_glyph = self.contour_clipboard[paste_uid]
-
-			# Convert trGlyph to format expected by TRNodeActionCollector
-			# This creates a dict with layer_name: list_of_nodes structure
 			paste_data = {}
 
 			for tr_layer in tr_glyph.layers:
-				new_contour = trNodes_to_flContour(tr_layer.nodes, is_closed=False)
-				paste_data[tr_layer.name] = eNodesContainer(new_contour.nodes())
+				fl_contour = trNodes_to_flContour(tr_layer.nodes, is_closed=False)
+				paste_data[tr_layer.name] = eNodesContainer(fl_contour.nodes())
 
 			TRNodeActionCollector.nodes_paste(wGlyph, wLayers, paste_data, self.node_align_state, (self.chk_paste_flip_h.isChecked(), self.chk_paste_flip_v.isChecked(), False, False, True, False))
 	
@@ -499,22 +496,20 @@ class TRContourCopy(QtGui.QWidget):
 				for tr_layer in tr_glyph.layers:
 					layer_name = tr_layer.name
 					
-					# Get destination layer or mask
-					work_layer = wGlyph.layer(layer_name)
+					work_layer = wGlyph.layer(layer_name) # Get destination layer or mask
 
 					if to_mask:
 						work_layer = wGlyph.mask(layer_name, force_create=True)
 						layer_name = work_layer.name
 					
 					if work_layer is not None:
-						# Convert trContours back to flContours
 						fl_contours = []
+						
 						for tr_shape in tr_layer.shapes:
 							for tr_contour in tr_shape.contours:
 								fl_contour = trNodes_to_flContour(tr_contour.nodes, is_closed=tr_contour.closed)
 								fl_contours.append(fl_contour)
 
-						# Insert contours into currently selected shape
 						try:
 							selected_shape = wGlyph.shapes(layer_name)[0]
 						
@@ -545,18 +540,17 @@ class TRContourCopy(QtGui.QWidget):
 					combined_data.setdefault(tr_layer.name, []).extend(tr_layer.nodes)
 
 			for layer_name, tr_nodes in combined_data.items():
-				wLayer = wGlyph.layer(layer_name)
+				work_layer = wGlyph.layer(layer_name)
 
-				if wLayer is not None:
-					# - Create new contour from nodes
+				if work_layer is not None:
 					new_contour = trNodes_to_flContour(tr_nodes, is_closed=self.opt_trace_close.isChecked())
 
-					# - Insert contour into currently selected shape
 					try:
 						selected_shape = wGlyph.shapes(layer_name)[0]
+					
 					except IndexError:
 						selected_shape = fl6.flShape()
-						wLayer.addShape(selected_shape)
+						work_layer.addShape(selected_shape)
 
 					selected_shape.addContours([new_contour], True)
 			
