@@ -22,7 +22,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.shape import Shape
 
 # - Init -------------------------------
-__version__ = '0.2.1'
+__version__ = '0.2.2'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -285,70 +285,166 @@ class Layer(Container, XMLSerializable):
 
 		return func
 
-	def delta_scale_to(self, virtual_axis, width, height, fix_scale_direction=-1, main="node_array" ,extrapolate=False):
-		'''Delta Bruter: Brute-force to given dimensions'''
+	def scale_with_axis(self, virtual_axis, target_width=None, target_height=None, 
+	                    fix_scale_direction=-1, main_attribute='point_array', 
+	                    extrapolate=False, precision=(1.0, 1.0), max_iterations=1000):
+		'''Scale layer to target dimensions using a virtual axis (non-destructive).
 		
-		# - Init
-		main_array = getattr(self, main)
-		main_bounds = Bounds(main_array)
-		process_axis = {}
-
-		direction = [1,-1][extrapolate] # Negative for deltas that behave in reverse - investigate?! correlates with extrapolation!
-		precision_x = 1.
-		precision_y = 1.
-
-		# -- Safety
-		sentinel = 0
-		cutoff = 1000
+		This is a non-destructive version that returns a new scaled layer.
 		
-		# -- Set source and target
-		target_x = width
-		source_x = main_bounds.width
-		diff_x = prev_diff_x = (target_x - source_x)
-
-		target_y = height
-		source_y = main_bounds.height
-		diff_y = prev_diff_y = (target_y - source_y)
-
-		# -- Set scale and precision
+		Args:
+			virtual_axis (dict): Virtual axis dictionary from Glyph.create_virtual_axis()
+			target_width (float, optional): Target width. If None, width is not constrained.
+			target_height (float, optional): Target height. If None, height is not constrained.
+			fix_scale_direction (int): -1=independent x/y, 0=use x for both, 1=use y for both
+			main_attribute (str): Main attribute to measure ('point_array' usually)
+			extrapolate (bool): Allow extrapolation beyond source layers
+			precision (tuple): Starting precision for x and y (default: (1.0, 1.0))
+			max_iterations (int): Maximum iterations to prevent infinite loops (default: 1000)
+		
+		Returns:
+			Layer: New scaled layer
+			
+		Example:
+			>>> axis = glyph.create_virtual_axis(['Light', 'Regular', 'Bold'])
+			>>> new_layer = glyph.layer('Regular').scale_with_axis(
+			...     axis, target_width=600, target_height=700
+			... )
+		'''
+		# Create a copy to work with (non-destructive)
+		result_layer = self.clone()
+		
+		# Validate inputs
+		if main_attribute not in virtual_axis:
+			raise ValueError('Attribute "{}" not in virtual_axis. Available: {}'.format(
+				main_attribute, list(virtual_axis.keys())))
+		
+		if target_width is None and target_height is None:
+			raise ValueError('At least one of target_width or target_height must be specified')
+		
+		# Get initial bounds
+		main_array = getattr(result_layer, main_attribute)
+		main_bounds = Bounds(main_array.tuple if hasattr(main_array, 'tuple') else main_array)
+		
+		# Set up targets and sources
+		source_width = main_bounds.width
+		source_height = main_bounds.height
+		
+		# If target not specified, use source
+		if target_width is None:
+			target_width = source_width
+		if target_height is None:
+			target_height = source_height
+		
+		# Calculate initial differences
+		diff_x = target_width - source_width
+		diff_y = target_height - source_height
+		prev_diff_x = diff_x
+		prev_diff_y = diff_y
+		
+		# Initialize scales and precisions
+		direction = [1, -1][extrapolate]
+		precision_x, precision_y = precision
 		scale_x = prev_scale_x = 0.99
 		scale_y = prev_scale_y = 0.99
-
-		# -- Process
-		while (abs(round(diff_x)) != 0 and abs(round(diff_y)) != 0) if fix_scale_direction != -1 else (abs(round(diff_x)) != 0 or abs(round(diff_y)) != 0):
-			if sentinel == cutoff:	break
-
+		
+		# Storage for processed data
+		process_axis = {}
+		
+		# Iteration counter
+		iteration = 0
+		
+		# Iterative scaling loop
+		while iteration < max_iterations:
+			# Check convergence
+			x_converged = abs(round(diff_x)) == 0
+			y_converged = abs(round(diff_y)) == 0
+			
+			if fix_scale_direction != -1:
+				# Both must converge
+				if x_converged and y_converged:
+					break
+			else:
+				# Either can converge independently
+				if x_converged or y_converged:
+					if x_converged and target_width != source_width:
+						break
+					if y_converged and target_height != source_height:
+						break
+					if x_converged and y_converged:
+						break
+			
+			# Adjust precision if we're oscillating
 			if abs(diff_x) > abs(prev_diff_x):
 				scale_x = prev_scale_x
 				precision_x /= 10
-
+			
 			if abs(diff_y) > abs(prev_diff_y):
 				scale_y = prev_scale_y
 				precision_y /= 10
-
+			
+			# Store previous values
 			prev_scale_x, prev_diff_x = scale_x, diff_x
 			prev_scale_y, prev_diff_y = scale_y, diff_y
-
-			scale_x += [+direction,-direction][diff_x < 0]*precision_x
-			scale_y += [+direction,-direction][diff_y < 0]*precision_y
-
-			scale_x = scale_x if fix_scale_direction != 1 else scale_y
-			scale_y = scale_y if fix_scale_direction != 0 else scale_x
-
+			
+			# Update scales
+			scale_x += [+direction, -direction][diff_x < 0] * precision_x
+			scale_y += [+direction, -direction][diff_y < 0] * precision_y
+			
+			# Apply scale direction constraint
+			if fix_scale_direction == 1:  # Use Y for both
+				scale_x = scale_y
+			elif fix_scale_direction == 0:  # Use X for both
+				scale_y = scale_x
+			
+			# Scale all attributes using the virtual axis
 			for attrib, delta_array in virtual_axis.items():
-				delta_scale = delta_array.scale_by_stem((self.stx, self.sty), (scale_x, scale_y), (0.,0.), (0.,0.), False, extrapolate)
+				delta_scale = delta_array.scale_by_stem(
+					result_layer.stems, 
+					(scale_x, scale_y), 
+					(0., 0.),  # compensation
+					(0., 0.),  # shift
+					False,     # italic_angle (using False instead of 0 to match original)
+					extrapolate
+				)
+				# Convert to list for storage
 				process_axis[attrib] = list(delta_scale)
 			
-			main_bounds = Bounds(process_axis[main])
+			# Update bounds measurement
+			main_data = process_axis[main_attribute]
+			main_bounds = Bounds(main_data)
 			
-			diff_x = (target_x - main_bounds.width)
-			diff_y = (target_y - main_bounds.height)
+			# Calculate new differences
+			diff_x = target_width - main_bounds.width
+			diff_y = target_height - main_bounds.height
 			
-			sentinel += 1
-
-		# - Set Glyph  
+			iteration += 1
+		
+		# Apply the final scaled data to the result layer
 		for attrib, data in process_axis.items():
-			setattr(self, attrib, data)
+			if attrib == 'point_array':
+				# Convert back to PointArray
+				setattr(result_layer, attrib, PointArray(data))
+			else:
+				setattr(result_layer, attrib, data)
+		
+		return result_layer
+
+	# Old destructive method kept for backward compatibility
+	def delta_scale_to(self, virtual_axis, width, height, fix_scale_direction=-1, main="point_array", extrapolate=False):
+		'''Delta Bruter: Brute-force to given dimensions (DESTRUCTIVE - modifies this layer).
+		
+		DEPRECATED: Use scale_with_axis() instead for non-destructive scaling.
+		
+		This method modifies the layer in place. For non-destructive scaling, use:
+		    new_layer = layer.scale_with_axis(virtual_axis, target_width=width, target_height=height)
+		'''
+		# Call the new method and copy results back to self
+		scaled_layer = self.scale_with_axis(virtual_axis, width, height, fix_scale_direction, main, extrapolate)
+		
+		# Copy the scaled data back to self (destructive)
+		for attrib in virtual_axis.keys():
+			setattr(self, attrib, getattr(scaled_layer, attrib))
 
 if __name__ == '__main__':
 	from pprint import pprint
@@ -388,12 +484,3 @@ if __name__ == '__main__':
 	print(Bounds([(0,0),(100,200)]))
 
 	print(l.to_XML())
-
-	
-
-
-
-
-
-	
-	

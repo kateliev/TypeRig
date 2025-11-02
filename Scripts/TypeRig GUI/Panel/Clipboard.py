@@ -41,11 +41,14 @@ from typerig.proxy.fl.gui.drawing import TRDrawIcon
 # - Init -------------------------------
 global pLayers
 global pMode
-pLayers = (True, False, False, False)
+pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '2.7'
+app_name, app_version = 'TypeRig | Contour', '3.0'
 
 fileFormats = 'TypeRig XML data (*.xml);;'
+delta_app_id_key = 'com.typerig.delta.machine.axissetup'
+delta_axis_group_name = 'Virtual Axis'
+delta_axis_target_name = 'Target Layers'
 exclude_attrs = ['transform', 'g2'] # Exclude some elements for more compact files
 
 cfg_addon_reversed = ' (Reversed)'
@@ -153,6 +156,10 @@ class TRContourCopy(QtGui.QWidget):
 		self.opt_trace_close = CustomPushButton("contour_close", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_contour_copy.addWidget(self.opt_trace_close)
 
+		tooltip_button =  "Use Delta Machine to fit pasted contours into selected shape bounds"
+		self.opt_delta_machine = CustomPushButton("delta_machine", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_contour_copy.addWidget(self.opt_delta_machine)
+
 		tooltip_button = "Reset contour bank"
 		self.btn_reset = CustomPushButton("close", tooltip=tooltip_button, obj_name='btn_panel')
 		lay_contour_copy.addWidget(self.btn_reset)
@@ -168,7 +175,8 @@ class TRContourCopy(QtGui.QWidget):
 		lay_options_copy = TRFlowLayout(spacing=7)
 
 		# --- Options
-		grp_copy_nodes_options = QtGui.QButtonGroup()
+		grp_copy_nodes_options = QtGui.QButtonGroup(self)
+		grp_copy_nodes_options.setExclusive(True)
 
 		tooltip_button =  "Node Paste: Align Top Left"
 		self.chk_paste_top_left = CustomPushButton("node_align_top_left", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
@@ -501,15 +509,50 @@ class TRContourCopy(QtGui.QWidget):
 		wGlyph = eGlyph()
 		wLayers = wGlyph._prepareLayers(pLayers)
 		gallery_selection = [self.lst_contours.model().itemFromIndex(qidx) for qidx in self.lst_contours.selectedIndexes()]
+		do_delta = self.opt_delta_machine.isChecked()
 
 		if len(gallery_selection):
 			clipboard_item = gallery_selection[0]
 			paste_uid = clipboard_item.data(QtCore.Qt.UserRole + 1000)
 			tr_glyph = self.contour_clipboard[paste_uid]
-			paste_data = {}
 
+			# - Paste with Delta Machine enabled
+			if do_delta:
+				# -- Look for Delta Machine Axis data in font's lib
+				try:
+					font_lib = self.active_font.fl.packageLib
+					raw_axis_data = font_lib[delta_app_id_key][delta_axis_group_name]
+					axis_data = {layer_name : (stx, sty) for layer_name, stx, sty, sx, sy, color in raw_axis_data}
+					
+				except KeyError:
+					output(3, app_name, 'Delta Machine Axis setup not found in Fonts Lib.\n Please setup using < Delta panel > then save the axis data within the font!')
+					do_delta = False
+			
+			if do_delta:
+				# -- Prepare virtual axis
+				for layer_name, stems in axis_data.items():
+					tr_glyph.layer(layer_name).stems = stems
+
+				virtual_axis = tr_glyph.virtual_axis(list(axis_data.keys()))
+				target_bounds = {}
+
+				for layer_name in wLayers:
+					layer_selection = wGlyph.selectedNodes(layer_name)
+					selection_container = eNodesContainer(layer_selection)
+					target_bounds[layer_name] = (selection_container.width, selection_container.height)
+				
+	
+			# - Paste
+			paste_data = {}
 			for tr_layer in tr_glyph.layers:
-				fl_contour = trNodes_to_flContour(tr_layer.nodes, is_closed=False)
+				# - Paste with Delta Machine enabled
+				if do_delta:
+					target_width, target_height = target_bounds[tr_layer.name]
+					process_layer = tr_layer.scale_with_axis(virtual_axis, target_width, target_height)
+				else:
+					process_layer = tr_layer
+
+				fl_contour = trNodes_to_flContour(process_layer.nodes, is_closed=False)
 				paste_data[tr_layer.name] = eNodesContainer(fl_contour.nodes())
 
 			TRNodeActionCollector.nodes_paste(wGlyph, wLayers, paste_data, self.node_align_state, (self.chk_paste_flip_h.isChecked(), self.chk_paste_flip_v.isChecked(), False, False, True, False))

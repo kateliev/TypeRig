@@ -21,7 +21,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.layer import Layer
 
 # - Init -------------------------------
-__version__ = '0.1.7'
+__version__ = '0.1.8'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -74,20 +74,81 @@ class Glyph(Container, XMLSerializable):
 
 	# -- Delta related ----------------------------
 	def build_delta(self, layer_names_list, attrib):
+		'''Build a DeltaScale object for a specific attribute across multiple layers.
+		
+		Args:
+			layer_names_list (list): List of layer names to include in the delta
+			attrib (str): Attribute name to extract ('point_array', 'metric_array', etc.)
+			
+		Returns:
+			DeltaScale: Delta scale object for interpolation/extrapolation
+		'''
 		data_array = []
 		stem_array = []
 		
 		for layer_name in layer_names_list:
 			work_layer = self.layer(layer_name)
-			if hasattr(work_layer, attrib):
-				data_array.append(getattr(work_layer, attrib))
+			
+			if work_layer is None:
+				raise ValueError('Layer "{}" not found in glyph "{}"'.format(layer_name, self.name))
+			
+			if not hasattr(work_layer, attrib):
+				raise AttributeError('Layer "{}" does not have attribute "{}"'.format(layer_name, attrib))
+			
+			# Get the attribute data
+			attr_data = getattr(work_layer, attrib)
+			
+			# Convert PointArray to list of tuples if needed
+			if hasattr(attr_data, 'tuple'):
+				data_array.append(list(attr_data.tuple))
+			else:
+				data_array.append(attr_data)
+			
+			# Get stems for this layer
+			if work_layer.has_stems:
 				stem_array.append([work_layer.stems])
+			else:
+				raise ValueError('Layer "{}" does not have stems defined. Use layer.stems = (stx, sty)'.format(layer_name))
 
 		return DeltaScale(data_array, stem_array)
 
-	def virtual_axis(self, layer_names_list):
-		process_attrib_list = ('node_array', 'metric_array') # 'anchor_array'
-		return {attrib: self.build_delta(layer_names_list, attrib) for attrib in process_attrib_list}
+	def create_virtual_axis(self, layer_names, attributes=None):
+		'''Create a virtual axis from a list of layer names.
+		
+		This is the main method to set up interpolation/extrapolation between layers.
+		
+		Args:
+			layer_names (list): List of layer names in order (e.g., ['Light', 'Regular', 'Bold'])
+			attributes (list, optional): Attributes to process. Defaults to ['point_array', 'metric_array']
+			
+		Returns:
+			dict: Dictionary with attribute names as keys and DeltaScale objects as values
+			
+		Example:
+			>>> glyph = Glyph(...)
+			>>> # Set stems for each layer first
+			>>> glyph.layer('Light').stems = (80, 80)
+			>>> glyph.layer('Regular').stems = (100, 100)
+			>>> glyph.layer('Bold').stems = (140, 140)
+			>>> 
+			>>> # Create the virtual axis
+			>>> axis = glyph.create_virtual_axis(['Light', 'Regular', 'Bold'])
+			>>> 
+			>>> # Scale a layer using the axis (non-destructive)
+			>>> new_layer = glyph.layer('Regular').scale_with_axis(axis, target_width=600)
+		'''
+		if attributes is None:
+			attributes = ['point_array', 'metric_array']
+		
+		if not isinstance(layer_names, (list, tuple)) or len(layer_names) < 2:
+			raise ValueError('layer_names must be a list of at least 2 layer names')
+		
+		return {attrib: self.build_delta(layer_names, attrib) for attrib in attributes}
+	
+	# Keep old name for backward compatibility
+	def virtual_axis(self, layer_names_list, process_attrib_list=('point_array','metric_array')):
+		'''Deprecated: Use create_virtual_axis() instead.'''
+		return self.create_virtual_axis(layer_names_list, process_attrib_list)
 
 	# -- Properties -----------------------------
 	@property
@@ -148,14 +209,3 @@ if __name__ == '__main__':
 	#print(g.virtual_axis(('Regular', 'Regular')))
 
 	print(g.to_XML())
-
-
-
-	
-
-
-
-
-
-	
-	
