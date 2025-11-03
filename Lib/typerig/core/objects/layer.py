@@ -13,7 +13,7 @@ from __future__ import absolute_import, print_function, division
 
 from typerig.core.objects.array import PointArray
 from typerig.core.objects.point import Point
-from typerig.core.objects.transform import Transform
+from typerig.core.objects.transform import Transform, TransformOrigin
 from typerig.core.objects.utils import Bounds
 
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
@@ -22,7 +22,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.shape import Shape
 
 # - Init -------------------------------
-__version__ = '0.2.2'
+__version__ = '0.3.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -231,47 +231,103 @@ class Layer(Container, XMLSerializable):
 			node.x, node.y = self.transform.applyTransformation(node.x, node.y)
 
 	def shift(self, delta_x, delta_y):
-		'''Shift the layer by given amout'''
+		'''Shift the layer by given amount'''
 		for node in self.nodes:
 			node.point += Point(delta_x, delta_y)
 
-	def align_to(self, entity, mode=('C','C'), align=(True, True)):
-		'''Align contour to a node or line given.
+	def align_to(self, entity, mode=(TransformOrigin.CENTER, TransformOrigin.CENTER), align=(True, True)):
+		'''Align layer to another entity using transformation origins.
+		
+		This is an improved version that uses TransformOrigin enum for type safety
+		and consistency with other transformation methods.
+		
 		Arguments:
 			entity (Layer, Point, tuple(x,y)):
 				Object to align to
 
-			align (tuple(bool, bool)):
-				Align X, Align Y
+			mode (tuple(TransformOrigin, TransformOrigin)):
+				Alignment origins for (self, other). Uses TransformOrigin enum.
+				For example:
+				- (TransformOrigin.CENTER, TransformOrigin.CENTER) - align centers
+				- (TransformOrigin.BASELINE, TransformOrigin.BASELINE) - align baselines
+				- (TransformOrigin.TOP_LEFT, TransformOrigin.BOTTOM_LEFT) - align top to bottom
+				
+				For backward compatibility, also accepts string tuples like ('C', 'C')
 
-			mode tuple(string, string):
-				A special tuple(self, other) that is Bounds().align_matrix:
-				'TL', 'TM', 'TR', 'LM', 'C', 'RM', 'BL', 'BM', 'BR', 
-				where T(top), B(bottom), L(left), R(right), M(middle), C(center)
+			align (tuple(bool, bool)):
+				Align X, Align Y. Set to False to disable alignment on that axis.
 		
 		Returns:
-			Nothing
+			Nothing (modifies layer in place)
+			
+		Example:
+			>>> from typerig.core.objects.transform import TransformOrigin
+			>>> 
+			>>> # Align layer centers
+			>>> layer1.align_to(layer2)  # Uses CENTER by default
+			>>> 
+			>>> # Align layer1's baseline to layer2's baseline
+			>>> layer1.align_to(
+			...     layer2,
+			...     mode=(TransformOrigin.BASELINE, TransformOrigin.BASELINE)
+			... )
+			>>> 
+			>>> # Align layer1's top-left to a specific point
+			>>> layer1.align_to(
+			...     Point(100, 200),
+			...     mode=(TransformOrigin.TOP_LEFT, None)
+			... )
+			>>> 
+			>>> # Align only X axis (Y stays the same)
+			>>> layer1.align_to(
+			...     layer2,
+			...     mode=(TransformOrigin.CENTER_LEFT, TransformOrigin.CENTER_LEFT),
+			...     align=(True, False)
+			... )
 		'''
 		delta_x, delta_y = 0., 0.
 		align_matrix = self.bounds.align_matrix
-		self_x, self_y = align_matrix[mode[0].upper()]
+		
+		# Handle mode - support both TransformOrigin enum and legacy string codes
+		self_mode = mode[0]
+		if isinstance(self_mode, TransformOrigin):
+			self_code = self_mode.code
+		elif isinstance(self_mode, str):
+			self_code = self_mode.upper()
+		else:
+			raise TypeError('mode[0] must be TransformOrigin or string, got {}'.format(type(self_mode)))
+		
+		self_x, self_y = align_matrix[self_code]
 
 		if isinstance(entity, self.__class__):
+			# Aligning to another layer
 			other_align_matrix = entity.bounds.align_matrix
-			other_x, other_y = other_align_matrix[mode[1].upper()]
+			
+			other_mode = mode[1]
+			if isinstance(other_mode, TransformOrigin):
+				other_code = other_mode.code
+			elif isinstance(other_mode, str):
+				other_code = other_mode.upper()
+			else:
+				raise TypeError('mode[1] must be TransformOrigin or string, got {}'.format(type(other_mode)))
+			
+			other_x, other_y = other_align_matrix[other_code]
 
 			delta_x = other_x - self_x if align[0] else 0.
 			delta_y = other_y - self_y if align[1] else 0.
 
 		elif isinstance(entity, Point):
+			# Aligning to a point
 			delta_x = entity.x - self_x if align[0] else 0.
 			delta_y = entity.y - self_y if align[1] else 0.
 
-		elif isinstance(entity, tuple):
-			delta_x = entity.x - entity[0] if align[0] else 0.
-			delta_y = entity.y - entity[1] if align[1] else 0.
+		elif isinstance(entity, (tuple, list)) and len(entity) == 2:
+			# Aligning to a coordinate tuple
+			delta_x = entity[0] - self_x if align[0] else 0.
+			delta_y = entity[1] - self_y if align[1] else 0.
 
-		else: return
+		else:
+			raise TypeError('entity must be Layer, Point, or tuple(x, y), got {}'.format(type(entity)))
 
 		self.shift(delta_x, delta_y)
 
@@ -286,11 +342,13 @@ class Layer(Container, XMLSerializable):
 		return func
 
 	def scale_with_axis(self, virtual_axis, target_width=None, target_height=None, 
-	                    fix_scale_direction=-1, main_attribute='point_array', 
-	                    extrapolate=False, precision=(1.0, 1.0), max_iterations=1000):
+						fix_scale_direction=-1, main_attribute='point_array', 
+						extrapolate=False, precision=(1.0, 1.0), max_iterations=1000,
+						transform_origin=TransformOrigin.BASELINE):
 		'''Scale layer to target dimensions using a virtual axis (non-destructive).
 		
-		This is a non-destructive version that returns a new scaled layer.
+		IMPORTANT: This method properly handles transformation origins, meaning the 
+		specified origin point stays fixed while the glyph scales around it.
 		
 		Args:
 			virtual_axis (dict): Virtual axis dictionary from Glyph.create_virtual_axis()
@@ -301,14 +359,40 @@ class Layer(Container, XMLSerializable):
 			extrapolate (bool): Allow extrapolation beyond source layers
 			precision (tuple): Starting precision for x and y (default: (1.0, 1.0))
 			max_iterations (int): Maximum iterations to prevent infinite loops (default: 1000)
+			transform_origin (TransformOrigin): Where to anchor the transformation:
+				- TransformOrigin.BASELINE (default): Left sidebearing + baseline (0)
+				- TransformOrigin.BOTTOM_LEFT: Bottom-left corner
+				- TransformOrigin.BOTTOM_MIDDLE: Bottom-center
+				- TransformOrigin.BOTTOM_RIGHT: Bottom-right corner
+				- TransformOrigin.CENTER: Absolute center of bounding box
+				- TransformOrigin.CENTER_LEFT: Center-left
+				- TransformOrigin.CENTER_RIGHT: Center-right
+				- TransformOrigin.TOP_LEFT: Top-left corner
+				- TransformOrigin.TOP_MIDDLE: Top-center
+				- TransformOrigin.TOP_RIGHT: Top-right corner
 		
 		Returns:
-			Layer: New scaled layer
+			Layer: New scaled layer with transformation origin preserved
 			
 		Example:
+			>>> from typerig.core.objects.transform import TransformOrigin
 			>>> axis = glyph.create_virtual_axis(['Light', 'Regular', 'Bold'])
-			>>> new_layer = glyph.layer('Regular').scale_with_axis(
+			>>> 
+			>>> # Scale from baseline (typical for type design)
+			>>> scaled = glyph.layer('Regular').scale_with_axis(
 			...     axis, target_width=600, target_height=700
+			... )  # Uses BASELINE by default
+			>>> 
+			>>> # Scale from center
+			>>> centered = glyph.layer('Regular').scale_with_axis(
+			...     axis, target_width=600, 
+			...     transform_origin=TransformOrigin.CENTER
+			... )
+			>>> 
+			>>> # Scale from bottom-left corner
+			>>> corner = glyph.layer('Regular').scale_with_axis(
+			...     axis, target_width=600,
+			...     transform_origin=TransformOrigin.BOTTOM_LEFT
 			... )
 		'''
 		# Create a copy to work with (non-destructive)
@@ -321,6 +405,10 @@ class Layer(Container, XMLSerializable):
 		
 		if target_width is None and target_height is None:
 			raise ValueError('At least one of target_width or target_height must be specified')
+		
+		# STEP 1: Get the transformation origin point BEFORE scaling
+		source_bounds = result_layer.bounds
+		source_origin_x, source_origin_y = source_bounds.align_matrix[transform_origin.code]
 		
 		# Get initial bounds
 		main_array = getattr(result_layer, main_attribute)
@@ -354,7 +442,7 @@ class Layer(Container, XMLSerializable):
 		# Iteration counter
 		iteration = 0
 		
-		# Iterative scaling loop
+		# STEP 2: Iterative scaling loop (scales from origin 0,0 initially)
 		while iteration < max_iterations:
 			# Check convergence
 			x_converged = abs(round(diff_x)) == 0
@@ -398,13 +486,14 @@ class Layer(Container, XMLSerializable):
 				scale_y = scale_x
 			
 			# Scale all attributes using the virtual axis
+			# Note: delta scale operates from origin (0, 0) by design
 			for attrib, delta_array in virtual_axis.items():
 				delta_scale = delta_array.scale_by_stem(
 					result_layer.stems, 
 					(scale_x, scale_y), 
-					(0., 0.),  # compensation
-					(0., 0.),  # shift
-					False,     # italic_angle (using False instead of 0 to match original)
+					(0., 0.),  # compensation - scale from origin
+					(0., 0.),  # shift - no additional shift
+					False,     # italic_angle
 					extrapolate
 				)
 				# Convert to list for storage
@@ -420,13 +509,27 @@ class Layer(Container, XMLSerializable):
 			
 			iteration += 1
 		
-		# Apply the final scaled data to the result layer
+		# STEP 3: Apply the final scaled data to the result layer
 		for attrib, data in process_axis.items():
 			if attrib == 'point_array':
 				# Convert back to PointArray
 				setattr(result_layer, attrib, PointArray(data))
 			else:
 				setattr(result_layer, attrib, data)
+		
+		# STEP 4: Realign to preserve transformation origin
+		# This is the key step that makes scaling happen around the chosen origin point!
+		if transform_origin != TransformOrigin.BASELINE:
+			# Get where the transformation origin ended up after scaling
+			dest_bounds = result_layer.bounds
+			dest_origin_x, dest_origin_y = dest_bounds.align_matrix[transform_origin.code]
+			
+			# Calculate the shift needed to realign the transformation origin
+			realign_shift_x = source_origin_x - dest_origin_x
+			realign_shift_y = source_origin_y - dest_origin_y
+			
+			# Apply the realignment shift
+			result_layer.shift(realign_shift_x, realign_shift_y)
 		
 		return result_layer
 

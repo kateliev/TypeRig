@@ -15,7 +15,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 from typerig.core.objects.array import PointArray
 from typerig.core.objects.cubicbezier import CubicBezier
-from typerig.core.objects.transform import Transform
+from typerig.core.objects.transform import Transform, TransformOrigin
 from typerig.core.objects.utils import Bounds
 
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
@@ -28,7 +28,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.node import Node, Knot
 
 # - Init -------------------------------
-__version__ = '0.4.1'
+__version__ = '0.5.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -184,46 +184,70 @@ class Contour(Container, XMLSerializable):
 		for node in self.nodes:
 			node.point += Point(delta_x, delta_y)
 
-	def align_to(self, entity, mode=('C','C'), align=(True, True)):
-		'''Align contour to a node or line given.
+	def align_to(self, entity, mode=(TransformOrigin.CENTER, TransformOrigin.CENTER), 
+	             align=(True, True)):
+		'''Align contour to another entity using transformation origins.
+		
 		Arguments:
 			entity (Contour, Point, tuple(x,y)):
 				Object to align to
 
-			align (tuple(bool, bool)):
-				Align X, Align Y
+			mode (tuple(TransformOrigin, TransformOrigin)):
+				Alignment origins for (self, other). Uses TransformOrigin enum.
+				For backward compatibility, also accepts string tuples like ('C', 'C')
 
-			mode tuple(string, string):
-				A special tuple(self, other) that is Bounds().align_matrix:
-				'TL', 'TM', 'TR', 'LM', 'C', 'RM', 'BL', 'BM', 'BR', 
-				where T(top), B(bottom), L(left), R(right), M(middle), C(center)
+			align (tuple(bool, bool)):
+				Align X, Align Y. Set to False to disable alignment on that axis.
 		
 		Returns:
-			Nothing
+			Nothing (modifies contour in place)
 		'''
 		delta_x, delta_y = 0., 0.
 		align_matrix = self.bounds.align_matrix
-		self_x, self_y = align_matrix[mode[0].upper()]
+		
+		# Handle mode - support both TransformOrigin enum and legacy string codes
+		self_mode = mode[0]
+		if isinstance(self_mode, TransformOrigin):
+			self_code = self_mode.code
+		elif isinstance(self_mode, str):
+			self_code = self_mode.upper()
+		else:
+			raise TypeError('mode[0] must be TransformOrigin or string, got {}'.format(type(self_mode)))
+		
+		self_x, self_y = align_matrix[self_code]
 
 		if isinstance(entity, self.__class__):
+			# Aligning to another contour
 			other_align_matrix = entity.bounds.align_matrix
-			other_x, other_y = other_align_matrix[mode[1].upper()]
+			
+			other_mode = mode[1]
+			if isinstance(other_mode, TransformOrigin):
+				other_code = other_mode.code
+			elif isinstance(other_mode, str):
+				other_code = other_mode.upper()
+			else:
+				raise TypeError('mode[1] must be TransformOrigin or string, got {}'.format(type(other_mode)))
+			
+			other_x, other_y = other_align_matrix[other_code]
 
 			delta_x = other_x - self_x if align[0] else 0.
 			delta_y = other_y - self_y if align[1] else 0.
 
 		elif isinstance(entity, Point):
+			# Aligning to a point
 			delta_x = entity.x - self_x if align[0] else 0.
 			delta_y = entity.y - self_y if align[1] else 0.
 
-		elif isinstance(entity, tuple):
-			delta_x = entity.x - entity[0] if align[0] else 0.
-			delta_y = entity.y - entity[1] if align[1] else 0.
+		elif isinstance(entity, (tuple, list)) and len(entity) == 2:
+			# Aligning to a coordinate tuple
+			delta_x = entity[0] - self_x if align[0] else 0.
+			delta_y = entity[1] - self_y if align[1] else 0.
 
-		else: return
+		else:
+			raise TypeError('entity must be Contour, Point, or tuple(x, y), got {}'.format(type(entity)))
 
 		self.shift(delta_x, delta_y)
-	
+
 	def lerp_function(self, other):
 		'''Linear interpolation function to Node or Point
 		Args:

@@ -15,7 +15,7 @@ from typerig.core.func.math import linspread, geospread, ratfrac
 from typerig.core.objects.point import Point
 
 # - Init -----------------------------
-__version__ = '0.26.3'
+__version__ = '0.26.4'
 
 # - Classes --------------------------
 class fontFamilly():
@@ -136,7 +136,8 @@ class Bounds(object):
 
 		return_matrix = {	'TL': (x, my), 		'TM': (h(x,y), my), 	'TR': (mx, my),
 							'LM': (x, h(y, my)),'C':(h(x,mx), h(y,my)),	'RM': (mx, h(y, my)),
-							'BL': (x, y),		'BM':(h(x,mx), y),		'BR': (mx, y)}
+							'BL': (x, y),		'BM':(h(x,mx), y),		'BR': (mx, y), 
+							'B':(0., 0.)}
 		
 		return return_matrix
 

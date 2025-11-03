@@ -12,7 +12,7 @@
 from __future__ import absolute_import, print_function, division
 
 from typerig.core.objects.point import Point
-from typerig.core.objects.transform import Transform
+from typerig.core.objects.transform import Transform, TransformOrigin
 from typerig.core.objects.utils import Bounds
 
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
@@ -21,7 +21,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.contour import Contour
 
 # - Init -------------------------------
-__version__ = '0.1.8'
+__version__ = '0.2.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -116,47 +116,93 @@ class Shape(Container, XMLSerializable):
 			node.x, node.y = self.transform.applyTransformation(node.x, node.y)
 
 	def shift(self, delta_x, delta_y):
-		'''Shift the shape by given amout'''
+		'''Shift the shape by given amount'''
 		for node in self.nodes:
 			node.point += Point(delta_x, delta_y)
 
-	def align_to(self, entity, mode=('C','C'), align=(True, True)):
-		'''Align contour to a node or line given.
+	def align_to(self, entity, mode=(TransformOrigin.CENTER, TransformOrigin.CENTER), 
+	             align=(True, True)):
+		'''Align shape to another entity using transformation origins.
+		
+		This is an improved version that uses TransformOrigin enum for type safety
+		and consistency with other transformation methods.
+		
 		Arguments:
 			entity (Shape, Point, tuple(x,y)):
 				Object to align to
 
-			align (tuple(bool, bool)):
-				Align X, Align Y
+			mode (tuple(TransformOrigin, TransformOrigin)):
+				Alignment origins for (self, other). Uses TransformOrigin enum.
+				For backward compatibility, also accepts string tuples like ('C', 'C')
 
-			mode tuple(string, string):
-				A special tuple(self, other) that is Bounds().align_matrix:
-				'TL', 'TM', 'TR', 'LM', 'C', 'RM', 'BL', 'BM', 'BR', 
-				where T(top), B(bottom), L(left), R(right), M(middle), C(center)
+			align (tuple(bool, bool)):
+				Align X, Align Y. Set to False to disable alignment on that axis.
 		
 		Returns:
-			Nothing
+			Nothing (modifies shape in place)
+			
+		Example:
+			>>> from typerig.core.objects.transform import TransformOrigin
+			>>> 
+			>>> # Align shape centers
+			>>> shape1.align_to(shape2)  # Uses CENTER by default
+			>>> 
+			>>> # Align shape1's baseline to shape2's baseline
+			>>> shape1.align_to(
+			...     shape2,
+			...     mode=(TransformOrigin.BASELINE, TransformOrigin.BASELINE)
+			... )
+			>>> 
+			>>> # Align only X axis (Y stays the same)
+			>>> shape1.align_to(
+			...     shape2,
+			...     mode=(TransformOrigin.CENTER_LEFT, TransformOrigin.CENTER_LEFT),
+			...     align=(True, False)
+			... )
 		'''
 		delta_x, delta_y = 0., 0.
 		align_matrix = self.bounds.align_matrix
-		self_x, self_y = align_matrix[mode[0].upper()]
+		
+		# Handle mode - support both TransformOrigin enum and legacy string codes
+		self_mode = mode[0]
+		if isinstance(self_mode, TransformOrigin):
+			self_code = self_mode.code
+		elif isinstance(self_mode, str):
+			self_code = self_mode.upper()
+		else:
+			raise TypeError('mode[0] must be TransformOrigin or string, got {}'.format(type(self_mode)))
+		
+		self_x, self_y = align_matrix[self_code]
 
 		if isinstance(entity, self.__class__):
+			# Aligning to another shape
 			other_align_matrix = entity.bounds.align_matrix
-			other_x, other_y = other_align_matrix[mode[1].upper()]
+			
+			other_mode = mode[1]
+			if isinstance(other_mode, TransformOrigin):
+				other_code = other_mode.code
+			elif isinstance(other_mode, str):
+				other_code = other_mode.upper()
+			else:
+				raise TypeError('mode[1] must be TransformOrigin or string, got {}'.format(type(other_mode)))
+			
+			other_x, other_y = other_align_matrix[other_code]
 
 			delta_x = other_x - self_x if align[0] else 0.
 			delta_y = other_y - self_y if align[1] else 0.
 
 		elif isinstance(entity, Point):
+			# Aligning to a point
 			delta_x = entity.x - self_x if align[0] else 0.
 			delta_y = entity.y - self_y if align[1] else 0.
 
-		elif isinstance(entity, tuple):
-			delta_x = entity.x - entity[0] if align[0] else 0.
-			delta_y = entity.y - entity[1] if align[1] else 0.
+		elif isinstance(entity, (tuple, list)) and len(entity) == 2:
+			# Aligning to a coordinate tuple
+			delta_x = entity[0] - self_x if align[0] else 0.
+			delta_y = entity[1] - self_y if align[1] else 0.
 
-		else: return
+		else:
+			raise TypeError('entity must be Shape, Point, or tuple(x, y), got {}'.format(type(entity)))
 
 		self.shift(delta_x, delta_y)
 
@@ -200,12 +246,3 @@ if __name__ == '__main__':
 
 	print(section('Shape Nodes'))
 	print(s.to_XML())
-
-	
-
-
-
-
-
-	
-	

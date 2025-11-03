@@ -20,6 +20,7 @@ from PythonQt import QtCore, QtGui
 
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.node import eNode, eNodesContainer
+from typerig.core.objects.transform import Transform, TransformOrigin
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Core TypeRig objects for storage
@@ -43,7 +44,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '3.0'
+app_name, app_version = 'TypeRig | Contour', '3.5'
 
 fileFormats = 'TypeRig XML data (*.xml);;'
 delta_app_id_key = 'com.typerig.delta.machine.axissetup'
@@ -267,6 +268,35 @@ class TRContourCopy(QtGui.QWidget):
 
 	def __set_align_state(self, align_state):
 		self.node_align_state = align_state
+
+	def __prep_delta_parameters(self, tr_glyph, wGlyph, wLayers):
+		# -- Look for Delta Machine Axis data in font's lib
+		try:
+			font_lib = self.active_font.fl.packageLib
+			raw_axis_data = font_lib[delta_app_id_key][delta_axis_group_name]
+			axis_data = {layer_name : (stx, sty) for layer_name, stx, sty, sx, sy, color in raw_axis_data}
+			
+		except KeyError:
+			output(3, app_name, 'Delta Machine Axis setup not found in Fonts Lib.\n Please setup using < Delta panel > then save the axis data within the font!')
+			return None, None
+		
+		# -- Prepare virtual axis
+		for layer_name, stems in axis_data.items():
+			tr_glyph.layer(layer_name).stems = stems
+
+		virtual_axis = tr_glyph.virtual_axis(list(axis_data.keys()))
+		target_bounds = {}
+
+		for layer_name in wLayers:
+			layer_selection = wGlyph.selectedNodes(layer_name)
+			
+			if len(layer_selection):
+				selection_container = eNodesContainer(layer_selection)
+				target_bounds[layer_name] = selection_container
+			else:
+				target_bounds[layer_name] = None
+
+		return virtual_axis, target_bounds
 
 	def __clear_selected(self):
 		gallery_selection = [qidx.row() for qidx in self.lst_contours.selectedIndexes()]
@@ -518,37 +548,16 @@ class TRContourCopy(QtGui.QWidget):
 
 			# - Paste with Delta Machine enabled
 			if do_delta:
-				# -- Look for Delta Machine Axis data in font's lib
-				try:
-					font_lib = self.active_font.fl.packageLib
-					raw_axis_data = font_lib[delta_app_id_key][delta_axis_group_name]
-					axis_data = {layer_name : (stx, sty) for layer_name, stx, sty, sx, sy, color in raw_axis_data}
-					
-				except KeyError:
-					output(3, app_name, 'Delta Machine Axis setup not found in Fonts Lib.\n Please setup using < Delta panel > then save the axis data within the font!')
-					do_delta = False
-			
-			if do_delta:
-				# -- Prepare virtual axis
-				for layer_name, stems in axis_data.items():
-					tr_glyph.layer(layer_name).stems = stems
-
-				virtual_axis = tr_glyph.virtual_axis(list(axis_data.keys()))
-				target_bounds = {}
-
-				for layer_name in wLayers:
-					layer_selection = wGlyph.selectedNodes(layer_name)
-					selection_container = eNodesContainer(layer_selection)
-					target_bounds[layer_name] = (selection_container.width, selection_container.height)
+				virtual_axis, target_container = self.__prep_delta_parameters(tr_glyph, wGlyph, wLayers)
+				if virtual_axis is None: do_delta = False
 				
-	
 			# - Paste
 			paste_data = {}
 			for tr_layer in tr_glyph.layers:
 				# - Paste with Delta Machine enabled
 				if do_delta:
-					target_width, target_height = target_bounds[tr_layer.name]
-					process_layer = tr_layer.scale_with_axis(virtual_axis, target_width, target_height)
+					current_container = target_container[tr_layer.name]
+					process_layer = tr_layer.scale_with_axis(virtual_axis, current_container.width, current_container.height)
 				else:
 					process_layer = tr_layer
 
@@ -563,6 +572,7 @@ class TRContourCopy(QtGui.QWidget):
 		wGlyph = eGlyph()
 		wLayers = wGlyph._prepareLayers(pLayers)
 		gallery_selection = [self.lst_contours.model().itemFromIndex(qidx) for qidx in self.lst_contours.selectedIndexes()]
+		do_delta = self.opt_delta_machine.isChecked()
 
 		# - Process
 		if len(gallery_selection):
@@ -570,6 +580,11 @@ class TRContourCopy(QtGui.QWidget):
 				paste_uid = clipboard_item.data(QtCore.Qt.UserRole + 1000)
 				is_partial = clipboard_item.data(QtCore.Qt.UserRole + 1001)
 				tr_glyph = self.contour_clipboard[paste_uid]
+
+				# - Paste with Delta Machine enabled
+				if do_delta:
+					virtual_axis, target_container = self.__prep_delta_parameters(tr_glyph, wGlyph, wLayers)
+					if virtual_axis is None: do_delta = False
 
 				if is_partial:
 					output(3, app_name, '< Partial path > not suitable for < Paste contours > operation!')
@@ -586,8 +601,15 @@ class TRContourCopy(QtGui.QWidget):
 					
 					if work_layer is not None:
 						fl_contours = []
+
+						if do_delta:
+							current_container = target_container[tr_layer.name]
+							process_layer = tr_layer.scale_with_axis(virtual_axis, current_container.width, current_container.height, transform_origin=TransformOrigin.CENTER)
+							process_layer.align_to(current_container.bounds.center_point, mode=(TransformOrigin.CENTER, TransformOrigin.CENTER), align=(True, True))
+						else:
+							process_layer = tr_layer
 						
-						for tr_shape in tr_layer.shapes:
+						for tr_shape in process_layer.shapes:
 							for tr_contour in tr_shape.contours:
 								fl_contour = trNodes_to_flContour(tr_contour.nodes, is_closed=tr_contour.closed)
 								fl_contours.append(fl_contour)
