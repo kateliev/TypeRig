@@ -44,7 +44,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '3.5'
+app_name, app_version = 'TypeRig | Contour', '3.6'
 
 fileFormats = 'TypeRig XML data (*.xml);;'
 delta_app_id_key = 'com.typerig.delta.machine.axissetup'
@@ -274,7 +274,7 @@ class TRContourCopy(QtGui.QWidget):
 		try:
 			font_lib = self.active_font.fl.packageLib
 			raw_axis_data = font_lib[delta_app_id_key][delta_axis_group_name]
-			axis_data = {layer_name : (stx, sty) for layer_name, stx, sty, sx, sy, color in raw_axis_data}
+			axis_data = {layer_name : (float(stx), float(sty)) for layer_name, stx, sty, sx, sy, color in raw_axis_data}
 			
 		except KeyError:
 			output(3, app_name, 'Delta Machine Axis setup not found in Fonts Lib.\n Please setup using < Delta panel > then save the axis data within the font!')
