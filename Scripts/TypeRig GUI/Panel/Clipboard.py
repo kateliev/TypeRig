@@ -565,7 +565,7 @@ class TRContourCopy(QtGui.QWidget):
 				fl_contour = trNodes_to_flContour(process_layer.nodes, is_closed=False)
 				paste_data[tr_layer.name] = eNodesContainer(fl_contour.nodes())
 
-			TRNodeActionCollector.nodes_paste(wGlyph, wLayers, paste_data, self.node_align_state, (self.chk_paste_flip_h.isChecked(), self.chk_paste_flip_v.isChecked(), False, False, overwrite, False))
+			TRNodeActionCollector.nodes_paste(wGlyph, list(paste_data.keys()), paste_data, self.node_align_state, (self.chk_paste_flip_h.isChecked(), self.chk_paste_flip_v.isChecked(), False, False, overwrite, False))
 	
 	def paste_contour(self, to_mask=False):
 		'''Paste whole contours from clipboard.'''

@@ -238,21 +238,16 @@ class Layer(Container, XMLSerializable):
 	def align_to(self, entity, mode=(TransformOrigin.CENTER, TransformOrigin.CENTER), align=(True, True)):
 		'''Align layer to another entity using transformation origins.
 		
-		This is an improved version that uses TransformOrigin enum for type safety
-		and consistency with other transformation methods.
-		
 		Arguments:
 			entity (Layer, Point, tuple(x,y)):
 				Object to align to
 
 			mode (tuple(TransformOrigin, TransformOrigin)):
-				Alignment origins for (self, other). Uses TransformOrigin enum.
-				For example:
+				Alignment origins for (self, other). Must use TransformOrigin enum.
+				Examples:
 				- (TransformOrigin.CENTER, TransformOrigin.CENTER) - align centers
 				- (TransformOrigin.BASELINE, TransformOrigin.BASELINE) - align baselines
 				- (TransformOrigin.TOP_LEFT, TransformOrigin.BOTTOM_LEFT) - align top to bottom
-				
-				For backward compatibility, also accepts string tuples like ('C', 'C')
 
 			align (tuple(bool, bool)):
 				Align X, Align Y. Set to False to disable alignment on that axis.
@@ -285,49 +280,21 @@ class Layer(Container, XMLSerializable):
 			...     align=(True, False)
 			... )
 		'''
-		delta_x, delta_y = 0., 0.
 		align_matrix = self.bounds.align_matrix
-		
-		# Handle mode - support both TransformOrigin enum and legacy string codes
-		self_mode = mode[0]
-		if isinstance(self_mode, TransformOrigin):
-			self_code = self_mode.code
-		elif isinstance(self_mode, str):
-			self_code = self_mode.upper()
-		else:
-			raise TypeError('mode[0] must be TransformOrigin or string, got {}'.format(type(self_mode)))
-		
-		self_x, self_y = align_matrix[self_code]
+		self_x, self_y = align_matrix[mode[0].code]
 
 		if isinstance(entity, self.__class__):
-			# Aligning to another layer
-			other_align_matrix = entity.bounds.align_matrix
-			
-			other_mode = mode[1]
-			if isinstance(other_mode, TransformOrigin):
-				other_code = other_mode.code
-			elif isinstance(other_mode, str):
-				other_code = other_mode.upper()
-			else:
-				raise TypeError('mode[1] must be TransformOrigin or string, got {}'.format(type(other_mode)))
-			
-			other_x, other_y = other_align_matrix[other_code]
-
+			other_x, other_y = entity.bounds.align_matrix[mode[1].code]
 			delta_x = other_x - self_x if align[0] else 0.
 			delta_y = other_y - self_y if align[1] else 0.
 
 		elif isinstance(entity, Point):
-			# Aligning to a point
 			delta_x = entity.x - self_x if align[0] else 0.
 			delta_y = entity.y - self_y if align[1] else 0.
 
-		elif isinstance(entity, (tuple, list)) and len(entity) == 2:
-			# Aligning to a coordinate tuple
+		elif isinstance(entity, (tuple, list)):
 			delta_x = entity[0] - self_x if align[0] else 0.
 			delta_y = entity[1] - self_y if align[1] else 0.
-
-		else:
-			raise TypeError('entity must be Layer, Point, or tuple(x, y), got {}'.format(type(entity)))
 
 		self.shift(delta_x, delta_y)
 
