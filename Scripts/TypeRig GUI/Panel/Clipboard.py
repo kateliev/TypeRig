@@ -556,6 +556,7 @@ class TRContourCopy(QtGui.QWidget):
 			for tr_layer in tr_glyph.layers:
 				# - Paste with Delta Machine enabled
 				if do_delta:
+					print(f'{app_name}: Working in < Delta Machine > mode')
 					current_bounds = target_bounds[tr_layer.name]
 					process_layer = tr_layer.scale_with_axis(virtual_axis, current_bounds.width, current_bounds.height)
 				else:
@@ -603,6 +604,7 @@ class TRContourCopy(QtGui.QWidget):
 						fl_contours = []
 
 						if do_delta:
+							print(f'{app_name}: Working in < Delta Machine > mode')
 							current_bounds = target_bounds[tr_layer.name]
 							process_layer = tr_layer.scale_with_axis(virtual_axis, current_bounds.width, current_bounds.height, transform_origin=TransformOrigin.CENTER)
 							process_layer.align_to(current_bounds.center_point, mode=(TransformOrigin.CENTER, TransformOrigin.CENTER), align=(True, True))

@@ -35,7 +35,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.80'
+__version__ = '2.9'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -737,68 +737,77 @@ class TRNodeActionCollector(object):
 		flip_h, flip_v, reverse, inject_nodes, overwrite_nodes, overwrite_coordinates = mode
 		update_flag = False
 		
+		# - FIRST PASS: Collect all data BEFORE any modifications 
+		layer_operations = {}
+		
 		for layer in wLayers:
 			if layer in node_bank.keys():
 				dst_container = eNodesContainer(glyph.selectedNodes(layer), extend=eNode)
-
 				if len(dst_container):
 					src_container = node_bank[layer].clone()
 					src_transform = QtGui.QTransform()
-																
+					
 					# - Transform
 					if flip_h or flip_v:
 						scaleX = -1 if flip_h else 1
 						scaleY = -1 if flip_v else 1
 						dX = src_container.x + src_container.width/2.
 						dY = src_container.y + src_container.height/2.
-
 						src_transform.translate(dX, dY)
 						src_transform.scale(scaleX, scaleY)
 						src_transform.translate(-dX, -dY)
 						src_container.applyTransform(src_transform)
-						
-
+					
 					# - Align source
 					if align is None:
 						src_container.shift(*src_container[0].diffTo(dst_container[0]))
 					else:
 						src_container.alignTo(dst_container, align, align=(True,True))
-
 					if reverse: 
 						src_container = src_container.reverse()
-
-					# - Process
-					if inject_nodes: # - Inject mode - insert source after first node index
-						dst_container[0].contour.insert(dst_container[0].index, [node.fl for node in src_container.nodes])
-						update_flag = True
-
-					elif overwrite_nodes: # - Overwrite mode - delete all nodes in selection and replace with source
-						insert_index = dst_container[0].index
-						insert_contour = dst_container[0].contour
-						insert_contour.removeNodesBetween(dst_container[0].fl, dst_container[-1].getNextOn())
-						insert_contour.insert(dst_container[0].index, [node.fl for node in src_container.nodes])
-						insert_contour.removeAt(insert_index + len(src_container))
-
-						update_flag = True
-
-					elif overwrite_coordinates: # - Overwrite mode - copy node coordinates only
-						for nid in range(len(dst_container)):
-							dst_container.nodes[nid].x = src_container.nodes[nid].x
-							dst_container.nodes[nid].y = src_container.nodes[nid].y
-
-						update_flag = True
-
-					else: # - Paste mode - remap node by node
-						if len(dst_container) == len(node_bank[layer]):
-							for nid in range(len(dst_container)):
-								dst_container[nid].fl.x = src_container[nid].x 
-								dst_container[nid].fl.y = src_container[nid].y 
-
-							update_flag = True
-						else:
-							update_flag = False
-							warnings.warn('Layer: {};\tCount Mismatch: Selected nodes [{}]; Source nodes [{}].'.format(layer, len(dst_container), len(src_container)), NodeWarning)
-							
+					
+					# Store operation data
+					layer_operations[layer] = {
+						'dst_container': dst_container,
+						'src_container': src_container,
+						'insert_index': dst_container[0].index,
+						'insert_contour': dst_container[0].contour
+					}
+		
+		# - SECOND PASS: Execute all modifications 
+		for layer, op_data in layer_operations.items():
+			dst_container = op_data['dst_container']
+			src_container = op_data['src_container']
+			
+			if inject_nodes:
+				op_data['insert_contour'].insert(op_data['insert_index'], [node.fl for node in src_container.nodes])
+				update_flag = True
+				
+			elif overwrite_nodes:
+				insert_contour = op_data['insert_contour']
+				insert_index = op_data['insert_index']
+				
+				insert_contour.removeNodesBetween(dst_container[0].fl, dst_container[-1].getNextOn())
+				insert_contour.insert(insert_index, [node.fl for node in src_container.nodes])
+				insert_contour.removeAt(insert_index + len(src_container))
+				update_flag = True
+				
+			elif overwrite_coordinates:
+				for nid in range(len(dst_container)):
+					dst_container.nodes[nid].x = src_container.nodes[nid].x
+					dst_container.nodes[nid].y = src_container.nodes[nid].y
+				update_flag = True
+				
+			else:  # - Paste mode
+				if len(dst_container) == len(node_bank[layer]):
+					for nid in range(len(dst_container)):
+						dst_container[nid].fl.x = src_container[nid].x 
+						dst_container[nid].fl.y = src_container[nid].y 
+					update_flag = True
+				else:
+					update_flag = False
+					warnings.warn('Layer: {};\tCount Mismatch: Selected nodes [{}]; Source nodes [{}].'.format(layer, len(dst_container), len(src_container)), NodeWarning)
+		
 		# - Done							
 		if update_flag:
 			glyph.updateObject(glyph.fl, '{};\nPaste Nodes @ {}.'.format(glyph.name, '; '.join(wLayers)))
