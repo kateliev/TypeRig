@@ -44,7 +44,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '3.6'
+app_name, app_version = 'TypeRig | Contour', '3.7'
 
 fileFormats = 'TypeRig XML data (*.xml);;'
 delta_app_id_key = 'com.typerig.delta.machine.axissetup'
@@ -143,10 +143,10 @@ class TRContourCopy(QtGui.QWidget):
 		lay_contour_copy.addWidget(self.btn_clear)
 		self.btn_clear.clicked.connect(self.__clear_selected)
 
-		tooltip_button =  "Paste nodes over selection"
+		tooltip_button =  "Paste nodes over selection\nALT + Click: Overwrite"
 		self.btn_paste_nodes = CustomPushButton("clipboard_paste_nodes", checkable=False, checked=False, tooltip=tooltip_button, obj_name='btn_panel')
 		lay_contour_copy.addWidget(self.btn_paste_nodes)
-		self.btn_paste_nodes.clicked.connect(lambda: self.paste_nodes())
+		self.btn_paste_nodes.clicked.connect(lambda: self.paste_nodes(overwrite=get_modifier()))
 		
 		tooltip_button =  "Trace nodes for selected path items"
 		self.btn_trace = CustomPushButton("node_trace", tooltip=tooltip_button, obj_name='btn_panel')
@@ -292,7 +292,7 @@ class TRContourCopy(QtGui.QWidget):
 			
 			if len(layer_selection):
 				selection_container = eNodesContainer(layer_selection)
-				target_bounds[layer_name] = selection_container
+				target_bounds[layer_name] = selection_container.bounds
 			else:
 				target_bounds[layer_name] = None
 
@@ -534,7 +534,7 @@ class TRContourCopy(QtGui.QWidget):
 
 			output(0, app_name, 'Copy contours; Glyph: %s; Layers: %s;' %(wGlyph.name, '; '.join(process_layers)))
 		
-	def paste_nodes(self):
+	def paste_nodes(self, overwrite=False):
 		'''Paste nodes over selection using node action collector.'''
 		wGlyph = eGlyph()
 		wLayers = wGlyph._prepareLayers(pLayers)
@@ -548,7 +548,7 @@ class TRContourCopy(QtGui.QWidget):
 
 			# - Paste with Delta Machine enabled
 			if do_delta:
-				virtual_axis, target_container = self.__prep_delta_parameters(tr_glyph, wGlyph, wLayers)
+				virtual_axis, target_bounds = self.__prep_delta_parameters(tr_glyph, wGlyph, wLayers)
 				if virtual_axis is None: do_delta = False
 				
 			# - Paste
@@ -556,15 +556,15 @@ class TRContourCopy(QtGui.QWidget):
 			for tr_layer in tr_glyph.layers:
 				# - Paste with Delta Machine enabled
 				if do_delta:
-					current_container = target_container[tr_layer.name]
-					process_layer = tr_layer.scale_with_axis(virtual_axis, current_container.width, current_container.height)
+					current_bounds = target_bounds[tr_layer.name]
+					process_layer = tr_layer.scale_with_axis(virtual_axis, current_bounds.width, current_bounds.height)
 				else:
 					process_layer = tr_layer
 
 				fl_contour = trNodes_to_flContour(process_layer.nodes, is_closed=False)
 				paste_data[tr_layer.name] = eNodesContainer(fl_contour.nodes())
 
-			TRNodeActionCollector.nodes_paste(wGlyph, wLayers, paste_data, self.node_align_state, (self.chk_paste_flip_h.isChecked(), self.chk_paste_flip_v.isChecked(), False, False, True, False))
+			TRNodeActionCollector.nodes_paste(wGlyph, wLayers, paste_data, self.node_align_state, (self.chk_paste_flip_h.isChecked(), self.chk_paste_flip_v.isChecked(), False, False, overwrite, False))
 	
 	def paste_contour(self, to_mask=False):
 		'''Paste whole contours from clipboard.'''
@@ -583,7 +583,7 @@ class TRContourCopy(QtGui.QWidget):
 
 				# - Paste with Delta Machine enabled
 				if do_delta:
-					virtual_axis, target_container = self.__prep_delta_parameters(tr_glyph, wGlyph, wLayers)
+					virtual_axis, target_bounds = self.__prep_delta_parameters(tr_glyph, wGlyph, wLayers)
 					if virtual_axis is None: do_delta = False
 
 				if is_partial:
@@ -603,9 +603,9 @@ class TRContourCopy(QtGui.QWidget):
 						fl_contours = []
 
 						if do_delta:
-							current_container = target_container[tr_layer.name]
-							process_layer = tr_layer.scale_with_axis(virtual_axis, current_container.width, current_container.height, transform_origin=TransformOrigin.CENTER)
-							process_layer.align_to(current_container.bounds.center_point, mode=(TransformOrigin.CENTER, TransformOrigin.CENTER), align=(True, True))
+							current_bounds = target_bounds[tr_layer.name]
+							process_layer = tr_layer.scale_with_axis(virtual_axis, current_bounds.width, current_bounds.height, transform_origin=TransformOrigin.CENTER)
+							process_layer.align_to(current_bounds.center_point, mode=(TransformOrigin.CENTER, TransformOrigin.CENTER), align=(True, True))
 						else:
 							process_layer = tr_layer
 						
