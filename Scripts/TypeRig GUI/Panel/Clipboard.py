@@ -44,7 +44,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '3.7'
+app_name, app_version = 'TypeRig | Contour', '3.8'
 
 fileFormats = 'TypeRig XML data (*.xml);;'
 delta_app_id_key = 'com.typerig.delta.machine.axissetup'
@@ -157,14 +157,15 @@ class TRContourCopy(QtGui.QWidget):
 		self.opt_trace_close = CustomPushButton("contour_close", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_contour_copy.addWidget(self.opt_trace_close)
 
+		tooltip_button =  "Round coordinates"
+		self.opt_round = CustomPushButton("node_round", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_contour_copy.addWidget(self.opt_round)
+
 		tooltip_button =  "Use Delta Machine to fit pasted contours into selected shape bounds"
 		self.opt_delta_machine = CustomPushButton("delta_machine", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_contour_copy.addWidget(self.opt_delta_machine)
 
-		tooltip_button = "Reset contour bank"
-		self.btn_reset = CustomPushButton("close", tooltip=tooltip_button, obj_name='btn_panel')
-		lay_contour_copy.addWidget(self.btn_reset)
-		self.btn_reset.clicked.connect(self.__reset)
+		
 
 		box_contour_copy.setLayout(lay_contour_copy)
 		lay_main.addWidget(box_contour_copy)
@@ -243,6 +244,11 @@ class TRContourCopy(QtGui.QWidget):
 		self.btn_clipboard_load = CustomPushButton("file_open", tooltip=tooltip_button, obj_name='btn_panel')
 		lay_options_main.addWidget(self.btn_clipboard_load)
 		self.btn_clipboard_load.clicked.connect(self.clipboard_load)
+
+		tooltip_button = "Reset contour bank"
+		self.btn_reset = CustomPushButton("close", tooltip=tooltip_button, obj_name='btn_panel')
+		lay_options_main.addWidget(self.btn_reset)
+		self.btn_reset.clicked.connect(self.__reset)
 
 		tooltip_button = "Toggle view mode"
 		self.btn_toggle_view = CustomPushButton("select_glyph", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
@@ -566,6 +572,9 @@ class TRContourCopy(QtGui.QWidget):
 				paste_data[tr_layer.name] = eNodesContainer(fl_contour.nodes())
 
 			TRNodeActionCollector.nodes_paste(wGlyph, list(paste_data.keys()), paste_data, self.node_align_state, (self.chk_paste_flip_h.isChecked(), self.chk_paste_flip_v.isChecked(), False, False, overwrite, False))
+			
+			if self.opt_round.isChecked():
+				TRNodeActionCollector.node_round(pMode, pLayers, True, True)
 	
 	def paste_contour(self, to_mask=False):
 		'''Paste whole contours from clipboard.'''
@@ -625,6 +634,9 @@ class TRContourCopy(QtGui.QWidget):
 
 						selected_shape.addContours(fl_contours, True)
 			
+			if self.opt_round.isChecked():
+				TRNodeActionCollector.node_round(pMode, pLayers, True, True)
+
 			wGlyph.updateObject(wGlyph.fl, 'Paste contours; Glyph: %s; Layers: %s' %(wGlyph.name, '; '.join(wLayers)))
 
 	def paste_path(self):
@@ -660,6 +672,9 @@ class TRContourCopy(QtGui.QWidget):
 
 					selected_shape.addContours([new_contour], True)
 			
+			if self.opt_round.isChecked():
+				TRNodeActionCollector.node_round(pMode, pLayers, True, True)
+
 			wGlyph.updateObject(wGlyph.fl, 'Paste path; Glyph: %s; Layers: %s' %(wGlyph.name, '; '.join(wLayers)))
 
 	# -- File operations
