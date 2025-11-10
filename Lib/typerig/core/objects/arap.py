@@ -12,10 +12,10 @@
 # - Dependencies ------------------------
 import math
 
-from point import Point
-from node import Node
-from contour import Contour
-from matrix import Mat, Vec, eye
+from typerig.core.objects.point import Point
+from typerig.core.objects.node import Node
+from typerig.core.objects.contour import Contour
+from typerig.core.objects.matrix import Mat, Vec, eye
 
 # - Init -------------------------------
 __version__ = '0.1.0'
