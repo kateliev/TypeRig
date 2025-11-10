@@ -22,7 +22,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.shape import Shape
 
 # - Init -------------------------------
-__version__ = '0.3.0'
+__version__ = '0.3.1'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -400,8 +400,8 @@ class Layer(Container, XMLSerializable):
 		# Initialize scales and precisions
 		direction = [1, -1][extrapolate]
 		precision_x, precision_y = precision
-		scale_x = prev_scale_x = 0.99
-		scale_y = prev_scale_y = 0.99
+		scale_x = prev_scale_x = 1.
+		scale_y = prev_scale_y = 1.
 		
 		# Storage for processed data
 		process_axis = {}
