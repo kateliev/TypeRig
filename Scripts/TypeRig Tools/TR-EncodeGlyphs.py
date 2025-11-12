@@ -1,4 +1,4 @@
-#FLM: TR: Encoder
+#FLM: TypeRig: Encoder
 # ----------------------------------------
 # (C) Vassil Kateliev, 2023-2025  (http://www.kateliev.com)
 #-----------------------------------------
