@@ -17,8 +17,6 @@ import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore
 
-from typerig.core.objects.point import Point
-
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 
@@ -27,7 +25,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.core.base.message import *
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Copy Anchors', '2.2'
+app_name, app_version = 'TR | Copy Anchors', '2.3'
 str_all_masters = '*All masters*'
 
 # - Interface -----------------------------
@@ -326,15 +324,9 @@ class dlg_copy_anchors(QtGui.QDialog):
 						
 						# - Handle italic angle adjustment
 						if mode_italic and italic_angle > 0:
-							#new_point = Point(tmp_anchor.point.x(), tmp_anchor.point.y())
-							#new_point.angle = italic_angle
-
 							angle_radians = math.radians(italic_angle)
-							x_shift = tmp_anchor.point.y() * math.tan(angle_radians)
+							x_shift = round(tmp_anchor.point.y() * math.tan(angle_radians))
 							tmp_anchor.point = QtCore.QPointF(tmp_anchor.point.x() + x_shift, tmp_anchor.point.y())
-
-							#print(tmp_anchor.point.x() + x_shift , new_point.solve_width())
-							#tmp_anchor.point = QtCore.QPointF(new_point.solve_width(), tmp_anchor.point.y())
 
 						# - Handle collision
 						if mode_collide: # Rename mode
