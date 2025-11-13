@@ -11,10 +11,13 @@
 
 # - Dependencies -----------------
 import os
+import math
 
 import fontlab as fl6
 import fontgate as fgt
 from PythonQt import QtCore
+
+from typerig.core.objects.point import Point
 
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs
@@ -24,7 +27,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.core.base.message import *
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Copy Anchors', '2.1'
+app_name, app_version = 'TR | Copy Anchors', '2.2'
 str_all_masters = '*All masters*'
 
 # - Interface -----------------------------
@@ -109,6 +112,13 @@ class dlg_copy_anchors(QtGui.QDialog):
 		self.edt_anchors_list.setPlaceholderText('Comma separated list of anchors: top, left')
 		self.edt_collide_suffix.setPlaceholderText('Examples: .new, .bak, .1')
 		self.edt_collide_suffix.setText('.bak')
+		
+		# - Check and Spin
+		self.chk_use_italic = QtGui.QCheckBox('Use italic angle')
+		self.spn_italic_angle = QtGui.QSpinBox()
+		self.spn_italic_angle.setRange(0, 20)
+		self.spn_italic_angle.setValue(10)
+		self.spn_italic_angle.setSuffix('°')
 				
 		# - Build layouts 
 		# -- Soource 
@@ -148,6 +158,9 @@ class dlg_copy_anchors(QtGui.QDialog):
 		layout_dst.addWidget(self.rad_collide_dst, 					6, 4, 1, 3)
 		layout_dst.addWidget(QtGui.QLabel('Addon suffix:'), 		7, 0, 1, 1)
 		layout_dst.addWidget(self.edt_collide_suffix, 				7, 1, 1, 6)
+		layout_dst.addWidget(QtGui.QLabel('Italic:'), 				8, 0, 1, 1)
+		layout_dst.addWidget(self.chk_use_italic, 					8, 1, 1, 3)
+		layout_dst.addWidget(self.spn_italic_angle, 				8, 4, 1, 3)
 		self.box_dst.setLayout(layout_dst)
 
 		# -- Main
@@ -237,6 +250,8 @@ class dlg_copy_anchors(QtGui.QDialog):
 		mode_anchors = self.rad_copy_specific.isChecked()			# if True source for specific anchors
 		mode_collide = self.rad_collide_rename.isChecked()			# if True rename 
 		mode_rename = self.rad_collide_dst.isChecked()				# if True modify destination
+		mode_italic = self.chk_use_italic.isChecked()				# if True apply italic angle
+		italic_angle = self.spn_italic_angle.value					# Italic angle in degrees
 
 		anchors_list = [item.strip() for item in self.edt_anchors_list.text.strip().split(',')] if mode_source else []
 		replace_suffix = self.edt_collide_suffix.text.strip()
@@ -309,6 +324,18 @@ class dlg_copy_anchors(QtGui.QDialog):
 							except ZeroDivisionError:
 								output(1, app_name, 'Source layer has zero advance width! Cannot calculate proportional anchor position - fallback to absolute!\t Font: {}; Glyph: {}; Layer:{}; Anchor: {}.'.format(self.cmb_select_font_B.currentText, src_glyph.name, layer_source, tmp_anchor.name))
 						
+						# - Handle italic angle adjustment
+						if mode_italic and italic_angle > 0:
+							#new_point = Point(tmp_anchor.point.x(), tmp_anchor.point.y())
+							#new_point.angle = italic_angle
+
+							angle_radians = math.radians(italic_angle)
+							x_shift = tmp_anchor.point.y() * math.tan(angle_radians)
+							tmp_anchor.point = QtCore.QPointF(tmp_anchor.point.x() + x_shift, tmp_anchor.point.y())
+
+							#print(tmp_anchor.point.x() + x_shift , new_point.solve_width())
+							#tmp_anchor.point = QtCore.QPointF(new_point.solve_width(), tmp_anchor.point.y())
+
 						# - Handle collision
 						if mode_collide: # Rename mode
 							dst_anchor_names = [a.name for a in dst_glyph.anchors(layer_destination)]
@@ -344,7 +371,7 @@ class dlg_copy_anchors(QtGui.QDialog):
 				for update_glyph in glyphs_source:
 					update_glyph.updateObject(update_glyph.fl, verbose=False)
 
-				output(0, app_name, 'Copying anchors! Font: {}; Glyphs processed: {}'.format(self.cmb_select_font_B.currentText, len(glyphs_source)))
+			output(0, app_name, 'Copying anchors! Font: {}; Glyphs processed: {}'.format(self.cmb_select_font_B.currentText, len(glyphs_source)))
 
 
 		
