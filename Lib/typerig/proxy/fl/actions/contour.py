@@ -28,7 +28,7 @@ from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRTransformCtrl
 
 # - Init ---------------------------------------------------
-__version__ = '2.9'
+__version__ = '3.0'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -76,7 +76,16 @@ class TRContourActionCollector(object):
 		active_workspace.getCanvas(True).refreshAll()
 
 	@staticmethod	
-	def contour_slice(pMode:int, pLayers:tuple):
+	def contour_slice(pMode:int, pLayers:tuple, expanded=False):
+		# - Helper
+		def cut_contour(contour, nid, extend=expanded):
+			if extend:
+				return_contour = contour.breakContourExpanded(nid, 1.)
+			else:
+				return_contour = contour.breakContour(nid)
+
+			return return_contour
+
 		# - Get list of glyphs to be processed
 		process_glyphs = getProcessGlyphs(pMode)
 
@@ -84,64 +93,51 @@ class TRContourActionCollector(object):
 		for glyph in process_glyphs:
 			do_update = False
 			work_layers = glyph._prepareLayers(pLayers)
-			selection = [(layer_name, glyph.selectedNodes(layer_name)) for layer_name in work_layers]
+			selection = [(layer_name, glyph.selectedAtContours(layer_name)) for layer_name in work_layers]
 
-			for layer_name, selected_nodes in selection:
-				if len(selection) > 1:
-					node_first, node_last = selected_nodes[0], selected_nodes[-1]
-					contour_first = node_first.contour
-					contour_last = node_last.contour.clone()
+			for layer_name, selected_data in selection:
+				
+				first_shape = glyph.shapes(layer_name)[0]
+				
+				first_cid, first_nid = selected_data[0]
+				last_cid, last_nid = selected_data[-1]
 
-					if contour_first != contour_last:
-						contour_first.setStartPoint(node_first.index)
-						contour_last.setStartPoint(node_last.index)
-						contour_last.closed = False
-						contour_first.closed = False
-						contour_first.append(contour_last)
-						contour_first.closed = True
-						do_update = True
+				if first_cid != last_cid: # Different contours
+					new_contours = []
+					
+					first_contour = first_shape.contours[first_cid]
+					last_contour = first_shape.contours[last_cid]
+					
+					first_contour_parts = cut_contour(first_contour, first_nid)
+					last_contour_parts = cut_contour(last_contour, last_nid)
+					
+					if first_contour_parts is not None and last_contour_parts is not None:
+						first_contour_parts.append(last_contour_parts)
+						first_contour_parts.closed = True
+						first_shape.addContours([first_contour_parts])
+					
+					first_contour.append(last_contour)
+					first_contour.closed = True
+					do_update = False
 
+				else: # Same contour
+					first_contour = first_shape.contours[first_cid]
+					first_contour_nodes = first_contour.nodes()
+					first_node = first_contour_nodes[first_nid]
+					last_node = first_contour_nodes[last_nid]
+
+					cut_contour(first_contour, first_nid)
+					cutout = cut_contour(first_contour, last_node.index)
+					first_contour.closed = True
+
+					if cutout is not None:
+						cutout.closed = True
+						first_shape.addContours([cutout], True)
+					
+					do_update = False
+					
 			if do_update:	
 				glyph.updateObject(glyph.fl, '%s: Slice contour @ {}.'.format(glyph.name, '; '.join(work_layers)))
-
-		active_workspace.getCanvas(True).refreshAll()
-
-	@staticmethod
-	def contour_bool_remove_overlap(pMode:int, pLayers:tuple):
-		# - Get list of glyphs to be processed
-		process_glyphs = getProcessGlyphs(pMode)
-
-		# - Process
-		for glyph in process_glyphs:
-			work_layers = glyph._prepareLayers(pLayers)
-			
-			# - Prepare selection
-			tmp = {}
-			selection = glyph.selectedAtShapes()
-
-			for sid, cid, nid in selection:
-				tmp.setdefault(sid,[]).append(cid)
-
-			selection = {key:list(set(value)) for key, value in tmp.items()}
-
-			# - Get contours
-			process_shapes = []
-			
-			for layer_name in work_layers:
-				for sid, cid_list in selection.items():
-					process_shapes.append((glyph.shapes(layer_name)[sid], [glyph.contours(layer_name)[cid] for cid in cid_list]))
-
-			for shape, contours in process_shapes:
-				shape.removeContours(contours)
-				new_shape = fl6.flShape()
-				new_fg_shape = fgt.fgShape()
-				new_shape.contours = contours
-				new_shape.convertToFgShape(new_fg_shape)
-				new_fg_shape.removeOverlap()
-				shape.addContours(fl6.flShape(new_fg_shape).contours, True)
-
-			glyph.update()
-			glyph.updateObject(glyph.fl, '{};\tRemove overlap @ {}.'.format(glyph.name, '; '.join(work_layers)))
 
 		active_workspace.getCanvas(True).refreshAll()
 

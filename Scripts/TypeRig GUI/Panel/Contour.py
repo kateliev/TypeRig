@@ -143,10 +143,10 @@ class TRContourBasics(QtGui.QWidget):
 		
 		lay_operations = TRFlowLayout(spacing=10)
 		
-		tooltip_button = "Slice selected contours\nSlice and then join two conturs each having a node selected"
+		tooltip_button = "Slice selected contours\nMouse Left + Alt: Overlap"
 		self.btn_contour_cut = CustomPushButton("contour_cut", tooltip=tooltip_button, obj_name='btn_panel')
 		lay_operations.addWidget(self.btn_contour_cut)
-		self.btn_contour_cut.clicked.connect(lambda: TRContourActionCollector.contour_slice(pMode, pLayers))
+		self.btn_contour_cut.clicked.connect(lambda: TRContourActionCollector.contour_slice(pMode, pLayers, get_modifier()))
 
 		tooltip_button = "Close selected contours"
 		self.btn_contour_close = CustomPushButton("contour_close", tooltip=tooltip_button, obj_name='btn_panel')
