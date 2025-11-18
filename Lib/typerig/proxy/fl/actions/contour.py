@@ -28,7 +28,7 @@ from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRTransformCtrl
 
 # - Init ---------------------------------------------------
-__version__ = '3.0'
+__version__ = '3.1'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -93,14 +93,15 @@ class TRContourActionCollector(object):
 		for glyph in process_glyphs:
 			do_update = False
 			work_layers = glyph._prepareLayers(pLayers)
-			selection = [(layer_name, glyph.selectedAtContours(layer_name)) for layer_name in work_layers]
+			selection = [(layer_name, glyph.selectedAtShapes(layer_name)) for layer_name in work_layers]
 
 			for layer_name, selected_data in selection:
+				first_sid, first_cid, first_nid = selected_data[0]
+				last_sid, last_cid, last_nid = selected_data[-1]
 				
-				first_shape = glyph.shapes(layer_name)[0]
-				
-				first_cid, first_nid = selected_data[0]
-				last_cid, last_nid = selected_data[-1]
+				if first_sid != last_sid: break
+
+				first_shape = glyph.shapes(layer_name)[first_sid]
 
 				if first_cid != last_cid: # Different contours
 					new_contours = []
@@ -115,14 +116,17 @@ class TRContourActionCollector(object):
 						first_contour_parts.append(last_contour_parts)
 						first_contour_parts.closed = True
 						first_shape.addContours([first_contour_parts])
+						first_shape.removeContours([last_contour_parts])
 					
 					first_contour.append(last_contour)
 					first_contour.closed = True
+					first_shape.removeContours([last_contour])
 					do_update = False
 
 				else: # Same contour
 					first_contour = first_shape.contours[first_cid]
 					first_contour_nodes = first_contour.nodes()
+
 					first_node = first_contour_nodes[first_nid]
 					last_node = first_contour_nodes[last_nid]
 
