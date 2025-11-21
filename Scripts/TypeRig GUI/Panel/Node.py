@@ -244,6 +244,11 @@ class TRNodeBasics(QtGui.QWidget):
 		lay_cap.addWidget(self.btn_cap_normal)
 		self.btn_cap_normal.clicked.connect(lambda: TRNodeActionCollector.cap_normal(eGlyph(), pLayers))
 
+		tooltip_button = 'Force two selected curves to be collinear'
+		self.btn_curve_collinear = CustomPushButton('stem_horizontal', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_cap.addWidget(self.btn_curve_collinear)
+		self.btn_curve_collinear.clicked.connect(lambda: TRNodeActionCollector.make_collinear(eGlyph(), pLayers))
+
 		#lay_cap.setColumnStretch(lay_cap.columnCount(), 1)
 		box_cap.setLayout(lay_cap)
 		self.lay_main.addWidget(box_cap)

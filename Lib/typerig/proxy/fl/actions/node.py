@@ -35,7 +35,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '2.9'
+__version__ = '3.0'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -1174,4 +1174,30 @@ class TRNodeActionCollector(object):
 
 		if do_update:
 			glyph.updateObject(glyph.fl, '{};\tNormalize Cap @ {}.'.format(glyph.name, '; '.join(wLayers)))
+			active_workspace.getCanvas(True).refreshAll()
+
+	@staticmethod
+	def make_collinear(glyph:eGlyph, pLayers:tuple, keep_nodes:bool=False):
+		'''Make two curves collinear'''
+
+		# - Init
+		wLayers = glyph._prepareLayers(pLayers)
+		modifiers = QtGui.QApplication.keyboardModifiers()
+		
+		selection_per_layer = {layer:glyph.selectedNodes(layer, extend=eNode) for layer in wLayers}
+		do_update = False
+		
+		# - Process
+		for layer, selection in selection_per_layer.items():	
+			print(layer, selection)	
+			if len(selection) == 8:
+				# - Set curves 
+				curve_A = eCurveEx(selection[0].getSegmentNodes())
+				curve_B = eCurveEx(selection[4].getSegmentNodes())
+				new_curve_A, new_curve_B = curve_A.make_collinear(curve_B, mode=-1, equalize=True, target_width=None, apply=True)
+			else:
+				output(1, 'Make collinear', 'Selection must be 2 curves = 8 Nodes! Current = {}'.format(len(selection)))
+
+		if do_update:
+			glyph.updateObject(glyph.fl, '{};\tMake collinear @ {}.'.format(glyph.name, '; '.join(wLayers)))
 			active_workspace.getCanvas(True).refreshAll()

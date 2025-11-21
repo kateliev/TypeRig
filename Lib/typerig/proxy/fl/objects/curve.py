@@ -20,7 +20,7 @@ from typerig.proxy.fl.objects.node import eNode
 from typerig.core.func.utils import isMultiInstance
 
 # - Init -----------------------------------
-__version__ = '0.3.93'
+__version__ = '0.3.95'
 
 # - Keep compatibility for basestring checks
 try:
@@ -39,6 +39,7 @@ class eCurveEx(object):
 		...
 	'''
 	def __init__(self, *argv):
+		self.nodes = []
 		
 		if isinstance(argv[0], fl6.CurveEx):
 			self.fl = self.CurveEx = argv[0]
@@ -122,3 +123,14 @@ class eCurveEx(object):
 			return self.curve
 		else:
 			return self.__riseCurveWaring()
+
+	def make_collinear(self, other, mode=0, equalize=False, target_width=None, apply=True):
+		if self.isCurve and other.isCurve:
+			self.curve, other.curve = self.curve.make_collinear(other.curve, mode, equalize, target_width)
+			if apply: 
+				self.updateNodes()
+				other.updateNodes()
+			return self.curve, other.curve
+		else:
+			return self.__riseCurveWaring()
+

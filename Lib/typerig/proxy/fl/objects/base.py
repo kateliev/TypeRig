@@ -123,7 +123,7 @@ class Curve(CubicBezier):
 				points = argv
 
 		if len(argv) == 1:
-			if isMultiInstance(argv[0], (Coord, fl6.flNode)):
+			if isMultiInstance(argv[0], (Coord, fl6.flNode, trPoint)):
 				points = [(item.x, item.y) for item in argv[0]]
 
 			if isMultiInstance(argv[0], (tuple, list)):

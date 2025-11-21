@@ -20,7 +20,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.28.0'
+__version__ = '0.29.0'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -528,9 +528,9 @@ class CubicBezier(object):
 			return velocity
 
 		def controls(z0, w0, alpha, beta, w1, z1):
-			"""Given two points in a path, and the angles of departure and arrival
+			'''Given two points in a path, and the angles of departure and arrival
 			at each one, this function finds the appropiate control points of the
-			Bezier's curve, using John Hobby's algorithm"""
+			Bezier's curve, using John Hobby's algorithm'''
 			theta = arg(w0 / (z1 - z0))
 			phi = arg((z1 - z0) / w1)
 			u = z0 + math.e**(0+1j * theta) * (z1 - z0) * hobby(theta, phi) / alpha
@@ -685,6 +685,193 @@ class CubicBezier(object):
 
 		return self.__class__(self.p0.tuple, self.p1.tuple, self.p2.tuple, self.p3.tuple)
 
+	# -- Collinearity / Channel Processing ---------------------------
+	def match_direction_to(self, other):
+		'''
+		Check if this curve needs direction reversal to match another curve.
+		
+		Args:
+			other: CubicBezier object to match
+		
+		Returns:
+			(matched_curve, was_reversed): Tuple of matched curve and reversal flag
+		'''
+		dist_same = self.p0.diff_to(other.p0) + self.p3.diff_to(other.p3)
+		dist_reversed = self.p0.diff_to(other.p3) + self.p3.diff_to(other.p0)
+		
+		if dist_reversed < dist_same:
+			return self.doSwap(), True
+		
+		return self, False
+
+	def _set_handle_polar(self, base_point, angle, length):
+		'''
+		Calculate handle position using polar coordinates.
+		Internal helper method.
+		
+		Args:
+			base_point: Point object (anchor point)
+			angle: Angle in radians
+			length: Handle length
+		
+		Returns:
+			Point object (handle position)
+		'''
+		if math.isnan(angle) or math.isnan(length) or length == 0:
+			return Point(base_point.x, base_point.y)
+		
+		return Point(
+			base_point.x + length * math.cos(angle),
+			base_point.y + length * math.sin(angle)
+		)
+
+	def _equalize_points(self, point_0, point_1, target_distance):
+		'''
+		Position two points equidistant from their centerline.
+		Internal helper method.
+		
+		Args:
+			point_0, point_1: Point objects
+			target_distance: Desired distance between points
+		
+		Returns:
+			(new_point_0, new_point_1): Tuple of repositioned points
+		'''
+		# Calculate centerline
+		center_x = (point_0.x + point_1.x) / 2.0
+		center_y = (point_0.y + point_1.y) / 2.0
+		
+		# Get angle from center to point_0
+		dx = point_0.x - center_x
+		dy = point_0.y - center_y
+		angle = math.atan2(dy, dx)
+		
+		# Position points at half target distance from center
+		half_dist = target_distance / 2.0
+		
+		new_point_0 = Point(
+			center_x + half_dist * math.cos(angle),
+			center_y + half_dist * math.sin(angle)
+		)
+		
+		new_point_1 = Point(
+			center_x - half_dist * math.cos(angle),
+			center_y - half_dist * math.sin(angle)
+		)
+		
+		return new_point_0, new_point_1
+
+	def make_collinear(self, other, mode=0, equalize=False, target_width=None):
+		'''
+		Make this curve collinear with another curve by aligning control point handles.
+		Optionally equalize the distance between curves for uniform stems.
+		
+		Args:
+			other: CubicBezier object to align with
+			mode: 0 = use self angles, 1 = use other angles, -1 = average
+			equalize: If True, make curves equidistant (uniform stem width)
+			target_width: If set, use this specific distance. If None, use average
+		
+		Returns:
+			(modified_self, modified_other): Tuple of two aligned CubicBezier objects
+		
+		Example:
+			>>> curve_a = CubicBezier(...)
+			>>> curve_b = CubicBezier(...)
+			>>> # Align with averaged angles
+			>>> aligned_a, aligned_b = curve_a.make_collinear(curve_b, mode=-1)
+			>>> # Align and equalize for uniform stem
+			>>> aligned_a, aligned_b = curve_a.make_collinear(curve_b, mode=-1, equalize=True)
+		'''
+		
+		# Match curve directions
+		other_matched, was_reversed = other.match_direction_to(self)
+		
+		c0 = self
+		c1 = other_matched
+		
+		# Calculate target distances if equalizing
+		if equalize:
+			dist_start = c0.p0.diff_to(c1.p0)
+			dist_end = c0.p3.diff_to(c1.p3)
+			
+			if target_width is None:
+				# Use average of start and end distances
+				target_width = (dist_start + dist_end) / 2.0
+			
+			# Equalize on-curve points
+			new_p0_0, new_p0_1 = c0._equalize_points(c0.p0, c1.p0, target_width)
+			new_p3_0, new_p3_1 = c0._equalize_points(c0.p3, c1.p3, target_width)
+		else:
+			# Keep original positions
+			new_p0_0 = Point(c0.p0.x, c0.p0.y)
+			new_p0_1 = Point(c1.p0.x, c1.p0.y)
+			new_p3_0 = Point(c0.p3.x, c0.p3.y)
+			new_p3_1 = Point(c1.p3.x, c1.p3.y)
+		
+		# Process first handle pair (p0->p1)
+		# Use add=0 to get raw angle without 90-degree offset
+		angle_0_out = c0.p0.angle_to(c0.p1, add=0)
+		angle_1_out = c1.p0.angle_to(c1.p1, add=0)
+		
+		length_0_out = c0.p0.diff_to(c0.p1)
+		length_1_out = c1.p0.diff_to(c1.p1)
+		
+		if (not math.isnan(angle_0_out) and not math.isnan(angle_1_out) and 
+			length_0_out > 0 and length_1_out > 0):
+			
+			# Calculate target angle based on mode
+			if mode == 0:
+				target_angle_out = angle_0_out
+			elif mode == 1:
+				target_angle_out = angle_1_out
+			else:  # mode == -1
+				target_angle_out = (angle_0_out + angle_1_out) / 2.0
+			
+			# Apply target angle (from new positions if equalized)
+			new_p1_0 = c0._set_handle_polar(new_p0_0, target_angle_out, length_0_out)
+			new_p1_1 = c0._set_handle_polar(new_p0_1, target_angle_out, length_1_out)
+		else:
+			# Keep original handles
+			new_p1_0 = Point(c0.p1.x, c0.p1.y)
+			new_p1_1 = Point(c1.p1.x, c1.p1.y)
+		
+		# Process second handle pair (p3->p2)
+		angle_0_in = c0.p3.angle_to(c0.p2, add=0)
+		angle_1_in = c1.p3.angle_to(c1.p2, add=0)
+		
+		length_0_in = c0.p3.diff_to(c0.p2)
+		length_1_in = c1.p3.diff_to(c1.p2)
+		
+		if (not math.isnan(angle_0_in) and not math.isnan(angle_1_in) and 
+			length_0_in > 0 and length_1_in > 0):
+			
+			# Calculate target angle based on mode
+			if mode == 0:
+				target_angle_in = angle_0_in
+			elif mode == 1:
+				target_angle_in = angle_1_in
+			else:  # mode == -1
+				target_angle_in = (angle_0_in + angle_1_in) / 2.0
+			
+			# Apply target angle (from new positions if equalized)
+			new_p2_0 = c0._set_handle_polar(new_p3_0, target_angle_in, length_0_in)
+			new_p2_1 = c0._set_handle_polar(new_p3_1, target_angle_in, length_1_in)
+		else:
+			# Keep original handles
+			new_p2_0 = Point(c0.p2.x, c0.p2.y)
+			new_p2_1 = Point(c1.p2.x, c1.p2.y)
+		
+		# Create new curves
+		result_0 = self.__class__(new_p0_0.tuple, new_p1_0.tuple, new_p2_0.tuple, new_p3_0.tuple)
+		result_1 = self.__class__(new_p0_1.tuple, new_p1_1.tuple, new_p2_1.tuple, new_p3_1.tuple)
+		
+		# If other was reversed, reverse result back
+		if was_reversed:
+			result_1 = result_1.doSwap()
+		
+		return result_0, result_1
+
 
 if __name__ == "__main__":
 	a = Line(((113.73076629638672, 283.6538391113281), (357.96154022216797, 415.3846130371094)))
@@ -695,3 +882,20 @@ if __name__ == "__main__":
 	
 	f = CubicBezier((150, 370), (220, 400), (320, 380), (330, 230))
 	print(f.lerp_last(Point(10,0)))
+
+	curve_a = CubicBezier(Point(100, 100), Point(150, 120), Point(250, 130), Point(300, 110))
+	curve_b = CubicBezier(Point(100, 200), Point(150, 180), Point(250, 170), Point(300, 190))
+	
+	# Just align handles (keep original positions)
+	aligned_a, aligned_b = curve_a.make_collinear(curve_b, mode=-1)
+	# Align handles + equalize distance (uniform stem)
+	aligned_a, aligned_b = curve_a.make_collinear(curve_b, mode=-1, equalize=True)
+	
+	# Align + specific stem width
+	aligned_a, aligned_b = curve_a.make_collinear(curve_b, mode=-1, equalize=True, target_width=120.0)
+
+
+
+
+
+
