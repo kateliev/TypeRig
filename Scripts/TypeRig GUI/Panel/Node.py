@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '3.35'
+app_name, app_version = 'TypeRig | Nodes', '3.36'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -247,7 +247,7 @@ class TRNodeBasics(QtGui.QWidget):
 		tooltip_button = 'Force two selected curves to be collinear'
 		self.btn_curve_collinear = CustomPushButton('stem_horizontal', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_cap.addWidget(self.btn_curve_collinear)
-		self.btn_curve_collinear.clicked.connect(lambda: TRNodeActionCollector.make_collinear(eGlyph(), pLayers))
+		self.btn_curve_collinear.clicked.connect(lambda: TRNodeActionCollector.make_collinear(eGlyph(), pLayers, get_modifier(QtCore.Qt.AltModifier)))
 
 		#lay_cap.setColumnStretch(lay_cap.columnCount(), 1)
 		box_cap.setLayout(lay_cap)
