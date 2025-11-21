@@ -1193,7 +1193,7 @@ class TRNodeActionCollector(object):
 				# - Set curves 
 				curve_A = eCurveEx(selection[0].getSegmentNodes())
 				curve_B = eCurveEx(selection[4].getSegmentNodes())
-				new_curve_A, new_curve_B = curve_A.make_collinear(curve_B, mode=-1, equalize, target_width=None, apply=True)
+				new_curve_A, new_curve_B = curve_A.make_collinear(curve_B, mode=-1, equalize=equalize, target_width=None, apply=True)
 			else:
 				output(1, 'Make collinear', 'Selection must be 2 curves = 8 Nodes! Current = {}'.format(len(selection)))
 
