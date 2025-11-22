@@ -35,7 +35,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '3.1'
+__version__ = '3.2'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -1194,6 +1194,7 @@ class TRNodeActionCollector(object):
 				curve_A = eCurveEx(selection[0].getSegmentNodes())
 				curve_B = eCurveEx(selection[4].getSegmentNodes())
 				new_curve_A, new_curve_B = curve_A.make_collinear(curve_B, mode=-1, equalize=equalize, target_width=None, apply=True)
+				do_update = True
 			else:
 				output(1, 'Make collinear', 'Selection must be 2 curves = 8 Nodes! Current = {}'.format(len(selection)))
 
