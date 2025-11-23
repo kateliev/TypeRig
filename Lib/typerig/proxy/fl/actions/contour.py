@@ -121,7 +121,7 @@ class TRContourActionCollector(object):
 					first_contour.append(last_contour)
 					first_contour.closed = True
 					first_shape.removeContours([last_contour])
-					do_update = False
+					do_update = True
 
 				else: # Same contour
 					first_contour = first_shape.contours[first_cid]
@@ -138,7 +138,7 @@ class TRContourActionCollector(object):
 						cutout.closed = True
 						first_shape.addContours([cutout], True)
 					
-					do_update = False
+					do_update = True
 					
 			if do_update:	
 				glyph.updateObject(glyph.fl, '%s: Slice contour @ {}.'.format(glyph.name, '; '.join(work_layers)))
