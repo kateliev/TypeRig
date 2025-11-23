@@ -183,12 +183,12 @@ class TRDeltaPanel(QtGui.QWidget):
 		self.chk_target.clicked.connect(lambda: self.__prepare_target())
 
 		tooltip_button = 'Proportional scale mode'
-		self.chk_proportional = CustomPushButton("draw_square_2p", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_proportional = CustomPushButton("scale_lock", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_proportional)
 		self.chk_proportional.clicked.connect(lambda: self.__toggle_proportional_scale())
 
 		tooltip_button = 'Selection mode'
-		self.chk_selection = CustomPushButton("align_contour_to_layer", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.chk_selection = CustomPushButton("selection_basic", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_selection)
 		
 		tooltip_button = 'Show extended controls'

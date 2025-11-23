@@ -251,7 +251,7 @@ class TRContourCopy(QtGui.QWidget):
 		self.btn_reset.clicked.connect(self.__reset)
 
 		tooltip_button = "Toggle view mode"
-		self.btn_toggle_view = CustomPushButton("select_glyph", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.btn_toggle_view = CustomPushButton("view_icons", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options_main.addWidget(self.btn_toggle_view)
 		self.btn_toggle_view.clicked.connect(self.__toggle_list_view_mode)
 
