@@ -24,7 +24,7 @@ from typerig.proxy.fl.gui.widgets import getTRIconFont, getProcessGlyphs
 
 
 # - Init --------------------------
-tool_version = '1.20'
+tool_version = '1.3'
 tool_name = 'TypeRig Nodes: Align'
 
 TRToolFont = getTRIconFont()
@@ -217,8 +217,15 @@ class TRExternalToolBar(QtGui.QToolBar):
 			wLayers = glyph._prepareLayers(pLayers)
 			
 			for layer in wLayers:
-				self.ext_target[layer] = glyph.selectedNodes(layer)[0]
-
+				selection =  glyph.selectedNodes(layer)
+				
+				if len(selection) > 1:
+					# Set target in the middle of selection
+					med_x = round(sum([n.x for n in selection])/len(selection))
+					med_y = round(sum([n.y for n in selection])/len(selection))
+					self.ext_target[layer] = fl6.flNode(QtCore.QPointF(med_x, med_y))
+				else:
+					self.ext_target[layer] = glyph.selectedNodes(layer)[0]
 		else:
 			self.ext_target = {}
 

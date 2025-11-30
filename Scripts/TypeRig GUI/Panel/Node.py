@@ -30,7 +30,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Nodes', '3.36'
+app_name, app_version = 'TypeRig | Nodes', '3.4'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -638,8 +638,15 @@ class TRNodeBasics(QtGui.QWidget):
 			wLayers = glyph._prepareLayers(pLayers)
 			
 			for layer in wLayers:
-				self.ext_target[layer] = glyph.selectedNodes(layer)[0]
-
+				selection =  glyph.selectedNodes(layer)
+				
+				if len(selection) > 1:
+					# Set target in the middle of selection
+					med_x = round(sum([n.x for n in selection])/len(selection))
+					med_y = round(sum([n.y for n in selection])/len(selection))
+					self.ext_target[layer] = fl6.flNode(QtCore.QPointF(med_x, med_y))
+				else:
+					self.ext_target[layer] = glyph.selectedNodes(layer)[0]
 		else:
 			self.ext_target = {}
 
