@@ -44,7 +44,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '3.8'
+app_name, app_version = 'TypeRig | Contour', '3.9'
 
 fileFormats = 'TypeRig XML data (*.xml);;'
 delta_app_id_key = 'com.typerig.delta.machine.axissetup'
@@ -81,9 +81,10 @@ def trNodes_to_flContour(tr_nodes, is_closed):
 	
 	for tr_node in tr_nodes:
 		fl_node = fl6.flNode(QtCore.QPointF(tr_node.x, tr_node.y), nodeType=tr_node.type)
+		fl_node.smooth = tr_node.smooth
 		fl_nodes.append(fl_node)
 	
-	fl_contour = fl6.flContour(fl_nodes)
+	fl_contour = fl6.flContour(fl_nodes, closed=is_closed)
 	fl_contour_nodes = fl_contour.nodes()
 
 	# - Accurately transfer the smooth flag: 
@@ -94,9 +95,6 @@ def trNodes_to_flContour(tr_nodes, is_closed):
 		if tr_nodes[nid].smooth:
 			fl_contour_nodes[nid].smooth = True
 
-	# - Close the contour if flag is set
-	fl_contour.closed = is_closed
-	
 	return fl_contour
 
 # - Sub widgets ------------------------
@@ -502,16 +500,19 @@ class TRContourCopy(QtGui.QWidget):
 				all_contours = wGlyph.contours(layer_name)
 				
 				if not is_partial:
-					# Store whole contours
+					stored_contours = []
+
+					# - Store whole contours
 					for cid in selection.keys():
 						fl_contour = all_contours[cid]
 						tr_contour = flNodes_to_trContour(fl_contour.nodes(), True)
+						stored_contours.append(tr_contour)
 						
-						# Create shape with single contour
-						tr_shape = Shape([tr_contour])
-						tr_layer.append(tr_shape)
+					# - Create a shape containing the contours
+					tr_shape = Shape(stored_contours)
+					tr_layer.append(tr_shape)
 				else:
-					# Store partial path as a single contour
+					# - Store partial path as a single contour
 					partial_nodes = []
 					for cid, node_list in selection.items():
 						contour_nodes = all_contours[cid].nodes()
@@ -524,7 +525,7 @@ class TRContourCopy(QtGui.QWidget):
 							
 							partial_nodes.append(fl_node)
 					
-					# Create single contour from partial nodes
+					# - Create single contour from partial nodes
 					tr_contour = flNodes_to_trContour(partial_nodes, False)
 					tr_shape = Shape([tr_contour])
 					tr_layer.append(tr_shape)
