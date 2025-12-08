@@ -1189,10 +1189,19 @@ class TRNodeActionCollector(object):
 		
 		# - Process
 		for layer, selection in selection_per_layer.items():	
-			if len(selection) == 8:
+			segments_set = {}
+			
+			for node in selection:
+				node_segment = node.getSegmentNodes()
+				if len(node_segment) == 4:
+					unique_key = hash(tuple([node.index for node in node_segment]))
+					segments_set[unique_key] = node_segment
+
+			if len(segments_set.keys()) >= 2:
+				data = list(segments_set.values())
 				# - Set curves 
-				curve_A = eCurveEx(selection[0].getSegmentNodes())
-				curve_B = eCurveEx(selection[4].getSegmentNodes())
+				curve_A = eCurveEx(data[0])
+				curve_B = eCurveEx(data[-1])
 				new_curve_A, new_curve_B = curve_A.make_collinear(curve_B, mode=-1, equalize=equalize, target_width=None, apply=True)
 				do_update = True
 			else:
