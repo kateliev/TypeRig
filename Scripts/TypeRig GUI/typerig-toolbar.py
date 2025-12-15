@@ -141,6 +141,7 @@ toolbar_control = TRToolbarController()
 
 # -- Fix Mac's lack of visible QMainWindow, thus adding toolbars to invisible item renders them ivisible too 
 if fl_runtime_platform == 'Darwin':
+	#app.main.setWindowFlags(QtCore.Qt.FramelessWindowHint | QtCore.Qt.Tool)
 	app.main.show()
 
 app.main.addToolBar(toolbar_control)
