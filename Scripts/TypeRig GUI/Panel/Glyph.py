@@ -1,6 +1,6 @@
 #FLM: TR: Glyph
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2019-2021 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2019-2025 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 
@@ -18,11 +18,12 @@ import fontgate as fgt
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
-from PythonQt import QtCore
+from PythonQt import QtCore, QtGui
 
 from typerig.core.base.message import *
-from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRGLineEdit, TRTransformCtrl, fontMarkColors
+#from typerig.proxy.fl.gui import QtGui
+from typerig.proxy.fl.gui.widgets import getProcessGlyphs, TRGLineEdit, TRTransformCtrl, fontMarkColors, getTRIconFontPath, CustomPushButton, TRFlowLayout, CustomLabel
+from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 
 # - Init --------------------------
 global pLayers
@@ -31,58 +32,49 @@ global pUndo
 pLayers = None
 pMode = 0
 pUndo = True
-app_name, app_version = 'TypeRig | Glyph', '1.11'
+app_name, app_version = 'TypeRig | Glyph', '2.00'
 
 number_token = '#'
 
+TRToolFont = getTRIconFontPath()
+font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
+
 # - String -----------------------------
-help_numeration = 'Use # for sequential numeration.\n\nExample:\n#=1; ##=01; ###=001\nA.ss## will crearte A.ss01 to A.ss20'
+help_numeration = 'Use # for sequential numeration.\n\nExample:\n#=1; ##=01; ###=001\nA.ss## will create A.ss01 to A.ss20'
 help_setName = 'Set name for current glyph or multiple selected glyphs (TR Selection mode).\n' + help_numeration
 help_duplicate = 'Duplicate current glyph or multiple selected glyphs (TR Selection mode).\n' + help_numeration
-str_warning = '<p><b>NOTE</b>: Disabling UNDO will generate the new glyphs, but the font would not update.</p><p>New glyphs will NOT be visible in FontWidow< until your next operation.</p>'
+str_warning = '<p><b>NOTE</b>: Disabling UNDO will generate the new glyphs, but the font would not update.</p><p>New glyphs will NOT be visible in FontWindow until your next operation.</p>'
 
 # - Functions --------------------------
 fromat_number = lambda x, i: '0'*(i - 1) + str(x) if len(str(x)) < i else str(x)
 
 # - Tabs -------------------------------
-class TRGlyphBasic(QtGui.QGridLayout):
+class TRGlyphBasic(QtGui.QWidget):
 	def __init__(self):
 		super(TRGlyphBasic, self).__init__()
 
-		# -- Edit fields
+		# - Layout
+		self.lay_main = QtGui.QVBoxLayout()
+
+		# - Widgets and tools -------------------------------------------------
+		# -- Glyph Basics -----------------------------------------------------
+		box_basics = QtGui.QGroupBox()
+		box_basics.setObjectName('box_group')
+		
+		lay_basics = QtGui.QGridLayout()
+		lay_basics.setSpacing(6)
+
+		# -- Name field
 		self.edt_glyphName = TRGLineEdit()
-		self.edt_glyphTags = TRGLineEdit()
-		self.edt_glyphUnis = TRGLineEdit()
-
 		self.edt_glyphName.setPlaceholderText('Glyph Name')
-		self.edt_glyphTags.setPlaceholderText('Glyph Tags')
-		self.edt_glyphUnis.setPlaceholderText('Glyph Unicodes')
+		self.edt_glyphName.setToolTip(help_setName + '\n\n' + help_numeration)
+		lay_basics.addWidget(self.edt_glyphName, 0, 0, 1, 3)
 
-		self.edt_glyphName.setToolTip(help_numeration)
-
-		# -- Buttons 
-		self.btn_setName = QtGui.QPushButton('Set &Name')
-		self.btn_setFlag = QtGui.QPushButton('Set &Flag')
-		self.btn_setTags = QtGui.QPushButton('Set &Tags')
-		self.btn_setUnis = QtGui.QPushButton('Set &Unicode')
-		self.btn_setUnis.setEnabled(False)
-
+		self.btn_setName = CustomPushButton('glyph_active', tooltip=help_setName, obj_name='btn_panel')
 		self.btn_setName.clicked.connect(lambda: self.glyph_setBasics('name'))
-		self.btn_setFlag.clicked.connect(lambda: self.glyph_setBasics('flag'))
-		self.btn_setTags.clicked.connect(lambda: self.glyph_setBasics('tags'))
+		lay_basics.addWidget(self.btn_setName, 0, 3, 1, 1)
 
-		self.btn_setName.setToolTip(help_setName)
-
-		# -- Hinting & Stems (Move to other panel later!)
-		self.cmb_select_stem =  QtGui.QComboBox()
-		self.cmb_select_stem.addItems(['PostScript', 'TrueType'])
-		self.btn_setStemV = QtGui.QPushButton('Set &V-Stem')
-		self.btn_setStemH = QtGui.QPushButton('Set &H-Stem')
-		self.btn_setStemV.clicked.connect(lambda: self.setStem(False))
-		self.btn_setStemH.clicked.connect(lambda: self.setStem(True))
-
-		# -- Combo box
-		#fontMarkColors = [(QtGui.QColor(name).hue(), name) for name in QtGui.QColor.fontMarkColors()]
+		# -- Flag field
 		self.cmb_select_color = QtGui.QComboBox()
 		self.color_codes = {name:value for name, value, discard in fontMarkColors}
 		
@@ -91,27 +83,62 @@ class TRGlyphBasic(QtGui.QGridLayout):
 			self.cmb_select_color.setItemData(i, QtGui.QColor(fontMarkColors[i][2]), QtCore.Qt.DecorationRole)
 
 		self.cmb_select_color.setMinimumWidth(40)
-		self.edt_glyphName.setMinimumWidth(40)
+		self.cmb_select_color.setToolTip('Select flag color')
+		lay_basics.addWidget(self.cmb_select_color, 1, 0, 1, 3)
 
-		# - Build
-		self.addWidget(QtGui.QLabel('Glyph Basics:'), 			0, 0, 1, 8)
-		self.addWidget(QtGui.QLabel('Name:'), 					1, 0, 1, 1)
-		self.addWidget(self.edt_glyphName, 						1, 1, 1, 5)
-		self.addWidget(self.btn_setName, 						1, 6, 1, 2)
-		self.addWidget(QtGui.QLabel('Flag:'), 					2, 0, 1, 1)
-		self.addWidget(self.cmb_select_color, 					2, 1, 1, 5)
-		self.addWidget(self.btn_setFlag, 						2, 6, 1, 2)
-		self.addWidget(QtGui.QLabel('Tags:'), 					3, 0, 1, 1)
-		self.addWidget(self.edt_glyphTags, 						3, 1, 1, 5)
-		self.addWidget(self.btn_setTags, 						3, 6, 1, 2)
-		self.addWidget(QtGui.QLabel('Uni:'), 					4, 0, 1, 1)
-		self.addWidget(self.edt_glyphUnis, 						4, 1, 1, 5)
-		self.addWidget(self.btn_setUnis, 						4, 6, 1, 2)
-		self.addWidget(QtGui.QLabel('\nGlyph selection to Font Stems (Hinting):'),	5, 0, 1, 8)
-		self.addWidget(QtGui.QLabel('Type:'), 					6, 0, 1, 1)
-		self.addWidget(self.cmb_select_stem, 					6, 1, 1, 3)
-		self.addWidget(self.btn_setStemV, 						6, 4, 1, 2)
-		self.addWidget(self.btn_setStemH, 						6, 6, 1, 2)
+		self.btn_setFlag = CustomPushButton('flag', tooltip='Set glyph flag color', obj_name='btn_panel')
+		self.btn_setFlag.clicked.connect(lambda: self.glyph_setBasics('flag'))
+		lay_basics.addWidget(self.btn_setFlag, 1, 3, 1, 1)
+
+		# -- Tags field
+		self.edt_glyphTags = TRGLineEdit()
+		self.edt_glyphTags.setPlaceholderText('Glyph Tags')
+		self.edt_glyphTags.setToolTip('Enter glyph tags (space separated)')
+		lay_basics.addWidget(self.edt_glyphTags, 2, 0, 1, 3)
+
+		self.btn_setTags = CustomPushButton('label', tooltip='Set glyph tags', obj_name='btn_panel')
+		self.btn_setTags.clicked.connect(lambda: self.glyph_setBasics('tags'))
+		lay_basics.addWidget(self.btn_setTags, 2, 3, 1, 1)
+
+		# -- Unicode field
+		self.edt_glyphUnis = TRGLineEdit()
+		self.edt_glyphUnis.setPlaceholderText('Glyph Unicodes')
+		self.edt_glyphUnis.setToolTip('Enter glyph unicode values')
+		self.edt_glyphUnis.setEnabled(False)
+		lay_basics.addWidget(self.edt_glyphUnis, 3, 0, 1, 3)
+
+		self.btn_setUnis = CustomPushButton('select_glyph', tooltip='Set glyph unicode', obj_name='btn_panel')
+		self.btn_setUnis.setEnabled(False)
+		lay_basics.addWidget(self.btn_setUnis, 3, 3, 1, 1)
+
+		box_basics.setLayout(lay_basics)
+		self.lay_main.addWidget(box_basics)
+
+		# -- Glyph Stems (Hinting) -------------------------------------------
+		box_stems = QtGui.QGroupBox()
+		box_stems.setObjectName('box_group')
+		
+		lay_stems = QtGui.QGridLayout()
+		lay_stems.setSpacing(6)
+
+		self.cmb_select_stem = QtGui.QComboBox()
+		self.cmb_select_stem.addItems(['PostScript', 'TrueType'])
+		self.cmb_select_stem.setToolTip('Select stem type')
+		lay_stems.addWidget(self.cmb_select_stem, 0, 0, 1, 2)
+
+		self.btn_setStemV = CustomPushButton('stem_vertical', tooltip='Set vertical stem from selection', obj_name='btn_panel')
+		self.btn_setStemV.clicked.connect(lambda: self.setStem(False))
+		lay_stems.addWidget(self.btn_setStemV, 0, 2, 1, 1)
+
+		self.btn_setStemH = CustomPushButton('stem_horizontal', tooltip='Set horizontal stem from selection', obj_name='btn_panel')
+		self.btn_setStemH.clicked.connect(lambda: self.setStem(True))
+		lay_stems.addWidget(self.btn_setStemH, 0, 3, 1, 1)
+
+		box_stems.setLayout(lay_stems)
+		self.lay_main.addWidget(box_stems)
+
+		# -- Finish it -------------------------------------------------------
+		self.setLayout(self.lay_main)
 
 	def glyph_setBasics(self, mode):
 		font = pFont()
@@ -182,100 +209,118 @@ class TRGlyphBasic(QtGui.QGridLayout):
 			output(1, app_name, 'Set Stem(s): {}; {}; {}.'.format(stem_name, stem_width, self.cmb_select_stem.currentText))
 
 
-class TRGlyphCopyTools(QtGui.QGridLayout):
+class TRGlyphCopyTools(QtGui.QWidget):
 	def __init__(self):
 		super(TRGlyphCopyTools, self).__init__()
 
-		# -- Edit Fields
+		# - Layout
+		self.lay_main = QtGui.QVBoxLayout()
+
+		# - Widgets and tools -------------------------------------------------
+		# -- Copy Options -----------------------------------------------------
+		box_options = QtGui.QGroupBox()
+		box_options.setObjectName('box_group')
+		
+		lay_options = TRFlowLayout(spacing=10)
+
+		# -- Checkable icon buttons for copy options
+		self.chk_outline = CustomPushButton('contour', checkable=True, checked=True, tooltip='Copy contours', obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_outline)
+
+		self.chk_references = CustomPushButton('shape', checkable=True, checked=False, tooltip='Copy references', obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_references)
+
+		self.chk_lsb = CustomPushButton('metrics_lsb', checkable=True, checked=True, tooltip='Copy LSB', obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_lsb)
+
+		self.chk_adv = CustomPushButton('metrics_advance', checkable=True, checked=True, tooltip='Copy Advance', obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_adv)
+
+		self.chk_rsb = CustomPushButton('metrics_rsb', checkable=True, checked=True, tooltip='Copy RSB', obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_rsb)
+
+		self.chk_links = CustomPushButton('guide_zone', checkable=True, checked=True, tooltip='Copy links', obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_links)
+
+		self.chk_anchors = CustomPushButton('icon_anchor', checkable=True, checked=True, tooltip='Copy anchors', obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_anchors)
+
+		self.chk_guides = CustomPushButton('guide_horizontal', checkable=True, checked=True, tooltip='Copy guides', obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_guides)
+
+		self.chk_tags = CustomPushButton('label', checkable=True, checked=True, tooltip='Copy tags', obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_tags)
+
+		self.chk_flag = CustomPushButton('flag', checkable=True, checked=True, tooltip='Copy flag', obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_flag)
+
+		box_options.setLayout(lay_options)
+		self.lay_main.addWidget(box_options)
+
+		# -- Transform Controls -----------------------------------------------
+		box_transform = QtGui.QGroupBox()
+		box_transform.setObjectName('box_group')
+		
+		lay_transform = QtGui.QVBoxLayout()
+		lay_transform.setContentsMargins(0, 0, 0, 0)
+		lay_transform.setSpacing(0)
+
+		self.ctrl_transform = TRTransformCtrl()
+		lay_transform.addWidget(self.ctrl_transform)
+
+		box_transform.setLayout(lay_transform)
+		self.lay_main.addWidget(box_transform)
+
+		# -- Duplicate Glyph --------------------------------------------------
+		box_duplicate = QtGui.QGroupBox()
+		box_duplicate.setObjectName('box_group')
+		
+		lay_duplicate = QtGui.QGridLayout()
+		lay_duplicate.setSpacing(6)
+
 		self.edt_glyphsuffix = TRGLineEdit()
 		self.edt_glyphsuffix.setPlaceholderText('Glyph Suffix')
-		self.edt_glyphsuffix.setToolTip(help_numeration)
+		self.edt_glyphsuffix.setToolTip(help_duplicate + '\n\n' + help_numeration)
+		lay_duplicate.addWidget(self.edt_glyphsuffix, 0, 0, 1, 2)
+
+		self.spb_duplicate = QtGui.QSpinBox()
+		self.spb_duplicate.setMaximum(20)
+		self.spb_duplicate.setMinimum(1)
+		self.spb_duplicate.setToolTip('Number of duplicates to create')
+		lay_duplicate.addWidget(self.spb_duplicate, 0, 2, 1, 1)
+
+		self.btn_duplicate = CustomPushButton('align_group_to_group', tooltip=help_duplicate, obj_name='btn_panel')
+		self.btn_duplicate.clicked.connect(self.glyph_duplicate)
+		lay_duplicate.addWidget(self.btn_duplicate, 0, 3, 1, 1)
+
+		box_duplicate.setLayout(lay_duplicate)
+		self.lay_main.addWidget(box_duplicate)
+
+		# -- Insert from Source -----------------------------------------------
+		box_insert = QtGui.QGroupBox()
+		box_insert.setObjectName('box_group')
+		
+		lay_insert = QtGui.QGridLayout()
+		lay_insert.setSpacing(6)
 
 		self.edt_sourceName = TRGLineEdit()
 		self.edt_sourceName.setPlaceholderText('Source name / Current')
 		self.edt_sourceName.setToolTip('Source glyph name, or Active Glyph if Blank')
+		lay_insert.addWidget(self.edt_sourceName, 0, 0, 1, 2)
 
-		# -- Buttons
-		self.btn_duplicate = QtGui.QPushButton('Duplicate')
-		self.chk_slot01 = QtGui.QPushButton('')
-		self.chk_slot01.setCheckable(True)
-		self.chk_slot02 = QtGui.QPushButton('')
-		self.chk_slot02.setCheckable(True)
-		self.chk_slot03 = QtGui.QPushButton('')
-		self.chk_slot03.setCheckable(True)
-		self.chk_slot04 = QtGui.QPushButton('')
-		self.chk_slot04.setCheckable(True)
-
-		self.btn_insert = QtGui.QPushButton('Insert')
-		self.btn_insert.setToolTip('Copy contents of source glyph and insert them to current active glyph(s)')
+		self.btn_insert = CustomPushButton('layer_add', tooltip='Copy contents of source glyph and insert them to current active glyph(s)', obj_name='btn_panel')
 		self.btn_insert.clicked.connect(lambda: self.glyph_insert(False))
+		lay_insert.addWidget(self.btn_insert, 0, 2, 1, 1)
 
-		self.btn_insert_mask = QtGui.QPushButton('Mask')
-		self.btn_insert_mask.setToolTip('Copy contents of source glyph and insert them as MASK to current active glyph(s)')
+		self.btn_insert_mask = CustomPushButton('layer_mask_add', tooltip='Copy contents of source glyph and insert them as MASK to current active glyph(s)', obj_name='btn_panel')
 		self.btn_insert_mask.clicked.connect(lambda: self.glyph_insert(True))
+		lay_insert.addWidget(self.btn_insert_mask, 0, 3, 1, 1)
 
-		self.btn_duplicate.setToolTip(help_duplicate)
-		self.btn_duplicate.clicked.connect(self.glyph_duplicate)
-		
-		# -- Spin boxes 
-		self.spb_duplicate =  QtGui.QSpinBox()
-		self.spb_duplicate.setMaximum(20)
-		self.spb_duplicate.setMinimum(1)
+		box_insert.setLayout(lay_insert)
+		self.lay_main.addWidget(box_insert)
 
-		# -- Mode checks
-		self.chk_outline = QtGui.QCheckBox('Contours')
-		self.chk_references = QtGui.QCheckBox('References')
-		self.chk_guides = QtGui.QCheckBox('Guides')
-		self.chk_anchors = QtGui.QCheckBox('Anchors')
-		self.chk_lsb = QtGui.QCheckBox('LSB')
-		self.chk_adv = QtGui.QCheckBox('Advance')
-		self.chk_rsb = QtGui.QCheckBox('RSB')
-		self.chk_links = QtGui.QCheckBox('Links')
-		self.chk_tags = QtGui.QCheckBox('Tags')
-		self.chk_flag = QtGui.QCheckBox('Flag')
-		
-		# -- Set States
-		self.chk_outline.setCheckState(QtCore.Qt.Checked)
-		#self.chk_references.setCheckState(QtCore.Qt.Checked)
-		self.chk_guides.setCheckState(QtCore.Qt.Checked)
-		self.chk_anchors.setCheckState(QtCore.Qt.Checked)
-		self.chk_lsb.setCheckState(QtCore.Qt.Checked)
-		self.chk_adv.setCheckState(QtCore.Qt.Checked)
-		self.chk_rsb.setCheckState(QtCore.Qt.Checked)
-		self.chk_links.setCheckState(QtCore.Qt.Checked)
-		self.chk_tags.setCheckState(QtCore.Qt.Checked)
-		self.chk_flag.setCheckState(QtCore.Qt.Checked)
-
-		# -- Custom controls
-		self.tr_trans_ctrl = TRTransformCtrl()
-	
-		# -- Build
-		self.addWidget(QtGui.QLabel('\nCopy and Duplicate Glyph(s) (Options): '), 	0, 0, 1, 4)
-		#self.addWidget(self.chk_slot01, 				1, 0, 1, 1)
-		#self.addWidget(self.chk_slot02, 				1, 1, 1, 1)
-		#self.addWidget(self.chk_slot03, 				1, 2, 1, 1)
-		#self.addWidget(self.chk_slot04, 				1, 3, 1, 1)
-		self.addWidget(self.chk_outline, 				2, 0, 1, 2)
-		self.addWidget(self.chk_references,				2, 2, 1, 2)
-		self.addWidget(self.chk_lsb, 					3, 0, 1, 1)
-		self.addWidget(self.chk_adv, 					3, 1, 1, 1)
-		self.addWidget(self.chk_rsb, 					3, 2, 1, 1)
-		self.addWidget(self.chk_links, 					3, 3, 1, 1)
-		self.addWidget(self.chk_anchors,				4, 0, 1, 1)
-		self.addWidget(self.chk_guides, 				4, 1, 1, 1)
-		self.addWidget(self.chk_tags, 					4, 2, 1, 1)
-		self.addWidget(self.chk_flag, 					4, 3, 1, 1)
-		self.addWidget(self.tr_trans_ctrl,				5, 0, 1, 4)
-		self.addWidget(QtGui.QLabel('\nDuplicate Glyph(s) with suffix:'), 	6, 0, 1, 4)
-		self.addWidget(self.edt_glyphsuffix, 			7, 0, 1, 2)
-		self.addWidget(self.spb_duplicate, 				7, 2, 1, 1)
-		self.addWidget(self.btn_duplicate, 				7, 3, 1, 1)
-		self.addWidget(QtGui.QLabel('\nInsert contents from glyph source:'), 	8, 0, 1, 4)
-		self.addWidget(self.edt_sourceName, 			9, 0, 1, 2)
-		self.addWidget(self.btn_insert, 				9, 2, 1, 1)
-		self.addWidget(self.btn_insert_mask, 			9, 3, 1, 1)
-
-		self.tr_trans_ctrl.lay_controls.setMargin(0)
+		# -- Finish it -------------------------------------------------------
+		self.setLayout(self.lay_main)
 		
 	def __getOptions(self):
 		copy_options = {'out': self.chk_outline.isChecked(),
@@ -308,7 +353,7 @@ class TRGlyphCopyTools(QtGui.QGridLayout):
 					
 					if '#' not in src_layer_name:
 						new_layer = dst_glyph.importLayer(src_glyph, src_layer_name, src_layer_name, copy_options, True, False, True, ('insert', 'mask')[asMask])
-						new_transform, org_transform, rev_transform = self.tr_trans_ctrl.getTransform(new_layer.boundingBox)
+						new_transform, org_transform, rev_transform = self.ctrl_transform.getTransform(new_layer.boundingBox)
 						new_layer.applyTransform(org_transform)
 						new_layer.applyTransform(new_transform)
 						new_layer.applyTransform(rev_transform)
@@ -350,17 +395,13 @@ class TRGlyphCopyTools(QtGui.QGridLayout):
 				new_glyph = font.duplicateGlyph(glyp_name, new_name, dst_unicode=None, options=copy_options)
 				
 				for layer in new_glyph.layers():
-					new_transform, org_transform, rev_transform = self.tr_trans_ctrl.getTransform(layer.boundingBox)
+					new_transform, org_transform, rev_transform = self.ctrl_transform.getTransform(layer.boundingBox)
 					layer.applyTransform(org_transform)
 					layer.applyTransform(new_transform)
 					layer.applyTransform(rev_transform)
 
 				processed_glyphs.append(new_name)
 
-		'''
-		for glyph in process_glyphs:	
-			wLayers = glyph._prepareLayers(pLayers)
-		'''
 		# - Finish operation
 		global pUndo
 		if pUndo:
@@ -374,7 +415,11 @@ class tool_tab(QtGui.QWidget):
 		super(tool_tab, self).__init__()
 
 		# - Init
+		set_stylesheet = css_tr_button_dark if fl6.flPreferences().isDark else css_tr_button
+		self.setStyleSheet(set_stylesheet)
+
 		layoutV = QtGui.QVBoxLayout()
+		layoutV.setContentsMargins(0, 0, 0, 0)
 
 		# - Set Undo controller
 		# -- Warning Label
@@ -384,16 +429,26 @@ class tool_tab(QtGui.QWidget):
 		self.lbl_warn.hide()
 
 		# -- Buttons
-		self.btn_disable_undo = QtGui.QPushButton('Disable UNDO') 
-		self.btn_disable_undo.setCheckable(True)
-		self.btn_disable_undo.setChecked(False)
+		box_undo = QtGui.QGroupBox()
+		box_undo.setObjectName('box_group')
+		
+		lay_undo = QtGui.QHBoxLayout()
+		lay_undo.setSpacing(6)
+		lay_undo.addWidget(QtGui.QLabel('Disable Application Undo'))
+		self.btn_disable_undo = CustomPushButton('alert', checkable=True, checked=False, tooltip='Disable UNDO for faster operation\n\nWARNING: Changes will not update immediately', obj_name='btn_panel_opt')
 		self.btn_disable_undo.clicked.connect(self.undo_set_state)
+		lay_undo.addWidget(self.btn_disable_undo)
+		lay_undo.addStretch()
+
+		box_undo.setLayout(lay_undo)
 		
 		# - Build ---------------------------
-		layoutV.addLayout(TRGlyphBasic())
-		layoutV.addLayout(TRGlyphCopyTools())
-		layoutV.addWidget(QtGui.QLabel('Font UNDO state:'))
-		layoutV.addWidget(self.btn_disable_undo)
+		layoutV.addWidget(CustomLabel('Glyph Basics'))
+		layoutV.addWidget(TRGlyphBasic())
+		layoutV.addWidget(QtGui.QLabel('Duplicate Glyph'))
+		layoutV.addWidget(TRGlyphCopyTools())
+		layoutV.addWidget(QtGui.QLabel('Application'))
+		layoutV.addWidget(box_undo)
 		layoutV.addWidget(self.lbl_warn)
 
 		layoutV.addStretch()
@@ -406,6 +461,11 @@ class tool_tab(QtGui.QWidget):
 		global pUndo
 		pUndo = not pUndo
 		warnings.warn('Font wide UNDO state changed! Undo Enabled: %s' %pUndo, FontWarning)
+		
+		if not pUndo:
+			self.lbl_warn.show()
+		else:
+			self.lbl_warn.hide()
 
 # - Test ----------------------
 if __name__ == '__main__':
