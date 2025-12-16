@@ -27,7 +27,7 @@ from typerig.proxy.fl.gui.dialogs import TRLayerSelectNEW
 import Toolbar
 
 # - Init --------------------------
-tool_version = '1.62'
+tool_version = '1.7'
 tool_name = 'TypeRig Controller'
 ignore_toolbar = '__'
 
@@ -38,6 +38,7 @@ fl_runtime_platform = system()
 # -- Global parameters
 pMode = 0
 pLayers = (True, False, False, False)
+hide_title = True
 
 # -- Main Widget --------------------------
 class TRToolbarController(QtGui.QToolBar):
@@ -53,6 +54,16 @@ class TRToolbarController(QtGui.QToolBar):
 		self.dlg_layer.hide()
 
 		# - Actions and groups 
+		if fl_runtime_platform == 'Darwin':
+			self.grp_macos = QtGui.QActionGroup(self)
+			self.chk_ToggleTitle = QtGui.QAction("window", self.grp_macos)
+			self.addAction(self.chk_ToggleTitle)
+			self.chk_ToggleTitle.setToolTip("Toggle toolbar window title")
+			self.chk_ToggleTitle.setFont(TRToolFont)
+			self.chk_ToggleTitle.setCheckable(True)
+			self.chk_ToggleTitle.setChecked(True)
+			self.chk_ToggleTitle.triggered.connect(self.__toggle_window)
+
 		self.grp_layers = QtGui.QActionGroup(self)
 		self.grp_glyphs = QtGui.QActionGroup(self)
 
@@ -109,6 +120,18 @@ class TRToolbarController(QtGui.QToolBar):
 		self.layers_refresh()
 
 	# - Procedures -----------------------------------
+	def __toggle_window(self):
+		global hide_title
+		if hide_title:
+			app.main.setWindowFlags(QtCore.Qt.FramelessWindowHint | QtCore.Qt.Tool)
+			hide_title = False
+		else:
+			app.main.setWindowFlags(QtCore.Qt.Tool)
+			hide_title = True
+		
+		self.chk_ToggleTitle.setChecked(hide_title)
+		app.main.show()
+
 	def mode_refresh(self):
 		global pMode
 
@@ -142,6 +165,7 @@ toolbar_control = TRToolbarController()
 # -- Fix Mac's lack of visible QMainWindow, thus adding toolbars to invisible item renders them ivisible too 
 if fl_runtime_platform == 'Darwin':
 	#app.main.setWindowFlags(QtCore.Qt.FramelessWindowHint | QtCore.Qt.Tool)
+	app.main.setGeometry(0,0,960,50)
 	app.main.show()
 
 app.main.addToolBar(toolbar_control)
