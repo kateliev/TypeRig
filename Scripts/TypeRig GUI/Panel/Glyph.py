@@ -32,7 +32,7 @@ global pUndo
 pLayers = None
 pMode = 0
 pUndo = True
-app_name, app_version = 'TypeRig | Glyph', '2.1'
+app_name, app_version = 'TypeRig | Glyph', '2.2'
 
 number_token = '#'
 
@@ -40,10 +40,10 @@ TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
 
 # - String -----------------------------
-help_numeration = 'Use # for sequential numeration.\n\nExample:\n#=1; ##=01; ###=001\nA.ss## will create A.ss01 to A.ss20'
+help_numeration = 'Use # for sequential numeration.\n\nExample:\n#=1; ##=01; ###=001\nA.ss## will create A.ss01, A.ss02, A.ss03, etc.'
 help_setName = 'Set name for current glyph or multiple selected glyphs (TR Selection mode).\n' + help_numeration
 help_duplicate = 'Duplicate current glyph or multiple selected glyphs (TR Selection mode).\n' + help_numeration
-str_warning = '<p><b>NOTE</b>: Disabling UNDO will generate the new glyphs, but the font would not update.</p><p>New glyphs will NOT be visible in FontWindow until your next operation.</p>'
+str_warning = '<p><b>NOTE</b>: Disabling UNDO will generate new glyphs, but the font will not update immediately.</p><p>New glyphs will NOT be visible in Font Window until your next operation.</p>'
 
 # - Functions --------------------------
 fromat_number = lambda x, i: '0'*(i - 1) + str(x) if len(str(x)) < i else str(x)
@@ -93,7 +93,7 @@ class TRGlyphBasic(QtGui.QWidget):
 
 		# -- Tags field
 		self.edt_glyphTags = TRGLineEdit()
-		self.edt_glyphTags.setPlaceholderText('Glyph Tags')
+		self.edt_glyphTags.setPlaceholderText('Set tags: comma separated')
 		self.edt_glyphTags.setToolTip('Enter glyph tags (space separated)')
 		lay_basics.addWidget(self.edt_glyphTags, 3, 0, 1, 3)
 
@@ -103,13 +103,12 @@ class TRGlyphBasic(QtGui.QWidget):
 
 		# -- Unicode field
 		self.edt_glyphUnis = TRGLineEdit()
-		self.edt_glyphUnis.setPlaceholderText('Glyph Unicodes')
-		self.edt_glyphUnis.setToolTip('Enter glyph unicode values')
-		self.edt_glyphUnis.setEnabled(False)
+		self.edt_glyphUnis.setPlaceholderText('Set unicodes: hex, integer, or character')
+		self.edt_glyphUnis.setToolTip('Enter unicode values separated by comma\nFormats: hex (2C1C), integer (11292), or character (Ж)')
 		lay_basics.addWidget(self.edt_glyphUnis, 4, 0, 1, 3)
 
-		self.btn_setUnis = CustomPushButton('select_glyph', tooltip='Set glyph unicode', obj_name='btn_panel')
-		self.btn_setUnis.setEnabled(False)
+		self.btn_setUnis = CustomPushButton('select_glyph', tooltip='Set glyph unicode values', obj_name='btn_panel')
+		self.btn_setUnis.clicked.connect(lambda: self.glyph_setBasics('unicode'))
 		lay_basics.addWidget(self.btn_setUnis, 4, 3, 1, 1)
 
 		box_basics.setLayout(lay_basics)
@@ -142,10 +141,46 @@ class TRGlyphBasic(QtGui.QWidget):
 		# -- Finish it -------------------------------------------------------
 		self.setLayout(self.lay_main)
 
+	def __parse_unicodes(self, unicode_string):
+		"""Parse unicode input from various formats: hex strings, integers, or single characters.
+		Returns list of unicode integers."""
+		unicode_list = []
+		
+		if not unicode_string or not len(unicode_string.strip()):
+			return unicode_list
+		
+		# Split by comma and process each value
+		values = [v.strip() for v in unicode_string.split(',')]
+		
+		for value in values:
+			if not value:
+				continue
+			
+			try:
+				# Try as hex string (like "2C1C")
+				if all(c in '0123456789ABCDEFabcdef' for c in value):
+					uni_int = int(value, 16)
+					unicode_list.append(uni_int)
+				# Try as integer string (like "11292")
+				elif value.isdigit():
+					uni_int = int(value)
+					unicode_list.append(uni_int)
+				# Try as single character (like "Ж")
+				elif len(value) == 1:
+					uni_int = ord(value)
+					unicode_list.append(uni_int)
+				else:
+					warnings.warn('Cannot parse unicode value: {}'.format(value), GlyphWarning)
+			except ValueError as e:
+				warnings.warn('Error parsing unicode value: {}; Error: {}'.format(value, e), GlyphWarning)
+		
+		return unicode_list
+
 	def glyph_setBasics(self, mode):
 		font = pFont()
 		process_glyphs = getProcessGlyphs(pMode)
 		processed_glyphs = []
+		added_unicodes = []
 		
 		for n, glyph in enumerate(process_glyphs):
 			if mode == 'flag': 
@@ -165,7 +200,22 @@ class TRGlyphBasic(QtGui.QWidget):
 				
 				glyph.setName(new_name)
 
-			if mode == 'tags': glyph.setTags(str(self.edt_glyphTags.text).split(' '))
+			if mode == 'tags': 
+				new_tags = [item.strip() for item in str(self.edt_glyphTags.text).split(',')]
+				glyph.setTags(new_tags, append=False)
+
+			if mode == 'unicode':
+				unicode_values = self.__parse_unicodes(str(self.edt_glyphUnis.text))
+				glyph_added = []
+				glyph.unicodes = []
+				
+				for uni_int in unicode_values:
+					if not glyph.fg.hasUnicode(uni_int):
+						glyph.fg.addUnicode(uni_int)
+						glyph_added.append('U+{:04X}'.format(uni_int))
+				
+				if glyph_added:
+					added_unicodes.append('{}: {}'.format(glyph.name, ', '.join(glyph_added)))
 			
 			processed_glyphs.append(glyph.name)
 
@@ -175,6 +225,10 @@ class TRGlyphBasic(QtGui.QWidget):
 			font.updateObject(font.fl, 'Set Glyph(s) %s | %s' %(mode, ', '.join(processed_glyphs)))
 		else:
 			output(1, app_name, 'Set Glyph(s) %s | %s' %(mode, ', '.join(processed_glyphs)))
+		
+		# - Print added unicodes
+		if mode == 'unicode' and added_unicodes:
+			output(0, app_name, 'Added unicodes:\n' + '\n'.join(added_unicodes))
 
 
 	def setStem(self, horizontal=False):
@@ -228,7 +282,7 @@ class TRGlyphCopyTools(QtGui.QWidget):
 		lay_duplicate.addWidget(QtGui.QLabel('Duplicate Glyph'), 0, 0, 1, 2)
 
 		self.edt_glyphsuffix = TRGLineEdit()
-		self.edt_glyphsuffix.setPlaceholderText('Glyph Suffix')
+		self.edt_glyphsuffix.setPlaceholderText('Set new glyph suffix')
 		self.edt_glyphsuffix.setToolTip(help_duplicate + '\n\n' + help_numeration)
 		lay_duplicate.addWidget(self.edt_glyphsuffix, 1, 0, 1, 2)
 
@@ -282,12 +336,23 @@ class TRGlyphCopyTools(QtGui.QWidget):
 		self.chk_flag = CustomPushButton('flag', checkable=True, checked=True, tooltip='Copy flag', obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_flag)
 
+		self.chk_disable_undo = CustomPushButton('alert', checkable=True, checked=False, tooltip='Disable UNDO for faster operation\n\nWARNING: Changes will not update immediately', obj_name='btn_panel_opt')
+		self.chk_disable_undo.clicked.connect(self.__set_undo_state)
+		lay_options.addWidget(self.chk_disable_undo)
+
 		tooltip_button = 'Show transformation controls'
 		self.chk_transform = CustomPushButton("diagonal_bottom_up", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_transform)
 
 		box_options.setLayout(lay_options)
 		self.lay_main.addWidget(box_options)
+
+		# -- Warning Label
+		self.lbl_warn = QtGui.QLabel(str_warning)
+		self.lbl_warn.setWordWrap(True)
+		self.lbl_warn.setStyleSheet('padding: 10; font-size: 10pt; background: lightpink;')
+		self.lbl_warn.hide()
+		self.lay_main.addWidget(self.lbl_warn)
 
 		# -- Transform Controls -----------------------------------------------
 		self.ctrl_transform = TRTransformCtrl()
@@ -323,6 +388,16 @@ class TRGlyphCopyTools(QtGui.QWidget):
 
 		# -- Finish it -------------------------------------------------------
 		self.setLayout(self.lay_main)
+
+	def __set_undo_state(self):
+		global pUndo
+		pUndo = not pUndo
+		warnings.warn('Font wide UNDO state changed! Undo Enabled: %s' %pUndo, FontWarning)
+		
+		if not pUndo:
+			self.lbl_warn.show()
+		else:
+			self.lbl_warn.hide()
 	
 	def __toggle(self, trigger, widget):
 		if trigger.isChecked():
@@ -415,49 +490,6 @@ class TRGlyphCopyTools(QtGui.QWidget):
 		else:
 			output(1, app_name, 'Duplicate Glyph(s) | %s' %', '.join(processed_glyphs))
 
-
-class TRGlyphUndo(QtGui.QWidget):
-	def __init__(self):
-		super(TRGlyphUndo, self).__init__()
-
-		# - Layout
-		self.lay_main = QtGui.QVBoxLayout()
-
-		# - Widgets and tools -------------------------------------------------
-		# -- Undo Controller --------------------------------------------------
-		box_undo = QtGui.QGroupBox()
-		box_undo.setObjectName('box_group')
-		
-		lay_undo = QtGui.QGridLayout()
-		lay_undo.addWidget(QtGui.QLabel('Disable Application Undo'), 0, 0, 1, 3)
-
-		self.btn_disable_undo = CustomPushButton('alert', checkable=True, checked=False, tooltip='Disable UNDO for faster operation\n\nWARNING: Changes will not update immediately', obj_name='btn_panel_opt')
-		self.btn_disable_undo.clicked.connect(self.undo_set_state)
-		lay_undo.addWidget(self.btn_disable_undo, 0, 3, 1, 1)
-
-		box_undo.setLayout(lay_undo)
-		self.lay_main.addWidget(box_undo)
-
-		# -- Warning Label
-		self.lbl_warn = QtGui.QLabel(str_warning)
-		self.lbl_warn.setWordWrap(True)
-		self.lbl_warn.setStyleSheet('padding: 10; font-size: 10pt; background: lightpink;')
-		self.lbl_warn.hide()
-		self.lay_main.addWidget(self.lbl_warn)
-
-		# -- Finish it -------------------------------------------------------
-		self.setLayout(self.lay_main)
-
-	def undo_set_state(self):
-		global pUndo
-		pUndo = not pUndo
-		warnings.warn('Font wide UNDO state changed! Undo Enabled: %s' %pUndo, FontWarning)
-		
-		if not pUndo:
-			self.lbl_warn.show()
-		else:
-			self.lbl_warn.hide()
-
 class tool_tab(QtGui.QWidget):
 	def __init__(self):
 		super(tool_tab, self).__init__()
@@ -472,7 +504,6 @@ class tool_tab(QtGui.QWidget):
 		# - Build ---------------------------
 		layoutV.addWidget(TRGlyphBasic())
 		layoutV.addWidget(TRGlyphCopyTools())
-		layoutV.addWidget(TRGlyphUndo())
 		layoutV.addStretch()
 		self.setLayout(layoutV)
 
