@@ -135,6 +135,21 @@ QLabel#lbl_panel {
     border: none;
 }
 
+QLabel#lbl_section {
+    padding-top: 2px;
+    padding-bottom: 2px;
+    padding-right: 5px;
+    padding-left: 5px;
+    margin-top: 0px;
+    margin-bottom: 0px;
+    margin-right: 0px;
+    margin-left: 5px;
+    border: none;
+    font-family: "TypeRig Icons";
+    font-size: 12px;
+    text-align: left;
+}
+
 QPushButton#btn_panel_opt{
     border: 1px solid #d1d2d3;
 }

@@ -32,7 +32,7 @@ global pUndo
 pLayers = None
 pMode = 0
 pUndo = True
-app_name, app_version = 'TypeRig | Glyph', '2.00'
+app_name, app_version = 'TypeRig | Glyph', '2.1'
 
 number_token = '#'
 
@@ -63,16 +63,17 @@ class TRGlyphBasic(QtGui.QWidget):
 		
 		lay_basics = QtGui.QGridLayout()
 		lay_basics.setSpacing(6)
+		lay_basics.addWidget(QtGui.QLabel('Glyph Basics'), 0, 0, 1, 4)
 
 		# -- Name field
 		self.edt_glyphName = TRGLineEdit()
 		self.edt_glyphName.setPlaceholderText('Glyph Name')
 		self.edt_glyphName.setToolTip(help_setName + '\n\n' + help_numeration)
-		lay_basics.addWidget(self.edt_glyphName, 0, 0, 1, 3)
+		lay_basics.addWidget(self.edt_glyphName, 1, 0, 1, 3)
 
 		self.btn_setName = CustomPushButton('glyph_active', tooltip=help_setName, obj_name='btn_panel')
 		self.btn_setName.clicked.connect(lambda: self.glyph_setBasics('name'))
-		lay_basics.addWidget(self.btn_setName, 0, 3, 1, 1)
+		lay_basics.addWidget(self.btn_setName, 1, 3, 1, 1)
 
 		# -- Flag field
 		self.cmb_select_color = QtGui.QComboBox()
@@ -84,32 +85,32 @@ class TRGlyphBasic(QtGui.QWidget):
 
 		self.cmb_select_color.setMinimumWidth(40)
 		self.cmb_select_color.setToolTip('Select flag color')
-		lay_basics.addWidget(self.cmb_select_color, 1, 0, 1, 3)
+		lay_basics.addWidget(self.cmb_select_color, 2, 0, 1, 3)
 
 		self.btn_setFlag = CustomPushButton('flag', tooltip='Set glyph flag color', obj_name='btn_panel')
 		self.btn_setFlag.clicked.connect(lambda: self.glyph_setBasics('flag'))
-		lay_basics.addWidget(self.btn_setFlag, 1, 3, 1, 1)
+		lay_basics.addWidget(self.btn_setFlag, 2, 3, 1, 1)
 
 		# -- Tags field
 		self.edt_glyphTags = TRGLineEdit()
 		self.edt_glyphTags.setPlaceholderText('Glyph Tags')
 		self.edt_glyphTags.setToolTip('Enter glyph tags (space separated)')
-		lay_basics.addWidget(self.edt_glyphTags, 2, 0, 1, 3)
+		lay_basics.addWidget(self.edt_glyphTags, 3, 0, 1, 3)
 
 		self.btn_setTags = CustomPushButton('label', tooltip='Set glyph tags', obj_name='btn_panel')
 		self.btn_setTags.clicked.connect(lambda: self.glyph_setBasics('tags'))
-		lay_basics.addWidget(self.btn_setTags, 2, 3, 1, 1)
+		lay_basics.addWidget(self.btn_setTags, 3, 3, 1, 1)
 
 		# -- Unicode field
 		self.edt_glyphUnis = TRGLineEdit()
 		self.edt_glyphUnis.setPlaceholderText('Glyph Unicodes')
 		self.edt_glyphUnis.setToolTip('Enter glyph unicode values')
 		self.edt_glyphUnis.setEnabled(False)
-		lay_basics.addWidget(self.edt_glyphUnis, 3, 0, 1, 3)
+		lay_basics.addWidget(self.edt_glyphUnis, 4, 0, 1, 3)
 
 		self.btn_setUnis = CustomPushButton('select_glyph', tooltip='Set glyph unicode', obj_name='btn_panel')
 		self.btn_setUnis.setEnabled(False)
-		lay_basics.addWidget(self.btn_setUnis, 3, 3, 1, 1)
+		lay_basics.addWidget(self.btn_setUnis, 4, 3, 1, 1)
 
 		box_basics.setLayout(lay_basics)
 		self.lay_main.addWidget(box_basics)
@@ -120,19 +121,20 @@ class TRGlyphBasic(QtGui.QWidget):
 		
 		lay_stems = QtGui.QGridLayout()
 		lay_stems.setSpacing(6)
+		lay_stems.addWidget(QtGui.QLabel('Standard Stems'), 0, 0, 1, 4)
 
 		self.cmb_select_stem = QtGui.QComboBox()
 		self.cmb_select_stem.addItems(['PostScript', 'TrueType'])
 		self.cmb_select_stem.setToolTip('Select stem type')
-		lay_stems.addWidget(self.cmb_select_stem, 0, 0, 1, 2)
+		lay_stems.addWidget(self.cmb_select_stem, 1, 0, 1, 2)
 
 		self.btn_setStemV = CustomPushButton('stem_vertical', tooltip='Set vertical stem from selection', obj_name='btn_panel')
 		self.btn_setStemV.clicked.connect(lambda: self.setStem(False))
-		lay_stems.addWidget(self.btn_setStemV, 0, 2, 1, 1)
+		lay_stems.addWidget(self.btn_setStemV, 1, 2, 1, 1)
 
 		self.btn_setStemH = CustomPushButton('stem_horizontal', tooltip='Set horizontal stem from selection', obj_name='btn_panel')
 		self.btn_setStemH.clicked.connect(lambda: self.setStem(True))
-		lay_stems.addWidget(self.btn_setStemH, 0, 3, 1, 1)
+		lay_stems.addWidget(self.btn_setStemH, 1, 3, 1, 1)
 
 		box_stems.setLayout(lay_stems)
 		self.lay_main.addWidget(box_stems)
@@ -215,8 +217,34 @@ class TRGlyphCopyTools(QtGui.QWidget):
 
 		# - Layout
 		self.lay_main = QtGui.QVBoxLayout()
-
+		
 		# - Widgets and tools -------------------------------------------------
+		# -- Duplicate Glyph --------------------------------------------------
+		box_duplicate = QtGui.QGroupBox()
+		box_duplicate.setObjectName('box_group')
+		
+		lay_duplicate = QtGui.QGridLayout()
+		lay_duplicate.setSpacing(6)
+		lay_duplicate.addWidget(QtGui.QLabel('Duplicate Glyph'), 0, 0, 1, 2)
+
+		self.edt_glyphsuffix = TRGLineEdit()
+		self.edt_glyphsuffix.setPlaceholderText('Glyph Suffix')
+		self.edt_glyphsuffix.setToolTip(help_duplicate + '\n\n' + help_numeration)
+		lay_duplicate.addWidget(self.edt_glyphsuffix, 1, 0, 1, 2)
+
+		self.spb_duplicate = QtGui.QSpinBox()
+		self.spb_duplicate.setMaximum(20)
+		self.spb_duplicate.setMinimum(1)
+		self.spb_duplicate.setToolTip('Number of duplicates to create')
+		lay_duplicate.addWidget(self.spb_duplicate, 1, 2, 1, 1)
+
+		self.btn_duplicate = CustomPushButton('align_group_to_group', tooltip=help_duplicate, obj_name='btn_panel')
+		self.btn_duplicate.clicked.connect(self.glyph_duplicate)
+		lay_duplicate.addWidget(self.btn_duplicate, 1, 3, 1, 1)
+
+		box_duplicate.setLayout(lay_duplicate)
+		self.lay_main.addWidget(box_duplicate)
+
 		# -- Copy Options -----------------------------------------------------
 		box_options = QtGui.QGroupBox()
 		box_options.setObjectName('box_group')
@@ -254,47 +282,20 @@ class TRGlyphCopyTools(QtGui.QWidget):
 		self.chk_flag = CustomPushButton('flag', checkable=True, checked=True, tooltip='Copy flag', obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_flag)
 
+		tooltip_button = 'Show transformation controls'
+		self.chk_transform = CustomPushButton("diagonal_bottom_up", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_transform)
+
 		box_options.setLayout(lay_options)
 		self.lay_main.addWidget(box_options)
 
 		# -- Transform Controls -----------------------------------------------
-		box_transform = QtGui.QGroupBox()
-		box_transform.setObjectName('box_group')
-		
-		lay_transform = QtGui.QVBoxLayout()
-		lay_transform.setContentsMargins(0, 0, 0, 0)
-		lay_transform.setSpacing(0)
-
 		self.ctrl_transform = TRTransformCtrl()
-		lay_transform.addWidget(self.ctrl_transform)
+		self.ctrl_transform.btn_transform.hide()
+		self.lay_main.addWidget(self.ctrl_transform)
 
-		box_transform.setLayout(lay_transform)
-		self.lay_main.addWidget(box_transform)
-
-		# -- Duplicate Glyph --------------------------------------------------
-		box_duplicate = QtGui.QGroupBox()
-		box_duplicate.setObjectName('box_group')
-		
-		lay_duplicate = QtGui.QGridLayout()
-		lay_duplicate.setSpacing(6)
-
-		self.edt_glyphsuffix = TRGLineEdit()
-		self.edt_glyphsuffix.setPlaceholderText('Glyph Suffix')
-		self.edt_glyphsuffix.setToolTip(help_duplicate + '\n\n' + help_numeration)
-		lay_duplicate.addWidget(self.edt_glyphsuffix, 0, 0, 1, 2)
-
-		self.spb_duplicate = QtGui.QSpinBox()
-		self.spb_duplicate.setMaximum(20)
-		self.spb_duplicate.setMinimum(1)
-		self.spb_duplicate.setToolTip('Number of duplicates to create')
-		lay_duplicate.addWidget(self.spb_duplicate, 0, 2, 1, 1)
-
-		self.btn_duplicate = CustomPushButton('align_group_to_group', tooltip=help_duplicate, obj_name='btn_panel')
-		self.btn_duplicate.clicked.connect(self.glyph_duplicate)
-		lay_duplicate.addWidget(self.btn_duplicate, 0, 3, 1, 1)
-
-		box_duplicate.setLayout(lay_duplicate)
-		self.lay_main.addWidget(box_duplicate)
+		self.ctrl_transform.hide()
+		self.chk_transform.clicked.connect(lambda: self.__toggle(self.chk_transform, self.ctrl_transform))
 
 		# -- Insert from Source -----------------------------------------------
 		box_insert = QtGui.QGroupBox()
@@ -302,26 +303,33 @@ class TRGlyphCopyTools(QtGui.QWidget):
 		
 		lay_insert = QtGui.QGridLayout()
 		lay_insert.setSpacing(6)
+		lay_insert.addWidget(QtGui.QLabel('Insert from source:'), 0, 0, 1, 2)
 
 		self.edt_sourceName = TRGLineEdit()
 		self.edt_sourceName.setPlaceholderText('Source name / Current')
 		self.edt_sourceName.setToolTip('Source glyph name, or Active Glyph if Blank')
-		lay_insert.addWidget(self.edt_sourceName, 0, 0, 1, 2)
+		lay_insert.addWidget(self.edt_sourceName, 1, 0, 1, 2)
 
 		self.btn_insert = CustomPushButton('layer_add', tooltip='Copy contents of source glyph and insert them to current active glyph(s)', obj_name='btn_panel')
 		self.btn_insert.clicked.connect(lambda: self.glyph_insert(False))
-		lay_insert.addWidget(self.btn_insert, 0, 2, 1, 1)
+		lay_insert.addWidget(self.btn_insert, 1, 2, 1, 1)
 
 		self.btn_insert_mask = CustomPushButton('layer_mask_add', tooltip='Copy contents of source glyph and insert them as MASK to current active glyph(s)', obj_name='btn_panel')
 		self.btn_insert_mask.clicked.connect(lambda: self.glyph_insert(True))
-		lay_insert.addWidget(self.btn_insert_mask, 0, 3, 1, 1)
+		lay_insert.addWidget(self.btn_insert_mask, 1, 3, 1, 1)
 
 		box_insert.setLayout(lay_insert)
 		self.lay_main.addWidget(box_insert)
 
 		# -- Finish it -------------------------------------------------------
 		self.setLayout(self.lay_main)
-		
+	
+	def __toggle(self, trigger, widget):
+		if trigger.isChecked():
+			widget.show()
+		else:
+			widget.hide()
+
 	def __getOptions(self):
 		copy_options = {'out': self.chk_outline.isChecked(),
 		 				'gui': self.chk_guides.isChecked(),
@@ -360,7 +368,6 @@ class TRGlyphCopyTools(QtGui.QWidget):
 
 				processed_glyphs.append(dst_glyph.name)
 
-			
 			# - Finish operation
 			global pUndo
 			if pUndo:
@@ -369,7 +376,6 @@ class TRGlyphCopyTools(QtGui.QWidget):
 				output(1, app_name, 'Insert Glyph: %s --> %s;' %(src_glyph_name, ', '.join(processed_glyphs)))
 		else:
 			warnings.warn('Glyph not found: %s;' %(None, src_glyph_name)[1 if len(src_glyph_name) else 0], GlyphWarning)
-
 
 	def glyph_duplicate(self):
 		copy_options = self.__getOptions()
@@ -408,54 +414,39 @@ class TRGlyphCopyTools(QtGui.QWidget):
 			font.updateObject(font.fl, 'Duplicate Glyph(s) | %s' %', '.join(processed_glyphs))
 		else:
 			output(1, app_name, 'Duplicate Glyph(s) | %s' %', '.join(processed_glyphs))
-		
-			
-class tool_tab(QtGui.QWidget):
+
+
+class TRGlyphUndo(QtGui.QWidget):
 	def __init__(self):
-		super(tool_tab, self).__init__()
+		super(TRGlyphUndo, self).__init__()
 
-		# - Init
-		set_stylesheet = css_tr_button_dark if fl6.flPreferences().isDark else css_tr_button
-		self.setStyleSheet(set_stylesheet)
+		# - Layout
+		self.lay_main = QtGui.QVBoxLayout()
 
-		layoutV = QtGui.QVBoxLayout()
-		layoutV.setContentsMargins(0, 0, 0, 0)
+		# - Widgets and tools -------------------------------------------------
+		# -- Undo Controller --------------------------------------------------
+		box_undo = QtGui.QGroupBox()
+		box_undo.setObjectName('box_group')
+		
+		lay_undo = QtGui.QGridLayout()
+		lay_undo.addWidget(QtGui.QLabel('Disable Application Undo'), 0, 0, 1, 3)
 
-		# - Set Undo controller
+		self.btn_disable_undo = CustomPushButton('alert', checkable=True, checked=False, tooltip='Disable UNDO for faster operation\n\nWARNING: Changes will not update immediately', obj_name='btn_panel_opt')
+		self.btn_disable_undo.clicked.connect(self.undo_set_state)
+		lay_undo.addWidget(self.btn_disable_undo, 0, 3, 1, 1)
+
+		box_undo.setLayout(lay_undo)
+		self.lay_main.addWidget(box_undo)
+
 		# -- Warning Label
 		self.lbl_warn = QtGui.QLabel(str_warning)
 		self.lbl_warn.setWordWrap(True)
 		self.lbl_warn.setStyleSheet('padding: 10; font-size: 10pt; background: lightpink;')
 		self.lbl_warn.hide()
+		self.lay_main.addWidget(self.lbl_warn)
 
-		# -- Buttons
-		box_undo = QtGui.QGroupBox()
-		box_undo.setObjectName('box_group')
-		
-		lay_undo = QtGui.QHBoxLayout()
-		lay_undo.setSpacing(6)
-		lay_undo.addWidget(QtGui.QLabel('Disable Application Undo'))
-		self.btn_disable_undo = CustomPushButton('alert', checkable=True, checked=False, tooltip='Disable UNDO for faster operation\n\nWARNING: Changes will not update immediately', obj_name='btn_panel_opt')
-		self.btn_disable_undo.clicked.connect(self.undo_set_state)
-		lay_undo.addWidget(self.btn_disable_undo)
-		lay_undo.addStretch()
-
-		box_undo.setLayout(lay_undo)
-		
-		# - Build ---------------------------
-		layoutV.addWidget(CustomLabel('Glyph Basics'))
-		layoutV.addWidget(TRGlyphBasic())
-		layoutV.addWidget(QtGui.QLabel('Duplicate Glyph'))
-		layoutV.addWidget(TRGlyphCopyTools())
-		layoutV.addWidget(QtGui.QLabel('Application'))
-		layoutV.addWidget(box_undo)
-		layoutV.addWidget(self.lbl_warn)
-
-		layoutV.addStretch()
-		self.setLayout(layoutV)
-
-		# !!! Hotfix FL7 7355 
-		self.setMinimumSize(300, self.sizeHint.height())
+		# -- Finish it -------------------------------------------------------
+		self.setLayout(self.lay_main)
 
 	def undo_set_state(self):
 		global pUndo
@@ -466,6 +457,27 @@ class tool_tab(QtGui.QWidget):
 			self.lbl_warn.show()
 		else:
 			self.lbl_warn.hide()
+
+class tool_tab(QtGui.QWidget):
+	def __init__(self):
+		super(tool_tab, self).__init__()
+
+		# - Init
+		set_stylesheet = css_tr_button_dark if fl6.flPreferences().isDark else css_tr_button
+		self.setStyleSheet(set_stylesheet)
+
+		layoutV = QtGui.QVBoxLayout()
+		layoutV.setContentsMargins(0, 0, 0, 0)
+		
+		# - Build ---------------------------
+		layoutV.addWidget(TRGlyphBasic())
+		layoutV.addWidget(TRGlyphCopyTools())
+		layoutV.addWidget(TRGlyphUndo())
+		layoutV.addStretch()
+		self.setLayout(layoutV)
+
+		# !!! Hotfix FL7 7355 
+		self.setMinimumSize(300, self.sizeHint.height())
 
 # - Test ----------------------
 if __name__ == '__main__':

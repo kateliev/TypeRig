@@ -133,7 +133,7 @@ class CustomPushButton(QtGui.QPushButton):
 		if obj_name is not None: self.setObjectName(obj_name)
 
 class CustomLabel(QtGui.QLabel):
-	def __init__(self, label_text, tooltip=None, obj_name=None):
+	def __init__(self, label_text, tooltip=None, obj_name='lbl_panel'):
 		super(CustomLabel, self).__init__(label_text)
 
 		if tooltip is not None: self.setToolTip(tooltip)
