@@ -20,13 +20,13 @@ from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 
-from Lib.namparse import *
-from Lib.protoparse import *
+from typerig.core.fileio.nam import NAMparser
+from typerig.core.fileio.textproto import TEXTPROTOparser
 
 from typerig.core.base.message import *
 
 # - Init --------------------------------
-app_name, app_version = 'TypeRig | Encoder', '3.9'
+app_name, app_version = 'TypeRig | Encoder', '4.0'
 app_id_key = 'com.typerig.data.encoding'
 alt_suffix = '.'
 

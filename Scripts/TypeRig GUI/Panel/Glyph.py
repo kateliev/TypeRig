@@ -216,6 +216,8 @@ class TRGlyphBasic(QtGui.QWidget):
 				
 				if glyph_added:
 					added_unicodes.append('{}: {}'.format(glyph.name, ', '.join(glyph_added)))
+
+				self.edt_glyphUnis.clear()
 			
 			processed_glyphs.append(glyph.name)
 
