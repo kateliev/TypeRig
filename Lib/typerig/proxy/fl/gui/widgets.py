@@ -45,6 +45,8 @@ def getTRIconFont(font_pixel_size=20):
 	TRIconFont = QtGui.QFont()
 	TRIconFont.setFamily("TypeRig Icons")
 	TRIconFont.setPixelSize(font_pixel_size)
+	#TRIconFont.setHintingPreference(QtGui.QFont.PreferNoHinting)
+	#TRIconFont.setStyleStrategy(QtGui.QFont.NoAntialias)
 
 	return TRIconFont
 
