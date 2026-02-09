@@ -44,7 +44,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '3.9'
+app_name, app_version = 'TypeRig | Contour', '4.0'
 
 fileFormats = 'TypeRig XML data (*.xml);;'
 delta_app_id_key = 'com.typerig.delta.machine.axissetup'
@@ -131,10 +131,10 @@ class TRContourCopy(QtGui.QWidget):
 		lay_contour_copy.addWidget(self.btn_copy_contour)
 		self.btn_copy_contour.clicked.connect(self.copy_contour)
 
-		tooltip_button = "Paste selected contours from bank\nALT + Click: Paste to mask"
+		tooltip_button = "Paste selected contours from bank\nALT + Click: Paste to mask\nShift + Click: Paste to new shape"
 		self.btn_paste_contour = CustomPushButton("clipboard_paste", tooltip=tooltip_button, obj_name='btn_panel')
 		lay_contour_copy.addWidget(self.btn_paste_contour)
-		self.btn_paste_contour.clicked.connect(lambda: self.paste_contour(to_mask=get_modifier()))
+		self.btn_paste_contour.clicked.connect(lambda: self.paste_contour())
 
 		tooltip_button = "Remove selected items from contour bank"
 		self.btn_clear = CustomPushButton("clipboard_clear", tooltip=tooltip_button, obj_name='btn_panel')
@@ -577,9 +577,10 @@ class TRContourCopy(QtGui.QWidget):
 			if self.opt_round.isChecked():
 				TRNodeActionCollector.node_round(pMode, pLayers, True, True)
 	
-	def paste_contour(self, to_mask=False):
+	def paste_contour(self):
 		'''Paste whole contours from clipboard.'''
 		# - Init
+		modifiers = QtGui.QApplication.keyboardModifiers()
 		wGlyph = eGlyph()
 		wLayers = wGlyph._prepareLayers(pLayers)
 		gallery_selection = [self.lst_contours.model().itemFromIndex(qidx) for qidx in self.lst_contours.selectedIndexes()]
@@ -606,7 +607,7 @@ class TRContourCopy(QtGui.QWidget):
 					
 					work_layer = wGlyph.layer(layer_name) # Get destination layer or mask
 
-					if to_mask:
+					if modifiers == QtCore.Qt.AltModifier:
 						work_layer = wGlyph.mask(layer_name, force_create=True)
 						layer_name = work_layer.name
 					
@@ -626,12 +627,11 @@ class TRContourCopy(QtGui.QWidget):
 								fl_contour = trNodes_to_flContour(tr_contour.nodes, is_closed=tr_contour.closed)
 								fl_contours.append(fl_contour)
 
-						try:
-							selected_shape = wGlyph.shapes(layer_name)[0]
-						
-						except IndexError:
+						if modifiers == QtCore.Qt.ShiftModifier or len(wGlyph.shapes(layer_name)) == 0:
 							selected_shape = fl6.flShape()
 							work_layer.addShape(selected_shape)
+						else:	
+							selected_shape = wGlyph.shapes(layer_name)[0]
 
 						selected_shape.addContours(fl_contours, True)
 			
