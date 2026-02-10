@@ -44,7 +44,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '4.0'
+app_name, app_version = 'TypeRig | Contour', '4.1'
 
 fileFormats = 'TypeRig XML data (*.xml);;'
 delta_app_id_key = 'com.typerig.delta.machine.axissetup'
@@ -581,10 +581,14 @@ class TRContourCopy(QtGui.QWidget):
 		'''Paste whole contours from clipboard.'''
 		# - Init
 		modifiers = QtGui.QApplication.keyboardModifiers()
+		do_delta = self.opt_delta_machine.isChecked()
+		
 		wGlyph = eGlyph()
 		wLayers = wGlyph._prepareLayers(pLayers)
+		
 		gallery_selection = [self.lst_contours.model().itemFromIndex(qidx) for qidx in self.lst_contours.selectedIndexes()]
-		do_delta = self.opt_delta_machine.isChecked()
+		selection_tuples = wGlyph.selectedAtShapes()
+		selected_shape_index = selection_tuples[0][0] if len(selection_tuples) else 0
 
 		# - Process
 		if len(gallery_selection):
@@ -631,7 +635,7 @@ class TRContourCopy(QtGui.QWidget):
 							selected_shape = fl6.flShape()
 							work_layer.addShape(selected_shape)
 						else:	
-							selected_shape = wGlyph.shapes(layer_name)[0]
+							selected_shape = wGlyph.shapes(layer_name)[selected_shape_index]
 
 						selected_shape.addContours(fl_contours, True)
 			
