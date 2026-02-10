@@ -44,19 +44,30 @@ class Node(Member, XMLSerializable):
 		super(Node, self).__init__(*args, **kwargs)
 
 		# - Basics
-		if len(args) == 1:
-			if isinstance(args[0], self.__class__): # Clone
-				x, y = args[0].x, args[0].y
+		x = y = 0.0
 
-			if isinstance(args[0], (tuple, list)):
-				x, y = args[0]
+		if len(args) == 1:
+			arg = args[0]
+
+			if isinstance(arg, (Point, self.__class__)):
+				x, y = arg.x, arg.y
+
+			elif isinstance(arg, (tuple, list)) and len(arg) == 2:
+				x, y = map(float, arg)
+
+			else:
+				raise TypeError(
+					"Single argument must be a Point, Node, or (x, y) tuple/list"
+				)
 
 		elif len(args) == 2:
-			if isMultiInstance(args, (float, int)):
-				x, y = float(args[0]), float(args[1])
-		
-		else:
-			x, y = 0., 0.
+			if all(isinstance(a, (int, float)) for a in args):
+				x, y = map(float, args)
+			else:
+				raise TypeError("Two arguments must be numeric (x, y)")
+
+		elif len(args) > 2:
+			raise TypeError("Expected 0, 1, or 2 positional arguments")
 
 		# - Basic
 		self.x = kwargs.pop('x', x)

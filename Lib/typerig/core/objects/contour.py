@@ -10,6 +10,7 @@
 
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
+import math
 
 from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
@@ -121,7 +122,42 @@ class Contour(Container, XMLSerializable):
 		if isinstance(other, PointArray) and len(other) == len(contour_nodes):
 			for idx in range(len(contour_nodes)):
 				contour_nodes[idx].point = other[idx]
+
+	@property 
+	def on_curve_points(self):
+		'''Return list of on-curve points (segment start points).'''
+		return [seg.p0 for seg in self.segments]
+
+	@property
+	def all_points_flat(self):
+		'''Return flat list of all coordinates for polyline rendering.'''
+		pts = self.sample(steps=100)
+		if pts:
+			pts.append(pts[0])  # close
+		return pts
 		
+	@property
+	def signed_area(self):
+		'''Signed area via shoelace on sampled polyline.
+		Positive = CCW, Negative = CW.
+		More accurate than get_on_area() for curved contours.
+		'''
+		pts = self.sample(steps_per_segment=100)
+		n = len(pts)
+		area = 0.0
+
+		for i in range(n):
+			x0, y0 = pts[i]
+			x1, y1 = pts[(i + 1) % n]
+			area += x0 * y1 - x1 * y0
+
+		return area / 2.0
+
+	@property
+	def is_ccw(self):
+		'''True if contour winds counter-clockwise (outer in PS convention).'''
+		return self.signed_area > 0
+
 	# -- Functions ------------------------------
 	def set_start(self, index):
 		index = self.nodes[index].prev_on.idx if not self.nodes[index].is_on else index
@@ -256,6 +292,213 @@ class Contour(Container, XMLSerializable):
 				self.nodes[idx].point = Point(adaptive_scale((node_array[idx][0], node_array[idx][1]), scale, transalte, time, compensate, angle, (node_array[idx][2][0], node_array[idx][3][0], node_array[idx][2][1], node_array[idx][3][1])))
 
 		return func
+
+	# -- SDF / Offset related -------------------------
+	def sample(self, steps_per_segment=64):
+		'''Sample contour into a polyline of (x, y) tuples.
+		Args:
+			steps_per_segment (int): samples per bezier segment
+		Returns:
+			list of tuple(x, y)
+		'''
+		points = []
+
+		for segment in self.segments:
+			for j in range(steps_per_segment):
+				t = j / float(steps_per_segment)
+				pt = segment.solve_point(t)
+				points.append((pt.x, pt.y))
+
+		return points
+
+	def sample_with_normals(self, steps_per_segment=64):
+		'''Sample contour points paired with outward unit normals.
+
+		Normal convention: right-hand normal (dy, -dx).
+		For CCW (outer) contours this points outward.
+		For CW (inner) contours this points inward into filled area.
+
+		Args:
+			steps_per_segment (int): samples per bezier segment
+
+		Returns:
+			list of ((px, py), (nx, ny))
+		'''
+		result = []
+
+		for segment in self.segments:
+			if isinstance(segment, CubicBezier):
+				for j in range(steps_per_segment):
+					t = j / float(steps_per_segment)
+					pt = segment.solve_point(t)
+					_pt, d1, _d2 = segment.solve_derivative_at_time(t)
+					mag = math.sqrt(d1.x * d1.x + d1.y * d1.y)
+
+					if mag > 1e-10:
+						nx, ny = d1.y / mag, -d1.x / mag
+					else:
+						nx, ny = 0.0, 0.0
+
+					result.append(((pt.x, pt.y), (nx, ny)))
+
+			elif isinstance(segment, Line):
+				dx = segment.p1.x - segment.p0.x
+				dy = segment.p1.y - segment.p0.y
+				mag = math.sqrt(dx * dx + dy * dy)
+
+				if mag > 1e-10:
+					nx, ny = dy / mag, -dx / mag
+				else:
+					nx, ny = 0.0, 0.0
+
+				for j in range(steps_per_segment):
+					t = j / float(steps_per_segment)
+					pt = segment.solve_point(t)
+					result.append(((pt.x, pt.y), (nx, ny)))
+
+		return result
+
+	def offset_outline(self, distance, curvature_correction=True):
+		'''Offset contour outline using analytical Bezier normals.
+		Modifies node coordinates in place.
+
+		Iterates segment endpoints, computes outward normals, averages
+		at shared junctions, then displaces nodes and adjusts handles.
+
+		Normal convention: right-hand normal (tan.y, -tan.x).
+		  - Positive distance = expand (thicken strokes)
+		  - Negative distance = contract (thin strokes)
+
+		Args:
+			distance (float): Offset amount in font units. 
+			curvature_correction (bool): Scale handles by (1 + d * kappa).
+
+		Returns:
+			None (modifies contour in place)
+		'''
+		segments = self.segments
+		node_segs = self.node_segments
+		num_seg = len(segments)
+
+		if num_seg == 0:
+			return
+
+		# --- Pass 1: compute normal + curvature per segment endpoint ---
+		seg_info = []
+
+		for segment in segments:
+			if isinstance(segment, CubicBezier):
+				# Start normal from P0->P1
+				tan0 = segment.p1 - segment.p0
+				m0 = abs(tan0)
+				if m0 < 1e-10:
+					tan0 = segment.p3 - segment.p0
+					m0 = abs(tan0)
+				n0 = (tan0.y / m0, -tan0.x / m0) if m0 > 1e-10 else (0., 0.)
+
+				# End normal from P2->P3
+				tan3 = segment.p3 - segment.p2
+				m3 = abs(tan3)
+				if m3 < 1e-10:
+					tan3 = segment.p3 - segment.p0
+					m3 = abs(tan3)
+				n3 = (tan3.y / m3, -tan3.x / m3) if m3 > 1e-10 else (0., 0.)
+
+				k0 = segment.solve_curvature(0.0) if curvature_correction else 0.
+				k3 = segment.solve_curvature(1.0) if curvature_correction else 0.
+
+				seg_info.append(('cubic', n0, n3, k0, k3))
+
+			elif isinstance(segment, Line):
+				dx = segment.p1.x - segment.p0.x
+				dy = segment.p1.y - segment.p0.y
+				m = math.sqrt(dx*dx + dy*dy)
+				n = (dy / m, -dx / m) if m > 1e-10 else (0., 0.)
+				seg_info.append(('line', n, n, 0., 0.))
+
+		# --- Pass 2: average normals at shared on-curve nodes ---
+		on_normals = {}  # id(node) -> [sum_nx, sum_ny, count]
+
+		for si in range(num_seg):
+			nodes = node_segs[si]
+			_, n_start, n_end, _, _ = seg_info[si]
+
+			for node, normal in [(nodes[0], n_start), (nodes[-1], n_end)]:
+				nid = id(node)
+
+				if nid in on_normals:
+					on_normals[nid][0] += normal[0]
+					on_normals[nid][1] += normal[1]
+					on_normals[nid][2] += 1
+				else:
+					on_normals[nid] = [normal[0], normal[1], 1]
+
+		# Averaged + re-normalized displacement per on-curve node
+		on_disp = {}
+
+		for nid, (nx, ny, cnt) in on_normals.items():
+			avg_nx, avg_ny = nx / cnt, ny / cnt
+			mag = math.sqrt(avg_nx*avg_nx + avg_ny*avg_ny)
+
+			if mag > 1e-10:
+				on_disp[nid] = (avg_nx / mag * distance, avg_ny / mag * distance)
+			else:
+				on_disp[nid] = (0., 0.)
+
+		# --- Pass 3: apply displacements ---
+		applied = set()
+
+		for si in range(num_seg):
+			nodes = node_segs[si]
+			stype, _, _, k_start, k_end = seg_info[si]
+
+			if stype == 'cubic' and len(nodes) == 4:
+				p0, bcp_out, bcp_in, p3 = nodes
+				d0 = on_disp[id(p0)]
+				d3 = on_disp[id(p3)]
+
+				# On-curve: apply once per unique node
+				if id(p0) not in applied:
+					p0.x += d0[0]
+					p0.y += d0[1]
+					applied.add(id(p0))
+
+				if id(p3) not in applied:
+					p3.x += d3[0]
+					p3.y += d3[1]
+					applied.add(id(p3))
+
+				# BCPs: always (never shared between segments)
+				bcp_out.x += d0[0]
+				bcp_out.y += d0[1]
+				bcp_in.x += d3[0]
+				bcp_in.y += d3[1]
+
+				# Curvature correction on handles
+				if curvature_correction:
+					s0 = max(0.1, min(1.0 + distance * k_start, 5.0))
+
+					if abs(s0 - 1.0) > 1e-6:
+						hx = bcp_out.x - p0.x
+						hy = bcp_out.y - p0.y
+						bcp_out.x = p0.x + hx * s0
+						bcp_out.y = p0.y + hy * s0
+
+					s3 = max(0.1, min(1.0 + distance * k_end, 5.0))
+
+					if abs(s3 - 1.0) > 1e-6:
+						hx = bcp_in.x - p3.x
+						hy = bcp_in.y - p3.y
+						bcp_in.x = p3.x + hx * s3
+						bcp_in.y = p3.y + hy * s3
+
+			elif stype == 'line' and len(nodes) == 2:
+				for node in nodes:
+					if id(node) not in applied:
+						d = on_disp[id(node)]
+						node.x += d[0]
+						node.y += d[1]
+						applied.add(id(node))
 
 class HobbySpline(Container): 
 	'''Adapted from mp2tikz.py (c) 2012 JL Diaz'''
