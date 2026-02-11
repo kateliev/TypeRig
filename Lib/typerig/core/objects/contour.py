@@ -131,7 +131,7 @@ class Contour(Container, XMLSerializable):
 	@property
 	def all_points_flat(self):
 		'''Return flat list of all coordinates for polyline rendering.'''
-		pts = self.sample(steps=100)
+		pts = self.sample(steps_per_segment=100)
 		if pts:
 			pts.append(pts[0])  # close
 		return pts
@@ -358,37 +358,27 @@ class Contour(Container, XMLSerializable):
 
 		return result
 
-	def offset_outline(self, distance, curvature_correction=True):
-		'''Offset contour outline using analytical Bezier normals.
-		Modifies node coordinates in place.
-
-		Iterates segment endpoints, computes outward normals, averages
-		at shared junctions, then displaces nodes and adjusts handles.
-
-		Normal convention: right-hand normal (tan.y, -tan.x).
-		  - Positive distance = expand (thicken strokes)
-		  - Negative distance = contract (thin strokes)
-
-		Args:
-			distance (float): Offset amount in font units. 
-			curvature_correction (bool): Scale handles by (1 + d * kappa).
+	def _compute_offset_data(self, distance, curvature_correction=True):
+		'''Compute offset displacement vectors for all nodes.
+		Internal helper used by offset_outline and offset_outline_inplace.
 
 		Returns:
-			None (modifies contour in place)
+			tuple: (seg_info, on_disp, node_segs, segments) or None if empty.
+				seg_info: list of (type, n_start, n_end, k_start, k_end) per segment
+				on_disp: dict mapping id(node) -> (dx, dy) averaged displacement
 		'''
 		segments = self.segments
 		node_segs = self.node_segments
 		num_seg = len(segments)
 
 		if num_seg == 0:
-			return
+			return None
 
 		# --- Pass 1: compute normal + curvature per segment endpoint ---
 		seg_info = []
 
 		for segment in segments:
 			if isinstance(segment, CubicBezier):
-				# Start normal from P0->P1
 				tan0 = segment.p1 - segment.p0
 				m0 = abs(tan0)
 				if m0 < 1e-10:
@@ -396,7 +386,6 @@ class Contour(Container, XMLSerializable):
 					m0 = abs(tan0)
 				n0 = (tan0.y / m0, -tan0.x / m0) if m0 > 1e-10 else (0., 0.)
 
-				# End normal from P2->P3
 				tan3 = segment.p3 - segment.p2
 				m3 = abs(tan3)
 				if m3 < 1e-10:
@@ -417,7 +406,7 @@ class Contour(Container, XMLSerializable):
 				seg_info.append(('line', n, n, 0., 0.))
 
 		# --- Pass 2: average normals at shared on-curve nodes ---
-		on_normals = {}  # id(node) -> [sum_nx, sum_ny, count]
+		on_normals = {}
 
 		for si in range(num_seg):
 			nodes = node_segs[si]
@@ -433,7 +422,6 @@ class Contour(Container, XMLSerializable):
 				else:
 					on_normals[nid] = [normal[0], normal[1], 1]
 
-		# Averaged + re-normalized displacement per on-curve node
 		on_disp = {}
 
 		for nid, (nx, ny, cnt) in on_normals.items():
@@ -445,10 +433,32 @@ class Contour(Container, XMLSerializable):
 			else:
 				on_disp[nid] = (0., 0.)
 
-		# --- Pass 3: apply displacements ---
-		applied = set()
+		return seg_info, on_disp, node_segs, segments
 
-		for si in range(num_seg):
+	def offset_outline(self, distance, curvature_correction=True):
+		'''Offset contour using analytical Bezier normals.
+		Returns a NEW Contour — does not modify the original.
+
+		Normal convention: right-hand normal (tan.y, -tan.x).
+		  - Positive distance = expand (thicken strokes)
+		  - Negative distance = contract (thin strokes)
+
+		Args:
+			distance (float): Offset amount in font units. 
+			curvature_correction (bool): Scale handles by (1 + d * kappa).
+
+		Returns:
+			Contour: New offset contour with same node structure.
+		'''
+		data = self._compute_offset_data(distance, curvature_correction)
+
+		if data is None:
+			return self.clone()
+
+		seg_info, on_disp, node_segs, segments = data
+		new_node_list = []
+
+		for si in range(len(segments)):
 			nodes = node_segs[si]
 			stype, _, _, k_start, k_end = seg_info[si]
 
@@ -457,48 +467,164 @@ class Contour(Container, XMLSerializable):
 				d0 = on_disp[id(p0)]
 				d3 = on_disp[id(p3)]
 
-				# On-curve: apply once per unique node
-				if id(p0) not in applied:
-					p0.x += d0[0]
-					p0.y += d0[1]
-					applied.add(id(p0))
+				# New on-curve position
+				new_p0x = p0.x + d0[0]
+				new_p0y = p0.y + d0[1]
 
-				if id(p3) not in applied:
-					p3.x += d3[0]
-					p3.y += d3[1]
-					applied.add(id(p3))
-
-				# BCPs: always (never shared between segments)
-				bcp_out.x += d0[0]
-				bcp_out.y += d0[1]
-				bcp_in.x += d3[0]
-				bcp_in.y += d3[1]
+				# New BCP positions (translate with parent)
+				new_bcp_out_x = bcp_out.x + d0[0]
+				new_bcp_out_y = bcp_out.y + d0[1]
+				new_bcp_in_x = bcp_in.x + d3[0]
+				new_bcp_in_y = bcp_in.y + d3[1]
 
 				# Curvature correction on handles
 				if curvature_correction:
 					s0 = max(0.1, min(1.0 + distance * k_start, 5.0))
 
 					if abs(s0 - 1.0) > 1e-6:
-						hx = bcp_out.x - p0.x
-						hy = bcp_out.y - p0.y
-						bcp_out.x = p0.x + hx * s0
-						bcp_out.y = p0.y + hy * s0
+						hx = new_bcp_out_x - new_p0x
+						hy = new_bcp_out_y - new_p0y
+						new_bcp_out_x = new_p0x + hx * s0
+						new_bcp_out_y = new_p0y + hy * s0
 
 					s3 = max(0.1, min(1.0 + distance * k_end, 5.0))
 
 					if abs(s3 - 1.0) > 1e-6:
-						hx = bcp_in.x - p3.x
-						hy = bcp_in.y - p3.y
-						bcp_in.x = p3.x + hx * s3
-						bcp_in.y = p3.y + hy * s3
+						new_p3x = p3.x + d3[0]
+						new_p3y = p3.y + d3[1]
+						hx = new_bcp_in_x - new_p3x
+						hy = new_bcp_in_y - new_p3y
+						new_bcp_in_x = new_p3x + hx * s3
+						new_bcp_in_y = new_p3y + hy * s3
+
+				new_node_list.append(Node(new_p0x, new_p0y, type='on', smooth=p0.smooth))
+				new_node_list.append(Node(new_bcp_out_x, new_bcp_out_y, type='curve', smooth=bcp_out.smooth))
+				new_node_list.append(Node(new_bcp_in_x, new_bcp_in_y, type='curve', smooth=bcp_in.smooth))
 
 			elif stype == 'line' and len(nodes) == 2:
-				for node in nodes:
-					if id(node) not in applied:
-						d = on_disp[id(node)]
-						node.x += d[0]
-						node.y += d[1]
-						applied.add(id(node))
+				p0 = nodes[0]
+				d0 = on_disp[id(p0)]
+				new_node_list.append(Node(p0.x + d0[0], p0.y + d0[1], type='on', smooth=p0.smooth))
+
+		return Contour(new_node_list, closed=self.closed, proxy=False)
+
+	def offset_outline_inplace(self, distance, curvature_correction=True):
+		'''Offset contour in place using analytical Bezier normals.
+
+		Convenience wrapper: computes offset_outline() then applies 
+		the result back to this contour's nodes.
+
+		Args:
+			distance (float): Offset amount in font units.
+			curvature_correction (bool): Scale handles by (1 + d * kappa).
+		'''
+		new_contour = self.offset_outline(distance, curvature_correction)
+		new_nodes = new_contour.nodes
+
+		if len(new_nodes) == len(self.nodes):
+			for i in range(len(self.nodes)):
+				self.nodes[i].x = new_nodes[i].x
+				self.nodes[i].y = new_nodes[i].y
+
+	def offset_outline_sdf(self, distance, sdf, curvature_correction=True):
+		'''Offset contour using SDF gradient directions.
+		Returns a NEW Contour — does not modify the original.
+
+		Uses the SDF gradient (which points outward from the glyph) 
+		as offset direction instead of analytical per-segment normals.
+		This is topology-aware: the SDF "knows" about all contours,
+		neighboring strokes, and the medial axis.
+
+		Falls back to analytical offset if the SDF has no computed grid.
+
+		Args:
+			distance (float): Offset amount in font units.
+			sdf (SignedDistanceField): Precomputed SDF for the layer.
+			curvature_correction (bool): Scale handles by (1 + d * kappa).
+
+		Returns:
+			Contour: New offset contour.
+		'''
+		if sdf is None or not sdf.is_computed:
+			return self.offset_outline(distance, curvature_correction)
+
+		segments = self.segments
+		node_segs = self.node_segments
+		num_seg = len(segments)
+
+		if num_seg == 0:
+			return self.clone()
+
+		# --- Pass 1: query SDF gradient at each on-curve node ---
+		# Average gradients at shared junctions (same pattern as analytical)
+		on_grads = {}
+
+		for si in range(num_seg):
+			nodes = node_segs[si]
+
+			for node in [nodes[0], nodes[-1]]:
+				nid = id(node)
+
+				if nid not in on_grads:
+					gx, gy = sdf.gradient_at(node.x, node.y)
+					on_grads[nid] = (gx, gy)
+
+		# --- Pass 2: compute displacements ---
+		on_disp = {}
+
+		for nid, (gx, gy) in on_grads.items():
+			on_disp[nid] = (gx * distance, gy * distance)
+
+		# --- Pass 3: build new nodes ---
+		new_node_list = []
+
+		for si in range(num_seg):
+			nodes = node_segs[si]
+			segment = segments[si]
+
+			if isinstance(segment, CubicBezier) and len(nodes) == 4:
+				p0, bcp_out, bcp_in, p3 = nodes
+				d0 = on_disp[id(p0)]
+				d3 = on_disp[id(p3)]
+
+				new_p0x = p0.x + d0[0]
+				new_p0y = p0.y + d0[1]
+				new_bcp_out_x = bcp_out.x + d0[0]
+				new_bcp_out_y = bcp_out.y + d0[1]
+				new_bcp_in_x = bcp_in.x + d3[0]
+				new_bcp_in_y = bcp_in.y + d3[1]
+
+				if curvature_correction:
+					k0 = segment.solve_curvature(0.0)
+					s0 = max(0.1, min(1.0 + distance * k0, 5.0))
+
+					if abs(s0 - 1.0) > 1e-6:
+						hx = new_bcp_out_x - new_p0x
+						hy = new_bcp_out_y - new_p0y
+						new_bcp_out_x = new_p0x + hx * s0
+						new_bcp_out_y = new_p0y + hy * s0
+
+					k3 = segment.solve_curvature(1.0)
+					s3 = max(0.1, min(1.0 + distance * k3, 5.0))
+
+					if abs(s3 - 1.0) > 1e-6:
+						new_p3x = p3.x + d3[0]
+						new_p3y = p3.y + d3[1]
+						hx = new_bcp_in_x - new_p3x
+						hy = new_bcp_in_y - new_p3y
+						new_bcp_in_x = new_p3x + hx * s3
+						new_bcp_in_y = new_p3y + hy * s3
+
+				new_node_list.append(Node(new_p0x, new_p0y, type='on', smooth=p0.smooth))
+				new_node_list.append(Node(new_bcp_out_x, new_bcp_out_y, type='curve', smooth=bcp_out.smooth))
+				new_node_list.append(Node(new_bcp_in_x, new_bcp_in_y, type='curve', smooth=bcp_in.smooth))
+
+			elif isinstance(segment, Line) and len(nodes) == 2:
+				p0 = nodes[0]
+				d0 = on_disp[id(p0)]
+				new_node_list.append(Node(p0.x + d0[0], p0.y + d0[1], type='on', smooth=p0.smooth))
+
+		return Contour(new_node_list, closed=self.closed, proxy=False)
 
 class HobbySpline(Container): 
 	'''Adapted from mp2tikz.py (c) 2012 JL Diaz'''

@@ -20,6 +20,7 @@ from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 
 from typerig.core.objects.atom import Container
 from typerig.core.objects.shape import Shape
+from typerig.core.objects.sdf import SignedDistanceField
 
 # - Init -------------------------------
 __version__ = '0.3.1'
@@ -27,7 +28,7 @@ __version__ = '0.3.1'
 # - Classes -----------------------------
 @register_xml_class
 class Layer(Container, XMLSerializable): 
-	__slots__ = ('name', 'stx', 'sty', 'transform', 'mark', 'advance_width', 'advance_height', 'identifier', 'parent', 'lib')
+	__slots__ = ('name', 'stx', 'sty', 'transform', 'mark', 'advance_width', 'advance_height', 'identifier', 'parent', 'lib', '_sdf')
 
 	XML_TAG = 'layer'
 	XML_ATTRS = ['name', 'identifier', 'width', 'height']
@@ -50,6 +51,9 @@ class Layer(Container, XMLSerializable):
 			self.mark = kwargs.pop('mark', 0)
 			self.advance_width = kwargs.pop('width', 0.) 
 			self.advance_height = kwargs.pop('height', 1000.) 
+
+		# - SDF cache (not serialized)
+		self._sdf = None
 	
 	# -- Internals ------------------------------
 	def __repr__(self):
@@ -57,8 +61,47 @@ class Layer(Container, XMLSerializable):
 
 	# -- Properties -----------------------------
 	@property
+	def sdf(self):
+		'''Cached SignedDistanceField for this layer. 
+		None if not yet computed. Use compute_sdf() to populate.
+		'''
+		return self._sdf
+
+	# -- Properties -----------------------------
+	@property
 	def has_stems(self):
 		return self.stx is not None and self.sty is not None
+
+	# -- SDF methods --------------------------------
+	def compute_sdf(self, resolution=10.0, padding=50, steps_per_segment=64, verbose=False):
+		'''Compute and cache a SignedDistanceField for all contours on this layer.
+
+		The SDF is stored in self._sdf and can be accessed via the .sdf property.
+		Subsequent calls recompute and replace the cached SDF.
+
+		Args:
+			resolution (float): Grid cell size in font units. 
+				Lower = more precise but slower.
+				Typical: 1.0 for production, 2-5 for preview.
+			padding (float): Extra space around contour bounds.
+			steps_per_segment (int): Polyline sampling density.
+			verbose (bool): Print progress.
+
+		Returns:
+			SignedDistanceField: The computed SDF (also cached as self._sdf).
+		'''
+		self._sdf = SignedDistanceField(
+			self.contours, 
+			resolution=resolution, 
+			padding=padding, 
+			steps_per_segment=steps_per_segment
+		)
+		self._sdf.compute(verbose=verbose)
+		return self._sdf
+
+	def clear_sdf(self):
+		'''Clear the cached SDF to free memory.'''
+		self._sdf = None
 
 	@property
 	def stems(self):
