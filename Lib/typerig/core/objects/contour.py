@@ -546,20 +546,29 @@ class Contour(Container, XMLSerializable):
 				self.nodes[i].x = new_nodes[i].x
 				self.nodes[i].y = new_nodes[i].y
 
-	def offset_outline_sdf(self, distance, sdf, curvature_correction=True):
-		'''Offset contour using SDF gradient directions with miter joins.
+	def offset_outline_sdf(self, distance, sdf, curvature_correction=True, clamp_factor=0.9):
+		'''Offset contour using analytical normals with SDF distance clamping.
 		Returns a NEW Contour — does not modify the original.
 
-		Uses analytical normals with miter formula at on-curve junctions 
-		(SDF gradients are ambiguous at corners), and SDF gradients for
-		topology-aware direction at smooth points.
+		Direction: identical to offset_outline() — analytical normals with
+		miter formula at junctions. This is geometrically exact.
 
-		Falls back to analytical offset if the SDF has no computed grid.
+		Distance: the SDF provides topology-aware clamping. At each on-curve
+		node, the SDF value tells us the distance to the nearest OTHER 
+		contour edge. If the requested offset would overshoot the medial 
+		axis (i.e. collide with another stroke or counter), the displacement 
+		is reduced to prevent self-intersection.
+
+		The clamp_factor (0.0-1.0) controls how much of the available space 
+		to use: 0.9 means stop at 90% of the medial axis distance.
+
+		Falls back to analytical offset if no SDF is available.
 
 		Args:
 			distance (float): Offset amount in font units.
 			sdf (SignedDistanceField): Precomputed SDF for the layer.
 			curvature_correction (bool): Scale handles by (1 + d * kappa).
+			clamp_factor (float): Fraction of medial axis to allow (0.0-1.0).
 
 		Returns:
 			Contour: New offset contour.
@@ -574,45 +583,18 @@ class Contour(Container, XMLSerializable):
 		if num_seg == 0:
 			return self.clone()
 
-		# --- Pass 1: compute per-segment analytical normals ---
+		# --- Pass 1: analytical normals (identical to offset_outline) ---
 		seg_info = []
 
 		for segment in segments:
 			seg_info.append(self._segment_normals(segment))
 
-		# --- Pass 2: miter at junctions using SDF-informed normals ---
-		# At each junction, query SDF gradient slightly along each edge
-		# to get topology-aware normals, then apply miter formula.
-		on_normals = {}  # id(node) -> list of (nx, ny)
+		# --- Pass 2: miter displacement (identical to offset_outline) ---
+		on_normals = {}
 
 		for si in range(num_seg):
 			nodes = node_segs[si]
-			segment = segments[si]
-			n_start_anal, n_end_anal, _, _ = seg_info[si]
-
-			# Query SDF slightly along the segment from each endpoint
-			# to avoid corner ambiguity in the gradient
-			eps = 2.0  # font units along the edge
-
-			# Start point: sample slightly into the segment
-			pt_start = segment.solve_point(0.02)
-			gx, gy = sdf.gradient_at(pt_start.x, pt_start.y)
-			mag = math.sqrt(gx * gx + gy * gy)
-
-			if mag > 1e-10:
-				n_start = (gx / mag, gy / mag)
-			else:
-				n_start = n_start_anal
-
-			# End point: sample slightly before the end
-			pt_end = segment.solve_point(0.98)
-			gx, gy = sdf.gradient_at(pt_end.x, pt_end.y)
-			mag = math.sqrt(gx * gx + gy * gy)
-
-			if mag > 1e-10:
-				n_end = (gx / mag, gy / mag)
-			else:
-				n_end = n_end_anal
+			n_start, n_end, _, _ = seg_info[si]
 
 			for node, normal in [(nodes[0], n_start), (nodes[-1], n_end)]:
 				nid = id(node)
@@ -622,7 +604,6 @@ class Contour(Container, XMLSerializable):
 
 				on_normals[nid].append(normal)
 
-		# Miter formula
 		on_disp = {}
 
 		for nid, normals in on_normals.items():
@@ -652,7 +633,77 @@ class Contour(Container, XMLSerializable):
 				else:
 					on_disp[nid] = (0., 0.)
 
-		# --- Pass 3: build new contour ---
+		# --- Pass 3: SDF distance clamping ---
+		# At each on-curve node, query SDF to find available space.
+		# The SDF value at a point on the outline is ~0. We need to 
+		# check along the displacement direction: how far can we go 
+		# before hitting the medial axis (where SDF changes sign or 
+		# reaches its minimum between two contours).
+		#
+		# For contracting (negative distance): SDF inside is negative,
+		# |SDF| tells distance to nearest contour. Clamp if |d| > |SDF| * factor.
+		#
+		# For expanding (positive distance): nodes move outward, 
+		# SDF grows. Less risk of collision, but inner contours may collide.
+		on_disp_clamped = {}
+
+		for nid, disp in on_disp.items():
+			disp_mag = math.sqrt(disp[0] * disp[0] + disp[1] * disp[1])
+
+			if disp_mag < 1e-10:
+				on_disp_clamped[nid] = disp
+				continue
+
+			# Unit direction of displacement
+			dx_unit = disp[0] / disp_mag
+			dy_unit = disp[1] / disp_mag
+
+			# Walk along displacement to find available space
+			# Sample SDF at the target position
+			# Find the node's original position from node_segs
+			node_found = False
+
+			for si in range(num_seg):
+				nodes = node_segs[si]
+
+				for node in [nodes[0], nodes[-1]]:
+					if id(node) == nid:
+						# Query SDF at a few steps along the displacement
+						max_safe = disp_mag  # default: full displacement
+
+						for step_frac in (0.25, 0.5, 0.75, 1.0):
+							test_x = node.x + dx_unit * disp_mag * step_frac
+							test_y = node.y + dy_unit * disp_mag * step_frac
+							sdf_val = sdf.query(test_x, test_y)
+
+							# If we're contracting (moving into the glyph)
+							# and the SDF becomes positive (crossed the outline), clamp
+							if distance < 0 and sdf_val > 0:
+								max_safe = min(max_safe, disp_mag * step_frac * clamp_factor)
+								break
+
+							# If we're expanding and SDF becomes negative
+							# (crossed into another contour's fill), clamp
+							if distance > 0 and sdf_val < 0:
+								max_safe = min(max_safe, disp_mag * step_frac * clamp_factor)
+								break
+
+						if max_safe < disp_mag:
+							scale = max_safe / disp_mag
+							on_disp_clamped[nid] = (disp[0] * scale, disp[1] * scale)
+						else:
+							on_disp_clamped[nid] = disp
+
+						node_found = True
+						break
+
+				if node_found:
+					break
+
+			if not node_found:
+				on_disp_clamped[nid] = disp
+
+		# --- Pass 4: build new contour ---
 		new_node_list = []
 
 		for si in range(num_seg):
@@ -662,8 +713,8 @@ class Contour(Container, XMLSerializable):
 
 			if isinstance(segment, CubicBezier) and len(nodes) == 4:
 				p0, bcp_out, bcp_in, p3 = nodes
-				d0 = on_disp[id(p0)]
-				d3 = on_disp[id(p3)]
+				d0 = on_disp_clamped[id(p0)]
+				d3 = on_disp_clamped[id(p3)]
 
 				new_p0x = p0.x + d0[0]
 				new_p0y = p0.y + d0[1]
@@ -673,8 +724,15 @@ class Contour(Container, XMLSerializable):
 				new_bcp_in_y = bcp_in.y + d3[1]
 
 				if curvature_correction:
-					k0 = segment.solve_curvature(0.0)
-					s0 = max(0.1, min(1.0 + distance * k0, 5.0))
+					# Use clamped distance for curvature scaling
+					d0_mag = math.sqrt(d0[0]*d0[0] + d0[1]*d0[1])
+					d3_mag = math.sqrt(d3[0]*d3[0] + d3[1]*d3[1])
+					
+					# Preserve sign of distance for curvature direction
+					eff_d0 = d0_mag if distance > 0 else -d0_mag
+					eff_d3 = d3_mag if distance > 0 else -d3_mag
+
+					s0 = max(0.1, min(1.0 + eff_d0 * k_start, 5.0))
 
 					if abs(s0 - 1.0) > 1e-6:
 						hx = new_bcp_out_x - new_p0x
@@ -682,8 +740,7 @@ class Contour(Container, XMLSerializable):
 						new_bcp_out_x = new_p0x + hx * s0
 						new_bcp_out_y = new_p0y + hy * s0
 
-					k3 = segment.solve_curvature(1.0)
-					s3 = max(0.1, min(1.0 + distance * k3, 5.0))
+					s3 = max(0.1, min(1.0 + eff_d3 * k_end, 5.0))
 
 					if abs(s3 - 1.0) > 1e-6:
 						new_p3x = p3.x + d3[0]
@@ -699,7 +756,7 @@ class Contour(Container, XMLSerializable):
 
 			elif isinstance(segment, Line) and len(nodes) == 2:
 				p0 = nodes[0]
-				d0 = on_disp[id(p0)]
+				d0 = on_disp_clamped[id(p0)]
 				new_node_list.append(Node(p0.x + d0[0], p0.y + d0[1], type='on', smooth=p0.smooth))
 
 		return Contour(new_node_list, closed=self.closed, proxy=False)
