@@ -22,7 +22,7 @@ from typerig.core.objects.utils import Bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 # - Init ---------------------------------
-__version__ = '0.29.0'
+__version__ = '0.29.1'
 
 # - Keep compatibility for basestring checks
 try:
@@ -869,26 +869,26 @@ class eNode(pNode):
 			entity (flNode, pNode, eNode or Line)
 			align (tuple(Align_X (bool), Align_Y (bool)) 
 		'''
+		newX, newY = 0., 0.
+
 		if isinstance(entity, (fl6.flNode, pNode, self.__class__)):
 			newX = entity.x if align[0] else self.fl.x
 			newY = entity.y if align[1] else self.fl.y
 				
-			if not lerp
-				if smart:
-					self.smartReloc(newX, newY)
-				else:
-					self.reloc(newX, newY)
-			else:
-				self.interpShift(newX, newY)
-
 		elif isinstance(entity, (Line, Vector)):
 			newX = entity.solve_x(self.fl.y) if align[0] else self.fl.x
 			newY = entity.solve_y(self.fl.x) if align[1] else self.fl.y
 
+		if not lerp:
 			if smart:
 				self.smartReloc(newX, newY)
 			else:
 				self.reloc(newX, newY)
+		else:
+			shiftX = newX - self.x
+			shiftY = newY - self.y
+			
+			self.interpShift(shiftX, shiftY)
 
 
 class eNodesContainer(pNodesContainer):

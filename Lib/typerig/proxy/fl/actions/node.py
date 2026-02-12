@@ -35,7 +35,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '3.2'
+__version__ = '3.3'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -474,7 +474,7 @@ class TRNodeActionCollector(object):
 
 	# -- Nodes alignment ------------------------------------------------------
 	@staticmethod
-	def nodes_align(pMode:int, pLayers:tuple, mode:str, intercept:bool=False, keep_relations:bool=False, smart_shift:bool=False, ext_target:dict={}):
+	def nodes_align(pMode:int, pLayers:tuple, mode:str, intercept:bool=False, keep_relations:bool=False, smart_shift:bool=False, ext_target:dict={}, lerp_shift:bool=False):
 		process_glyphs = getProcessGlyphs(pMode)
 		modifiers = QtGui.QApplication.keyboardModifiers()
 
@@ -718,7 +718,7 @@ class TRNodeActionCollector(object):
 								pass
 						
 						# - Execute Align ----------
-						node.alignTo(target, control, smart_shift)
+						node.alignTo(target, control, smart_shift, lerp_shift)
 
 			glyph.updateObject(glyph.fl, '{};\tAlign Nodes @ {}.'.format(glyph.name, '; '.join(wLayers)))
 		
