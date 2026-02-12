@@ -863,7 +863,7 @@ class eNode(pNode):
 		#self.fl.smartSetXY(pqt.QtCore.QPointF(newX, self.y + shift_y))
 		self.smartReloc(newX, self.y + shift_y)
 
-	def alignTo(self, entity, align=(True, True), smart=True):
+	def alignTo(self, entity, align=(True, True), smart=True, lerp=False):
 		'''Align current node to a node or line given.
 		Arguments:
 			entity (flNode, pNode, eNode or Line)
@@ -873,10 +873,13 @@ class eNode(pNode):
 			newX = entity.x if align[0] else self.fl.x
 			newY = entity.y if align[1] else self.fl.y
 				
-			if smart:
-				self.smartReloc(newX, newY)
+			if not lerp
+				if smart:
+					self.smartReloc(newX, newY)
+				else:
+					self.reloc(newX, newY)
 			else:
-				self.reloc(newX, newY)
+				self.interpShift(newX, newY)
 
 		elif isinstance(entity, (Line, Vector)):
 			newX = entity.solve_x(self.fl.y) if align[0] else self.fl.x

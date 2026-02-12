@@ -359,11 +359,34 @@ class Contour(Container, XMLSerializable):
 		return result
 
 	@staticmethod
-	def _segment_normals(segment):
+	def _segment_normals(segment, epsilon=0.5):
 		'''Compute outward normals and curvature at segment endpoints.
-		Returns (n_start, n_end, k_start, k_end) where n is (nx, ny) unit normal.
+
+		Handles degenerate (zero-length / collapsed) segments gracefully:
+		returns None for normals that cannot be determined, letting the 
+		caller resolve them from neighboring segments.
+
+		Args:
+			segment: CubicBezier or Line object
+			epsilon (float): Below this chord length, segment is degenerate.
+
+		Returns:
+			tuple: (n_start, n_end, k_start, k_end)
+				n_start, n_end: (nx, ny) unit normal or None if degenerate
+				k_start, k_end: curvature float (0.0 if degenerate)
 		'''
 		if isinstance(segment, CubicBezier):
+			# Check if fully collapsed (all points within epsilon)
+			chord = abs(segment.p3 - segment.p0)
+
+			if chord < epsilon:
+				# Also check if handles extend meaningfully
+				h_out = abs(segment.p1 - segment.p0)
+				h_in = abs(segment.p2 - segment.p3)
+
+				if h_out < epsilon and h_in < epsilon:
+					return None, None, 0., 0.
+
 			# Start normal from P0->P1 tangent
 			tan0 = segment.p1 - segment.p0
 			m0 = abs(tan0)
@@ -372,7 +395,7 @@ class Contour(Container, XMLSerializable):
 				tan0 = segment.p3 - segment.p0
 				m0 = abs(tan0)
 
-			n0 = (tan0.y / m0, -tan0.x / m0) if m0 > 1e-10 else (0., 0.)
+			n0 = (tan0.y / m0, -tan0.x / m0) if m0 > 1e-10 else None
 
 			# End normal from P2->P3 tangent
 			tan3 = segment.p3 - segment.p2
@@ -382,57 +405,66 @@ class Contour(Container, XMLSerializable):
 				tan3 = segment.p3 - segment.p0
 				m3 = abs(tan3)
 
-			n3 = (tan3.y / m3, -tan3.x / m3) if m3 > 1e-10 else (0., 0.)
+			n3 = (tan3.y / m3, -tan3.x / m3) if m3 > 1e-10 else None
 
-			return n0, n3, segment.solve_curvature(0.0), segment.solve_curvature(1.0)
+			# Curvature: safe against zero-length
+			k0 = 0.
+			k3 = 0.
+
+			if n0 is not None:
+				try:
+					k0 = segment.solve_curvature(0.0)
+				except (ZeroDivisionError, ValueError):
+					k0 = 0.
+
+			if n3 is not None:
+				try:
+					k3 = segment.solve_curvature(1.0)
+				except (ZeroDivisionError, ValueError):
+					k3 = 0.
+
+			return n0, n3, k0, k3
 
 		elif isinstance(segment, Line):
 			dx = segment.p1.x - segment.p0.x
 			dy = segment.p1.y - segment.p0.y
 			m = math.sqrt(dx * dx + dy * dy)
-			n = (dy / m, -dx / m) if m > 1e-10 else (0., 0.)
+
+			if m < epsilon:
+				return None, None, 0., 0.
+
+			n = (dy / m, -dx / m)
 			return n, n, 0., 0.
 
-		return (0., 0.), (0., 0.), 0., 0.
+		return None, None, 0., 0.
 
-	def offset_outline(self, distance, curvature_correction=True):
-		'''Offset contour using analytical Bezier normals with miter joins.
-		Returns a NEW Contour — does not modify the original.
+	def _compute_miter_displacements(self, distance):
+		'''Compute miter displacement vectors for all on-curve junction nodes.
 
-		At each junction between segments, the miter formula is used:
-		  disp = d * (n_in + n_out) / (1 + dot(n_in, n_out))
-		This guarantees perpendicular distance = d to each adjacent edge,
-		keeping lines parallel and curves at correct distance.
-
-		Normal convention: right-hand normal (tan.y, -tan.x).
-		  - Positive distance = expand (thicken strokes)
-		  - Negative distance = contract (thin strokes)
+		Handles degenerate (zero-length) segments: their None normals are 
+		filtered out, and orphaned nodes inherit displacement from the 
+		nearest resolved neighbor along the contour.
 
 		Args:
-			distance (float): Offset amount in font units. 
-			curvature_correction (bool): Scale handles by (1 + d * kappa).
+			distance (float): Offset amount in font units.
 
 		Returns:
-			Contour: New offset contour with same node structure.
+			tuple: (seg_info, on_disp)
+				seg_info: list of (n_start, n_end, k_start, k_end) per segment
+				on_disp: dict {id(node): (dx, dy)} for all on-curve nodes
 		'''
 		segments = self.segments
 		node_segs = self.node_segments
 		num_seg = len(segments)
 
-		if num_seg == 0:
-			return self.clone()
-
-		# --- Pass 1: compute per-segment normals and curvature ---
+		# --- Pass 1: per-segment normals and curvature ---
 		seg_info = []
 
 		for segment in segments:
 			seg_info.append(self._segment_normals(segment))
 
-		# --- Pass 2: miter displacement at each on-curve junction ---
-		# Each junction has an incoming normal (prev seg end) and 
-		# outgoing normal (next seg start). Miter formula ensures
-		# perpendicular distance = d to both adjacent edges.
-		on_normals = {}  # id(node) -> list of (nx, ny)
+		# --- Pass 2: collect non-None normals per junction node ---
+		on_normals = {}
 
 		for si in range(num_seg):
 			nodes = node_segs[si]
@@ -444,12 +476,17 @@ class Contour(Container, XMLSerializable):
 				if nid not in on_normals:
 					on_normals[nid] = []
 
-				on_normals[nid].append(normal)
+				if normal is not None:
+					on_normals[nid].append(normal)
 
+		# --- Miter formula for nodes with normals ---
 		on_disp = {}
 
 		for nid, normals in on_normals.items():
-			if len(normals) == 1:
+			if len(normals) == 0:
+				continue
+
+			elif len(normals) == 1:
 				n = normals[0]
 				on_disp[nid] = (n[0] * distance, n[1] * distance)
 
@@ -458,7 +495,6 @@ class Contour(Container, XMLSerializable):
 				dot = n1[0] * n2[0] + n1[1] * n2[1]
 				denom = 1.0 + dot
 
-				# Miter limit for very sharp corners (> ~160 degrees)
 				if denom < 0.15:
 					denom = 0.15
 
@@ -467,7 +503,6 @@ class Contour(Container, XMLSerializable):
 				on_disp[nid] = (distance * sx / denom, distance * sy / denom)
 
 			else:
-				# Rare: >2 segments at one point
 				sx = sum(n[0] for n in normals)
 				sy = sum(n[1] for n in normals)
 				mag = math.sqrt(sx * sx + sy * sy)
@@ -477,18 +512,83 @@ class Contour(Container, XMLSerializable):
 				else:
 					on_disp[nid] = (0., 0.)
 
-		# --- Pass 3: build new contour ---
+		# --- Propagate to orphaned nodes (degenerate segments only) ---
+		if len(on_disp) < len(on_normals):
+			junction_ids = []
+
+			for si in range(num_seg):
+				nodes = node_segs[si]
+				nid = id(nodes[0])
+
+				if not junction_ids or junction_ids[-1] != nid:
+					junction_ids.append(nid)
+
+			n_junctions = len(junction_ids)
+
+			for ji, nid in enumerate(junction_ids):
+				if nid in on_disp:
+					continue
+
+				fwd_disp = None
+				bwd_disp = None
+
+				for step in range(1, n_junctions):
+					fwd_nid = junction_ids[(ji + step) % n_junctions]
+
+					if fwd_nid in on_disp:
+						fwd_disp = on_disp[fwd_nid]
+						break
+
+				for step in range(1, n_junctions):
+					bwd_nid = junction_ids[(ji - step) % n_junctions]
+
+					if bwd_nid in on_disp:
+						bwd_disp = on_disp[bwd_nid]
+						break
+
+				if fwd_disp is not None and bwd_disp is not None:
+					on_disp[nid] = (
+						(fwd_disp[0] + bwd_disp[0]) * 0.5,
+						(fwd_disp[1] + bwd_disp[1]) * 0.5
+					)
+				elif fwd_disp is not None:
+					on_disp[nid] = fwd_disp
+				elif bwd_disp is not None:
+					on_disp[nid] = bwd_disp
+				else:
+					on_disp[nid] = (0., 0.)
+
+		return seg_info, on_disp
+
+	@staticmethod
+	def _build_offset_nodes(segments, node_segs, seg_info, on_disp, distance, curvature_correction, closed):
+		'''Build new node list from computed displacements.
+
+		Shared by offset_outline, offset_outline_sdf, etc.
+
+		Args:
+			segments: list of segment objects
+			node_segs: list of node lists per segment
+			seg_info: list of (n_start, n_end, k_start, k_end) per segment
+			on_disp: dict {id(node): (dx, dy)} displacement per on-curve node
+			distance: original signed offset distance (for curvature sign)
+			curvature_correction: bool
+			closed: bool
+
+		Returns:
+			Contour: New offset contour.
+		'''
 		new_node_list = []
 
-		for si in range(num_seg):
+		for si in range(len(segments)):
 			segment = segments[si]
 			nodes = node_segs[si]
 			_, _, k_start, k_end = seg_info[si]
 
 			if isinstance(segment, CubicBezier) and len(nodes) == 4:
 				p0, bcp_out, bcp_in, p3 = nodes
-				d0 = on_disp[id(p0)]
-				d3 = on_disp[id(p3)]
+				d0 = on_disp.get(id(p0), (0., 0.))
+				d3 = on_disp.get(id(p3), (0., 0.))
 
 				new_p0x = p0.x + d0[0]
 				new_p0y = p0.y + d0[1]
@@ -497,8 +597,7 @@ class Contour(Container, XMLSerializable):
 				new_bcp_in_x = bcp_in.x + d3[0]
 				new_bcp_in_y = bcp_in.y + d3[1]
 
-				# Curvature correction
-				if curvature_correction:
+				if curvature_correction and (k_start != 0. or k_end != 0.):
 					s0 = max(0.1, min(1.0 + distance * k_start, 5.0))
 
 					if abs(s0 - 1.0) > 1e-6:
@@ -523,10 +622,44 @@ class Contour(Container, XMLSerializable):
 
 			elif isinstance(segment, Line) and len(nodes) == 2:
 				p0 = nodes[0]
-				d0 = on_disp[id(p0)]
+				d0 = on_disp.get(id(p0), (0., 0.))
 				new_node_list.append(Node(p0.x + d0[0], p0.y + d0[1], type='on', smooth=p0.smooth))
 
-		return Contour(new_node_list, closed=self.closed, proxy=False)
+		return Contour(new_node_list, closed=closed, proxy=False)
+
+	def offset_outline(self, distance, curvature_correction=True):
+		'''Offset contour using analytical Bezier normals with miter joins.
+		Returns a NEW Contour — does not modify the original.
+
+		At each junction between segments, the miter formula is used:
+		  disp = d * (n_in + n_out) / (1 + dot(n_in, n_out))
+		This guarantees perpendicular distance = d to each adjacent edge,
+		keeping lines parallel and curves at correct distance.
+
+		Handles degenerate (zero-length / collapsed) segments: their nodes
+		inherit displacement from the nearest non-degenerate neighbor,
+		preserving point compatibility for Multiple Master workflows.
+
+		Normal convention: right-hand normal (tan.y, -tan.x).
+		  - Positive distance = expand (thicken strokes)
+		  - Negative distance = contract (thin strokes)
+
+		Args:
+			distance (float): Offset amount in font units. 
+			curvature_correction (bool): Scale handles by (1 + d * kappa).
+
+		Returns:
+			Contour: New offset contour with same node structure.
+		'''
+		if len(self.segments) == 0:
+			return self.clone()
+
+		seg_info, on_disp = self._compute_miter_displacements(distance)
+
+		return self._build_offset_nodes(
+			self.segments, self.node_segments, seg_info, on_disp,
+			distance, curvature_correction, self.closed
+		)
 
 	def offset_outline_inplace(self, distance, curvature_correction=True):
 		'''Offset contour in place using analytical Bezier normals.
@@ -559,6 +692,9 @@ class Contour(Container, XMLSerializable):
 		axis (i.e. collide with another stroke or counter), the displacement 
 		is reduced to prevent self-intersection.
 
+		Handles degenerate (zero-length / collapsed) segments identically
+		to offset_outline().
+
 		The clamp_factor (0.0-1.0) controls how much of the available space 
 		to use: 0.9 means stop at 90% of the medial axis distance.
 
@@ -576,75 +712,23 @@ class Contour(Container, XMLSerializable):
 		if sdf is None or not sdf.is_computed:
 			return self.offset_outline(distance, curvature_correction)
 
-		segments = self.segments
-		node_segs = self.node_segments
-		num_seg = len(segments)
-
-		if num_seg == 0:
+		if len(self.segments) == 0:
 			return self.clone()
 
-		# --- Pass 1: analytical normals (identical to offset_outline) ---
-		seg_info = []
-
-		for segment in segments:
-			seg_info.append(self._segment_normals(segment))
-
-		# --- Pass 2: miter displacement (identical to offset_outline) ---
-		on_normals = {}
-
-		for si in range(num_seg):
-			nodes = node_segs[si]
-			n_start, n_end, _, _ = seg_info[si]
-
-			for node, normal in [(nodes[0], n_start), (nodes[-1], n_end)]:
-				nid = id(node)
-
-				if nid not in on_normals:
-					on_normals[nid] = []
-
-				on_normals[nid].append(normal)
-
-		on_disp = {}
-
-		for nid, normals in on_normals.items():
-			if len(normals) == 1:
-				n = normals[0]
-				on_disp[nid] = (n[0] * distance, n[1] * distance)
-
-			elif len(normals) == 2:
-				n1, n2 = normals
-				dot = n1[0] * n2[0] + n1[1] * n2[1]
-				denom = 1.0 + dot
-
-				if denom < 0.15:
-					denom = 0.15
-
-				sx = n1[0] + n2[0]
-				sy = n1[1] + n2[1]
-				on_disp[nid] = (distance * sx / denom, distance * sy / denom)
-
-			else:
-				sx = sum(n[0] for n in normals)
-				sy = sum(n[1] for n in normals)
-				mag = math.sqrt(sx * sx + sy * sy)
-
-				if mag > 1e-10:
-					on_disp[nid] = (sx / mag * distance, sy / mag * distance)
-				else:
-					on_disp[nid] = (0., 0.)
+		# --- Passes 1-2: identical to offset_outline ---
+		seg_info, on_disp = self._compute_miter_displacements(distance)
 
 		# --- Pass 3: SDF distance clamping ---
-		# At each on-curve node, query SDF to find available space.
-		# The SDF value at a point on the outline is ~0. We need to 
-		# check along the displacement direction: how far can we go 
-		# before hitting the medial axis (where SDF changes sign or 
-		# reaches its minimum between two contours).
-		#
-		# For contracting (negative distance): SDF inside is negative,
-		# |SDF| tells distance to nearest contour. Clamp if |d| > |SDF| * factor.
-		#
-		# For expanding (positive distance): nodes move outward, 
-		# SDF grows. Less risk of collision, but inner contours may collide.
+		# Build nid -> node lookup for coordinate access
+		node_segs = self.node_segments
+		nid_to_node = {}
+
+		for si in range(len(self.segments)):
+			nodes = node_segs[si]
+
+			for node in [nodes[0], nodes[-1]]:
+				nid_to_node[id(node)] = node
+
 		on_disp_clamped = {}
 
 		for nid, disp in on_disp.items():
@@ -654,112 +738,41 @@ class Contour(Container, XMLSerializable):
 				on_disp_clamped[nid] = disp
 				continue
 
-			# Unit direction of displacement
+			node = nid_to_node.get(nid)
+
+			if node is None:
+				on_disp_clamped[nid] = disp
+				continue
+
 			dx_unit = disp[0] / disp_mag
 			dy_unit = disp[1] / disp_mag
+			max_safe = disp_mag
 
-			# Walk along displacement to find available space
-			# Sample SDF at the target position
-			# Find the node's original position from node_segs
-			node_found = False
+			for step_frac in (0.25, 0.5, 0.75, 1.0):
+				test_x = node.x + dx_unit * disp_mag * step_frac
+				test_y = node.y + dy_unit * disp_mag * step_frac
+				sdf_val = sdf.query(test_x, test_y)
 
-			for si in range(num_seg):
-				nodes = node_segs[si]
-
-				for node in [nodes[0], nodes[-1]]:
-					if id(node) == nid:
-						# Query SDF at a few steps along the displacement
-						max_safe = disp_mag  # default: full displacement
-
-						for step_frac in (0.25, 0.5, 0.75, 1.0):
-							test_x = node.x + dx_unit * disp_mag * step_frac
-							test_y = node.y + dy_unit * disp_mag * step_frac
-							sdf_val = sdf.query(test_x, test_y)
-
-							# If we're contracting (moving into the glyph)
-							# and the SDF becomes positive (crossed the outline), clamp
-							if distance < 0 and sdf_val > 0:
-								max_safe = min(max_safe, disp_mag * step_frac * clamp_factor)
-								break
-
-							# If we're expanding and SDF becomes negative
-							# (crossed into another contour's fill), clamp
-							if distance > 0 and sdf_val < 0:
-								max_safe = min(max_safe, disp_mag * step_frac * clamp_factor)
-								break
-
-						if max_safe < disp_mag:
-							scale = max_safe / disp_mag
-							on_disp_clamped[nid] = (disp[0] * scale, disp[1] * scale)
-						else:
-							on_disp_clamped[nid] = disp
-
-						node_found = True
-						break
-
-				if node_found:
+				if distance < 0 and sdf_val > 0:
+					max_safe = min(max_safe, disp_mag * step_frac * clamp_factor)
 					break
 
-			if not node_found:
+				if distance > 0 and sdf_val < 0:
+					max_safe = min(max_safe, disp_mag * step_frac * clamp_factor)
+					break
+
+			if max_safe < disp_mag:
+				scale = max_safe / disp_mag
+				on_disp_clamped[nid] = (disp[0] * scale, disp[1] * scale)
+			else:
 				on_disp_clamped[nid] = disp
 
 		# --- Pass 4: build new contour ---
-		new_node_list = []
-
-		for si in range(num_seg):
-			segment = segments[si]
-			nodes = node_segs[si]
-			_, _, k_start, k_end = seg_info[si]
-
-			if isinstance(segment, CubicBezier) and len(nodes) == 4:
-				p0, bcp_out, bcp_in, p3 = nodes
-				d0 = on_disp_clamped[id(p0)]
-				d3 = on_disp_clamped[id(p3)]
-
-				new_p0x = p0.x + d0[0]
-				new_p0y = p0.y + d0[1]
-				new_bcp_out_x = bcp_out.x + d0[0]
-				new_bcp_out_y = bcp_out.y + d0[1]
-				new_bcp_in_x = bcp_in.x + d3[0]
-				new_bcp_in_y = bcp_in.y + d3[1]
-
-				if curvature_correction:
-					# Use clamped distance for curvature scaling
-					d0_mag = math.sqrt(d0[0]*d0[0] + d0[1]*d0[1])
-					d3_mag = math.sqrt(d3[0]*d3[0] + d3[1]*d3[1])
-					
-					# Preserve sign of distance for curvature direction
-					eff_d0 = d0_mag if distance > 0 else -d0_mag
-					eff_d3 = d3_mag if distance > 0 else -d3_mag
-
-					s0 = max(0.1, min(1.0 + eff_d0 * k_start, 5.0))
-
-					if abs(s0 - 1.0) > 1e-6:
-						hx = new_bcp_out_x - new_p0x
-						hy = new_bcp_out_y - new_p0y
-						new_bcp_out_x = new_p0x + hx * s0
-						new_bcp_out_y = new_p0y + hy * s0
-
-					s3 = max(0.1, min(1.0 + eff_d3 * k_end, 5.0))
-
-					if abs(s3 - 1.0) > 1e-6:
-						new_p3x = p3.x + d3[0]
-						new_p3y = p3.y + d3[1]
-						hx = new_bcp_in_x - new_p3x
-						hy = new_bcp_in_y - new_p3y
-						new_bcp_in_x = new_p3x + hx * s3
-						new_bcp_in_y = new_p3y + hy * s3
-
-				new_node_list.append(Node(new_p0x, new_p0y, type='on', smooth=p0.smooth))
-				new_node_list.append(Node(new_bcp_out_x, new_bcp_out_y, type='curve', smooth=bcp_out.smooth))
-				new_node_list.append(Node(new_bcp_in_x, new_bcp_in_y, type='curve', smooth=bcp_in.smooth))
-
-			elif isinstance(segment, Line) and len(nodes) == 2:
-				p0 = nodes[0]
-				d0 = on_disp_clamped[id(p0)]
-				new_node_list.append(Node(p0.x + d0[0], p0.y + d0[1], type='on', smooth=p0.smooth))
-
-		return Contour(new_node_list, closed=self.closed, proxy=False)
+		# Use clamped effective distance for curvature correction
+		return self._build_offset_nodes(
+			self.segments, node_segs, seg_info, on_disp_clamped,
+			distance, curvature_correction, self.closed
+		)
 
 class HobbySpline(Container): 
 	'''Adapted from mp2tikz.py (c) 2012 JL Diaz'''
