@@ -774,6 +774,288 @@ class Contour(Container, XMLSerializable):
 			distance, curvature_correction, self.closed
 		)
 
+	# -- Angle-compensated scaling via corrective offset ----------------
+	@staticmethod
+	def _segment_tangent_angles(segment, epsilon=0.5):
+		'''Compute tangent angles at segment endpoints.
+
+		Convention:
+			theta = 0      -> horizontal tangent
+			theta = pi/2   -> vertical tangent
+
+		Args:
+			segment: CubicBezier or Line object
+			epsilon (float): Below this chord length, segment is degenerate.
+
+		Returns:
+			tuple: (theta_start, theta_end) or (None, None) if degenerate
+		'''
+		if isinstance(segment, CubicBezier):
+			chord = abs(segment.p3 - segment.p0)
+
+			if chord < epsilon:
+				h_out = abs(segment.p1 - segment.p0)
+				h_in = abs(segment.p2 - segment.p3)
+
+				if h_out < epsilon and h_in < epsilon:
+					return None, None
+
+			# Start tangent from P0->P1 (or chord as fallback)
+			tan0 = segment.p1 - segment.p0
+			m0 = abs(tan0)
+
+			if m0 < 1e-10:
+				tan0 = segment.p3 - segment.p0
+				m0 = abs(tan0)
+
+			theta0 = math.atan2(tan0.y, tan0.x) if m0 > 1e-10 else None
+
+			# End tangent from P2->P3 (or chord as fallback)
+			tan3 = segment.p3 - segment.p2
+			m3 = abs(tan3)
+
+			if m3 < 1e-10:
+				tan3 = segment.p3 - segment.p0
+				m3 = abs(tan3)
+
+			theta3 = math.atan2(tan3.y, tan3.x) if m3 > 1e-10 else None
+
+			return theta0, theta3
+
+		elif isinstance(segment, Line):
+			dx = segment.p1.x - segment.p0.x
+			dy = segment.p1.y - segment.p0.y
+			m = math.sqrt(dx * dx + dy * dy)
+
+			if m < epsilon:
+				return None, None
+
+			theta = math.atan2(dy, dx)
+			return theta, theta
+
+		return None, None
+
+	def scale_compensated(self, sx, sy, stx, sty, interp='geometric', blend=1.0):
+		'''Scale contour with diagonal stroke weight compensation.
+		Returns a NEW Contour — does not modify the original.
+
+		Two-pass approach:
+		  1. Naive affine scale by (sx, sy) — preserves Bezier topology
+		  2. Corrective normal offset — fixes diagonal stroke weights
+
+		The correction offset is computed from the tangent angle at each
+		on-curve node. It is zero for horizontal and vertical strokes
+		(where naive scaling is already correct) and peaks at 45 degrees.
+
+		Uses the existing miter/normal infrastructure from offset_outline:
+		normals for direction, miter formula at junctions, degenerate 
+		segment propagation.
+
+		Args:
+			sx (float): Horizontal scale factor (must be > 0)
+			sy (float): Vertical scale factor (must be > 0)
+			stx (float): Horizontal stem width (vertical stroke width)
+			sty (float): Vertical stem width (horizontal stroke width)
+			interp (str): Weight interpolation at diagonals:
+				'geometric' — sqrt(sx*sy) at 45°, most balanced (default)
+				'harmonic'  — slightly thinner diagonals
+				'linear'    — thicker diagonals, more humanist
+			blend (float): Correction amount 0.0 to 1.0.
+				0.0 = naive affine scaling (no correction)
+				1.0 = full diagonal compensation (default)
+
+		Returns:
+			Contour: New contour with compensated scaling applied.
+		'''
+		from typerig.core.func.transform import diagonal_correction_offset
+
+		if len(self.segments) == 0:
+			return self.clone()
+
+		segments = self.segments
+		node_segs = self.node_segments
+		num_seg = len(segments)
+
+		# --- Pass 1: compute tangent angles from ORIGINAL geometry ---
+		orig_angles = []
+
+		for segment in segments:
+			orig_angles.append(self._segment_tangent_angles(segment))
+
+		# Resolve None angles from degenerate segments
+		for si in range(num_seg):
+			ts, te = orig_angles[si]
+
+			if ts is None:
+				for step in range(1, num_seg):
+					ns, ne = orig_angles[(si + step) % num_seg]
+
+					if ns is not None:
+						ts = ns
+						break
+
+			if te is None:
+				for step in range(1, num_seg):
+					ns, ne = orig_angles[(si - step) % num_seg]
+
+					if ne is not None:
+						te = ne
+						break
+
+			orig_angles[si] = (ts if ts is not None else 0.,
+							   te if te is not None else 0.)
+
+		# --- Pass 2: clone and naive scale ---
+		result = self.clone()
+
+		for node in result.nodes:
+			node.x *= sx
+			node.y *= sy
+
+		# Early out: no correction needed
+		if abs(sx - sy) < 1e-12 or blend < 1e-12:
+			return result
+
+		# --- Pass 3: compute normals from SCALED geometry ---
+		scaled_segments = result.segments
+		scaled_node_segs = result.node_segments
+
+		scaled_seg_info = []
+
+		for segment in scaled_segments:
+			scaled_seg_info.append(self._segment_normals(segment))
+
+		# --- Pass 4: per-node correction displacements ---
+		# Collect normals + correction distances at each junction node
+		# Uses miter formula with angle-dependent distance
+		on_data = {}  # nid -> list of (normal, correction_d)
+
+		for si in range(num_seg):
+			nodes = scaled_node_segs[si]
+			n_start, n_end, _, _ = scaled_seg_info[si]
+			theta_start, theta_end = orig_angles[si]
+
+			d_start = diagonal_correction_offset(
+				theta_start, sx, sy, stx, sty, interp) * blend
+			d_end = diagonal_correction_offset(
+				theta_end, sx, sy, stx, sty, interp) * blend
+
+			for node, normal, d in [(nodes[0], n_start, d_start), 
+									(nodes[-1], n_end, d_end)]:
+				nid = id(node)
+
+				if nid not in on_data:
+					on_data[nid] = []
+
+				if normal is not None:
+					on_data[nid].append((normal, d))
+
+		# Miter formula with per-node distance
+		on_disp = {}
+
+		for nid, entries in on_data.items():
+			if len(entries) == 0:
+				continue
+
+			elif len(entries) == 1:
+				n, d = entries[0]
+				on_disp[nid] = (n[0] * d, n[1] * d)
+
+			elif len(entries) == 2:
+				(n1, d1), (n2, d2) = entries
+				d_avg = (d1 + d2) * 0.5
+				dot = n1[0] * n2[0] + n1[1] * n2[1]
+				denom = 1.0 + dot
+
+				if denom < 0.15:
+					denom = 0.15
+
+				mx = n1[0] + n2[0]
+				my = n1[1] + n2[1]
+				on_disp[nid] = (d_avg * mx / denom, d_avg * my / denom)
+
+			else:
+				d_avg = sum(e[1] for e in entries) / len(entries)
+				mx = sum(e[0][0] for e in entries)
+				my = sum(e[0][1] for e in entries)
+				mag = math.sqrt(mx * mx + my * my)
+
+				if mag > 1e-10:
+					on_disp[nid] = (mx / mag * d_avg, my / mag * d_avg)
+				else:
+					on_disp[nid] = (0., 0.)
+
+		# --- Propagate to orphaned nodes (degenerate segments) ---
+		if len(on_disp) < len(on_data):
+			junction_ids = []
+
+			for si in range(num_seg):
+				nodes = scaled_node_segs[si]
+				nid = id(nodes[0])
+
+				if not junction_ids or junction_ids[-1] != nid:
+					junction_ids.append(nid)
+
+			n_junctions = len(junction_ids)
+
+			for ji, nid in enumerate(junction_ids):
+				if nid in on_disp:
+					continue
+
+				fwd_disp = None
+				bwd_disp = None
+
+				for step in range(1, n_junctions):
+					fwd_nid = junction_ids[(ji + step) % n_junctions]
+
+					if fwd_nid in on_disp:
+						fwd_disp = on_disp[fwd_nid]
+						break
+
+				for step in range(1, n_junctions):
+					bwd_nid = junction_ids[(ji - step) % n_junctions]
+
+					if bwd_nid in on_disp:
+						bwd_disp = on_disp[bwd_nid]
+						break
+
+				if fwd_disp is not None and bwd_disp is not None:
+					on_disp[nid] = (
+						(fwd_disp[0] + bwd_disp[0]) * 0.5,
+						(fwd_disp[1] + bwd_disp[1]) * 0.5)
+				elif fwd_disp is not None:
+					on_disp[nid] = fwd_disp
+				elif bwd_disp is not None:
+					on_disp[nid] = bwd_disp
+				else:
+					on_disp[nid] = (0., 0.)
+
+		# --- Pass 5: apply correction offsets ---
+		# Use _build_offset_nodes with curvature_correction=False
+		# (correction is small, curvature adjustment negligible)
+		return self._build_offset_nodes(
+			scaled_segments, scaled_node_segs, scaled_seg_info, on_disp,
+			0., False, self.closed
+		)
+
+	def scale_compensated_inplace(self, sx, sy, stx, sty, interp='geometric', blend=1.0):
+		'''Scale contour in place with diagonal stroke weight compensation.
+
+		Args:
+			sx, sy (float): Scale factors (must be > 0)
+			stx (float): Horizontal stem width (vertical stroke width)
+			sty (float): Vertical stem width (horizontal stroke width)
+			interp (str): Weight interpolation mode
+			blend (float): Correction amount 0.0 (naive) to 1.0 (full)
+		'''
+		new_contour = self.scale_compensated(sx, sy, stx, sty, interp, blend)
+		new_nodes = new_contour.nodes
+
+		if len(new_nodes) == len(self.nodes):
+			for i in range(len(self.nodes)):
+				self.nodes[i].x = new_nodes[i].x
+				self.nodes[i].y = new_nodes[i].y
+
 class HobbySpline(Container): 
 	'''Adapted from mp2tikz.py (c) 2012 JL Diaz'''
 

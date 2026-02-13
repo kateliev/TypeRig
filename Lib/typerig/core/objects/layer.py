@@ -559,6 +559,60 @@ class Layer(Container, XMLSerializable):
 		for attrib in virtual_axis.keys():
 			setattr(self, attrib, getattr(scaled_layer, attrib))
 
+	# -- Angle-compensated scaling --------------------------------
+	def scale_compensated_inplace(self, sx, sy, interp='geometric', blend=1.0,
+								  transform_origin=TransformOrigin.BASELINE):
+		'''Scale layer in place with diagonal stroke weight compensation.
+
+		Two-pass approach per contour:
+		  1. Naive affine scale by (sx, sy) — preserves Bezier topology
+		  2. Corrective normal offset — fixes diagonal stroke weights
+
+		Requires stems to be set on this layer (layer.stems = (stx, sty)).
+
+		Args:
+			sx (float): Horizontal scale factor (must be > 0)
+			sy (float): Vertical scale factor (must be > 0)
+			interp (str): Weight interpolation at diagonals:
+				'geometric' — most optically balanced (default)
+				'harmonic'  — slightly thinner diagonals
+				'linear'    — thicker diagonals
+			blend (float): Correction amount 0.0 (naive) to 1.0 (full)
+			transform_origin (TransformOrigin): Anchor point for scaling.
+		'''
+		assert self.has_stems, \
+			'scale_compensated requires stems. Set layer.stems = (stx, sty) first.'
+
+		stx, sty = self.stems
+
+		# Get origin point before scaling
+		if transform_origin != TransformOrigin.BASELINE:
+			source_bounds = self.bounds
+			ox, oy = source_bounds.align_matrix[transform_origin.code]
+			self.shift(-ox, -oy)
+
+		# Apply compensated scale to each contour
+		for shape in self.shapes:
+			for ci in range(len(shape.contours)):
+				new_contour = shape.contours[ci].scale_compensated(
+					sx, sy, stx, sty, interp, blend
+				)
+				# Write back node positions
+				old_nodes = shape.contours[ci].nodes
+				new_nodes = new_contour.nodes
+
+				if len(new_nodes) == len(old_nodes):
+					for i in range(len(old_nodes)):
+						old_nodes[i].x = new_nodes[i].x
+						old_nodes[i].y = new_nodes[i].y
+
+		# Scale advance width proportionally
+		self.advance_width *= sx
+
+		# Restore origin
+		if transform_origin != TransformOrigin.BASELINE:
+			self.shift(ox, oy)
+
 if __name__ == '__main__':
 	from pprint import pprint
 	section = lambda s: '\n+{0}\n+ {1}\n+{0}'.format('-'*30, s)
