@@ -560,7 +560,7 @@ class Layer(Container, XMLSerializable):
 			setattr(self, attrib, getattr(scaled_layer, attrib))
 
 	# -- Angle-compensated scaling --------------------------------
-	def scale_compensated_inplace(self, sx, sy, interp='geometric', blend=1.0,
+	def scale_compensated_inplace(self, sx, sy, intensity=1.0,
 								  transform_origin=TransformOrigin.BASELINE):
 		'''Scale layer in place with diagonal stroke weight compensation.
 
@@ -568,16 +568,20 @@ class Layer(Container, XMLSerializable):
 		  1. Naive affine scale by (sx, sy) — preserves Bezier topology
 		  2. Corrective normal offset — fixes diagonal stroke weights
 
+		The correction direction depends on the scaling:
+		  Condensing (sx < sy): diagonals get thinned
+		  Expanding  (sx > sy): diagonals get grown
+
 		Requires stems to be set on this layer (layer.stems = (stx, sty)).
 
 		Args:
 			sx (float): Horizontal scale factor (must be > 0)
 			sy (float): Vertical scale factor (must be > 0)
-			interp (str): Weight interpolation at diagonals:
-				'geometric' — most optically balanced (default)
-				'harmonic'  — slightly thinner diagonals
-				'linear'    — thicker diagonals
-			blend (float): Correction amount 0.0 (naive) to 1.0 (full)
+			intensity (float): Correction strength. Default 1.0.
+				0.0 = no correction (pure naive scaling)
+				1.0 = standard correction
+				>1.0 = amplified correction
+				Typical range: 0.5 to 2.0
 			transform_origin (TransformOrigin): Anchor point for scaling.
 		'''
 		assert self.has_stems, \
@@ -595,7 +599,7 @@ class Layer(Container, XMLSerializable):
 		for shape in self.shapes:
 			for ci in range(len(shape.contours)):
 				new_contour = shape.contours[ci].scale_compensated(
-					sx, sy, stx, sty, interp, blend
+					sx, sy, stx, sty, intensity
 				)
 				# Write back node positions
 				old_nodes = shape.contours[ci].nodes

@@ -835,7 +835,7 @@ class Contour(Container, XMLSerializable):
 
 		return None, None
 
-	def scale_compensated(self, sx, sy, stx, sty, interp='geometric', blend=1.0):
+	def scale_compensated(self, sx, sy, stx, sty, intensity=1.0):
 		'''Scale contour with diagonal stroke weight compensation.
 		Returns a NEW Contour — does not modify the original.
 
@@ -843,26 +843,23 @@ class Contour(Container, XMLSerializable):
 		  1. Naive affine scale by (sx, sy) — preserves Bezier topology
 		  2. Corrective normal offset — fixes diagonal stroke weights
 
-		The correction offset is computed from the tangent angle at each
-		on-curve node. It is zero for horizontal and vertical strokes
-		(where naive scaling is already correct) and peaks at 45 degrees.
+		The correction direction depends on the scaling:
+		  Condensing (sx < sy): diagonals get thinned (they were too fat)
+		  Expanding  (sx > sy): diagonals get grown (they were too thin)
+		  Uniform    (sx == sy): no correction
 
-		Uses the existing miter/normal infrastructure from offset_outline:
-		normals for direction, miter formula at junctions, degenerate 
-		segment propagation.
+		Uses the existing miter/normal infrastructure from offset_outline.
 
 		Args:
 			sx (float): Horizontal scale factor (must be > 0)
 			sy (float): Vertical scale factor (must be > 0)
 			stx (float): Horizontal stem width (vertical stroke width)
 			sty (float): Vertical stem width (horizontal stroke width)
-			interp (str): Weight interpolation at diagonals:
-				'geometric' — sqrt(sx*sy) at 45°, most balanced (default)
-				'harmonic'  — slightly thinner diagonals
-				'linear'    — thicker diagonals, more humanist
-			blend (float): Correction amount 0.0 to 1.0.
-				0.0 = naive affine scaling (no correction)
-				1.0 = full diagonal compensation (default)
+			intensity (float): Correction strength. Default 1.0.
+				0.0 = no correction (pure naive scaling)
+				1.0 = standard correction
+				>1.0 = amplified correction
+				Typical range: 0.5 to 2.0
 
 		Returns:
 			Contour: New contour with compensated scaling applied.
@@ -913,7 +910,7 @@ class Contour(Container, XMLSerializable):
 			node.y *= sy
 
 		# Early out: no correction needed
-		if abs(sx - sy) < 1e-12 or blend < 1e-12:
+		if abs(sx - sy) < 1e-12 or abs(intensity) < 1e-12:
 			return result
 
 		# --- Pass 3: compute normals from SCALED geometry ---
@@ -926,8 +923,6 @@ class Contour(Container, XMLSerializable):
 			scaled_seg_info.append(self._segment_normals(segment))
 
 		# --- Pass 4: per-node correction displacements ---
-		# Collect normals + correction distances at each junction node
-		# Uses miter formula with angle-dependent distance
 		on_data = {}  # nid -> list of (normal, correction_d)
 
 		for si in range(num_seg):
@@ -936,9 +931,9 @@ class Contour(Container, XMLSerializable):
 			theta_start, theta_end = orig_angles[si]
 
 			d_start = diagonal_correction_offset(
-				theta_start, sx, sy, stx, sty, interp) * blend
+				theta_start, sx, sy, stx, sty, intensity)
 			d_end = diagonal_correction_offset(
-				theta_end, sx, sy, stx, sty, interp) * blend
+				theta_end, sx, sy, stx, sty, intensity)
 
 			for node, normal, d in [(nodes[0], n_start, d_start), 
 									(nodes[-1], n_end, d_end)]:
@@ -1031,24 +1026,21 @@ class Contour(Container, XMLSerializable):
 					on_disp[nid] = (0., 0.)
 
 		# --- Pass 5: apply correction offsets ---
-		# Use _build_offset_nodes with curvature_correction=False
-		# (correction is small, curvature adjustment negligible)
 		return self._build_offset_nodes(
 			scaled_segments, scaled_node_segs, scaled_seg_info, on_disp,
 			0., False, self.closed
 		)
 
-	def scale_compensated_inplace(self, sx, sy, stx, sty, interp='geometric', blend=1.0):
+	def scale_compensated_inplace(self, sx, sy, stx, sty, intensity=1.0):
 		'''Scale contour in place with diagonal stroke weight compensation.
 
 		Args:
 			sx, sy (float): Scale factors (must be > 0)
 			stx (float): Horizontal stem width (vertical stroke width)
 			sty (float): Vertical stem width (horizontal stroke width)
-			interp (str): Weight interpolation mode
-			blend (float): Correction amount 0.0 (naive) to 1.0 (full)
+			intensity (float): Correction strength (0.0=none, 1.0=standard, >1.0=amplified)
 		'''
-		new_contour = self.scale_compensated(sx, sy, stx, sty, interp, blend)
+		new_contour = self.scale_compensated(sx, sy, stx, sty, intensity)
 		new_nodes = new_contour.nodes
 
 		if len(new_nodes) == len(self.nodes):

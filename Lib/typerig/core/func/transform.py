@@ -180,76 +180,61 @@ def target_scale_array(a, w, h, d, t, c, i, st):
 
 # -- Diagonal correction offset ----------------------------------------
 # After naive anisotropic scaling by (sx, sy), diagonal strokes get
-# distorted: their apparent width changes differently from horizontal
-# and vertical stems. This function computes the corrective normal
-# offset needed at a given tangent angle to restore the desired weight.
+# distorted relative to cardinal-direction stems:
+#   - Condensing (sx < 1, sy ≈ 1): diagonals get TOO FAT → need thinning
+#   - Expanding  (sx > 1, sy ≈ 1): diagonals get TOO THIN → need growing
 #
-# The correction is zero at cardinal angles (where naive scaling is 
-# already correct) and peaks at 45 degrees. It uses stem values to
-# estimate the local stroke half-width.
+# The correction uses (sx - sy) as driver, so the sign flips naturally:
+#   condensing → negative (contract)
+#   expanding  → positive (expand)
 #
-# Usage: scale naively first, then apply this as offset_outline distance.
+# The angular window sin²(2θ) is zero at cardinals and peaks at 45°,
+# ensuring horizontal and vertical strokes are never touched.
 #
-# Based on: Normal offsetting with angle-dependent modulation
-# Combined with Tim Ahrens' stem-aware scaling philosophy
+# Usage: scale naively first, then apply this as offset_outline correction.
 
-def _diagonal_weight_target(sx, sy, sin2t, cos2t, interp='geometric'):
-	'''Desired weight scale factor at tangent angle theta.
-	
-	Args:
-		sx, sy: scale factors
-		sin2t, cos2t: sin²θ, cos²θ precomputed
-		interp: 'geometric', 'harmonic', or 'linear'
-
-	Returns:
-		float: target weight scale factor
-	'''
-	if interp == 'geometric':
-		return math.exp(sin2t * math.log(sx) + cos2t * math.log(sy))
-	elif interp == 'harmonic':
-		denom = sin2t / sx + cos2t / sy
-		return 1.0 / denom if abs(denom) > 1e-12 else (sx + sy) * 0.5
-	else:  # linear
-		return sx * sin2t + sy * cos2t
-
-def diagonal_correction_offset(theta, sx, sy, stx, sty, interp='geometric'):
+def diagonal_correction_offset(theta, sx, sy, stx, sty, intensity=1.0):
 	'''Compute the per-side normal offset to correct diagonal stroke weight 
 	after naive (sx, sy) scaling.
 
-	Returns the signed distance to offset along the contour normal:
+	Returns a signed distance to offset along the contour normal:
 	  positive = expand (thicken stroke)
 	  negative = contract (thin stroke)
 
-	The result is zero at theta=0 and theta=pi/2 — no correction needed
-	for horizontal and vertical strokes. Peaks at 45 degrees.
+	The sign depends on the scaling direction:
+	  sx < sy (condensing) → negative (thin diagonals that got too fat)
+	  sx > sy (expanding)  → positive (grow diagonals that got too thin)
+	  sx == sy             → zero (uniform scale, no correction needed)
+
+	The correction is zero at theta=0 and theta=pi/2 (cardinal strokes
+	are already correct after naive scaling) and peaks at 45 degrees.
 
 	Args:
 		theta (float): Tangent angle in radians (0=horizontal, pi/2=vertical)
 		sx, sy (float): Scale factors that were applied (must be > 0)
 		stx (float): Horizontal stem width (width of vertical strokes)
 		sty (float): Vertical stem width (width of horizontal strokes)
-		interp (str): Weight interpolation mode:
-			'geometric' — sqrt(sx*sy) at 45°, most optically balanced (default)
-			'harmonic'  — slightly thinner diagonals
-			'linear'    — thicker diagonals, more humanist
+		intensity (float): Correction strength. Default 1.0.
+			0.0 = no correction (naive scaling)
+			1.0 = standard correction
+			>1.0 = amplified correction (for aggressive compensation)
+			Typical range: 0.5 to 2.0
 
 	Returns:
 		float: Signed offset distance (per side)
 	'''
-	sin2t = math.sin(theta) ** 2
-	cos2t = math.cos(theta) ** 2
+	# Angular window: zero at cardinals, peaks at 45°
+	sin_2t = math.sin(2.0 * theta)
+	window = sin_2t * sin_2t  # sin²(2θ)
 
 	# Estimated half-width at this angle from stems
-	# At theta=0 (H tangent): hw = sty/2 (horizontal stroke measured vertically)
-	# At theta=pi/2 (V tangent): hw = stx/2 (vertical stroke measured horizontally)
+	# Geometric interpolation between stem values:
+	#   theta=0 (H tangent, H stroke): hw = sty/2
+	#   theta=pi/2 (V tangent, V stroke): hw = stx/2
+	sin2t = math.sin(theta) ** 2
+	cos2t = math.cos(theta) ** 2
 	hw = 0.5 * math.exp(sin2t * math.log(max(stx, 1e-6)) 
 					   + cos2t * math.log(max(sty, 1e-6)))
 
-	# What naive scaling actually did to the width at this angle
-	w_naive = math.sqrt(sx * sx * sin2t + sy * sy * cos2t)
-
-	# What we wanted the width to scale by
-	w_target = _diagonal_weight_target(sx, sy, sin2t, cos2t, interp)
-
-	# Correction per side
-	return hw * (w_target - w_naive)
+	# Correction: proportional to anisotropy, windowed by angle
+	return hw * window * intensity * (sx - sy)
