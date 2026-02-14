@@ -11,6 +11,8 @@
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
 
+import math
+
 from typerig.core.objects.array import PointArray
 from typerig.core.objects.point import Point
 from typerig.core.objects.transform import Transform, TransformOrigin
@@ -616,6 +618,154 @@ class Layer(Container, XMLSerializable):
 		# Restore origin
 		if transform_origin != TransformOrigin.BASELINE:
 			self.shift(ox, oy)
+
+	# -- Per-contour compensated delta scaling --------------------------------
+	def analyze_contours(self):
+		'''Compute dominant orientation angle for each contour on this layer.
+
+		Uses PCA on on-curve node positions to determine the overall
+		stroke direction of each contour. Useful for diagnostics and
+		for pre-computing angles before scaling.
+
+		Returns:
+			list[tuple]: List of (contour_index, angle_radians, angle_degrees)
+				for each contour on this layer.
+		'''
+		from typerig.core.func.transform import contour_dominant_angle
+
+		result = []
+
+		for ci, contour in enumerate(self.contours):
+			# Extract on-curve node positions only
+			on_curve = [(n.x, n.y) for n in contour.nodes if n.type == 'on']
+			angle = contour_dominant_angle(on_curve)
+			result.append((ci, angle, math.degrees(angle)))
+
+		return result
+
+	def scale_contours_compensated_inplace(self, contour_deltas, scale, 
+										   intensity=1.0, compensation=(0., 0.),
+										   shift=(0., 0.), italic_angle=False,
+										   extrapolate=False,
+										   metric_delta=None,
+										   transform_origin=TransformOrigin.BASELINE):
+		'''Scale layer using per-contour DeltaMachine with diagonal compensation.
+
+		Each contour is analyzed for its dominant stroke angle. Based on
+		the angle and the scaling direction, the target stems are adjusted
+		before feeding them to DeltaMachine:
+
+		  Condensing (sx < sy): diagonal contours get lighter target stems
+		    → DeltaMachine interpolates them thinner
+		  Expanding (sx > sy): diagonal contours get heavier target stems
+		    → DeltaMachine interpolates them fatter
+		  Cardinal contours (H/V strokes): no adjustment, standard scaling
+
+		This works on decomposed stroke contours where each closed path
+		represents a single stroke. The contour_deltas should be built
+		with glyph.build_contour_deltas() or build_contour_deltas_with_metrics().
+
+		Args:
+			contour_deltas (list[DeltaScale]): Per-contour DeltaScale objects,
+				one per contour in layer.contours order.
+				Build with: glyph.build_contour_deltas(layer_names)
+
+			scale (tuple): (sx, sy) scale factors.
+				sx < 1 = condense, sx > 1 = expand (width direction)
+				sy typically stays at 1.0
+
+			intensity (float): Diagonal compensation strength. Default 1.0.
+				0.0 = no compensation (all contours get same stems)
+				1.0 = standard compensation
+				>1.0 = amplified (for strong anisotropy)
+				Typical range: 0.3 to 1.5
+
+			compensation (tuple): (cx, cy) DeltaMachine compensation factors.
+				0.0 = no stem compensation, 1.0 = full compensation.
+
+			shift (tuple): (dx, dy) translation after scaling.
+
+			italic_angle: Italic shear angle in radians, or False.
+
+			extrapolate (bool): Allow extrapolation beyond master range.
+
+			metric_delta (DeltaScale, optional): DeltaScale for advance width.
+				If provided, advance width is scaled using the global stems
+				(not per-contour adjusted). Build with:
+				glyph.build_delta(layer_names, 'metric_array')
+
+			transform_origin (TransformOrigin): Anchor point for scaling.
+		'''
+		from typerig.core.func.transform import contour_dominant_angle, adjust_stems_for_angle
+
+		assert self.has_stems, \
+			'Layer requires stems. Set layer.stems = (stx, sty) first.'
+
+		assert len(contour_deltas) == len(self.contours), \
+			'contour_deltas count ({}) != contour count ({})'.format(
+				len(contour_deltas), len(self.contours))
+
+		sx, sy = scale
+		target_stx, target_sty = self.stems
+
+		# Get origin point before scaling
+		if transform_origin != TransformOrigin.BASELINE:
+			source_bounds = self.bounds
+			ox, oy = source_bounds.align_matrix[transform_origin.code]
+
+		# Process each contour with its own adjusted stems
+		contour_idx = 0
+
+		for shape in self.shapes:
+			for ci in range(len(shape.contours)):
+				contour = shape.contours[ci]
+				delta = contour_deltas[contour_idx]
+
+				# Analyze contour orientation from on-curve nodes
+				on_curve = [(n.x, n.y) for n in contour.nodes if n.type == 'on']
+				angle = contour_dominant_angle(on_curve)
+
+				# Adjust stems for this contour's angle
+				adj_stx, adj_sty = adjust_stems_for_angle(
+					target_stx, target_sty, angle, sx, sy, intensity)
+
+				# Apply delta scaling with adjusted stems
+				result = list(delta.scale_by_stem(
+					(adj_stx, adj_sty),
+					(sx, sy),
+					compensation,
+					shift,
+					italic_angle,
+					extrapolate
+				))
+
+				# Write back node positions
+				nodes = contour.nodes
+
+				if len(result) == len(nodes):
+					for i in range(len(nodes)):
+						nodes[i].x = result[i][0]
+						nodes[i].y = result[i][1]
+
+				contour_idx += 1
+
+		# Handle metrics (advance width) with global stems
+		if metric_delta is not None:
+			metric_result = list(metric_delta.scale_by_stem(
+				(target_stx, target_sty),
+				(sx, sy),
+				compensation,
+				shift,
+				italic_angle,
+				extrapolate
+			))
+			self.metric_array = metric_result
+
+		# Realign to preserve transformation origin
+		if transform_origin != TransformOrigin.BASELINE:
+			dest_bounds = self.bounds
+			dest_ox, dest_oy = dest_bounds.align_matrix[transform_origin.code]
+			self.shift(ox - dest_ox, oy - dest_oy)
 
 if __name__ == '__main__':
 	from pprint import pprint

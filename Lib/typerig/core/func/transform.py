@@ -238,3 +238,135 @@ def diagonal_correction_offset(theta, sx, sy, stx, sty, intensity=1.0):
 
 	# Correction: proportional to anisotropy, windowed by angle
 	return hw * window * intensity * (sx - sy)
+
+# -- Contour orientation analysis ------------------------------------
+# PCA-based dominant angle detection for stroke contours.
+# Uses the principal component of on-curve node positions to determine
+# the overall stroke direction. Works on decomposed stroke contours
+# where each closed path represents a single stroke.
+#
+# Combined with stem adjustment, this enables per-contour weight
+# control during DeltaMachine scaling — diagonal strokes get different
+# interpolation positions than cardinal strokes.
+
+def contour_dominant_angle(points):
+	'''Compute the dominant orientation of a contour via PCA.
+
+	Performs Principal Component Analysis on a set of 2D points
+	and returns the angle of the first principal component — the
+	direction of maximum variance, which corresponds to the stroke
+	direction for decomposed stroke contours.
+
+	Uses the standard 2x2 covariance matrix eigenvector formula:
+	  theta = 0.5 * atan2(2 * Cxy, Cxx - Cyy)
+
+	Results:
+	  0       -> horizontal stroke
+	  pi/4    -> 45° diagonal
+	  pi/2    -> vertical stroke
+	  -pi/4   -> -45° diagonal
+
+	For nearly isotropic contours (circles, squares), returns 0.
+
+	Args:
+		points: list of (x, y) tuples — should be on-curve nodes only,
+			off-curve (BCP) nodes would bias the result.
+
+	Returns:
+		float: Dominant angle in radians, range [-pi/2, pi/2]
+	'''
+	n = len(points)
+
+	if n < 2:
+		return 0.
+
+	# Centroid
+	cx = sum(p[0] for p in points) / n
+	cy = sum(p[1] for p in points) / n
+
+	# Covariance matrix elements
+	cxx = 0.
+	cyy = 0.
+	cxy = 0.
+
+	for p in points:
+		dx = p[0] - cx
+		dy = p[1] - cy
+		cxx += dx * dx
+		cyy += dy * dy
+		cxy += dx * dy
+
+	cxx /= n
+	cyy /= n
+	cxy /= n
+
+	# Check for degenerate/isotropic case
+	diff = cxx - cyy
+
+	if abs(diff) < 1e-10 and abs(cxy) < 1e-10:
+		return 0.
+
+	# Angle of first principal component
+	# Standard formula for 2x2 symmetric eigenvalue problem
+	return 0.5 * math.atan2(2. * cxy, diff)
+
+def adjust_stems_for_angle(target_stx, target_sty, angle, sx, sy, intensity=1.0):
+	'''Adjust target stems based on contour orientation and scale direction.
+
+	For diagonal stroke contours, shifts the target stems to compensate
+	for the optical distortion caused by anisotropic scaling:
+
+	  Condensing (sx < sy): diagonals appear too fat relative to stems
+	    → reduce target stems → DeltaMachine interpolates lighter → thinner
+	  
+	  Expanding (sx > sy): diagonals appear too thin relative to stems
+	    → increase target stems → DeltaMachine interpolates heavier → fatter
+
+	At cardinal angles (0°, 90°), no adjustment is applied.
+	At 45°, maximum adjustment is applied.
+
+	Uses log(sx/sy) instead of (sx - sy) for two reasons:
+	  1. Naturally gives ~35% more correction to contracting than expanding
+	     at the same ratio, compensating for the DeltaMachine asymmetry
+	     (reducing stems below the light master extrapolates with diminishing
+	     returns, while increasing toward bold interpolates into real data)
+	  2. Better normalized — intensity=1.0 gives a useful default correction
+	     (about 10% stem shift at 45° for a 0.7x condense)
+
+	Args:
+		target_stx (float): Target horizontal stem width
+		target_sty (float): Target vertical stem width
+		angle (float): Contour dominant angle in radians (from contour_dominant_angle)
+		sx (float): Horizontal scale factor being applied
+		sy (float): Vertical scale factor being applied
+		intensity (float): Correction strength. Default 1.0.
+			0.0 = no adjustment (all contours get same stems)
+			1.0 = standard adjustment (~10% at 45° for moderate condense)
+			2.0 = strong adjustment
+			Typical range: 0.5 to 2.0
+
+	Returns:
+		tuple(float, float): Adjusted (stx, sty)
+	'''
+	# Angular window: 0 at cardinals, 1 at 45°
+	sin_2a = math.sin(2.0 * angle)
+	window = sin_2a * sin_2a  # sin²(2α)
+
+	# Log ratio of scale factors
+	# log(sx/sy): negative for condense, positive for expand
+	# |log(0.7)| = 0.357 > |log(1.3)| = 0.262 → natural boost for contracting
+	ratio = sx / max(sy, 1e-12)
+	log_aniso = math.log(max(ratio, 1e-6))
+
+	# Normalization constant: 0.3 chosen so that intensity=1.0 at 45°
+	# gives ~10% stem shift for a typical 0.7x condense
+	# (0.3 × log(0.7) ≈ -0.107 → 10.7% reduction)
+	factor = window * intensity * 0.3 * log_aniso
+
+	# Proportional adjustment to stems
+	# Clamp to prevent negative stems at extreme intensity values
+	adj_stx = target_stx * (1.0 + factor)
+	adj_sty = target_sty * (1.0 + factor)
+
+	return (max(adj_stx, target_stx * 0.1),
+			max(adj_sty, target_sty * 0.1))
