@@ -74,37 +74,6 @@ class Layer(Container, XMLSerializable):
 	def has_stems(self):
 		return self.stx is not None and self.sty is not None
 
-	# -- SDF methods --------------------------------
-	def compute_sdf(self, resolution=10.0, padding=50, steps_per_segment=64, verbose=False):
-		'''Compute and cache a SignedDistanceField for all contours on this layer.
-
-		The SDF is stored in self._sdf and can be accessed via the .sdf property.
-		Subsequent calls recompute and replace the cached SDF.
-
-		Args:
-			resolution (float): Grid cell size in font units. 
-				Lower = more precise but slower.
-				Typical: 1.0 for production, 2-5 for preview.
-			padding (float): Extra space around contour bounds.
-			steps_per_segment (int): Polyline sampling density.
-			verbose (bool): Print progress.
-
-		Returns:
-			SignedDistanceField: The computed SDF (also cached as self._sdf).
-		'''
-		self._sdf = SignedDistanceField(
-			self.contours, 
-			resolution=resolution, 
-			padding=padding, 
-			steps_per_segment=steps_per_segment
-		)
-		self._sdf.compute(verbose=verbose)
-		return self._sdf
-
-	def clear_sdf(self):
-		'''Clear the cached SDF to free memory.'''
-		self._sdf = None
-
 	@property
 	def stems(self):
 		return (self.stx, self.sty)
@@ -546,7 +515,8 @@ class Layer(Container, XMLSerializable):
 		return result_layer
 
 	# Old destructive method kept for backward compatibility
-	def delta_scale_to(self, virtual_axis, width, height, fix_scale_direction=-1, main="point_array", extrapolate=False):
+	def delta_scale_to(self, virtual_axis, width, height, 
+					   fix_scale_direction=-1, main="point_array", extrapolate=False):
 		'''Delta Bruter: Brute-force to given dimensions (DESTRUCTIVE - modifies this layer).
 		
 		DEPRECATED: Use scale_with_axis() instead for non-destructive scaling.
@@ -560,6 +530,37 @@ class Layer(Container, XMLSerializable):
 		# Copy the scaled data back to self (destructive)
 		for attrib in virtual_axis.keys():
 			setattr(self, attrib, getattr(scaled_layer, attrib))
+
+	# -- SDF methods --------------------------------
+	def compute_sdf(self, resolution=10.0, padding=50, steps_per_segment=64, verbose=False):
+		'''Compute and cache a SignedDistanceField for all contours on this layer.
+
+		The SDF is stored in self._sdf and can be accessed via the .sdf property.
+		Subsequent calls recompute and replace the cached SDF.
+
+		Args:
+			resolution (float): Grid cell size in font units. 
+				Lower = more precise but slower.
+				Typical: 1.0 for production, 2-5 for preview.
+			padding (float): Extra space around contour bounds.
+			steps_per_segment (int): Polyline sampling density.
+			verbose (bool): Print progress.
+
+		Returns:
+			SignedDistanceField: The computed SDF (also cached as self._sdf).
+		'''
+		self._sdf = SignedDistanceField(
+			self.contours, 
+			resolution=resolution, 
+			padding=padding, 
+			steps_per_segment=steps_per_segment
+		)
+		self._sdf.compute(verbose=verbose)
+		return self._sdf
+
+	def clear_sdf(self):
+		'''Clear the cached SDF to free memory.'''
+		self._sdf = None
 
 	# -- Angle-compensated scaling --------------------------------
 	def scale_compensated_inplace(self, sx, sy, intensity=1.0,
