@@ -15,7 +15,7 @@ from typerig.core.func.math import linspread, geospread, ratfrac
 from typerig.core.objects.point import Point
 
 # - Init -----------------------------
-__version__ = '0.26.4'
+__version__ = '0.26.5'
 
 # - Classes --------------------------
 class fontFamilly():
@@ -43,9 +43,6 @@ class fontFamilly():
 		self.update()
 
 	def update(self):
-		from math import sqrt
-		from typerig.brain import linspread, geospread, ratfrac
-
 		self.wt_stems =  [int(round(item)) for item in geospread(self.wt0, self.wt1, self.wt_steps)]
 		self.wt_instances = [int(ratfrac(item - self.wt0, self.wt1 - self.wt0, 1000)) for item in self.wt_stems]
 		self.wd_instances = []
@@ -93,8 +90,6 @@ class geoAxis(object):
 		self.update()           
 
 	def update(self):
-		from typerig.brain import linspread, geospread, ratfrac
-
 		minAxisStem, maxAxisStem = min(self.masters.values()), max(self.masters.values())
 		minAxisPos, maxAxisPos = min(self.masters.keys()), max(self.masters.keys())
 		

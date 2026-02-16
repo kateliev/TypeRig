@@ -16,7 +16,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.transform import Transform
 
 # - Init -------------------------------
-__version__ = '0.27.2'
+__version__ = '0.28.0'
 
 # - Classes -----------------------------
 class Point(object): 
@@ -43,46 +43,20 @@ class Point(object):
 	def __add__(self, other):
 		if isinstance(other, self.__class__):
 			return self.__class__(self.x + other.x, self.y + other.y)
-		
-		elif isinstance(other, int):
+		elif isinstance(other, (int, float)):
 			return self.__class__(self.x + other, self.y + other)
-
-		elif isinstance(other, float):
-			return self.__class__(self.x + other, self.y + other)
-		
-		elif isinstance(other, tuple):
+		elif isinstance(other, (tuple, list)):
 			return self.__class__(self.x + other[0], self.y + other[1])
-		
-		elif isinstance(other, list):
-			pass
-
-		elif isinstance(other, str):
-			pass
-
-		else:
-			print('ERROR:\t Cannot evaluate {} <<{}, {}>> with {}'.format(type(self.__class__), self.x, self.y, type(other)))
+		raise TypeError('Cannot add {} to {}'.format(type(other).__name__, self.__class__.__name__))
 
 	def __sub__(self, other):
 		if isinstance(other, self.__class__):
 			return self.__class__(self.x - other.x, self.y - other.y)
-		
-		elif isinstance(other, int):
+		elif isinstance(other, (int, float)):
 			return self.__class__(self.x - other, self.y - other)
-
-		elif isinstance(other, float):
-			return self.__class__(self.x - other, self.y - other)
-		
-		elif isinstance(other, tuple):
+		elif isinstance(other, (tuple, list)):
 			return self.__class__(self.x - other[0], self.y - other[1])
-		
-		elif isinstance(other, list):
-			pass
-
-		elif isinstance(other, str):
-			pass
-
-		else:
-			print('ERROR:\t Cannot evaluate {} <<{}, {}>> with {}'.format(type(self.__class__), self.x, self.y, type(other)))
+		raise TypeError('Cannot subtract {} from {}'.format(type(other).__name__, self.__class__.__name__))
 
 	def __mul__(self, other):
 		if isinstance(other, self.__class__):
@@ -93,24 +67,11 @@ class Point(object):
 				return self.__class__(product.real, product.imag)
 			else:
 				return self.__class__(self.x * other.x, self.y * other.x)
-		
-		elif isinstance(other, int):
+		elif isinstance(other, (int, float)):
 			return self.__class__(self.x * other, self.y * other)
-
-		elif isinstance(other, float):
-			return self.__class__(self.x * other, self.y * other)
-		
-		elif isinstance(other, tuple):
+		elif isinstance(other, (tuple, list)):
 			return self.__class__(self.x * other[0], self.y * other[1])
-		
-		elif isinstance(other, list):
-			pass
-
-		elif isinstance(other, str):
-			pass
-
-		else:
-			print('ERROR:\t Cannot evaluate {} <<{}, {}>> with {}'.format(type(self.__class__), self.x, self.y, type(other)))
+		raise TypeError('Cannot multiply {} with {}'.format(type(other).__name__, self.__class__.__name__))
 
 	__rmul__ = __mul__
 
@@ -122,25 +83,12 @@ class Point(object):
 				product = a / b
 				return self.__class__(product.real, product.imag)
 			else:
-				return self.__class__(self.x // other.x, self.y // other.x)
-		
-		elif isinstance(other, int):
+				return self.__class__(self.x / other.x, self.y / other.x)
+		elif isinstance(other, (int, float)):
 			return self.__class__(self.x / other, self.y / other)
-
-		elif isinstance(other, float):
-			return self.__class__(self.x // other, self.y // other)
-		
-		elif isinstance(other, tuple):
-			return self.__class__(self.x // other[0], self.y // other[1])
-		
-		elif isinstance(other, list):
-			pass
-
-		elif isinstance(other, str):
-			pass
-
-		else:
-			print('ERROR:\t Cannot evaluate {} <<{}, {}>> with {}'.format(type(self.__class__), self.x, self.y, type(other)))
+		elif isinstance(other, (tuple, list)):
+			return self.__class__(self.x / other[0], self.y / other[1])
+		raise TypeError('Cannot divide {} by {}'.format(type(other).__name__, self.__class__.__name__))
 
 	__rdiv__ = __div__
 	__truediv__ = __div__
@@ -153,41 +101,21 @@ class Point(object):
 		'''self & other: Used as for Scalar product'''
 		if isinstance(other, self.__class__):
 			return self.x * other.x + self.y * other.y
-		
-		elif isinstance(other, int):
+		elif isinstance(other, (int, float)):
 			return self.x * other + self.y * other
-
-		elif isinstance(other, float):
-			return self.x * other + self.y * other
-		
-		elif isinstance(other, tuple):
+		elif isinstance(other, (tuple, list)):
 			return self.x * other[0] + self.y * other[1]
-		
-		elif isinstance(other, list):
-			pass
-
-		elif isinstance(other, str):
-			pass
+		raise TypeError('Cannot compute dot product of {} with {}'.format(type(other).__name__, self.__class__.__name__))
 
 	def __or__(self, other):
 		'''self | other: Used as for Cross product'''
 		if isinstance(other, self.__class__):
 			return self.x * other.y - self.y * other.x
-		
-		elif isinstance(other, int):
+		elif isinstance(other, (int, float)):
 			return self.x * other - self.y * other
-
-		elif isinstance(other, float):
-			return self.x * other - self.y * other
-		
-		elif isinstance(other, tuple):
+		elif isinstance(other, (tuple, list)):
 			return self.x * other[1] - self.y * other[0]
-		
-		elif isinstance(other, list):
-			pass
-
-		elif isinstance(other, str):
-			pass
+		raise TypeError('Cannot compute cross product of {} with {}'.format(type(other).__name__, self.__class__.__name__))
 
 	def __abs__(self):
 		return math.sqrt(self.x**2 + self.y**2)

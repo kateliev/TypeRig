@@ -25,7 +25,7 @@ from typerig.core.objects.contour import Contour
 from typerig.core.objects.sdf import SignedDistanceField
 
 # - Init -------------------------------
-__version__ = '0.3.0'
+__version__ = '0.3.2'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -62,27 +62,15 @@ class Shape(Container, XMLSerializable):
 
 	@property
 	def nodes(self):
-		shape_nodes = []
-		for contour in self.contours:
-			shape_nodes += contour.nodes
-
-		return shape_nodes
+		return self._collect('nodes')
 
 	@property
 	def selected_nodes(self):
-		selection = []
-		for contour in self.contours:
-			selection += contour.selected_nodes
-
-		return selection
+		return self._collect('selected_nodes')
 
 	@property
 	def selected_indices(self):
-		selection = []
-		for contour in self.contours:
-			selection += contour.selected_indices
-
-		return selection
+		return self._collect('selected_indices')
 	
 	@property
 	def bounds(self):

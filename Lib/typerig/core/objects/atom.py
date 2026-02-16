@@ -16,7 +16,7 @@ import copy, uuid
 from typerig.core.objects.collection import CustomList
 
 # - Init -------------------------------
-__version__ = '0.2.1'
+__version__ = '0.3.0'
 
 # - Keep compatibility for basestring checks
 try:
@@ -32,7 +32,38 @@ class Atom(object):
 	def __init__(self, *args, **kwargs):
 		pass
 
-class Member(Atom):
+class Navigable(object):
+	'''Mixin for objects that navigate within a parent sequence.
+	Requires self.parent to be defined by the inheriting class.'''
+	__slots__ = ()
+
+	@property
+	def idx(self):
+		return self.parent.index(self)
+	
+	@property
+	def next(self):
+		try:
+			return self.parent[self.idx + 1]
+		
+		except (IndexError, AttributeError):
+			if self.idx == len(self.parent) - 1:
+				return self.parent[0]
+
+			return None
+	
+	@property
+	def prev(self):
+		try:
+			return self.parent[self.idx - 1]
+		
+		except (IndexError, AttributeError):
+			if self.idx == 0:
+				return self.parent[-1]
+
+			return None
+
+class Member(Navigable, Atom):
 	''' A primitive that is a member of a sequence. '''
 	__slots__ = ('uid', 'identifier', 'parent', 'lib')
 
@@ -45,38 +76,11 @@ class Member(Atom):
 	def __hash__(self):
 		return hash(self.uid)
 
-	# - Properties -----------------------	
-	@property
-	def idx(self):
-		return self.parent.index(self)
-	
-	@property
-	def next(self):
-		try:
-			return self.parent[self.idx + 1]
-		
-		except (IndexError, AttributeError) as error:
-			if self.idx == len(self.parent) - 1:
-				return self.parent[0]
-
-			return None
-	
-	@property
-	def prev(self):
-		try:
-			return self.parent[self.idx - 1]
-		
-		except (IndexError, AttributeError) as error:
-			if self.idx == 0:
-				return self.parent[-1]
-
-			return None
-
 	# - Functions ----------------------
 	def clone(self):
 		return copy.deepcopy(self)
 
-class Container(CustomList, Atom):
+class Container(CustomList, Navigable, Atom):
 	''' A primitive that is a member of a sequence and sequence of its own. '''
 	__slots__ = ('data', 'uid', 'identifier', 'parent', 'lib', '_lock', '_subclass')
 
@@ -92,19 +96,14 @@ class Container(CustomList, Atom):
 		# - Process data
 		if len(self.data):
 			for idx in range(len(self.data)):
-				# -- Set parent
-				if isinstance(self.data[idx], self._subclass):
-					self.data[idx].parent = self
-
-				# -- Cache to _subclass or on demand casting (might will reduce overheat).
-				elif not isinstance(self.data[idx], (int, float, basestring)):
-					self.data[idx] = self._subclass(self.data[idx], parent=self)
+				self.data[idx] = self._coerce(self.data[idx])
 				
 	# - Internals ----------------------
 	def __hash__(self):
 		return hash(self.uid)
 
 	def __getitem__(self, i):
+		# -- Lazy coercion on access (strict: coerces everything)
 		if not isinstance(self.data[i], self._subclass):
 			self.data[i] = self._subclass(self.data[i], parent=self)
 
@@ -119,60 +118,58 @@ class Container(CustomList, Atom):
 	def __repr__(self):
 		return '<{}: {}>'.format(self.__class__.__name__, repr(self.data))
 
-	# - Properties -----------------------	
-	@property
-	def idx(self):
-		return self.parent.index(self)
-	
-	@property
-	def next(self):
-		try:
-			return self.parent[self.idx + 1]
-		
-		except (IndexError, AttributeError) as error:
-			if self.idx == len(self.parent) - 1:
-				return self.parent[0]
-
-			return None
-	
-	@property
-	def prev(self):
-		try:
-			return self.parent[self.idx - 1]
-		
-		except (IndexError, AttributeError) as error:
-			if self.idx == 0:
-				return self.parent[-1]
-
-			return None
-
 	# - Methods ------------------------
+	def _coerce(self, item):
+		'''Coerce item to _subclass if needed, set parent.
+		Primitives (int, float, basestring) pass through unchanged.'''
+		if isinstance(item, self._subclass):
+			item.parent = self
+			return item
+
+		if not isinstance(item, (int, float, basestring)):
+			return self._subclass(item, parent=self)
+
+		return item
+
+	def _collect(self, attr):
+		'''Collect attribute from all children into a flat list.'''
+		result = []
+
+		for child in self.data:
+			value = getattr(child, attr, None)
+
+			if value is not None:
+				if isinstance(value, (list, tuple)):
+					result += list(value)
+				else:
+					result.append(value)
+
+		return result
+
+	@classmethod
+	def as_proxy(cls, data=None, **kwargs):
+		'''Create a lightweight proxy instance (skips metadata init).'''
+		kwargs['proxy'] = True
+		return cls(data, **kwargs)
+
 	def insert(self, i, item):
 		if not self._lock:
-			if isinstance(item, self._subclass):
-				item.parent = self
-			
-			elif not isinstance(item, (int, float, basestring)):
-				item = self._subclass(item, parent=self) 
-
-			self.data.insert(i, item)
+			self.data.insert(i, self._coerce(item))
 
 	def pop(self, i=-1): 
 		if not self._lock:
+			item = self.data[i]
+
 			if isinstance(item, self._subclass):
 				item.parent = None
 
-		return self.data.pop(i)
+			return self.data.pop(i)
+
+		return None
 
 	def append(self, item):
 		if not self._lock:
-			if isinstance(item, self._subclass):
-				item.parent = self
-			
-			elif not isinstance(item, (int, float, basestring)):
-				item = self._subclass(item, parent=self)
-
-			self.data.append(item)
+			self.data.append(self._coerce(item))
 
 	# - Functions ----------------------
 	def clone(self):
@@ -252,5 +249,3 @@ if __name__ == "__main__":
 	cc = Container((30,10))
 	dc = Container([ac, bc, cc, (20,30)])
 	print(cc.next.next)
-
-
