@@ -12,10 +12,11 @@
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
 import math
+import copy
 from enum import Enum
 
 # - Init -------------------------------
-__version__ = '0.26.4'
+__version__ = '0.26.5'
 
 # - Objects ----------------------------------------------------
 class TransformOrigin(Enum):
@@ -117,6 +118,9 @@ class Transform(object):
 		dx, dy = -xx * dx - yx * dy, - xy * dx - yy * dy
 
 		return self.__class__(xx, xy, yx, yy, dx, dy)
+
+	def clone(self):
+		return copy.deepcopy(self)
 
 	def __len__(self):
 		return 6
