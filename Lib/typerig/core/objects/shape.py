@@ -423,6 +423,66 @@ class Shape(Container, XMLSerializable):
 		if transform_origin != TransformOrigin.BASELINE:
 			self.shift(ox, oy)
 
+	def delta_scale_compensated(self, contour_deltas, stems, scale,
+								intensity=1.0, compensation=(0., 0.),
+								shift=(0., 0.), italic_angle=False,
+								extrapolate=False):
+		'''Scale shape using per-contour DeltaMachine with diagonal compensation.
+		Returns a NEW Shape — does not modify the original.
+
+		Each contour is analyzed for its dominant stroke angle and
+		stems are adjusted accordingly before DeltaMachine scaling.
+
+		Args:
+			contour_deltas (list[DeltaScale]): Per-contour DeltaScale objects,
+				one per contour in this shape.
+			stems (tuple): (stx, sty) target stem widths.
+			scale (tuple): (sx, sy) scale factors.
+			intensity (float): Diagonal compensation strength. Default 1.0.
+			compensation (tuple): (cx, cy) DeltaMachine compensation factors.
+			shift (tuple): (dx, dy) translation after scaling.
+			italic_angle: Italic shear angle in radians, or False.
+			extrapolate (bool): Allow extrapolation beyond master range.
+
+		Returns:
+			Shape: New shape with delta-scaled contours.
+		'''
+		assert len(contour_deltas) == len(self.contours), \
+			'contour_deltas count ({}) != contour count ({})'.format(
+				len(contour_deltas), len(self.contours))
+
+		new_contours = []
+
+		for ci, contour in enumerate(self.contours):
+			new_contours.append(contour.delta_scale_compensated(
+				contour_deltas[ci], stems, scale, intensity,
+				compensation, shift, italic_angle, extrapolate))
+
+		return self.__class__(new_contours, name=self.name,
+							  transform=self.transform.clone(), proxy=False)
+
+	def delta_scale_compensated_inplace(self, contour_deltas, stems, scale,
+										intensity=1.0, compensation=(0., 0.),
+										shift=(0., 0.), italic_angle=False,
+										extrapolate=False):
+		'''Scale shape in place using per-contour DeltaMachine with diagonal compensation.
+
+		Args: Same as delta_scale_compensated().
+		'''
+		new_shape = self.delta_scale_compensated(
+			contour_deltas, stems, scale, intensity,
+			compensation, shift, italic_angle, extrapolate)
+
+		# Write back node positions per contour
+		for ci in range(len(self.contours)):
+			old_nodes = self.contours[ci].nodes
+			new_nodes = new_shape.contours[ci].nodes
+
+			if len(new_nodes) == len(old_nodes):
+				for i in range(len(old_nodes)):
+					old_nodes[i].x = new_nodes[i].x
+					old_nodes[i].y = new_nodes[i].y
+
 if __name__ == '__main__':
 	from typerig.core.objects.node import Node
 	from pprint import pprint

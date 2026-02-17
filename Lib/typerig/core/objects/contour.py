@@ -1048,6 +1048,87 @@ class Contour(Container, XMLSerializable):
 				self.nodes[i].x = new_nodes[i].x
 				self.nodes[i].y = new_nodes[i].y
 
+	def delta_scale_compensated(self, delta, stems, scale,
+								intensity=1.0, compensation=(0., 0.),
+								shift=(0., 0.), italic_angle=False,
+								extrapolate=False):
+		'''Scale contour using DeltaMachine with diagonal compensation.
+		Returns a NEW Contour — does not modify the original.
+
+		Analyzes this contour's dominant stroke angle and adjusts
+		the target stems before feeding to DeltaMachine:
+
+		  Condensing (sx < sy): diagonal contours get lighter target stems
+		  Expanding  (sx > sy): diagonal contours get heavier target stems
+		  Cardinal contours (H/V strokes): no adjustment
+
+		Args:
+			delta (DeltaScale): DeltaScale object for this contour.
+			stems (tuple): (stx, sty) target stem widths.
+			scale (tuple): (sx, sy) scale factors.
+			intensity (float): Diagonal compensation strength. Default 1.0.
+			compensation (tuple): (cx, cy) DeltaMachine compensation factors.
+			shift (tuple): (dx, dy) translation after scaling.
+			italic_angle: Italic shear angle in radians, or False.
+			extrapolate (bool): Allow extrapolation beyond master range.
+
+		Returns:
+			Contour: New contour with delta-scaled coordinates.
+		'''
+		from typerig.core.func.transform import contour_dominant_angle, adjust_stems_for_angle
+
+		sx, sy = scale
+		target_stx, target_sty = stems
+
+		# Analyze contour orientation from on-curve nodes
+		on_curve = [(n.x, n.y) for n in self.nodes if n.type == 'on']
+		angle = contour_dominant_angle(on_curve)
+
+		# Adjust stems for this contour's angle
+		adj_stx, adj_sty = adjust_stems_for_angle(
+			target_stx, target_sty, angle, sx, sy, intensity)
+
+		# Apply delta scaling with adjusted stems
+		result = list(delta.scale_by_stem(
+			(adj_stx, adj_sty),
+			(sx, sy),
+			compensation,
+			shift,
+			italic_angle,
+			extrapolate
+		))
+
+		# Build new contour with scaled coordinates
+		new_contour = self.clone()
+		new_nodes = new_contour.nodes
+
+		if len(result) == len(new_nodes):
+			for i in range(len(new_nodes)):
+				new_nodes[i].x = result[i][0]
+				new_nodes[i].y = result[i][1]
+
+		return new_contour
+
+	def delta_scale_compensated_inplace(self, delta, stems, scale,
+										intensity=1.0, compensation=(0., 0.),
+										shift=(0., 0.), italic_angle=False,
+										extrapolate=False):
+		'''Scale contour in place using DeltaMachine with diagonal compensation.
+
+		Args: Same as delta_scale_compensated().
+		'''
+		new_contour = self.delta_scale_compensated(
+			delta, stems, scale, intensity,
+			compensation, shift, italic_angle, extrapolate)
+
+		new_nodes = new_contour.nodes
+
+		if len(new_nodes) == len(self.nodes):
+			for i in range(len(self.nodes)):
+				self.nodes[i].x = new_nodes[i].x
+				self.nodes[i].y = new_nodes[i].y
+
+
 class HobbySpline(Container): 
 	'''Adapted from mp2tikz.py (c) 2012 JL Diaz'''
 

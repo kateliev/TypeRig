@@ -87,6 +87,11 @@ class Layer(Container, XMLSerializable):
 	def shapes(self):
 		return self.data
 
+	@shapes.setter
+	def shapes(self, other):
+		if isinstance(other, self.data.__class__):
+			self.data = other
+
 	@property
 	def nodes(self):
 		return self._collect('nodes')
@@ -628,13 +633,14 @@ class Layer(Container, XMLSerializable):
 
 		return result
 
-	def delta_scale_compensated_inplace(self, contour_deltas, scale, 
-										   intensity=1.0, compensation=(0., 0.),
-										   shift=(0., 0.), italic_angle=False,
-										   extrapolate=False,
-										   metric_delta=None,
-										   transform_origin=TransformOrigin.BASELINE):
+	def delta_scale_compensated(self, contour_deltas, scale,
+								intensity=1.0, compensation=(0., 0.),
+								shift=(0., 0.), italic_angle=False,
+								extrapolate=False,
+								metric_delta=None,
+								transform_origin=TransformOrigin.BASELINE):
 		'''Scale layer using per-contour DeltaMachine with diagonal compensation.
+		Returns a NEW Layer — does not modify the original.
 
 		Each contour is analyzed for its dominant stroke angle. Based on
 		the angle and the scaling direction, the target stems are adjusted
@@ -680,9 +686,10 @@ class Layer(Container, XMLSerializable):
 				glyph.build_delta(layer_names, 'metric_array')
 
 			transform_origin (TransformOrigin): Anchor point for scaling.
-		'''
-		from typerig.core.func.transform import contour_dominant_angle, adjust_stems_for_angle
 
+		Returns:
+			Layer: New layer with delta-scaled contours.
+		'''
 		assert self.has_stems, \
 			'Layer requires stems. Set layer.stems = (stx, sty) first.'
 
@@ -698,41 +705,32 @@ class Layer(Container, XMLSerializable):
 			source_bounds = self.bounds
 			ox, oy = source_bounds.align_matrix[transform_origin.code]
 
-		# Process each contour with its own adjusted stems
+		# Process each shape with its slice of contour_deltas
+		new_shapes = []
 		contour_idx = 0
 
 		for shape in self.shapes:
-			for ci in range(len(shape.contours)):
-				contour = shape.contours[ci]
-				delta = contour_deltas[contour_idx]
+			n_contours = len(shape.contours)
+			shape_deltas = contour_deltas[contour_idx:contour_idx + n_contours]
 
-				# Analyze contour orientation from on-curve nodes
-				on_curve = [(n.x, n.y) for n in contour.nodes if n.type == 'on']
-				angle = contour_dominant_angle(on_curve)
+			new_shapes.append(shape.delta_scale_compensated(
+				shape_deltas, (target_stx, target_sty), scale,
+				intensity, compensation, shift, italic_angle, extrapolate))
 
-				# Adjust stems for this contour's angle
-				adj_stx, adj_sty = adjust_stems_for_angle(
-					target_stx, target_sty, angle, sx, sy, intensity)
+			contour_idx += n_contours
 
-				# Apply delta scaling with adjusted stems
-				result = list(delta.scale_by_stem(
-					(adj_stx, adj_sty),
-					(sx, sy),
-					compensation,
-					shift,
-					italic_angle,
-					extrapolate
-				))
-
-				# Write back node positions
-				nodes = contour.nodes
-
-				if len(result) == len(nodes):
-					for i in range(len(nodes)):
-						nodes[i].x = result[i][0]
-						nodes[i].y = result[i][1]
-
-				contour_idx += 1
+		# Build new layer
+		result = self.__class__(
+			new_shapes,
+			name=self.name,
+			width=self.advance_width,
+			height=self.advance_height,
+			stx=self.stx,
+			sty=self.sty,
+			transform=self.transform.clone(),
+			identifier=self.identifier,
+			mark=self.mark
+		)
 
 		# Handle metrics (advance width) with global stems
 		if metric_delta is not None:
@@ -744,13 +742,43 @@ class Layer(Container, XMLSerializable):
 				italic_angle,
 				extrapolate
 			))
-			self.metric_array = metric_result
+			result.metric_array = metric_result
 
 		# Realign to preserve transformation origin
 		if transform_origin != TransformOrigin.BASELINE:
-			dest_bounds = self.bounds
+			dest_bounds = result.bounds
 			dest_ox, dest_oy = dest_bounds.align_matrix[transform_origin.code]
-			self.shift(ox - dest_ox, oy - dest_oy)
+			result.shift(ox - dest_ox, oy - dest_oy)
+
+		return result
+
+	def delta_scale_compensated_inplace(self, contour_deltas, scale,
+										intensity=1.0, compensation=(0., 0.),
+										shift=(0., 0.), italic_angle=False,
+										extrapolate=False,
+										metric_delta=None,
+										transform_origin=TransformOrigin.BASELINE):
+		'''Scale layer in place using per-contour DeltaMachine with diagonal compensation.
+
+		Args: Same as delta_scale_compensated().
+		'''
+		result = self.delta_scale_compensated(
+			contour_deltas, scale, intensity, compensation,
+			shift, italic_angle, extrapolate,
+			metric_delta, transform_origin)
+
+		# Write back node positions
+		old_nodes = self.nodes
+		new_nodes = result.nodes
+
+		if len(new_nodes) == len(old_nodes):
+			for i in range(len(old_nodes)):
+				old_nodes[i].x = new_nodes[i].x
+				old_nodes[i].y = new_nodes[i].y
+
+		# Copy metrics
+		self.advance_width = result.advance_width
+		self.advance_height = result.advance_height
 
 if __name__ == '__main__':
 	from pprint import pprint
