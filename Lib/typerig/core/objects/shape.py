@@ -61,7 +61,7 @@ class Shape(Container, XMLSerializable):
 		return self.data
 
 	@contours.setter
-	def contours(self):
+	def contours(self, other):
 		if isinstance(other, self.__class__):
 			self.data = other.data
 		elif isinstance(other, (tuple, list)):
