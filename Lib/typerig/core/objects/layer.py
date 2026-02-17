@@ -25,7 +25,7 @@ from typerig.core.objects.shape import Shape
 from typerig.core.objects.sdf import SignedDistanceField
 
 # - Init -------------------------------
-__version__ = '0.3.3'
+__version__ = '0.3.4'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -88,9 +88,11 @@ class Layer(Container, XMLSerializable):
 		return self.data
 
 	@shapes.setter
-	def shapes(self, other):
-		if isinstance(other, self.data.__class__):
-			self.data = other
+	def shapes(self):
+		if isinstance(other, self.__class__):
+			self.data = other.data
+		elif isinstance(other, (tuple, list)):
+			self.data = [self._coerce(item) for item in other]
 
 	@property
 	def nodes(self):

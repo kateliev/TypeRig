@@ -29,7 +29,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.node import Node, Knot
 
 # - Init -------------------------------
-__version__ = '0.5.0'
+__version__ = '0.5.1'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -61,13 +61,9 @@ class Contour(Container, XMLSerializable):
 	@nodes.setter
 	def nodes(self, other):
 		if isinstance(other, self.__class__):
-			self.data = other
-
-		if isinstance(other, (tuple, list)):
-			for item in other:
-				if not isinstance(item, self._subclass):
-					item = self._subclass(item, parent=self)
-					self.data.append(item)
+			self.data = other.data
+		elif isinstance(other, (tuple, list)):
+			self.data = [self._coerce(item) for item in other]
 
 	@property
 	def selected_nodes(self):
