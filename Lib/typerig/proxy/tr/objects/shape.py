@@ -17,17 +17,28 @@ import fontgate as fgt
 import PythonQt as pqt
 
 from typerig.proxy.tr.objects.node import trNode
-from typerig.proxy.tr.objects.contour import trContour
+from typerig.proxy.tr.objects.contour import trContour, _build_fl_contour
 from typerig.core.objects.shape import Shape
 
 # - Init --------------------------------
-__version__ = '0.1.1'
+__version__ = '0.2.0'
 
 # - Keep compatibility for basestring checks
 try:
 	basestring
 except NameError:
 	basestring = (str, bytes)
+
+# - Helpers ------------------------------
+def _build_fl_shape(core_shape):
+	'''Build an flShape from a core Shape.'''
+	fl_shape = fl6.flShape()
+	fl_shape.contours = [_build_fl_contour(c) for c in core_shape.contours]
+
+	if hasattr(core_shape, 'name') and core_shape.name:
+		fl_shape.name = core_shape.name
+
+	return fl_shape
 
 # - Classes -----------------------------
 class trShape(Shape):
@@ -95,3 +106,45 @@ class trShape(Shape):
 		contour_bounds = [(contour, contour.bounds.align_matrix[mode.upper()]) for contour in self.contours]
 		self.data = [contour_pair[0] for contour_pair in sorted(contour_bounds, key=lambda d: d[1][direction])]
 		self.host.contours = [contour.host for contour in self.data]
+
+	# - Host sync --------------------------------
+	def _sync_host(self):
+		'''Sync host shape contours with proxy data.
+		Call after individual contour.mount() changes structure.
+		'''
+		self.host.contours = [c.host for c in self.data]
+
+	# - Eject/mount ----------------------------
+	def eject(self):
+		'''Detach from host: return a pure core Shape with current FL values.
+		The returned Shape has no FL bindings and can be freely manipulated.
+		'''
+		core_contours = [trContour(c).eject() for c in self.host.contours]
+		return Shape(core_contours, name=self.name)
+
+	def mount(self, core_shape):
+		'''Write core Shape data back into the FL host.
+		Rebuilds all FL contours from core data and syncs the host.
+
+		Args:
+			core_shape (Shape): Pure core Shape with data to apply.
+
+		Note:
+			If parent is a trLayer, its host is synced automatically.
+		'''
+		# - Build new FL contours from core data
+		fl_contours = [_build_fl_contour(c) for c in core_shape.contours]
+
+		# - Replace host contours
+		self.host.contours = fl_contours
+
+		# - Copy shape name
+		if hasattr(core_shape, 'name') and core_shape.name:
+			self.host.name = core_shape.name
+
+		# - Rebuild proxy data
+		self.data = [trContour(c, parent=self) for c in self.host.contours]
+
+		# - Sync parent layer host if available
+		if self.parent is not None and hasattr(self.parent, '_sync_host'):
+			self.parent._sync_host()

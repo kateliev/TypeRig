@@ -20,7 +20,7 @@ from typerig.proxy.tr.objects.layer import trLayer
 from typerig.core.objects.glyph import Glyph
 
 # - Init --------------------------------
-__version__ = '0.0.8'
+__version__ = '0.1.0'
 
 # - Classes -----------------------------
 class trGlyph(Glyph):
@@ -85,4 +85,28 @@ class trGlyph(Glyph):
 	# - Functions ---------------------------
 	def update(self):
 		fl6.flItems.notifyChangesApplied(self.name, self.host, True)
-	
+
+	# - Eject/mount ----------------------------
+	def eject(self):
+		'''Detach from host: return a pure core Glyph with current FL values.
+		The returned Glyph has no FL bindings and can be freely manipulated.
+
+		Returns:
+			Glyph: Pure core Glyph with all layers, geometry and metadata.
+
+		Example:
+			>>> tr_g = trGlyph()
+			>>> core_g = tr_g.eject()
+			>>> layer = core_g.layer('Regular')
+			>>> layer.shift(10, 20)
+			>>> tr_g.layer('Regular').mount(layer)  # mount at layer level
+			>>> tr_g.update()
+		'''
+		core_layers = [trLayer(l).eject() for l in self.host.layers]
+
+		return Glyph(
+			core_layers,
+			name=self.name,
+			mark=self.mark,
+			unicodes=list(self.unicodes)
+		)

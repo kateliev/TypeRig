@@ -1,7 +1,6 @@
-# MODULE: Typerig / Proxy / Node (Object)
-# NOTE: Experimental proxy approach
+# MODULE: Typerig / Proxy / Node (Objects)
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2017-2022 	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2019-2022 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
@@ -18,7 +17,7 @@ from typerig.core.objects.node import Node
 from typerig.core.func.utils import isMultiInstance
 
 # - Init ---------------------------------
-__version__ = '0.2.3'
+__version__ = '0.3.0'
 	
 # - Classes -------------------------------
 class trNode(Node):
@@ -80,6 +79,34 @@ class trNode(Node):
 		new_node = self.host.clone()
 		return self.__class__(new_node)
 
+	# - Eject/mount ----------------------------
+	def eject(self):
+		'''Detach from host: return a pure core Node with current FL values.
+		The returned Node has no FL bindings and can be freely manipulated.
+		'''
+		return Node(
+			float(self.x), float(self.y),
+			type=self.type,
+			smooth=self.smooth,
+			name=self.name,
+			g2=self.g2,
+			selected=self.selected
+		)
+
+	def mount(self, core_node):
+		'''Write core Node values back into the FL host.
+		
+		Args:
+			core_node (Node): Pure core Node with values to apply.
+		'''
+		self.host.x = float(core_node.x)
+		self.host.y = float(core_node.y)
+		self.host.type = core_node.type
+		self.host.smooth = core_node.smooth
+
+		if hasattr(core_node, 'name') and core_node.name:
+			self.host.name = core_node.name
+
 	# - Effects --------------------------------
 	def getSmartAngle(self):
 		return (self.host.isSmartAngle(), self.host.smartAngleR)
@@ -96,8 +123,3 @@ class trNode(Node):
 
 	def getSmartAngleRadius(self):
 		return self.host.smartAngleR
-
-
-	
-	
-	

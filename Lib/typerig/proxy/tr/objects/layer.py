@@ -16,11 +16,11 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
-from typerig.proxy.tr.objects.shape import trShape
+from typerig.proxy.tr.objects.shape import trShape, _build_fl_shape
 from typerig.core.objects.layer import Layer
 
 # - Init --------------------------------
-__version__ = '0.0.6'
+__version__ = '0.1.0'
 
 # - Classes -----------------------------
 class trLayer(Layer):
@@ -54,3 +54,58 @@ class trLayer(Layer):
 			self.host.__setattr__(trLayer.__meta__[name], value)
 		else:
 			Layer.__setattr__(self, name, value)
+
+	# - Host sync --------------------------------
+	def _sync_host(self):
+		'''Sync host layer shapes with proxy data.
+		Call after individual shape.mount() changes structure.
+		'''
+		self.host.shapes = [s.host for s in self.data]
+
+	# - Eject/mount ----------------------------
+	def eject(self):
+		'''Detach from host: return a pure core Layer with current FL values.
+		The returned Layer has no FL bindings and can be freely manipulated.
+
+		Returns:
+			Layer: Pure core Layer with geometry and metrics copied from host.
+		'''
+		core_shapes = [trShape(s).eject() for s in self.host.shapes]
+
+		return Layer(
+			core_shapes,
+			name=self.name,
+			width=self.advance_width,
+			height=self.advance_height,
+			mark=self.mark
+		)
+
+	def mount(self, core_layer):
+		'''Write core Layer data back into the FL host.
+		Rebuilds all FL shapes from core data and updates metrics.
+
+		Args:
+			core_layer (Layer): Pure core Layer with data to apply.
+
+		Example:
+			>>> tr_g = trGlyph()
+			>>> core_layer = tr_g[0].eject()     # eject first layer
+			>>> core_layer.shift(10, 20)          # manipulate
+			>>> tr_g[0].mount(core_layer)        # push back
+			>>> tr_g.update()                     # notify FL
+		'''
+		# - Remove existing shapes from host
+		for shape in list(self.host.shapes):
+			self.host.removeShape(shape)
+
+		# - Build and add new shapes from core data
+		for core_shape in core_layer.shapes:
+			fl_shape = _build_fl_shape(core_shape)
+			self.host.addShape(fl_shape)
+
+		# - Copy metrics
+		self.host.advanceWidth = core_layer.advance_width
+		self.host.advanceHeight = core_layer.advance_height
+
+		# - Rebuild proxy data
+		self.data = [trShape(s, parent=self) for s in self.host.shapes]

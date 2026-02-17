@@ -17,15 +17,32 @@ import PythonQt as pqt
 
 from typerig.proxy.tr.objects.node import trNode
 from typerig.core.objects.contour import Contour
+from typerig.core.objects.node import Node
 
 # - Init --------------------------------
-__version__ = '0.1.4'
+__version__ = '0.2.0'
 
 # - Keep compatibility for basestring checks
 try:
 	basestring
 except NameError:
 	basestring = (str, bytes)
+
+# - Helpers ------------------------------
+def _build_fl_node(core_node):
+	'''Build an flNode from a core Node.'''
+	fl_node = fl6.flNode(float(core_node.x), float(core_node.y), nodeType=core_node.type)
+	fl_node.smooth = core_node.smooth
+
+	if hasattr(core_node, 'name') and core_node.name:
+		fl_node.name = core_node.name
+
+	return fl_node
+
+def _build_fl_contour(core_contour):
+	'''Build an flContour from a core Contour.'''
+	fl_nodes = [_build_fl_node(node) for node in core_contour.nodes]
+	return fl6.flContour(fl_nodes, closed=core_contour.closed)
 
 # - Classes -----------------------------
 class trContour(Contour):
@@ -95,3 +112,54 @@ class trContour(Contour):
 		index = self.nodes[index].prev_on.idx if not self.nodes[index].is_on else index
 		self.data = self.data[index:] + self.data[:index] 
 		return self.host.setStartPoint(index)
+
+	# - Eject/mount ----------------------------
+	def eject(self):
+		'''Detach from host: return a pure core Contour with current FL values.
+		The returned Contour has no FL bindings and can be freely manipulated.
+		'''
+		core_nodes = [trNode(n).eject() for n in self.host.nodes()]
+		return Contour(core_nodes, closed=self.closed, name=self.name)
+
+	def mount(self, core_contour):
+		'''Write core Contour data back into the FL host.
+		If node count matches, updates nodes in place.
+		Otherwise rebuilds the FL contour entirely.
+
+		Args:
+			core_contour (Contour): Pure core Contour with data to apply.
+
+		Note:
+			If structure changes (node count differs), the host flContour 
+			is replaced. Parent shape host is synced automatically if 
+			parent is a trShape.
+		'''
+		host_nodes = self.host.nodes()
+
+		if len(core_contour.nodes) == len(host_nodes):
+			# - Same structure: update nodes in place
+			for fl_node, core_node in zip(host_nodes, core_contour.nodes):
+				fl_node.x = float(core_node.x)
+				fl_node.y = float(core_node.y)
+				fl_node.type = core_node.type
+				fl_node.smooth = core_node.smooth
+
+				if hasattr(core_node, 'name') and core_node.name:
+					fl_node.name = core_node.name
+
+		else:
+			# - Structure changed: rebuild entire contour
+			self.host = _build_fl_contour(core_contour)
+
+			# - Sync parent shape host if available
+			if self.parent is not None and hasattr(self.parent, '_sync_host'):
+				self.parent._sync_host()
+
+		# - Update closed/name
+		self.host.closed = core_contour.closed
+
+		if hasattr(core_contour, 'name') and core_contour.name:
+			self.host.name = core_contour.name
+
+		# - Rebuild proxy data
+		self.data = [trNode(n, parent=self) for n in self.host.nodes()]
