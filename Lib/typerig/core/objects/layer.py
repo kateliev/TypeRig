@@ -25,7 +25,7 @@ from typerig.core.objects.shape import Shape
 from typerig.core.objects.sdf import SignedDistanceField
 
 # - Init -------------------------------
-__version__ = '0.3.2'
+__version__ = '0.3.3'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -628,7 +628,7 @@ class Layer(Container, XMLSerializable):
 
 		return result
 
-	def scale_contours_compensated_inplace(self, contour_deltas, scale, 
+	def delta_scale_compensated_inplace(self, contour_deltas, scale, 
 										   intensity=1.0, compensation=(0., 0.),
 										   shift=(0., 0.), italic_angle=False,
 										   extrapolate=False,
