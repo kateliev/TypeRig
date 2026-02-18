@@ -910,7 +910,11 @@ class Layer(Container, XMLSerializable):
 			return t * effective_r
 
 		def func(t, t_angle=None):
+			new_layer = self.__class__()
+
 			for si, shape in enumerate(self.shapes):
+				new_shape = Shape()
+
 				for ci, contour in enumerate(shape.contours):
 					da = data_a[si][ci]
 					db = data_b[si][ci]
@@ -924,8 +928,8 @@ class Layer(Container, XMLSerializable):
 
 						# Angle — short-arc SLERP
 						ta = t if t_angle is None else t_angle
-						a_out = _slerp_angle(a.angle_out, b.angle_out, ta)
-						a_in  = _slerp_angle(a.angle_in,  b.angle_in,  ta)
+						a_out = slerp_angle(a.angle_out, b.angle_out, ta)
+						a_in  = slerp_angle(a.angle_in,  b.angle_in,  ta)
 
 						# Magnitude — stem-weighted t per handle direction
 						t_out = _stem_t_for_angle(a_out, t)
@@ -940,12 +944,12 @@ class Layer(Container, XMLSerializable):
 							smooth=a.smooth,
 						))
 
-					rebuilt = Contour.from_directional(blended, closed=contour.closed)
+					new_shape.contours.append(Contour.from_directional(blended, closed=contour.closed))
 
-					for node, src in zip(contour.nodes, rebuilt.nodes):
-						node.x = src.x
-						node.y = src.y
+				new_layer.shapes.append(new_shape)
 
+			return new_layer
+					
 		return func
 
 if __name__ == '__main__':
