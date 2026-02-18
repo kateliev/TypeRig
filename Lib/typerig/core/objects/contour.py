@@ -10,6 +10,7 @@
 
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
+from collections import namedtuple
 import math
 
 from typerig.core.objects.point import Point
@@ -18,6 +19,7 @@ from typerig.core.objects.array import PointArray
 from typerig.core.objects.cubicbezier import CubicBezier
 from typerig.core.objects.transform import Transform, TransformOrigin
 from typerig.core.objects.utils import Bounds
+from typerig.core.func.math import slerp_angle, interpolate_directional
 
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 
@@ -26,10 +28,10 @@ from typerig.core.func.transform import adaptive_scale, lerp
 from typerig.core.func.math import zero_matrix, solve_equations, hobby_control_points
 
 from typerig.core.objects.atom import Container
-from typerig.core.objects.node import Node, Knot
+from typerig.core.objects.node import Node, Knot, DirectionalNode, node_types
 
 # - Init -------------------------------
-__version__ = '0.5.1'
+__version__ = '0.6.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -1127,6 +1129,141 @@ class Contour(Container, XMLSerializable):
 			for i in range(len(self.nodes)):
 				self.nodes[i].x = new_nodes[i].x
 				self.nodes[i].y = new_nodes[i].y
+
+
+	# - Directional contour interface ----------------------------
+	# Adobe-style representation: each on-curve node owns its
+	# outgoing and incoming off-curve positions expressed as a
+	# direction vector (angle + magnitude) rather than absolute
+	# coordinates. This makes angular interpolation, stem-aware
+	# scaling and smooth-node enforcement much more natural.
+
+	def to_directional(self):
+		'''Export contour geometry as a list of DirectionalNode entries,
+		one per on-curve node.
+
+		Each entry stores position plus outgoing and incoming handle vectors
+		expressed as (angle_radians, magnitude) relative to the node.
+		Line segments are represented with magnitude 0.0 and the angle
+		toward the adjacent on-curve node, so the tangent information is
+		never lost even for straight sides.
+
+		This representation is useful for:
+		  - Angular interpolation between masters
+		  - Stem-aware scaling (magnitude encodes handle length)
+		  - Smooth-node enforcement via angle arithmetic
+		  - Round-trip reconstruction via from_directional()
+
+		Returns:
+			list[DirectionalNode]
+		'''
+		result = []
+
+		for node_seg in self.node_segments:
+			# node_seg is [on, ...off..., on] but get_segments stops at
+			# the DESTINATION on-curve, so node_seg[0] is the source.
+			p0 = node_seg[0]
+
+			# -- Outgoing handle (from p0 toward next off-curve or next on-curve)
+			if len(node_seg) == 4:
+				# Cubic: p0, bcp_out, bcp_in, p1
+				bcp_out = node_seg[1]
+				dx = bcp_out.x - p0.x
+				dy = bcp_out.y - p0.y
+				a_out = math.atan2(dy, dx)
+				m_out = math.hypot(dx, dy)
+			else:
+				# Line: p0, p1 — encode tangent direction, zero magnitude
+				p1 = node_seg[-1]
+				a_out = math.atan2(p1.y - p0.y, p1.x - p0.x)
+				m_out = 0.
+
+			# -- Incoming handle (from p0 toward its own prev off-curve)
+			# The incoming BCP of this node is the last off-curve in the
+			# PREVIOUS segment, i.e. p0.prev when it is off-curve.
+			prv = p0.prev
+
+			if prv is not None and not prv.is_on:
+				dx = prv.x - p0.x
+				dy = prv.y - p0.y
+				a_in = math.atan2(dy, dx)
+				m_in = math.hypot(dx, dy)
+			else:
+				# Line arrival — encode reverse tangent, zero magnitude
+				prev_on = p0.prev_on
+				if prev_on is not None:
+					a_in = math.atan2(p0.y - prev_on.y, p0.x - prev_on.x) + math.pi
+				else:
+					a_in = 0.
+				m_in = 0.
+
+			result.append(DirectionalNode(
+				x=p0.x, y=p0.y,
+				angle_out=a_out, mag_out=m_out,
+				angle_in=a_in,   mag_in=m_in,
+				smooth=p0.smooth,
+			))
+
+		return result
+
+	@classmethod
+	def from_directional(cls, data, closed=True):
+		'''Reconstruct a Contour from a list of DirectionalNode entries.
+
+		Inverse of to_directional(). Accepts the list returned by that
+		method or any compatible sequence of DirectionalNode namedtuples.
+
+		Segment type is inferred from magnitudes:
+		  - Both sides have mag > 0  →  cubic bezier
+		  - Either side has mag == 0 →  line on that side
+		  - Mixed (one mag, one line) → degenerate BCP placed at on-curve
+
+		Args:
+			data  : list[DirectionalNode]
+			closed: bool (default True)
+
+		Returns:
+			Contour
+		'''
+		nodes = []
+		n = len(data)
+
+		for i in range(n):
+			curr = data[i]
+			nxt  = data[(i + 1) % n]
+
+			# On-curve node
+			nodes.append(Node(curr.x, curr.y, type=node_types['on'], smooth=curr.smooth))
+
+			# BCPs between curr and nxt
+			# Outgoing BCP: lives at (curr.x + m*cos(a), curr.y + m*sin(a))
+			# Incoming BCP: lives at (nxt.x  + m*cos(a), nxt.y  + m*sin(a))
+			has_out = curr.mag_out > 0.
+			has_in  = nxt.mag_in  > 0.
+
+			if has_out or has_in:
+				# Build outgoing BCP — use degenerate (on-curve position) if missing
+				if has_out:
+					bx = curr.x + curr.mag_out * math.cos(curr.angle_out)
+					by = curr.y + curr.mag_out * math.sin(curr.angle_out)
+				else:
+					bx, by = curr.x, curr.y  # degenerate
+
+				nodes.append(Node(bx, by, type=node_types['curve']))
+
+				# Build incoming BCP — use degenerate if missing
+				if has_in:
+					bx = nxt.x + nxt.mag_in * math.cos(nxt.angle_in)
+					by = nxt.y + nxt.mag_in * math.sin(nxt.angle_in)
+				else:
+					bx, by = nxt.x, nxt.y  # degenerate
+
+				nodes.append(Node(bx, by, type=node_types['curve']))
+
+		return cls(nodes, closed=closed)
+
+
+	
 
 
 class HobbySpline(Container): 

@@ -22,10 +22,11 @@ from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 
 from typerig.core.objects.atom import Container
 from typerig.core.objects.contour import Contour
+from typerig.core.func.math import slerp_angle, interpolate_directional
 from typerig.core.objects.sdf import SignedDistanceField
 
 # - Init -------------------------------
-__version__ = '0.3.3'
+__version__ = '0.4.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -489,6 +490,74 @@ class Shape(Container, XMLSerializable):
 				for i in range(len(old_nodes)):
 					old_nodes[i].x = new_nodes[i].x
 					old_nodes[i].y = new_nodes[i].y
+	
+	# - Directional shape interface ----------------------------
+	# Adobe-style representation: each on-curve node owns its
+	# outgoing and incoming off-curve positions expressed as a
+	# direction vector (angle + magnitude) rather than absolute
+	# coordinates. This makes angular interpolation, stem-aware
+	# scaling and smooth-node enforcement much more natural.
+
+	def to_directional(self):
+		'''Export all contours as a list of directional descriptions.
+		Each entry is the list returned by Contour.to_directional().
+
+		Returns:
+			list[list[DirectionalNode]]
+		'''
+		return [contour.to_directional() for contour in self.contours]
+
+	
+	@classmethod
+	def from_directional(cls, data, closed=True, **kwargs):
+		'''Reconstruct a Shape from a list of directional contour descriptions.
+
+		Args:
+			data   : list[list[DirectionalNode]] — as returned by to_directional()
+			closed : bool — passed to each Contour (default True)
+
+		Returns:
+			Shape
+		'''
+		contours = [Contour.from_directional(contour_data, closed=closed) for contour_data in data]
+		return cls(contours, **kwargs)
+
+	def directional_lerp_function(self, other):
+		'''Angular interpolation function between two compatible shapes.
+
+		Unlike lerp_function() which moves handles in straight XY lines,
+		this blends handle angles along the shorter arc and interpolates
+		magnitudes linearly. Produces smoother intermediate curves.
+
+		Requires compatible contour structure (same count, same node types).
+
+		Args:
+			other (Shape): Master shape to interpolate toward.
+
+		Returns:
+			func(t, t_angle=None) — call with float 0..1.
+				t_angle: optional separate time for angle blending;
+				         defaults to t when None.
+		'''
+		assert len(self.contours) == len(other.contours), \
+			'Incompatible shapes: {} vs {} contours'.format(
+				len(self.contours), len(other.contours))
+
+		# Snapshot directional state of both masters at call time
+		data_a = self.to_directional()
+		data_b = other.to_directional()
+
+		def func(t, t_angle=None):
+			for ci, contour in enumerate(self.contours):
+				blended = interpolate_directional(data_a[ci], data_b[ci], t, t_angle)
+				rebuilt = Contour.from_directional(blended, closed=contour.closed)
+
+				# Copy node positions back in place — preserves parent/index links
+				for node, src in zip(contour.nodes, rebuilt.nodes):
+					node.x = src.x
+					node.y = src.y
+
+		return func
 
 if __name__ == '__main__':
 	from typerig.core.objects.node import Node

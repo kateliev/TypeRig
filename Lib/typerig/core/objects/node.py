@@ -11,6 +11,7 @@
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
 import math, copy
+from collections import namedtuple
 
 from typerig.core.func.geometry import ccw
 from typerig.core.func.math import ratfrac, randomize
@@ -27,10 +28,19 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.5.4'
+__version__ = '0.6.0'
+
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
 # - Classes -----------------------------
+# Directional handle: angle in radians (standard math, CCW from +X),
+# magnitude in font units. Both relative to the owning on-curve node.
+DirectionalHandle = namedtuple('DirectionalHandle', ['angle', 'magnitude'])
+
+# One entry per on-curve node. Angles in radians (standard math).
+# mag_out / mag_in == 0.0 signals a line segment on that side.
+DirectionalNode = namedtuple('DirectionalNode',	['x', 'y', 'angle_out', 'mag_out', 'angle_in', 'mag_in', 'smooth'])
+
 @register_xml_class
 class Node(Member, XMLSerializable): 
 	__slots__ = ('x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'identifier','complex_math','weight', 'parent', 'lib')
@@ -757,6 +767,170 @@ class Knot(Member):
 	@property
 	def d_post(self):
 		return self.distance_to_next
+
+	# - Directional handle interface ----------------------------
+	# Adobe-style representation: each on-curve node owns its
+	# outgoing and incoming off-curve positions expressed as a
+	# direction vector (angle + magnitude) rather than absolute
+	# coordinates. This makes angular interpolation, stem-aware
+	# scaling and smooth-node enforcement much more natural.
+
+	@property
+	def handle_out(self):
+		'''Outgoing handle as DirectionalHandle(angle, magnitude).
+		Angle is in radians (standard math convention, CCW from +X).
+		Both values are relative to this on-curve node.
+		Returns None when the outgoing segment is a line (no off-curve).
+		Only meaningful on on-curve nodes.
+		'''
+		if not self.is_on or self.parent is None:
+			return None
+
+		nxt = self.next
+
+		if nxt is not None and not nxt.is_on:
+			dx = nxt.x - self.x
+			dy = nxt.y - self.y
+			return DirectionalHandle(math.atan2(dy, dx), math.hypot(dx, dy))
+
+		return None
+
+	@handle_out.setter
+	def handle_out(self, value):
+		'''Move the outgoing off-curve to match DirectionalHandle(angle, magnitude).
+		value : DirectionalHandle or (angle, magnitude) tuple
+		Does nothing when the outgoing segment has no off-curve.
+		'''
+		if not self.is_on or self.parent is None:
+			return
+
+		nxt = self.next
+
+		if nxt is not None and not nxt.is_on:
+			angle, mag = value
+			nxt.x = self.x + mag * math.cos(angle)
+			nxt.y = self.y + mag * math.sin(angle)
+
+	@property
+	def handle_in(self):
+		'''Incoming handle as DirectionalHandle(angle, magnitude).
+		Angle points FROM this node TOWARD the incoming off-curve —
+		i.e. the reverse of the curve's arrival direction.
+		At a smooth node: handle_in.angle == handle_out.angle + pi.
+		Returns None when the incoming segment is a line.
+		Only meaningful on on-curve nodes.
+		'''
+		if not self.is_on or self.parent is None:
+			return None
+
+		prv = self.prev
+
+		if prv is not None and not prv.is_on:
+			dx = prv.x - self.x
+			dy = prv.y - self.y
+			return DirectionalHandle(math.atan2(dy, dx), math.hypot(dx, dy))
+
+		return None
+
+	@handle_in.setter
+	def handle_in(self, value):
+		'''Move the incoming off-curve to match DirectionalHandle(angle, magnitude).
+		value : DirectionalHandle or (angle, magnitude) tuple
+		Does nothing when the incoming segment has no off-curve.
+		'''
+		if not self.is_on or self.parent is None:
+			return
+
+		prv = self.prev
+
+		if prv is not None and not prv.is_on:
+			angle, mag = value
+			prv.x = self.x + mag * math.cos(angle)
+			prv.y = self.y + mag * math.sin(angle)
+
+	@property
+	def handle_out_angle(self):
+		'''Outgoing handle direction in radians. Settable — preserves magnitude.'''
+		h = self.handle_out
+		return h.angle if h is not None else None
+
+	@handle_out_angle.setter
+	def handle_out_angle(self, angle):
+		h = self.handle_out
+		if h is not None:
+			self.handle_out = DirectionalHandle(angle, h.magnitude)
+
+	@property
+	def handle_in_angle(self):
+		'''Incoming handle direction in radians. Settable — preserves magnitude.'''
+		h = self.handle_in
+		return h.angle if h is not None else None
+
+	@handle_in_angle.setter
+	def handle_in_angle(self, angle):
+		h = self.handle_in
+		if h is not None:
+			self.handle_in = DirectionalHandle(angle, h.magnitude)
+
+	@property
+	def handle_out_magnitude(self):
+		'''Outgoing handle magnitude in font units. Settable — preserves angle.'''
+		h = self.handle_out
+		return h.magnitude if h is not None else None
+
+	@handle_out_magnitude.setter
+	def handle_out_magnitude(self, mag):
+		h = self.handle_out
+		if h is not None:
+			self.handle_out = DirectionalHandle(h.angle, mag)
+
+	@property
+	def handle_in_magnitude(self):
+		'''Incoming handle magnitude in font units. Settable — preserves angle.'''
+		h = self.handle_in
+		return h.magnitude if h is not None else None
+
+	@handle_in_magnitude.setter
+	def handle_in_magnitude(self, mag):
+		h = self.handle_in
+		if h is not None:
+			self.handle_in = DirectionalHandle(h.angle, mag)
+
+	@property
+	def is_smooth_directional(self):
+		'''True when both handles exist and are exactly collinear (smooth node
+		in the directional sense: handle_in.angle == handle_out.angle + pi).
+		Slightly more robust than checking the smooth flag, which can drift.
+		'''
+		h_out = self.handle_out
+		h_in = self.handle_in
+
+		if h_out is None or h_in is None:
+			return False
+
+		# Normalise angle difference to [-pi, pi]
+		diff = (h_in.angle - h_out.angle + math.pi) % (2 * math.pi) - math.pi
+		return abs(abs(diff) - math.pi) < 1e-6
+
+	def make_smooth_directional(self):
+		'''Force smooth continuity by averaging the two handle directions.
+		The resulting angle bisects the current in/out directions so the
+		edit is as small as possible. Magnitudes are preserved.
+		'''
+		h_out = self.handle_out
+		h_in = self.handle_in
+
+		if h_out is None or h_in is None:
+			return
+
+		# Average direction (on the unit circle) — bisect the shorter arc
+		avg_x = math.cos(h_out.angle) + math.cos(h_in.angle + math.pi)
+		avg_y = math.sin(h_out.angle) + math.sin(h_in.angle + math.pi)
+		avg_angle = math.atan2(avg_y, avg_x)
+
+		self.handle_out = DirectionalHandle(avg_angle, h_out.magnitude)
+		self.handle_in  = DirectionalHandle(avg_angle + math.pi, h_in.magnitude)
+		self.smooth = True
 
 
 	# - Functions ----------------------------

@@ -13,7 +13,7 @@ from __future__ import absolute_import, print_function, division
 import math, cmath, random
 
 # - Init --------------------------------
-__version__ = '0.27.0'
+__version__ = '0.28.0'
 
 epsilon = 0.000001
 
@@ -210,6 +210,65 @@ def bilinInterp(x, y, points):
 			q22 * (x - x1) * (y - y1)
 		   ) / ((x2 - x1) * (y2 - y1) + 0.0)
 	
+def slerp_angle(a0, a1, t):
+	'''Interpolate two angles along the shorter arc.
+	Both angles in radians. Returns angle in radians.
+	'''
+	# Difference normalised to [-pi, pi]
+	diff = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
+	return a0 + diff * t
+
+def interpolate_directional(data_a, data_b, t, t_angle=None):
+	from typerig.core.objects.node import DirectionalNode
+	
+	'''Interpolate two directional contour descriptions.
+
+	Interpolates on-curve positions linearly and handle angles
+	angularly (short-arc SLERP on the unit circle). Magnitudes
+	interpolate linearly. This produces smoother intermediate
+	shapes than naive XY handle interpolation — the curve stays
+	"on course" through the blend.
+
+	Args:
+		data_a, data_b : list[DirectionalNode] — must be same length
+		t              : float — interpolation factor (0=a, 1=b)
+		t_angle        : float or None — separate time for angle
+		                 interpolation; defaults to t when None.
+		                 Pass a different value for anisotropic blends.
+
+	Returns:
+		list[DirectionalNode]
+	'''
+	assert len(data_a) == len(data_b), \
+		'Incompatible: {} vs {} DirectionalNode elements'.format(len(data_a), len(data_b))
+
+	if t_angle is None:
+		t_angle = t
+
+	result = []
+
+	for a, b in zip(data_a, data_b):
+		# Linear position
+		x = a.x + (b.x - a.x) * t
+		y = a.y + (b.y - a.y) * t
+
+		# Angular SLERP (short arc) for handle directions
+		a_out = slerp_angle(a.angle_out, b.angle_out, t_angle)
+		a_in  = slerp_angle(a.angle_in,  b.angle_in,  t_angle)
+
+		# Linear magnitude
+		m_out = a.mag_out + (b.mag_out - a.mag_out) * t
+		m_in  = a.mag_in  + (b.mag_in  - a.mag_in)  * t
+
+		result.append(DirectionalNode(
+			x=x, y=y,
+			angle_out=a_out, mag_out=m_out,
+			angle_in=a_in,   mag_in=m_in,
+			smooth=a.smooth,
+		))
+
+	return result
+
 # -- Drawing ---------------------------------------------------------
 def two_point_circle(p1, p2):
 	'''Calculate the center point and radius of a circle 
@@ -309,7 +368,6 @@ def hobby_control_points(z0, z1, theta=0., phi=0., alpha=1., beta=1.):
 	u = z0 + cmath.exp(i*theta)*(z1 - z0)*hobby_velocity(theta, phi)/alpha #was *alpha
 	v = z1 - cmath.exp(-i*phi)*(z1 - z0)*hobby_velocity(phi, theta)/beta #was *beta
 	return (u,v)
-
 
 # - Test ----------------------------------------------------------------	
 if __name__ == '__main__':

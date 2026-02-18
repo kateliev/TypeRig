@@ -13,19 +13,20 @@ from __future__ import absolute_import, print_function, division
 
 import math
 
+from typerig.core.objects.atom import Container
 from typerig.core.objects.array import PointArray
 from typerig.core.objects.point import Point
+from typerig.core.objects.node import DirectionalNode
 from typerig.core.objects.transform import Transform, TransformOrigin
 from typerig.core.objects.utils import Bounds
-
-from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
-
-from typerig.core.objects.atom import Container
 from typerig.core.objects.shape import Shape
+from typerig.core.objects.contour import Contour
 from typerig.core.objects.sdf import SignedDistanceField
+from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
+from typerig.core.func.math import slerp_angle, interpolate_directional
 
 # - Init -------------------------------
-__version__ = '0.3.4'
+__version__ = '0.4.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -309,7 +310,11 @@ class Layer(Container, XMLSerializable):
 
 		t0 = self.point_array
 		t1 = other.point_array
-		func = lambda tx, ty: (t1 - t0) * (tx, ty) + t0
+	
+		def func(tx, ty):
+			new_layer = self.clone()
+			new_layer.point_array = (t1 - t0) * (tx, ty) + t0
+			return new_layer
 
 		return func
 
@@ -781,6 +786,167 @@ class Layer(Container, XMLSerializable):
 		# Copy metrics
 		self.advance_width = result.advance_width
 		self.advance_height = result.advance_height
+
+	# - Directional shape interface ----------------------------
+	# Adobe-style representation: each on-curve node owns its
+	# outgoing and incoming off-curve positions expressed as a
+	# direction vector (angle + magnitude) rather than absolute
+	# coordinates. This makes angular interpolation, stem-aware
+	# scaling and smooth-node enforcement much more natural.
+
+	def to_directional(self):
+		'''Export all shapes as a nested list of directional descriptions.
+
+		Returns:
+			list[list[list[DirectionalNode]]]  (layer → shape → contour → nodes)
+		'''
+		return [shape.to_directional() for shape in self.shapes]
+
+	@classmethod
+	def from_directional(cls, data, closed=True, **kwargs):
+		'''Reconstruct a Layer from nested directional descriptions.
+
+		Args:
+			data   : list[list[list[DirectionalNode]]] — as returned by to_directional()
+			closed : bool — passed down to each Contour (default True)
+
+		Returns:
+			Layer
+		'''
+		shapes = [Shape.from_directional(shape_data, closed=closed) for shape_data in data]
+		return cls(shapes, **kwargs)
+
+	def directional_lerp_function(self, other):
+		'''Angular interpolation function between two compatible layers.
+
+		Blends handle angles along the shorter arc and magnitudes linearly.
+		When both layers have stems defined, magnitude blending is weighted
+		by the stem ratio — handles on near-vertical strokes get Y-axis
+		weighting, near-horizontal ones get X-axis weighting.
+
+		Requires compatible shape/contour/node structure.
+
+		Args:
+			other (Layer): Master layer to interpolate toward.
+
+		Returns:
+			func(t, t_angle=None) — call with float 0..1.
+				t_angle: optional separate time for angle blending.
+				         Defaults to t when None.
+		'''
+		assert len(self.shapes) == len(other.shapes), 'Incompatible layers: {} vs {} shapes'.format(len(self.shapes), len(other.shapes))
+
+		# Snapshot both masters at function-build time
+		data_a = self.to_directional()
+		data_b = other.to_directional()
+
+		def func(t, t_angle=None):
+			new_layer = self.__class__()
+
+			for si, shape in enumerate(self.shapes):
+				new_shape = Shape()
+
+				for ci, contour in enumerate(shape.contours):
+					blended = interpolate_directional(
+						data_a[si][ci], data_b[si][ci], t, t_angle)
+					
+					new_shape.contours.append(Contour.from_directional(blended, closed=contour.closed))
+
+				new_layer.shapes.append(new_shape)
+
+			return new_layer
+					
+		return func
+
+	def directional_lerp_stem_function(self, other):
+		'''Stem-aware angular interpolation function between two compatible layers.
+
+		Extends directional_lerp_function() by using each layer's stem values
+		to split magnitude blending into separate X and Y components.
+		A handle pointing near-vertical (angle close to pi/2) blends its
+		magnitude along the Y-stem ratio; a near-horizontal handle uses the
+		X-stem ratio. Handles at intermediate angles get a cosine-weighted mix.
+
+		Both layers must have stems defined (layer.stems = (stx, sty)).
+		Falls back to isotropic blending when stems are missing.
+
+		Args:
+			other (Layer): Master layer to interpolate toward.
+
+		Returns:
+			func(t, t_angle=None) — call with float 0..1.
+		'''
+		assert len(self.shapes) == len(other.shapes), \
+			'Incompatible layers: {} vs {} shapes'.format(
+				len(self.shapes), len(other.shapes))
+
+		# Snapshot both masters at function-build time
+		data_a = self.to_directional()
+		data_b = other.to_directional()
+
+		# Pre-compute stem ratios if available; fall back to 1.0 (neutral)
+		if self.has_stems and other.has_stems:
+			stx_a, sty_a = self.stems
+			stx_b, sty_b = other.stems
+			# Ratio of target stem to source stem — same logic as DeltaMachine
+			rx = stx_b / float(stx_a) if stx_a else 1.
+			ry = sty_b / float(sty_a) if sty_a else 1.
+		else:
+			rx = ry = 1.
+
+		def _stem_t_for_angle(angle, t):
+			'''Compute an effective magnitude-t biased by handle direction.
+			Near-vertical handle  (angle ~ pi/2 or -pi/2) → use ry stem ratio.
+			Near-horizontal handle (angle ~ 0 or pi)       → use rx stem ratio.
+			Intermediate                                   → cosine mix.
+			The stem ratio rescales t so that magnitudes grow proportionally
+			to the stem rather than purely linearly.
+			'''
+			# sin²(angle) weights toward vertical, cos²(angle) toward horizontal
+			sin2 = math.sin(angle) ** 2
+			cos2 = math.cos(angle) ** 2
+			effective_r = rx * cos2 + ry * sin2
+			# Remap t so that t=1 lands at the stem ratio, not at 1.0
+			return t * effective_r
+
+		def func(t, t_angle=None):
+			for si, shape in enumerate(self.shapes):
+				for ci, contour in enumerate(shape.contours):
+					da = data_a[si][ci]
+					db = data_b[si][ci]
+
+					blended = []
+
+					for a, b in zip(da, db):
+						# Position — plain linear
+						x = a.x + (b.x - a.x) * t
+						y = a.y + (b.y - a.y) * t
+
+						# Angle — short-arc SLERP
+						ta = t if t_angle is None else t_angle
+						a_out = _slerp_angle(a.angle_out, b.angle_out, ta)
+						a_in  = _slerp_angle(a.angle_in,  b.angle_in,  ta)
+
+						# Magnitude — stem-weighted t per handle direction
+						t_out = _stem_t_for_angle(a_out, t)
+						t_in  = _stem_t_for_angle(a_in,  t)
+						m_out = a.mag_out + (b.mag_out - a.mag_out) * t_out
+						m_in  = a.mag_in  + (b.mag_in  - a.mag_in)  * t_in
+
+						blended.append(DirectionalNode(
+							x=x, y=y,
+							angle_out=a_out, mag_out=m_out,
+							angle_in=a_in,   mag_in=m_in,
+							smooth=a.smooth,
+						))
+
+					rebuilt = Contour.from_directional(blended, closed=contour.closed)
+
+					for node, src in zip(contour.nodes, rebuilt.nodes):
+						node.x = src.x
+						node.y = src.y
+
+		return func
 
 if __name__ == '__main__':
 	from pprint import pprint
