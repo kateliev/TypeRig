@@ -1045,7 +1045,7 @@ class Contour(Container, XMLSerializable):
 				self.nodes[i].y = new_nodes[i].y
 
 	def delta_scale_compensated(self, delta, stems, scale,
-								intensity=1.0, compensation=(0., 0.),
+								intensity=0.0, compensation=(0., 0.),
 								shift=(0., 0.), italic_angle=False,
 								extrapolate=False):
 		'''Scale contour using DeltaMachine with diagonal compensation.
@@ -1074,15 +1074,19 @@ class Contour(Container, XMLSerializable):
 		from typerig.core.func.transform import contour_dominant_angle, adjust_stems_for_angle
 
 		sx, sy = scale
-		target_stx, target_sty = stems
 
-		# Analyze contour orientation from on-curve nodes
-		on_curve = [(n.x, n.y) for n in self.nodes if n.type == 'on']
-		angle = contour_dominant_angle(on_curve)
+		if intensity > 0.:
+			target_stx, target_sty = stems
+			
+			# Analyze contour orientation from on-curve nodes
+			on_curve = [(n.x, n.y) for n in self.nodes if n.type == 'on']
+			angle = contour_dominant_angle(on_curve)
 
-		# Adjust stems for this contour's angle
-		adj_stx, adj_sty = adjust_stems_for_angle(
-			target_stx, target_sty, angle, sx, sy, intensity)
+			# Adjust stems for this contour's angle
+			adj_stx, adj_sty = adjust_stems_for_angle(
+				target_stx, target_sty, angle, sx, sy, intensity)
+		else:
+			adj_stx, adj_sty = stems
 
 		# Apply delta scaling with adjusted stems
 		result = list(delta.scale_by_stem(
@@ -1106,7 +1110,7 @@ class Contour(Container, XMLSerializable):
 		return new_contour
 
 	def delta_scale_compensated_inplace(self, delta, stems, scale,
-										intensity=1.0, compensation=(0., 0.),
+										intensity=0.0, compensation=(0., 0.),
 										shift=(0., 0.), italic_angle=False,
 										extrapolate=False):
 		'''Scale contour in place using DeltaMachine with diagonal compensation.

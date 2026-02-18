@@ -636,7 +636,7 @@ class Layer(Container, XMLSerializable):
 		return result
 
 	def delta_scale_compensated(self, contour_deltas, scale,
-								intensity=1.0, compensation=(0., 0.),
+								intensity=0.0, compensation=(0., 0.),
 								shift=(0., 0.), italic_angle=False,
 								extrapolate=False,
 								metric_delta=None,
@@ -755,7 +755,7 @@ class Layer(Container, XMLSerializable):
 		return result
 
 	def delta_scale_compensated_inplace(self, contour_deltas, scale,
-										intensity=1.0, compensation=(0., 0.),
+										intensity=0.0, compensation=(0., 0.),
 										shift=(0., 0.), italic_angle=False,
 										extrapolate=False,
 										metric_delta=None,

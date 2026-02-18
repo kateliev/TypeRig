@@ -431,7 +431,7 @@ class Shape(Container, XMLSerializable):
 			self.shift(ox, oy)
 
 	def delta_scale_compensated(self, contour_deltas, stems, scale,
-								intensity=1.0, compensation=(0., 0.),
+								intensity=0.0, compensation=(0., 0.),
 								shift=(0., 0.), italic_angle=False,
 								extrapolate=False):
 		'''Scale shape using per-contour DeltaMachine with diagonal compensation.
@@ -469,7 +469,7 @@ class Shape(Container, XMLSerializable):
 							  transform=self.transform.clone(), proxy=False)
 
 	def delta_scale_compensated_inplace(self, contour_deltas, stems, scale,
-										intensity=1.0, compensation=(0., 0.),
+										intensity=0.0, compensation=(0., 0.),
 										shift=(0., 0.), italic_angle=False,
 										extrapolate=False):
 		'''Scale shape in place using per-contour DeltaMachine with diagonal compensation.
