@@ -22,11 +22,14 @@ from typerig.core.objects.utils import Bounds
 from typerig.core.objects.shape import Shape
 from typerig.core.objects.contour import Contour
 from typerig.core.objects.sdf import SignedDistanceField
+
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
+
 from typerig.core.func.math import slerp_angle, interpolate_directional
+from typerig.core.func.transform import adaptive_scale_directional, timer
 
 # - Init -------------------------------
-__version__ = '0.4.0'
+__version__ = '0.4.5'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -314,6 +317,56 @@ class Layer(Container, XMLSerializable):
 		def func(tx, ty):
 			new_layer = self.clone()
 			new_layer.point_array = (t1 - t0) * (tx, ty) + t0
+			return new_layer
+
+		return func
+
+	def delta_function(self, other):
+		'''Adaptive scaling function between two compatible layers.
+
+		Direct layer-level equivalent of contour.delta_function() and
+		node.delta_function(). Snapshots node pairs from both masters at
+		build time, returns a callable that applies adaptive_scale() over
+		all nodes and produces a new Layer.
+
+		Node weights (node.weight.x, node.weight.y) carry the stem values
+		for each master. Set with layer.set_weight(wx, wy) before calling.
+
+		Args:
+			other (Layer): Second master layer. Must be structurally compatible.
+
+		Returns:
+			func(scale, time, translate, angle, compensate) -> Layer
+				scale     : (sx, sy) scale factors
+				time      : (tx, ty) interpolation times, anisotropic X/Y
+				translate : (dx, dy) post-interpolation shift
+				angle     : italic shear in radians
+				compensate: (cx, cy) stem compensation 0.0=none 1.0=full
+		'''
+		from typerig.core.func.transform import adaptive_scale
+
+		# Snapshot node pairs and their stem weights at build time
+		node_array = [
+			(n0.point.tuple, n1.point.tuple, n0.weight.tuple, n1.weight.tuple)
+			for n0, n1 in zip(self.nodes, other.nodes)
+		]
+
+		def func(scale=(1., 1.), time=(0., 0.), translate=(0., 0.), angle=0., compensate=(0., 0.)):
+			new_layer = self.clone()
+			new_nodes = new_layer.nodes
+
+			for idx in range(len(new_nodes)):
+				p0, p1, w0, w1 = node_array[idx]
+				new_nodes[idx].point = Point(adaptive_scale(
+					(p0, p1),
+					scale,
+					translate,
+					time,
+					compensate,
+					angle,
+					(w0[0], w1[0], w0[1], w1[1])	# stx0, stx1, sty0, sty1
+				))
+
 			return new_layer
 
 		return func
@@ -856,6 +909,110 @@ class Layer(Container, XMLSerializable):
 
 			return new_layer
 					
+		return func
+
+	def directional_delta_function(self, other):
+		'''Adaptive scaling function using directional (polar) handle geometry.
+
+		Mirrors the DeltaMachine stem-compensation workflow:
+		  - self.stems provides the TARGET stem value (where you want to be)
+		  - node.weight on each master holds the master's stem values
+		  - interpolation time is derived via timer() from the above,
+		    exactly as DeltaScale.scale_by_stem() does it
+		  - scale, compensate, translate, italic_angle are caller-controlled
+
+		Difference from standard delta_function():
+		  - handle angles transform geometrically (SLERP + anisotropic direction)
+		  - handle magnitudes stretch geometrically in the handle's own direction
+		  - on-curve positions use identical adaptive_scale stem compensation
+
+		Requires:
+		  - self.has_stems == True  (set layer.stems = (stx, sty) first)
+		  - node.weight set on all nodes of both masters (set_weight or per-node)
+		  - compatible shape/contour/node structure
+
+		Args:
+			other (Layer): Second master layer.
+
+		Returns:
+			func(scale, compensate, translate, italic_angle, extrapolate) → Layer
+				scale        : (sx, sy) scale factors
+				compensate   : (cx, cy) stem compensation 0.0=none 1.0=full
+				translate    : (dx, dy) post-interpolation shift
+				italic_angle : shear in radians for italic designs
+				extrapolate  : bool — allow extrapolation beyond master range
+		'''
+		from typerig.core.func.transform import adaptive_scale_directional, timer
+
+		assert self.has_stems, \
+			'Layer requires stems. Set layer.stems = (stx, sty) first.'
+
+		assert len(self.shapes) == len(other.shapes), \
+			'Incompatible layers: {} vs {} shapes'.format(
+				len(self.shapes), len(other.shapes))
+
+		# Target stems: where on the interpolation axis this layer sits
+		target_stx, target_sty = self.stems
+
+		# Snapshot directional geometry from both masters at build time
+		data_a = self.to_directional()
+		data_b = other.to_directional()
+
+		# Snapshot per-node stem weights from both masters.
+		# weight.x = horizontal stem (stx), weight.y = vertical stem (sty)
+		def _stem_weights(layer):
+			result = []
+
+			for shape in layer.shapes:
+				for contour in shape.contours:
+					for node in contour.nodes:
+						if node.is_on:
+							result.append((node.weight.x, node.weight.y))
+
+			return result
+
+		stems_a = _stem_weights(self)
+		stems_b = _stem_weights(other)
+
+		def func(scale=(1., 1.), compensate=(0., 0.), translate=(0., 0.), italic_angle=0., extrapolate=False):
+			new_layer = self.__class__()
+			on_idx = 0
+
+			for si, shape in enumerate(self.shapes):
+				new_shape = Shape()
+
+				for ci, contour in enumerate(shape.contours):
+					da = data_a[si][ci]
+					db = data_b[si][ci]
+					scaled = []
+
+					for dn_a, dn_b in zip(da, db):
+						wx_a, wy_a = stems_a[on_idx]
+						wx_b, wy_b = stems_b[on_idx]
+						on_idx += 1
+
+						# Derive interpolation time from target stem vs master stems —
+						# identical logic to DeltaScale._stem_for_time() / scale_by_stem()
+						tx = timer(target_stx, wx_a, wx_b, fix_boundry=extrapolate)
+						ty = timer(target_sty, wy_a, wy_b, fix_boundry=extrapolate)
+
+						scaled.append(adaptive_scale_directional(
+							dn_a, dn_b,
+							scale,
+							translate,
+							(tx, ty),				# time derived from stems, not from caller
+							compensate,
+							italic_angle,
+							(wx_a, wx_b, wy_a, wy_b),	# stx0, stx1, sty0, sty1
+						))
+
+					new_shape.contours.append(
+						Contour.from_directional(scaled, closed=contour.closed))
+
+				new_layer.shapes.append(new_shape)
+
+			return new_layer
+
 		return func
 
 if __name__ == '__main__':
