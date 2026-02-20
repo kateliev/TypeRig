@@ -19,7 +19,7 @@ from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomPushButton, TR
 from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 
 # - Init --------------------------
-tool_version = '1.3'
+tool_version = '1.4'
 tool_name = 'TR Popup Align'
 
 TRToolFont_path = getTRIconFontPath()
@@ -72,6 +72,10 @@ class TRPopupAlign(QtGui.QWidget):
 		self.lay_main.addWidget(self.btn_close)
 		self.btn_close.clicked.connect(lambda: self.close())
 
+		tooltip_button = 'Keep relations between selected nodes'
+		self.chk_shift_keep_dimension = CustomPushButton('shift_keep_dimension', checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.lay_main.addWidget(self.chk_shift_keep_dimension)
+		
 		tooltip_button = 'Simple Shift: Shift only selected nodes.'
 		self.chk_shift_dumb = CustomPushButton('shift_dumb', checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.grp_shift_options.addButton(self.chk_shift_dumb, 1)
@@ -82,13 +86,13 @@ class TRPopupAlign(QtGui.QWidget):
 		self.grp_shift_options.addButton(self.chk_shift_smart, 2)
 		self.lay_main.addWidget(self.chk_shift_smart)
 
-		tooltip_button = 'Keep relations between selected nodes'
-		self.chk_shift_keep_dimension = CustomPushButton('shift_keep_dimension', checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
-		self.lay_main.addWidget(self.chk_shift_keep_dimension)
-
 		tooltip_button =  "Interpolated shift"
 		self.chk_shift_lerp = CustomPushButton("shift_interpolate", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.lay_main.addWidget(self.chk_shift_lerp)
+
+		tooltip_button = "Intercept vertical position"
+		self.chk_shift_intercept = CustomPushButton("shift_intercept", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.lay_main.addWidget(self.chk_shift_intercept)
 
 		tooltip_button = 'Pick target node for alignment'
 		self.chk_node_target = CustomPushButton('node_target', checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
@@ -235,7 +239,7 @@ class TRPopupAlign(QtGui.QWidget):
 			pMode, 
 			pLayers, 
 			mode, 
-			False,  # intercept
+			self.chk_shift_intercept.isChecked(),
 			self.chk_shift_keep_dimension.isChecked(), 
 			self.chk_shift_smart.isChecked(), 
 			self.ext_target,
