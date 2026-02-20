@@ -19,7 +19,7 @@ from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomPushButton, TR
 from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 
 # - Init --------------------------
-tool_version = '1.4'
+tool_version = '1.5'
 tool_name = 'TR Popup Align'
 
 TRToolFont_path = getTRIconFontPath()
@@ -90,9 +90,15 @@ class TRPopupAlign(QtGui.QWidget):
 		self.chk_shift_lerp = CustomPushButton("shift_interpolate", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.lay_main.addWidget(self.chk_shift_lerp)
 
+		'''
 		tooltip_button = "Intercept vertical position"
 		self.chk_shift_intercept = CustomPushButton("shift_intercept", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.lay_main.addWidget(self.chk_shift_intercept)
+		'''
+
+		tooltip_button = 'Extrapolate: when checked, alignment buttons slide nodes along their bezier curve/extension instead of direct coordinate assignment.'
+		self.chk_extrapolate = CustomPushButton('extrapolate', checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		self.lay_main.addWidget(self.chk_extrapolate)
 
 		tooltip_button = 'Pick target node for alignment'
 		self.chk_node_target = CustomPushButton('node_target', checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
@@ -154,6 +160,7 @@ class TRPopupAlign(QtGui.QWidget):
 		self.btn_node_align_selection_y = CustomPushButton('node_align_selection_y', tooltip=tooltip_button, obj_name='btn_panel')
 		self.lay_main.addWidget(self.btn_node_align_selection_y)
 		self.btn_node_align_selection_y.clicked.connect(lambda: self.do_align('E'))
+
 
 		# - Set container layout
 		self.container.setLayout(self.lay_main)
@@ -243,7 +250,8 @@ class TRPopupAlign(QtGui.QWidget):
 			self.chk_shift_keep_dimension.isChecked(), 
 			self.chk_shift_smart.isChecked(), 
 			self.ext_target,
-			self.chk_shift_lerp.isChecked()
+			self.chk_shift_lerp.isChecked(),
+			self.chk_extrapolate.isChecked()
 		)
 		self.close()
 

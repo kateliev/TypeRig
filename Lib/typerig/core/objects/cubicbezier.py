@@ -20,7 +20,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.29.0'
+__version__ = '0.30.0'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -232,6 +232,43 @@ class CubicBezier(object):
 		rtime = 1 - time
 		pt = (rtime**3)*self.p0 + 3*(rtime**2)*time*self.p1 + 3*rtime*(time**2)*self.p2 + (time**3)*self.p3
 		return pt
+
+	@staticmethod
+	def _nr_roots_unclamped(p0v, p1v, p2v, p3v, target):
+		'''Newton-Raphson: find all real t where the 1D bezier component equals target.
+		Unclamped — returns t outside [0,1] for extrapolation beyond segment endpoints.
+		'''
+		a =  -p0v + 3.*p1v - 3.*p2v + p3v
+		b =  3.*p0v - 6.*p1v + 3.*p2v
+		c = -3.*p0v + 3.*p1v
+		d =  p0v - target
+		results = []
+		for t0 in (-0.5, 0.0, 0.25, 0.5, 0.75, 1.0, 1.5):
+			t = float(t0)
+			for _ in range(100):
+				ft  = a*t**3 + b*t**2 + c*t + d
+				ftp = 3.*a*t**2 + 2.*b*t + c
+				if abs(ftp) < 1e-14:
+					break
+				dt = ft / ftp
+				t -= dt
+				if abs(dt) < 1e-9:
+					if abs(a*t**3 + b*t**2 + c*t + d) < 1e-3:
+						results.append(t)
+					break
+		unique = []
+		for t in results:
+			if not any(abs(t - u) < 1e-4 for u in unique):
+				unique.append(t)
+		return unique
+
+	def find_t_for_y(self, target_y):
+		'''All real t where B_y(t) == target_y. Includes extrapolation (t outside [0,1]).'''
+		return self._nr_roots_unclamped(self.p0.y, self.p1.y, self.p2.y, self.p3.y, target_y)
+
+	def find_t_for_x(self, target_x):
+		'''All real t where B_x(t) == target_x. Includes extrapolation (t outside [0,1]).'''
+		return self._nr_roots_unclamped(self.p0.x, self.p1.x, self.p2.x, self.p3.x, target_x)
 
 	def solve_derivative_at_time(self, time):
 		'''Returns point of on-curve point at given time and vector of 1st and 2nd derivative.'''
@@ -893,9 +930,3 @@ if __name__ == "__main__":
 	
 	# Align + specific stem width
 	aligned_a, aligned_b = curve_a.make_collinear(curve_b, mode=-1, equalize=True, target_width=120.0)
-
-
-
-
-
-

@@ -25,6 +25,7 @@ from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 from typerig.core.func.collection import group_consecutive
 from typerig.core.objects.point import Void
+from typerig.core.objects.cubicbezier import CubicBezier
 from typerig.core.base.message import *
 
 from PythonQt import QtCore
@@ -35,7 +36,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '3.3'
+__version__ = '3.4'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -474,9 +475,78 @@ class TRNodeActionCollector(object):
 
 	# -- Nodes alignment ------------------------------------------------------
 	@staticmethod
-	def nodes_align(pMode:int, pLayers:tuple, mode:str, intercept:bool=False, keep_relations:bool=False, smart_shift:bool=False, ext_target:dict={}, lerp_shift:bool=False):
+	def nodes_align(pMode:int, pLayers:tuple, mode:str, intercept:bool=False, keep_relations:bool=False, smart_shift:bool=False, ext_target:dict={}, lerp_shift:bool=False, extrapolate:bool=False):
 		process_glyphs = getProcessGlyphs(pMode)
 		modifiers = QtGui.QApplication.keyboardModifiers()
+
+		# Axis for extrapolation is determined by the alignment mode, not by delta heuristics.
+		# X-moving modes: L, R, C, BBoxCenterX, peerCenterX, Y (vector)
+		# Y-moving modes: T, B, E, BBoxCenterY, peerCenterY, FontMetrics*, X (vector)
+		_extrap_x_modes = {'L', 'R', 'C', 'BBoxCenterX', 'peerCenterX'}
+		_extrap_use_y   = mode not in _extrap_x_modes
+
+		def _bezier_align(node, target_val, use_y):
+			'''Slide node along its outgoing bezier segment (or its mathematical extension)
+			to the position where B_y(t)==target_val (or B_x(t)).
+			Updates the on-curve node and both outgoing off-curve handles via de Casteljau.
+			node.getSegmentNodes() -> [node=p0(t=0), bcp1, bcp2, next_on=p3(t=1)]
+			solve_slice(t).second -> [B(t), new_bcp1, new_bcp2, p3]
+			'''
+			use_prev = False
+			seg = node.getSegmentNodes()
+			prev_seg = node.getPrevOn(False).getSegmentNodes()
+
+			# Linear segment
+			if len(seg) < 4 and len(prev_seg) < 4:
+					return
+
+			if len(seg) < 4 and len(prev_seg) == 4:
+				# Cubic segment
+				curve = CubicBezier(
+				(prev_seg[0].x, prev_seg[0].y),
+				(prev_seg[1].x, prev_seg[1].y),
+				(prev_seg[2].x, prev_seg[2].y),
+				(prev_seg[3].x, prev_seg[3].y))
+				use_prev = True
+			else:
+				# Cubic segment
+				curve = CubicBezier(
+				(seg[0].x, seg[0].y),
+				(seg[1].x, seg[1].y),
+				(seg[2].x, seg[2].y),
+				(seg[3].x, seg[3].y))
+
+			candidates = curve.find_t_for_y(target_val) if use_y else curve.find_t_for_x(target_val)
+
+			if not candidates:
+				output(1, 'Align+Extrapolate', 'Node [{},{}]: no solution for {}={}'.format(
+					round(node.x), round(node.y), 'Y' if use_y else 'X', round(target_val)))
+				return
+
+			if use_prev:
+				# Node is at t=1 of prev_seg — pick root closest to 1.0
+				# Use first sub-curve: [prev_on=p0, new_bcp1, new_bcp2, node=B(t)]
+				valid = [t for t in candidates if abs(t - 0.0) > 1e-3 and abs(t - 1.0) > 1e-3]
+				if not valid:
+					return
+				best_t = min(valid, key=lambda t: abs(t - 1.0))
+				first, _ = curve.solve_slice(best_t)
+				# first.p0 = prev_on (unchanged), first.p3 = new node pos
+				prev_seg[3].x = first.p3.x;  prev_seg[3].y = first.p3.y  # node
+				prev_seg[2].x = first.p2.x;  prev_seg[2].y = first.p2.y  # inner bcp (near node)
+				prev_seg[1].x = first.p1.x;  prev_seg[1].y = first.p1.y  # outer bcp (near prev_on)
+			else:
+				# Node is at t=0 of outgoing seg — pick root closest to 0.0
+				# Use second sub-curve: [node=B(t), new_bcp1, new_bcp2, next_on=p3]
+				valid = [t for t in candidates if abs(t - 1.0) > 1e-3 and abs(t - 0.0) > 1e-3]
+				if not valid:
+					return
+				best_t = min(valid, key=lambda t: abs(t))
+				_, second = curve.solve_slice(best_t)
+				seg[0].x = second.p0.x;  seg[0].y = second.p0.y  # node
+				seg[1].x = second.p1.x;  seg[1].y = second.p1.y  # bcp1
+				seg[2].x = second.p2.x;  seg[2].y = second.p2.y  # bcp2
+
 
 		for glyph in process_glyphs:
 			wLayers = glyph._prepareLayers(pLayers)
@@ -718,7 +788,11 @@ class TRNodeActionCollector(object):
 								pass
 						
 						# - Execute Align ----------
-						node.alignTo(target, control, smart_shift, lerp_shift)
+						if extrapolate and node.isOn:
+							target_val = target.y if _extrap_use_y else target.x
+							_bezier_align(node, target_val, _extrap_use_y)
+						else:
+							node.alignTo(target, control, smart_shift, lerp_shift)
 
 			glyph.updateObject(glyph.fl, '{};\tAlign Nodes @ {}.'.format(glyph.name, '; '.join(wLayers)))
 		
