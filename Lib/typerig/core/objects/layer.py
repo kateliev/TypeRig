@@ -29,7 +29,7 @@ from typerig.core.func.math import slerp_angle, interpolate_directional
 from typerig.core.func.transform import adaptive_scale_directional, timer
 
 # - Init -------------------------------
-__version__ = '0.4.5'
+__version__ = '0.4.8'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -925,6 +925,7 @@ class Layer(Container, XMLSerializable):
 		  - handle angles transform geometrically (SLERP + anisotropic direction)
 		  - handle magnitudes stretch geometrically in the handle's own direction
 		  - on-curve positions use identical adaptive_scale stem compensation
+		  - t_angle allows handle angles to lead or lag the position blend
 
 		Requires:
 		  - self.has_stems == True  (set layer.stems = (stx, sty) first)
@@ -935,12 +936,14 @@ class Layer(Container, XMLSerializable):
 			other (Layer): Second master layer.
 
 		Returns:
-			func(scale, compensate, translate, italic_angle, extrapolate) → Layer
+			func(scale, compensate, translate, italic_angle, extrapolate, t_angle) -> Layer
 				scale        : (sx, sy) scale factors
 				compensate   : (cx, cy) stem compensation 0.0=none 1.0=full
 				translate    : (dx, dy) post-interpolation shift
 				italic_angle : shear in radians for italic designs
 				extrapolate  : bool — allow extrapolation beyond master range
+				t_angle      : float or None — separate time for handle angle blending.
+				               Defaults to the stem-derived tx when None.
 		'''
 		from typerig.core.func.transform import adaptive_scale_directional, timer
 
@@ -974,7 +977,7 @@ class Layer(Container, XMLSerializable):
 		stems_a = _stem_weights(self)
 		stems_b = _stem_weights(other)
 
-		def func(scale=(1., 1.), compensate=(0., 0.), translate=(0., 0.), italic_angle=0., extrapolate=False):
+		def func(scale=(1., 1.), compensate=(0., 0.), translate=(0., 0.), italic_angle=0., extrapolate=False, t_angle=None):
 			new_layer = self.__class__()
 			on_idx = 0
 
@@ -996,14 +999,18 @@ class Layer(Container, XMLSerializable):
 						tx = timer(target_stx, wx_a, wx_b, fix_boundry=extrapolate)
 						ty = timer(target_sty, wy_a, wy_b, fix_boundry=extrapolate)
 
+						# t_angle defaults to tx — angles follow position unless overridden
+						ta = tx if t_angle is None else t_angle
+
 						scaled.append(adaptive_scale_directional(
 							dn_a, dn_b,
 							scale,
 							translate,
-							(tx, ty),				# time derived from stems, not from caller
+							(tx, ty),				# position time — stem derived
 							compensate,
 							italic_angle,
 							(wx_a, wx_b, wy_a, wy_b),	# stx0, stx1, sty0, sty1
+							ta,					# angle time — caller controlled
 						))
 
 					new_shape.contours.append(

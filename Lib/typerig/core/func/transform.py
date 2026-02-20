@@ -12,14 +12,20 @@
 from __future__ import absolute_import, print_function, division, unicode_literals
 
 import math
-from typerig.core.func.math import slerp_angle
 
 # - Init --------------------------------
-__version__ = '0.27.0'
+__version__ = '0.27.5'
 
 # - Functions ---------------------------
 def lerp(t0, t1, t):
 	return (t1 - t0)*t + t0
+
+def slerp_angle(a0, a1, t):
+	'''Interpolate two angles along the shorter arc.
+	Both angles in radians. Returns angle in radians.
+	'''
+	diff = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
+	return a0 + diff * t
 
 def compensator(sf, cf, st0, st1):
 	b = float(st1)/st0
@@ -373,7 +379,8 @@ def adjust_stems_for_angle(target_stx, target_sty, angle, sx, sy, intensity=1.0)
 			max(adj_sty, target_sty * 0.1))
 
 
-def adaptive_scale_directional(dn_a, dn_b, s, d, t, c, i, st):
+# - Directional space -----------------------------------------------------
+def adaptive_scale_directional(dn_a, dn_b, s, d, t, c, i, st, t_angle=None):
 	'''Perform adaptive scaling in the directional (polar) domain.
 
 	Reimagines adaptive_scale() to work with directional node geometry
@@ -387,9 +394,9 @@ def adaptive_scale_directional(dn_a, dn_b, s, d, t, c, i, st):
 	    Stroke widths are preserved exactly as in standard DeltaMachine.
 
 	  HANDLE ANGLE — geometrically exact anisotropic transform:
-	    After SLERPing the angle between masters at time t, apply the
+	    After SLERPing the angle between masters at t_angle, apply the
 	    scale (sx, sy) as a direction transform:
-	      θ' = atan2(sy·sin(θ), sx·cos(θ))
+	      theta' = atan2(sy*sin(theta), sx*cos(theta))
 	    This is exact — it is the angle you get if you naively scale
 	    the XY handle vector, but computed in polar space without
 	    going through XY first. No approximation.
@@ -402,11 +409,11 @@ def adaptive_scale_directional(dn_a, dn_b, s, d, t, c, i, st):
 	    intermediate angles are always geometrically consistent.
 
 	  HANDLE MAGNITUDE — geometrically exact anisotropic transform:
-	    After linearly interpolating magnitude between masters at time t,
+	    After linearly interpolating magnitude between masters at tx,
 	    scale by the effective stretch factor in the handle's direction:
-	      m' = m · hypot(sx·cos(θ), sy·sin(θ))
-	    At θ=0 (horizontal handle) this reduces to m·sx.
-	    At θ=π/2 (vertical handle) this reduces to m·sy.
+	      m' = m * hypot(sx*cos(theta), sy*sin(theta))
+	    At theta=0 (horizontal handle) this reduces to m*sx.
+	    At theta=pi/2 (vertical handle) this reduces to m*sy.
 	    Intermediate angles get the geometrically correct blend.
 	    No stem compensation is applied to magnitude — compensation
 	    is a position-level concept; handle lengths scale with the geometry.
@@ -416,10 +423,13 @@ def adaptive_scale_directional(dn_a, dn_b, s, d, t, c, i, st):
 		dn_b     : DirectionalNode — second master
 		s(sx,sy) : tuple(float, float) — scale factors
 		d(dx,dy) : tuple(float, float) — translate
-		t(tx,ty) : tuple(float, float) — interpolation times (anisotropic)
+		t(tx,ty) : tuple(float, float) — interpolation times for position (anisotropic)
 		c(cx,cy) : tuple(float, float) — compensation 0.0=none 1.0=full
 		i        : float — italic shear angle in radians
 		st(stx0,stx1,sty0,sty1) : tuple — stem widths for both masters
+		t_angle  : float or None — separate interpolation time for handle angles
+		           and magnitudes. Defaults to tx when None, allowing angles
+		           to lead or lag the position blend independently.
 
 	Returns:
 		DirectionalNode with scaled position and geometrically transformed handles.
@@ -427,44 +437,59 @@ def adaptive_scale_directional(dn_a, dn_b, s, d, t, c, i, st):
 	from typerig.core.objects.node import DirectionalNode
 
 	sx, sy = s
+	dx, dy = d
 	tx, ty = t
+	stx0, stx1, sty0, sty1 = st
 
-	# -- Position: stem-compensated, identical to adaptive_scale --------
-	new_pos = adaptive_scale(
-		((dn_a.x, dn_a.y), (dn_b.x, dn_b.y)),
-		s, d, t, c, i, st
-	)
+	# Handle angle time: defaults to position time tx when not specified
+	ta = tx if t_angle is None else t_angle
 
-	# -- Handle out: SLERP angle → scale transform → scale magnitude ----
-	θ_out = slerp_angle(dn_a.angle_out, dn_b.angle_out, tx)
-	θ_out_scaled = math.atan2(sy * math.sin(θ_out), sx * math.cos(θ_out))
+	# -- Position: stem-compensated when stems are valid, plain lerp otherwise.
+	# adaptive_scale -> compensator does float(st1)/st0 internally.
+	# If either master stem is zero the interpolated stem cstx/csty will be
+	# zero and that division blows up. Fall back to a naive affine lerp+scale
+	# in that case — same result as compensation=0 but without the crash.
+	if stx0 > 0 and stx1 > 0 and sty0 > 0 and sty1 > 0:
+		new_pos = adaptive_scale(
+			((dn_a.x, dn_a.y), (dn_b.x, dn_b.y)),
+			s, d, t, c, i, st
+		)
+	else:
+		# Plain lerp then scale — no stem compensation
+		lx = dn_a.x + (dn_b.x - dn_a.x) * tx
+		ly = dn_a.y + (dn_b.y - dn_a.y) * ty
+		new_pos = (sx * lx + dx, sy * ly + dy)
 
-	m_out = dn_a.mag_out + (dn_b.mag_out - dn_a.mag_out) * tx
-	m_out_scaled = m_out * math.hypot(sx * math.cos(θ_out), sy * math.sin(θ_out))
+	# -- Handle out: SLERP at t_angle -> scale transform -> scale magnitude
+	theta_out = slerp_angle(dn_a.angle_out, dn_b.angle_out, ta)
+	theta_out_scaled = math.atan2(sy * math.sin(theta_out), sx * math.cos(theta_out))
 
-	# -- Handle in: same treatment as handle out -------------------------
-	θ_in = slerp_angle(dn_a.angle_in, dn_b.angle_in, tx)
-	θ_in_scaled = math.atan2(sy * math.sin(θ_in), sx * math.cos(θ_in))
+	m_out = dn_a.mag_out + (dn_b.mag_out - dn_a.mag_out) * ta
+	m_out_scaled = m_out * math.hypot(sx * math.cos(theta_out), sy * math.sin(theta_out))
 
-	m_in = dn_a.mag_in + (dn_b.mag_in - dn_a.mag_in) * tx
-	m_in_scaled = m_in * math.hypot(sx * math.cos(θ_in), sy * math.sin(θ_in))
+	# -- Handle in: same treatment as handle out
+	theta_in = slerp_angle(dn_a.angle_in, dn_b.angle_in, ta)
+	theta_in_scaled = math.atan2(sy * math.sin(theta_in), sx * math.cos(theta_in))
+
+	m_in = dn_a.mag_in + (dn_b.mag_in - dn_a.mag_in) * ta
+	m_in_scaled = m_in * math.hypot(sx * math.cos(theta_in), sy * math.sin(theta_in))
 
 	return DirectionalNode(
 		x=new_pos[0], y=new_pos[1],
-		angle_out=θ_out_scaled, mag_out=m_out_scaled,
-		angle_in=θ_in_scaled,   mag_in=m_in_scaled,
+		angle_out=theta_out_scaled, mag_out=m_out_scaled,
+		angle_in=theta_in_scaled,   mag_in=m_in_scaled,
 		smooth=dn_a.smooth,
 	)
 
-
-def adaptive_scale_directional_array(a, s, d, t, c, i, st):
+def adaptive_scale_directional_array(a, s, d, t, c, i, st, t_angle=None):
 	'''Apply adaptive_scale_directional() over a list of DirectionalNode pairs.
 
 	Args:
-		a  : list of (DirectionalNode_a, DirectionalNode_b) pairs
-		... : same as adaptive_scale_directional()
+		a       : list of (DirectionalNode_a, DirectionalNode_b) pairs
+		t_angle : float or None — separate time for handle angle blending
+		...     : same as adaptive_scale_directional()
 
 	Returns:
 		list of DirectionalNode
 	'''
-	return [adaptive_scale_directional(dn_a, dn_b, s, d, t, c, i, st) for dn_a, dn_b in a]
+	return [adaptive_scale_directional(dn_a, dn_b, s, d, t, c, i, st, t_angle) for dn_a, dn_b in a]
