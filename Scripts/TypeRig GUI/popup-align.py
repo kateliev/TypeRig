@@ -59,7 +59,6 @@ class TRPopupAlign(QtGui.QWidget):
 		self.container.setObjectName('popup_container')
 		self.container.setSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
 
-
 		# - Flow layout for buttons
 		self.lay_main = TRFlowLayout(spacing=6)
 		self.lay_main.setContentsMargins(12, 12, 12, 12)
@@ -90,11 +89,9 @@ class TRPopupAlign(QtGui.QWidget):
 		self.chk_shift_lerp = CustomPushButton("shift_interpolate", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		self.lay_main.addWidget(self.chk_shift_lerp)
 
-		'''
 		tooltip_button = "Intercept vertical position"
 		self.chk_shift_intercept = CustomPushButton("shift_intercept", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
-		self.lay_main.addWidget(self.chk_shift_intercept)
-		'''
+		#self.lay_main.addWidget(self.chk_shift_intercept)
 
 		tooltip_button = 'Extrapolate: when checked, alignment buttons slide nodes along their bezier curve/extension instead of direct coordinate assignment.'
 		self.chk_extrapolate = CustomPushButton('extrapolate', checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
