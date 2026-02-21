@@ -61,7 +61,7 @@ from typerig.core.base.message import *
 from typerig.core.objects.transform import TransformOrigin
 
 # - Init
-app_name, app_version = 'TR | Delta Preview', '2.0'
+app_name, app_version = 'TR | Delta Preview', '3.0'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -99,6 +99,21 @@ _CLR_EMPTY_BG	= QtGui.QColor(210, 210, 215)
 _CLR_LABEL		= QtGui.QColor(40,  40,  40)
 _CLR_LABEL_SHD	= QtGui.QColor(255, 255, 255)
 _CLR_SEL_BORDER	= QtGui.QColor(80,  120, 200)
+_CLR_BASELINE	= QtGui.QColor(160, 160, 160, 200)
+_CLR_BEARING	= QtGui.QColor(160, 160, 160, 140)
+
+# Semi-transparent contour colors — index wraps via modulo.
+# Consistent across all cells: contour 0 is always the same hue.
+_CONTOUR_COLORS = [
+	QtGui.QColor(220, 70,  70,  110),	# red
+	QtGui.QColor(60,  140, 220, 110),	# blue
+	QtGui.QColor(60,  190, 90,  110),	# green
+	QtGui.QColor(220, 170, 40,  110),	# amber
+	QtGui.QColor(170, 70,  220, 110),	# purple
+	QtGui.QColor(220, 130, 50,  110),	# orange
+	QtGui.QColor(50,  195, 195, 110),	# cyan
+	QtGui.QColor(220, 90,  155, 110),	# pink
+]
 
 
 # - QPainterPath extraction -------------------------------------
@@ -130,14 +145,21 @@ def _fl_contours_to_qpaths(fl_contours):
 
 def _fl_layer_to_qpaths(fl_layer):
 	'''Extract QPainterPaths from a live FL proxy layer.
-	Returns (list[QPainterPath], QRectF) or ([], None).
+	Returns (list[QPainterPath], QRectF, float adv_w).
 	'''
 	fl_contours = []
 
 	for fl_shape in fl_layer.shapes:
 		fl_contours.extend(fl_shape.getContours())
 
-	return _fl_contours_to_qpaths(fl_contours)
+	paths, bbox = _fl_contours_to_qpaths(fl_contours)
+
+	try:
+		adv_w = float(fl_layer.advanceWidth)
+	except Exception:
+		adv_w = 0.0
+
+	return paths, bbox, adv_w
 
 
 def _core_contour_to_qpath(contour):
@@ -173,11 +195,11 @@ def _core_contour_to_qpath(contour):
 
 
 def _core_layer_to_qpaths(core_layer):
-	'''Convert a core Layer (post-delta) to (list[QPainterPath], QRectF).
+	'''Convert a core Layer (post-delta) to (list[QPainterPath], QRectF, float).
 
 	Builds QPainterPaths directly from core contour segments — no FL
 	object reconstruction, no PythonQt boundary crossings per node.
-	Returns ([], None) if the layer has no drawable geometry.
+	Returns ([], None, 0.0) if the layer has no drawable geometry.
 	'''
 	paths = []
 	bbox  = None
@@ -193,7 +215,12 @@ def _core_layer_to_qpaths(core_layer):
 			r    = qp.boundingRect()
 			bbox = r if bbox is None else bbox.united(r)
 
-	return paths, bbox
+	try:
+		adv_w = float(core_layer.width)
+	except Exception:
+		adv_w = 0.0
+
+	return paths, bbox, adv_w
 
 
 
@@ -204,14 +231,14 @@ def _make_error_item(label, message='Error'):
 	item = QtGui.QStandardItem('{}\n{}'.format(label, message))
 	item.setEditable(False)
 	item.setDropEnabled(False)
-	return item, [], None
+	return item, [], None, 0.0
 
 
-def _make_glyph_item(label, paths, bbox):
+def _make_glyph_item(label, paths, bbox, adv_w=0.0):
 	item = QtGui.QStandardItem(label)
 	item.setEditable(False)
 	item.setDropEnabled(False)
-	return item, paths, bbox
+	return item, paths, bbox, adv_w
 
 
 # - Vector delegate ----------------------------------------------
@@ -234,6 +261,9 @@ class GlyphPathDelegate(QtGui.QStyledItemDelegate):
 		# Shared reference bbox — union of all item bboxes in the current model.
 		# All cells scale to this so relative glyph sizes are preserved.
 		self._ref_bbox    = None
+		# Overlay toggles — set by the two toggle buttons in the status bar.
+		self.show_colors  = False		# colorize contours by index
+		self.show_metrics = False		# draw baseline + side bearings
 
 	def sizeHint(self, option, index):
 		s = self.cell_size
@@ -244,7 +274,7 @@ class GlyphPathDelegate(QtGui.QStyledItemDelegate):
 		label = index.data(QtCore.Qt.DisplayRole) or ''
 		row   = index.row()
 		data  = self._path_data.get(id(index.model()), [])
-		paths, bbox = data[row] if row < len(data) else ([], None)
+		paths, bbox, adv_w = data[row] if row < len(data) else ([], None, 0.0)
 
 		cell_w = rect.width()
 		cell_h = rect.height()
@@ -286,11 +316,50 @@ class GlyphPathDelegate(QtGui.QStyledItemDelegate):
 			painter.save()
 			painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
 			painter.setTransform(t)
-			painter.setBrush(QtGui.QBrush(_CLR_FILL))
-			painter.setPen(QtGui.QPen(_CLR_STROKE, max(0.2, 0.5 / scale)))
+			pen_w = max(0.2, 0.5 / scale)
 
-			for path in paths:
-				painter.drawPath(path)
+			if self.show_metrics:
+				# Draw baseline and side bearings in font coordinates.
+				# Lines extend across the full ref bbox + 20% margin.
+				margin = max(ref.width(), ref.height()) * 0.2
+				x0 = ref.x() - margin
+				x1 = ref.x() + ref.width()  + margin
+				y0 = ref.y() - margin
+				y1 = ref.y() + ref.height() + margin
+
+				# Baseline — solid
+				pen_base = QtGui.QPen(_CLR_BASELINE, pen_w)
+				pen_base.setStyle(QtCore.Qt.SolidLine)
+				painter.setPen(pen_base)
+				painter.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 0, 0)))
+				painter.drawLine(
+					QtCore.QPointF(x0, 0.0),
+					QtCore.QPointF(x1, 0.0)
+				)
+
+				# Side bearings — dashed
+				pen_bear = QtGui.QPen(_CLR_BEARING, pen_w)
+				pen_bear.setStyle(QtCore.Qt.DashLine)
+				painter.setPen(pen_bear)
+				for x in (0.0, adv_w):
+					painter.drawLine(
+						QtCore.QPointF(x, y0),
+						QtCore.QPointF(x, y1)
+					)
+
+			if self.show_colors:
+				# Each contour index gets its own semi-transparent color.
+				# Same index = same color across all cells.
+				for i, path in enumerate(paths):
+					clr = _CONTOUR_COLORS[i % len(_CONTOUR_COLORS)]
+					painter.setBrush(QtGui.QBrush(clr))
+					painter.setPen(QtGui.QPen(clr.darker(130), pen_w))
+					painter.drawPath(path)
+			else:
+				painter.setBrush(QtGui.QBrush(_CLR_FILL))
+				painter.setPen(QtGui.QPen(_CLR_STROKE, pen_w))
+				for path in paths:
+					painter.drawPath(path)
 
 			painter.restore()
 
@@ -493,6 +562,16 @@ class VariationsPreview(QtGui.QDialog):
 		self.spn_pad.setFixedWidth(52)
 		self.spn_pad.valueChanged.connect(self.__on_pad_spin)
 
+		# Contour color toggle
+		self.btn_colors = CustomPushButton('flag', checkable=True, checked=False,
+			tooltip='Colorize contours by index', obj_name='btn_panel')
+		self.btn_colors.toggled.connect(self.__on_toggle_colors)
+
+		# Metrics overlay toggle
+		self.btn_metrics_view = CustomPushButton('visible', checkable=True, checked=False,
+			tooltip='Show baseline and side bearings', obj_name='btn_panel')
+		self.btn_metrics_view.toggled.connect(self.__on_toggle_metrics)
+
 		# Refresh
 		self.btn_refresh = CustomPushButton('refresh', tooltip='Refresh current glyph', obj_name='btn_panel')
 		self.btn_refresh.clicked.connect(lambda: self.refresh())
@@ -503,6 +582,8 @@ class VariationsPreview(QtGui.QDialog):
 		lay_status.addWidget(self.spn_zoom)
 		lay_status.addWidget(icn_pad)
 		lay_status.addWidget(self.spn_pad)
+		lay_status.addWidget(self.btn_colors)
+		lay_status.addWidget(self.btn_metrics_view)
 		lay_status.addWidget(self.btn_refresh)
 
 		lay_left.addLayout(lay_status)
@@ -538,6 +619,14 @@ class VariationsPreview(QtGui.QDialog):
 		self._delegate.padding_frac = value / 100.0
 		self.lst_glyphs.viewport().update()
 
+	def __on_toggle_colors(self, checked):
+		self._delegate.show_colors = checked
+		self.lst_glyphs.viewport().update()
+
+	def __on_toggle_metrics(self, checked):
+		self._delegate.show_metrics = checked
+		self.lst_glyphs.viewport().update()
+
 	def _apply_cell_size(self, size):
 		self._delegate.cell_size = size
 
@@ -562,16 +651,16 @@ class VariationsPreview(QtGui.QDialog):
 		else:
 			path_list = self._delegate._path_data.get(id(model), [])
 
-		for item, paths, bbox in items:
+		for item, paths, bbox, adv_w in items:
 			model.appendRow(item)
-			path_list.append((paths, bbox))
+			path_list.append((paths, bbox, adv_w))
 
 		self._delegate._path_data[id(model)] = path_list
 
 		# Recompute shared ref bbox from all entries in this model.
 		# Skips error items (bbox is None) — they render as grey cells.
 		ref = None
-		for _, bbox in path_list:
+		for _, bbox, _adv in path_list:
 			if bbox is not None and bbox.width() > 0 and bbox.height() > 0:
 				ref = bbox if ref is None else ref.united(bbox)
 		self._delegate._ref_bbox = ref
@@ -600,13 +689,13 @@ class VariationsPreview(QtGui.QDialog):
 					items.append(_make_error_item(layer_name, 'Not found'))
 					continue
 
-				paths, bbox = _fl_layer_to_qpaths(fl_layer)
+				paths, bbox, adv_w = _fl_layer_to_qpaths(fl_layer)
 
 				if not paths:
 					items.append(_make_error_item(layer_name, 'Empty'))
 					continue
 
-				items.append(_make_glyph_item(layer_name, paths, bbox))
+				items.append(_make_glyph_item(layer_name, paths, bbox, adv_w))
 
 			self._fill_model(self.mod_glyphs, items)
 
@@ -685,13 +774,13 @@ class VariationsPreview(QtGui.QDialog):
 						transform_origin = self.transform_origin
 					)
 
-					paths, bbox = _core_layer_to_qpaths(result_layer)
+					paths, bbox, adv_w = _core_layer_to_qpaths(result_layer)
 
 					if not paths:
 						items.append(_make_error_item(target_name, 'Empty result'))
 						continue
 
-					items.append(_make_glyph_item(target_name, paths, bbox))
+					items.append(_make_glyph_item(target_name, paths, bbox, adv_w))
 
 				except Exception as e:
 					items.append(_make_error_item(target_name, 'Error'))
