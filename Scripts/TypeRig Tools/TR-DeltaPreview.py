@@ -61,7 +61,7 @@ from typerig.core.base.message import *
 from typerig.core.objects.transform import TransformOrigin
 
 # - Init
-app_name, app_version = 'TR | Delta Preview', '1.0'
+app_name, app_version = 'TR | Delta Preview', '2.0'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -140,19 +140,60 @@ def _fl_layer_to_qpaths(fl_layer):
 	return _fl_contours_to_qpaths(fl_contours)
 
 
+def _core_contour_to_qpath(contour):
+	'''Build a QtGui.QPainterPath from a core Contour via its segments.
+
+	This is the fast path for delta results — avoids _build_fl_shape,
+	getContours(), and flContour.path() entirely.  Paths built here are
+	genuine Python/Qt objects stored directly in the delegate._path_data
+	dict, never serialized through QVariant, so no void* corruption.
+
+	Segment types (from typerig.core):
+	  Line        — p0 (on), p1 (on)
+	  CubicBezier — p0 (on), p1 (bcp-out), p2 (bcp-in), p3 (on)
+	'''
+	path     = QtGui.QPainterPath()
+	segments = contour.segments
+
+	if not segments:
+		return path
+
+	path.moveTo(segments[0].p0.x, segments[0].p0.y)
+
+	for seg in segments:
+		if hasattr(seg, 'p3'):
+			path.cubicTo(seg.p1.x, seg.p1.y,
+						 seg.p2.x, seg.p2.y,
+						 seg.p3.x, seg.p3.y)
+		else:
+			path.lineTo(seg.p1.x, seg.p1.y)
+
+	path.closeSubpath()
+	return path
+
+
 def _core_layer_to_qpaths(core_layer):
 	'''Convert a core Layer (post-delta) to (list[QPainterPath], QRectF).
-	Builds fl6 shapes via _build_fl_shape then calls flContour.path() on each.
-	Returns ([], None) if no drawable geometry.
+
+	Builds QPainterPaths directly from core contour segments — no FL
+	object reconstruction, no PythonQt boundary crossings per node.
+	Returns ([], None) if the layer has no drawable geometry.
 	'''
-	from typerig.proxy.tr.objects.shape import _build_fl_shape
-	fl_contours = []
+	paths = []
+	bbox  = None
 
-	for core_shape in core_layer.shapes:
-		fl_shape = _build_fl_shape(core_shape)
-		fl_contours.extend(fl_shape.getContours())
+	for shape in core_layer.shapes:
+		for contour in shape.contours:
+			qp = _core_contour_to_qpath(contour)
 
-	return _fl_contours_to_qpaths(fl_contours)
+			if qp.isEmpty():
+				continue
+
+			paths.append(qp)
+			r    = qp.boundingRect()
+			bbox = r if bbox is None else bbox.united(r)
+
+	return paths, bbox
 
 
 
@@ -190,6 +231,9 @@ class GlyphPathDelegate(QtGui.QStyledItemDelegate):
 		# Keyed by id(QStandardItemModel) -> list of (paths, bbox) per row.
 		# Python dict — avoids QVariant serialization that corrupts Qt objects.
 		self._path_data   = {}
+		# Shared reference bbox — union of all item bboxes in the current model.
+		# All cells scale to this so relative glyph sizes are preserved.
+		self._ref_bbox    = None
 
 	def sizeHint(self, option, index):
 		s = self.cell_size
@@ -214,14 +258,17 @@ class GlyphPathDelegate(QtGui.QStyledItemDelegate):
 		# -- Glyph area (everything above label strip)
 		glyph_h = cell_h - _LABEL_H
 
-		if paths and bbox is not None and bbox.width() > 0 and bbox.height() > 0:
+		ref  = self._ref_bbox if self._ref_bbox is not None else bbox
+		if paths and bbox is not None and bbox.width() > 0 and bbox.height() > 0 \
+				and ref is not None and ref.width() > 0 and ref.height() > 0:
 			pad     = max(1.0, cell_w * self.padding_frac)
 			avail_w = cell_w  - 2.0 * pad
 			avail_h = glyph_h - 2.0 * pad
 
-			scale = min(avail_w / bbox.width(), avail_h / bbox.height())
+			# Scale from shared ref bbox — preserves relative glyph sizes
+			scale = min(avail_w / ref.width(), avail_h / ref.height())
 
-			# Map bbox center -> center of glyph area, Y-flipped
+			# Center from item's own bbox — each glyph sits in its own position
 			bcx = bbox.x() + bbox.width()  / 2.0
 			bcy = bbox.y() + bbox.height() / 2.0
 
@@ -307,6 +354,10 @@ class VariationsPreview(QtGui.QDialog):
 		self.masters_data = OrderedDict()
 		self.axis_data    = []
 		self.axis_stems   = []
+
+		# Cache: built by __set_axis(), reused by execute_target().
+		# Cleared when glyph changes (refresh) or axis is reset.
+		self._delta_cache = None
 
 		self._delegate = GlyphPathDelegate()
 
@@ -517,6 +568,14 @@ class VariationsPreview(QtGui.QDialog):
 
 		self._delegate._path_data[id(model)] = path_list
 
+		# Recompute shared ref bbox from all entries in this model.
+		# Skips error items (bbox is None) — they render as grey cells.
+		ref = None
+		for _, bbox in path_list:
+			if bbox is not None and bbox.width() > 0 and bbox.height() > 0:
+				ref = bbox if ref is None else ref.united(bbox)
+		self._delegate._ref_bbox = ref
+
 	# - Show axis masters ----------------------------------------
 
 	def _show_axis_masters(self):
@@ -574,38 +633,24 @@ class VariationsPreview(QtGui.QDialog):
 
 		self._show_axis_masters()
 
+		# Rebuild cache if missing (e.g. glyph refreshed after set_axis)
+		if self._delta_cache is None:
+			self._build_delta_cache()
+
+		if self._delta_cache is None:
+			warnings.warn('Cache build failed — cannot execute.', UserWarning)
+			return
+
 		try:
-			tr_g       = trGlyph()
-			core_glyph = tr_g.eject()
-
-			axis_names = []
-
-			for entry in axis_entries:
-				layer_name = entry[0]
-
-				try:
-					stx = float(entry[1])
-					sty = float(entry[2])
-				except (ValueError, IndexError):
-					warnings.warn('Invalid stems for "{}".'.format(layer_name), UserWarning)
-					return
-
-				layer = core_glyph.layer(layer_name)
-
-				if layer is None:
-					warnings.warn('Axis layer "{}" not found.'.format(layer_name), UserWarning)
-					return
-
-				layer.stems = (stx, sty)
-				axis_names.append(layer_name)
-
-			contour_deltas, metric_delta = \
-				core_glyph.build_contour_deltas_with_metrics(axis_names)
-
-			source_name = axis_names[0]
-			it          = math.radians(-float(self.active_font.italic_angle))
+			core_glyph     = self._delta_cache['core_glyph']
+			axis_names     = self._delta_cache['axis_names']
+			contour_deltas = self._delta_cache['contour_deltas']
+			metric_delta   = self._delta_cache['metric_delta']
+			source_name    = self._delta_cache['source_name']
+			it             = math.radians(-float(self.active_font.italic_angle))
 
 			items = []
+
 
 			for entry in target_entries:
 				target_name = entry[0]
@@ -675,6 +720,61 @@ class VariationsPreview(QtGui.QDialog):
 			(tree_axis_target_name,   []),
 		])
 
+	# - Delta cache --------------------------------------------
+
+	def _build_delta_cache(self):
+		'''Eject current glyph to core, stamp Virtual Axis stems, compute
+		contour deltas and metric delta. Stores everything in self._delta_cache.
+		Called by __set_axis() and lazily by execute_target() if cache is None.
+		'''
+		self._delta_cache = None
+
+		try:
+			masters_data = self.tree_layer.getTree()
+			axis_entries = masters_data.get(tree_axis_group_name, [])
+
+			if len(axis_entries) < 2:
+				return
+
+			core_glyph = trGlyph().eject()
+			axis_names = []
+
+			for entry in axis_entries:
+				layer_name = entry[0]
+
+				try:
+					stx = float(entry[1])
+					sty = float(entry[2])
+				except (ValueError, IndexError):
+					warnings.warn('Invalid stems for "{}".'.format(layer_name), UserWarning)
+					return
+
+				layer = core_glyph.layer(layer_name)
+
+				if layer is None:
+					warnings.warn('Axis layer "{}" not found.'.format(layer_name), UserWarning)
+					return
+
+				layer.stems = (stx, sty)
+				axis_names.append(layer_name)
+
+			contour_deltas, metric_delta = \
+				core_glyph.build_contour_deltas_with_metrics(axis_names)
+
+			self._delta_cache = {
+				'core_glyph'     : core_glyph,
+				'axis_names'     : axis_names,
+				'source_name'    : axis_names[0],
+				'contour_deltas' : contour_deltas,
+				'metric_delta'   : metric_delta,
+			}
+
+		except Exception as e:
+			print('{}: _build_delta_cache error - {}'.format(app_name, e))
+			self._delta_cache = None
+
+	# - Internal: Delta panel helpers ----------------------------
+
 	def __set_axis(self, verbose=False):
 		self.masters_data = self.tree_layer.getTree()
 		self.axis_data    = self.masters_data[tree_axis_group_name]
@@ -692,6 +792,10 @@ class VariationsPreview(QtGui.QDialog):
 				warnings.warn('Missing or invalid stem data!', UserWarning)
 				return
 
+		# Build delta cache now — eject + stamp stems + build deltas.
+		# execute_target() reuses this; only rebuilt when axis changes.
+		self._build_delta_cache()
+
 		self.btn_execute.setEnabled(True)
 		self._show_axis_masters()
 
@@ -699,8 +803,9 @@ class VariationsPreview(QtGui.QDialog):
 			output(0, app_name, 'Font: {}; Axis set.'.format(self.active_font.name))
 
 	def __reset_axis(self, verbose=False):
-		self.axis_data  = []
-		self.axis_stems = []
+		self.axis_data    = []
+		self.axis_stems   = []
+		self._delta_cache = None
 		self.btn_execute.setEnabled(False)
 
 		if verbose:
@@ -788,6 +893,7 @@ class VariationsPreview(QtGui.QDialog):
 
 	def refresh(self):
 		self.active_glyph = eGlyph()
+		self._delta_cache = None		# glyph changed — stale cache
 		self._show_axis_masters()
 
 
