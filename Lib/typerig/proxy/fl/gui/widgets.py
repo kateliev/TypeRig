@@ -29,7 +29,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.gui.styles import css_tr_button
 
 # - Init ----------------------------------
-__version__ = '0.5.6'
+__version__ = '0.5.7'
 
 # - Keep compatibility for basestring checks
 try:
@@ -163,6 +163,29 @@ class CustomSpinBox(QtGui.QDoubleSpinBox):
 		if tooltip is not None: self.setToolTip(tooltip)
 		if suffix is not None: self.setSuffix(suffix)
 		if obj_name is not None: self.setObjectName(obj_name)
+
+class CustomLineEdit(QtGui.QWidget):
+	def __init__(self, label_text, input_text=None, tooltip=None, placeholder_text=None, obj_name=(None, None)):
+		super(CustomLineEdit, self).__init__()
+
+		# - Init
+		input_obj_name, lbl_obj_name = None, None
+		
+		if len(obj_name) == 2:	
+			input_obj_name, lbl_obj_name = obj_name
+
+		# - Widgets
+		self.label = CustomLabel(label_text, tooltip, lbl_obj_name)
+		self.input = QtGui.QLineEdit(input_text)
+		self.input.setPlaceholderText(placeholder_text)
+
+		# - Layout
+		self.box = QtGui.QHBoxLayout()
+		self.box.setContentsMargins(0, 0, 0, 0)
+		self.box.addWidget(self.label)
+		self.box.addWidget(self.input)
+		self.setLayout(self.box)
+		self.setSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
 
 # -- Miniwidgets --------------------------
 class CustomSpinLabel(QtGui.QWidget):

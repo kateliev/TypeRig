@@ -50,7 +50,7 @@ from PythonQt import QtCore, QtGui
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
-from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomPushButton, TRFlowLayout, TRDeltaLayerTree, CustomLabel, CustomSpinBox, CustomSpinLabel
+from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomPushButton, TRFlowLayout, TRDeltaLayerTree, CustomLabel, CustomSpinBox, CustomSpinLabel, CustomLineEdit
 
 from typerig.proxy.tr.objects.glyph import trGlyph
 from typerig.proxy.tr.objects.layer import trLayer
@@ -59,7 +59,7 @@ from typerig.core.base.message import *
 from typerig.core.objects.transform import TransformOrigin
 
 # - Init
-app_name, app_version = 'TR | Delta Preview', '3.5'
+app_name, app_version = 'TR | Delta Preview', '3.6'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -222,7 +222,7 @@ def _core_layer_to_qpaths(core_layer):
 
 # - Model item helpers -------------------------------------------
 def _make_error_item(label, message='Error'):
-	item = QtGui.QStandardItem('{}\n{}'.format(label, message))
+	item = QtGui.QStandardItem('{} | {}'.format(label, message))
 	item.setEditable(False)
 	item.setDropEnabled(False)
 	return item, [], None, 0.0
@@ -403,22 +403,6 @@ def _setup_list_view(view, delegate):
 	view.setDefaultDropAction(QtCore.Qt.MoveAction)
 
 
-# - Helpers ------------------------------------------------------
-def _make_icon_spin(icon_name, icon_tip, spinbox):
-	'''Wrap a disabled icon button and a spinbox into one fixed-size
-	widget so TRFlowLayout treats the pair as a single indivisible unit.
-	Mirrors the CustomSpinButton/CustomSpinLabel pattern from widgets.py.
-	'''
-	w   = QtGui.QWidget()
-	lay = QtGui.QHBoxLayout(w)
-	lay.setContentsMargins(0, 0, 0, 0)
-	lay.setSpacing(2)
-	btn = CustomPushButton(icon_name, enabled=False, tooltip=icon_tip, obj_name='btn_panel')
-	lay.addWidget(btn)
-	lay.addWidget(spinbox)
-	w.setSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
-	return w
-
 
 # - Swap-on-drop list view ----------------------------------------
 
@@ -486,7 +470,6 @@ class VariationsPreview(QtGui.QDialog):
 		self.refresh()
 
 	# - UI -------------------------------------------------------
-
 	def _build_ui(self):
 		self.setWindowTitle('{} {}'.format(app_name, app_version))
 		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
@@ -499,53 +482,51 @@ class VariationsPreview(QtGui.QDialog):
 		# ---- Left panel ----------------------------------------
 		left = QtGui.QWidget()
 		left.setMinimumWidth(200)
+		
 		lay_left = QtGui.QVBoxLayout(left)
 		lay_left.setContentsMargins(2, 2, 2, 2)
 		lay_left.setSpacing(4)
 
-		# View controls box —
-		box_view = QtGui.QGroupBox()
-		box_view.setObjectName('box_group')
-		lay_view = TRFlowLayout(spacing=4)
+		# - Glyph info
+		box_glyph = QtGui.QGroupBox()
+		box_glyph.setObjectName('box_group')
+		lay_glyph = TRFlowLayout(spacing=4)
 
-		# Glyph name: icon label + QLabel — kept as a pair wrapper too
-		self.lbl_glyph = CustomLabel('No glyph', obj_name='lbl_panel')
-		wgt_glyph = _make_icon_spin('label', 'Current glyph', self.lbl_glyph)
-
-		# Zoom spinbox
-		self.spn_zoom = CustomSpinBox(
-			(_CELL_SIZE_MIN, _CELL_SIZE_MAX, _CELL_SIZE_DEFAULT, _CELL_SIZE_STEP),
-			tooltip='Cell size (px)', suffix=' px', obj_name='spn_panel')
-		self.spn_zoom.setFixedWidth(68)
-		self.spn_zoom.valueChanged.connect(
-			lambda v: self.__on_zoom_spin(int(self.spn_zoom.value)))
-		wgt_zoom = _make_icon_spin('search', 'Cell size (px)', self.spn_zoom)
-
-		# Padding spinbox
-		self.spn_pad = CustomSpinBox(
-			(0, 40, _PAD_DEFAULT, 1),
-			tooltip='Padding (%)', suffix=' %', obj_name='spn_panel')
-		self.spn_pad.setFixedWidth(52)
-		self.spn_pad.valueChanged.connect(
-			lambda v: self.__on_pad_spin(int(self.spn_pad.value)))
-		wgt_pad = _make_icon_spin('view_icons', 'Padding (%)', self.spn_pad)
-
-		# Toggle buttons and refresh
-		self.btn_colors = CustomPushButton('flag', checkable=True, checked=False,
-			tooltip='Colorize contours by index', obj_name='btn_panel')
-		self.btn_colors.toggled.connect(self.__on_toggle_colors)
-
-		self.btn_metrics_view = CustomPushButton('visible', checkable=True, checked=False,
-			tooltip='Show baseline and side bearings', obj_name='btn_panel')
-		self.btn_metrics_view.toggled.connect(self.__on_toggle_metrics)
+		# Glyph name label — no spinbox partner, added directly to flow
+		self.edt_glyph = CustomLineEdit('label', input_text=None, placeholder_text='Current Glyph', tooltip='Current glyph', obj_name=('lbl_icon', 'lbl_icon'))
+		self.edt_glyph.input.setMinimumWidth(150)
 
 		self.btn_refresh = CustomPushButton('refresh', tooltip='Refresh current glyph', obj_name='btn_panel')
 		self.btn_refresh.clicked.connect(lambda: self.refresh())
 
-		for w in (wgt_glyph, wgt_zoom, wgt_pad,
-				  self.btn_colors, self.btn_metrics_view, self.btn_refresh):
-			lay_view.addWidget(w)
+		lay_glyph.addWidget(self.edt_glyph)
+		lay_glyph.addWidget(self.btn_refresh)
 
+		box_glyph.setLayout(lay_glyph)
+		lay_left.addWidget(box_glyph)
+
+		# - View controls
+		box_view = QtGui.QGroupBox()
+		box_view.setObjectName('box_group')
+		lay_view = TRFlowLayout(spacing=4)
+
+		self.wgt_zoom = CustomSpinLabel('search', (_CELL_SIZE_MIN, _CELL_SIZE_MAX, _CELL_SIZE_DEFAULT, _CELL_SIZE_STEP), tooltip='Cell size (px)', suffix=' px', obj_name=('spn_panel', 'lbl_icon'))
+		self.wgt_zoom.input.valueChanged.connect(lambda v: self.__on_zoom_spin(int(self.wgt_zoom.input.value)))
+
+		self.wgt_pad = CustomSpinLabel('view_icons', (0, 40, _PAD_DEFAULT, 1), tooltip='Padding (%)', suffix=' %', obj_name=('spn_panel', 'lbl_icon'))
+		self.wgt_pad.input.valueChanged.connect(lambda v: self.__on_pad_spin(int(self.wgt_pad.input.value)))
+
+		self.btn_colors = CustomPushButton('flag', checkable=True, checked=False, tooltip='Colorize contours by index', obj_name='btn_panel')
+		self.btn_colors.toggled.connect(self.__on_toggle_colors)
+
+		self.btn_metrics_view = CustomPushButton('visible', checkable=True, checked=False, tooltip='Show baseline and side bearings', obj_name='btn_panel')
+		self.btn_metrics_view.toggled.connect(self.__on_toggle_metrics)
+
+		lay_view.addWidget(self.wgt_zoom)
+		lay_view.addWidget(self.wgt_pad)
+		lay_view.addWidget(self.btn_colors)
+		lay_view.addWidget(self.btn_metrics_view)
+		
 		box_view.setLayout(lay_view)
 		lay_left.addWidget(box_view)
 
@@ -574,7 +555,7 @@ class VariationsPreview(QtGui.QDialog):
 		self.btn_execute.clicked.connect(lambda: self.execute_target())
 		lay_actions.addWidget(self.btn_execute)
 
-		self.btn_commit = CustomPushButton('delta_machine', tooltip='Commit delta results as real layers in the glyph', obj_name='btn_panel')
+		self.btn_commit = CustomPushButton('delta_machine', tooltip='Commit delta results as real layers in the glyph', enabled=False, obj_name='btn_panel')
 		self.btn_commit.clicked.connect(lambda: self.execute_to_font())
 		lay_actions.addWidget(self.btn_commit)
 
@@ -605,17 +586,11 @@ class VariationsPreview(QtGui.QDialog):
 		self.chk_anchors     = CustomPushButton('icon_anchor',         checkable=True, checked=True, tooltip='Process anchors',     obj_name='btn_panel_opt')
 		self.chk_extrapolate = CustomPushButton('extrapolate',         checkable=True, checked=True, tooltip='Allow extrapolation', obj_name='btn_panel_opt')
 
-		# Intensity: icon + spinbox wrapped as one flow item
-		_intensity_tip = ('Diagonal compensation intensity: '
-			'0%=none (uniform stems), '
-			'100%=full (diagonal contours get angle-adjusted stems)')
-		self.spn_intensity = CustomSpinBox(
-			(0, 100, 0, 5), tooltip=_intensity_tip, suffix=' %',
-			obj_name='spn_panel')
-		self.spn_intensity.setFixedWidth(56)
-		wgt_intensity = _make_icon_spin('node_snap', _intensity_tip, self.spn_intensity)
+		# Intensity
+		self.wgt_intensity = CustomSpinLabel('node_snap',(0, 100, 0, 5), tooltip='Stem compensation intensity', suffix=' %', obj_name=('spn_panel', 'lbl_icon'))
+		self.wgt_intensity.input.setFixedWidth(56)
 
-		for w in (self.chk_metrics, self.chk_anchors, self.chk_extrapolate, wgt_intensity):
+		for w in (self.chk_metrics, self.chk_anchors, self.chk_extrapolate, self.wgt_intensity):
 			lay_options.addWidget(w)
 
 		box_options.setLayout(lay_options)
@@ -644,7 +619,6 @@ class VariationsPreview(QtGui.QDialog):
 		box_transform.setLayout(lay_transform)
 		lay_left.addWidget(box_transform)
 
-
 		# ---- Right panel — single wrapping list for all layers
 		self.mod_glyphs = QtGui.QStandardItemModel()
 		self.lst_glyphs = SwapListView(self._delegate)
@@ -658,10 +632,7 @@ class VariationsPreview(QtGui.QDialog):
 		self._splitter_h.setStretchFactor(0, 0)
 		self._splitter_h.setStretchFactor(1, 1)
 		self._splitter_h.setSizes([320, 700])
-		self._splitter_h.setHandleWidth(1)
-		self._splitter_h.setStyleSheet(
-			'QSplitter::handle { background: rgba(120,120,130,80); }'
-		)
+		self._splitter_h.setHandleWidth(2)
 
 		lay_root = QtGui.QVBoxLayout()
 		lay_root.setContentsMargins(4, 4, 4, 4)
@@ -672,7 +643,6 @@ class VariationsPreview(QtGui.QDialog):
 		self.show()
 
 	# - Zoom / padding -------------------------------------------
-
 	def __on_zoom_spin(self, value):
 		self._apply_cell_size(value)
 
@@ -699,7 +669,6 @@ class VariationsPreview(QtGui.QDialog):
 		self.lst_glyphs.doItemsLayout()
 
 	# - Model population -----------------------------------------
-
 	def _fill_model(self, model, items, append=False):
 		'''items: list of (QStandardItem, paths, bbox) tuples.
 		Paths/bbox stored in delegate._path_data keyed by id(model),
@@ -727,7 +696,6 @@ class VariationsPreview(QtGui.QDialog):
 		self._delegate._ref_bbox = ref
 
 	# - Show axis masters ----------------------------------------
-
 	def _show_axis_masters(self):
 		self.__refresh_options()
 
@@ -739,7 +707,7 @@ class VariationsPreview(QtGui.QDialog):
 
 		try:
 			glyph = eGlyph()
-			self.lbl_glyph.setText(glyph.name)
+			self.edt_glyph.input.setText(glyph.name)
 			items = []
 
 			for entry in axis_entries:
@@ -765,7 +733,6 @@ class VariationsPreview(QtGui.QDialog):
 
 
 	# - Execute --------------------------------------------------
-
 	def execute_target(self):
 		self.__refresh_options()
 
@@ -947,7 +914,6 @@ class VariationsPreview(QtGui.QDialog):
 			print('{}: execute_to_font error - {}'.format(app_name, e))
 
 	# - Internal: Delta panel helpers ----------------------------
-
 	def __init_tree(self):
 		masters_data = []
 		active_glyph = eGlyph()
@@ -965,7 +931,6 @@ class VariationsPreview(QtGui.QDialog):
 		])
 
 	# - Delta cache --------------------------------------------
-
 	def _build_delta_cache(self):
 		'''Eject current glyph to core, stamp Virtual Axis stems, compute
 		contour deltas and metric delta. Stores everything in self._delta_cache.
@@ -1112,7 +1077,6 @@ class VariationsPreview(QtGui.QDialog):
 			print('{}: execute_to_font error - {}'.format(app_name, e))
 
 	# - Internal: Delta panel helpers ----------------------------
-
 	def __set_axis(self, verbose=False):
 		self.masters_data = self.tree_layer.getTree()
 		self.axis_data    = self.masters_data[tree_axis_group_name]
@@ -1135,6 +1099,7 @@ class VariationsPreview(QtGui.QDialog):
 		self._build_delta_cache()
 
 		self.btn_execute.setEnabled(True)
+		self.btn_commit.setEnabled(True)
 		self._show_axis_masters()
 
 		if verbose:
@@ -1161,7 +1126,7 @@ class VariationsPreview(QtGui.QDialog):
 		self.opt_extrapolate = self.chk_extrapolate.isChecked()
 		self.opt_metrics     = self.chk_metrics.isChecked()
 		self.opt_anchors     = self.chk_anchors.isChecked()
-		self.opt_intensity   = self.spn_intensity.value / 100.0
+		self.opt_intensity   = self.wgt_intensity.input.value / 100.0
 
 		btn_id = self.grp_transform.checkedId()
 		self.transform_origin = {
@@ -1195,7 +1160,6 @@ class VariationsPreview(QtGui.QDialog):
 		self.tree_layer.setTree(OrderedDict(self.masters_data), tree_column_names)
 
 	# - Font / file IO -------------------------------------------
-
 	def font_save_axis_data(self):
 		temp_lib = self.active_font.fl.packageLib
 		temp_lib[app_id_key] = self.tree_layer.getTree()
@@ -1229,7 +1193,6 @@ class VariationsPreview(QtGui.QDialog):
 			output(6, app_name, 'Font: {}; Axis loaded from: {}.'.format(self.active_font.name, fname))
 
 	# - Public ---------------------------------------------------
-
 	def refresh(self):
 		self.active_glyph = eGlyph()
 		self._delta_cache = None		# glyph changed — stale cache
@@ -1237,5 +1200,4 @@ class VariationsPreview(QtGui.QDialog):
 
 
 # - Run ----------------------------------------------------------
-
 dialog = VariationsPreview()
