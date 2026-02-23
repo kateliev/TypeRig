@@ -25,7 +25,7 @@ from typerig.core.base.message import *
 from typerig.proxy.fl.gui.dialogs import TRLayerSelectDLG
 
 # - Init --------------------------------
-app_name, app_version = 'TR | Propagate Anchors', '1.6'
+app_name, app_version = 'TR | Propagate Anchors', '1.7'
 
 # -- Global parameters
 pMode = 0
@@ -475,7 +475,7 @@ class dlg_copy_anchors_table(QtGui.QDialog):
 		return widget
 	
 	def create_layers_cell_widget(self, row, layers=None):
-		'''Create widget for layers cell with label and select button'''
+		'''Create widget for layers cell with editable field and select button'''
 		if layers is None:
 			layers = []
 		
@@ -489,28 +489,31 @@ class dlg_copy_anchors_table(QtGui.QDialog):
 		layout.setContentsMargins(2, 2, 2, 2)
 		layout.setSpacing(2)
 		
-		# Label showing selected layers (empty = all layers)
-		lbl_layers = QtGui.QLabel()
-		lbl_layers.setWordWrap(True)
-		lbl_layers.setStyleSheet('font-size: 9px; color: #666;')
-		self.update_layers_label(lbl_layers, layers)
+		# Editable text field - comma-separated layer names (empty = all layers)
+		edt_layers = QtGui.QTextEdit()
+		edt_layers.setPlaceholderText('All layers')
+		edt_layers.setMaximumHeight(50)
+		
+		if layers:
+			edt_layers.setPlainText(', '.join(layers))
 		
 		# Button to open layer selection dialog
 		btn_layers = QtGui.QPushButton('Select Layers')
 		btn_layers.clicked.connect(lambda: self.action_select_layers(row))
 		
-		layout.addWidget(lbl_layers)
+		layout.addWidget(edt_layers)
 		layout.addWidget(btn_layers)
 		widget.setLayout(layout)
 		
 		return widget
 	
-	def update_layers_label(self, label, layers):
-		'''Update layers label - show names or "All layers" if empty'''
-		if layers:
-			label.setText('\n'.join(layers))
-		else:
-			label.setText('All layers')
+	def update_layers_field(self, row, layers):
+		'''Update the layers text field in a row'''
+		widget = self.table_widget.cellWidget(row, 3)
+		if widget:
+			text_edit = widget.findChild(QtGui.QTextEdit)
+			if text_edit:
+				text_edit.setPlainText(', '.join(layers) if layers else '')
 	
 	def action_select_layers(self, row):
 		'''Open TRLayerSelectDLG to select layers for a row'''
@@ -524,32 +527,16 @@ class dlg_copy_anchors_table(QtGui.QDialog):
 			# Read directly from the dialog - getTable() returns list of layer name strings
 			selected_layers = list(self.layer_dialog.tab_masters.getTable())
 			self.row_data.setdefault(row, {})['layers'] = selected_layers
-			
-			# Update label
-			widget = self.table_widget.cellWidget(row, 3)
-			if widget:
-				label = widget.findChild(QtGui.QLabel)
-				if label:
-					self.update_layers_label(label, selected_layers)
-			
+			self.update_layers_field(row, selected_layers)
 			output(0, app_name, 'Layers updated for action {}: {}'.format(row + 1, selected_layers or 'All'))
 	
 	def layers_refresh(self):
-		'''Called by TRLayerSelectDLG on every cell change - update label live'''
+		'''Called by TRLayerSelectDLG on every cell change - update field live'''
 		if self.current_layer_row is None:
 			return
 		
 		current_selection = list(self.layer_dialog.tab_masters.getTable())
-		
-		widget = self.table_widget.cellWidget(self.current_layer_row, 3)
-		
-		if widget:
-			selected_layers = list(self.layer_dialog.tab_masters.getTable())
-			self.row_data.setdefault(self.current_layer_row, {})['layers'] = selected_layers
-
-			label = widget.findChild(QtGui.QLabel)
-			if label:
-				self.update_layers_label(label, current_selection)
+		self.update_layers_field(self.current_layer_row, current_selection)
 
 	def update_options_label(self, label, options):
 		'''Update options label with compact info'''
@@ -828,8 +815,17 @@ class dlg_copy_anchors_table(QtGui.QDialog):
 				if dest_text_edit:
 					row_info['destinations'] = dest_text_edit.toPlainText().strip()
 			
-			# Get layers
-			row_info['layers'] = self.row_data.get(row, {}).get('layers', [])
+			# Get layers from text field
+			layers_widget = self.table_widget.cellWidget(row, 3)
+			if layers_widget:
+				layers_text_edit = layers_widget.findChild(QtGui.QTextEdit)
+				if layers_text_edit:
+					layer_text = layers_text_edit.toPlainText().strip()
+					row_info['layers'] = [l.strip() for l in layer_text.split(',') if l.strip()]
+				else:
+					row_info['layers'] = []
+			else:
+				row_info['layers'] = []
 			
 			# Get options
 			if row in self.row_data:
@@ -904,12 +900,11 @@ class dlg_copy_anchors_table(QtGui.QDialog):
 			
 			# Set layers
 			if 'layers' in row_info:
-				self.row_data.setdefault(row, {})['layers'] = row_info['layers']
-				widget = self.table_widget.cellWidget(row, 3)
-				if widget:
-					label = widget.findChild(QtGui.QLabel)
-					if label:
-						self.update_layers_label(label, row_info['layers'])
+				layers_widget = self.table_widget.cellWidget(row, 3)
+				if layers_widget:
+					layers_text_edit = layers_widget.findChild(QtGui.QTextEdit)
+					if layers_text_edit:
+						layers_text_edit.setPlainText(', '.join(row_info['layers']))
 			
 			# Set options
 			if 'options' in row_info:
@@ -978,9 +973,16 @@ class dlg_copy_anchors_table(QtGui.QDialog):
 			dest_text = dest_text_edit.toPlainText().strip()
 			dest_glyphs = [g.strip().lstrip('/') for g in dest_text.split('/') if g.strip()]
 			
-			# Get selected layers - fall back to all masters if none specified
-			selected_layers = self.row_data.get(row, {}).get('layers', [])
-			target_layers = selected_layers if selected_layers else self.active_font.masters()
+			# Get selected layers from text field - fall back to all masters if empty
+			layers_widget = self.table_widget.cellWidget(row, 3)
+			layer_text = ''
+			if layers_widget:
+				layers_text_edit = layers_widget.findChild(QtGui.QTextEdit)
+				if layers_text_edit:
+					layer_text = layers_text_edit.toPlainText().strip()
+			
+			layer_names = [l.strip() for l in layer_text.split(',') if l.strip()]
+			target_layers = layer_names if layer_names else self.active_font.masters()
 			
 			# Get options from row_data
 			options = self.row_data.get(row, {}).get('options', {
