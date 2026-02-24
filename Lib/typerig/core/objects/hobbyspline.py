@@ -332,6 +332,10 @@ class HobbyKnot(Member):
 	def __init__(self, x=0., y=0., **kwargs):
 		super(HobbyKnot, self).__init__(**kwargs)
 
+		# Handle tuple/list input from Container._coerce
+		if isinstance(x, (tuple, list)):
+			x, y = float(x[0]), float(x[1])
+
 		self.x = float(x)
 		self.y = float(y)
 
@@ -1300,13 +1304,11 @@ if __name__ == '__main__':
 	from pprint import pprint
 	section = lambda s: '\n--- {} {}'.format(s, '-' * (40 - len(s)))
 
-	'''
 	# -- Test 1: Backward compatible — all hobby (tuple list)
 	print(section('All Hobby (closed)'))
 	hs = HobbySpline([(0, 320), (320, 640), (640, 320), (320, 0)], closed=True)
 	hs.tension = 1.
 	pprint(hs.nodes)
-	'''
 
 	# -- Test 2: Mixed segments — hobby + line
 	print(section('Mixed: hobby + line'))
@@ -1324,7 +1326,7 @@ if __name__ == '__main__':
 	hs3.add_knot((100, 200), segment=FIXED, bcp_out=(130, 250), bcp_in=(70, 150))
 	hs3.add_knot((300, 200))
 	hs3.add_knot((400, 0))
-	pprint(hs3.segments)
+	pprint(hs3.nodes)
 
 	# -- Test 4: Direction constraint
 	print(section('Direction constraint'))
