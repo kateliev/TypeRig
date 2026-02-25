@@ -17,6 +17,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 from typerig.core.objects.array import PointArray
 from typerig.core.objects.cubicbezier import CubicBezier
+from typerig.core.objects.quadraticbezier import QuadraticBezier
 from typerig.core.objects.transform import Transform, TransformOrigin
 from typerig.core.objects.utils import Bounds
 from typerig.core.func.math import slerp_angle, interpolate_directional
@@ -31,7 +32,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.node import Node, Knot, DirectionalNode, node_types
 
 # - Init -------------------------------
-__version__ = '0.6.0'
+__version__ = '0.6.5'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -97,8 +98,7 @@ class Contour(Container, XMLSerializable):
 				obj_segments.append(Line(*segment))
 
 			elif len(segment) == 3:
-				# Placeholder for simple TT curves
-				raise NotImplementedError
+				obj_segments.append(QuadraticBezier(*segment))
 
 			elif len(segment) == 4:
 				obj_segments.append(CubicBezier(*segment))
@@ -339,6 +339,20 @@ class Contour(Container, XMLSerializable):
 
 					result.append(((pt.x, pt.y), (nx, ny)))
 
+			elif isinstance(segment, QuadraticBezier):
+				for j in range(steps_per_segment):
+					t = j / float(steps_per_segment)
+					pt = segment.solve_point(t)
+					_pt, d1, _d2 = segment.solve_derivative_at_time(t)
+					mag = math.sqrt(d1.x * d1.x + d1.y * d1.y)
+
+					if mag > 1e-10:
+						nx, ny = d1.y / mag, -d1.x / mag
+					else:
+						nx, ny = 0.0, 0.0
+
+					result.append(((pt.x, pt.y), (nx, ny)))
+
 			elif isinstance(segment, Line):
 				dx = segment.p1.x - segment.p0.x
 				dy = segment.p1.y - segment.p0.y
@@ -422,6 +436,54 @@ class Contour(Container, XMLSerializable):
 					k3 = 0.
 
 			return n0, n3, k0, k3
+
+		elif isinstance(segment, QuadraticBezier):
+			# Check if fully collapsed
+			chord = abs(segment.p2 - segment.p0)
+
+			if chord < epsilon:
+				h_ctrl = abs(segment.p1 - segment.p0)
+
+				if h_ctrl < epsilon:
+					return None, None, 0., 0.
+
+			# Start normal from P0->P1 tangent
+			tan0 = segment.p1 - segment.p0
+			m0 = abs(tan0)
+
+			if m0 < 1e-10:
+				tan0 = segment.p2 - segment.p0
+				m0 = abs(tan0)
+
+			n0 = (tan0.y / m0, -tan0.x / m0) if m0 > 1e-10 else None
+
+			# End normal from P1->P2 tangent
+			tan2 = segment.p2 - segment.p1
+			m2 = abs(tan2)
+
+			if m2 < 1e-10:
+				tan2 = segment.p2 - segment.p0
+				m2 = abs(tan2)
+
+			n2 = (tan2.y / m2, -tan2.x / m2) if m2 > 1e-10 else None
+
+			# Curvature
+			k0 = 0.
+			k2 = 0.
+
+			if n0 is not None:
+				try:
+					k0 = segment.solve_curvature(0.0)
+				except (ZeroDivisionError, ValueError):
+					k0 = 0.
+
+			if n2 is not None:
+				try:
+					k2 = segment.solve_curvature(1.0)
+				except (ZeroDivisionError, ValueError):
+					k2 = 0.
+
+			return n0, n2, k0, k2
 
 		elif isinstance(segment, Line):
 			dx = segment.p1.x - segment.p0.x
@@ -617,6 +679,29 @@ class Contour(Container, XMLSerializable):
 				new_node_list.append(Node(new_p0x, new_p0y, type='on', smooth=p0.smooth))
 				new_node_list.append(Node(new_bcp_out_x, new_bcp_out_y, type='curve', smooth=bcp_out.smooth))
 				new_node_list.append(Node(new_bcp_in_x, new_bcp_in_y, type='curve', smooth=bcp_in.smooth))
+
+			elif isinstance(segment, QuadraticBezier) and len(nodes) == 3:
+				p0, qcp, p2 = nodes
+				d0 = on_disp.get(id(p0), (0., 0.))
+				d2 = on_disp.get(id(p2), (0., 0.))
+
+				new_p0x = p0.x + d0[0]
+				new_p0y = p0.y + d0[1]
+				# Off-curve control point gets averaged displacement
+				new_qcp_x = qcp.x + (d0[0] + d2[0]) * 0.5
+				new_qcp_y = qcp.y + (d0[1] + d2[1]) * 0.5
+
+				if curvature_correction and (k_start != 0. or k_end != 0.):
+					s0 = max(0.1, min(1.0 + distance * k_start, 5.0))
+
+					if abs(s0 - 1.0) > 1e-6:
+						hx = new_qcp_x - new_p0x
+						hy = new_qcp_y - new_p0y
+						new_qcp_x = new_p0x + hx * s0
+						new_qcp_y = new_p0y + hy * s0
+
+				new_node_list.append(Node(new_p0x, new_p0y, type='on', smooth=p0.smooth))
+				new_node_list.append(Node(new_qcp_x, new_qcp_y, type='qcurve', smooth=qcp.smooth))
 
 			elif isinstance(segment, Line) and len(nodes) == 2:
 				p0 = nodes[0]
@@ -819,6 +904,37 @@ class Contour(Container, XMLSerializable):
 			theta3 = math.atan2(tan3.y, tan3.x) if m3 > 1e-10 else None
 
 			return theta0, theta3
+
+		elif isinstance(segment, QuadraticBezier):
+			chord = abs(segment.p2 - segment.p0)
+
+			if chord < epsilon:
+				h_ctrl = abs(segment.p1 - segment.p0)
+
+				if h_ctrl < epsilon:
+					return None, None
+
+			# Start tangent from P0->P1 (or chord as fallback)
+			tan0 = segment.p1 - segment.p0
+			m0 = abs(tan0)
+
+			if m0 < 1e-10:
+				tan0 = segment.p2 - segment.p0
+				m0 = abs(tan0)
+
+			theta0 = math.atan2(tan0.y, tan0.x) if m0 > 1e-10 else None
+
+			# End tangent from P1->P2 (or chord as fallback)
+			tan2 = segment.p2 - segment.p1
+			m2 = abs(tan2)
+
+			if m2 < 1e-10:
+				tan2 = segment.p2 - segment.p0
+				m2 = abs(tan2)
+
+			theta2 = math.atan2(tan2.y, tan2.x) if m2 > 1e-10 else None
+
+			return theta0, theta2
 
 		elif isinstance(segment, Line):
 			dx = segment.p1.x - segment.p0.x
@@ -1170,6 +1286,13 @@ class Contour(Container, XMLSerializable):
 				bcp_out = node_seg[1]
 				dx = bcp_out.x - p0.x
 				dy = bcp_out.y - p0.y
+				a_out = math.atan2(dy, dx)
+				m_out = math.hypot(dx, dy)
+			elif len(node_seg) == 3:
+				# Quadratic: p0, qcp, p1 — single shared off-curve
+				qcp = node_seg[1]
+				dx = qcp.x - p0.x
+				dy = qcp.y - p0.y
 				a_out = math.atan2(dy, dx)
 				m_out = math.hypot(dx, dy)
 			else:
