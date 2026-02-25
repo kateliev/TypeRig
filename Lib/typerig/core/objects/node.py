@@ -20,6 +20,7 @@ from typerig.core.func.transform import adaptive_scale, lerp
 from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line, Vector
 from typerig.core.objects.cubicbezier import CubicBezier
+from typerig.core.objects.quadraticbezier import QuadraticBezier
 from typerig.core.objects.transform import Transform
 
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
@@ -147,6 +148,10 @@ class Node(Member, XMLSerializable):
 		return self.type == node_types['on']
 
 	@property
+	def is_off(self):
+		return self.type == node_types['off']
+
+	@property
 	def next_on(self):
 		assert self.parent is not None, 'Orphan Node: Cannot find Next on-curve node!'
 		currentNode = self.next
@@ -174,9 +179,20 @@ class Node(Member, XMLSerializable):
 	
 	@property
 	def segment(self):
-		for si in range(len(self.parent.node_segments)):
-			if self in self.parent.node_segments[si][:1]: return self.parent.segments[si]
-		return
+		for node_seg in self.parent.node_segments:
+			if self in node_seg[:1]:
+				points = [n.point for n in node_seg]
+				num = len(node_seg)
+
+				if num == 2:
+					return Line(*points)
+				elif num == 4 and node_seg[1].type == node_types['curve']:
+					return CubicBezier(*points)
+				elif num == 3:
+					return QuadraticBezier(*points)
+				# Complex TT: not directly representable as single segment
+				return None
+		return None
 
 	@property
 	def triad(self):
@@ -277,6 +293,20 @@ class Node(Member, XMLSerializable):
 				self.parent.insert(self.idx + 3, new_on)
 				self.parent.insert(self.idx + 4, new_curve_out)
 				
+				return (self.segment, self.next_on.segment)
+
+			if isinstance(segment, QuadraticBezier):
+				slices = self.segment.solve_slice(time)
+
+				# First half: on, off, on — update existing off-curve
+				self.next.point = slices[0].p1
+				# Insert new on-curve and new off-curve for second half
+				new_on = self.__class__(slices[1].p0.tuple, type=node_types['on'], smooth=True)
+				new_off = self.__class__(slices[1].p1.tuple, type=node_types['off'])
+
+				self.parent.insert(self.idx + 2, new_on)
+				self.parent.insert(self.idx + 3, new_off)
+				
 				return (self.segment, self.next_on.segment)	
 		return
 
@@ -324,6 +354,29 @@ class Node(Member, XMLSerializable):
 		self.parent.insert(self.idx + 3, other)
 		
 		return self_bcp_out, other_bcp_in, other
+
+	def qcurve_to(self, off_curve, other):
+		'''Draw a quadratic curve from this node through off_curve to other.
+
+		Arguments:
+			off_curve: TT off-curve control point (Node, Point or tuple)
+			other: Destination on-curve point (Node, Point or tuple)
+
+		Returns:
+			tuple(off_curve_node, other_node)
+		'''
+		if not isinstance(off_curve, self.__class__):
+			off_curve = self.__class__(off_curve)
+			off_curve.type = node_types['off']
+
+		if not isinstance(other, self.__class__):
+			other = self.__class__(other)
+			other.type = node_types['on']
+
+		self.parent.insert(self.idx + 1, off_curve)
+		self.parent.insert(self.idx + 2, other)
+		
+		return off_curve, other
 
 	# - Transformation -----------------------------------------------
 	def apply_transform(self):

@@ -32,7 +32,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.node import Node, Knot, DirectionalNode, node_types
 
 # - Init -------------------------------
-__version__ = '0.6.5'
+__version__ = '0.6.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -93,19 +93,36 @@ class Contour(Container, XMLSerializable):
 	def segments(self):
 		obj_segments = []
 
-		for segment in self.point_segments:
-			if len(segment) == 2:
-				obj_segments.append(Line(*segment))
+		for node_seg in self.node_segments:
+			points = [n.point for n in node_seg]
+			num = len(node_seg)
 
-			elif len(segment) == 3:
-				obj_segments.append(QuadraticBezier(*segment))
+			if num == 2:
+				obj_segments.append(Line(*points))
 
-			elif len(segment) == 4:
-				obj_segments.append(CubicBezier(*segment))
+			elif num == 4 and node_seg[1].type == node_types['curve']:
+				# Cubic bezier: on, curve, curve, on
+				obj_segments.append(CubicBezier(*points))
 
-			else:
-				# Placeholder for complex TT curves
-				raise NotImplementedError
+			elif num >= 3:
+				# TT quadratic (simple or complex)
+				# Expand complex TT runs via implicit on-curves at midpoints
+				off_points = points[1:-1]
+				p_start = points[0]
+
+				for i in range(len(off_points)):
+					q = off_points[i]
+
+					if i < len(off_points) - 1:
+						# Implicit on-curve at midpoint to next off-curve
+						q_next = off_points[i + 1]
+						p_end = Point((q.x + q_next.x) * 0.5, (q.y + q_next.y) * 0.5)
+					else:
+						# Last off-curve connects to final on-curve
+						p_end = points[-1]
+
+					obj_segments.append(QuadraticBezier(p_start, q, p_end))
+					p_start = p_end
 
 		return obj_segments
 
@@ -701,7 +718,7 @@ class Contour(Container, XMLSerializable):
 						new_qcp_y = new_p0y + hy * s0
 
 				new_node_list.append(Node(new_p0x, new_p0y, type='on', smooth=p0.smooth))
-				new_node_list.append(Node(new_qcp_x, new_qcp_y, type='qcurve', smooth=qcp.smooth))
+				new_node_list.append(Node(new_qcp_x, new_qcp_y, type=node_types['off'], smooth=qcp.smooth))
 
 			elif isinstance(segment, Line) and len(nodes) == 2:
 				p0 = nodes[0]
