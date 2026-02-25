@@ -173,6 +173,29 @@ class Contour(Container, XMLSerializable):
 		'''True if contour winds counter-clockwise (outer in PS convention).'''
 		return self.signed_area > 0
 
+	@property
+	def has_quadratic(self):
+		'''True if contour contains any TT quadratic segments.'''
+		for node in self.nodes:
+			if node.type == node_types['off']:
+				return True
+		return False
+
+	@property
+	def is_mixed(self):
+		'''True if contour contains both cubic and quadratic segments.'''
+		has_cubic = any(n.type == node_types['curve'] for n in self.nodes)
+		has_tt = any(n.type == node_types['off'] for n in self.nodes)
+		return has_cubic and has_tt
+
+	def _assert_cubic_only(self, method_name):
+		'''Raise NotImplementedError if contour contains quadratic segments.'''
+		if self.has_quadratic:
+			raise NotImplementedError(
+				'{}: TT quadratic contours are not supported. '
+				'Use to_cubic_contour() to convert first.'.format(method_name)
+			)
+
 	# -- Functions ------------------------------
 	def set_start(self, index):
 		index = self.nodes[index].prev_on.idx if not self.nodes[index].is_on else index
@@ -751,6 +774,8 @@ class Contour(Container, XMLSerializable):
 		Returns:
 			Contour: New offset contour with same node structure.
 		'''
+		self._assert_cubic_only('offset_outline')
+
 		if len(self.segments) == 0:
 			return self.clone()
 
@@ -809,6 +834,8 @@ class Contour(Container, XMLSerializable):
 		Returns:
 			Contour: New offset contour.
 		'''
+		self._assert_cubic_only('offset_outline_sdf')
+
 		if sdf is None or not sdf.is_computed:
 			return self.offset_outline(distance, curvature_correction)
 
@@ -996,6 +1023,8 @@ class Contour(Container, XMLSerializable):
 			Contour: New contour with compensated scaling applied.
 		'''
 		from typerig.core.func.transform import diagonal_correction_offset
+
+		self._assert_cubic_only('scale_compensated')
 
 		if len(self.segments) == 0:
 			return self.clone()
@@ -1264,6 +1293,158 @@ class Contour(Container, XMLSerializable):
 				self.nodes[i].y = new_nodes[i].y
 
 
+	# - TT to PS conversion --------------------------------
+	def to_cubic_contour(self):
+		'''Convert all TT quadratic segments to PS cubic beziers.
+		Returns a NEW Contour — does not modify the original.
+
+		Simple quadratic segments (on, off, on) are elevated via
+		exact degree elevation. Complex TT runs (multiple off-curves)
+		are first expanded into simple quadratics via implicit on-curve
+		midpoints, then each is elevated to cubic.
+
+		Pure cubic and line segments pass through unchanged.
+
+		Returns:
+			Contour: New contour with all-cubic geometry.
+		'''
+		new_nodes = []
+
+		for node_seg in self.node_segments:
+			num = len(node_seg)
+
+			if num == 2:
+				# Line: copy start node
+				p0 = node_seg[0]
+				new_nodes.append(Node(p0.x, p0.y, type=node_types['on'], smooth=p0.smooth))
+
+			elif num == 4 and node_seg[1].type == node_types['curve']:
+				# Cubic: copy on + both BCPs
+				p0 = node_seg[0]
+				new_nodes.append(Node(p0.x, p0.y, type=node_types['on'], smooth=p0.smooth))
+				new_nodes.append(Node(node_seg[1].x, node_seg[1].y, type=node_types['curve'], smooth=node_seg[1].smooth))
+				new_nodes.append(Node(node_seg[2].x, node_seg[2].y, type=node_types['curve'], smooth=node_seg[2].smooth))
+
+			elif num >= 3:
+				# TT quadratic (simple or complex) — expand and elevate
+				points = [n.point for n in node_seg]
+				off_points = points[1:-1]
+				p_start = points[0]
+				is_first = True
+
+				for i in range(len(off_points)):
+					q = off_points[i]
+
+					if i < len(off_points) - 1:
+						q_next = off_points[i + 1]
+						p_end = Point((q.x + q_next.x) * 0.5, (q.y + q_next.y) * 0.5)
+					else:
+						p_end = points[-1]
+
+					# Degree elevation: Q0->Q1->Q2 becomes C0->C1->C2->C3
+					c1 = Point(
+						(p_start.x + 2. * q.x) / 3.,
+						(p_start.y + 2. * q.y) / 3.
+					)
+					c2 = Point(
+						(2. * q.x + p_end.x) / 3.,
+						(2. * q.y + p_end.y) / 3.
+					)
+
+					if is_first:
+						# Emit on-curve from original node
+						src = node_seg[0]
+						new_nodes.append(Node(src.x, src.y, type=node_types['on'], smooth=src.smooth))
+						is_first = False
+					else:
+						# Implicit on-curve from expansion
+						new_nodes.append(Node(p_start.x, p_start.y, type=node_types['on'], smooth=True))
+
+					new_nodes.append(Node(c1.x, c1.y, type=node_types['curve']))
+					new_nodes.append(Node(c2.x, c2.y, type=node_types['curve']))
+
+					p_start = p_end
+
+		return Contour(new_nodes, closed=self.closed, proxy=False)
+
+	def to_quadratic_contour(self, max_err=1.0, all_quadratic=True):
+		'''Convert all cubic segments to TT quadratic splines.
+		Returns a NEW Contour — does not modify the original.
+
+		Uses fontTools.cu2qu for the lossy cubic-to-quadratic approximation.
+		Line segments pass through unchanged. Existing quadratic segments
+		are kept as-is.
+
+		The returned contour uses TT convention with implied on-curve
+		points between consecutive off-curves.
+
+		Args:
+			max_err (float): Maximum approximation error in font units.
+				Recommended: UPEM / 1000 (i.e. 1.0 for a 1000 UPM font).
+			all_quadratic (bool): If True (default), all cubics become
+				quadratic splines. If False, cubics that are already
+				close enough to a quadratic are kept as single quadratics,
+				otherwise kept as cubics.
+
+		Returns:
+			Contour: New contour with TT quadratic geometry.
+
+		Raises:
+			ImportError: If fontTools is not installed.
+		'''
+		try:
+			from fontTools.cu2qu import curve_to_quadratic
+		except ImportError:
+			raise ImportError(
+				'to_quadratic_contour() requires fontTools. '
+				'Install it with: pip install fonttools'
+			)
+
+		new_nodes = []
+
+		for node_seg in self.node_segments:
+			num = len(node_seg)
+
+			if num == 2:
+				# Line: copy start node
+				p0 = node_seg[0]
+				new_nodes.append(Node(p0.x, p0.y, type=node_types['on'], smooth=p0.smooth))
+
+			elif num == 4 and node_seg[1].type == node_types['curve']:
+				# Cubic: convert via cu2qu
+				cubic = [(n.x, n.y) for n in node_seg]
+				result = curve_to_quadratic(cubic, max_err, all_quadratic=all_quadratic)
+
+				if result is None:
+					# cu2qu couldn't fit — keep as cubic
+					p0 = node_seg[0]
+					new_nodes.append(Node(p0.x, p0.y, type=node_types['on'], smooth=p0.smooth))
+					new_nodes.append(Node(node_seg[1].x, node_seg[1].y, type=node_types['curve'], smooth=node_seg[1].smooth))
+					new_nodes.append(Node(node_seg[2].x, node_seg[2].y, type=node_types['curve'], smooth=node_seg[2].smooth))
+
+				elif len(result) == 3:
+					# Single quadratic: on, off, (next on implicit)
+					new_nodes.append(Node(result[0][0], result[0][1], type=node_types['on'], smooth=node_seg[0].smooth))
+					new_nodes.append(Node(result[1][0], result[1][1], type=node_types['off']))
+
+				else:
+					# TT spline with implied on-curves: first point is on,
+					# all middle points are off (on-curves are implied at midpoints)
+					new_nodes.append(Node(result[0][0], result[0][1], type=node_types['on'], smooth=node_seg[0].smooth))
+
+					for pt in result[1:-1]:
+						new_nodes.append(Node(pt[0], pt[1], type=node_types['off']))
+
+			else:
+				# Already quadratic (simple or complex) — keep as-is
+				p0 = node_seg[0]
+				new_nodes.append(Node(p0.x, p0.y, type=node_types['on'], smooth=p0.smooth))
+
+				for n in node_seg[1:-1]:
+					new_nodes.append(Node(n.x, n.y, type=node_types['off'], smooth=n.smooth))
+
+		return Contour(new_nodes, closed=self.closed, proxy=False)
+
 	# - Directional contour interface ----------------------------
 	# Adobe-style representation: each on-curve node owns its
 	# outgoing and incoming off-curve positions expressed as a
@@ -1290,6 +1471,8 @@ class Contour(Container, XMLSerializable):
 		Returns:
 			list[DirectionalNode]
 		'''
+		self._assert_cubic_only('to_directional')
+
 		result = []
 
 		for node_seg in self.node_segments:

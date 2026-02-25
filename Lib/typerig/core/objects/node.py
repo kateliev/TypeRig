@@ -415,6 +415,13 @@ class Node(Member, XMLSerializable):
 			curr_segmet_nodes,  curr_segment = self.segment_nodes, self.segment
 			prev_segment_nodes, prev_segment = self.prev_on.segment_nodes, self.prev_on.segment
 
+			# - Guard against TT quadratic segments
+			if isinstance(curr_segment, QuadraticBezier) or isinstance(prev_segment, QuadraticBezier):
+				raise NotImplementedError(
+					'lerp_shift: TT quadratic segments are not supported. '
+					'Use to_cubic_contour() to convert first.'
+				)
+
 			# - Process segments
 			if isinstance(curr_segment, CubicBezier):
 				new_curr = curr_segment.lerp_first(shift)
