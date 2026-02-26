@@ -1065,6 +1065,121 @@ class CubicBezier(object):
 
 		return new_in, new_out
 
+	def intersect_line_extended(self, other_line):
+		'''Find curve/line intersections allowing t outside [0,1] for extrapolation.
+		Uses Newton-Raphson root finding on the curve aligned to the target line.
+		
+		Args:
+			other_line: Line object to intersect with
+		
+		Returns:
+			tuple: (t_values, intersection_points) — t may be outside [0,1]
+		'''
+		aligned_bezier = self.align_to(other_line)
+
+		# Find all t where y=0 on aligned curve (unclamped)
+		t_values = self._nr_roots_unclamped(
+			aligned_bezier.p0.y, aligned_bezier.p1.y,
+			aligned_bezier.p2.y, aligned_bezier.p3.y, 0.)
+
+		intersection_points = [self.solve_point(t) for t in t_values]
+		return t_values, intersection_points
+
+	def extend_to_line(self, target_line, from_end=True):
+		'''Extend the curve beyond one endpoint until it intersects a target line.
+		Uses de Casteljau splitting at the intersection t for proper handle adjustment.
+		
+		Args:
+			target_line: Line object to intersect with
+			from_end: If True extend beyond p3, if False extend beyond p0
+		
+		Returns:
+			CubicBezier: Extended curve with proper handles, or None if no intersection
+		'''
+		t_values, _ = self.intersect_line_extended(target_line)
+
+		if not t_values:
+			return None
+
+		if from_end:
+			# Extending beyond p3: prefer t > 1.0, fallback to closest to 1.0
+			beyond = [t for t in t_values if t > 1.0 + 1e-6]
+			best_t = min(beyond) if beyond else min(t_values, key=lambda t: abs(t - 1.0))
+			result, _ = self.solve_slice(best_t)
+		else:
+			# Extending beyond p0: prefer t < 0.0, fallback to closest to 0.0
+			beyond = [t for t in t_values if t < -1e-6]
+			best_t = max(beyond) if beyond else min(t_values, key=lambda t: abs(t))
+			_, result = self.solve_slice(best_t)
+
+		return result
+
+	@staticmethod
+	def _line_line_intersect(a0, a1, b0, b1):
+		'''Intersect two infinite lines (a0->a1) and (b0->b1).
+		Returns Point or None if parallel.
+		'''
+		dx1 = a1.x - a0.x
+		dy1 = a1.y - a0.y
+		dx2 = b1.x - b0.x
+		dy2 = b1.y - b0.y
+		det = dx1 * dy2 - dy1 * dx2
+
+		if abs(det) < 1e-10:
+			return None
+
+		t = ((b0.x - a0.x) * dy2 - (b0.y - a0.y) * dx2) / det
+		return Point(a0.x + t * dx1, a0.y + t * dy1)
+
+	@staticmethod
+	def corner_loop_to_lines(segment_in, segment_out, target_in, target_out):
+		'''Loop a corner by extending segments until they intersect target lines.
+		Works with both CubicBezier curves and Line segments.
+		For curve targets, pass Line(target_curve.p0, target_curve.p3) as the chord.
+
+		Args:
+			segment_in: CubicBezier or Line ending at the corner
+			segment_out: CubicBezier or Line starting from the corner
+			target_in: Line that the incoming extension should reach
+			target_out: Line that the outgoing extension should reach
+
+		Returns:
+			tuple: (new_segment_in, new_segment_out) or (None, None) on failure
+		'''
+		# - Extend incoming segment beyond its endpoint (p3 for curves, p1 for lines)
+		if isinstance(segment_in, CubicBezier):
+			new_in = segment_in.extend_to_line(target_in, from_end=True)
+		else:
+			hit = CubicBezier._line_line_intersect(
+				segment_in.p0, segment_in.p1,
+				target_in.p0, target_in.p1)
+
+			if hit is None:
+				return None, None
+
+			new_in = Line(segment_in.p0, hit)
+
+		if new_in is None:
+			return None, None
+
+		# - Extend outgoing segment beyond its start (p0 for curves and lines)
+		if isinstance(segment_out, CubicBezier):
+			new_out = segment_out.extend_to_line(target_out, from_end=False)
+		else:
+			hit = CubicBezier._line_line_intersect(
+				segment_out.p0, segment_out.p1,
+				target_out.p0, target_out.p1)
+
+			if hit is None:
+				return None, None
+
+			new_out = Line(hit, segment_out.p1)
+
+		if new_out is None:
+			return None, None
+
+		return new_in, new_out
+
 
 if __name__ == "__main__":
 	a = Line(((113.73076629638672, 283.6538391113281), (357.96154022216797, 415.3846130371094)))

@@ -340,6 +340,69 @@ class TRNodeActionCollector(object):
 		TRNodeActionCollector.corner_loop(pMode, pLayers, dlg_get_input.values)
 
 	@staticmethod
+	def corner_loop_to_targets(pMode:int, pLayers:tuple):
+		'''Loop corner extending to target segments.
+		Select 3+ on-curve nodes: the corner is auto-detected (sharpest angle),
+		the other two define bounding segments the loop should reach.
+		'''
+		process_glyphs = getProcessGlyphs(pMode)
+
+		for glyph in process_glyphs:
+			wLayers = glyph._prepareLayers(pLayers)
+
+			for layer in wLayers:
+				selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
+
+				if len(selection) < 3:
+					output(1, 'Loop to Target', 'Need 3 selected on-curve nodes: 2 bounds + 1 corner.')
+					continue
+
+				# - Find corner node by sharpest angle
+				angles = []
+				for node in selection:
+					prev_on = node.getPrevOn(False)
+					next_on = node.getNextOn(False)
+					vp = (prev_on.x - node.x, prev_on.y - node.y)
+					vn = (next_on.x - node.x, next_on.y - node.y)
+					dot = vp[0] * vn[0] + vp[1] * vn[1]
+					cross = abs(vp[0] * vn[1] - vp[1] * vn[0])
+					angles.append(math.atan2(cross, dot))
+
+				corner_idx = angles.index(min(angles))
+				corner_node = selection[corner_idx]
+				bound_nodes = [s for i, s in enumerate(selection) if i != corner_idx]
+
+				# - Build target lines from bound nodes
+				# -- Use the secant through each bound node's neighbors as the target
+				target_lines = []
+				for bnode in bound_nodes:
+					bp = bnode.getPrevOn(False)
+					bn = bnode.getNextOn(False)
+					target_lines.append(Line(bp.tuple, bn.tuple))
+
+				# - Assign targets to incoming/outgoing sides
+				# -- Compare distance from each bound to corner's prev/next neighbors
+				prev_on = corner_node.getPrevOn(False)
+				next_on = corner_node.getNextOn(False)
+
+				d0_prev = math.hypot(bound_nodes[0].x - prev_on.x, bound_nodes[0].y - prev_on.y)
+				d0_next = math.hypot(bound_nodes[0].x - next_on.x, bound_nodes[0].y - next_on.y)
+
+				if d0_prev < d0_next:
+					target_in = target_lines[0]
+					target_out = target_lines[1]
+				else:
+					target_in = target_lines[1]
+					target_out = target_lines[0]
+
+				# - Execute
+				corner_node.cornerLoopToTargets(target_in, target_out)
+
+			glyph.updateObject(glyph.fl, '{};\tLoop to Target @ {}.'.format(glyph.name, '; '.join(wLayers)))
+
+		active_workspace.getCanvas(True).refreshAll()
+
+	@staticmethod
 	def corner_trap(pMode:int, pLayers:tuple, incision:int, depth:int, trap:int, smooth:bool=True):
 		# - Get list of glyphs to be processed
 		process_glyphs = getProcessGlyphs(pMode)
