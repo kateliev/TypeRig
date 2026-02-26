@@ -22,7 +22,7 @@ from typerig.core.objects.utils import Bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 # - Init ---------------------------------
-__version__ = '0.29.1'
+__version__ = '0.29.2'
 
 # - Keep compatibility for basestring checks
 try:
@@ -495,29 +495,54 @@ class eNode(pNode):
 
 	# - Corner operations ---------------
 	def cornerMitre(self, mitreSize=5, isRadius=False):
-		# - Calculate unit vectors and shifts
-		nextNode = self.getNextOn(False)
-		prevNode = self.getPrevOn(False)
+		# - Get segment geometry BEFORE any node modifications
+		prev_on = self.getPrevOn(False)
+		in_seg = prev_on.getSegmentNodes()		# Segment ending at self: [prev_on, (bcp, bcp,) self]
+		out_seg = self.getSegmentNodes()			# Segment starting from self: [self, (bcp, bcp,) next_on]
+		is_curve_in = len(in_seg) == 4
+		is_curve_out = len(out_seg) == 4
 
-		nextUnit = Coord(nextNode.asCoord() - self.asCoord()).unit
-		prevUnit = Coord(prevNode.asCoord() - self.asCoord()).unit
-		
-		if not isRadius:
-			angle = math.atan2(nextUnit | prevUnit, nextUnit & prevUnit)
-			radius = abs((float(mitreSize)/2)/math.sin(angle/2))
+		# - Build curve/line geometry objects from current positions
+		if is_curve_in:
+			seg_in = Curve(in_seg)
 		else:
-			radius = mitreSize
+			seg_in = Line(prev_on.tuple, self.tuple)
 
-		nextShift = nextUnit * radius
-		prevShift = prevUnit * radius
+		if is_curve_out:
+			seg_out = Curve(out_seg)
+		else:
+			next_on = self.getNextOn(False)
+			seg_out = Line(self.tuple, next_on.tuple)
 
-		# - Insert Node and process
+		# - Compute mitre/loop via de Casteljau extrapolation
+		new_in, new_out = Curve.corner_mitre(seg_in, seg_out, mitreSize, isRadius)
+
+		# - Update incoming segment handles (curve only)
+		if is_curve_in:
+			in_seg[1].x = new_in.p1.x; in_seg[1].y = new_in.p1.y
+			in_seg[2].x = new_in.p2.x; in_seg[2].y = new_in.p2.y
+
+		# - Compute new corner positions
+		new_self_x = new_in.p3.x if is_curve_in else new_in.p1.x
+		new_self_y = new_in.p3.y if is_curve_in else new_in.p1.y
+
+		# - Insert new node for mitre/loop edge
 		nextNode = self.__class__(self.insertAfter(.01)) # Was 0?, something went wrong in 6871
 		nextNode.smartReloc(self.x, self.y) # Go back because something went wrong in 6871
 
-		self.smartShift(*prevShift.tuple)
-		nextNode.smartShift(*nextShift.tuple)
+		# - Relocate nodes to computed positions (reloc, not smartReloc — handles set explicitly)
+		self.reloc(new_self_x, new_self_y)
+		nextNode.reloc(new_out.p0.x, new_out.p0.y)
+
+		# - Convert mitre/loop edge to line
 		nextNode.fl.convertToLine()
+
+		# - Update outgoing segment handles (curve only)
+		if is_curve_out:
+			new_out_seg = nextNode.getSegmentNodes()
+			if len(new_out_seg) == 4:
+				new_out_seg[1].x = new_out.p1.x; new_out_seg[1].y = new_out.p1.y
+				new_out_seg[2].x = new_out.p2.x; new_out_seg[2].y = new_out.p2.y
 
 		return (self.fl, nextNode.fl)
 

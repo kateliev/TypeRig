@@ -20,7 +20,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.30.0'
+__version__ = '0.30.1'
 
 # - Classes -----------------------------
 class CubicBezier(object):
@@ -908,6 +908,162 @@ class CubicBezier(object):
 			result_1 = result_1.doSwap()
 		
 		return result_0, result_1
+
+
+	# -- Corner operations -----------------------------------------
+	def solve_distance_extended(self, distance, from_start=True, timeStep=.001):
+		'''Find time t at which chord distance from an endpoint equals given distance.
+		Supports extrapolation (t outside [0,1]) for extension beyond curve endpoints.
+		Uses de Casteljau via solve_slice for proper handle adjustment.
+		
+		Args:
+			distance: Positive = inward along curve, negative = outward (extrapolation beyond endpoint)
+			from_start: If True measure from p0, if False measure from p3
+			timeStep: Probing resolution
+		
+		Returns:
+			float: t parameter (may be outside [0,1] for extrapolation)
+		'''
+		if from_start:
+			ref = self.p0
+			t = 0.
+			step = timeStep if distance >= 0 else -timeStep
+		else:
+			ref = self.p3
+			t = 1.
+			step = -timeStep if distance >= 0 else timeStep
+
+		target = abs(distance)
+		measure = 0.
+
+		while measure < target:
+			t += step
+
+			# - Safety: do not extrapolate too far
+			if abs(t) > 3. or abs(1. - t) > 3.:
+				break
+
+			pt = self.solve_point(t)
+			measure = math.hypot(pt.x - ref.x, pt.y - ref.y)
+
+		return t
+
+	def trim_at_start(self, distance, timeStep=.001):
+		'''Trim (positive) or extend (negative) the curve from the p0 side.
+		Uses de Casteljau splitting to properly adjust control point handles.
+		Positive distance moves p0 towards p3 (shorter curve).
+		Negative distance extends p0 away from p3 (longer curve, extrapolated).
+		
+		Returns:
+			CubicBezier: New curve with adjusted start point and handles.
+		'''
+		t = self.solve_distance_extended(distance, from_start=True, timeStep=timeStep)
+		_, result = self.solve_slice(t)
+		return result
+
+	def trim_at_end(self, distance, timeStep=.001):
+		'''Trim (positive) or extend (negative) the curve from the p3 side.
+		Uses de Casteljau splitting to properly adjust control point handles.
+		Positive distance moves p3 towards p0 (shorter curve).
+		Negative distance extends p3 away from p0 (longer curve, extrapolated).
+		
+		Returns:
+			CubicBezier: New curve with adjusted end point and handles.
+		'''
+		t = self.solve_distance_extended(distance, from_start=False, timeStep=timeStep)
+		result, _ = self.solve_slice(t)
+		return result
+
+	@staticmethod
+	def corner_mitre(segment_in, segment_out, mitre_size, is_radius=False):
+		'''Mitre or loop a corner between two segments meeting at a point.
+		Works with both CubicBezier curves and Line segments, properly 
+		extrapolating/interpolating along curves via de Casteljau.
+
+		Args:
+			segment_in: CubicBezier or Line ending at the corner (p3 for curves, p1 for lines)
+			segment_out: CubicBezier or Line starting from the corner (p0 for curves and lines)
+			mitre_size: Positive for mitre (trim inward), negative for loop/overlap (extend outward).
+			is_radius: If True, |mitre_size| is used directly as the shift distance along each segment.
+					   If False, mitre_size is the desired mitre edge length and shift is calculated
+					   from the angle between the tangent directions at the corner.
+
+		Returns:
+			tuple: (new_segment_in, new_segment_out) - modified segments.
+				   CubicBezier inputs yield CubicBezier outputs with proper handles.
+				   Line inputs yield Line outputs.
+		'''
+		# - Determine tangent directions at the corner point
+		# -- Direction pointing AWAY from the corner, back along the incoming segment
+		if isinstance(segment_in, CubicBezier):
+			in_tangent = segment_in.p3 - segment_in.p2
+
+			# Handle retracted BCPs (p2 == p3): fall back to chord direction
+			if math.hypot(in_tangent.x, in_tangent.y) < 1e-10:
+				in_tangent = segment_in.p3 - segment_in.p0
+
+			prev_dir = Point(-in_tangent.x, -in_tangent.y)
+		else:
+			# Line: p0 -> p1 where p1 is at the corner
+			prev_dir = segment_in.p0 - segment_in.p1
+
+		# -- Direction pointing AWAY from the corner, forward along the outgoing segment
+		if isinstance(segment_out, CubicBezier):
+			out_tangent = segment_out.p1 - segment_out.p0
+
+			# Handle retracted BCPs (p0 == p1): fall back to chord direction
+			if math.hypot(out_tangent.x, out_tangent.y) < 1e-10:
+				out_tangent = segment_out.p3 - segment_out.p0
+
+			next_dir = Point(out_tangent.x, out_tangent.y)
+		else:
+			# Line: p0 is at the corner, p1 is away
+			next_dir = segment_out.p1 - segment_out.p0
+
+		# - Normalize to unit vectors
+		prev_len = math.hypot(prev_dir.x, prev_dir.y)
+		next_len = math.hypot(next_dir.x, next_dir.y)
+
+		if prev_len < 1e-10 or next_len < 1e-10:
+			return segment_in, segment_out  # Degenerate: coincident points
+
+		prev_unit = Point(prev_dir.x / prev_len, prev_dir.y / prev_len)
+		next_unit = Point(next_dir.x / next_len, next_dir.y / next_len)
+
+		# - Calculate shift distance
+		if not is_radius:
+			# Angle between the two directions away from the corner
+			cross = prev_unit.x * next_unit.y - prev_unit.y * next_unit.x
+			dot = prev_unit.x * next_unit.x + prev_unit.y * next_unit.y
+			angle = math.atan2(abs(cross), dot)
+
+			if abs(math.sin(angle / 2.)) < 1e-10:
+				return segment_in, segment_out  # Nearly straight, no mitre needed
+
+			radius = abs((float(mitre_size) / 2.) / math.sin(angle / 2.))
+		else:
+			radius = abs(mitre_size)
+
+		# - Apply sign: positive mitre_size = trim inward, negative = extend outward
+		shift = radius if mitre_size >= 0 else -radius
+
+		# - Trim/extend incoming segment at its end (p3 side)
+		if isinstance(segment_in, CubicBezier):
+			new_in = segment_in.trim_at_end(shift)
+		else:
+			new_end = Point(segment_in.p1.x + prev_unit.x * shift,
+							segment_in.p1.y + prev_unit.y * shift)
+			new_in = Line(segment_in.p0, new_end)
+
+		# - Trim/extend outgoing segment at its start (p0 side)
+		if isinstance(segment_out, CubicBezier):
+			new_out = segment_out.trim_at_start(shift)
+		else:
+			new_start = Point(segment_out.p0.x + next_unit.x * shift,
+							  segment_out.p0.y + next_unit.y * shift)
+			new_out = Line(new_start, segment_out.p1)
+
+		return new_in, new_out
 
 
 if __name__ == "__main__":
