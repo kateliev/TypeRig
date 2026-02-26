@@ -824,17 +824,30 @@ class eNode(pNode):
 			
 		return (self.fl, b.fl, c.fl, d.fl)
 
-	def cornerLoopToTargets(self, target_in_line, target_out_line):
-		'''Loop corner by extending segments until they intersect target lines.
-		Uses de Casteljau extrapolation for proper curve handle adjustment.
+	def cornerLoopToTargets(self, target_x, target_y, safe_distance=0.):
+		'''Loop corner by extending segments toward a target position.
+		Uses find_t_for_x/y + de Casteljau split (same as _bezier_align).
+		Picks X or Y per segment based on tangent direction at the corner.
 		
 		Args:
-			target_in_line: Line that the incoming segment extension should reach
-			target_out_line: Line that the outgoing segment extension should reach
+			target_x, target_y: Target position coordinates
+			safe_distance: Pull back from target by this amount on each axis
 		
 		Returns:
 			tuple(flNode, flNode) or None on failure
 		'''
+
+		# - Apply safe distance: reduce shift on each axis
+		if safe_distance != 0.:
+			dx = target_x - self.x
+			dy = target_y - self.y
+
+			if abs(dx) > 1e-6:
+				target_x -= math.copysign(safe_distance, dx)
+
+			if abs(dy) > 1e-6:
+				target_y -= math.copysign(safe_distance, dy)
+
 		# - Get segment geometry BEFORE any node modifications
 		prev_on = self.getPrevOn(False)
 		in_seg = prev_on.getSegmentNodes()
@@ -842,50 +855,107 @@ class eNode(pNode):
 		is_curve_in = len(in_seg) == 4
 		is_curve_out = len(out_seg) == 4
 
-		# - Build geometry objects
-		if is_curve_in:
-			seg_in = Curve(in_seg)
-		else:
-			seg_in = Line(prev_on.tuple, self.tuple)
+		new_in_end = None
+		new_out_start = None
+		in_handles = None
+		out_handles = None
 
+		# - Process incoming segment (extends past p3)
+		if is_curve_in:
+			curve_in = Curve(in_seg)
+
+			# Tangent at corner end: p3 - p2
+			tan = curve_in.p3 - curve_in.p2
+			if abs(tan.x) < 1e-6 and abs(tan.y) < 1e-6:
+				tan = curve_in.p3 - curve_in.p0
+
+			# Pick axis based on tangent direction
+			use_y = abs(tan.y) > abs(tan.x)
+			candidates = curve_in.find_t_for_y(target_y) if use_y else curve_in.find_t_for_x(target_x)
+
+			# Only t > 1 = extension beyond corner
+			beyond = [t for t in candidates if t > 1.0 + 1e-3]
+
+			if beyond:
+				best_t = min(beyond)
+				first, _ = curve_in.solve_slice(best_t)
+				new_in_end = first.p3
+				in_handles = (first.p1, first.p2)
+		else:
+			# Line: project along direction
+			dx = self.x - prev_on.x
+			dy = self.y - prev_on.y
+
+			if abs(dx) > 1e-6 or abs(dy) > 1e-6:
+				use_y = abs(dy) > abs(dx)
+
+				if use_y and abs(dy) > 1e-6:
+					t_ext = (target_y - prev_on.y) / dy
+					new_in_end = Coord(prev_on.x + dx * t_ext, target_y)
+				elif abs(dx) > 1e-6:
+					t_ext = (target_x - prev_on.x) / dx
+					new_in_end = Coord(target_x, prev_on.y + dy * t_ext)
+
+		# - Process outgoing segment (extends before p0)
 		if is_curve_out:
-			seg_out = Curve(out_seg)
+			curve_out = Curve(out_seg)
+
+			# Tangent at corner start: p1 - p0
+			tan = curve_out.p1 - curve_out.p0
+			if abs(tan.x) < 1e-6 and abs(tan.y) < 1e-6:
+				tan = curve_out.p3 - curve_out.p0
+
+			use_y = abs(tan.y) > abs(tan.x)
+			candidates = curve_out.find_t_for_y(target_y) if use_y else curve_out.find_t_for_x(target_x)
+
+			# Only t < 0 = extension before corner
+			beyond = [t for t in candidates if t < -1e-3]
+
+			if beyond:
+				best_t = max(beyond)
+				_, second = curve_out.solve_slice(best_t)
+				new_out_start = second.p0
+				out_handles = (second.p1, second.p2)
 		else:
 			next_on = self.getNextOn(False)
-			seg_out = Line(self.tuple, next_on.tuple)
+			dx = next_on.x - self.x
+			dy = next_on.y - self.y
 
-		# - Compute extensions via intersection
-		new_in, new_out = Curve.corner_loop_to_lines(seg_in, seg_out, target_in_line, target_out_line)
+			if abs(dx) > 1e-6 or abs(dy) > 1e-6:
+				use_y = abs(dy) > abs(dx)
 
-		if new_in is None or new_out is None:
+				if use_y and abs(dy) > 1e-6:
+					t_ext = (target_y - self.y) / dy
+					new_out_start = Coord(self.x + dx * t_ext, target_y)
+				elif abs(dx) > 1e-6:
+					t_ext = (target_x - self.x) / dx
+					new_out_start = Coord(target_x, self.y + dy * t_ext)
+
+		if new_in_end is None or new_out_start is None:
 			return None
 
-		# - Update incoming segment handles (curve only)
-		if is_curve_in:
-			in_seg[1].x = new_in.p1.x; in_seg[1].y = new_in.p1.y
-			in_seg[2].x = new_in.p2.x; in_seg[2].y = new_in.p2.y
-
-		# - Compute new corner positions
-		new_self_x = new_in.p3.x if is_curve_in else new_in.p1.x
-		new_self_y = new_in.p3.y if is_curve_in else new_in.p1.y
+		# - Update incoming handles
+		if is_curve_in and in_handles:
+			in_seg[1].x = in_handles[0].x; in_seg[1].y = in_handles[0].y
+			in_seg[2].x = in_handles[1].x; in_seg[2].y = in_handles[1].y
 
 		# - Insert new node for loop edge
 		nextNode = self.__class__(self.insertAfter(.01))
 		nextNode.smartReloc(self.x, self.y)
 
-		# - Relocate nodes (reloc not smartReloc — handles are set explicitly)
-		self.reloc(new_self_x, new_self_y)
-		nextNode.reloc(new_out.p0.x, new_out.p0.y)
+		# - Relocate to computed positions
+		self.reloc(new_in_end.x, new_in_end.y)
+		nextNode.reloc(new_out_start.x, new_out_start.y)
 
 		# - Convert loop edge to line
 		nextNode.fl.convertToLine()
 
-		# - Update outgoing segment handles (curve only)
-		if is_curve_out:
+		# - Update outgoing handles
+		if is_curve_out and out_handles:
 			new_out_seg = nextNode.getSegmentNodes()
 			if len(new_out_seg) == 4:
-				new_out_seg[1].x = new_out.p1.x; new_out_seg[1].y = new_out.p1.y
-				new_out_seg[2].x = new_out.p2.x; new_out_seg[2].y = new_out.p2.y
+				new_out_seg[1].x = out_handles[0].x; new_out_seg[1].y = out_handles[0].y
+				new_out_seg[2].x = out_handles[1].x; new_out_seg[2].y = out_handles[1].y
 
 		return (self.fl, nextNode.fl)
 
