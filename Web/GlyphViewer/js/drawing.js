@@ -35,10 +35,17 @@ TRV.draw = function() {
 	const layer = TRV.getActiveLayer();
 	if (!layer) return;
 
+	// Draw mask layer underneath (if visible)
+	if (state.showMask) {
+		const mask = TRV.getMaskFor(layer.name);
+		if (mask) TRV.drawMaskContours(mask);
+	}
+
 	if (state.showMetrics) TRV.drawMetrics(layer, w, h);
 	TRV.drawContours(layer);
 	if (state.showAnchors) TRV.drawAnchors(layer);
 	if (state.showNodes) TRV.drawNodes(layer);
+	TRV.drawLayerLabel(layer);
 
 	// Draw selection overlay (rect or lasso)
 	if (state.isSelecting) TRV.drawSelectionOverlay();
@@ -406,4 +413,89 @@ TRV.drawSelectionOverlay = function() {
 	}
 
 	ctx.restore();
+};
+
+// -- Mask contours (dashed, muted, underneath main layer) -----------
+TRV.drawMaskContours = function(maskLayer) {
+	if (!maskLayer) return;
+	const ctx = TRV.dom.ctx;
+
+	for (const shape of maskLayer.shapes) {
+		for (const contour of shape.contours) {
+			if (contour.nodes.length === 0) continue;
+
+			ctx.beginPath();
+			TRV.buildContourPath(contour);
+
+			ctx.strokeStyle = 'rgba(255,160,60,0.3)';
+			ctx.lineWidth = 1.5;
+			//ctx.setLineDash([6, 4]);
+			ctx.stroke();
+			ctx.setLineDash([]);
+		}
+	}
+};
+
+// -- Layer color palette --------------------------------------------
+TRV.LAYER_COLORS = [
+	'#5b9def',  // blue
+	'#ef6b5b',  // red
+	'#50c878',  // green
+	'#c084fc',  // purple
+	'#f59e0b',  // amber
+	'#06b6d4',  // cyan
+	'#f472b6',  // pink
+	'#a3e635',  // lime
+];
+
+TRV.getLayerColor = function(layerIdx) {
+	return TRV.LAYER_COLORS[layerIdx % TRV.LAYER_COLORS.length];
+};
+
+// -- Layer name label (filled badge, centered below baseline) -------
+TRV.drawLayerLabel = function(layer) {
+	const ctx = TRV.dom.ctx;
+	if (!TRV.state.glyphData) return;
+
+	const layers = TRV.state.glyphData.layers;
+	const idx = layers.indexOf(layer);
+	const color = TRV.getLayerColor(idx >= 0 ? idx : 0);
+	const name = layer.name || '(unnamed)';
+
+	// Position: centered on advance width, below baseline
+	const cx = layer.width / 2;
+	const labelGy = -30; // 30 units below baseline
+	const pos = TRV.glyphToScreen(cx, labelGy);
+
+	ctx.font = '10px "JetBrains Mono", monospace';
+	const textW = ctx.measureText(name).width;
+	const padX = 6;
+	const padY = 3;
+	const boxW = textW + padX * 2;
+	const boxH = 14 + padY * 2;
+	const boxX = pos.x - boxW / 2;
+	const boxY = pos.y - boxH / 2;
+	const radius = 3;
+
+	// Filled rounded rect background
+	ctx.fillStyle = color;
+	ctx.beginPath();
+	ctx.moveTo(boxX + radius, boxY);
+	ctx.lineTo(boxX + boxW - radius, boxY);
+	ctx.quadraticCurveTo(boxX + boxW, boxY, boxX + boxW, boxY + radius);
+	ctx.lineTo(boxX + boxW, boxY + boxH - radius);
+	ctx.quadraticCurveTo(boxX + boxW, boxY + boxH, boxX + boxW - radius, boxY + boxH);
+	ctx.lineTo(boxX + radius, boxY + boxH);
+	ctx.quadraticCurveTo(boxX, boxY + boxH, boxX, boxY + boxH - radius);
+	ctx.lineTo(boxX, boxY + radius);
+	ctx.quadraticCurveTo(boxX, boxY, boxX + radius, boxY);
+	ctx.closePath();
+	ctx.fill();
+
+	// White text
+	ctx.fillStyle = '#000000';
+	ctx.textAlign = 'center';
+	ctx.textBaseline = 'middle';
+	ctx.fillText(name, pos.x, pos.y);
+	ctx.textBaseline = 'alphabetic'; // reset
 };

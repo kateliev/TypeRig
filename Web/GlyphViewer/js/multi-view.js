@@ -16,14 +16,17 @@ TRV.initMultiGrid = function() {
 	const state = TRV.state;
 	const cols = state.gridCols;
 	const rows = state.gridRows;
-	const N = state.glyphData ? state.glyphData.layers.length : 1;
+
+	// Only non-mask layers participate in the grid
+	const validIndices = TRV.getNonMaskLayerIndices();
+	const N = validIndices.length || 1;
 
 	state.gridLayers = [];
 	let idx = 0;
 	for (let r = 0; r < rows; r++) {
 		const row = [];
 		for (let c = 0; c < cols; c++) {
-			row.push(idx % N);
+			row.push(validIndices[idx % N]);
 			idx++;
 		}
 		state.gridLayers.push(row);
@@ -85,10 +88,15 @@ TRV.syncActiveCellToLayer = function() {
 // -- Ribbon rotation ------------------------------------------------
 TRV.rotateColumn = function(col, direction) {
 	const state = TRV.state;
-	const N = state.glyphData ? state.glyphData.layers.length : 1;
+	const validIndices = TRV.getNonMaskLayerIndices();
+	const N = validIndices.length || 1;
 
 	for (let r = 0; r < state.gridRows; r++) {
-		state.gridLayers[r][col] = ((state.gridLayers[r][col] + direction) % N + N) % N;
+		// Find current position in validIndices
+		let pos = validIndices.indexOf(state.gridLayers[r][col]);
+		if (pos < 0) pos = 0;
+		pos = ((pos + direction) % N + N) % N;
+		state.gridLayers[r][col] = validIndices[pos];
 	}
 
 	TRV.syncActiveCellToLayer();
@@ -96,10 +104,14 @@ TRV.rotateColumn = function(col, direction) {
 
 TRV.rotateRow = function(row, direction) {
 	const state = TRV.state;
-	const N = state.glyphData ? state.glyphData.layers.length : 1;
+	const validIndices = TRV.getNonMaskLayerIndices();
+	const N = validIndices.length || 1;
 
 	for (let c = 0; c < state.gridCols; c++) {
-		state.gridLayers[row][c] = ((state.gridLayers[row][c] + direction) % N + N) % N;
+		let pos = validIndices.indexOf(state.gridLayers[row][c]);
+		if (pos < 0) pos = 0;
+		pos = ((pos + direction) % N + N) % N;
+		state.gridLayers[row][c] = validIndices[pos];
 	}
 
 	TRV.syncActiveCellToLayer();
@@ -122,9 +134,11 @@ TRV.getJoinedLayout = function() {
 	const rows = state.gridRows;
 	const gap = TRV.JOINED_GAP;
 
-	// Compute actual bounding box across all layers (not just advance metrics)
+	// Compute actual bounding box across non-mask layers
 	let maxW = 0, maxH = 0;
 	for (const layer of layers) {
+		if (TRV.isMaskLayer(layer.name)) continue;
+
 		let minX = 0, minY = 0;
 		let mxX = layer.width, mxY = layer.height;
 
@@ -237,6 +251,12 @@ TRV.drawJoinedView = function(canvasW, canvasH) {
 
 			// Draw with pan shifted to place this layer
 			TRV.withJoinedOffset(r, c, function() {
+				// Mask layer underneath
+				if (state.showMask) {
+					const mask = TRV.getMaskFor(layer.name);
+					if (mask) TRV.drawMaskContours(mask);
+				}
+
 				if (state.showMetrics) TRV.drawMetrics(layer, canvasW, canvasH);
 				TRV.drawContours(layer);
 				if (state.showAnchors) TRV.drawAnchors(layer);
@@ -246,12 +266,8 @@ TRV.drawJoinedView = function(canvasW, canvasH) {
 					TRV.drawSelectionOverlay();
 				}
 
-				// Layer name above the glyph
-				const labelPos = TRV.glyphToScreen(0, layer.height + 30);
-				ctx.font = '11px "JetBrains Mono", monospace';
-				ctx.fillStyle = isActive ? 'rgba(91,157,239,0.8)' : 'rgba(255,255,255,0.35)';
-				ctx.textAlign = 'left';
-				ctx.fillText(layer.name || '(unnamed)', labelPos.x, labelPos.y);
+				// Layer name badge
+				TRV.drawLayerLabel(layer);
 			});
 
 			if (!isActive) {
@@ -416,6 +432,12 @@ TRV.drawSplitView = function(canvasW, canvasH) {
 
 			if (!isActive) state.selectedNodeIds = new Set();
 
+			// Mask layer underneath
+			if (state.showMask) {
+				const mask = TRV.getMaskFor(layer.name);
+				if (mask) TRV.drawMaskContours(mask);
+			}
+
 			if (state.showMetrics) TRV.drawMetrics(layer, cell.w, cell.h);
 			TRV.drawContours(layer);
 			if (state.showAnchors) TRV.drawAnchors(layer);
@@ -427,11 +449,8 @@ TRV.drawSplitView = function(canvasW, canvasH) {
 
 			if (!isActive) state.selectedNodeIds = savedSelection;
 
-			// Layer name label
-			ctx.font = '11px "JetBrains Mono", monospace';
-			ctx.fillStyle = isActive ? 'rgba(91,157,239,0.8)' : 'rgba(255,255,255,0.35)';
-			ctx.textAlign = 'left';
-			ctx.fillText(layer.name || '(unnamed)', 8, 18);
+			// Layer name badge
+			TRV.drawLayerLabel(layer);
 
 			ctx.restore();
 		}

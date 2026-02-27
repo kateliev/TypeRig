@@ -17,6 +17,7 @@ const TRV = {
 		showNodes: true,
 		showMetrics: true,
 		showAnchors: true,
+		showMask: true,
 		showXml: false,
 
 		// Selection — set of node IDs ('c{ci}_n{ni}')

@@ -161,3 +161,27 @@ TRV.pointInPolygon = function(px, py, polygon) {
 
 	return inside;
 };
+
+// -- Mask layer helpers ---------------------------------------------
+TRV.isMaskLayer = function(layerName) {
+	return layerName && layerName.toLowerCase().startsWith('mask.');
+};
+
+// Get the mask layer object for a given layer name, or null
+TRV.getMaskFor = function(layerName) {
+	if (!TRV.state.glyphData) return null;
+	const maskName = 'mask.' + layerName;
+	return TRV.state.glyphData.layers.find(
+		l => l.name.toLowerCase() === maskName.toLowerCase()
+	) || null;
+};
+
+// Get indices of non-mask layers (for grid population)
+TRV.getNonMaskLayerIndices = function() {
+	if (!TRV.state.glyphData) return [];
+	const indices = [];
+	TRV.state.glyphData.layers.forEach(function(layer, i) {
+		if (!TRV.isMaskLayer(layer.name)) indices.push(i);
+	});
+	return indices;
+};

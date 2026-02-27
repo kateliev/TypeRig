@@ -225,12 +225,14 @@ window.addEventListener('mouseup', function(e) {
 				state.selectCurrentScreen.x, state.selectCurrentScreen.y
 			);
 		});
-		TRV.selectNodes(ids, e.shiftKey);
 
+		// Clear overlay state BEFORE draw so it disappears
 		state.isSelecting = false;
 		state.selectMode = null;
 		state.selectStartScreen = null;
 		state.selectCurrentScreen = null;
+
+		TRV.selectNodes(ids, e.shiftKey);
 		TRV.updateCanvasCursor();
 		return;
 	}
@@ -241,11 +243,13 @@ window.addEventListener('mouseup', function(e) {
 		withActiveOffset(function() {
 			ids = TRV.hitTestLasso(state.selectLassoPoints);
 		});
-		TRV.selectNodes(ids, e.shiftKey);
 
+		// Clear overlay state BEFORE draw
 		state.isSelecting = false;
 		state.selectMode = null;
 		state.selectLassoPoints = [];
+
+		TRV.selectNodes(ids, e.shiftKey);
 		TRV.updateCanvasCursor();
 		return;
 	}
@@ -353,6 +357,12 @@ document.getElementById('btn-anchors').addEventListener('click', function() {
 	TRV.draw();
 });
 
+document.getElementById('btn-mask').addEventListener('click', function() {
+	state.showMask = !state.showMask;
+	this.classList.toggle('active');
+	TRV.draw();
+});
+
 document.getElementById('btn-xml').addEventListener('click', function() {
 	state.showXml = !state.showXml;
 	this.classList.toggle('active');
@@ -426,13 +436,16 @@ dom.layerSelect.addEventListener('change', function() {
 	state.selectedNodeIds.clear();
 
 	// In multi-view, update the active cell to show selected layer
+	// (mask layers are not allowed in the grid)
 	if (state.multiView && state.glyphData) {
-		const layers = state.glyphData.layers;
-		const idx = layers.findIndex(l => l.name === this.value);
-		if (idx >= 0 && state.gridLayers) {
-			const r = state.activeCell.row;
-			const c = state.activeCell.col;
-			state.gridLayers[r][c] = idx;
+		if (!TRV.isMaskLayer(this.value)) {
+			const layers = state.glyphData.layers;
+			const idx = layers.findIndex(l => l.name === this.value);
+			if (idx >= 0 && state.gridLayers) {
+				const r = state.activeCell.row;
+				const c = state.activeCell.col;
+				state.gridLayers[r][c] = idx;
+			}
 		}
 	}
 
