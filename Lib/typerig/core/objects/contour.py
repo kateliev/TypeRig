@@ -42,7 +42,7 @@ class Contour(Container, XMLSerializable):
 	XML_TAG = 'contour'
 	XML_ATTRS = ['name', 'identifier']
 	XML_CHILDREN = {'node': 'nodes'}
-	XML_LIB_ATTRS = ['transform', 'closed', 'clockwise']
+	XML_LIB_ATTRS = ['closed', 'clockwise'] # 'transform',
 
 	def __init__(self, nodes=None, **kwargs):
 		factory = kwargs.pop('default_factory', Node)

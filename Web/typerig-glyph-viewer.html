@@ -146,13 +146,10 @@
 
 	/* -- Main area ---------------------------------------------- */
 	#main {
-		display: grid;
-		grid-template-columns: 1fr;
+		display: flex;
 		overflow: hidden;
 		position: relative;
 	}
-
-	#main.split { grid-template-columns: 1fr 1fr; }
 
 	/* -- Canvas ------------------------------------------------- */
 	#canvas-wrap {
@@ -160,6 +157,8 @@
 		overflow: hidden;
 		background: var(--bg-primary);
 		cursor: grab;
+		flex: 1;
+		min-width: 200px;
 	}
 
 	#canvas-wrap:active { cursor: grabbing; }
@@ -176,11 +175,47 @@
 		display: none;
 		flex-direction: column;
 		background: var(--bg-secondary);
-		border-left: 1px solid var(--border);
 		overflow: hidden;
+		min-width: 200px;
 	}
 
-	#main.split #xml-panel { display: flex; }
+	#xml-panel.visible { display: flex; }
+
+	/* -- Resizer handle ----------------------------------------- */
+	#split-handle {
+		display: none;
+		width: 5px;
+		cursor: col-resize;
+		background: var(--border);
+		position: relative;
+		flex-shrink: 0;
+		transition: background 0.12s;
+		z-index: 5;
+	}
+
+	#split-handle:hover,
+	#split-handle.dragging {
+		background: var(--accent-dim);
+	}
+
+	#split-handle::after {
+		content: '';
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: 3px;
+		height: 32px;
+		border-left: 1px solid var(--text-dim);
+		border-right: 1px solid var(--text-dim);
+		opacity: 0;
+		transition: opacity 0.12s;
+	}
+
+	#split-handle:hover::after,
+	#split-handle.dragging::after { opacity: 0.5; }
+
+	#split-handle.visible { display: block; }
 
 	#xml-panel-header {
 		display: flex;
@@ -197,41 +232,50 @@
 	#xml-content {
 		flex: 1;
 		overflow: auto;
-		padding: 12px;
+		padding: 0;
+		margin: 0;
+		border: none;
+		outline: none;
+		resize: none;
 		font-family: 'JetBrains Mono', monospace;
 		font-size: 12px;
 		line-height: 1.65;
 		tab-size: 2;
+		-moz-tab-size: 2;
 		white-space: pre;
 		color: var(--text-secondary);
-		cursor: text;
+		background: var(--bg-secondary);
+		padding: 12px;
 		user-select: text;
 	}
 
-	#xml-content .xml-line {
-		display: block;
-		padding: 0 4px;
-		border-left: 2px solid transparent;
-		border-radius: 2px;
-		transition: background 0.12s, border-color 0.12s;
+	#xml-content:focus { outline: none; }
+
+	#xml-content.has-error {
+		box-shadow: inset 0 0 0 1px rgba(255,107,107,0.4);
 	}
 
-	#xml-content .xml-line:hover {
-		background: rgba(255,255,255,0.02);
+	#xml-panel-header .parse-status {
+		font-size: 10px;
+		padding: 1px 6px;
+		border-radius: 3px;
+		margin-left: 8px;
 	}
 
-	#xml-content .xml-line.highlighted {
-		background: var(--xml-highlight);
-		border-left-color: var(--xml-highlight-border);
+	#xml-panel-header .parse-status.ok {
+		color: #50c878;
+		background: rgba(80,200,120,0.1);
 	}
 
-	#xml-content .xml-line.clickable { cursor: pointer; }
+	#xml-panel-header .parse-status.error {
+		color: #ff6b6b;
+		background: rgba(255,107,107,0.1);
+	}
 
-	.xt { color: var(--xml-tag); }         /* tag names */
-	.xa { color: var(--xml-attr); }        /* attribute names */
-	.xv { color: var(--xml-value); }       /* attribute values */
-	.xp { color: var(--text-dim); }        /* punctuation < > / = */
-	.xc { color: var(--xml-comment); }     /* comments */
+	/* -- Node highlighting in textarea (via overlay) ------------ */
+	#xml-highlight-overlay {
+		display: none;
+	}
 
 	/* -- Status bar --------------------------------------------- */
 	#statusbar {
@@ -394,16 +438,17 @@
 			<canvas id="glyph-canvas"></canvas>
 			<div id="empty-state">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-				<span>Load a TypeRig glyph XML file</span>
+				<span>Load a TypeRig glyph file (.trglyph)</span>
 				<span class="hint">Drop file here or use Load button</span>
 			</div>
 		</div>
+		<div id="split-handle"></div>
 		<div id="xml-panel">
 			<div id="xml-panel-header">
-				<span>XML Source</span>
+				<span>XML Source <span class="parse-status ok" id="parse-status">OK</span></span>
 				<span id="xml-node-count"></span>
 			</div>
-			<div id="xml-content"></div>
+			<textarea id="xml-content" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
 		</div>
 	</div>
 
@@ -429,10 +474,10 @@
 	<div class="drop-icon">
 		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 15v4a2 2 0 002 2h14a2 2 0 002-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
 	</div>
-	<span class="drop-text">Drop TypeRig XML file</span>
+	<span class="drop-text">Drop .trglyph file</span>
 </div>
 
-<input type="file" id="file-input" accept=".xml,.typerig">
+<input type="file" id="file-input" accept=".trglyph,.xml">
 
 <script>
 // ===================================================================
@@ -471,6 +516,8 @@ const ctx = canvas.getContext('2d');
 const canvasWrap = document.getElementById('canvas-wrap');
 const xmlContent = document.getElementById('xml-content');
 const xmlNodeCount = document.getElementById('xml-node-count');
+const parseStatus = document.getElementById('parse-status');
+const splitHandle = document.getElementById('split-handle');
 const mainEl = document.getElementById('main');
 const emptyState = document.getElementById('empty-state');
 const fileInput = document.getElementById('file-input');
@@ -1008,55 +1055,32 @@ function hitTestNode(sx, sy, radius) {
 }
 
 // -- XML Panel ------------------------------------------------------
+let xmlLineNodeMap = {};   // line index → node id
+let xmlNodeLineMap = {};   // node id → line index
+let xmlEditTimer = null;   // debounce timer for re-parse
+
 function buildXmlPanel() {
 	if (!state.rawXml) {
-		xmlContent.innerHTML = '';
+		xmlContent.value = '';
 		xmlNodeCount.textContent = '';
 		return;
 	}
 
-	// Pretty-print the XML
+	// Pretty-print the XML and populate textarea
 	const formatted = formatXml(state.rawXml);
-	const lines = formatted.split('\n');
+	xmlContent.value = formatted;
 
-	// Build node ID mapping: line index → node id
-	// We track which lines contain <node> elements and map them
-	const lineMap = buildLineNodeMap(formatted);
-
-	let html = '';
-	for (let i = 0; i < lines.length; i++) {
-		const line = lines[i];
-		const nodeId = lineMap[i] || null;
-		const clickable = nodeId ? ' clickable' : '';
-		const dataAttr = nodeId ? ` data-node-id="${nodeId}"` : '';
-		html += `<span class="xml-line${clickable}" data-line="${i}"${dataAttr}>${highlightXmlLine(escapeHtml(line))}</span>\n`;
-	}
-
-	xmlContent.innerHTML = html;
-
-	// Count nodes
-	const layer = getActiveLayer();
-	if (layer) {
-		const allNodes = getAllNodes(layer);
-		const onCount = allNodes.filter(n => n.type === 'on').length;
-		const offCount = allNodes.length - onCount;
-		xmlNodeCount.textContent = `${onCount} on / ${offCount} off`;
-	}
-
-	// Attach click listeners to node lines
-	for (const el of xmlContent.querySelectorAll('.xml-line.clickable')) {
-		el.addEventListener('click', () => {
-			const nodeId = el.dataset.nodeId;
-			selectNode(nodeId);
-		});
-	}
+	// Build bidirectional node ↔ line maps
+	rebuildLineMaps(formatted);
+	updateNodeCount();
+	setParseStatus(true);
 }
 
-function buildLineNodeMap(formatted) {
-	const lines = formatted.split('\n');
-	const map = {};
+function rebuildLineMaps(text) {
+	xmlLineNodeMap = {};
+	xmlNodeLineMap = {};
 
-	// Track contour index globally across all shapes
+	const lines = text.split('\n');
 	let globalContourIdx = 0;
 	let nodeIdx = 0;
 	let inContour = false;
@@ -1071,12 +1095,131 @@ function buildLineNodeMap(formatted) {
 			if (inContour) globalContourIdx++;
 			inContour = false;
 		} else if (inContour && line.startsWith('<node ')) {
-			map[i] = `c${globalContourIdx}_n${nodeIdx}`;
+			const id = `c${globalContourIdx}_n${nodeIdx}`;
+			xmlLineNodeMap[i] = id;
+			xmlNodeLineMap[id] = i;
 			nodeIdx++;
 		}
 	}
+}
 
-	return map;
+function updateNodeCount() {
+	const layer = getActiveLayer();
+	if (layer) {
+		const allNodes = getAllNodes(layer);
+		const onCount = allNodes.filter(n => n.type === 'on').length;
+		const offCount = allNodes.length - onCount;
+		xmlNodeCount.textContent = `${onCount} on / ${offCount} off`;
+	} else {
+		xmlNodeCount.textContent = '';
+	}
+}
+
+function setParseStatus(ok, msg) {
+	if (ok) {
+		parseStatus.textContent = 'OK';
+		parseStatus.className = 'parse-status ok';
+		xmlContent.classList.remove('has-error');
+	} else {
+		parseStatus.textContent = msg || 'Error';
+		parseStatus.className = 'parse-status error';
+		xmlContent.classList.add('has-error');
+	}
+}
+
+function highlightXmlNode(nodeId) {
+	if (!state.showXml) return;
+
+	if (!nodeId) return;
+
+	const lineIdx = xmlNodeLineMap[nodeId];
+	if (lineIdx === undefined) return;
+
+	// Scroll textarea to the line and select it
+	const text = xmlContent.value;
+	const lines = text.split('\n');
+
+	let charStart = 0;
+	for (let i = 0; i < lineIdx; i++) {
+		charStart += lines[i].length + 1; // +1 for \n
+	}
+	const charEnd = charStart + (lines[lineIdx] || '').length;
+
+	xmlContent.focus();
+	xmlContent.setSelectionRange(charStart, charEnd);
+
+	// Scroll the line into view
+	// Approximate: line height * line index
+	const lineHeight = 12 * 1.65; // font-size * line-height
+	const scrollTarget = lineIdx * lineHeight - xmlContent.clientHeight / 2;
+	xmlContent.scrollTop = Math.max(0, scrollTarget);
+}
+
+// -- XML Editing → live re-parse ------------------------------------
+function onXmlEdit() {
+	// Debounce: wait 400ms after last keystroke
+	if (xmlEditTimer) clearTimeout(xmlEditTimer);
+	xmlEditTimer = setTimeout(applyXmlEdit, 400);
+}
+
+function applyXmlEdit() {
+	const xmlString = xmlContent.value;
+
+	try {
+		const newGlyph = parseGlyphXML(xmlString);
+
+		// Success — update state
+		state.glyphData = newGlyph;
+		state.rawXml = xmlString;
+
+		// Update layer selector if layers changed
+		const currentLayer = state.activeLayer;
+		layerSelect.innerHTML = '';
+		for (const layer of newGlyph.layers) {
+			const opt = document.createElement('option');
+			opt.value = layer.name;
+			opt.textContent = layer.name || '(unnamed)';
+			layerSelect.appendChild(opt);
+		}
+
+		// Try to keep current layer, fallback to first
+		if (newGlyph.layers.find(l => l.name === currentLayer)) {
+			layerSelect.value = currentLayer;
+			state.activeLayer = currentLayer;
+		} else if (newGlyph.layers.length > 0) {
+			state.activeLayer = newGlyph.layers[0].name;
+			layerSelect.value = state.activeLayer;
+		}
+
+		// Update info
+		let infoHtml = `<span>${newGlyph.name || '?'}</span>`;
+		if (newGlyph.unicodes) infoHtml += ` U+${newGlyph.unicodes}`;
+		glyphInfo.innerHTML = infoHtml;
+
+		// Rebuild line maps and redraw
+		rebuildLineMaps(xmlString);
+		updateNodeCount();
+		setParseStatus(true);
+		draw();
+
+	} catch (e) {
+		// Parse error — show status but don't lose data
+		setParseStatus(false, 'Parse error');
+	}
+}
+
+// Handle click in textarea to detect which node line was clicked
+function onXmlClick() {
+	const pos = xmlContent.selectionStart;
+	const text = xmlContent.value.substring(0, pos);
+	const lineIdx = text.split('\n').length - 1;
+	const nodeId = xmlLineNodeMap[lineIdx];
+
+	if (nodeId) {
+		state.selectedNodeId = nodeId;
+		draw();
+		updateStatusSelected();
+	}
 }
 
 function formatXml(xml) {
@@ -1110,37 +1253,6 @@ function formatXml(xml) {
 	}
 
 	return result.trimEnd();
-}
-
-function escapeHtml(s) {
-	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function highlightXmlLine(line) {
-	// Syntax-highlight an already-escaped XML line
-	return line
-		// Tag names: <tagname or </tagname
-		.replace(/(&lt;\/?)([\w:-]+)/g, '<span class="xp">$1</span><span class="xt">$2</span>')
-		// Self-closing and closing brackets
-		.replace(/(\/?&gt;)/g, '<span class="xp">$1</span>')
-		// Attributes: name="value"
-		.replace(/([\w:-]+)(=)(&quot;)([^&]*?)(&quot;)/g,
-			'<span class="xa">$1</span><span class="xp">$2</span><span class="xv">$3$4$5</span>');
-}
-
-function highlightXmlNode(nodeId) {
-	// Clear previous
-	for (const el of xmlContent.querySelectorAll('.xml-line.highlighted')) {
-		el.classList.remove('highlighted');
-	}
-
-	if (!nodeId) return;
-
-	const el = xmlContent.querySelector(`.xml-line[data-node-id="${nodeId}"]`);
-	if (el) {
-		el.classList.add('highlighted');
-		el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-	}
 }
 
 // -- Selection ------------------------------------------------------
@@ -1260,14 +1372,16 @@ function loadXmlString(xmlString, filename) {
 }
 
 function saveXml() {
-	if (!state.rawXml) return;
+	// Use textarea content if XML panel is open, otherwise use stored rawXml
+	const xmlString = state.showXml ? xmlContent.value : state.rawXml;
+	if (!xmlString) return;
 
-	const blob = new Blob([state.rawXml], { type: 'application/xml' });
+	const blob = new Blob([xmlString], { type: 'application/xml' });
 	const url = URL.createObjectURL(blob);
 	const a = document.createElement('a');
 	a.href = url;
 	const name = state.glyphData ? state.glyphData.name : 'glyph';
-	a.download = `${name}.xml`;
+	a.download = `${name}.trglyph`;
 	a.click();
 	URL.revokeObjectURL(url);
 }
@@ -1378,7 +1492,21 @@ document.getElementById('btn-anchors').addEventListener('click', function() {
 document.getElementById('btn-xml').addEventListener('click', function() {
 	state.showXml = !state.showXml;
 	this.classList.toggle('active');
-	mainEl.classList.toggle('split', state.showXml);
+
+	const xmlPanel = document.getElementById('xml-panel');
+
+	if (state.showXml) {
+		// Set initial width to ~40% of main area
+		const mainWidth = mainEl.clientWidth;
+		xmlPanel.style.width = Math.round(mainWidth * 0.4) + 'px';
+		xmlPanel.classList.add('visible');
+		splitHandle.classList.add('visible');
+	} else {
+		xmlPanel.classList.remove('visible');
+		splitHandle.classList.remove('visible');
+		xmlPanel.style.width = '';
+	}
+
 	requestAnimationFrame(() => {
 		draw();
 		if (state.showXml) buildXmlPanel();
@@ -1428,6 +1556,9 @@ document.addEventListener('drop', (e) => {
 
 // Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
+	// Don't intercept shortcuts when typing in the XML textarea
+	if (e.target === xmlContent && !e.ctrlKey && !e.metaKey) return;
+
 	if (e.ctrlKey || e.metaKey) {
 		if (e.key === 'o') { e.preventDefault(); fileInput.click(); }
 		if (e.key === 's') { e.preventDefault(); saveXml(); }
@@ -1436,9 +1567,55 @@ document.addEventListener('keydown', (e) => {
 			document.getElementById('btn-xml').click();
 		}
 	}
-	if (e.key === 'Home') { e.preventDefault(); fitToView(); }
+	if (e.key === 'Home' && e.target !== xmlContent) { e.preventDefault(); fitToView(); }
 	if (e.key === 'Escape') { selectNode(null); }
 });
+
+// -- Split handle drag ----------------------------------------------
+(function initSplitHandle() {
+	let isDragging = false;
+
+	splitHandle.addEventListener('mousedown', (e) => {
+		e.preventDefault();
+		isDragging = true;
+		splitHandle.classList.add('dragging');
+		document.body.style.cursor = 'col-resize';
+		document.body.style.userSelect = 'none';
+	});
+
+	window.addEventListener('mousemove', (e) => {
+		if (!isDragging) return;
+
+		const mainRect = mainEl.getBoundingClientRect();
+		const xmlPanel = document.getElementById('xml-panel');
+
+		// Mouse position relative to main container right edge
+		const mouseX = e.clientX - mainRect.left;
+		const panelWidth = mainRect.width - mouseX - splitHandle.offsetWidth / 2;
+
+		// Clamp: min 200px each side
+		const minPanel = 200;
+		const maxPanel = mainRect.width - minPanel - splitHandle.offsetWidth;
+		xmlPanel.style.width = Math.max(minPanel, Math.min(maxPanel, panelWidth)) + 'px';
+
+		// Redraw canvas since it resized
+		draw();
+	});
+
+	window.addEventListener('mouseup', () => {
+		if (isDragging) {
+			isDragging = false;
+			splitHandle.classList.remove('dragging');
+			document.body.style.cursor = '';
+			document.body.style.userSelect = '';
+			draw();
+		}
+	});
+})();
+
+// -- XML textarea events --------------------------------------------
+xmlContent.addEventListener('input', onXmlEdit);
+xmlContent.addEventListener('click', onXmlClick);
 
 // -- Load sample on start -------------------------------------------
 // Provide a sample glyph so the viewer isn't empty on first load
@@ -1555,7 +1732,7 @@ function loadSampleGlyph() {
   </layer>
 </glyph>`;
 
-	loadXmlString(sampleXml, 'sample_A.xml');
+	loadXmlString(sampleXml, 'sample_A.trglyph');
 }
 
 // -- Init -----------------------------------------------------------

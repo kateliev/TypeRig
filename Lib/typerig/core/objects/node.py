@@ -48,8 +48,7 @@ class Node(Member, XMLSerializable):
 
 	XML_TAG = 'node'
 	XML_ATTRS = ['x', 'y', 'type', 'smooth']
-	XML_LIB_ATTRS = ['g2', 'transform']
-
+	XML_LIB_ATTRS = [] #['g2', 'transform'] # Skip those for now
 
 	def __init__(self, *args, **kwargs):
 		super(Node, self).__init__(*args, **kwargs)

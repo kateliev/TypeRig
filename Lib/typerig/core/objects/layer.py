@@ -40,7 +40,7 @@ class Layer(Container, XMLSerializable):
 	XML_TAG = 'layer'
 	XML_ATTRS = ['name', 'identifier', 'width', 'height']
 	XML_CHILDREN = {'shape': 'shapes', 'anchor': 'anchors'}
-	XML_LIB_ATTRS = ['transform', 'stx', 'sty']
+	XML_LIB_ATTRS = ['stx', 'sty'] # 'transform'
 	
 	def __init__(self, shapes=None, **kwargs):
 		factory = kwargs.pop('default_factory', Shape)
