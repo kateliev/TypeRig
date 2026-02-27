@@ -16,10 +16,11 @@ import copy
 from enum import Enum
 
 # - Init -------------------------------
-__version__ = '0.26.5'
+__version__ = '0.27.0'
 
 # - Objects ----------------------------------------------------
 class TransformOrigin(Enum):
+	# - Tier 1: Bounding box origins (resolved by Bounds.align_matrix)
 	BASELINE 		= ('baseline',		'B')
 	BOTTOM_LEFT 	= ('bottom_left', 	'BL')
 	BOTTOM_MIDDLE 	= ('bottom_middle', 'BM')
@@ -30,6 +31,23 @@ class TransformOrigin(Enum):
 	CENTER_LEFT		= ('center_left', 	'LM')
 	CENTER 			= ('center', 		'C')
 	CENTER_RIGHT	= ('center_right', 	'RM')
+
+	# - Tier 2: Metrics origins (resolved by Layer — require advance width/height)
+	METRICS_LSB 			= ('metrics_lsb',				'LSB')
+	METRICS_RSB 			= ('metrics_rsb',				'RSB')
+	METRICS_ADVANCE 		= ('metrics_advance',			'ADV')
+	METRICS_ADVANCE_MIDDLE 	= ('metrics_advance_middle',	'ADM')
+
+	# - Tier 3: Outline analysis origins (resolved by Layer — require on-curve node analysis)
+	OUTLINE_BOTTOM_LEFT		= ('outline_bottom_left',		'OBL')
+	OUTLINE_BOTTOM_RIGHT	= ('outline_bottom_right',		'OBR')
+	OUTLINE_BOTTOM_CENTER	= ('outline_bottom_center',		'OBM')
+	OUTLINE_TOP_LEFT		= ('outline_top_left',			'OTL')
+	OUTLINE_TOP_RIGHT		= ('outline_top_right',			'OTR')
+	OUTLINE_TOP_CENTER		= ('outline_top_center',		'OTM')
+
+	# - Tier 4: Statistical origins (resolved by Layer — require area/centroid computation)
+	CENTER_OF_MASS			= ('center_of_mass',			'COM')
 
 	@property
 	def text(self):
@@ -42,6 +60,26 @@ class TransformOrigin(Enum):
 	@property
 	def code(self):
 		return self.value[1]
+
+	@property
+	def is_bounds(self):
+		'''True if this origin can be resolved by Bounds.align_matrix alone'''
+		return self.code in ('B', 'BL', 'BM', 'BR', 'TL', 'TM', 'TR', 'LM', 'C', 'RM')
+
+	@property
+	def is_metrics(self):
+		'''True if this origin requires metrics (advance width) to resolve'''
+		return self.code in ('LSB', 'RSB', 'ADV', 'ADM')
+
+	@property
+	def is_outline(self):
+		'''True if this origin requires outline analysis to resolve'''
+		return self.code in ('OBL', 'OBR', 'OBM', 'OTL', 'OTR', 'OTM')
+
+	@property
+	def is_statistical(self):
+		'''True if this origin requires area/centroid computation to resolve'''
+		return self.code in ('COM',)
 
 
 # -- Affine transformations ------------------------------------

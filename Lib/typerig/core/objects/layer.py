@@ -30,7 +30,7 @@ from typerig.core.func.math import slerp_angle, interpolate_directional
 from typerig.core.func.transform import adaptive_scale_directional, timer
 
 # - Init -------------------------------
-__version__ = '0.5.1'
+__version__ = '0.6.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -187,6 +187,251 @@ class Layer(Container, XMLSerializable):
 	def VADV(self, value):
 		self.advance_height = value
 
+	@property
+	def center_of_mass(self):
+		'''Area-weighted centroid of the layer outline (center of gravity).
+		Uses the shoelace formula (Green's theorem) over on-curve polygons.
+		Counters (CCW contours) subtract from the area automatically.
+
+		Returns:
+			Point or None if no on-curve nodes exist
+		'''
+		total_area = 0.
+		total_cx = 0.
+		total_cy = 0.
+
+		for contour in self.contours:
+			pts = [(n.x, n.y) for n in contour.nodes if n.type == 'on']
+			n = len(pts)
+
+			if n < 3:
+				continue
+
+			# Shoelace: signed area and first moments
+			a = 0.
+			cx = 0.
+			cy = 0.
+
+			for i in range(n):
+				j = (i + 1) % n
+				cross = pts[i][0] * pts[j][1] - pts[j][0] * pts[i][1]
+				a += cross
+				cx += (pts[i][0] + pts[j][0]) * cross
+				cy += (pts[i][1] + pts[j][1]) * cross
+
+			total_area += a
+			total_cx += cx
+			total_cy += cy
+
+		if abs(total_area) < 1e-10:
+			return None
+
+		total_area *= 0.5
+		total_cx /= (6. * total_area)
+		total_cy /= (6. * total_area)
+
+		return Point(total_cx, total_cy)
+
+	@property
+	def align_matrix(self):
+		'''Layer-level alignment matrix — superset of Bounds.align_matrix.
+		Contains bounding box positions, metrics positions and outline 
+		analysis positions. Useful for alignment, transformation origins,
+		anchor placement, guidelines and any position-dependent operations.
+		'''
+		# Tier 1: Bounding box positions
+		matrix = dict(self.bounds.align_matrix)
+
+		# Tier 2: Metrics positions (Layer knows advance width/height)
+		matrix['LSB'] = (0., 0.)
+		matrix['RSB'] = (self.ADV, 0.)
+		matrix['ADV'] = (self.ADV, 0.)
+		matrix['ADM'] = (self.ADV / 2., 0.)
+
+		# Tier 3: Outline analysis positions (on-curve extrema centers)
+		outline = self.outline_centers()
+
+		if outline is not None:
+			matrix['OBL'] = (outline['bottom_left'], outline['min_y'])
+			matrix['OBR'] = (outline['bottom_right'], outline['min_y'])
+			matrix['OBM'] = (outline['bottom_center'], outline['min_y'])
+			matrix['OTL'] = (outline['top_left'], outline['max_y'])
+			matrix['OTR'] = (outline['top_right'], outline['max_y'])
+			matrix['OTM'] = (outline['top_center'], outline['max_y'])
+
+		# Tier 4: Statistical positions (area-weighted centroid)
+		com = self.center_of_mass
+
+		if com is not None:
+			matrix['COM'] = (com.x, com.y)
+
+		return matrix
+
+	# - Fucntions --------------------------
+	def outline_centers(self, tolerance=5):
+		'''Compute X centers at lowest and highest Y from on-curve nodes.
+		Useful for determining diacritic/mark attachment positions and
+		outline-aware alignment origins.
+
+		Args:
+			tolerance (float): Y-distance tolerance for grouping nodes at extremes
+
+		Returns:
+			dict with keys: min_y, max_y, bottom_left, bottom_right, bottom_center,
+			top_left, top_right, top_center. Returns None if no on-curve nodes.
+		'''
+		from operator import itemgetter
+
+		# Collect on-curve node coordinates
+		on_curve = [(n.x, n.y) for n in self.nodes if n.type == 'on']
+
+		if not on_curve:
+			return None
+
+		min_y = min(on_curve, key=itemgetter(1))[1]
+		max_y = max(on_curve, key=itemgetter(1))[1]
+
+		# Nodes within tolerance of min/max Y
+		at_min_y = [pt for pt in on_curve if abs(pt[1] - min_y) < tolerance]
+		at_max_y = [pt for pt in on_curve if abs(pt[1] - max_y) < tolerance]
+
+		bottom_left = min(at_min_y, key=itemgetter(0))[0]
+		bottom_right = max(at_min_y, key=itemgetter(0))[0]
+		top_left = min(at_max_y, key=itemgetter(0))[0]
+		top_right = max(at_max_y, key=itemgetter(0))[0]
+
+		return {
+			'min_y': min_y,
+			'max_y': max_y,
+			'bottom_left': bottom_left,
+			'bottom_right': bottom_right,
+			'bottom_center': (bottom_left + bottom_right) / 2.,
+			'top_left': top_left,
+			'top_right': top_right,
+			'top_center': (top_left + top_right) / 2.
+		}
+
+
+	# - Anchors ---------------------------------
+	def find_anchor(self, name):
+		'''Find anchor by name.
+
+		Args:
+			name (str): Anchor name to search for
+
+		Returns:
+			Anchor or None
+		'''
+		return next((a for a in self.anchors if a.name == name), None)
+
+	def add_anchor(self, name, position=(0., 0.), align=None, tolerance=5, italic_angle=0.):
+		'''Add an anchor to this layer.
+
+		Args:
+			name (str): Anchor name
+			position (tuple or Point): Base position or offset when align is used
+			align (TransformOrigin, optional): Alignment origin from align_matrix.
+				When provided, position is treated as an offset from that origin.
+			tolerance (float): Tolerance for outline_centers analysis
+			italic_angle (float): Italic angle in degrees for X correction
+
+		Returns:
+			Anchor: The newly created anchor
+		'''
+		x, y = self._resolve_anchor_position(position, align, tolerance, italic_angle)
+
+		anchor = Anchor(x, y, name=name, parent=self)
+		self.anchors.append(anchor)
+		return anchor
+
+	def move_anchor(self, name, offset=(0., 0.), align=None, tolerance=5, italic_angle=0.):
+		'''Move an existing anchor by name.
+
+		Args:
+			name (str): Anchor name to find and move
+			offset (tuple or Point): Position or offset
+			align (TransformOrigin, optional): Alignment origin from align_matrix.
+				When provided, offset is added to that origin (absolute repositioning).
+				When None, offset is added to current position (relative shift).
+			tolerance (float): Tolerance for outline_centers analysis
+			italic_angle (float): Italic angle in degrees for X correction
+
+		Returns:
+			Anchor or None if not found
+		'''
+		anchor = self.find_anchor(name)
+
+		if anchor is None:
+			return None
+
+		if align is not None:
+			# Absolute repositioning relative to alignment origin
+			x, y = self._resolve_anchor_position(offset, align, tolerance, italic_angle)
+			anchor.x = x
+			anchor.y = y
+		else:
+			# Relative shift from current position
+			ox = offset[0] if isinstance(offset, (tuple, list)) else offset.x
+			oy = offset[1] if isinstance(offset, (tuple, list)) else offset.y
+			anchor.shift(ox, oy)
+
+		return anchor
+
+	def remove_anchor(self, name):
+		'''Remove anchor by name.
+
+		Args:
+			name (str): Anchor name to remove
+
+		Returns:
+			Anchor or None if not found
+		'''
+		anchor = self.find_anchor(name)
+
+		if anchor is not None:
+			self.anchors.remove(anchor)
+
+		return anchor
+
+	def _resolve_anchor_position(self, offset, align=None, tolerance=5, italic_angle=0.):
+		'''Resolve anchor position from offset and alignment origin.
+
+		Args:
+			offset (tuple or Point): (x, y) offset values
+			align (TransformOrigin, optional): Alignment origin to use as base.
+				When None, offset is returned as-is.
+			tolerance (float): Tolerance for outline_centers analysis
+			italic_angle (float): Italic angle in degrees
+
+		Returns:
+			tuple: (x, y) resolved position
+		'''
+		ox = offset[0] if isinstance(offset, (tuple, list)) else offset.x
+		oy = offset[1] if isinstance(offset, (tuple, list)) else offset.y
+
+		if align is None:
+			return (ox, oy)
+
+		# Get base position from align_matrix
+		matrix = self.align_matrix
+		code = align.code if hasattr(align, 'code') else align
+
+		if code not in matrix:
+			raise ValueError('Unknown alignment code: {}'.format(code))
+
+		base_x, base_y = matrix[code]
+
+		# Apply italic angle correction
+		if italic_angle != 0.:
+			italic_shift = math.tan(math.radians(italic_angle)) * (base_y + oy)
+			x = ox + base_x + italic_shift
+			y = oy + base_y
+		else:
+			x = ox + base_x
+			y = oy + base_y
+
+		return (x, y)
+
 	# - Delta related retrievers -----------
 	@property
 	def point_array(self):
@@ -292,7 +537,7 @@ class Layer(Container, XMLSerializable):
 			...     align=(True, False)
 			... )
 		'''
-		align_matrix = self.bounds.align_matrix
+		align_matrix = self.align_matrix
 		self_x, self_y = align_matrix[mode[0].code]
 
 		if isinstance(entity, self.__class__):

@@ -18,13 +18,13 @@ from PythonQt import QtCore
 from typerig.core.objects.anchor import Anchor
 
 # - Init ---------------------------------
-__version__ = '0.1.0'
+__version__ = '0.1.3'
 
 # - Helper --------------------------------
 def _build_fl_anchor(core_anchor):
 	'''Build an flPinPoint from a core Anchor object.'''
 	# NOTE: FL uses flPinPoint for anchors on flLayer
-	anchor = fl6.flPinPoint(core_anchor.x, core_anchor.y)
+	anchor = fl6.flPinPoint(QtCore.QPointF(core_anchor.x, core_anchor.y))
 	anchor.name = core_anchor.name or ''
 	return anchor
 
@@ -103,7 +103,7 @@ class trAnchor(Anchor):
 		The returned Anchor has no FL bindings and can be freely manipulated.
 		'''
 		return Anchor(
-			float(self.point.x()), float(self.point.y()),
+			float(self.host.point.x()), float(self.host.point.y()),
 			name=self.name
 		)
 
