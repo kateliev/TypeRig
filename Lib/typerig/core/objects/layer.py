@@ -30,7 +30,7 @@ from typerig.core.func.math import slerp_angle, interpolate_directional
 from typerig.core.func.transform import adaptive_scale_directional, timer
 
 # - Init -------------------------------
-__version__ = '0.6.0'
+__version__ = '0.6.1'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -69,6 +69,24 @@ class Layer(Container, XMLSerializable):
 		return '<{}: Name={}, Shapes={}>'.format(self.__class__.__name__, self.name, len(self.data))
 
 	# -- Properties -----------------------------
+	@property
+	def width(self):
+		'''XML alias for advance_width'''
+		return self.advance_width
+
+	@width.setter
+	def width(self, value):
+		self.advance_width = value
+
+	@property
+	def height(self):
+		'''XML alias for advance_height'''
+		return self.advance_height
+
+	@height.setter
+	def height(self, value):
+		self.advance_height = value
+	
 	@property
 	def sdf(self):
 		'''Cached SignedDistanceField for this layer. 
