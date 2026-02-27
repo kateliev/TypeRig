@@ -80,8 +80,16 @@ TRV.fitToView = function() {
 	const layer = TRV.getActiveLayer();
 	if (!layer) return;
 
-	const w = TRV.dom.canvasWrap.clientWidth;
-	const h = TRV.dom.canvasWrap.clientHeight;
+	// In multi-view, fit to cell dimensions, not full canvas
+	let w, h;
+	if (TRV.state.multiView) {
+		const cell = TRV.getCellRect(TRV.state.activeCell.row, TRV.state.activeCell.col);
+		w = cell.w;
+		h = cell.h;
+	} else {
+		w = TRV.dom.canvasWrap.clientWidth;
+		h = TRV.dom.canvasWrap.clientHeight;
+	}
 
 	let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
@@ -113,7 +121,7 @@ TRV.fitToView = function() {
 	const glyphW = maxX - minX || 1;
 	const glyphH = maxY - minY || 1;
 
-	const padding = 60;
+	const padding = TRV.state.multiView ? 30 : 60;
 	const scaleX = (w - padding * 2) / glyphW;
 	const scaleY = (h - padding * 2) / glyphH;
 	TRV.state.zoom = Math.min(scaleX, scaleY);
@@ -157,6 +165,9 @@ TRV.loadXmlString = function(xmlString, filename) {
 
 		TRV.dom.emptyState.classList.add('hidden');
 		TRV.state.selectedNodeIds.clear();
+
+		// Re-init grid if multi-view is active
+		if (TRV.state.multiView) TRV.initMultiGrid();
 
 		TRV.fitToView();
 		TRV.buildXmlPanel();

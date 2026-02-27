@@ -20,6 +20,14 @@ TRV.draw = function() {
 	ctx.fillStyle = state.filled ? '#18181b' : '#1a1a1e';
 	ctx.fillRect(0, 0, w, h);
 
+	if (!state.glyphData) return;
+
+	// Multi-view: delegate to grid renderer
+	if (state.multiView) {
+		TRV.drawMultiView(w, h);
+		return;
+	}
+
 	const layer = TRV.getActiveLayer();
 	if (!layer) return;
 

@@ -8,13 +8,21 @@
 const state = TRV.state;
 const dom = TRV.dom;
 
+// -- Helper: get cell-relative coords for active cell ---------------
+// During drag/selection, always use active cell as reference
+function activeCellCoords(sx, sy) {
+	if (!state.multiView) return { sx: sx, sy: sy };
+	const cell = TRV.getCellRect(state.activeCell.row, state.activeCell.col);
+	return { sx: sx - cell.x, sy: sy - cell.y };
+}
+
 // -- Mouse: node click/drag, rect select, lasso select, pan --------
 dom.canvasWrap.addEventListener('mousedown', function(e) {
 	if (e.button !== 0) return;
 
 	const rect = dom.canvas.getBoundingClientRect();
-	const sx = e.clientX - rect.left;
-	const sy = e.clientY - rect.top;
+	const absSx = e.clientX - rect.left;
+	const absSy = e.clientY - rect.top;
 
 	// -- Spacebar held → pan mode
 	if (state.spaceDown) {
@@ -24,18 +32,26 @@ dom.canvasWrap.addEventListener('mousedown', function(e) {
 		return;
 	}
 
+	// -- Multi-view: switch active cell on click
+	if (state.multiView) {
+		const clicked = TRV.getCellAt(absSx, absSy);
+		if (clicked.row !== state.activeCell.row || clicked.col !== state.activeCell.col) {
+			TRV.setActiveCell(clicked.row, clicked.col);
+		}
+	}
+
+	// Cell-relative coords for hit testing
+	const { sx, sy } = activeCellCoords(absSx, absSy);
+
 	// -- Check node hit
 	if (state.showNodes) {
 		const hit = TRV.hitTestNode(sx, sy);
 		if (hit) {
 			if (e.shiftKey) {
-				// Shift+click: toggle node in selection
 				TRV.selectNode(hit.id, true);
 			} else if (!state.selectedNodeIds.has(hit.id)) {
-				// Click on unselected node: replace selection
 				TRV.selectNode(hit.id, false);
 			}
-			// In all cases, start dragging the selection
 			startDrag(sx, sy);
 			return;
 		}
@@ -57,7 +73,7 @@ dom.canvasWrap.addEventListener('mousedown', function(e) {
 		dom.canvasWrap.style.cursor = 'crosshair';
 	}
 
-	// Clear existing selection unless shift held (additive)
+	// Clear existing selection unless shift held
 	if (!e.shiftKey) {
 		state.selectedNodeIds.clear();
 		TRV.draw();
@@ -70,7 +86,6 @@ function startDrag(sx, sy) {
 	state.isDragging = true;
 	state.dragOriginGlyph = { x: gp.x, y: gp.y };
 
-	// Snapshot start positions of all selected nodes
 	state.dragStartPositions = new Map();
 	for (const nodeId of state.selectedNodeIds) {
 		const ref = TRV.findNodeById(nodeId);
@@ -83,8 +98,11 @@ function startDrag(sx, sy) {
 
 window.addEventListener('mousemove', function(e) {
 	const rect = dom.canvas.getBoundingClientRect();
-	const sx = e.clientX - rect.left;
-	const sy = e.clientY - rect.top;
+	const absSx = e.clientX - rect.left;
+	const absSy = e.clientY - rect.top;
+
+	// Cell-relative coords (always relative to active cell during interactions)
+	const { sx, sy } = activeCellCoords(absSx, absSy);
 	const gp = TRV.screenToGlyph(sx, sy);
 	dom.statusCursor.textContent = `${Math.round(gp.x)}, ${Math.round(gp.y)}`;
 
@@ -92,7 +110,6 @@ window.addEventListener('mousemove', function(e) {
 	if (state.isSelecting && state.selectMode === 'rect') {
 		state.selectCurrentScreen = { x: sx, y: sy };
 
-		// Live preview: show which nodes would be selected
 		const ids = TRV.hitTestRect(
 			state.selectStartScreen.x, state.selectStartScreen.y,
 			sx, sy
@@ -109,7 +126,6 @@ window.addEventListener('mousemove', function(e) {
 	if (state.isSelecting && state.selectMode === 'lasso') {
 		state.selectLassoPoints.push({ x: sx, y: sy });
 
-		// Live preview
 		const ids = TRV.hitTestLasso(state.selectLassoPoints);
 		if (!e.shiftKey) state.selectedNodeIds.clear();
 		for (const id of ids) state.selectedNodeIds.add(id);
@@ -128,7 +144,6 @@ window.addEventListener('mousemove', function(e) {
 			let newX = startPos.x + dx;
 			let newY = startPos.y + dy;
 
-			// Shift: constrain to dominant axis
 			if (e.shiftKey) {
 				if (Math.abs(dx) > Math.abs(dy)) {
 					newY = startPos.y;
@@ -142,8 +157,6 @@ window.addEventListener('mousemove', function(e) {
 
 		TRV.draw();
 		TRV.updateStatusSelected();
-
-		// Debounced XML sync during drag (keeps textarea roughly in sync)
 		TRV.syncXmlFromDataDebounced();
 		return;
 	}
@@ -197,7 +210,6 @@ window.addEventListener('mouseup', function(e) {
 
 	// -- Finalize drag
 	if (state.isDragging) {
-		// Immediate XML sync on drag end
 		if (TRV.xmlSyncTimer) {
 			clearTimeout(TRV.xmlSyncTimer);
 			TRV.xmlSyncTimer = null;
@@ -216,12 +228,36 @@ window.addEventListener('mouseup', function(e) {
 	TRV.updateCanvasCursor();
 });
 
-// -- Zoom -----------------------------------------------------------
+// -- Zoom / Ribbon rotation -----------------------------------------
 dom.canvasWrap.addEventListener('wheel', function(e) {
 	e.preventDefault();
+
 	const rect = dom.canvas.getBoundingClientRect();
-	const mx = e.clientX - rect.left;
-	const my = e.clientY - rect.top;
+	const absSx = e.clientX - rect.left;
+	const absSy = e.clientY - rect.top;
+
+	// Multi-view ribbon rotation
+	if (state.multiView) {
+		const cell = TRV.getCellAt(absSx, absSy);
+		const direction = e.deltaY > 0 ? 1 : -1;
+
+		if (e.ctrlKey) {
+			// Ctrl+scroll: rotate column
+			TRV.rotateColumn(cell.col, direction);
+			TRV.draw();
+			return;
+		}
+
+		if (e.altKey) {
+			// Alt+scroll: rotate row
+			TRV.rotateRow(cell.row, direction);
+			TRV.draw();
+			return;
+		}
+	}
+
+	// Normal zoom (cell-relative in multi-view)
+	const { sx: mx, sy: my } = activeCellCoords(absSx, absSy);
 
 	const factor = e.deltaY > 0 ? 0.9 : 1.1;
 	const newZoom = state.zoom * factor;
@@ -300,11 +336,53 @@ document.getElementById('btn-xml').addEventListener('click', function() {
 	});
 });
 
+// -- View mode buttons (1×1, 2×1, 2×2) -----------------------------
+function setViewMode(cols, rows) {
+	const btn1x1 = document.getElementById('btn-view-1x1');
+	const btn2x1 = document.getElementById('btn-view-2x1');
+	const btn2x2 = document.getElementById('btn-view-2x2');
+
+	btn1x1.classList.remove('active');
+	btn2x1.classList.remove('active');
+	btn2x2.classList.remove('active');
+
+	if (cols === 1 && rows === 1) {
+		state.multiView = false;
+		state.gridLayers = null;
+		btn1x1.classList.add('active');
+	} else {
+		state.multiView = true;
+		state.gridCols = cols;
+		state.gridRows = rows;
+		TRV.initMultiGrid();
+		if (cols === 2 && rows === 1) btn2x1.classList.add('active');
+		if (cols === 2 && rows === 2) btn2x2.classList.add('active');
+	}
+
+	TRV.fitToView();
+}
+
+document.getElementById('btn-view-1x1').addEventListener('click', function() { setViewMode(1, 1); });
+document.getElementById('btn-view-2x1').addEventListener('click', function() { setViewMode(2, 1); });
+document.getElementById('btn-view-2x2').addEventListener('click', function() { setViewMode(2, 2); });
+
 document.getElementById('btn-fit').addEventListener('click', TRV.fitToView);
 
 dom.layerSelect.addEventListener('change', function() {
 	state.activeLayer = this.value;
 	state.selectedNodeIds.clear();
+
+	// In multi-view, update the active cell to show selected layer
+	if (state.multiView && state.glyphData) {
+		const layers = state.glyphData.layers;
+		const idx = layers.findIndex(l => l.name === this.value);
+		if (idx >= 0 && state.gridLayers) {
+			const r = state.activeCell.row;
+			const c = state.activeCell.col;
+			state.gridLayers[r][c] = idx;
+		}
+	}
+
 	TRV.fitToView();
 	TRV.buildXmlPanel();
 });

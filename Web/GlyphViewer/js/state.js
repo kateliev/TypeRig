@@ -30,6 +30,13 @@ const TRV = {
 		lastMouse: { x: 0, y: 0 },
 		spaceDown: false,
 
+		// Multi-layer grid view
+		multiView: false,
+		gridCols: 2,              // columns in grid
+		gridRows: 1,              // rows in grid (2x1 default, cycles to 2x2)
+		gridLayers: null,         // 2D array of layer indices, init on toggle
+		activeCell: { row: 0, col: 0 },
+
 		// Rect / lasso selection
 		isSelecting: false,
 		selectMode: null,          // 'rect' | 'lasso'
