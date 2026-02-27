@@ -1,0 +1,62 @@
+// ===================================================================
+// TypeRig Glyph Viewer — State & DOM refs
+// ===================================================================
+'use strict';
+
+const TRV = {
+	// -- Application state ----------------------------------------------
+	state: {
+		glyphData: null,       // parsed glyph object
+		rawXml: '',            // raw XML string
+		activeLayer: null,     // current layer name
+
+		// View
+		pan: { x: 0, y: 0 },
+		zoom: 1,
+		filled: true,
+		showNodes: true,
+		showMetrics: true,
+		showAnchors: true,
+		showXml: false,
+
+		// Selection
+		selectedNodeId: null,  // 'c{ci}_n{ni}' format
+
+		// Interaction
+		isPanning: false,
+		isDragging: false,
+		dragNodeId: null,
+		dragOriginGlyph: null, // glyph coords where drag started
+		dragNodeStart: null,   // { x, y } node position at drag start
+		lastMouse: { x: 0, y: 0 },
+		spaceDown: false,      // spacebar held for panning
+	},
+
+	// -- DOM references (populated on init) -----------------------------
+	dom: {},
+
+	// -- XML panel line maps --------------------------------------------
+	xmlLineNodeMap: {},   // line index → node id
+	xmlNodeLineMap: {},   // node id → line index
+	xmlEditTimer: null,   // debounce timer for re-parse
+};
+
+// Populate DOM refs after DOM is ready
+TRV.dom = {
+	canvas:         document.getElementById('glyph-canvas'),
+	ctx:            document.getElementById('glyph-canvas').getContext('2d'),
+	canvasWrap:     document.getElementById('canvas-wrap'),
+	xmlContent:     document.getElementById('xml-content'),
+	xmlNodeCount:   document.getElementById('xml-node-count'),
+	parseStatus:    document.getElementById('parse-status'),
+	splitHandle:    document.getElementById('split-handle'),
+	main:           document.getElementById('main'),
+	emptyState:     document.getElementById('empty-state'),
+	fileInput:      document.getElementById('file-input'),
+	dropOverlay:    document.getElementById('drop-overlay'),
+	layerSelect:    document.getElementById('layer-select'),
+	glyphInfo:      document.getElementById('glyph-info'),
+	statusZoom:     document.getElementById('status-zoom'),
+	statusCursor:   document.getElementById('status-cursor'),
+	statusSelected: document.getElementById('status-selected'),
+};

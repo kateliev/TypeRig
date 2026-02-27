@@ -1,0 +1,356 @@
+/* -- Fonts -------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+/* -- Variables ---------------------------------------------- */
+:root {
+	--bg-primary: #1a1a1e;
+	--bg-secondary: #222226;
+	--bg-tertiary: #2a2a2e;
+	--bg-hover: #333338;
+	--border: #3a3a40;
+	--border-subtle: #2e2e34;
+	--text-primary: #e8e8ec;
+	--text-secondary: #9898a0;
+	--text-dim: #686870;
+	--accent: #5b9def;
+	--accent-dim: #3a6fb0;
+	--accent-bg: rgba(91,157,239,0.08);
+	--node-on: #e8e8ec;
+	--node-off: #5b9def;
+	--node-smooth: #50c878;
+	--node-selected: #ff6b6b;
+	--handle-line: rgba(91,157,239,0.45);
+	--outline-fill: rgba(200,200,210,0.12);
+	--outline-stroke: #c8c8d2;
+	--metric-line: rgba(255,120,80,0.35);
+	--metric-line-adv: rgba(91,157,239,0.45);
+	--baseline: rgba(255,120,80,0.25);
+	--anchor-color: #ff6b6b;
+	--xml-tag: #5b9def;
+	--xml-attr: #c792ea;
+	--xml-value: #c3e88d;
+	--xml-comment: #686870;
+	--xml-highlight: rgba(91,157,239,0.15);
+	--xml-highlight-border: rgba(91,157,239,0.5);
+	--scrollbar-thumb: #3a3a40;
+	--scrollbar-track: transparent;
+}
+
+/* -- Reset -------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+	font-family: 'DM Sans', sans-serif;
+	background: var(--bg-primary);
+	color: var(--text-primary);
+	height: 100vh;
+	overflow: hidden;
+	user-select: none;
+	-webkit-font-smoothing: antialiased;
+}
+
+/* -- Scrollbar ---------------------------------------------- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #4a4a50; }
+
+/* -- Layout ------------------------------------------------- */
+#app {
+	display: grid;
+	grid-template-rows: auto 1fr auto;
+	height: 100vh;
+}
+
+/* -- Toolbar ------------------------------------------------ */
+#toolbar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 12px;
+	background: var(--bg-secondary);
+	border-bottom: 1px solid var(--border);
+	z-index: 10;
+}
+
+#toolbar .logo {
+	font-family: 'JetBrains Mono', monospace;
+	font-weight: 600;
+	font-size: 12px;
+	color: var(--accent);
+	letter-spacing: 0.5px;
+	margin-right: 8px;
+	white-space: nowrap;
+}
+
+#toolbar .separator {
+	width: 1px;
+	height: 20px;
+	background: var(--border);
+	margin: 0 4px;
+}
+
+.tb-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 5px 10px;
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	color: var(--text-secondary);
+	font-family: 'DM Sans', sans-serif;
+	font-size: 12px;
+	cursor: pointer;
+	transition: all 0.15s;
+	white-space: nowrap;
+}
+
+.tb-btn:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+	border-color: var(--border);
+}
+
+.tb-btn.active {
+	background: var(--accent-bg);
+	color: var(--accent);
+	border-color: var(--accent-dim);
+}
+
+.tb-btn svg { width: 14px; height: 14px; }
+
+.tb-group {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.tb-spacer { flex: 1; }
+
+#glyph-info {
+	font-family: 'JetBrains Mono', monospace;
+	font-size: 11px;
+	color: var(--text-dim);
+	margin-left: 8px;
+}
+
+#glyph-info span { color: var(--text-secondary); }
+
+/* -- Main area ---------------------------------------------- */
+#main {
+	display: flex;
+	overflow: hidden;
+	position: relative;
+}
+
+/* -- Canvas ------------------------------------------------- */
+#canvas-wrap {
+	position: relative;
+	overflow: hidden;
+	background: var(--bg-primary);
+	cursor: default;
+	flex: 1;
+	min-width: 200px;
+}
+
+#canvas-wrap:active { cursor: inherit; }
+
+#glyph-canvas {
+	position: absolute;
+	top: 0; left: 0;
+	width: 100%;
+	height: 100%;
+}
+
+/* -- XML Panel ---------------------------------------------- */
+#xml-panel {
+	display: none;
+	flex-direction: column;
+	background: var(--bg-secondary);
+	overflow: hidden;
+	min-width: 200px;
+}
+
+#xml-panel.visible { display: flex; }
+
+/* -- Resizer handle ----------------------------------------- */
+#split-handle {
+	display: none;
+	width: 5px;
+	cursor: col-resize;
+	background: var(--border);
+	position: relative;
+	flex-shrink: 0;
+	transition: background 0.12s;
+	z-index: 5;
+}
+
+#split-handle:hover,
+#split-handle.dragging {
+	background: var(--accent-dim);
+}
+
+#split-handle::after {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	width: 3px;
+	height: 32px;
+	border-left: 1px solid var(--text-dim);
+	border-right: 1px solid var(--text-dim);
+	opacity: 0;
+	transition: opacity 0.12s;
+}
+
+#split-handle:hover::after,
+#split-handle.dragging::after { opacity: 0.5; }
+
+#split-handle.visible { display: block; }
+
+#xml-panel-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 6px 12px;
+	background: var(--bg-tertiary);
+	border-bottom: 1px solid var(--border);
+	font-size: 11px;
+	font-family: 'JetBrains Mono', monospace;
+	color: var(--text-dim);
+}
+
+#xml-content {
+	flex: 1;
+	overflow: auto;
+	padding: 0;
+	margin: 0;
+	border: none;
+	outline: none;
+	resize: none;
+	font-family: 'JetBrains Mono', monospace;
+	font-size: 12px;
+	line-height: 1.65;
+	tab-size: 2;
+	-moz-tab-size: 2;
+	white-space: pre;
+	color: var(--text-secondary);
+	background: var(--bg-secondary);
+	padding: 12px;
+	user-select: text;
+}
+
+#xml-content:focus { outline: none; }
+
+#xml-content.has-error {
+	box-shadow: inset 0 0 0 1px rgba(255,107,107,0.4);
+}
+
+#xml-panel-header .parse-status {
+	font-size: 10px;
+	padding: 1px 6px;
+	border-radius: 3px;
+	margin-left: 8px;
+}
+
+#xml-panel-header .parse-status.ok {
+	color: #50c878;
+	background: rgba(80,200,120,0.1);
+}
+
+#xml-panel-header .parse-status.error {
+	color: #ff6b6b;
+	background: rgba(255,107,107,0.1);
+}
+
+/* -- Node highlighting in textarea (via overlay) ------------ */
+#xml-highlight-overlay {
+	display: none;
+}
+
+/* -- Status bar --------------------------------------------- */
+#statusbar {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	padding: 4px 12px;
+	background: var(--bg-secondary);
+	border-top: 1px solid var(--border);
+	font-family: 'JetBrains Mono', monospace;
+	font-size: 10px;
+	color: var(--text-dim);
+}
+
+#statusbar .status-item { display: flex; align-items: center; gap: 4px; }
+#statusbar .status-label { color: var(--text-dim); }
+#statusbar .status-value { color: var(--text-secondary); }
+
+/* -- Drop overlay ------------------------------------------- */
+#drop-overlay {
+	display: none;
+	position: fixed;
+	inset: 0;
+	background: rgba(26,26,30,0.92);
+	z-index: 100;
+	justify-content: center;
+	align-items: center;
+	flex-direction: column;
+	gap: 12px;
+}
+
+#drop-overlay.visible { display: flex; }
+
+#drop-overlay .drop-icon {
+	width: 56px; height: 56px;
+	border: 2px dashed var(--accent-dim);
+	border-radius: 12px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+#drop-overlay .drop-icon svg { width: 24px; height: 24px; color: var(--accent); }
+
+#drop-overlay .drop-text {
+	font-size: 14px;
+	color: var(--text-secondary);
+}
+
+/* -- Empty state -------------------------------------------- */
+#empty-state {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	color: var(--text-dim);
+	font-size: 13px;
+	pointer-events: none;
+}
+
+#empty-state.hidden { display: none; }
+
+#empty-state svg { width: 40px; height: 40px; opacity: 0.3; }
+#empty-state .hint { font-size: 11px; opacity: 0.6; }
+
+/* -- Hidden file input -------------------------------------- */
+#file-input { display: none; }
+
+/* -- Layer selector ----------------------------------------- */
+#layer-select {
+	background: var(--bg-tertiary);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	color: var(--text-secondary);
+	font-family: 'JetBrains Mono', monospace;
+	font-size: 11px;
+	padding: 4px 6px;
+	cursor: pointer;
+	outline: none;
+}
+
+#layer-select:focus { border-color: var(--accent-dim); }
