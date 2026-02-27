@@ -13,5 +13,6 @@ from .contour import Contour
 from .shape import Shape
 from .layer import Layer
 from .glyph import Glyph
+from .anchor import Anchor
 
-__all__ = ['Node', 'Contour', 'Shape', 'Layer', 'Glyph']
+__all__ = ['Node', 'Contour', 'Shape', 'Layer', 'Glyph', 'Anchor']

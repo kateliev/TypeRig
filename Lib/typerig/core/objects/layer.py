@@ -21,6 +21,7 @@ from typerig.core.objects.transform import Transform, TransformOrigin
 from typerig.core.objects.utils import Bounds
 from typerig.core.objects.shape import Shape
 from typerig.core.objects.contour import Contour
+from typerig.core.objects.anchor import Anchor
 from typerig.core.objects.sdf import SignedDistanceField
 
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
@@ -29,16 +30,16 @@ from typerig.core.func.math import slerp_angle, interpolate_directional
 from typerig.core.func.transform import adaptive_scale_directional, timer
 
 # - Init -------------------------------
-__version__ = '0.4.8'
+__version__ = '0.5.1'
 
 # - Classes -----------------------------
 @register_xml_class
 class Layer(Container, XMLSerializable): 
-	__slots__ = ('name', 'stx', 'sty', 'transform', 'mark', 'advance_width', 'advance_height', 'identifier', 'parent', 'lib', '_sdf')
+	__slots__ = ('name', 'stx', 'sty', 'transform', 'mark', 'advance_width', 'advance_height', 'identifier', 'parent', 'lib', 'anchors', '_sdf')
 
 	XML_TAG = 'layer'
 	XML_ATTRS = ['name', 'identifier', 'width', 'height']
-	XML_CHILDREN = {'shape': 'shapes'}
+	XML_CHILDREN = {'shape': 'shapes', 'anchor': 'anchors'}
 	XML_LIB_ATTRS = ['transform', 'stx', 'sty']
 	
 	def __init__(self, shapes=None, **kwargs):
@@ -57,9 +58,11 @@ class Layer(Container, XMLSerializable):
 			self.mark = kwargs.pop('mark', 0)
 			self.advance_width = kwargs.pop('width', 0.) 
 			self.advance_height = kwargs.pop('height', 1000.) 
+			self.anchors = kwargs.pop('anchors', [])
 
 		# - SDF cache (not serialized)
 		self._sdf = None
+
 	
 	# -- Internals ------------------------------
 	def __repr__(self):
@@ -73,7 +76,6 @@ class Layer(Container, XMLSerializable):
 		'''
 		return self._sdf
 
-	# -- Properties -----------------------------
 	@property
 	def has_stems(self):
 		return self.stx is not None and self.sty is not None
@@ -200,19 +202,14 @@ class Layer(Container, XMLSerializable):
 
 	@property
 	def anchor_array(self):
-		#return [node.tuple for node in self.nodes]
-		pass
+		return [(a.x, a.y) for a in self.anchors]
 
 	@anchor_array.setter
 	def anchor_array(self, other):
-		'''
-		layer_nodes = self.nodes
-
-		if isinstance(other, (tuple, list)) and len(other) == len(layer_nodes):
-			for idx in range(len(layer_nodes)):
-				layer_nodes[idx].tuple = other[idx]
-		'''
-		pass
+		if isinstance(other, (tuple, list)) and len(other) == len(self.anchors):
+			for idx in range(len(self.anchors)):
+				self.anchors[idx].x = other[idx][0]
+				self.anchors[idx].y = other[idx][1]
 
 	@property
 	def metric_array(self):
@@ -239,10 +236,16 @@ class Layer(Container, XMLSerializable):
 		for node in self.nodes:
 			node.x, node.y = self.transform.applyTransformation(node.x, node.y)
 
+		for anchor in self.anchors:
+			anchor.x, anchor.y = self.transform.applyTransformation(anchor.x, anchor.y)
+
 	def shift(self, delta_x, delta_y):
 		'''Shift the layer by given amount'''
 		for node in self.nodes:
 			node.point += Point(delta_x, delta_y)
+
+		for anchor in self.anchors:
+			anchor.shift(delta_x, delta_y)
 
 	def align_to(self, entity, mode=(TransformOrigin.CENTER, TransformOrigin.CENTER), align=(True, True)):
 		'''Align layer to another entity using transformation origins.

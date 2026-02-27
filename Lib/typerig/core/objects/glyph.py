@@ -21,7 +21,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.layer import Layer
 
 # - Init -------------------------------
-__version__ = '0.2.0'
+__version__ = '0.2.5'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -68,6 +68,9 @@ class Glyph(Container, XMLSerializable):
 
 	def nodes(self, layer_name=None):
 		return self.layer(layer_name).nodes
+
+	def anchors(self, layer_name=None):
+		return self.layer(layer_name).anchors
 
 	def selected_nodes(self, layer_name=None):
 		return self.layer(layer_name).selected_nodes

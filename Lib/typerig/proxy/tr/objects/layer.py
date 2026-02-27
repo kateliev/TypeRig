@@ -17,10 +17,11 @@ import fontgate as fgt
 import PythonQt as pqt
 
 from typerig.proxy.tr.objects.shape import trShape, _build_fl_shape
+from typerig.proxy.tr.objects.anchor import trAnchor, _build_fl_anchor
 from typerig.core.objects.layer import Layer
 
 # - Init --------------------------------
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 # - Classes -----------------------------
 class trLayer(Layer):
@@ -55,6 +56,23 @@ class trLayer(Layer):
 		else:
 			Layer.__setattr__(self, name, value)
 
+	# - Properties -------------------------------
+	@property
+	def anchors(self):
+		return [trAnchor(a, parent=self) for a in self.host.anchors]
+
+	@anchors.setter
+	def anchors(self, other):
+		# Clear existing
+		while len(self.host.anchors):
+			self.host.removeAnchor(self.host.anchors[0])
+		# Add new
+		for a in other:
+			if isinstance(a, trAnchor):
+				self.host.addAnchor(a.host)
+			else:
+				self.host.addAnchor(_build_fl_anchor(a))
+
 	# - Host sync --------------------------------
 	def _sync_host(self):
 		'''Sync host layer shapes with proxy data.
@@ -71,13 +89,15 @@ class trLayer(Layer):
 			Layer: Pure core Layer with geometry and metrics copied from host.
 		'''
 		core_shapes = [trShape(s).eject() for s in self.host.shapes]
+		core_anchors = [trAnchor(a).eject() for a in self.host.anchors]
 
 		return Layer(
 			core_shapes,
 			name=self.name,
 			width=self.advance_width,
 			height=self.advance_height,
-			mark=self.mark
+			mark=self.mark,
+			anchors=core_anchors
 		)
 
 	def mount(self, core_layer):
@@ -102,6 +122,12 @@ class trLayer(Layer):
 		for core_shape in core_layer.shapes:
 			fl_shape = _build_fl_shape(core_shape)
 			self.host.addShape(fl_shape)
+
+		while len(self.host.anchors):
+			self.host.removeAnchor(self.host.anchors[0])
+		
+		for core_anchor in core_layer.anchors:
+			self.host.addAnchor(_build_fl_anchor(core_anchor))
 
 		# - Copy metrics
 		self.host.advanceWidth = core_layer.advance_width
