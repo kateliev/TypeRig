@@ -22,9 +22,13 @@ TRV.draw = function() {
 
 	if (!state.glyphData) return;
 
-	// Multi-view: delegate to grid renderer
+	// Multi-view: delegate to split or joined renderer
 	if (state.multiView) {
-		TRV.drawMultiView(w, h);
+		if (state.joinedView) {
+			TRV.drawJoinedView(w, h);
+		} else {
+			TRV.drawSplitView(w, h);
+		}
 		return;
 	}
 

@@ -32,9 +32,10 @@ const TRV = {
 
 		// Multi-layer grid view
 		multiView: false,
-		gridCols: 2,              // columns in grid
-		gridRows: 1,              // rows in grid (2x1 default, cycles to 2x2)
-		gridLayers: null,         // 2D array of layer indices, init on toggle
+		joinedView: false,        // true = shared canvas, false = split cells
+		gridCols: 2,
+		gridRows: 1,
+		gridLayers: null,
 		activeCell: { row: 0, col: 0 },
 
 		// Rect / lasso selection

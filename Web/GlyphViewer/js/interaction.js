@@ -80,15 +80,38 @@ TRV.fitToView = function() {
 	const layer = TRV.getActiveLayer();
 	if (!layer) return;
 
-	// In multi-view, fit to cell dimensions, not full canvas
+	const canvasW = TRV.dom.canvasWrap.clientWidth;
+	const canvasH = TRV.dom.canvasWrap.clientHeight;
+
+	// Joined multi-view: fit the entire joined layout
+	if (TRV.state.multiView && TRV.state.joinedView) {
+		const layout = TRV.getJoinedLayout();
+
+		const padding = 40;
+		const scaleX = (canvasW - padding * 2) / layout.totalW;
+		const scaleY = (canvasH - padding * 2) / layout.totalH;
+		TRV.state.zoom = Math.min(scaleX, scaleY);
+
+		// Center of the joined layout in glyph space
+		const cx = layout.totalW / 2;
+		const cy = layout.totalH / 2;
+		TRV.state.pan.x = canvasW / 2 - cx * TRV.state.zoom;
+		TRV.state.pan.y = canvasH / 2 + cy * TRV.state.zoom;
+
+		TRV.updateZoomStatus();
+		TRV.draw();
+		return;
+	}
+
+	// Split multi-view: fit to cell dimensions
 	let w, h;
 	if (TRV.state.multiView) {
 		const cell = TRV.getCellRect(TRV.state.activeCell.row, TRV.state.activeCell.col);
 		w = cell.w;
 		h = cell.h;
 	} else {
-		w = TRV.dom.canvasWrap.clientWidth;
-		h = TRV.dom.canvasWrap.clientHeight;
+		w = canvasW;
+		h = canvasH;
 	}
 
 	let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;

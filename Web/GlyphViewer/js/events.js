@@ -8,12 +8,32 @@
 const state = TRV.state;
 const dom = TRV.dom;
 
-// -- Helper: get cell-relative coords for active cell ---------------
-// During drag/selection, always use active cell as reference
-function activeCellCoords(sx, sy) {
-	if (!state.multiView) return { sx: sx, sy: sy };
-	const cell = TRV.getCellRect(state.activeCell.row, state.activeCell.col);
-	return { sx: sx - cell.x, sy: sy - cell.y };
+// -- Helpers for multi-view coordinate handling ----------------------
+
+// Which cell was clicked (split or joined)
+function getCellAtScreen(sx, sy) {
+	if (!state.multiView) return null;
+	if (state.joinedView) return TRV.getJoinedCellAt(sx, sy);
+	return TRV.getCellAt(sx, sy);
+}
+
+// Get screen coords suitable for hit testing in active cell.
+// Split mode: cell-relative. Joined/single: absolute.
+function interactionCoords(sx, sy) {
+	if (state.multiView && !state.joinedView) {
+		const cell = TRV.getCellRect(state.activeCell.row, state.activeCell.col);
+		return { sx: sx - cell.x, sy: sy - cell.y };
+	}
+	return { sx: sx, sy: sy };
+}
+
+// Execute fn with pan shifted for active cell (joined mode only)
+function withActiveOffset(fn) {
+	if (state.multiView && state.joinedView) {
+		TRV.withJoinedOffset(state.activeCell.row, state.activeCell.col, fn);
+	} else {
+		fn();
+	}
 }
 
 // -- Mouse: node click/drag, rect select, lasso select, pan --------
@@ -34,18 +54,21 @@ dom.canvasWrap.addEventListener('mousedown', function(e) {
 
 	// -- Multi-view: switch active cell on click
 	if (state.multiView) {
-		const clicked = TRV.getCellAt(absSx, absSy);
-		if (clicked.row !== state.activeCell.row || clicked.col !== state.activeCell.col) {
+		const clicked = getCellAtScreen(absSx, absSy);
+		if (clicked && (clicked.row !== state.activeCell.row || clicked.col !== state.activeCell.col)) {
 			TRV.setActiveCell(clicked.row, clicked.col);
 		}
 	}
 
-	// Cell-relative coords for hit testing
-	const { sx, sy } = activeCellCoords(absSx, absSy);
+	// Interaction coords (cell-relative in split, absolute in joined/single)
+	const { sx, sy } = interactionCoords(absSx, absSy);
 
-	// -- Check node hit
+	// -- Check node hit (with pan offset in joined mode)
 	if (state.showNodes) {
-		const hit = TRV.hitTestNode(sx, sy);
+		let hit = null;
+		withActiveOffset(function() {
+			hit = TRV.hitTestNode(sx, sy);
+		});
 		if (hit) {
 			if (e.shiftKey) {
 				TRV.selectNode(hit.id, true);
@@ -82,7 +105,8 @@ dom.canvasWrap.addEventListener('mousedown', function(e) {
 });
 
 function startDrag(sx, sy) {
-	const gp = TRV.screenToGlyph(sx, sy);
+	let gp;
+	withActiveOffset(function() { gp = TRV.screenToGlyph(sx, sy); });
 	state.isDragging = true;
 	state.dragOriginGlyph = { x: gp.x, y: gp.y };
 
@@ -101,19 +125,24 @@ window.addEventListener('mousemove', function(e) {
 	const absSx = e.clientX - rect.left;
 	const absSy = e.clientY - rect.top;
 
-	// Cell-relative coords (always relative to active cell during interactions)
-	const { sx, sy } = activeCellCoords(absSx, absSy);
-	const gp = TRV.screenToGlyph(sx, sy);
+	const { sx, sy } = interactionCoords(absSx, absSy);
+
+	// Cursor position in glyph coords (offset-aware)
+	let gp;
+	withActiveOffset(function() { gp = TRV.screenToGlyph(sx, sy); });
 	dom.statusCursor.textContent = `${Math.round(gp.x)}, ${Math.round(gp.y)}`;
 
 	// -- Rect selection
 	if (state.isSelecting && state.selectMode === 'rect') {
 		state.selectCurrentScreen = { x: sx, y: sy };
 
-		const ids = TRV.hitTestRect(
-			state.selectStartScreen.x, state.selectStartScreen.y,
-			sx, sy
-		);
+		let ids;
+		withActiveOffset(function() {
+			ids = TRV.hitTestRect(
+				state.selectStartScreen.x, state.selectStartScreen.y,
+				sx, sy
+			);
+		});
 		if (!e.shiftKey) state.selectedNodeIds.clear();
 		for (const id of ids) state.selectedNodeIds.add(id);
 
@@ -126,7 +155,10 @@ window.addEventListener('mousemove', function(e) {
 	if (state.isSelecting && state.selectMode === 'lasso') {
 		state.selectLassoPoints.push({ x: sx, y: sy });
 
-		const ids = TRV.hitTestLasso(state.selectLassoPoints);
+		let ids;
+		withActiveOffset(function() {
+			ids = TRV.hitTestLasso(state.selectLassoPoints);
+		});
 		if (!e.shiftKey) state.selectedNodeIds.clear();
 		for (const id of ids) state.selectedNodeIds.add(id);
 
@@ -137,23 +169,26 @@ window.addEventListener('mousemove', function(e) {
 
 	// -- Node drag (moves all selected)
 	if (state.isDragging && state.dragStartPositions) {
-		const dx = gp.x - state.dragOriginGlyph.x;
-		const dy = gp.y - state.dragOriginGlyph.y;
+		withActiveOffset(function() {
+			const dgp = TRV.screenToGlyph(sx, sy);
+			const dx = dgp.x - state.dragOriginGlyph.x;
+			const dy = dgp.y - state.dragOriginGlyph.y;
 
-		for (const [nodeId, startPos] of state.dragStartPositions) {
-			let newX = startPos.x + dx;
-			let newY = startPos.y + dy;
+			for (const [nodeId, startPos] of state.dragStartPositions) {
+				let newX = startPos.x + dx;
+				let newY = startPos.y + dy;
 
-			if (e.shiftKey) {
-				if (Math.abs(dx) > Math.abs(dy)) {
-					newY = startPos.y;
-				} else {
-					newX = startPos.x;
+				if (e.shiftKey) {
+					if (Math.abs(dx) > Math.abs(dy)) {
+						newY = startPos.y;
+					} else {
+						newX = startPos.x;
+					}
 				}
-			}
 
-			TRV.updateNodePosition(nodeId, newX, newY);
-		}
+				TRV.updateNodePosition(nodeId, newX, newY);
+			}
+		});
 
 		TRV.draw();
 		TRV.updateStatusSelected();
@@ -174,7 +209,8 @@ window.addEventListener('mousemove', function(e) {
 
 	// -- Hover cursor hint
 	if (!state.spaceDown && state.showNodes) {
-		const hit = TRV.hitTestNode(sx, sy);
+		let hit = null;
+		withActiveOffset(function() { hit = TRV.hitTestNode(sx, sy); });
 		dom.canvasWrap.style.cursor = hit ? 'move' : 'default';
 	}
 });
@@ -182,10 +218,13 @@ window.addEventListener('mousemove', function(e) {
 window.addEventListener('mouseup', function(e) {
 	// -- Finalize rect selection
 	if (state.isSelecting && state.selectMode === 'rect') {
-		const ids = TRV.hitTestRect(
-			state.selectStartScreen.x, state.selectStartScreen.y,
-			state.selectCurrentScreen.x, state.selectCurrentScreen.y
-		);
+		let ids;
+		withActiveOffset(function() {
+			ids = TRV.hitTestRect(
+				state.selectStartScreen.x, state.selectStartScreen.y,
+				state.selectCurrentScreen.x, state.selectCurrentScreen.y
+			);
+		});
 		TRV.selectNodes(ids, e.shiftKey);
 
 		state.isSelecting = false;
@@ -198,7 +237,10 @@ window.addEventListener('mouseup', function(e) {
 
 	// -- Finalize lasso selection
 	if (state.isSelecting && state.selectMode === 'lasso') {
-		const ids = TRV.hitTestLasso(state.selectLassoPoints);
+		let ids;
+		withActiveOffset(function() {
+			ids = TRV.hitTestLasso(state.selectLassoPoints);
+		});
 		TRV.selectNodes(ids, e.shiftKey);
 
 		state.isSelecting = false;
@@ -238,26 +280,24 @@ dom.canvasWrap.addEventListener('wheel', function(e) {
 
 	// Multi-view ribbon rotation
 	if (state.multiView) {
-		const cell = TRV.getCellAt(absSx, absSy);
+		const cell = getCellAtScreen(absSx, absSy);
 		const direction = e.deltaY > 0 ? 1 : -1;
 
 		if (e.ctrlKey) {
-			// Ctrl+scroll: rotate column
 			TRV.rotateColumn(cell.col, direction);
 			TRV.draw();
 			return;
 		}
 
 		if (e.altKey) {
-			// Alt+scroll: rotate row
 			TRV.rotateRow(cell.row, direction);
 			TRV.draw();
 			return;
 		}
 	}
 
-	// Normal zoom (cell-relative in multi-view)
-	const { sx: mx, sy: my } = activeCellCoords(absSx, absSy);
+	// Normal zoom
+	const { sx: mx, sy: my } = interactionCoords(absSx, absSy);
 
 	const factor = e.deltaY > 0 ? 0.9 : 1.1;
 	const newZoom = state.zoom * factor;
@@ -365,6 +405,19 @@ function setViewMode(cols, rows) {
 document.getElementById('btn-view-1x1').addEventListener('click', function() { setViewMode(1, 1); });
 document.getElementById('btn-view-2x1').addEventListener('click', function() { setViewMode(2, 1); });
 document.getElementById('btn-view-2x2').addEventListener('click', function() { setViewMode(2, 2); });
+
+// -- Join toggle (split vs joined canvas) ---------------------------
+document.getElementById('btn-join').addEventListener('click', function() {
+	state.joinedView = !state.joinedView;
+	this.classList.toggle('active', state.joinedView);
+
+	// Auto-enable multi-view if not active
+	if (state.joinedView && !state.multiView) {
+		setViewMode(2, 1);
+	}
+
+	TRV.fitToView();
+});
 
 document.getElementById('btn-fit').addEventListener('click', TRV.fitToView);
 
