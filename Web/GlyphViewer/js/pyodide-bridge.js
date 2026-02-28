@@ -80,7 +80,7 @@ TRV.pyBridge = {
 
 	// -- Build raw GitHub URL -------------------------------------------
 	_rawUrl: function(filePath) {
-		const c = this.config;
+		var c = this.config;
 		return 'https://raw.githubusercontent.com/' +
 			c.repo + '/' + c.branch + '/' + c.basePath + '/' + filePath;
 	},
@@ -91,7 +91,7 @@ TRV.pyBridge = {
 		this.loading = true;
 		this.error = null;
 
-		const log = onProgress || function() {};
+		var log = onProgress || function() {};
 
 		try {
 			// 1. Load Pyodide runtime from CDN
@@ -100,12 +100,12 @@ TRV.pyBridge = {
 			log('Python runtime loaded.');
 
 			// 2. Detect site-packages path dynamically
-			const sitePackages = this.pyodide.runPython(
+			var sitePackages = this.pyodide.runPython(
 				'import site; site.getsitepackages()[0]'
 			) + '/';
 
 			// 3. Create directory structure in Pyodide virtual FS
-			const dirs = [
+			var dirs = [
 				'typerig',
 				'typerig/core',
 				'typerig/core/objects',
@@ -113,20 +113,20 @@ TRV.pyBridge = {
 				'typerig/core/fileio',
 			];
 
-			for (const d of dirs) {
-				try { this.pyodide.FS.mkdirTree(sitePackages + d); }
+			for (var i = 0; i < dirs.length; i++) {
+				try { this.pyodide.FS.mkdirTree(sitePackages + dirs[i]); }
 				catch (e) { /* already exists */ }
 			}
 
 			// 4. Write stub __init__.py files
-			for (const [path, content] of Object.entries(this.stubs)) {
-				this.pyodide.FS.writeFile(sitePackages + path, content);
+			for (var path in this.stubs) {
+				this.pyodide.FS.writeFile(sitePackages + path, this.stubs[path]);
 			}
 
 			// 5. Fetch real module files from GitHub (parallel)
 			log('Fetching TypeRig core (' + this.manifest.length + ' files)…');
 
-			const fetches = this.manifest.map(function(filePath) {
+			var fetches = this.manifest.map(function(filePath) {
 				return fetch(TRV.pyBridge._rawUrl(filePath))
 					.then(function(r) {
 						if (!r.ok) throw new Error(filePath + ': ' + r.status);
@@ -137,33 +137,70 @@ TRV.pyBridge = {
 					});
 			});
 
-			const results = await Promise.all(fetches);
+			var results = await Promise.all(fetches);
 
-			for (const r of results) {
-				this.pyodide.FS.writeFile(sitePackages + r.path, r.text);
+			for (var j = 0; j < results.length; j++) {
+				this.pyodide.FS.writeFile(sitePackages + results[j].path, results[j].text);
 			}
 
 			log('TypeRig core installed (' + results.length + ' modules).');
 
-			// 6. Bootstrap: import core, set up helpers
-			this.pyodide.runPython(
-				'import sys\n' +
-				'from typerig.core.objects import Node, Contour, Shape, Layer, Glyph, Anchor\n' +
-				'from typerig.core.objects.transform import Transform\n' +
-				'from typerig.core.objects.delta import DeltaScale\n' +
-				'from typerig.core.objects.point import Point\n' +
-				'from typerig.core.objects.line import Line\n' +
-				'from typerig.core.objects.array import PointArray\n' +
-				'from typerig.core.fileio.xmlio import XMLSerializable\n' +
-				'\n' +
-				'# Glyph variable — synced with viewer\n' +
-				'glyph = None\n' +
-				'\n' +
-				'print("TypeRig core ready — Python", sys.version.split()[0])\n' +
-				'print("Available: Node, Contour, Shape, Layer, Glyph, Anchor")\n' +
-				'print("           Transform, DeltaScale, Point, Line, PointArray")\n' +
-				'print()\n'
-			);
+			// 6. Bootstrap: import core, set up bridge helpers
+			this.pyodide.runPython([
+				'import sys',
+				'from typerig.core.objects import Node, Contour, Shape, Layer, Glyph, Anchor',
+				'from typerig.core.objects.transform import Transform',
+				'from typerig.core.objects.delta import DeltaScale',
+				'from typerig.core.objects.point import Point',
+				'from typerig.core.objects.line import Line',
+				'from typerig.core.objects.array import PointArray',
+				'from typerig.core.fileio.xmlio import XMLSerializable',
+				'',
+				'# Glyph variable — synced with viewer',
+				'glyph = None',
+				'',
+				'# -- Selection bridge helpers --',
+				'def _set_selection(id_list, layer_name=None):',
+				'\t"""Set node selection from JS id list [\'c0_n3\', ...]"""',
+				'\tif glyph is None: return',
+				'\t# Clear all selection first',
+				'\tfor layer in glyph.layers:',
+				'\t\tfor shape in layer.shapes:',
+				'\t\t\tfor contour in shape.contours:',
+				'\t\t\t\tfor node in contour.data:',
+				'\t\t\t\t\tnode.selected = False',
+				'\t# Set selection on active layer only',
+				'\tlayer = glyph.layer(layer_name) if layer_name else (glyph.layers[0] if glyph.layers else None)',
+				'\tif layer is None: return',
+				'\tselected = set(id_list)',
+				'\tci = 0',
+				'\tfor shape in layer.shapes:',
+				'\t\tfor contour in shape.contours:',
+				'\t\t\tfor ni, node in enumerate(contour.data):',
+				'\t\t\t\tnode.selected = ("c%d_n%d" % (ci, ni)) in selected',
+				'\t\t\tci += 1',
+				'',
+				'def _get_selection(layer_name=None):',
+				'\t"""Get selected node ids as list [\'c0_n3\', ...]"""',
+				'\tif glyph is None: return []',
+				'\tlayer = glyph.layer(layer_name) if layer_name else (glyph.layers[0] if glyph.layers else None)',
+				'\tif layer is None: return []',
+				'\tresult = []',
+				'\tci = 0',
+				'\tfor shape in layer.shapes:',
+				'\t\tfor contour in shape.contours:',
+				'\t\t\tfor ni, node in enumerate(contour.data):',
+				'\t\t\t\tif getattr(node, "selected", False):',
+				'\t\t\t\t\tresult.append("c%d_n%d" % (ci, ni))',
+				'\t\t\tci += 1',
+				'\treturn result',
+				'',
+				'print("TypeRig core ready — Python", sys.version.split()[0])',
+				'print("Available: Node, Contour, Shape, Layer, Glyph, Anchor")',
+				'print("           Transform, DeltaScale, Point, Line, PointArray")',
+				'print("Selection: glyph.selected_nodes, node.selected")',
+				'print()',
+			].join('\n'));
 
 			this.ready = true;
 			this.loading = false;
@@ -178,35 +215,66 @@ TRV.pyBridge = {
 	},
 
 	// -- Sync viewer glyph → Python glyph variable ----------------------
+	// Also syncs selection state (not in XML, passed separately)
 	syncToPython: function() {
 		if (!this.ready || !TRV.state.glyphData) return;
 
-		const xml = TRV.glyphToXml(TRV.state.glyphData);
+		// Serialize current viewer glyph to XML
+		var xml = TRV.glyphToXml(TRV.state.glyphData);
 		this.pyodide.globals.set('_xml_in', xml);
 
 		this.pyodide.runPython(
 			'glyph = Glyph.from_XML(_xml_in)\n' +
 			'del _xml_in\n'
 		);
+
+		// Sync selection: JS selectedNodeIds → Python node.selected
+		var selIds = Array.from(TRV.state.selectedNodeIds);
+		var activeName = TRV.state.activeLayer || '';
+		this.pyodide.globals.set('_sel_ids', selIds);
+		this.pyodide.globals.set('_sel_layer', activeName);
+		this.pyodide.runPython(
+			'_set_selection(_sel_ids.to_py(), _sel_layer)\n' +
+			'del _sel_ids, _sel_layer\n'
+		);
 	},
 
 	// -- Sync Python glyph → viewer state --------------------------------
+	// Reads XML and selection back from Python, updates viewer + canvas
 	syncFromPython: function() {
 		if (!this.ready) return false;
 
 		try {
-			const xml = this.pyodide.runPython('glyph.to_XML() if glyph else ""');
+			var xml = this.pyodide.runPython(
+				'glyph.to_XML() if glyph is not None else ""'
+			);
+
 			if (!xml) return false;
 
-			const newGlyph = TRV.parseGlyphXML(xml);
+			var newGlyph = TRV.parseGlyphXML(xml);
+
 			TRV.state.glyphData = newGlyph;
 			TRV.state.rawXml = xml;
 
+			// Sync selection: Python node.selected → JS selectedNodeIds
+			var activeName = TRV.state.activeLayer || '';
+			this.pyodide.globals.set('_sel_layer', activeName);
+			var pySelRaw = this.pyodide.runPython(
+				'_get_selection(_sel_layer)'
+			);
+			this.pyodide.runPython('del _sel_layer');
+			// Pyodide may return a JsProxy for lists — convert to native JS
+			var pySel = pySelRaw && pySelRaw.toJs ? pySelRaw.toJs() : pySelRaw;
+			if (Array.isArray(pySel)) {
+				TRV.state.selectedNodeIds = new Set(pySel);
+			}
+
 			// Update layer selector
-			const currentLayer = TRV.state.activeLayer;
+			var currentLayer = TRV.state.activeLayer;
 			TRV.dom.layerSelect.innerHTML = '';
-			for (const layer of newGlyph.layers) {
-				const opt = document.createElement('option');
+			for (var i = 0; i < newGlyph.layers.length; i++) {
+				var layer = newGlyph.layers[i];
+				var opt = document.createElement('option');
 				opt.value = layer.name;
 				opt.textContent = layer.name || '(unnamed)';
 				TRV.dom.layerSelect.appendChild(opt);
@@ -220,7 +288,7 @@ TRV.pyBridge = {
 			}
 
 			// Update glyph info
-			let infoHtml = '<span>' + (newGlyph.name || '?') + '</span>';
+			var infoHtml = '<span>' + (newGlyph.name || '?') + '</span>';
 			if (newGlyph.unicodes) infoHtml += ' U+' + newGlyph.unicodes;
 			TRV.dom.glyphInfo.innerHTML = infoHtml;
 
@@ -229,7 +297,12 @@ TRV.pyBridge = {
 				TRV.buildXmlPanel();
 			}
 
-			TRV.draw();
+			// Force canvas redraw on next frame
+			requestAnimationFrame(function() { TRV.draw(); });
+
+			// Update status bar selection count
+			if (TRV.updateStatusSelected) TRV.updateStatusSelected();
+
 			return true;
 
 		} catch (e) {
@@ -245,7 +318,7 @@ TRV.pyBridge = {
 			return { output: '', error: 'Python not ready. Click Init to load.', glyphChanged: false };
 		}
 
-		// Sync current viewer state to Python
+		// Sync current viewer state → Python (glyph + selection)
 		this.syncToPython();
 
 		// Capture stdout/stderr
@@ -263,40 +336,43 @@ TRV.pyBridge = {
 		var glyphChanged = false;
 
 		try {
-			this.pyodide.runPython(code);
+			// Use AST to separate exec from final expression eval.
+			// This avoids re-executing the last line for repr display.
+			this.pyodide.globals.set('_user_code', code);
+
+			this.pyodide.runPython([
+				'_user_result = None',
+				'import ast as _ast',
+				'try:',
+				'\t_tree = _ast.parse(_user_code)',
+				'\t# If last statement is a bare expression, eval it separately',
+				'\tif _tree.body and isinstance(_tree.body[-1], _ast.Expr):',
+				'\t\t_last_expr = _tree.body.pop()',
+				'\t\t# Exec everything before the last expression',
+				'\t\tif _tree.body:',
+				'\t\t\texec(compile(_tree, "<repl>", "exec"))',
+				'\t\t# Eval last expression for display',
+				'\t\t_expr_tree = _ast.Expression(body=_last_expr.value)',
+				'\t\t_user_result = eval(compile(_expr_tree, "<repl>", "eval"))',
+				'\telse:',
+				'\t\texec(compile(_tree, "<repl>", "exec"))',
+				'except SyntaxError:',
+				'\t# Fallback: just exec the whole thing',
+				'\texec(compile(_user_code, "<repl>", "exec"))',
+				'del _user_code, _ast',
+			].join('\n'));
+
 			output = this.pyodide.runPython('_capture.getvalue()');
 
-			// Try to get last expression value (REPL-style)
-			// Only if there's no output already and code is a single expression
+			// Show REPL result (last expression value) if no print output
 			if (!output) {
-				const trimmed = code.trim();
-				const lines = trimmed.split('\n');
-				const lastLine = lines[lines.length - 1].trim();
-
-				// If last line looks like an expression (not assignment, not keyword)
-				if (lastLine &&
-					!lastLine.startsWith('#') &&
-					!lastLine.includes('=') &&
-					!lastLine.startsWith('import ') &&
-					!lastLine.startsWith('from ') &&
-					!lastLine.startsWith('def ') &&
-					!lastLine.startsWith('class ') &&
-					!lastLine.startsWith('for ') &&
-					!lastLine.startsWith('while ') &&
-					!lastLine.startsWith('if ') &&
-					!lastLine.startsWith('try:') &&
-					!lastLine.startsWith('with ') &&
-					!lastLine.startsWith('del ') &&
-					!lastLine.startsWith('print(')) {
-					try {
-						const val = this.pyodide.runPython('repr(' + lastLine + ')');
-						if (val && val !== 'None') output = val + '\n';
-					} catch (_) { /* ignore — not a valid expression */ }
-				}
+				try {
+					var result = this.pyodide.runPython(
+						'repr(_user_result) if _user_result is not None else ""'
+					);
+					if (result) output = result + '\n';
+				} catch (_) { /* no result */ }
 			}
-
-			// Sync glyph back if it changed
-			glyphChanged = this.syncFromPython();
 
 		} catch (e) {
 			// Get any partial output
@@ -308,14 +384,19 @@ TRV.pyBridge = {
 			error = error.replace(/^PythonError:\s*/i, '');
 		}
 
-		// Restore stdout/stderr
+		// Restore stdout/stderr (always, even after error)
 		try {
 			this.pyodide.runPython(
 				'_sys.stdout = _old_stdout\n' +
 				'_sys.stderr = _old_stderr\n' +
-				'del _capture, _old_stdout, _old_stderr, _io, _sys\n'
+				'del _capture, _old_stdout, _old_stderr, _io, _sys\n' +
+				'try:\n\tdel _user_result\nexcept: pass\n'
 			);
 		} catch (_) { /* safety net */ }
+
+		// Always sync back — even after errors, partial mutations
+		// may have occurred before the exception
+		glyphChanged = this.syncFromPython();
 
 		return { output: output, error: error, glyphChanged: glyphChanged };
 	},
