@@ -163,8 +163,8 @@ body {
 	height: 100%;
 }
 
-/* -- XML Panel ---------------------------------------------- */
-#xml-panel {
+/* -- Side Panel (tabbed: XML / Python) ---------------------- */
+#side-panel {
 	display: none;
 	flex-direction: column;
 	background: var(--bg-secondary);
@@ -172,7 +172,7 @@ body {
 	min-width: 200px;
 }
 
-#xml-panel.visible { display: flex; }
+#side-panel.visible { display: flex; }
 
 /* -- Resizer handle ----------------------------------------- */
 #split-handle {
@@ -210,18 +210,75 @@ body {
 
 #split-handle.visible { display: block; }
 
-#xml-panel-header {
+/* -- Panel tabs --------------------------------------------- */
+#panel-tabs {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	padding: 6px 12px;
+	padding: 0 4px;
 	background: var(--bg-tertiary);
 	border-bottom: 1px solid var(--border);
 	font-size: 11px;
 	font-family: 'JetBrains Mono', monospace;
-	color: var(--text-dim);
+	gap: 0;
+	min-height: 30px;
 }
 
+.panel-tab {
+	padding: 6px 12px;
+	background: none;
+	border: none;
+	border-bottom: 2px solid transparent;
+	color: var(--text-dim);
+	font-family: 'JetBrains Mono', monospace;
+	font-size: 11px;
+	cursor: pointer;
+	transition: color 0.12s, border-color 0.12s;
+	white-space: nowrap;
+}
+
+.panel-tab:hover { color: var(--text-secondary); }
+
+.panel-tab.active {
+	color: var(--accent);
+	border-bottom-color: var(--accent);
+}
+
+.panel-tab-info {
+	font-size: 10px;
+	color: var(--text-dim);
+	margin-left: auto;
+	padding: 0 8px;
+	white-space: nowrap;
+}
+
+.panel-tab-info .parse-status {
+	font-size: 10px;
+	padding: 1px 6px;
+	border-radius: 3px;
+	margin-left: 6px;
+}
+
+.panel-tab-info .parse-status.ok {
+	color: #50c878;
+	background: rgba(80,200,120,0.1);
+}
+
+.panel-tab-info .parse-status.error {
+	color: #ff6b6b;
+	background: rgba(255,107,107,0.1);
+}
+
+/* -- Panel content switching -------------------------------- */
+.panel-content {
+	display: none;
+	flex-direction: column;
+	flex: 1;
+	overflow: hidden;
+}
+
+.panel-content.active { display: flex; }
+
+/* -- XML tab ------------------------------------------------ */
 #xml-content {
 	flex: 1;
 	overflow: auto;
@@ -248,22 +305,110 @@ body {
 	box-shadow: inset 0 0 0 1px rgba(255,107,107,0.4);
 }
 
-#xml-panel-header .parse-status {
+/* -- Python tab --------------------------------------------- */
+#py-output {
+	flex: 1;
+	overflow-y: auto;
+	padding: 10px 12px;
+	font-family: 'JetBrains Mono', monospace;
+	font-size: 12px;
+	line-height: 1.6;
+	user-select: text;
+}
+
+.py-entry {
+	white-space: pre-wrap;
+	word-break: break-all;
+	margin-bottom: 4px;
+}
+
+.py-input { color: var(--accent); }
+.py-output { color: var(--text-secondary); }
+.py-error { color: #ff6b6b; }
+.py-info { color: var(--text-dim); font-style: italic; }
+
+/* Python input area */
+#py-input-wrap {
+	border-top: 1px solid var(--border);
+	padding: 8px;
+	background: var(--bg-tertiary);
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+#py-input {
+	width: 100%;
+	min-height: 28px;
+	max-height: 160px;
+	padding: 6px 8px;
+	background: var(--bg-primary);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	color: var(--text-primary);
+	font-family: 'JetBrains Mono', monospace;
+	font-size: 12px;
+	line-height: 1.5;
+	resize: none;
+	outline: none;
+	overflow-y: auto;
+	user-select: text;
+}
+
+#py-input:focus { border-color: var(--accent-dim); }
+#py-input:disabled { opacity: 0.4; cursor: not-allowed; }
+#py-input::placeholder { color: var(--text-dim); }
+
+#py-input-actions {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 10px;
+	color: var(--text-dim);
+	font-family: 'JetBrains Mono', monospace;
+}
+
+#py-input-actions .hint { margin-left: auto; }
+
+/* Python toolbar buttons */
+.py-btn {
+	padding: 3px 8px;
+	background: var(--bg-hover);
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	color: var(--text-secondary);
+	font-family: 'JetBrains Mono', monospace;
+	font-size: 10px;
+	cursor: pointer;
+	transition: all 0.12s;
+}
+
+.py-btn:hover {
+	background: var(--bg-tertiary);
+	color: var(--text-primary);
+	border-color: var(--accent-dim);
+}
+
+.py-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.py-btn--primary {
+	background: var(--accent-dim);
+	border-color: var(--accent);
+	color: var(--text-primary);
+}
+
+.py-btn--primary:hover { background: var(--accent); }
+
+/* Python status badge */
+.py-status {
 	font-size: 10px;
 	padding: 1px 6px;
 	border-radius: 3px;
-	margin-left: 8px;
 }
 
-#xml-panel-header .parse-status.ok {
-	color: #50c878;
-	background: rgba(80,200,120,0.1);
-}
-
-#xml-panel-header .parse-status.error {
-	color: #ff6b6b;
-	background: rgba(255,107,107,0.1);
-}
+.py-status--idle { color: var(--text-dim); background: rgba(104,104,112,0.15); }
+.py-status--ready { color: #50c878; background: rgba(80,200,120,0.1); }
+.py-status--error { color: #ff6b6b; background: rgba(255,107,107,0.1); }
 
 /* -- Node highlighting in textarea (via overlay) ------------ */
 #xml-highlight-overlay {

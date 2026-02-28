@@ -369,26 +369,26 @@ document.getElementById('btn-outline').addEventListener('click', function() {
 });
 
 // XML panel (has panel show/hide logic)
-document.getElementById('btn-xml').addEventListener('click', function() {
+document.getElementById('btn-panel').addEventListener('click', function() {
 	state.showXml = !state.showXml;
 	this.classList.toggle('active');
 
-	const xmlPanel = document.getElementById('xml-panel');
+	const panel = dom.sidePanel;
 
 	if (state.showXml) {
 		const mainWidth = dom.main.clientWidth;
-		xmlPanel.style.width = Math.round(mainWidth * 0.4) + 'px';
-		xmlPanel.classList.add('visible');
+		panel.style.width = Math.round(mainWidth * 0.4) + 'px';
+		panel.classList.add('visible');
 		dom.splitHandle.classList.add('visible');
 	} else {
-		xmlPanel.classList.remove('visible');
+		panel.classList.remove('visible');
 		dom.splitHandle.classList.remove('visible');
-		xmlPanel.style.width = '';
+		panel.style.width = '';
 	}
 
 	requestAnimationFrame(function() {
 		TRV.draw();
-		if (state.showXml) TRV.buildXmlPanel();
+		if (state.showXml && state.activePanel === 'xml') TRV.buildXmlPanel();
 	});
 });
 
@@ -542,14 +542,14 @@ document.addEventListener('keyup', function(e) {
 		if (!isDragging) return;
 
 		const mainRect = dom.main.getBoundingClientRect();
-		const xmlPanel = document.getElementById('xml-panel');
+		const panel = dom.sidePanel;
 
 		const mouseX = e.clientX - mainRect.left;
 		const panelWidth = mainRect.width - mouseX - dom.splitHandle.offsetWidth / 2;
 
 		const minPanel = 200;
 		const maxPanel = mainRect.width - minPanel - dom.splitHandle.offsetWidth;
-		xmlPanel.style.width = Math.max(minPanel, Math.min(maxPanel, panelWidth)) + 'px';
+		panel.style.width = Math.max(minPanel, Math.min(maxPanel, panelWidth)) + 'px';
 
 		TRV.draw();
 	});
@@ -570,6 +570,12 @@ document.addEventListener('keyup', function(e) {
 // ===================================================================
 dom.xmlContent.addEventListener('input', TRV.onXmlEdit);
 dom.xmlContent.addEventListener('click', TRV.onXmlClick);
+
+// ===================================================================
+// Panel tabs + Python REPL
+// ===================================================================
+TRV.initPanelTabs();
+TRV.wirePythonPanel();
 
 // ===================================================================
 // Wire simple toolbar buttons from bindings.js

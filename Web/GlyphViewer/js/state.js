@@ -19,6 +19,7 @@ const TRV = {
 		showAnchors: true,
 		showMask: true,
 		showXml: false,
+		activePanel: 'xml',    // 'xml' | 'python'
 
 		// Selection — set of node IDs ('c{ci}_n{ni}')
 		selectedNodeIds: new Set(),
@@ -62,6 +63,7 @@ TRV.dom = {
 	canvas:         document.getElementById('glyph-canvas'),
 	ctx:            document.getElementById('glyph-canvas').getContext('2d'),
 	canvasWrap:     document.getElementById('canvas-wrap'),
+	sidePanel:      document.getElementById('side-panel'),
 	xmlContent:     document.getElementById('xml-content'),
 	xmlNodeCount:   document.getElementById('xml-node-count'),
 	parseStatus:    document.getElementById('parse-status'),

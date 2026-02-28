@@ -86,7 +86,7 @@ TRV.actions = {
 
 	// -- Panels ---
 	toggleXml: function() {
-		document.getElementById('btn-xml').click();
+		document.getElementById('btn-panel').click();
 	},
 };
 
@@ -123,7 +123,7 @@ TRV.keyMap = [
 // Called from events.js keydown handler. Returns true if handled.
 TRV.dispatchKey = function(e) {
 	var isCtrl = e.ctrlKey || e.metaKey;
-	var isXml = (e.target === TRV.dom.xmlContent);
+	var isTyping = (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT');
 
 	for (var i = 0; i < TRV.keyMap.length; i++) {
 		var b = TRV.keyMap[i];
@@ -138,8 +138,8 @@ TRV.dispatchKey = function(e) {
 		// Skip if requires selection but none active
 		if (b.hasSelection && TRV.state.selectedNodeIds.size === 0) continue;
 
-		// Skip plain keys when typing in XML textarea
-		if (isXml && !b.ctrl) continue;
+		// Skip plain keys when typing in any text field
+		if (isTyping && !b.ctrl) continue;
 
 		e.preventDefault();
 		var action = TRV.actions[b.action];

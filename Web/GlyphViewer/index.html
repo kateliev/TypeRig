@@ -65,9 +65,9 @@
 
 		<div class="separator"></div>
 
-		<button class="tb-btn" id="btn-xml" title="Toggle XML panel (Ctrl+E)">
+		<button class="tb-btn" id="btn-panel" title="Toggle side panel (Ctrl+E)">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-			XML
+			Panel
 		</button>
 
 		<div class="tb-group">
@@ -111,12 +111,37 @@
 			</div>
 		</div>
 		<div id="split-handle"></div>
-		<div id="xml-panel">
-			<div id="xml-panel-header">
-				<span>XML Source <span class="parse-status ok" id="parse-status">OK</span></span>
-				<span id="xml-node-count"></span>
+		<div id="side-panel">
+			<!-- Tab header -->
+			<div id="panel-tabs">
+				<button class="panel-tab active" data-panel="xml">XML</button>
+				<button class="panel-tab" data-panel="python">Python</button>
+				<span class="panel-tab-info" id="xml-tab-info">
+					<span id="xml-node-count"></span>
+					<span class="parse-status ok" id="parse-status">OK</span>
+				</span>
+				<span class="panel-tab-info" id="py-tab-info" style="display:none">
+					<span class="py-status py-status--idle" id="py-status">Not loaded</span>
+				</span>
 			</div>
-			<textarea id="xml-content" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+
+			<!-- XML tab content -->
+			<div id="xml-tab" class="panel-content active">
+				<textarea id="xml-content" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+			</div>
+
+			<!-- Python tab content -->
+			<div id="python-tab" class="panel-content">
+				<div id="py-output"></div>
+				<div id="py-input-wrap">
+					<textarea id="py-input" rows="1" disabled placeholder="Click Init to load Python runtime" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+					<div id="py-input-actions">
+						<button class="py-btn py-btn--primary" id="py-init-btn">Init Python</button>
+						<button class="py-btn" id="py-clear-btn">Clear</button>
+						<span class="hint">Shift+Enter to run</span>
+					</div>
+				</div>
+			</div>
 		</div>
 	</div>
 
@@ -147,6 +172,9 @@
 
 <input type="file" id="file-input" accept=".trglyph,.xml">
 
+<!-- Pyodide: Python in WebAssembly (loaded from CDN, ~12MB cached) -->
+<script src="https://cdn.jsdelivr.net/pyodide/v0.27.4/full/pyodide.js"></script>
+
 <!-- Scripts: load in dependency order -->
 <script src="js/state.js"></script>
 <script src="js/theme.js"></script>
@@ -156,6 +184,8 @@
 <script src="js/drawing.js"></script>
 <script src="js/multi-view.js"></script>
 <script src="js/xml-panel.js"></script>
+<script src="js/pyodide-bridge.js"></script>
+<script src="js/python-panel.js"></script>
 <script src="js/interaction.js"></script>
 <script src="js/bindings.js"></script>
 <script src="js/events.js"></script>
