@@ -162,6 +162,22 @@ TRV.updateZoomStatus = function() {
 	TRV.dom.statusZoom.textContent = Math.round(TRV.state.zoom * 100) + '%';
 };
 
+// Zoom centred on the viewport middle (for keyboard zoom)
+TRV.zoomAtCenter = function(factor) {
+	const w = TRV.dom.canvasWrap.clientWidth;
+	const h = TRV.dom.canvasWrap.clientHeight;
+	const cx = w / 2;
+	const cy = h / 2;
+	const newZoom = TRV.state.zoom * factor;
+
+	TRV.state.pan.x = cx - (cx - TRV.state.pan.x) * (newZoom / TRV.state.zoom);
+	TRV.state.pan.y = cy - (cy - TRV.state.pan.y) * (newZoom / TRV.state.zoom);
+	TRV.state.zoom = newZoom;
+
+	TRV.updateZoomStatus();
+	TRV.draw();
+};
+
 // -- File I/O -------------------------------------------------------
 TRV.loadXmlString = function(xmlString, filename) {
 	try {

@@ -287,30 +287,29 @@ TRV.drawJoinedView = function(canvasW, canvasH) {
 TRV.drawJoinedDividers = function(canvasW, canvasH, layout) {
 	const ctx = TRV.dom.ctx;
 	const state = TRV.state;
+	const tg = TRV.theme.grid;
+	const rgb = TRV.theme.bgFadeRgb;
+	const a = tg.dividerFadeAlphaJ;
 	const fade = 28;
 
 	// Vertical dividers between columns
 	for (let c = 1; c < state.gridCols; c++) {
-		// Midpoint of the gap in glyph space
 		const gapMidX = c * layout.cellW - layout.gap / 2;
 		const screenX = gapMidX * state.zoom + state.pan.x;
 
-		// Left fade
 		const gradL = ctx.createLinearGradient(screenX - fade, 0, screenX, 0);
-		gradL.addColorStop(0, 'rgba(24,24,27,0)');
-		gradL.addColorStop(1, 'rgba(24,24,27,0.55)');
+		gradL.addColorStop(0, 'rgba(' + rgb + ',0)');
+		gradL.addColorStop(1, 'rgba(' + rgb + ',' + a + ')');
 		ctx.fillStyle = gradL;
 		ctx.fillRect(screenX - fade, 0, fade, canvasH);
 
-		// Right fade
 		const gradR = ctx.createLinearGradient(screenX, 0, screenX + fade, 0);
-		gradR.addColorStop(0, 'rgba(24,24,27,0.55)');
-		gradR.addColorStop(1, 'rgba(24,24,27,0)');
+		gradR.addColorStop(0, 'rgba(' + rgb + ',' + a + ')');
+		gradR.addColorStop(1, 'rgba(' + rgb + ',0)');
 		ctx.fillStyle = gradR;
 		ctx.fillRect(screenX, 0, fade, canvasH);
 
-		// Hairline
-		ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+		ctx.strokeStyle = tg.dividerHairlineJ;
 		ctx.lineWidth = 1;
 		ctx.beginPath();
 		ctx.moveTo(Math.round(screenX) + 0.5, 0);
@@ -320,26 +319,22 @@ TRV.drawJoinedDividers = function(canvasW, canvasH, layout) {
 
 	// Horizontal dividers between rows
 	for (let r = 1; r < state.gridRows; r++) {
-		// Gap midpoint in glyph Y, converted to screen
 		const gapMidY = (state.gridRows - r) * layout.cellH - layout.gap / 2;
 		const screenY = -gapMidY * state.zoom + state.pan.y;
 
-		// Top fade
 		const gradT = ctx.createLinearGradient(0, screenY - fade, 0, screenY);
-		gradT.addColorStop(0, 'rgba(24,24,27,0)');
-		gradT.addColorStop(1, 'rgba(24,24,27,0.55)');
+		gradT.addColorStop(0, 'rgba(' + rgb + ',0)');
+		gradT.addColorStop(1, 'rgba(' + rgb + ',' + a + ')');
 		ctx.fillStyle = gradT;
 		ctx.fillRect(0, screenY - fade, canvasW, fade);
 
-		// Bottom fade
 		const gradB = ctx.createLinearGradient(0, screenY, 0, screenY + fade);
-		gradB.addColorStop(0, 'rgba(24,24,27,0.55)');
-		gradB.addColorStop(1, 'rgba(24,24,27,0)');
+		gradB.addColorStop(0, 'rgba(' + rgb + ',' + a + ')');
+		gradB.addColorStop(1, 'rgba(' + rgb + ',0)');
 		ctx.fillStyle = gradB;
 		ctx.fillRect(0, screenY, canvasW, fade);
 
-		// Hairline
-		ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+		ctx.strokeStyle = tg.dividerHairlineJ;
 		ctx.lineWidth = 1;
 		ctx.beginPath();
 		ctx.moveTo(0, Math.round(screenY) + 0.5);
@@ -364,7 +359,7 @@ TRV.drawJoinedActiveIndicator = function(layout) {
 		const br = TRV.glyphToScreen(layer.width, 0);
 		const tick = 8;
 
-		ctx.strokeStyle = 'rgba(91,157,239,0.35)';
+		ctx.strokeStyle = TRV.theme.grid.activeBorder;
 		ctx.lineWidth = 1.5;
 
 		// Top-left corner
@@ -427,7 +422,7 @@ TRV.drawSplitView = function(canvasW, canvasH) {
 			ctx.clip();
 			ctx.translate(cell.x, cell.y);
 
-			ctx.fillStyle = state.filled ? '#18181b' : '#1a1a1e';
+			ctx.fillStyle = TRV.getBgColor();
 			ctx.fillRect(0, 0, cell.w, cell.h);
 
 			if (!isActive) state.selectedNodeIds = new Set();
@@ -467,6 +462,9 @@ TRV.drawSplitView = function(canvasW, canvasH) {
 TRV.drawSplitDividers = function(w, h) {
 	const ctx = TRV.dom.ctx;
 	const state = TRV.state;
+	const tg = TRV.theme.grid;
+	const rgb = TRV.theme.bgFadeRgb;
+	const a = tg.dividerFadeAlpha;
 	const cols = state.gridCols;
 	const rows = state.gridRows;
 	const fade = 24;
@@ -475,18 +473,18 @@ TRV.drawSplitDividers = function(w, h) {
 		const x = Math.round(c * w / cols);
 
 		const gradL = ctx.createLinearGradient(x - fade, 0, x, 0);
-		gradL.addColorStop(0, 'rgba(24,24,27,0)');
-		gradL.addColorStop(1, 'rgba(24,24,27,0.6)');
+		gradL.addColorStop(0, 'rgba(' + rgb + ',0)');
+		gradL.addColorStop(1, 'rgba(' + rgb + ',' + a + ')');
 		ctx.fillStyle = gradL;
 		ctx.fillRect(x - fade, 0, fade, h);
 
 		const gradR = ctx.createLinearGradient(x, 0, x + fade, 0);
-		gradR.addColorStop(0, 'rgba(24,24,27,0.6)');
-		gradR.addColorStop(1, 'rgba(24,24,27,0)');
+		gradR.addColorStop(0, 'rgba(' + rgb + ',' + a + ')');
+		gradR.addColorStop(1, 'rgba(' + rgb + ',0)');
 		ctx.fillStyle = gradR;
 		ctx.fillRect(x, 0, fade, h);
 
-		ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+		ctx.strokeStyle = tg.dividerHairline;
 		ctx.lineWidth = 1;
 		ctx.beginPath();
 		ctx.moveTo(x + 0.5, 0);
@@ -498,18 +496,18 @@ TRV.drawSplitDividers = function(w, h) {
 		const y = Math.round(r * h / rows);
 
 		const gradT = ctx.createLinearGradient(0, y - fade, 0, y);
-		gradT.addColorStop(0, 'rgba(24,24,27,0)');
-		gradT.addColorStop(1, 'rgba(24,24,27,0.6)');
+		gradT.addColorStop(0, 'rgba(' + rgb + ',0)');
+		gradT.addColorStop(1, 'rgba(' + rgb + ',' + a + ')');
 		ctx.fillStyle = gradT;
 		ctx.fillRect(0, y - fade, w, fade);
 
 		const gradB = ctx.createLinearGradient(0, y, 0, y + fade);
-		gradB.addColorStop(0, 'rgba(24,24,27,0.6)');
-		gradB.addColorStop(1, 'rgba(24,24,27,0)');
+		gradB.addColorStop(0, 'rgba(' + rgb + ',' + a + ')');
+		gradB.addColorStop(1, 'rgba(' + rgb + ',0)');
 		ctx.fillStyle = gradB;
 		ctx.fillRect(0, y, w, fade);
 
-		ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+		ctx.strokeStyle = tg.dividerHairline;
 		ctx.lineWidth = 1;
 		ctx.beginPath();
 		ctx.moveTo(0, y + 0.5);
@@ -523,7 +521,7 @@ TRV.drawActiveCellBorder = function() {
 	const ctx = TRV.dom.ctx;
 	const cell = TRV.getCellRect(TRV.state.activeCell.row, TRV.state.activeCell.col);
 
-	ctx.strokeStyle = 'rgba(91,157,239,0.35)';
+	ctx.strokeStyle = TRV.theme.grid.activeBorder;
 	ctx.lineWidth = 2;
 	ctx.strokeRect(cell.x + 1, cell.y + 1, cell.w - 2, cell.h - 2);
 };

@@ -1,6 +1,8 @@
 // ===================================================================
 // TypeRig Glyph Viewer — Canvas Drawing
 // ===================================================================
+// All color values come from TRV.theme (theme.js).
+// ===================================================================
 'use strict';
 
 TRV.draw = function() {
@@ -17,7 +19,7 @@ TRV.draw = function() {
 	ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
 	// Clear
-	ctx.fillStyle = state.filled ? '#18181b' : '#1a1a1e';
+	ctx.fillStyle = TRV.getBgColor();
 	ctx.fillRect(0, 0, w, h);
 
 	if (!state.glyphData) return;
@@ -54,13 +56,13 @@ TRV.draw = function() {
 // -- Metrics --------------------------------------------------------
 TRV.drawMetrics = function(layer, w, h) {
 	const ctx = TRV.dom.ctx;
+	const t = TRV.theme.metrics;
 	const advW = layer.width;
 	const advH = layer.height;
-	const baselineColor = 'rgba(255,120,80,0.25)';
 
 	// Baseline (y=0)
 	const baseY = TRV.glyphToScreen(0, 0).y;
-	ctx.strokeStyle = baselineColor;
+	ctx.strokeStyle = t.baseline;
 	ctx.lineWidth = 1;
 	ctx.setLineDash([6, 4]);
 	ctx.beginPath();
@@ -71,7 +73,7 @@ TRV.drawMetrics = function(layer, w, h) {
 
 	// Advance height line (y=advH)
 	const topY = TRV.glyphToScreen(0, advH).y;
-	ctx.strokeStyle = baselineColor;
+	ctx.strokeStyle = t.baseline;
 	ctx.setLineDash([6, 4]);
 	ctx.beginPath();
 	ctx.moveTo(0, topY);
@@ -81,7 +83,7 @@ TRV.drawMetrics = function(layer, w, h) {
 
 	// LSB line (x=0)
 	const lsbX = TRV.glyphToScreen(0, 0).x;
-	ctx.strokeStyle = 'rgba(255,120,80,0.35)';
+	ctx.strokeStyle = t.sidebearing;
 	ctx.lineWidth = 1;
 	ctx.setLineDash([]);
 	ctx.beginPath();
@@ -91,7 +93,7 @@ TRV.drawMetrics = function(layer, w, h) {
 
 	// RSB / Advance width line
 	const rsbX = TRV.glyphToScreen(advW, 0).x;
-	ctx.strokeStyle = 'rgba(91,157,239,0.45)';
+	ctx.strokeStyle = t.advance;
 	ctx.beginPath();
 	ctx.moveTo(rsbX, 0);
 	ctx.lineTo(rsbX, h);
@@ -100,48 +102,53 @@ TRV.drawMetrics = function(layer, w, h) {
 	// Labels
 	ctx.font = '10px "JetBrains Mono", monospace';
 
-	ctx.fillStyle = 'rgba(255,120,80,0.6)';
+	ctx.fillStyle = t.labelBaseFg;
 	ctx.textAlign = 'left';
 	ctx.fillText('LSB (x=0)', lsbX + 4, baseY - 6);
 
-	ctx.fillStyle = 'rgba(91,157,239,0.7)';
+	ctx.fillStyle = t.labelAdvance;
 	ctx.textAlign = 'right';
 	ctx.fillText(`ADV (${advW})`, rsbX - 4, baseY - 6);
 
-	ctx.fillStyle = 'rgba(255,120,80,0.5)';
+	ctx.fillStyle = t.labelBase;
 	ctx.textAlign = 'left';
 	ctx.fillText('Baseline', lsbX + 4, baseY + 14);
 
-	ctx.fillStyle = 'rgba(255,120,80,0.5)';
+	ctx.fillStyle = t.labelBase;
 	ctx.fillText(`Height (${advH})`, lsbX + 4, topY + 14);
 };
 
 // -- Contours -------------------------------------------------------
 TRV.drawContours = function(layer) {
-	for (const shape of layer.shapes) {
-		for (const contour of shape.contours) {
-			TRV.drawContour(contour);
-		}
-	}
-};
-
-TRV.drawContour = function(contour) {
-	if (contour.nodes.length === 0) return;
 	const ctx = TRV.dom.ctx;
-
-	ctx.beginPath();
-	TRV.buildContourPath(contour);
+	const t = TRV.theme.contour;
 
 	if (TRV.state.filled) {
-		ctx.fillStyle = 'rgba(200,200,210,0.12)';
+		// Filled mode: all contours in ONE path so even-odd punches counters
+		ctx.beginPath();
+		for (const shape of layer.shapes) {
+			for (const contour of shape.contours) {
+				if (contour.nodes.length === 0) continue;
+				TRV.buildContourPath(contour);
+			}
+		}
+		ctx.fillStyle = t.fill;
 		ctx.fill('evenodd');
-		ctx.strokeStyle = 'rgba(200,200,210,0.6)';
+		ctx.strokeStyle = t.stroke;
 		ctx.lineWidth = 1;
 		ctx.stroke();
 	} else {
-		ctx.strokeStyle = '#c8c8d2';
-		ctx.lineWidth = 1.5;
-		ctx.stroke();
+		// Outline mode: stroke each contour independently
+		for (const shape of layer.shapes) {
+			for (const contour of shape.contours) {
+				if (contour.nodes.length === 0) continue;
+				ctx.beginPath();
+				TRV.buildContourPath(contour);
+				ctx.strokeStyle = t.strokePlain;
+				ctx.lineWidth = 1.5;
+				ctx.stroke();
+			}
+		}
 	}
 };
 
@@ -206,6 +213,7 @@ TRV.buildContourPath = function(contour) {
 TRV.drawNodes = function(layer) {
 	const ctx = TRV.dom.ctx;
 	const sel = TRV.state.selectedNodeIds;
+	const tn = TRV.theme.node;
 
 	// First pass: draw handle lines
 	// Cubic BCPs connect to their parent on-curve only, NOT to each other
@@ -228,7 +236,7 @@ TRV.drawNodes = function(layer) {
 
 					if (prev.type === 'on') {
 						const pp = TRV.glyphToScreen(prev.x, prev.y);
-						ctx.strokeStyle = 'rgba(91,157,239,0.35)';
+						ctx.strokeStyle = tn.handleLine;
 						ctx.lineWidth = 1;
 						ctx.beginPath();
 						ctx.moveTo(pp.x, pp.y);
@@ -238,7 +246,7 @@ TRV.drawNodes = function(layer) {
 
 					if (next.type === 'on') {
 						const np = TRV.glyphToScreen(next.x, next.y);
-						ctx.strokeStyle = 'rgba(91,157,239,0.35)';
+						ctx.strokeStyle = tn.handleLine;
 						ctx.lineWidth = 1;
 						ctx.beginPath();
 						ctx.moveTo(sp.x, sp.y);
@@ -253,7 +261,7 @@ TRV.drawNodes = function(layer) {
 
 					if (nodes[prevIdx].type === 'on') {
 						const pp = TRV.glyphToScreen(nodes[prevIdx].x, nodes[prevIdx].y);
-						ctx.strokeStyle = 'rgba(91,157,239,0.35)';
+						ctx.strokeStyle = tn.handleLine;
 						ctx.lineWidth = 1;
 						ctx.beginPath();
 						ctx.moveTo(pp.x, pp.y);
@@ -263,7 +271,7 @@ TRV.drawNodes = function(layer) {
 
 					if (nodes[nextIdx].type === 'on') {
 						const np = TRV.glyphToScreen(nodes[nextIdx].x, nodes[nextIdx].y);
-						ctx.strokeStyle = 'rgba(91,157,239,0.35)';
+						ctx.strokeStyle = tn.handleLine;
 						ctx.lineWidth = 1;
 						ctx.beginPath();
 						ctx.moveTo(sp.x, sp.y);
@@ -281,16 +289,34 @@ TRV.drawNodes = function(layer) {
 	for (const shape of layer.shapes) {
 		for (const contour of shape.contours) {
 			const nodes = contour.nodes;
-			for (let ni = 0; ni < nodes.length; ni++) {
+			const n = nodes.length;
+
+			// Find first on-curve (start point — drawn as triangle in pass 3)
+			let firstOn = 0;
+			for (let j = 0; j < n; j++) {
+				if (nodes[j].type === 'on') { firstOn = j; break; }
+			}
+			const startNode = nodes[firstOn];
+
+			for (let ni = 0; ni < n; ni++) {
 				const node = nodes[ni];
+
+				// Skip the start node — triangle replaces it
+				if (ni === firstOn) { continue; }
+
+				// Skip end node if it overlaps the start node
+				if (ni === n - 1 && node.x === startNode.x && node.y === startNode.y) {
+					continue;
+				}
+
 				const id = `c${ci}_n${ni}`;
 				const sp = TRV.glyphToScreen(node.x, node.y);
 				const isSelected = sel.has(id);
 				const r = isSelected ? 5 : (node.type === 'on' ? 4 : 3);
 
 				if (node.type === 'on') {
-					ctx.fillStyle = isSelected ? '#ff6b6b' : (node.smooth ? '#50c878' : '#e8e8ec');
-					ctx.strokeStyle = isSelected ? '#ff6b6b' : 'rgba(0,0,0,0.5)';
+					ctx.fillStyle = isSelected ? tn.selected : (node.smooth ? tn.onSmooth : tn.onCorner);
+					ctx.strokeStyle = isSelected ? tn.selected : tn.outline;
 					ctx.lineWidth = 1;
 
 					if (node.smooth) {
@@ -303,8 +329,8 @@ TRV.drawNodes = function(layer) {
 						ctx.strokeRect(sp.x - r, sp.y - r, r * 2, r * 2);
 					}
 				} else {
-					ctx.fillStyle = isSelected ? '#ff6b6b' : '#5b9def';
-					ctx.strokeStyle = isSelected ? '#ff6b6b' : 'rgba(0,0,0,0.5)';
+					ctx.fillStyle = isSelected ? tn.selected : tn.offCurve;
+					ctx.strokeStyle = isSelected ? tn.selected : tn.outline;
 					ctx.lineWidth = 1;
 					ctx.beginPath();
 					ctx.arc(sp.x, sp.y, r, 0, Math.PI * 2);
@@ -315,19 +341,69 @@ TRV.drawNodes = function(layer) {
 			ci++;
 		}
 	}
+
+	// Third pass: contour start point triangles
+	ci = 0;
+	for (const shape of layer.shapes) {
+		for (const contour of shape.contours) {
+			const nodes = contour.nodes;
+			const n = nodes.length;
+			if (n < 2) { ci++; continue; }
+
+			// Find first on-curve (same logic as buildContourPath)
+			let firstOn = 0;
+			for (let j = 0; j < n; j++) {
+				if (nodes[j].type === 'on') { firstOn = j; break; }
+			}
+
+			const startNode = nodes[firstOn];
+			const nextNode = nodes[(firstOn + 1) % n];
+			const sp = TRV.glyphToScreen(startNode.x, startNode.y);
+			const np = TRV.glyphToScreen(nextNode.x, nextNode.y);
+
+			// Direction angle from start towards next node
+			const dx = np.x - sp.x;
+			const dy = np.y - sp.y;
+			const angle = Math.atan2(dy, dx);
+
+			const isStartSelected = sel.has('c' + ci + '_n' + firstOn);
+			const size = 6;
+
+			ctx.save();
+			ctx.translate(sp.x, sp.y);
+			ctx.rotate(angle);
+
+			// Triangle pointing in contour direction
+			ctx.beginPath();
+			ctx.moveTo(size + 4, 0);               // tip (ahead)
+			ctx.lineTo(-size + 2, -size + 1);      // base left
+			ctx.lineTo(-size + 2, size - 1);       // base right
+			ctx.closePath();
+
+			ctx.fillStyle = isStartSelected ? tn.selected : tn.startPoint;
+			ctx.fill();
+			ctx.strokeStyle = tn.outline;
+			ctx.lineWidth = 1;
+			ctx.stroke();
+
+			ctx.restore();
+			ci++;
+		}
+	}
 };
 
 // -- Anchors --------------------------------------------------------
 TRV.drawAnchors = function(layer) {
 	if (!layer.anchors || layer.anchors.length === 0) return;
 	const ctx = TRV.dom.ctx;
+	const ta = TRV.theme.anchor;
 
 	for (const anchor of layer.anchors) {
 		const sp = TRV.glyphToScreen(anchor.x, anchor.y);
 		const size = 6;
 
-		ctx.fillStyle = '#ff6b6b';
-		ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+		ctx.fillStyle = ta.fill;
+		ctx.strokeStyle = ta.outline;
 		ctx.lineWidth = 1;
 		ctx.beginPath();
 		ctx.moveTo(sp.x, sp.y - size);
@@ -338,7 +414,7 @@ TRV.drawAnchors = function(layer) {
 		ctx.fill();
 		ctx.stroke();
 
-		ctx.strokeStyle = 'rgba(255,107,107,0.4)';
+		ctx.strokeStyle = ta.crosshair;
 		ctx.setLineDash([3, 3]);
 		ctx.beginPath();
 		ctx.moveTo(sp.x - 12, sp.y);
@@ -349,7 +425,7 @@ TRV.drawAnchors = function(layer) {
 		ctx.setLineDash([]);
 
 		ctx.font = '10px "JetBrains Mono", monospace';
-		ctx.fillStyle = 'rgba(255,107,107,0.8)';
+		ctx.fillStyle = ta.label;
 		ctx.textAlign = 'left';
 		ctx.fillText(anchor.name, sp.x + size + 4, sp.y + 3);
 	}
@@ -359,6 +435,7 @@ TRV.drawAnchors = function(layer) {
 TRV.drawSelectionOverlay = function() {
 	const ctx = TRV.dom.ctx;
 	const state = TRV.state;
+	const ts = TRV.theme.selection;
 
 	ctx.save();
 
@@ -369,14 +446,14 @@ TRV.drawSelectionOverlay = function() {
 		const y2 = state.selectCurrentScreen.y;
 
 		// Semi-transparent fill
-		ctx.fillStyle = 'rgba(91,157,239,0.08)';
+		ctx.fillStyle = ts.fill;
 		ctx.fillRect(
 			Math.min(x1, x2), Math.min(y1, y2),
 			Math.abs(x2 - x1), Math.abs(y2 - y1)
 		);
 
 		// Dashed border
-		ctx.strokeStyle = 'rgba(91,157,239,0.6)';
+		ctx.strokeStyle = ts.stroke;
 		ctx.lineWidth = 1;
 		ctx.setLineDash([4, 3]);
 		ctx.strokeRect(
@@ -389,7 +466,7 @@ TRV.drawSelectionOverlay = function() {
 		const pts = state.selectLassoPoints;
 
 		// Semi-transparent fill
-		ctx.fillStyle = 'rgba(91,157,239,0.08)';
+		ctx.fillStyle = ts.fill;
 		ctx.beginPath();
 		ctx.moveTo(pts[0].x, pts[0].y);
 		for (let i = 1; i < pts.length; i++) {
@@ -399,7 +476,7 @@ TRV.drawSelectionOverlay = function() {
 		ctx.fill();
 
 		// Dashed border
-		ctx.strokeStyle = 'rgba(91,157,239,0.6)';
+		ctx.strokeStyle = ts.stroke;
 		ctx.lineWidth = 1;
 		ctx.setLineDash([4, 3]);
 		ctx.beginPath();
@@ -415,10 +492,11 @@ TRV.drawSelectionOverlay = function() {
 	ctx.restore();
 };
 
-// -- Mask contours (dashed, muted, underneath main layer) -----------
+// -- Mask contours (underneath main layer) --------------------------
 TRV.drawMaskContours = function(maskLayer) {
 	if (!maskLayer) return;
 	const ctx = TRV.dom.ctx;
+	const tm = TRV.theme.mask;
 
 	for (const shape of maskLayer.shapes) {
 		for (const contour of shape.contours) {
@@ -427,34 +505,17 @@ TRV.drawMaskContours = function(maskLayer) {
 			ctx.beginPath();
 			TRV.buildContourPath(contour);
 
-			ctx.strokeStyle = 'rgba(255,160,60,0.3)';
-			ctx.lineWidth = 1.5;
-			//ctx.setLineDash([6, 4]);
+			ctx.strokeStyle = tm.stroke;
+			ctx.lineWidth = tm.lineWidth;
 			ctx.stroke();
-			ctx.setLineDash([]);
 		}
 	}
-};
-
-// -- Layer color palette --------------------------------------------
-TRV.LAYER_COLORS = [
-	'#5b9def',  // blue
-	'#ef6b5b',  // red
-	'#50c878',  // green
-	'#c084fc',  // purple
-	'#f59e0b',  // amber
-	'#06b6d4',  // cyan
-	'#f472b6',  // pink
-	'#a3e635',  // lime
-];
-
-TRV.getLayerColor = function(layerIdx) {
-	return TRV.LAYER_COLORS[layerIdx % TRV.LAYER_COLORS.length];
 };
 
 // -- Layer name label (filled badge, centered below baseline) -------
 TRV.drawLayerLabel = function(layer) {
 	const ctx = TRV.dom.ctx;
+	const tl = TRV.theme.label;
 	if (!TRV.state.glyphData) return;
 
 	const layers = TRV.state.glyphData.layers;
@@ -467,7 +528,7 @@ TRV.drawLayerLabel = function(layer) {
 	const labelGy = -30; // 30 units below baseline
 	const pos = TRV.glyphToScreen(cx, labelGy);
 
-	ctx.font = '10px "JetBrains Mono", monospace';
+	ctx.font = tl.font;
 	const textW = ctx.measureText(name).width;
 	const padX = 6;
 	const padY = 3;
@@ -492,8 +553,8 @@ TRV.drawLayerLabel = function(layer) {
 	ctx.closePath();
 	ctx.fill();
 
-	// White text
-	ctx.fillStyle = '#000000';
+	// Label text
+	ctx.fillStyle = tl.textColor;
 	ctx.textAlign = 'center';
 	ctx.textBaseline = 'middle';
 	ctx.fillText(name, pos.x, pos.y);

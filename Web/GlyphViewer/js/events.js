@@ -1,6 +1,8 @@
 // ===================================================================
 // TypeRig Glyph Viewer — Event Handlers
 // ===================================================================
+// DOM event wiring. Key/toolbar bindings defined in bindings.js.
+// ===================================================================
 'use strict';
 
 (function() {
@@ -36,7 +38,9 @@ function withActiveOffset(fn) {
 	}
 }
 
-// -- Mouse: node click/drag, rect select, lasso select, pan --------
+// ===================================================================
+// Mouse: click, drag, selection, pan
+// ===================================================================
 dom.canvasWrap.addEventListener('mousedown', function(e) {
 	if (e.button !== 0) return;
 
@@ -81,6 +85,9 @@ dom.canvasWrap.addEventListener('mousedown', function(e) {
 	}
 
 	// -- No node hit: begin selection mode
+	// Skip if this is the second click of a double-click (let dblclick handle it)
+	if (e.detail >= 2) return;
+
 	if (e.altKey) {
 		// Alt+drag: lasso selection
 		state.isSelecting = true;
@@ -274,7 +281,29 @@ window.addEventListener('mouseup', function(e) {
 	TRV.updateCanvasCursor();
 });
 
-// -- Zoom / Ribbon rotation -----------------------------------------
+// ===================================================================
+// Double-click: select all nodes on clicked contour
+// ===================================================================
+dom.canvasWrap.addEventListener('dblclick', function(e) {
+	const rect = dom.canvas.getBoundingClientRect();
+	const absSx = e.clientX - rect.left;
+	const absSy = e.clientY - rect.top;
+	const { sx, sy } = interactionCoords(absSx, absSy);
+
+	let ci = -1;
+	withActiveOffset(function() {
+		ci = TRV.hitTestContour(sx, sy);
+	});
+
+	if (ci >= 0) {
+		const ids = TRV.getContourNodeIds(ci);
+		TRV.selectNodes(ids, e.shiftKey);
+	}
+});
+
+// ===================================================================
+// Scroll wheel: zoom / ribbon rotation
+// ===================================================================
 dom.canvasWrap.addEventListener('wheel', function(e) {
 	e.preventDefault();
 
@@ -300,10 +329,9 @@ dom.canvasWrap.addEventListener('wheel', function(e) {
 		}
 	}
 
-	// Normal zoom
+	// Normal zoom (centred on cursor)
 	const { sx: mx, sy: my } = interactionCoords(absSx, absSy);
-
-	const factor = e.deltaY > 0 ? 0.9 : 1.1;
+	const factor = e.deltaY > 0 ? TRV.WHEEL_ZOOM_OUT : TRV.WHEEL_ZOOM_IN;
 	const newZoom = state.zoom * factor;
 
 	state.pan.x = mx - (mx - state.pan.x) * (newZoom / state.zoom);
@@ -314,17 +342,18 @@ dom.canvasWrap.addEventListener('wheel', function(e) {
 	TRV.draw();
 }, { passive: false });
 
-// -- Resize ---------------------------------------------------------
+// ===================================================================
+// Resize
+// ===================================================================
 const resizeObserver = new ResizeObserver(function() { TRV.draw(); });
 resizeObserver.observe(dom.canvasWrap);
 
-// -- Toolbar buttons ------------------------------------------------
-document.getElementById('btn-load').addEventListener('click', function() {
-	dom.fileInput.click();
-});
+// ===================================================================
+// Toolbar: special buttons (exclusive pairs, panels, view modes)
+// Simple toggle/action buttons are wired via TRV.wireToolbar().
+// ===================================================================
 
-document.getElementById('btn-save').addEventListener('click', TRV.saveXml);
-
+// Fill / Outline (exclusive pair)
 document.getElementById('btn-filled').addEventListener('click', function() {
 	state.filled = true;
 	this.classList.add('active');
@@ -339,30 +368,7 @@ document.getElementById('btn-outline').addEventListener('click', function() {
 	TRV.draw();
 });
 
-document.getElementById('btn-nodes').addEventListener('click', function() {
-	state.showNodes = !state.showNodes;
-	this.classList.toggle('active');
-	TRV.draw();
-});
-
-document.getElementById('btn-metrics').addEventListener('click', function() {
-	state.showMetrics = !state.showMetrics;
-	this.classList.toggle('active');
-	TRV.draw();
-});
-
-document.getElementById('btn-anchors').addEventListener('click', function() {
-	state.showAnchors = !state.showAnchors;
-	this.classList.toggle('active');
-	TRV.draw();
-});
-
-document.getElementById('btn-mask').addEventListener('click', function() {
-	state.showMask = !state.showMask;
-	this.classList.toggle('active');
-	TRV.draw();
-});
-
+// XML panel (has panel show/hide logic)
 document.getElementById('btn-xml').addEventListener('click', function() {
 	state.showXml = !state.showXml;
 	this.classList.toggle('active');
@@ -429,8 +435,7 @@ document.getElementById('btn-join').addEventListener('click', function() {
 	TRV.fitToView();
 });
 
-document.getElementById('btn-fit').addEventListener('click', TRV.fitToView);
-
+// -- Layer dropdown -------------------------------------------------
 dom.layerSelect.addEventListener('change', function() {
 	state.activeLayer = this.value;
 	state.selectedNodeIds.clear();
@@ -440,7 +445,7 @@ dom.layerSelect.addEventListener('change', function() {
 	if (state.multiView && state.glyphData) {
 		if (!TRV.isMaskLayer(this.value)) {
 			const layers = state.glyphData.layers;
-			const idx = layers.findIndex(l => l.name === this.value);
+			const idx = layers.findIndex(function(l) { return l.name === this.value; }.bind(this));
 			if (idx >= 0 && state.gridLayers) {
 				const r = state.activeCell.row;
 				const c = state.activeCell.col;
@@ -453,7 +458,9 @@ dom.layerSelect.addEventListener('change', function() {
 	TRV.buildXmlPanel();
 });
 
-// -- File input -----------------------------------------------------
+// ===================================================================
+// File input / Drag and drop
+// ===================================================================
 dom.fileInput.addEventListener('change', function(e) {
 	const file = e.target.files[0];
 	if (!file) return;
@@ -463,7 +470,6 @@ dom.fileInput.addEventListener('change', function(e) {
 	dom.fileInput.value = '';
 });
 
-// -- Drag and drop --------------------------------------------------
 document.addEventListener('dragover', function(e) {
 	e.preventDefault();
 	dom.dropOverlay.classList.add('visible');
@@ -485,9 +491,11 @@ document.addEventListener('drop', function(e) {
 	reader.readAsText(file);
 });
 
-// -- Keyboard -------------------------------------------------------
+// ===================================================================
+// Keyboard — dispatch via bindings.js keyMap
+// ===================================================================
 document.addEventListener('keydown', function(e) {
-	// Spacebar: panning mode
+	// Spacebar: panning mode (hold)
 	if (e.code === 'Space' && e.target !== dom.xmlContent) {
 		if (!state.spaceDown) {
 			state.spaceDown = true;
@@ -502,59 +510,8 @@ document.addEventListener('keydown', function(e) {
 		if (!(e.ctrlKey || e.metaKey)) return;
 	}
 
-	// Ctrl/Cmd shortcuts
-	if (e.ctrlKey || e.metaKey) {
-		if (e.key === 'o') { e.preventDefault(); dom.fileInput.click(); }
-		if (e.key === 's') { e.preventDefault(); TRV.saveXml(); }
-		if (e.key === 'e') {
-			e.preventDefault();
-			document.getElementById('btn-xml').click();
-		}
-		// Ctrl+A: select all nodes
-		if (e.key === 'a' && e.target !== dom.xmlContent) {
-			e.preventDefault();
-			const layer = TRV.getActiveLayer();
-			if (layer) {
-				const allNodes = TRV.getAllNodes(layer);
-				state.selectedNodeIds.clear();
-				for (const n of allNodes) state.selectedNodeIds.add(n.id);
-				TRV.draw();
-				TRV.updateStatusSelected();
-			}
-		}
-	}
-
-	// Arrow keys: move all selected nodes
-	if (state.selectedNodeIds.size > 0 && e.target !== dom.xmlContent) {
-		let step = TRV.ARROW_STEP;
-		if (e.shiftKey) step = TRV.ARROW_STEP_SHIFT;
-		if (e.ctrlKey || e.metaKey) step = TRV.ARROW_STEP_CTRL;
-
-		switch (e.key) {
-			case 'ArrowUp':
-				e.preventDefault();
-				TRV.moveSelectedNodes(0, step);
-				return;
-			case 'ArrowDown':
-				e.preventDefault();
-				TRV.moveSelectedNodes(0, -step);
-				return;
-			case 'ArrowRight':
-				e.preventDefault();
-				TRV.moveSelectedNodes(step, 0);
-				return;
-			case 'ArrowLeft':
-				e.preventDefault();
-				TRV.moveSelectedNodes(-step, 0);
-				return;
-		}
-	}
-
-	if (e.key === 'Home' && e.target !== dom.xmlContent) {
-		e.preventDefault();
-		TRV.fitToView();
-	}
-	if (e.key === 'Escape') { TRV.clearSelection(); }
+	// Dispatch through key map
+	TRV.dispatchKey(e);
 });
 
 document.addEventListener('keyup', function(e) {
@@ -567,7 +524,9 @@ document.addEventListener('keyup', function(e) {
 	}
 });
 
-// -- Split handle drag ----------------------------------------------
+// ===================================================================
+// Split handle drag
+// ===================================================================
 (function initSplitHandle() {
 	let isDragging = false;
 
@@ -606,8 +565,15 @@ document.addEventListener('keyup', function(e) {
 	});
 })();
 
-// -- XML textarea events --------------------------------------------
+// ===================================================================
+// XML textarea events
+// ===================================================================
 dom.xmlContent.addEventListener('input', TRV.onXmlEdit);
 dom.xmlContent.addEventListener('click', TRV.onXmlClick);
+
+// ===================================================================
+// Wire simple toolbar buttons from bindings.js
+// ===================================================================
+TRV.wireToolbar();
 
 })();

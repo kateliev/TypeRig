@@ -185,3 +185,98 @@ TRV.getNonMaskLayerIndices = function() {
 	});
 	return indices;
 };
+
+// -- Hit test: contour (screen coords) ------------------------------
+// Returns contour index (ci) if point is on/near a contour outline,
+// or -1 if nothing hit. Three-pass check:
+//   1. isPointInPath (click inside filled contour)
+//   2. isPointInStroke (click on outline edge)
+//   3. Nearest node proximity fallback (for edge cases)
+TRV.hitTestContour = function(sx, sy, tolerance) {
+	const layer = TRV.getActiveLayer();
+	if (!layer) return -1;
+
+	const ctx = TRV.dom.ctx;
+	tolerance = tolerance || 8;
+
+	// Reset transform to identity for accurate hit testing —
+	// draw() leaves DPR scaling active which distorts tolerance
+	ctx.save();
+	ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+	let ci = 0;
+	for (const shape of layer.shapes) {
+		for (const contour of shape.contours) {
+			if (contour.nodes.length < 2) { ci++; continue; }
+
+			ctx.beginPath();
+			TRV.buildContourPath(contour);
+
+			// Check filled area first (closed contours)
+			if (ctx.isPointInPath(sx, sy, 'evenodd')) {
+				ctx.restore();
+				return ci;
+			}
+
+			// Check stroke proximity
+			ctx.lineWidth = tolerance * 2;
+			if (ctx.isPointInStroke(sx, sy)) {
+				ctx.restore();
+				return ci;
+			}
+
+			ci++;
+		}
+	}
+
+	ctx.restore();
+
+	// Fallback: find the contour whose nearest node is closest
+	// (catches cases where isPointInStroke misses due to curves)
+	const tol2 = (tolerance * 3) * (tolerance * 3);
+	let bestCi = -1;
+	let bestDist = Infinity;
+
+	ci = 0;
+	for (const shape of layer.shapes) {
+		for (const contour of shape.contours) {
+			if (contour.nodes.length < 2) { ci++; continue; }
+
+			for (const node of contour.nodes) {
+				const sp = TRV.glyphToScreen(node.x, node.y);
+				const dx = sp.x - sx;
+				const dy = sp.y - sy;
+				const d2 = dx * dx + dy * dy;
+				if (d2 < bestDist) {
+					bestDist = d2;
+					bestCi = ci;
+				}
+			}
+			ci++;
+		}
+	}
+
+	if (bestDist <= tol2) return bestCi;
+	return -1;
+};
+
+// Return all node IDs belonging to contour index ci
+TRV.getContourNodeIds = function(ci) {
+	const layer = TRV.getActiveLayer();
+	if (!layer) return [];
+
+	let idx = 0;
+	for (const shape of layer.shapes) {
+		for (const contour of shape.contours) {
+			if (idx === ci) {
+				const ids = [];
+				for (let ni = 0; ni < contour.nodes.length; ni++) {
+					ids.push('c' + idx + '_n' + ni);
+				}
+				return ids;
+			}
+			idx++;
+		}
+	}
+	return [];
+};
