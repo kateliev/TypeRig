@@ -1,0 +1,791 @@
+/* ===================================================================
+   TypeRig Widgets (TRW) — Stylesheet
+   ===================================================================
+   Reusable UI gadgets matching the TypeRig Glyph Viewer dark theme.
+   Uses the same CSS variable tokens from the viewer's style.css.
+   =================================================================== */
+
+/* -- Variables (self-contained; viewer overrides if both loaded) ---- */
+:root {
+	--trw-bg-primary: #1a1a1e;
+	--trw-bg-secondary: #222226;
+	--trw-bg-tertiary: #2a2a2e;
+	--trw-bg-input: #1e1e22;
+	--trw-bg-hover: #333338;
+	--trw-bg-active: rgba(91,157,239,0.08);
+	--trw-border: #3a3a40;
+	--trw-border-subtle: #2e2e34;
+	--trw-border-focus: #5b9def;
+	--trw-text: #e8e8ec;
+	--trw-text-secondary: #9898a0;
+	--trw-text-dim: #686870;
+	--trw-text-placeholder: #55555d;
+	--trw-accent: #5b9def;
+	--trw-accent-dim: #3a6fb0;
+	--trw-accent-hover: #6eadf5;
+	--trw-danger: #ff6b6b;
+	--trw-success: #50c878;
+	--trw-warning: #f59e0b;
+	--trw-radius: 4px;
+	--trw-radius-lg: 6px;
+	--trw-font: 'DM Sans', system-ui, sans-serif;
+	--trw-font-mono: 'JetBrains Mono', monospace;
+	--trw-font-icon: 'TRW Icons', var(--trw-font-mono);
+	--trw-transition: 0.12s ease;
+	--trw-shadow: 0 4px 16px rgba(0,0,0,0.35);
+	--trw-shadow-sm: 0 2px 6px rgba(0,0,0,0.25);
+}
+
+/* -- Base reset for all TRW widgets -------------------------------- */
+.trw { box-sizing: border-box; font-family: var(--trw-font); }
+.trw *, .trw *::before, .trw *::after { box-sizing: border-box; }
+
+/* ===================================================================
+   LABEL
+   =================================================================== */
+.trw-label {
+	display: inline-block;
+	font-size: 11px;
+	color: var(--trw-text-secondary);
+	line-height: 1.4;
+	user-select: none;
+	white-space: nowrap;
+}
+
+.trw-label.trw-label--heading {
+	font-weight: 600;
+	font-size: 12px;
+	color: var(--trw-text);
+	letter-spacing: 0.02em;
+}
+
+.trw-label.trw-label--mono {
+	font-family: var(--trw-font-mono);
+	font-size: 10px;
+}
+
+.trw-label.trw-label--dim {
+	color: var(--trw-text-dim);
+}
+
+/* ===================================================================
+   BUTTON
+   =================================================================== */
+.trw-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	padding: 5px 10px;
+	min-height: 26px;
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: var(--trw-radius);
+	color: var(--trw-text-secondary);
+	font-family: var(--trw-font);
+	font-size: 11px;
+	cursor: pointer;
+	transition: all var(--trw-transition);
+	white-space: nowrap;
+	user-select: none;
+	outline: none;
+	line-height: 1;
+}
+
+.trw-btn:hover {
+	background: var(--trw-bg-hover);
+	color: var(--trw-text);
+	border-color: var(--trw-border);
+}
+
+.trw-btn:active {
+	background: var(--trw-bg-tertiary);
+}
+
+.trw-btn:focus-visible {
+	border-color: var(--trw-border-focus);
+	box-shadow: 0 0 0 1px var(--trw-accent-dim);
+}
+
+.trw-btn:disabled {
+	opacity: 0.35;
+	cursor: not-allowed;
+	pointer-events: none;
+}
+
+/* Icon-only button (square) */
+.trw-btn--icon {
+	padding: 4px;
+	min-width: 26px;
+	min-height: 26px;
+}
+
+/* Primary button */
+.trw-btn--primary {
+	background: var(--trw-accent-dim);
+	color: var(--trw-text);
+	border-color: var(--trw-accent-dim);
+}
+
+.trw-btn--primary:hover {
+	background: var(--trw-accent);
+	border-color: var(--trw-accent);
+}
+
+/* Compact (for increment buttons) */
+.trw-btn--compact {
+	padding: 3px 6px;
+	min-height: 22px;
+	font-size: 10px;
+	font-family: var(--trw-font-mono);
+}
+
+/* Button icon (SVG or icon font) */
+.trw-btn .trw-icon {
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+}
+
+/* ===================================================================
+   TOGGLE BUTTON
+   =================================================================== */
+.trw-toggle {
+	/* Inherits .trw-btn base styles */
+}
+
+.trw-toggle.active {
+	background: var(--trw-bg-active);
+	color: var(--trw-accent);
+	border-color: var(--trw-accent-dim);
+}
+
+/* ===================================================================
+   SPIN BOX (integer) & DOUBLE SPIN BOX (float)
+   =================================================================== */
+.trw-spinbox {
+	display: inline-flex;
+	align-items: stretch;
+	border: 1px solid var(--trw-border);
+	border-radius: var(--trw-radius);
+	overflow: hidden;
+	height: 26px;
+}
+
+.trw-spinbox__input {
+	width: 56px;
+	padding: 0 6px;
+	border: none;
+	background: var(--trw-bg-input);
+	color: var(--trw-text);
+	font-family: var(--trw-font-mono);
+	font-size: 11px;
+	text-align: center;
+	outline: none;
+	-moz-appearance: textfield;
+}
+
+.trw-spinbox__input::-webkit-inner-spin-button,
+.trw-spinbox__input::-webkit-outer-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+
+.trw-spinbox__input:focus {
+	background: var(--trw-bg-primary);
+}
+
+.trw-spinbox__btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	background: var(--trw-bg-tertiary);
+	border: none;
+	color: var(--trw-text-dim);
+	cursor: pointer;
+	font-size: 11px;
+	font-family: var(--trw-font-mono);
+	user-select: none;
+	transition: all var(--trw-transition);
+	padding: 0;
+}
+
+.trw-spinbox__btn:hover {
+	background: var(--trw-bg-hover);
+	color: var(--trw-text);
+}
+
+.trw-spinbox__btn:active {
+	background: var(--trw-accent-dim);
+	color: var(--trw-text);
+}
+
+.trw-spinbox__btn--dec { border-right: 1px solid var(--trw-border-subtle); }
+.trw-spinbox__btn--inc { border-left: 1px solid var(--trw-border-subtle); }
+
+/* Suffix label inside spinbox */
+.trw-spinbox__suffix {
+	display: flex;
+	align-items: center;
+	padding: 0 5px 0 0;
+	background: var(--trw-bg-input);
+	color: var(--trw-text-dim);
+	font-family: var(--trw-font-mono);
+	font-size: 10px;
+	user-select: none;
+}
+
+/* Focus ring on wrapper */
+.trw-spinbox:focus-within {
+	border-color: var(--trw-border-focus);
+}
+
+/* ===================================================================
+   EDIT FIELD (line edit)
+   =================================================================== */
+.trw-edit {
+	display: inline-flex;
+	align-items: center;
+	height: 26px;
+	border: 1px solid var(--trw-border);
+	border-radius: var(--trw-radius);
+	overflow: hidden;
+	transition: border-color var(--trw-transition);
+}
+
+.trw-edit:focus-within {
+	border-color: var(--trw-border-focus);
+}
+
+.trw-edit__input {
+	flex: 1;
+	min-width: 0;
+	padding: 0 8px;
+	border: none;
+	background: var(--trw-bg-input);
+	color: var(--trw-text);
+	font-family: var(--trw-font);
+	font-size: 11px;
+	outline: none;
+	height: 100%;
+}
+
+.trw-edit__input::placeholder {
+	color: var(--trw-text-placeholder);
+}
+
+.trw-edit__input.trw-edit__input--mono {
+	font-family: var(--trw-font-mono);
+}
+
+/* ===================================================================
+   COMBO BOX
+   =================================================================== */
+.trw-combo {
+	position: relative;
+	display: inline-block;
+	min-width: 100px;
+}
+
+.trw-combo__select {
+	width: 100%;
+	height: 26px;
+	padding: 0 24px 0 8px;
+	background: var(--trw-bg-input);
+	border: 1px solid var(--trw-border);
+	border-radius: var(--trw-radius);
+	color: var(--trw-text);
+	font-family: var(--trw-font);
+	font-size: 11px;
+	cursor: pointer;
+	outline: none;
+	appearance: none;
+	-webkit-appearance: none;
+	transition: border-color var(--trw-transition);
+}
+
+.trw-combo__select:focus {
+	border-color: var(--trw-border-focus);
+}
+
+.trw-combo__select:hover {
+	background: var(--trw-bg-tertiary);
+}
+
+.trw-combo__select option {
+	background: var(--trw-bg-secondary);
+	color: var(--trw-text);
+}
+
+/* Dropdown chevron */
+.trw-combo::after {
+	content: '';
+	position: absolute;
+	right: 8px;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 0;
+	height: 0;
+	border-left: 4px solid transparent;
+	border-right: 4px solid transparent;
+	border-top: 4px solid var(--trw-text-dim);
+	pointer-events: none;
+}
+
+/* ===================================================================
+   LIST WIDGET
+   =================================================================== */
+.trw-list {
+	border: 1px solid var(--trw-border);
+	border-radius: var(--trw-radius);
+	background: var(--trw-bg-input);
+	overflow-y: auto;
+	max-height: 180px;
+	min-height: 60px;
+}
+
+.trw-list__item {
+	display: flex;
+	align-items: center;
+	padding: 4px 8px;
+	font-size: 11px;
+	color: var(--trw-text-secondary);
+	cursor: pointer;
+	transition: all var(--trw-transition);
+	user-select: none;
+	border-bottom: 1px solid var(--trw-border-subtle);
+}
+
+.trw-list__item:last-child { border-bottom: none; }
+
+.trw-list__item:hover {
+	background: var(--trw-bg-hover);
+	color: var(--trw-text);
+}
+
+.trw-list__item.active {
+	background: var(--trw-bg-active);
+	color: var(--trw-accent);
+}
+
+.trw-list__item--empty {
+	color: var(--trw-text-dim);
+	font-style: italic;
+	cursor: default;
+}
+
+/* ===================================================================
+   SLIDER CONTROLLER
+   (slider + min/max fields + value field + ±1/±10 buttons)
+   Mirrors TRSliderCtrl / TRCustomSpinController from Qt
+   =================================================================== */
+.trw-slider-ctrl {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+/* Top row: label + spinbox + ±1/±10 buttons */
+.trw-slider-ctrl__top {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.trw-slider-ctrl__label {
+	font-size: 11px;
+	color: var(--trw-text-secondary);
+	white-space: nowrap;
+	min-width: 40px;
+}
+
+/* Bottom row: slider track + min/max */
+.trw-slider-ctrl__track-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.trw-slider-ctrl__minmax {
+	width: 44px;
+	padding: 0 4px;
+	height: 20px;
+	border: 1px solid var(--trw-border-subtle);
+	border-radius: 3px;
+	background: var(--trw-bg-input);
+	color: var(--trw-text-dim);
+	font-family: var(--trw-font-mono);
+	font-size: 10px;
+	text-align: center;
+	outline: none;
+	flex-shrink: 0;
+}
+
+.trw-slider-ctrl__minmax:focus {
+	border-color: var(--trw-border-focus);
+	color: var(--trw-text);
+}
+
+/* Slider track */
+.trw-slider-ctrl__slider {
+	flex: 1;
+	-webkit-appearance: none;
+	appearance: none;
+	height: 4px;
+	border-radius: 2px;
+	background: var(--trw-border);
+	outline: none;
+	cursor: pointer;
+}
+
+.trw-slider-ctrl__slider::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: var(--trw-accent);
+	border: 2px solid var(--trw-bg-secondary);
+	cursor: grab;
+	transition: background var(--trw-transition);
+}
+
+.trw-slider-ctrl__slider::-webkit-slider-thumb:hover {
+	background: var(--trw-accent-hover);
+}
+
+.trw-slider-ctrl__slider::-webkit-slider-thumb:active {
+	cursor: grabbing;
+}
+
+.trw-slider-ctrl__slider::-moz-range-thumb {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: var(--trw-accent);
+	border: 2px solid var(--trw-bg-secondary);
+	cursor: grab;
+}
+
+/* ===================================================================
+   TREE WIDGET (placeholder structure)
+   =================================================================== */
+.trw-tree {
+	border: 1px solid var(--trw-border);
+	border-radius: var(--trw-radius);
+	background: var(--trw-bg-input);
+	overflow-y: auto;
+	max-height: 240px;
+	font-size: 11px;
+}
+
+.trw-tree__node {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 8px;
+	color: var(--trw-text-secondary);
+	cursor: pointer;
+	user-select: none;
+	transition: background var(--trw-transition);
+}
+
+.trw-tree__node:hover { background: var(--trw-bg-hover); }
+.trw-tree__node.active { background: var(--trw-bg-active); color: var(--trw-accent); }
+
+.trw-tree__node--child { padding-left: 24px; }
+.trw-tree__node--grandchild { padding-left: 40px; }
+
+.trw-tree__toggle {
+	display: inline-flex;
+	width: 14px;
+	height: 14px;
+	align-items: center;
+	justify-content: center;
+	color: var(--trw-text-dim);
+	font-size: 9px;
+	flex-shrink: 0;
+	transition: transform var(--trw-transition);
+}
+
+.trw-tree__toggle.expanded { transform: rotate(90deg); }
+
+/* ===================================================================
+   TABLE WIDGET (placeholder structure)
+   =================================================================== */
+.trw-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 11px;
+	border: 1px solid var(--trw-border);
+	border-radius: var(--trw-radius);
+	overflow: hidden;
+}
+
+.trw-table th {
+	background: var(--trw-bg-tertiary);
+	color: var(--trw-text-dim);
+	font-weight: 500;
+	text-align: left;
+	padding: 5px 8px;
+	border-bottom: 1px solid var(--trw-border);
+	user-select: none;
+	white-space: nowrap;
+}
+
+.trw-table td {
+	padding: 4px 8px;
+	color: var(--trw-text-secondary);
+	border-bottom: 1px solid var(--trw-border-subtle);
+}
+
+.trw-table tr:last-child td { border-bottom: none; }
+
+.trw-table tr:hover td {
+	background: var(--trw-bg-hover);
+	color: var(--trw-text);
+}
+
+.trw-table tr.active td {
+	background: var(--trw-bg-active);
+	color: var(--trw-accent);
+}
+
+/* ===================================================================
+   COMBINED: SPIN BUTTON (button + spinbox)
+   =================================================================== */
+.trw-spin-button {
+	display: inline-flex;
+	align-items: stretch;
+	gap: 0;
+	border: 1px solid var(--trw-border);
+	border-radius: var(--trw-radius);
+	overflow: hidden;
+	height: 26px;
+}
+
+.trw-spin-button .trw-spinbox {
+	border: none;
+	border-radius: 0;
+}
+
+.trw-spin-button .trw-spinbox__input {
+	width: 48px;
+}
+
+.trw-spin-button__action {
+	display: flex;
+	align-items: center;
+	padding: 0 10px;
+	background: var(--trw-bg-tertiary);
+	border: none;
+	border-left: 1px solid var(--trw-border-subtle);
+	color: var(--trw-text-secondary);
+	font-family: var(--trw-font);
+	font-size: 11px;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: all var(--trw-transition);
+}
+
+.trw-spin-button__action:hover {
+	background: var(--trw-bg-hover);
+	color: var(--trw-text);
+}
+
+.trw-spin-button:focus-within {
+	border-color: var(--trw-border-focus);
+}
+
+/* ===================================================================
+   COMBINED: FLOW RIBBON (stretchable, reflowable button strip)
+   =================================================================== */
+.trw-ribbon {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 3px;
+	padding: 4px;
+	background: var(--trw-bg-secondary);
+	border: 1px solid var(--trw-border-subtle);
+	border-radius: var(--trw-radius-lg);
+}
+
+/* ===================================================================
+   DIALOG (simple modal)
+   =================================================================== */
+.trw-dialog-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(0,0,0,0.55);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 10000;
+	opacity: 0;
+	transition: opacity 0.15s ease;
+	pointer-events: none;
+}
+
+.trw-dialog-backdrop.visible {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.trw-dialog {
+	background: var(--trw-bg-secondary);
+	border: 1px solid var(--trw-border);
+	border-radius: var(--trw-radius-lg);
+	box-shadow: var(--trw-shadow);
+	min-width: 280px;
+	max-width: 480px;
+	overflow: hidden;
+	transform: translateY(8px);
+	transition: transform 0.15s ease;
+}
+
+.trw-dialog-backdrop.visible .trw-dialog {
+	transform: translateY(0);
+}
+
+.trw-dialog__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 10px 14px;
+	background: var(--trw-bg-tertiary);
+	border-bottom: 1px solid var(--trw-border);
+}
+
+.trw-dialog__title {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--trw-text);
+}
+
+.trw-dialog__close {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	background: none;
+	border: none;
+	color: var(--trw-text-dim);
+	cursor: pointer;
+	border-radius: 3px;
+	font-size: 14px;
+	line-height: 1;
+	transition: all var(--trw-transition);
+}
+
+.trw-dialog__close:hover {
+	background: var(--trw-bg-hover);
+	color: var(--trw-text);
+}
+
+.trw-dialog__body {
+	padding: 14px;
+	font-size: 12px;
+	color: var(--trw-text-secondary);
+	line-height: 1.5;
+}
+
+.trw-dialog__footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 6px;
+	padding: 10px 14px;
+	border-top: 1px solid var(--trw-border-subtle);
+}
+
+/* ===================================================================
+   ICON SYSTEM
+   Placeholder for custom icon font. Currently uses inline SVG.
+   To switch to a custom font: set --trw-font-icon and use
+   .trw-icon-font { font-family: var(--trw-font-icon); }
+   =================================================================== */
+.trw-icon {
+	display: inline-block;
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+}
+
+.trw-icon svg {
+	width: 100%;
+	height: 100%;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+/* Icon font glyph (for future custom font) */
+.trw-icon-font {
+	font-family: var(--trw-font-icon);
+	font-size: 14px;
+	line-height: 1;
+	font-style: normal;
+	font-weight: normal;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* ===================================================================
+   UTILITY: section headers, groups, spacers
+   =================================================================== */
+.trw-group {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.trw-group--vertical {
+	flex-direction: column;
+	align-items: stretch;
+}
+
+.trw-separator {
+	width: 1px;
+	height: 20px;
+	background: var(--trw-border);
+	flex-shrink: 0;
+}
+
+.trw-separator--horizontal {
+	width: 100%;
+	height: 1px;
+}
+
+.trw-spacer { flex: 1; }
+
+/* Section header */
+.trw-section {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 0;
+	margin: 8px 0 4px 0;
+	border-bottom: 1px solid var(--trw-border-subtle);
+}
+
+.trw-section__title {
+	font-size: 10px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--trw-text-dim);
+}
+
+/* Form row (label + widget) */
+.trw-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 28px;
+}
+
+.trw-row > .trw-label {
+	min-width: 60px;
+}

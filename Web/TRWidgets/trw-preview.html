@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRW — Widget Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="trw-widgets.css">
+<style>
+	*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+	body {
+		font-family: 'DM Sans', system-ui, sans-serif;
+		background: var(--trw-bg-primary);
+		color: var(--trw-text);
+		min-height: 100vh;
+		-webkit-font-smoothing: antialiased;
+	}
+
+	::-webkit-scrollbar { width: 6px; height: 6px; }
+	::-webkit-scrollbar-track { background: transparent; }
+	::-webkit-scrollbar-thumb { background: #3a3a40; border-radius: 3px; }
+
+	.preview {
+		max-width: 720px;
+		margin: 0 auto;
+		padding: 32px 24px 64px 24px;
+	}
+
+	.preview-header {
+		margin-bottom: 32px;
+		padding-bottom: 16px;
+		border-bottom: 1px solid var(--trw-border);
+	}
+
+	.preview-header h1 {
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 18px;
+		font-weight: 600;
+		color: var(--trw-accent);
+		letter-spacing: 0.02em;
+	}
+
+	.preview-header p {
+		margin-top: 6px;
+		font-size: 12px;
+		color: var(--trw-text-dim);
+	}
+
+	.widget-section {
+		margin-bottom: 28px;
+	}
+
+	.widget-section h2 {
+		font-size: 10px;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--trw-text-dim);
+		margin-bottom: 10px;
+		padding-bottom: 4px;
+		border-bottom: 1px solid var(--trw-border-subtle);
+	}
+
+	.widget-row {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 8px;
+		margin-bottom: 8px;
+	}
+
+	.widget-row--stretch {
+		align-items: stretch;
+	}
+
+	.widget-col {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.widget-note {
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 10px;
+		color: var(--trw-text-dim);
+		margin-top: 4px;
+	}
+
+	.log-area {
+		background: var(--trw-bg-input);
+		border: 1px solid var(--trw-border-subtle);
+		border-radius: 4px;
+		padding: 8px;
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 10px;
+		color: var(--trw-text-dim);
+		max-height: 100px;
+		overflow-y: auto;
+		margin-top: 8px;
+		line-height: 1.6;
+	}
+
+	.full-width { width: 100%; }
+</style>
+</head>
+<body>
+
+<div class="preview" id="preview">
+	<div class="preview-header">
+		<h1>TRW Widget Preview</h1>
+		<p>TypeRig Widgets — reusable UI gadgets for dark-themed web applications</p>
+	</div>
+</div>
+
+<script src="trw-widgets.js"></script>
+<script>
+(function() {
+	var root = document.getElementById('preview');
+
+	// Helper: create a section
+	function section(title) {
+		var div = document.createElement('div');
+		div.className = 'widget-section';
+		var h2 = document.createElement('h2');
+		h2.textContent = title;
+		div.appendChild(h2);
+		root.appendChild(div);
+		return div;
+	}
+
+	// Helper: create a row
+	function row(parent, stretch) {
+		var r = document.createElement('div');
+		r.className = 'widget-row' + (stretch ? ' widget-row--stretch' : '');
+		parent.appendChild(r);
+		return r;
+	}
+
+	// Helper: note
+	function note(parent, text) {
+		var n = document.createElement('div');
+		n.className = 'widget-note';
+		n.textContent = text;
+		parent.appendChild(n);
+	}
+
+	// Helper: event log
+	function makeLog(parent) {
+		var log = document.createElement('div');
+		log.className = 'log-area';
+		log.textContent = 'Event log...';
+		parent.appendChild(log);
+		return function(msg) {
+			log.textContent = msg + '\n' + log.textContent;
+			log.scrollTop = 0;
+		};
+	}
+
+	// =================================================================
+	// LABELS
+	// =================================================================
+	var s = section('Labels');
+	var r = row(s);
+	r.appendChild(TRW.Label('Default label'));
+	r.appendChild(TRW.Label('Heading label', { heading: true }));
+	r.appendChild(TRW.Label('Mono label', { mono: true }));
+	r.appendChild(TRW.Label('Dim label', { dim: true }));
+	note(s, 'TRW.Label(text, { heading, mono, dim })');
+
+	// =================================================================
+	// BUTTONS
+	// =================================================================
+	s = section('Buttons');
+	r = row(s);
+	r.appendChild(TRW.Button('Default'));
+	r.appendChild(TRW.Button('Primary', { primary: true }));
+	r.appendChild(TRW.Button('With Icon', { icon: 'check' }));
+	r.appendChild(TRW.Button(null, { icon: 'plus', tooltip: 'Icon-only button' }));
+	r.appendChild(TRW.Button(null, { icon: 'search', tooltip: 'Search' }));
+	r.appendChild(TRW.Button('Disabled', { disabled: true }));
+	r.appendChild(TRW.Button('Compact', { compact: true }));
+	note(s, 'TRW.Button(text, { icon, primary, compact, disabled, onClick })');
+
+	// =================================================================
+	// TOGGLE BUTTONS
+	// =================================================================
+	s = section('Toggle Buttons');
+	r = row(s);
+	var logToggle = makeLog(s);
+	r.appendChild(TRW.ToggleButton('Nodes', { icon: 'check', active: true,
+		onChange: function(v) { logToggle('Nodes: ' + v); }
+	}));
+	r.appendChild(TRW.ToggleButton('Metrics', {
+		onChange: function(v) { logToggle('Metrics: ' + v); }
+	}));
+	r.appendChild(TRW.ToggleButton('Mask', {
+		onChange: function(v) { logToggle('Mask: ' + v); }
+	}));
+	r.appendChild(TRW.ToggleButton(null, { icon: 'sliders', tooltip: 'Toggle panel',
+		onChange: function(v) { logToggle('Panel: ' + v); }
+	}));
+	note(s, 'TRW.ToggleButton(text, { icon, active, onChange })');
+
+	// =================================================================
+	// SPIN BOXES
+	// =================================================================
+	s = section('Spin Boxes');
+	var logSpin = makeLog(s);
+	r = row(s);
+	r.appendChild(TRW.Label('Integer:'));
+	r.appendChild(TRW.SpinBox({ min: -100, max: 100, value: 0, step: 1,
+		onChange: function(v) { logSpin('Int: ' + v); }
+	}));
+	r.appendChild(TRW.Label('With suffix:'));
+	r.appendChild(TRW.SpinBox({ min: 0, max: 1000, value: 72, step: 1, suffix: 'pt',
+		onChange: function(v) { logSpin('Pts: ' + v); }
+	}));
+	r = row(s);
+	r.appendChild(TRW.Label('Double:'));
+	r.appendChild(TRW.DoubleSpinBox({ min: -1, max: 1, value: 0.50, step: 0.01, decimals: 2,
+		onChange: function(v) { logSpin('Dbl: ' + v); }
+	}));
+	r.appendChild(TRW.Label('Weight:'));
+	r.appendChild(TRW.DoubleSpinBox({ min: 0, max: 999, value: 100.0, step: 0.5, decimals: 1,
+		onChange: function(v) { logSpin('Weight: ' + v); }
+	}));
+	note(s, 'TRW.SpinBox({ min, max, value, step, suffix }), TRW.DoubleSpinBox({ ..., decimals })');
+
+	// =================================================================
+	// EDIT FIELDS
+	// =================================================================
+	s = section('Edit Fields');
+	r = row(s);
+	r.appendChild(TRW.Label('Name:'));
+	r.appendChild(TRW.EditField({ value: 'A', placeholder: 'Glyph name', width: '120px' }));
+	r.appendChild(TRW.Label('Unicode:'));
+	r.appendChild(TRW.EditField({ value: '0041', placeholder: 'Hex', mono: true, width: '80px' }));
+	r = row(s);
+	r.appendChild(TRW.EditField({ placeholder: 'Full-width field with placeholder...', width: '100%' }));
+	note(s, 'TRW.EditField({ value, placeholder, mono, width, onChange })');
+
+	// =================================================================
+	// COMBO BOX
+	// =================================================================
+	s = section('Combo Box');
+	var logCombo = makeLog(s);
+	r = row(s);
+	r.appendChild(TRW.Label('Layer:'));
+	r.appendChild(TRW.ComboBox({
+		items: ['Regular', 'Bold', 'Light', 'mask.Regular', 'Condensed'],
+		value: 'Regular',
+		onChange: function(v) { logCombo('Layer: ' + v); }
+	}));
+	r.appendChild(TRW.Label('Format:'));
+	r.appendChild(TRW.ComboBox({
+		items: [
+			{ value: 'otf', label: 'OpenType CFF' },
+			{ value: 'ttf', label: 'TrueType' },
+			{ value: 'vf',  label: 'Variable Font' },
+		],
+		onChange: function(v) { logCombo('Format: ' + v); }
+	}));
+	note(s, 'TRW.ComboBox({ items, value, onChange }) — items: strings or {value, label}');
+
+	// =================================================================
+	// LIST WIDGET
+	// =================================================================
+	s = section('List Widget');
+	var logList = makeLog(s);
+	r = row(s, true);
+	var listDiv = document.createElement('div');
+	listDiv.style.width = '200px';
+	var list = TRW.ListWidget({
+		items: ['A (U+0041)', 'B (U+0042)', 'C (U+0043)', 'D (U+0044)', 'E (U+0045)',
+				'F (U+0046)', 'G (U+0047)', 'H (U+0048)', 'I (U+0049)', 'J (U+004A)'],
+		height: '140px',
+		onChange: function(idx, val) { logList('Selected [' + idx + ']: ' + val); }
+	});
+	listDiv.appendChild(list);
+	r.appendChild(listDiv);
+
+	var emptyListDiv = document.createElement('div');
+	emptyListDiv.style.width = '160px';
+	emptyListDiv.appendChild(TRW.ListWidget({ items: [], emptyText: 'No glyphs loaded', height: '140px' }));
+	r.appendChild(emptyListDiv);
+	note(s, 'TRW.ListWidget({ items, height, emptyText, onChange })');
+
+	// =================================================================
+	// SLIDER CONTROLLER
+	// =================================================================
+	s = section('Slider Controller');
+	var logSlider = makeLog(s);
+
+	var slider1 = TRW.SliderCtrl({
+		label: 'Weight:', min: 100, max: 900, value: 400, step: 1,
+		onChange: function(v) { logSlider('Weight: ' + v); }
+	});
+	s.appendChild(slider1);
+
+	var slider2 = TRW.SliderCtrl({
+		label: 'Width:', min: 50, max: 200, value: 100, step: 1, suffix: '%',
+		onChange: function(v) { logSlider('Width: ' + v + '%'); }
+	});
+	slider2.style.marginTop = '8px';
+	s.appendChild(slider2);
+
+	note(s, 'TRW.SliderCtrl({ label, min, max, value, step, suffix, decimals, onChange })');
+	note(s, 'Min/Max fields are editable. Mirrors TRSliderCtrl + TRCustomSpinController from Qt.');
+
+	// =================================================================
+	// SPIN BUTTON (combined)
+	// =================================================================
+	s = section('Spin Button (Combined)');
+	var logSpinBtn = makeLog(s);
+	r = row(s);
+	r.appendChild(TRW.SpinButton('Apply', {
+		min: -500, max: 500, value: 0, step: 1,
+		onClick: function(v) { logSpinBtn('Apply clicked, value: ' + v); }
+	}));
+	r.appendChild(TRW.SpinButton('Set UPM', {
+		min: 250, max: 4096, value: 1000, step: 1,
+		onClick: function(v) { logSpinBtn('Set UPM: ' + v); }
+	}));
+	note(s, 'TRW.SpinButton(buttonText, { min, max, value, step, onClick })');
+
+	// =================================================================
+	// FLOW RIBBON (combined)
+	// =================================================================
+	s = section('Flow Ribbon (Stretchable / Reflowable)');
+	var ribbon = TRW.FlowRibbon();
+	ribbon.style.width = '100%';
+
+	// Add a bunch of buttons
+	var toolNames = ['Select', 'Move', 'Scale', 'Rotate', 'Skew', 'Flip H', 'Flip V'];
+	for (var i = 0; i < toolNames.length; i++) {
+		ribbon.addWidget(TRW.ToggleButton(toolNames[i]));
+	}
+	ribbon.addSeparator();
+	ribbon.addWidget(TRW.Button('Undo', { icon: 'arrowLeft' }));
+	ribbon.addWidget(TRW.Button('Redo', { icon: 'arrowRight' }));
+	ribbon.addSeparator();
+	ribbon.addWidget(TRW.ToggleButton('Nodes', { icon: 'check', active: true }));
+	ribbon.addWidget(TRW.ToggleButton('Metrics'));
+	ribbon.addWidget(TRW.ToggleButton('Anchors'));
+	s.appendChild(ribbon);
+	note(s, 'TRW.FlowRibbon() — .addWidget(widget), .addSeparator()');
+	note(s, 'Resize the window to see reflow behavior.');
+
+	// =================================================================
+	// TREE WIDGET (planned)
+	// =================================================================
+	s = section('Tree Widget (Planned)');
+	var logTree = makeLog(s);
+	var tree = TRW.TreeWidget({
+		data: [
+			{ label: 'Masters', expanded: true, children: [
+				{ label: 'Regular' },
+				{ label: 'Bold' },
+				{ label: 'Light' },
+			]},
+			{ label: 'Masks', expanded: false, children: [
+				{ label: 'mask.Regular' },
+				{ label: 'mask.Bold' },
+			]},
+			{ label: 'Services', expanded: true, children: [
+				{ label: 'kern' },
+				{ label: 'mark' },
+			]},
+		],
+		onChange: function(idx, node, childIdx) {
+			logTree('Clicked: ' + (node.label || node.text) + (childIdx !== undefined ? ' [child ' + childIdx + ']' : ''));
+		}
+	});
+	tree.style.maxHeight = '180px';
+	s.appendChild(tree);
+	note(s, 'TRW.TreeWidget({ data, onChange }) — data: [{label, children, expanded}]');
+
+	// =================================================================
+	// TABLE WIDGET (planned)
+	// =================================================================
+	s = section('Table Widget (Planned)');
+	var logTable = makeLog(s);
+	var tableWrap = document.createElement('div');
+	tableWrap.style.overflowX = 'auto';
+	var table = TRW.TableWidget({
+		columns: ['Layer Name', 'Type', 'Nodes', 'Width'],
+		rows: [
+			['Regular',       'Master',  '42',  '600'],
+			['Bold',          'Master',  '42',  '620'],
+			['Light',         'Master',  '42',  '580'],
+			['mask.Regular',  'Mask',    '38',  '600'],
+			['Condensed',     'Service', '42',  '480'],
+		],
+		onChange: function(idx, data) {
+			logTable('Row ' + idx + ': ' + data.join(', '));
+		}
+	});
+	tableWrap.appendChild(table);
+	s.appendChild(tableWrap);
+	note(s, 'TRW.TableWidget({ columns, rows, onChange })');
+
+	// =================================================================
+	// DIALOG
+	// =================================================================
+	s = section('Dialog (Modal)');
+	r = row(s);
+
+	// Simple dialog
+	r.appendChild(TRW.Button('Open Simple Dialog', {
+		primary: true,
+		onClick: function() {
+			var content = document.createElement('div');
+			content.style.display = 'flex';
+			content.style.flexDirection = 'column';
+			content.style.gap = '8px';
+
+			content.appendChild(TRW.Row('Name:', TRW.EditField({ placeholder: 'Enter name...', width: '180px' })));
+			content.appendChild(TRW.Row('Value:', TRW.SpinBox({ min: 0, max: 1000, value: 100 })));
+			content.appendChild(TRW.Row('Layer:', TRW.ComboBox({ items: ['Regular', 'Bold', 'Light'] })));
+
+			var dlg = TRW.Dialog({
+				title: 'Set Parameters',
+				body: content,
+				buttons: [
+					{ text: 'Cancel' },
+					{ text: 'OK', primary: true, onClick: function() { alert('OK clicked'); } },
+				]
+			});
+			dlg.open();
+		}
+	}));
+
+	r.appendChild(TRW.Button('Message Dialog', {
+		onClick: function() {
+			var dlg = TRW.Dialog({
+				title: 'Warning',
+				body: 'This action will affect all layers in the current glyph. Proceed with caution.',
+				buttons: [
+					{ text: 'Cancel' },
+					{ text: 'Continue', primary: true },
+				]
+			});
+			dlg.open();
+		}
+	}));
+	note(s, 'TRW.Dialog({ title, body, buttons: [{text, primary, onClick}], onClose })');
+
+	// =================================================================
+	// UTILITY: Row helper
+	// =================================================================
+	s = section('Layout Utilities');
+	s.appendChild(TRW.Row('X Position:', TRW.SpinBox({ min: -9999, max: 9999, value: 0 })));
+	s.appendChild(TRW.Row('Y Position:', TRW.SpinBox({ min: -9999, max: 9999, value: 0 })));
+	s.appendChild(TRW.Row('Angle:', TRW.DoubleSpinBox({ min: -360, max: 360, value: 0, step: 0.5, decimals: 1, suffix: '\u00B0' })));
+	note(s, 'TRW.Row(label, widget), TRW.Section(title)');
+
+	// =================================================================
+	// ICON CATALOG
+	// =================================================================
+	s = section('Icon Catalog');
+	var iconRow = row(s);
+	iconRow.style.gap = '12px';
+	iconRow.style.flexWrap = 'wrap';
+
+	var iconNames = Object.keys(TRW.iconPaths);
+	for (var j = 0; j < iconNames.length; j++) {
+		var iconWrap = document.createElement('div');
+		iconWrap.style.display = 'flex';
+		iconWrap.style.flexDirection = 'column';
+		iconWrap.style.alignItems = 'center';
+		iconWrap.style.gap = '4px';
+
+		var ic = TRW.icon(iconNames[j]);
+		ic.style.color = 'var(--trw-text-secondary)';
+		ic.style.width = '18px';
+		ic.style.height = '18px';
+		iconWrap.appendChild(ic);
+
+		var icName = document.createElement('span');
+		icName.style.fontSize = '9px';
+		icName.style.fontFamily = 'var(--trw-font-mono)';
+		icName.style.color = 'var(--trw-text-dim)';
+		icName.textContent = iconNames[j];
+		iconWrap.appendChild(icName);
+
+		iconRow.appendChild(iconWrap);
+	}
+	note(s, 'TRW.icon(name) — returns SVG element. Set TRW.config.iconFont to switch to a custom icon font.');
+})();
+</script>
+</body>
+</html>
