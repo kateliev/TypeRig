@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TypeRig — Font Engineering Framework</title>
+<meta name="description" content="Python framework for font design, engineering, and advanced glyph manipulation.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* -- Variables ------------------------------------------- */
+:root {
+	--bg-primary: #1a1a1e;
+	--bg-secondary: #222226;
+	--bg-tertiary: #2a2a2e;
+	--bg-hover: #333338;
+	--border: #3a3a40;
+	--border-subtle: #2e2e34;
+	--text-primary: #e8e8ec;
+	--text-secondary: #9898a0;
+	--text-dim: #686870;
+	--accent: #5b9def;
+	--accent-dim: #3a6fb0;
+	--accent-bg: rgba(91,157,239,0.08);
+	--font-sans: 'DM Sans', system-ui, sans-serif;
+	--font-mono: 'JetBrains Mono', 'Consolas', monospace;
+}
+
+/* -- Reset ----------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+	scroll-behavior: smooth;
+	scrollbar-color: #3a3a40 transparent;
+}
+
+body {
+	font-family: var(--font-sans);
+	background: var(--bg-primary);
+	color: var(--text-primary);
+	-webkit-font-smoothing: antialiased;
+	line-height: 1.6;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #3a3a40; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #4a4a50; }
+
+a { color: var(--accent); text-decoration: none; transition: color 0.15s; }
+a:hover { color: var(--text-primary); }
+
+/* -- Layout ---------------------------------------------- */
+.wrap {
+	max-width: 960px;
+	margin: 0 auto;
+	padding: 0 24px;
+}
+
+/* -- Header ---------------------------------------------- */
+header {
+	border-bottom: 1px solid var(--border);
+	background: var(--bg-secondary);
+}
+
+.header-inner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 48px;
+}
+
+.logo {
+	font-family: var(--font-mono);
+	font-weight: 600;
+	font-size: 13px;
+	color: var(--accent);
+	letter-spacing: 0.5px;
+}
+
+.logo span { color: var(--text-dim); }
+
+nav { display: flex; gap: 4px; }
+
+nav a {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 5px 10px;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	color: var(--text-secondary);
+	font-size: 12px;
+	font-family: var(--font-sans);
+	transition: all 0.15s;
+}
+
+nav a:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+	border-color: var(--border);
+}
+
+nav a svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+/* -- Hero ------------------------------------------------ */
+.hero {
+	padding: 80px 0 64px;
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+.hero h1 {
+	font-family: var(--font-mono);
+	font-weight: 600;
+	font-size: 40px;
+	letter-spacing: -0.5px;
+	line-height: 1.1;
+	margin-bottom: 16px;
+}
+
+.hero h1 .accent { color: var(--accent); }
+
+.hero p {
+	font-size: 16px;
+	color: var(--text-secondary);
+	max-width: 560px;
+	line-height: 1.65;
+	margin-bottom: 32px;
+}
+
+.hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 16px;
+	border-radius: 5px;
+	font-family: var(--font-sans);
+	font-size: 13px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.15s;
+	border: 1px solid transparent;
+}
+
+.btn-primary {
+	background: var(--accent);
+	color: #0d0d10;
+}
+
+.btn-primary:hover {
+	background: #6daaff;
+	color: #0d0d10;
+}
+
+.btn-secondary {
+	background: transparent;
+	color: var(--text-secondary);
+	border-color: var(--border);
+}
+
+.btn-secondary:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+	border-color: var(--border);
+}
+
+.btn svg { width: 14px; height: 14px; }
+
+/* -- Badges row ------------------------------------------ */
+.badges {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+	margin-top: 24px;
+}
+
+.badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	color: var(--text-dim);
+	padding: 3px 8px;
+	border: 1px solid var(--border-subtle);
+	border-radius: 3px;
+	background: var(--bg-secondary);
+}
+
+.badge .dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--accent);
+}
+
+.badge .dot.py { background: #3572A5; }
+.badge .dot.js { background: #f1e05a; }
+
+/* -- Architecture section -------------------------------- */
+.arch {
+	padding: 48px 0;
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+.arch-label {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--text-dim);
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	margin-bottom: 20px;
+}
+
+.arch-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr 1fr;
+	gap: 1px;
+	background: var(--border-subtle);
+	border: 1px solid var(--border-subtle);
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+.arch-cell {
+	background: var(--bg-secondary);
+	padding: 20px;
+}
+
+.arch-cell h3 {
+	font-family: var(--font-mono);
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--accent);
+	margin-bottom: 6px;
+}
+
+.arch-cell p {
+	font-size: 13px;
+	color: var(--text-secondary);
+	line-height: 1.55;
+}
+
+.arch-cell code {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	color: var(--text-dim);
+	background: var(--bg-tertiary);
+	padding: 1px 5px;
+	border-radius: 3px;
+}
+
+/* -- Modules section ------------------------------------- */
+.modules {
+	padding: 48px 0;
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+.mod-list {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	background: var(--border-subtle);
+	border: 1px solid var(--border-subtle);
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+.mod-item {
+	display: grid;
+	grid-template-columns: 180px 1fr;
+	gap: 16px;
+	align-items: baseline;
+	padding: 14px 20px;
+	background: var(--bg-secondary);
+}
+
+.mod-item .mod-name {
+	font-family: var(--font-mono);
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--text-primary);
+}
+
+.mod-item .mod-desc {
+	font-size: 13px;
+	color: var(--text-secondary);
+}
+
+/* -- Install section ------------------------------------- */
+.install {
+	padding: 48px 0;
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+.code-block {
+	background: var(--bg-secondary);
+	border: 1px solid var(--border-subtle);
+	border-radius: 6px;
+	padding: 16px 20px;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1.8;
+	color: var(--text-secondary);
+	overflow-x: auto;
+	position: relative;
+}
+
+.code-block .comment { color: var(--text-dim); }
+.code-block .kw { color: #c792ea; }
+.code-block .str { color: #c3e88d; }
+.code-block .cls { color: var(--accent); }
+
+/* -- Links section --------------------------------------- */
+.links {
+	padding: 48px 0;
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+.links-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 1px;
+	background: var(--border-subtle);
+	border: 1px solid var(--border-subtle);
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+.link-card {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 20px;
+	background: var(--bg-secondary);
+	transition: background 0.15s;
+}
+
+.link-card:hover { background: var(--bg-tertiary); }
+
+.link-card .link-title {
+	font-family: var(--font-mono);
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--accent);
+}
+
+.link-card .link-desc {
+	font-size: 13px;
+	color: var(--text-secondary);
+}
+
+/* -- Footer ---------------------------------------------- */
+footer {
+	padding: 32px 0;
+	text-align: center;
+}
+
+footer p {
+	font-size: 12px;
+	color: var(--text-dim);
+}
+
+footer a { color: var(--text-secondary); }
+
+/* -- Responsive ------------------------------------------ */
+@media (max-width: 640px) {
+	.hero h1 { font-size: 28px; }
+	.arch-grid { grid-template-columns: 1fr; }
+	.mod-item { grid-template-columns: 1fr; gap: 4px; }
+	.links-grid { grid-template-columns: 1fr; }
+	.badges { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+	<div class="wrap header-inner">
+		<span class="logo">TR<span>:</span>TYPERIG</span>
+		<nav>
+			<a href="https://github.com/kateliev/TypeRig" target="_blank" rel="noopener">
+				<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+				Source
+			</a>
+			<a href="https://kateliev.github.io/TypeRig/Web/GlyphViewer/" target="_blank" rel="noopener">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+				Glyph Viewer
+			</a>
+			<a href="https://www.typerig.com" target="_blank" rel="noopener">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+				Website
+			</a>
+		</nav>
+	</div>
+</header>
+
+<!-- Hero -->
+<section class="hero">
+	<div class="wrap">
+		<h1>Type<span class="accent">Rig</span></h1>
+		<p>
+			Python framework for font design and engineering. Geometric primitives,
+			advanced interpolation with stem compensation, delta scaling, CJK-aware
+			transformations, and FontLab integration through a transparent proxy layer.
+		</p>
+		<div class="hero-actions">
+			<a class="btn btn-primary" href="https://github.com/kateliev/TypeRig" target="_blank" rel="noopener">
+				<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+				View on GitHub
+			</a>
+			<a class="btn btn-secondary" href="https://kateliev.github.io/TypeRig/Web/GlyphViewer/" target="_blank" rel="noopener">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+				Launch Glyph Viewer
+			</a>
+		</div>
+		<div class="badges">
+			<span class="badge"><span class="dot py"></span>Python</span>
+			<span class="badge"><span class="dot js"></span>JavaScript</span>
+			<span class="badge"><span class="dot"></span>FontLab 8</span>
+			<span class="badge">MIT License</span>
+		</div>
+	</div>
+</section>
+
+<!-- Architecture -->
+<section class="arch">
+	<div class="wrap">
+		<div class="arch-label">Architecture</div>
+		<div class="arch-grid">
+			<div class="arch-cell">
+				<h3>Core Objects</h3>
+				<p>Pure Python geometry: Point, Line, CubicBezier, Node, Contour, Shape, Layer, Glyph. No external dependencies.</p>
+			</div>
+			<div class="arch-cell">
+				<h3>Core Functions</h3>
+				<p>Math, geometry, and transform utilities including <code>adaptive_scale</code>, compensated interpolation, and Hobby splines.</p>
+			</div>
+			<div class="arch-cell">
+				<h3>File I/O</h3>
+				<p>XML serialization with the experimental <code>.trfont</code> format — shared glyph pools, manifests, and compact notation.</p>
+			</div>
+			<div class="arch-cell">
+				<h3>Proxy Layer</h3>
+				<p>Transparent bidirectional binding to FontLab via <code>__meta__</code> attribute routing. Eject/inject for round-tripping.</p>
+			</div>
+			<div class="arch-cell">
+				<h3>Delta Engine</h3>
+				<p>Directional coordinate system, per-contour stem measurement, and stem-compensated scaling for CJK and Latin alike.</p>
+			</div>
+			<div class="arch-cell">
+				<h3>Web Tools</h3>
+				<p>Browser-based Glyph Viewer with Pyodide integration — full TypeRig core running as Python in WebAssembly.</p>
+			</div>
+		</div>
+	</div>
+</section>
+
+<!-- Module list -->
+<section class="modules">
+	<div class="wrap">
+		<div class="arch-label">Core Modules</div>
+		<div class="mod-list">
+			<div class="mod-item">
+				<span class="mod-name">typerig.core.objects</span>
+				<span class="mod-desc">Geometric primitives — atom, point, line, cubic/quadratic bezier, node, contour, shape, layer, glyph, anchor, SDF, delta, hobby splines</span>
+			</div>
+			<div class="mod-item">
+				<span class="mod-name">typerig.core.func</span>
+				<span class="mod-desc">Math functions, transform utilities (adaptive scale, compensator, lerp), geometry helpers</span>
+			</div>
+			<div class="mod-item">
+				<span class="mod-name">typerig.core.fileio</span>
+				<span class="mod-desc">XML serialization engine with class registry and compact matrix notation</span>
+			</div>
+			<div class="mod-item">
+				<span class="mod-name">typerig.proxy.fl</span>
+				<span class="mod-desc">FontLab proxy objects — transparent wrappers with attribute routing and lazy loading</span>
+			</div>
+		</div>
+	</div>
+</section>
+
+<!-- Quick start -->
+<section class="install">
+	<div class="wrap">
+		<div class="arch-label">Quick Start</div>
+		<div class="code-block"><span class="comment"># Clone the repository</span>
+git clone https://github.com/kateliev/TypeRig.git
+
+<span class="comment"># Core objects — pure Python, no dependencies</span>
+<span class="kw">from</span> <span class="cls">typerig.core.objects</span> <span class="kw">import</span> Node, Contour, Shape, Layer, Glyph
+
+<span class="comment"># Transform functions</span>
+<span class="kw">from</span> <span class="cls">typerig.core.func.transform</span> <span class="kw">import</span> adaptive_scale, lerp
+
+<span class="comment"># FontLab proxy (inside FontLab only)</span>
+<span class="kw">from</span> <span class="cls">typerig.proxy.fl.objects.glyph</span> <span class="kw">import</span> eGlyph</div>
+	</div>
+</section>
+
+<!-- Links -->
+<section class="links">
+	<div class="wrap">
+		<div class="arch-label">Resources</div>
+		<div class="links-grid">
+			<a class="link-card" href="https://github.com/kateliev/TypeRig" target="_blank" rel="noopener">
+				<span class="link-title">GitHub Repository</span>
+				<span class="link-desc">Source code, issues, and releases.</span>
+			</a>
+			<a class="link-card" href="https://kateliev.github.io/TypeRig/Web/GlyphViewer/" target="_blank" rel="noopener">
+				<span class="link-title">TR Glyph Viewer</span>
+				<span class="link-desc">Browser-based glyph editor with live Python scripting.</span>
+			</a>
+			<a class="link-card" href="https://www.typerig.com" target="_blank" rel="noopener">
+				<span class="link-title">typerig.com</span>
+				<span class="link-desc">Project website and background.</span>
+			</a>
+			<a class="link-card" href="https://www.kateliev.com" target="_blank" rel="noopener">
+				<span class="link-title">kateliev.com</span>
+				<span class="link-desc">Author — Vassil Kateliev.</span>
+			</a>
+		</div>
+	</div>
+</section>
+
+<!-- Footer -->
+<footer>
+	<div class="wrap">
+		<p>&copy; <a href="https://www.kateliev.com">Vassil Kateliev</a> &middot; <a href="https://www.karandash.eu">Karandash Type Foundry</a></p>
+	</div>
+</footer>
+
+</body>
+</html>
