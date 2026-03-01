@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TypeRig — Font Engineering Framework</title>
-<meta name="description" content="Python framework for font design, engineering, and advanced glyph manipulation.">
+<meta name="description" content="Python framework for font design and engineering — geometry, interpolation, adaptive scaling, and a full FontLab production environment.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -60,6 +60,9 @@ a:hover { color: var(--text-primary); }
 
 /* -- Header ---------------------------------------------- */
 header {
+	position: sticky;
+	top: 0;
+	z-index: 20;
 	border-bottom: 1px solid var(--border);
 	background: var(--bg-secondary);
 }
@@ -106,8 +109,26 @@ nav a svg { width: 14px; height: 14px; flex-shrink: 0; }
 
 /* -- Hero ------------------------------------------------ */
 .hero {
-	padding: 80px 0 64px;
+	padding: 80px 0 56px;
 	border-bottom: 1px solid var(--border-subtle);
+}
+
+.hero .wrap {
+	position: relative;
+}
+
+.hero-logo {
+	position: absolute;
+	right: calc(100% + 24px);
+	top: 0;
+	width: 200px;
+	height: 200px;
+}
+
+.hero-logo img {
+	width: 100%;
+	height: 100%;
+	display: block;
 }
 
 .hero h1 {
@@ -121,11 +142,19 @@ nav a svg { width: 14px; height: 14px; flex-shrink: 0; }
 
 .hero h1 .accent { color: var(--accent); }
 
-.hero p {
+.hero .lead {
 	font-size: 16px;
 	color: var(--text-secondary);
-	max-width: 560px;
+	max-width: 640px;
 	line-height: 1.65;
+	margin-bottom: 12px;
+}
+
+.hero .sub {
+	font-size: 14px;
+	color: var(--text-dim);
+	max-width: 640px;
+	line-height: 1.6;
 	margin-bottom: 32px;
 }
 
@@ -164,17 +193,16 @@ nav a svg { width: 14px; height: 14px; flex-shrink: 0; }
 .btn-secondary:hover {
 	background: var(--bg-hover);
 	color: var(--text-primary);
-	border-color: var(--border);
 }
 
 .btn svg { width: 14px; height: 14px; }
 
-/* -- Badges row ------------------------------------------ */
 .badges {
 	display: flex;
 	gap: 12px;
 	align-items: center;
 	margin-top: 24px;
+	flex-wrap: wrap;
 }
 
 .badge {
@@ -200,13 +228,13 @@ nav a svg { width: 14px; height: 14px; flex-shrink: 0; }
 .badge .dot.py { background: #3572A5; }
 .badge .dot.js { background: #f1e05a; }
 
-/* -- Architecture section -------------------------------- */
-.arch {
+/* -- Section shared -------------------------------------- */
+.section {
 	padding: 48px 0;
 	border-bottom: 1px solid var(--border-subtle);
 }
 
-.arch-label {
+.section-label {
 	font-family: var(--font-mono);
 	font-size: 11px;
 	font-weight: 500;
@@ -216,7 +244,16 @@ nav a svg { width: 14px; height: 14px; flex-shrink: 0; }
 	margin-bottom: 20px;
 }
 
-.arch-grid {
+.section-desc {
+	font-size: 14px;
+	color: var(--text-secondary);
+	max-width: 640px;
+	line-height: 1.6;
+	margin-bottom: 24px;
+}
+
+/* -- Grid cells ------------------------------------------ */
+.grid-3 {
 	display: grid;
 	grid-template-columns: 1fr 1fr 1fr;
 	gap: 1px;
@@ -226,12 +263,22 @@ nav a svg { width: 14px; height: 14px; flex-shrink: 0; }
 	overflow: hidden;
 }
 
-.arch-cell {
+.grid-2 {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 1px;
+	background: var(--border-subtle);
+	border: 1px solid var(--border-subtle);
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+.cell {
 	background: var(--bg-secondary);
 	padding: 20px;
 }
 
-.arch-cell h3 {
+.cell h3 {
 	font-family: var(--font-mono);
 	font-size: 12px;
 	font-weight: 500;
@@ -239,13 +286,13 @@ nav a svg { width: 14px; height: 14px; flex-shrink: 0; }
 	margin-bottom: 6px;
 }
 
-.arch-cell p {
+.cell p {
 	font-size: 13px;
 	color: var(--text-secondary);
 	line-height: 1.55;
 }
 
-.arch-cell code {
+.cell code {
 	font-family: var(--font-mono);
 	font-size: 11px;
 	color: var(--text-dim);
@@ -254,12 +301,7 @@ nav a svg { width: 14px; height: 14px; flex-shrink: 0; }
 	border-radius: 3px;
 }
 
-/* -- Modules section ------------------------------------- */
-.modules {
-	padding: 48px 0;
-	border-bottom: 1px solid var(--border-subtle);
-}
-
+/* -- Module list ----------------------------------------- */
 .mod-list {
 	display: flex;
 	flex-direction: column;
@@ -289,14 +331,74 @@ nav a svg { width: 14px; height: 14px; flex-shrink: 0; }
 .mod-item .mod-desc {
 	font-size: 13px;
 	color: var(--text-secondary);
+	line-height: 1.5;
 }
 
-/* -- Install section ------------------------------------- */
-.install {
-	padding: 48px 0;
-	border-bottom: 1px solid var(--border-subtle);
+/* -- Panel list (expandable) ----------------------------- */
+.panel-list {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	background: var(--border-subtle);
+	border: 1px solid var(--border-subtle);
+	border-radius: 6px;
+	overflow: hidden;
 }
 
+.panel-item {
+	padding: 16px 20px;
+	background: var(--bg-secondary);
+}
+
+.panel-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 4px;
+	cursor: pointer;
+	user-select: none;
+}
+
+.panel-name {
+	font-family: var(--font-mono);
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--text-primary);
+}
+
+.panel-file {
+	font-family: var(--font-mono);
+	font-size: 10px;
+	color: var(--text-dim);
+}
+
+.panel-brief {
+	font-size: 13px;
+	color: var(--text-secondary);
+	line-height: 1.55;
+}
+
+.panel-detail {
+	font-size: 12px;
+	color: var(--text-dim);
+	line-height: 1.55;
+	margin-top: 6px;
+	display: none;
+}
+
+.panel-item.open .panel-detail { display: block; }
+
+.toggle-arrow {
+	font-family: var(--font-mono);
+	font-size: 10px;
+	color: var(--text-dim);
+	transition: transform 0.15s;
+	display: inline-block;
+}
+
+.panel-item.open .toggle-arrow { transform: rotate(90deg); }
+
+/* -- Code block ------------------------------------------ */
 .code-block {
 	background: var(--bg-secondary);
 	border: 1px solid var(--border-subtle);
@@ -307,30 +409,13 @@ nav a svg { width: 14px; height: 14px; flex-shrink: 0; }
 	line-height: 1.8;
 	color: var(--text-secondary);
 	overflow-x: auto;
-	position: relative;
 }
 
 .code-block .comment { color: var(--text-dim); }
 .code-block .kw { color: #c792ea; }
-.code-block .str { color: #c3e88d; }
 .code-block .cls { color: var(--accent); }
 
-/* -- Links section --------------------------------------- */
-.links {
-	padding: 48px 0;
-	border-bottom: 1px solid var(--border-subtle);
-}
-
-.links-grid {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 1px;
-	background: var(--border-subtle);
-	border: 1px solid var(--border-subtle);
-	border-radius: 6px;
-	overflow: hidden;
-}
-
+/* -- Link cards ------------------------------------------ */
 .link-card {
 	display: flex;
 	flex-direction: column;
@@ -354,6 +439,25 @@ nav a svg { width: 14px; height: 14px; flex-shrink: 0; }
 	color: var(--text-secondary);
 }
 
+/* -- Sub-label ------------------------------------------- */
+.sub-label {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--text-dim);
+	margin-top: 24px;
+	margin-bottom: 12px;
+}
+
+.sub-label code {
+	font-size: 10px;
+	color: var(--text-dim);
+	background: var(--bg-tertiary);
+	padding: 1px 5px;
+	border-radius: 3px;
+	margin-left: 6px;
+}
+
 /* -- Footer ---------------------------------------------- */
 footer {
 	padding: 32px 0;
@@ -363,6 +467,7 @@ footer {
 footer p {
 	font-size: 12px;
 	color: var(--text-dim);
+	line-height: 1.8;
 }
 
 footer a { color: var(--text-secondary); }
@@ -370,10 +475,13 @@ footer a { color: var(--text-secondary); }
 /* -- Responsive ------------------------------------------ */
 @media (max-width: 640px) {
 	.hero h1 { font-size: 28px; }
-	.arch-grid { grid-template-columns: 1fr; }
+	.hero-logo { display: none; }
+	.grid-3 { grid-template-columns: 1fr; }
+	.grid-2 { grid-template-columns: 1fr; }
 	.mod-item { grid-template-columns: 1fr; gap: 4px; }
-	.links-grid { grid-template-columns: 1fr; }
 	.badges { flex-wrap: wrap; }
+	nav { gap: 2px; }
+	nav a { padding: 5px 6px; font-size: 11px; }
 }
 </style>
 </head>
@@ -382,13 +490,13 @@ footer a { color: var(--text-secondary); }
 <!-- Header -->
 <header>
 	<div class="wrap header-inner">
-		<span class="logo">TR<span>:</span>TYPERIG</span>
+		<a href="#" class="logo">TR<span>:</span>TYPERIG</a>
 		<nav>
 			<a href="https://github.com/kateliev/TypeRig" target="_blank" rel="noopener">
 				<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
 				Source
 			</a>
-			<a href="https://kateliev.github.io/TypeRig/Web/GlyphViewer/" target="_blank" rel="noopener">
+			<a href="Web/GlyphViewer/" target="_blank" rel="noopener">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
 				Glyph Viewer
 			</a>
@@ -403,93 +511,363 @@ footer a { color: var(--text-secondary); }
 <!-- Hero -->
 <section class="hero">
 	<div class="wrap">
+		<div class="hero-logo">
+			<img src="typerig-logo-blue.svg" alt="TypeRig logo">
+		</div>
 		<h1>Type<span class="accent">Rig</span></h1>
-		<p>
-			Python framework for font design and engineering. Geometric primitives,
-			advanced interpolation with stem compensation, delta scaling, CJK-aware
-			transformations, and FontLab integration through a transparent proxy layer.
+		<p class="lead">
+			A Python framework for font design and engineering, providing an extensive suite
+			of tools for professional typeface development inside FontLab, alongside a standalone
+			pure-Python geometry and interpolation core.
+		</p>
+		<p class="sub">
+			Geometric objects for manipulating font outlines &mdash; points, nodes, contours, shapes,
+			layers and glyphs &mdash; together with advanced mathematical tools for interpolation,
+			adaptive scaling and curve processing. A proxy layer transparently wraps FontLab internals,
+			so the same operations work both standalone and inside the host application.
 		</p>
 		<div class="hero-actions">
 			<a class="btn btn-primary" href="https://github.com/kateliev/TypeRig" target="_blank" rel="noopener">
 				<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
 				View on GitHub
 			</a>
-			<a class="btn btn-secondary" href="https://kateliev.github.io/TypeRig/Web/GlyphViewer/" target="_blank" rel="noopener">
+			<a class="btn btn-secondary" href="Web/GlyphViewer/" target="_blank" rel="noopener">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
 				Launch Glyph Viewer
+			</a>
+			<a class="btn btn-secondary" href="http://paypal.me/VassilKateliev" target="_blank" rel="noopener">
+				<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+				Donate
 			</a>
 		</div>
 		<div class="badges">
 			<span class="badge"><span class="dot py"></span>Python</span>
 			<span class="badge"><span class="dot js"></span>JavaScript</span>
 			<span class="badge"><span class="dot"></span>FontLab 8</span>
-			<span class="badge">MIT License</span>
+		</div>
+	</div>
+</section>
+
+<!-- FontLab Scripts and Tools -->
+<section class="section" id="tools">
+	<div class="wrap">
+		<div class="section-label">FontLab Scripts &amp; Tools</div>
+		<p class="section-desc">
+			The FontLab-facing part of TypeRig &mdash; a rich set of GUI-driven tools covering virtually every
+			aspect of font design and production. All built with PythonQt, integrated with FontLab's undo
+			system, and supporting multi-master workflows out of the box.
+		</p>
+
+		<!-- Main Panel -->
+		<div class="sub-label">TypeRig Panel<code>typerig-panel.py</code></div>
+		<p class="section-desc" style="margin-bottom:16px">
+			Dockable, always-on-top panel with dynamically loaded sub-panels as tabbed modules.
+			Masthead with layer-selection controls and glyph-scope selectors.
+			Panel visibility is user-configurable and persisted via JSON.
+		</p>
+
+		<div class="panel-list">
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Node</span>
+				</div>
+				<div class="panel-brief">Insertion, removal, conversion, smart movement, alignment to metrics, slope and Hobby tension tools, coordinate banking, primitive drawing.</div>
+				<div class="panel-detail">Smart node movement with multiple methods: plain shift, proportional (LERP), italic-angle slant, slope-following, and a smart mode that preserves handle relationships. Alignment to other nodes, font metrics (ascender, caps height, x-height, baseline, descender, measurement line), and user-defined targets with intercept and dimension-preserving modes. Hobby spline tension copy/paste. Coordinate banking for complex multi-step operations. Circle from 2 or 3 nodes, square from diagonal or midpoints.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Contour</span>
+				</div>
+				<div class="panel-brief">Close, open, reverse, boolean operations, alignment, group alignment, distribution, reordering.</div>
+				<div class="panel-detail">Boolean operations: union, subtract, intersect, exclude. Alignment to other contours, to font metrics, and bounding-box-relative positioning. Group alignment (A-to-B). Horizontal and vertical distribution of multiple contours. Reordering by position.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Corner</span>
+				</div>
+				<div class="panel-brief">Smart corner filters with multi-master presets. Mitre, round, loop, and ink-trap operations.</div>
+				<div class="panel-detail">Apply, remove, and find-and-remove smart corners by preset value. Live slider control for captured smart angles. Dialog-based parameter entry for mitre, round, loop, and ink-trap corners. Corner rebuild for re-processing existing corners.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Layer</span>
+				</div>
+				<div class="panel-brief">Full layer management, cross-layer operations, element-level swap/pull/push, zero-setup interpolation.</div>
+				<div class="panel-detail">Add, duplicate, delete, duplicate-as-mask. Copy and paste whole layer groups. Visibility toggle and type assignment (mask, wireframe, service). Element-level operations: swap, pull, push, clean, lock/unlock. Contour-level cross-layer operations: pull/push nodes, copy/paste outlines, paste by layer name. Side-by-side comparison view. Zero setup interpolation between selected layers.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Delta</span>
+				</div>
+				<div class="panel-brief">Adaptive scaling (delta machine) with stem values per master, target layer generation, Tim Ahrens methodology.</div>
+				<div class="panel-detail">Virtual axis setup with stem values per master layer. Target layer generation with configurable horizontal/vertical stems, width, and height. Supports extrapolation, intensity control, italic-angle compensation, and multiple transform origins. Axis configurations saved/loaded from Font Lib or external JSON files.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Element</span>
+				</div>
+				<div class="panel-brief">Shape manipulation, element library insertion, alignment, and expression-based composition system.</div>
+				<div class="panel-detail">Naming, unlinking references, deletion, transform reset/rounding, auto-reorder, ungroup-all. Shape insertion and replacement from font-wide element library. Alignment to other shapes, layer bounds, font metrics. Expression-based composition with full scripting syntax: coordinate placement by node tags, anchor names, bbox positions, per-layer overrides, element swapping.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Clipboard</span>
+				</div>
+				<div class="panel-brief">Multi-master contour clipboard with core-object storage. Configurable paste transform and delta machine fit.</div>
+				<div class="panel-detail">Copy full contours or partial selections. Paste with configurable transform (translate, scale, rotate, skew), delta machine size fit and transform origin. Reversed and partial paste modes, drawing and connecting multiple segments. Save/load clipboard to XML for cross-session and cross-font workflows.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Metrics</span>
+				</div>
+				<div class="panel-brief">Sidebearing and advance width tools with metric expressions and cross-glyph copying.</div>
+				<div class="panel-detail">Copy metrics from other glyphs by name with percentage and unit adjustments. Metric expressions: get, set, auto-link from element references, unlink. Copy bounding-box dimensions between glyphs with proportional adjustments.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Anchor</span>
+				</div>
+				<div class="panel-brief">Anchor management with flexible coordinate input, font-metric and expression-based placement, italic-angle awareness.</div>
+				<div class="panel-detail">Tree-view display per layer. Add, move, and clear with absolute positions, font-metric-relative placement, bounding-box-relative, and expression-based coordinates. Per-layer coordinate lists for multi-master workflows.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Guide</span>
+				</div>
+				<div class="panel-brief">Guideline creation at percentage-based positions. Named/tagged guidelines with color assignment.</div>
+				<div class="panel-detail">Vertical and horizontal placement relative to advance width, bounding box, or font metrics. Source glyph reference for cross-glyph alignment. Glyph tagging and node naming tools.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Glyph &middot; Outline &middot; Pairs &middot; Stats</span>
+				</div>
+				<div class="panel-brief">Glyph rename/copy/duplicate, interactive node table, kern string generation, glyph statistics.</div>
+				<div class="panel-detail">Glyph: rename, copy/duplicate with configurable options, batch duplication with auto-numbering and transforms. Outline: interactive sortable node table with direct coordinate editing and live viewport sync. Pairs: filler-based kern pair construction, DTL .krn/.cla/.afm import. Stats: bounding box dimensions, advance widths, sidebearings across layers.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">AutoMetrics &middot; CopyKerning &middot; CleanKerning</span>
+				</div>
+				<div class="panel-brief">Automated metric assignment, kern pair copying with class-aware support, kerning table cleanup.</div>
+				<div class="panel-detail">AutoMetrics: automated metric assignment tools. CopyKerning: kern pair copying between glyphs and layers, source pair lookup with expression adjustment, group kerning with automatic class resolution. CleanKerning: kerning table cleanup utilities.</div>
+			</div>
+		</div>
+
+		<!-- Manager -->
+		<div class="sub-label">TypeRig Manager<code>typerig-manager.py</code></div>
+		<div class="panel-list">
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">FontMetrics</span>
+				</div>
+				<div class="panel-brief">Multi-master font metrics editor with table-based interface. Font zone management with JSON import/export.</div>
+				<div class="panel-detail">Table-based interface for all vertical metrics across all master layers. Add, remove, import/export zones as JSON. Zone creation from metric references.</div>
+			</div>
+		</div>
+
+		<!-- Toolbars -->
+		<div class="sub-label">Toolbars</div>
+		<div class="panel-list">
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Node &middot; Node Align &middot; Node Slope &middot; Contour</span>
+				</div>
+				<div class="panel-brief">Dockable toolbars for node operations, alignment, slope tools, and contour booleans.</div>
+				<div class="panel-detail">Node: insertion, removal, extreme insertion, start-point, corner operations. Node Align: alignment to min/max, user targets, font metrics with intercept and smart-align. Node Slope: copy/paste with italic angle, min/max pivot with horizontal flip. Contour: boolean operations, closing, reversing, winding correction. MacOS Panel (toolbar-mac.py): unified flow-layout panel consolidating all toolbar functionality where QToolBar doesn't work.</div>
+			</div>
+		</div>
+
+		<!-- Standalone Tools -->
+		<div class="sub-label">Standalone Tools</div>
+		<div class="panel-list">
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Delta Preview</span>
+					<span class="panel-file">TR-DeltaPreview.py</span>
+				</div>
+				<div class="panel-brief">Visual preview of delta machine results without writing to the font. Dual-pane with live zoom/padding.</div>
+				<div class="panel-detail">Source masters and computed targets rendered as QPainterPath objects from core geometry. Execute-to-font mode for committing approved results as real layers.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Comparator</span>
+					<span class="panel-file">TR-Comparator.py</span>
+				</div>
+				<div class="panel-brief">Cross-font and cross-layer glyph comparison. Outline differences, missing layers, anchor mismatches.</div>
+				<div class="panel-detail">Detect shifted-but-identical layers, color-coded difference display. Time-stamp-aware comparison for change tracking. Batch processing with progress bar and font mark colorization.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Match Contours</span>
+					<span class="panel-file">TR-MatchContours.py</span>
+				</div>
+				<div class="panel-brief">Visual contour matching across masters. Drag-and-drop reordering, start-point alignment, winding display.</div>
+				<div class="panel-detail">Contour order tab with drag-and-drop reordering and winding direction display (color-coded CW/CCW). Start-point tab for aligning start nodes across masters with corner-based and sequential adjustment. Visual icon rendering per contour per master.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Encoder</span>
+					<span class="panel-file">TR-EncodeGlyphs.py</span>
+				</div>
+				<div class="panel-brief">Unicode encoding management. Load from JSON, FontLab .nam, Google .textproto files.</div>
+				<div class="panel-detail">Apply or clear unicode mappings for entire fonts or selected glyphs. Save/load encoding data to Font Lib.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Sort Anchors</span>
+					<span class="panel-file">TR-SortAnchors.py</span>
+				</div>
+				<div class="panel-brief">Anchor ordering across all masters. Reference-master or alphabetical mode with verbose missing-anchor reports.</div>
+				<div class="panel-detail">Reference-master mode preserves anchor order from a chosen master. Alphabetical mode sorts uniformly. Verbose mode reports missing anchors across masters.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Propagate Anchors</span>
+					<span class="panel-file">TR-PropagateAnchors.py</span>
+				</div>
+				<div class="panel-brief">Table-driven batch anchor copying between glyphs with per-action configuration. Save/load as JSON.</div>
+				<div class="panel-detail">Source glyph, anchor selection, destination glyphs, layer scope, copy options (absolute/relative with LSB/RSB/advance-relative modes, collision handling with overwrite or rename, suffix control). Repeatable JSON workflows.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Export Glyph</span>
+					<span class="panel-file">TR-ExportGlyph.py</span>
+				</div>
+				<div class="panel-brief">Export individual glyphs as .trglyph XML files via the core serialization system and proxy-to-core eject.</div>
+				<div class="panel-detail">Lossless round-trip export using the eject mechanism to produce pure core objects serialized to XML.</div>
+			</div>
 		</div>
 	</div>
 </section>
 
 <!-- Architecture -->
-<section class="arch">
+<section class="section" id="architecture">
 	<div class="wrap">
-		<div class="arch-label">Architecture</div>
-		<div class="arch-grid">
-			<div class="arch-cell">
-				<h3>Core Objects</h3>
-				<p>Pure Python geometry: Point, Line, CubicBezier, Node, Contour, Shape, Layer, Glyph. No external dependencies.</p>
-			</div>
-			<div class="arch-cell">
-				<h3>Core Functions</h3>
-				<p>Math, geometry, and transform utilities including <code>adaptive_scale</code>, compensated interpolation, and Hobby splines.</p>
-			</div>
-			<div class="arch-cell">
-				<h3>File I/O</h3>
-				<p>XML serialization with the experimental <code>.trfont</code> format — shared glyph pools, manifests, and compact notation.</p>
-			</div>
-			<div class="arch-cell">
-				<h3>Proxy Layer</h3>
-				<p>Transparent bidirectional binding to FontLab via <code>__meta__</code> attribute routing. Eject/inject for round-tripping.</p>
-			</div>
-			<div class="arch-cell">
-				<h3>Delta Engine</h3>
-				<p>Directional coordinate system, per-contour stem measurement, and stem-compensated scaling for CJK and Latin alike.</p>
-			</div>
-			<div class="arch-cell">
-				<h3>Web Tools</h3>
-				<p>Browser-based Glyph Viewer with Pyodide integration — full TypeRig core running as Python in WebAssembly.</p>
-			</div>
-		</div>
-	</div>
-</section>
+		<div class="section-label">Architecture</div>
+		<p class="section-desc">
+			Split into two complementary packages, bridged by a dual proxy layer.
+		</p>
 
-<!-- Module list -->
-<section class="modules">
-	<div class="wrap">
-		<div class="arch-label">Core Modules</div>
+		<!-- Core -->
+		<div class="sub-label">Core<code>typerig.core</code></div>
+		<p class="section-desc" style="margin-bottom:16px">
+			Zero external dependencies. Every object lives in pure Python and can run anywhere &mdash;
+			CPython, Pyodide in a browser, or any other conforming runtime.
+		</p>
+
 		<div class="mod-list">
 			<div class="mod-item">
-				<span class="mod-name">typerig.core.objects</span>
-				<span class="mod-desc">Geometric primitives — atom, point, line, cubic/quadratic bezier, node, contour, shape, layer, glyph, anchor, SDF, delta, hobby splines</span>
+				<span class="mod-name">core.objects</span>
+				<span class="mod-desc">Point, Line, CubicBezier, QuadraticBezier &mdash; foundational geometry with operator overloading and complex-number math. Node with navigation, corner ops, Hobby splines, per-node stem weights. Contour with winding, segment iteration, analytical offset, SDF-clamped offset, compensated scaling. Shape, Layer (interpolation, adaptive scaling, virtual axes), Glyph, Anchor. Transform, SDF, HobbySpline, PointArray, DeltaArray, DeltaScale.</span>
 			</div>
 			<div class="mod-item">
-				<span class="mod-name">typerig.core.func</span>
-				<span class="mod-desc">Math functions, transform utilities (adaptive scale, compensator, lerp), geometry helpers</span>
+				<span class="mod-name">core.func</span>
+				<span class="mod-desc">math &mdash; lerp, SLERP, rational fractions, directional interpolation, Hobby velocity, matrix solvers. transform &mdash; delta machine, adaptive scaling (extending Tim Ahrens), directional adaptive scaling, stem compensation, italic-angle correction, per-contour angle adjustment. geometry &mdash; CCW, collinearity, intersection. utils &mdash; type-checking helpers.</span>
 			</div>
 			<div class="mod-item">
-				<span class="mod-name">typerig.core.fileio</span>
-				<span class="mod-desc">XML serialization engine with class registry and compact matrix notation</span>
+				<span class="mod-name">core.fileio</span>
+				<span class="mod-desc">xmlio &mdash; XML round-trip engine with class registry, compact attribute encoding, lib-attribute support. Powers the .trfont experimental format. svg &mdash; SVG path filtering and pen-based import. nam &mdash; FontLab .nam parser. textproto &mdash; Google protobuf .textproto parser.</span>
+			</div>
+		</div>
+
+		<!-- Proxy FL -->
+		<div class="sub-label">Proxy &mdash; FontLab<code>typerig.proxy.fl</code></div>
+		<p class="section-desc" style="margin-bottom:16px">
+			Depends on FontLab (fontlab, fontgate, PythonQt). Production-ready proxy objects, GUI components, and action collectors.
+		</p>
+
+		<div class="mod-list">
+			<div class="mod-item">
+				<span class="mod-name">proxy.fl.objects</span>
+				<span class="mod-desc">pFont/pFontMetrics, pGlyph/eGlyph, pShape/eShape, pContour, pNode/eNode/eNodesContainer, eCurveEx &mdash; full layer, shape, contour, node, anchor, guideline, component, metric access. eGlyph extends with tool-preparation and multi-master-aware operations.</span>
 			</div>
 			<div class="mod-item">
-				<span class="mod-name">typerig.proxy.fl</span>
-				<span class="mod-desc">FontLab proxy objects — transparent wrappers with attribute routing and lazy loading</span>
+				<span class="mod-name">proxy.fl.actions</span>
+				<span class="mod-desc">Action collectors separating tool logic from GUI: TRNodeActionCollector, TRCurveActionCollector, TRContourActionCollector, TRDrawActionCollector, TRLayerActionCollector.</span>
+			</div>
+			<div class="mod-item">
+				<span class="mod-name">proxy.fl.gui</span>
+				<span class="mod-desc">Reusable widgets (buttons, flow layout, tab widgets, table views, sliders, transform controls, delta layer tree, icon font loader), dialogs (layer chooser with search/filter, quick input), stylesheets with auto dark/light detection, canvas drawing utilities (TRDrawIcon, contour/node rendering).</span>
+			</div>
+			<div class="mod-item">
+				<span class="mod-name">proxy.fl.application</span>
+				<span class="mod-desc">pWorkspace (canvas access, text block queries, active kern pair, frame creation), pItems (undo notification helpers).</span>
+			</div>
+		</div>
+
+		<!-- Proxy TR -->
+		<div class="sub-label">Proxy &mdash; Core Bridge<code>typerig.proxy.tr</code></div>
+		<p class="section-desc" style="margin-bottom:16px">
+			Each proxy &mdash; trNode, trContour, trShape, trLayer, trGlyph, trFont, trAnchor &mdash;
+			inherits from its core counterpart and holds a <code>.host</code> reference to the FL object.
+			Attribute access is rerouted through a <code>__meta__</code> mapping so core algorithms run
+			identically on proxy objects with live FL data.
+		</p>
+
+		<div class="grid-3">
+			<div class="cell">
+				<h3>Eject / Mount</h3>
+				<p><code>.eject()</code> detaches a pure core copy. <code>.mount()</code> writes values back into the host. Keeps FL undo intact.</p>
+			</div>
+			<div class="cell">
+				<h3>Host Sync</h3>
+				<p>Structural changes trigger proxy rebuild of the FL contour with <code>_sync_host()</code> up the parent chain.</p>
+			</div>
+			<div class="cell">
+				<h3>Attribute Routing</h3>
+				<p>Reads/writes to mapped names go straight to the host. Everything else follows the normal core path.</p>
 			</div>
 		</div>
 	</div>
 </section>
 
-<!-- Quick start -->
-<section class="install">
+<!-- Web -->
+<section class="section" id="web">
 	<div class="wrap">
-		<div class="arch-label">Quick Start</div>
+		<div class="section-label">Web</div>
+		<p class="section-desc" style="margin-bottom:24px">
+			The core package runs in the browser via Pyodide. The TR Glyph Viewer loads TypeRig
+			modules directly from GitHub at runtime, stubs the proxy and FL-dependent init files,
+			and exposes the full core API to a live Python editor on an HTML canvas.
+		</p>
+		<div class="grid-2">
+			<a class="link-card" href="Web/GlyphViewer/" target="_blank" rel="noopener">
+				<span class="link-title">TR Glyph Viewer &rarr;</span>
+				<span class="link-desc">Browser-based glyph editor with live Python scripting via Pyodide.</span>
+			</a>
+			<div class="cell">
+				<h3>How it works</h3>
+				<p>Pyodide loads CPython as WebAssembly, fetches core modules from GitHub, stubs FL-dependent packages. Full core API available in-browser.</p>
+			</div>
+		</div>
+	</div>
+</section>
+
+<!-- Quick Start -->
+<section class="section" id="quickstart">
+	<div class="wrap">
+		<div class="section-label">Quick Start</div>
 		<div class="code-block"><span class="comment"># Clone the repository</span>
 git clone https://github.com/kateliev/TypeRig.git
 
@@ -505,25 +883,25 @@ git clone https://github.com/kateliev/TypeRig.git
 </section>
 
 <!-- Links -->
-<section class="links">
+<section class="section" id="links">
 	<div class="wrap">
-		<div class="arch-label">Resources</div>
-		<div class="links-grid">
+		<div class="section-label">Links</div>
+		<div class="grid-2">
 			<a class="link-card" href="https://github.com/kateliev/TypeRig" target="_blank" rel="noopener">
 				<span class="link-title">GitHub Repository</span>
 				<span class="link-desc">Source code, issues, and releases.</span>
 			</a>
-			<a class="link-card" href="https://kateliev.github.io/TypeRig/Web/GlyphViewer/" target="_blank" rel="noopener">
+			<a class="link-card" href="Web/GlyphViewer/" target="_blank" rel="noopener">
 				<span class="link-title">TR Glyph Viewer</span>
 				<span class="link-desc">Browser-based glyph editor with live Python scripting.</span>
 			</a>
 			<a class="link-card" href="https://www.typerig.com" target="_blank" rel="noopener">
 				<span class="link-title">typerig.com</span>
-				<span class="link-desc">Project website and background.</span>
+				<span class="link-desc">Project website.</span>
 			</a>
 			<a class="link-card" href="https://www.kateliev.com" target="_blank" rel="noopener">
 				<span class="link-title">kateliev.com</span>
-				<span class="link-desc">Author — Vassil Kateliev.</span>
+				<span class="link-desc">Author &mdash; Vassil Kateliev.</span>
 			</a>
 		</div>
 	</div>
@@ -532,7 +910,8 @@ git clone https://github.com/kateliev/TypeRig.git
 <!-- Footer -->
 <footer>
 	<div class="wrap">
-		<p>&copy; <a href="https://www.kateliev.com">Vassil Kateliev</a> &middot; <a href="https://www.karandash.eu">Karandash Type Foundry</a></p>
+		<p>No warranties. By using this you agree that you use it at your own risk.</p>
+		<p>&copy; <a href="https://www.kateliev.com">Vassil Kateliev</a> &middot; <a href="https://www.karandash.eu">Karandash Type Foundry</a> &middot; <a href="https://www.typerig.com">typerig.com</a></p>
 	</div>
 </footer>
 
