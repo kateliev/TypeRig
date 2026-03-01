@@ -26,7 +26,7 @@ from typerig.core.func.math import slerp_angle, interpolate_directional
 from typerig.core.objects.sdf import SignedDistanceField
 
 # - Init -------------------------------
-__version__ = '0.4.0'
+__version__ = '0.4.1'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -34,9 +34,15 @@ class Shape(Container, XMLSerializable):
 	__slots__ = ('name', 'transform', 'identifier', 'parent', 'lib', '_sdf')
 
 	XML_TAG = 'shape'
-	XML_ATTRS = ['name', 'identifier']
+	XML_ATTRS = ['name', 'identifier', 'transform']
 	XML_CHILDREN = {'contour': 'contours'}
-	XML_LIB_ATTRS = ['transform']
+	XML_LIB_ATTRS = []
+	XML_ATTR_DEFAULTS = {
+		'transform': lambda v: (
+			hasattr(v, '__len__') and len(v) == 6 and
+			[v[i] for i in range(6)] == [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+		)
+	}
 
 	def __init__(self, contours=None, **kwargs):
 		factory = kwargs.pop('default_factory', Contour)

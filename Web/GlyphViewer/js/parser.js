@@ -3,6 +3,21 @@
 // ===================================================================
 'use strict';
 
+// -- Helpers --------------------------------------------------------
+
+// Parse a transform matrix() attribute string: 'matrix(a b c d e f)'
+// Returns a 6-element array or null if not a valid matrix string
+TRV.parseTransformAttr = function(str) {
+	if (!str) return null;
+	const m = str.match(/^matrix\(([^)]+)\)$/);
+	if (!m) return null;
+	const parts = m[1].trim().split(/\s+/).map(parseFloat);
+	if (parts.length !== 6 || parts.some(isNaN)) return null;
+	return parts;
+};
+
+// ------------------------------------------------------------------
+
 TRV.parseGlyphXML = function(xmlString) {
 	const parser = new DOMParser();
 	const doc = parser.parseFromString(xmlString, 'text/xml');
@@ -39,20 +54,25 @@ TRV.parseLayer = function(el) {
 		lib: {},
 	};
 
-	// Parse lib for stems, transform etc
+	// stx/sty — compact: XML attribute; legacy fallback: lib
+	const stxAttr = el.getAttribute('stx');
+	const styAttr = el.getAttribute('sty');
+	if (stxAttr !== null) layer.stx = parseFloat(stxAttr);
+	if (styAttr !== null) layer.sty = parseFloat(styAttr);
+
+	// Parse lib for any remaining custom data; also check legacy stx/sty in lib
 	const libEl = el.querySelector(':scope > lib');
 	if (libEl) {
 		layer.lib = TRV.parsePlistDict(libEl.querySelector('dict'));
+		// Legacy: lib-stored stx/sty (only if not already set from attribute)
+		if (layer.stx === undefined && layer.lib.stx !== undefined) layer.stx = layer.lib.stx;
+		if (layer.sty === undefined && layer.lib.sty !== undefined) layer.sty = layer.lib.sty;
 	}
-
-	if (layer.lib.stx !== undefined) layer.stx = layer.lib.stx;
-	if (layer.lib.sty !== undefined) layer.sty = layer.lib.sty;
 
 	for (const shapeEl of el.querySelectorAll(':scope > shape')) {
 		layer.shapes.push(TRV.parseShape(shapeEl));
 	}
 
-	// Parse anchors if present
 	for (const anchorEl of el.querySelectorAll(':scope > anchor')) {
 		layer.anchors.push({
 			name: anchorEl.getAttribute('name') || '',
@@ -70,11 +90,22 @@ TRV.parseShape = function(el) {
 		identifier: el.getAttribute('identifier') || '',
 		contours: [],
 		lib: {},
+		transform: null,
 	};
+
+	// transform — compact: matrix() attribute; legacy fallback: lib array
+	const txAttr = el.getAttribute('transform');
+	if (txAttr !== null) {
+		shape.transform = TRV.parseTransformAttr(txAttr);
+	}
 
 	const libEl = el.querySelector(':scope > lib');
 	if (libEl) {
 		shape.lib = TRV.parsePlistDict(libEl.querySelector('dict'));
+		// Legacy: lib-stored transform array
+		if (shape.transform === null && Array.isArray(shape.lib.transform) && shape.lib.transform.length === 6) {
+			shape.transform = shape.lib.transform;
+		}
 	}
 
 	for (const contourEl of el.querySelectorAll(':scope > contour')) {
@@ -88,17 +119,30 @@ TRV.parseContour = function(el) {
 	const contour = {
 		name: el.getAttribute('name') || '',
 		identifier: el.getAttribute('identifier') || '',
-		closed: true,
+		closed: false,  // default open — only written when true
 		clockwise: null,
 		nodes: [],
 		lib: {},
 	};
 
+	// closed — compact: XML attribute; legacy fallback: lib bool
+	const closedAttr = el.getAttribute('closed');
+	if (closedAttr !== null) {
+		contour.closed = closedAttr === 'True' || closedAttr === 'true' || closedAttr === '1';
+	}
+
+	// clockwise — compact: XML attribute; legacy fallback: lib bool
+	const cwAttr = el.getAttribute('clockwise');
+	if (cwAttr !== null) {
+		contour.clockwise = cwAttr === 'True' || cwAttr === 'true' || cwAttr === '1';
+	}
+
 	const libEl = el.querySelector(':scope > lib');
 	if (libEl) {
 		const libData = TRV.parsePlistDict(libEl.querySelector('dict'));
-		if (libData.closed !== undefined) contour.closed = libData.closed;
-		if (libData.clockwise !== undefined) contour.clockwise = libData.clockwise;
+		// Legacy: lib-stored closed/clockwise (only if not already set from attribute)
+		if (closedAttr === null && libData.closed !== undefined) contour.closed = libData.closed;
+		if (cwAttr === null && libData.clockwise !== undefined) contour.clockwise = libData.clockwise;
 		contour.lib = libData;
 	}
 

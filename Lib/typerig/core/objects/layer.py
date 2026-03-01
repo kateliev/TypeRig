@@ -30,7 +30,7 @@ from typerig.core.func.math import slerp_angle, interpolate_directional
 from typerig.core.func.transform import adaptive_scale_directional, timer
 
 # - Init -------------------------------
-__version__ = '0.6.1'
+__version__ = '0.6.2'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -38,9 +38,9 @@ class Layer(Container, XMLSerializable):
 	__slots__ = ('name', 'stx', 'sty', 'transform', 'mark', 'advance_width', 'advance_height', 'identifier', 'parent', 'lib', 'anchors', '_sdf')
 
 	XML_TAG = 'layer'
-	XML_ATTRS = ['name', 'identifier', 'width', 'height']
+	XML_ATTRS = ['name', 'identifier', 'width', 'height', 'stx', 'sty']
 	XML_CHILDREN = {'shape': 'shapes', 'anchor': 'anchors'}
-	XML_LIB_ATTRS = ['stx', 'sty'] # 'transform'
+	XML_LIB_ATTRS = []
 	
 	def __init__(self, shapes=None, **kwargs):
 		factory = kwargs.pop('default_factory', Shape)

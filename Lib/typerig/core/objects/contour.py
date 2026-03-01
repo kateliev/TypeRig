@@ -32,7 +32,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.node import Node, Knot, DirectionalNode, node_types
 
 # - Init -------------------------------
-__version__ = '0.6.0'
+__version__ = '0.6.1'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -40,9 +40,10 @@ class Contour(Container, XMLSerializable):
 	__slots__ = ('name', 'closed', 'clockwise', 'transform', 'parent', 'lib')
 
 	XML_TAG = 'contour'
-	XML_ATTRS = ['name', 'identifier']
+	XML_ATTRS = ['name', 'identifier', 'closed', 'clockwise']
 	XML_CHILDREN = {'node': 'nodes'}
-	XML_LIB_ATTRS = ['closed', 'clockwise'] # 'transform',
+	XML_LIB_ATTRS = []
+	XML_ATTR_DEFAULTS = {'closed': False}
 
 	def __init__(self, nodes=None, **kwargs):
 		factory = kwargs.pop('default_factory', Node)
