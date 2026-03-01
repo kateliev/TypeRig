@@ -8,6 +8,22 @@ TRV.esc = function(s) {
 	return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 };
 
+// -- Compact float: drop .0 for integers, strip trailing zeros ------
+TRV.fmtFloat = function(v) {
+	if (Number.isInteger(v)) return String(v);
+	// Up to 6 decimal places, strip trailing zeros
+	return parseFloat(v.toFixed(6)).toString();
+};
+
+// -- Format a 6-element transform array as matrix() string ----------
+// Returns null when the transform is identity (skip writing)
+TRV.fmtTransform = function(t) {
+	if (!Array.isArray(t) || t.length !== 6) return null;
+	// Identity check: [1, 0, 0, 1, 0, 0]
+	if (t[0] === 1 && t[1] === 0 && t[2] === 0 && t[3] === 1 && t[4] === 0 && t[5] === 0) return null;
+	return 'matrix(' + t.map(TRV.fmtFloat).join(' ') + ')';
+};
+
 // -- Glyph → XML ----------------------------------------------------
 TRV.glyphToXml = function(glyph) {
 	let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
@@ -29,7 +45,11 @@ TRV.glyphToXml = function(glyph) {
 TRV.layerToXml = function(layer, indent) {
 	let xml = `${indent}<layer name="${TRV.esc(layer.name)}"`;
 	if (layer.identifier) xml += ` identifier="${TRV.esc(layer.identifier)}"`;
-	xml += ` width="${layer.width}" height="${layer.height}">\n`;
+	xml += ` width="${layer.width}" height="${layer.height}"`;
+	// stx/sty as direct attributes, only when present
+	if (layer.stx !== undefined && layer.stx !== null) xml += ` stx="${TRV.fmtFloat(layer.stx)}"`;
+	if (layer.sty !== undefined && layer.sty !== null) xml += ` sty="${TRV.fmtFloat(layer.sty)}"`;
+	xml += '>\n';
 
 	for (const shape of layer.shapes) {
 		xml += TRV.shapeToXml(shape, indent + '  ');
@@ -41,9 +61,11 @@ TRV.layerToXml = function(layer, indent) {
 		}
 	}
 
-	const libData = { ...(layer.lib || {}) };
-	if (layer.stx !== undefined && layer.stx !== null) libData.stx = layer.stx;
-	if (layer.sty !== undefined && layer.sty !== null) libData.sty = layer.sty;
+	// Only write lib for truly custom data — stx/sty no longer go here
+	const libData = {};
+	for (const [k, v] of Object.entries(layer.lib || {})) {
+		if (k !== 'stx' && k !== 'sty') libData[k] = v;
+	}
 	if (Object.keys(libData).length > 0) {
 		xml += TRV.plistLibToXml(libData, indent + '  ');
 	}
@@ -56,14 +78,22 @@ TRV.shapeToXml = function(shape, indent) {
 	let xml = `${indent}<shape`;
 	if (shape.name) xml += ` name="${TRV.esc(shape.name)}"`;
 	if (shape.identifier) xml += ` identifier="${TRV.esc(shape.identifier)}"`;
+	// transform as matrix() attribute, skipped when identity or absent
+	const tx = TRV.fmtTransform(shape.transform);
+	if (tx) xml += ` transform="${TRV.esc(tx)}"`;
 	xml += '>\n';
 
 	for (const contour of shape.contours) {
 		xml += TRV.contourToXml(contour, indent + '  ');
 	}
 
-	if (shape.lib && Object.keys(shape.lib).length > 0) {
-		xml += TRV.plistLibToXml(shape.lib, indent + '  ');
+	// Only write lib for truly custom data — transform no longer goes here
+	const libData = {};
+	for (const [k, v] of Object.entries(shape.lib || {})) {
+		if (k !== 'transform') libData[k] = v;
+	}
+	if (Object.keys(libData).length > 0) {
+		xml += TRV.plistLibToXml(libData, indent + '  ');
 	}
 
 	xml += `${indent}</shape>\n`;
@@ -74,6 +104,12 @@ TRV.contourToXml = function(contour, indent) {
 	let xml = `${indent}<contour`;
 	if (contour.name) xml += ` name="${TRV.esc(contour.name)}"`;
 	if (contour.identifier) xml += ` identifier="${TRV.esc(contour.identifier)}"`;
+	// closed only written when true (false is default, no need to write it)
+	if (contour.closed) xml += ` closed="True"`;
+	// clockwise only written when not null
+	if (contour.clockwise !== null && contour.clockwise !== undefined) {
+		xml += ` clockwise="${contour.clockwise ? 'True' : 'False'}"`;
+	}
 	xml += '>\n';
 
 	for (const node of contour.nodes) {
@@ -82,9 +118,11 @@ TRV.contourToXml = function(contour, indent) {
 		xml += '/>\n';
 	}
 
-	const libData = { ...(contour.lib || {}) };
-	if (contour.closed !== undefined) libData.closed = contour.closed;
-	if (contour.clockwise !== null && contour.clockwise !== undefined) libData.clockwise = contour.clockwise;
+	// Only write lib for truly custom data — closed/clockwise no longer go here
+	const libData = {};
+	for (const [k, v] of Object.entries(contour.lib || {})) {
+		if (k !== 'closed' && k !== 'clockwise') libData[k] = v;
+	}
 	if (Object.keys(libData).length > 0) {
 		xml += TRV.plistLibToXml(libData, indent + '  ');
 	}
@@ -107,7 +145,7 @@ TRV.plistValueToXml = function(val) {
 	if (val === true) return '<true/>';
 	if (val === false) return '<false/>';
 	if (typeof val === 'number') {
-		return Number.isInteger(val) ? `<integer>${val}</integer>` : `<real>${val}</real>`;
+		return Number.isInteger(val) ? `<integer>${val}</integer>` : `<real>${TRV.fmtFloat(val)}</real>`;
 	}
 	if (typeof val === 'string') return `<string>${TRV.esc(val)}</string>`;
 	if (Array.isArray(val)) {

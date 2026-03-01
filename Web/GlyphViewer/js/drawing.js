@@ -129,7 +129,7 @@ TRV.drawContours = function(layer) {
 		for (const shape of layer.shapes) {
 			for (const contour of shape.contours) {
 				if (contour.nodes.length === 0) continue;
-				TRV.buildContourPath(contour);
+				TRV.buildContourPath(contour, shape.transform);
 			}
 		}
 		ctx.fillStyle = t.fill;
@@ -143,7 +143,7 @@ TRV.drawContours = function(layer) {
 			for (const contour of shape.contours) {
 				if (contour.nodes.length === 0) continue;
 				ctx.beginPath();
-				TRV.buildContourPath(contour);
+				TRV.buildContourPath(contour, shape.transform);
 				ctx.strokeStyle = t.strokePlain;
 				ctx.lineWidth = 1.5;
 				ctx.stroke();
@@ -152,7 +152,8 @@ TRV.drawContours = function(layer) {
 	}
 };
 
-TRV.buildContourPath = function(contour) {
+// tx: 6-element transform array [xx, xy, yx, yy, dx, dy] or null/undefined
+TRV.buildContourPath = function(contour, tx) {
 	const ctx = TRV.dom.ctx;
 	const nodes = contour.nodes;
 	if (nodes.length === 0) return;
@@ -166,7 +167,7 @@ TRV.buildContourPath = function(contour) {
 		if (nodes[j].type === 'on') { firstOn = j; break; }
 	}
 
-	const sp = TRV.glyphToScreen(nodes[firstOn].x, nodes[firstOn].y);
+	const sp = TRV.txGlyphToScreen(tx, nodes[firstOn].x, nodes[firstOn].y);
 	ctx.moveTo(sp.x, sp.y);
 
 	let i = (firstOn + 1) % n;
@@ -176,7 +177,7 @@ TRV.buildContourPath = function(contour) {
 		const node = nodes[i];
 
 		if (node.type === 'on') {
-			const p = TRV.glyphToScreen(node.x, node.y);
+			const p = TRV.txGlyphToScreen(tx, node.x, node.y);
 			ctx.lineTo(p.x, p.y);
 
 		} else if (node.type === 'curve') {
@@ -184,9 +185,9 @@ TRV.buildContourPath = function(contour) {
 			const bcp1 = node;
 			const bcp2 = nodes[(i + 1) % n];
 			const onCurve = nodes[(i + 2) % n];
-			const p1 = TRV.glyphToScreen(bcp1.x, bcp1.y);
-			const p2 = TRV.glyphToScreen(bcp2.x, bcp2.y);
-			const p3 = TRV.glyphToScreen(onCurve.x, onCurve.y);
+			const p1 = TRV.txGlyphToScreen(tx, bcp1.x, bcp1.y);
+			const p2 = TRV.txGlyphToScreen(tx, bcp2.x, bcp2.y);
+			const p3 = TRV.txGlyphToScreen(tx, onCurve.x, onCurve.y);
 			ctx.bezierCurveTo(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
 			i = (i + 2) % n;
 			count += 2;
@@ -195,8 +196,8 @@ TRV.buildContourPath = function(contour) {
 			// Quadratic: single off-curve then on-curve
 			const offNode = node;
 			const onCurve = nodes[(i + 1) % n];
-			const p1 = TRV.glyphToScreen(offNode.x, offNode.y);
-			const p2 = TRV.glyphToScreen(onCurve.x, onCurve.y);
+			const p1 = TRV.txGlyphToScreen(tx, offNode.x, offNode.y);
+			const p2 = TRV.txGlyphToScreen(tx, onCurve.x, onCurve.y);
 			ctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y);
 			i = (i + 1) % n;
 			count += 1;
@@ -220,6 +221,7 @@ TRV.drawNodes = function(layer) {
 	// Quadratic off-curves connect to both adjacent on-curve nodes
 	let ci = 0;
 	for (const shape of layer.shapes) {
+		const tx = shape.transform;
 		for (const contour of shape.contours) {
 			const nodes = contour.nodes;
 			const n = nodes.length;
@@ -228,14 +230,14 @@ TRV.drawNodes = function(layer) {
 				const node = nodes[ni];
 
 				if (node.type === 'curve') {
-					const sp = TRV.glyphToScreen(node.x, node.y);
+					const sp = TRV.txGlyphToScreen(tx, node.x, node.y);
 					const prevIdx = (ni - 1 + n) % n;
 					const nextIdx = (ni + 1) % n;
 					const prev = nodes[prevIdx];
 					const next = nodes[nextIdx];
 
 					if (prev.type === 'on') {
-						const pp = TRV.glyphToScreen(prev.x, prev.y);
+						const pp = TRV.txGlyphToScreen(tx, prev.x, prev.y);
 						ctx.strokeStyle = tn.handleLine;
 						ctx.lineWidth = 1;
 						ctx.beginPath();
@@ -245,7 +247,7 @@ TRV.drawNodes = function(layer) {
 					}
 
 					if (next.type === 'on') {
-						const np = TRV.glyphToScreen(next.x, next.y);
+						const np = TRV.txGlyphToScreen(tx, next.x, next.y);
 						ctx.strokeStyle = tn.handleLine;
 						ctx.lineWidth = 1;
 						ctx.beginPath();
@@ -255,12 +257,12 @@ TRV.drawNodes = function(layer) {
 					}
 
 				} else if (node.type === 'off') {
-					const sp = TRV.glyphToScreen(node.x, node.y);
+					const sp = TRV.txGlyphToScreen(tx, node.x, node.y);
 					const prevIdx = (ni - 1 + n) % n;
 					const nextIdx = (ni + 1) % n;
 
 					if (nodes[prevIdx].type === 'on') {
-						const pp = TRV.glyphToScreen(nodes[prevIdx].x, nodes[prevIdx].y);
+						const pp = TRV.txGlyphToScreen(tx, nodes[prevIdx].x, nodes[prevIdx].y);
 						ctx.strokeStyle = tn.handleLine;
 						ctx.lineWidth = 1;
 						ctx.beginPath();
@@ -270,7 +272,7 @@ TRV.drawNodes = function(layer) {
 					}
 
 					if (nodes[nextIdx].type === 'on') {
-						const np = TRV.glyphToScreen(nodes[nextIdx].x, nodes[nextIdx].y);
+						const np = TRV.txGlyphToScreen(tx, nodes[nextIdx].x, nodes[nextIdx].y);
 						ctx.strokeStyle = tn.handleLine;
 						ctx.lineWidth = 1;
 						ctx.beginPath();
@@ -287,6 +289,7 @@ TRV.drawNodes = function(layer) {
 	// Second pass: draw node markers
 	ci = 0;
 	for (const shape of layer.shapes) {
+		const tx = shape.transform;
 		for (const contour of shape.contours) {
 			const nodes = contour.nodes;
 			const n = nodes.length;
@@ -310,7 +313,7 @@ TRV.drawNodes = function(layer) {
 				}
 
 				const id = `c${ci}_n${ni}`;
-				const sp = TRV.glyphToScreen(node.x, node.y);
+				const sp = TRV.txGlyphToScreen(tx, node.x, node.y);
 				const isSelected = sel.has(id);
 				const r = isSelected ? 5 : (node.type === 'on' ? 4 : 3);
 
@@ -345,6 +348,7 @@ TRV.drawNodes = function(layer) {
 	// Third pass: contour start point triangles
 	ci = 0;
 	for (const shape of layer.shapes) {
+		const tx = shape.transform;
 		for (const contour of shape.contours) {
 			const nodes = contour.nodes;
 			const n = nodes.length;
@@ -358,8 +362,8 @@ TRV.drawNodes = function(layer) {
 
 			const startNode = nodes[firstOn];
 			const nextNode = nodes[(firstOn + 1) % n];
-			const sp = TRV.glyphToScreen(startNode.x, startNode.y);
-			const np = TRV.glyphToScreen(nextNode.x, nextNode.y);
+			const sp = TRV.txGlyphToScreen(tx, startNode.x, startNode.y);
+			const np = TRV.txGlyphToScreen(tx, nextNode.x, nextNode.y);
 
 			// Direction angle from start towards next node
 			const dx = np.x - sp.x;
@@ -381,9 +385,9 @@ TRV.drawNodes = function(layer) {
 			ctx.closePath();
 
 			ctx.fillStyle = isStartSelected ? tn.selected : tn.startPoint;
-			ctx.fill();
-			ctx.strokeStyle = tn.outline;
+			ctx.strokeStyle = isStartSelected ? tn.selected : tn.outline;
 			ctx.lineWidth = 1;
+			ctx.fill();
 			ctx.stroke();
 
 			ctx.restore();
@@ -400,72 +404,48 @@ TRV.drawAnchors = function(layer) {
 
 	for (const anchor of layer.anchors) {
 		const sp = TRV.glyphToScreen(anchor.x, anchor.y);
-		const size = 6;
 
-		ctx.fillStyle = ta.fill;
-		ctx.strokeStyle = ta.outline;
+		// Crosshair
+		const arm = 6;
+		ctx.strokeStyle = ta.stroke;
 		ctx.lineWidth = 1;
 		ctx.beginPath();
-		ctx.moveTo(sp.x, sp.y - size);
-		ctx.lineTo(sp.x + size, sp.y);
-		ctx.lineTo(sp.x, sp.y + size);
-		ctx.lineTo(sp.x - size, sp.y);
-		ctx.closePath();
-		ctx.fill();
+		ctx.moveTo(sp.x - arm, sp.y);
+		ctx.lineTo(sp.x + arm, sp.y);
+		ctx.moveTo(sp.x, sp.y - arm);
+		ctx.lineTo(sp.x, sp.y + arm);
 		ctx.stroke();
 
-		ctx.strokeStyle = ta.crosshair;
-		ctx.setLineDash([3, 3]);
+		// Diamond
 		ctx.beginPath();
-		ctx.moveTo(sp.x - 12, sp.y);
-		ctx.lineTo(sp.x + 12, sp.y);
-		ctx.moveTo(sp.x, sp.y - 12);
-		ctx.lineTo(sp.x, sp.y + 12);
+		ctx.moveTo(sp.x, sp.y - arm);
+		ctx.lineTo(sp.x + arm, sp.y);
+		ctx.lineTo(sp.x, sp.y + arm);
+		ctx.lineTo(sp.x - arm, sp.y);
+		ctx.closePath();
+		ctx.fillStyle = ta.fill;
+		ctx.fill();
+		ctx.strokeStyle = ta.stroke;
 		ctx.stroke();
-		ctx.setLineDash([]);
 
-		ctx.font = '10px "JetBrains Mono", monospace';
-		ctx.fillStyle = ta.label;
-		ctx.textAlign = 'left';
-		ctx.fillText(anchor.name, sp.x + size + 4, sp.y + 3);
+		// Label
+		if (anchor.name) {
+			ctx.font = '10px "JetBrains Mono", monospace';
+			ctx.fillStyle = ta.label;
+			ctx.textAlign = 'left';
+			ctx.fillText(anchor.name, sp.x + arm + 3, sp.y - 3);
+		}
 	}
 };
 
-// -- Selection overlay (rect or lasso) ------------------------------
+// -- Selection overlay ----------------------------------------------
 TRV.drawSelectionOverlay = function() {
 	const ctx = TRV.dom.ctx;
-	const state = TRV.state;
 	const ts = TRV.theme.selection;
+	const sel = TRV.state;
 
-	ctx.save();
-
-	if (state.selectMode === 'rect' && state.selectStartScreen && state.selectCurrentScreen) {
-		const x1 = state.selectStartScreen.x;
-		const y1 = state.selectStartScreen.y;
-		const x2 = state.selectCurrentScreen.x;
-		const y2 = state.selectCurrentScreen.y;
-
-		// Semi-transparent fill
-		ctx.fillStyle = ts.fill;
-		ctx.fillRect(
-			Math.min(x1, x2), Math.min(y1, y2),
-			Math.abs(x2 - x1), Math.abs(y2 - y1)
-		);
-
-		// Dashed border
-		ctx.strokeStyle = ts.stroke;
-		ctx.lineWidth = 1;
-		ctx.setLineDash([4, 3]);
-		ctx.strokeRect(
-			Math.min(x1, x2), Math.min(y1, y2),
-			Math.abs(x2 - x1), Math.abs(y2 - y1)
-		);
-		ctx.setLineDash([]);
-
-	} else if (state.selectMode === 'lasso' && state.selectLassoPoints.length > 1) {
-		const pts = state.selectLassoPoints;
-
-		// Semi-transparent fill
+	if (sel.selectionMode === 'lasso' && sel.lassoPoints && sel.lassoPoints.length > 2) {
+		const pts = sel.lassoPoints;
 		ctx.fillStyle = ts.fill;
 		ctx.beginPath();
 		ctx.moveTo(pts[0].x, pts[0].y);
@@ -503,7 +483,7 @@ TRV.drawMaskContours = function(maskLayer) {
 			if (contour.nodes.length === 0) continue;
 
 			ctx.beginPath();
-			TRV.buildContourPath(contour);
+			TRV.buildContourPath(contour, shape.transform);
 
 			ctx.strokeStyle = tm.stroke;
 			ctx.lineWidth = tm.lineWidth;

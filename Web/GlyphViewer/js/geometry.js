@@ -25,6 +25,8 @@ TRV.getAllNodes = function(layer) {
 					contourIdx: ci,
 					nodeIdx: ni,
 					contour: contour,
+					// Carry the shape transform so callers can apply it
+					shapeTx: shape.transform || null,
 				});
 				ni++;
 			}
@@ -76,6 +78,24 @@ TRV.screenToGlyph = function(sx, sy) {
 	};
 };
 
+// Apply a shape transform matrix then convert to screen coords.
+// tx: 6-element array [xx, xy, yx, yy, dx, dy] matching Python's Transform.
+// When tx is null/undefined the point passes through unchanged.
+// Python affine convention: x' = xx*x + yx*y + dx
+//                           y' = xy*x + yy*y + dy
+TRV.txGlyphToScreen = function(tx, x, y) {
+	if (tx && tx.length === 6) {
+		// Python Transform convention: [xx, xy, yx, yy, dx, dy]
+		// x' = xx*x + yx*y + dx
+		// y' = xy*x + yy*y + dy
+		const nx = tx[0] * x + tx[2] * y + tx[4];
+		const ny = tx[1] * x + tx[3] * y + tx[5];
+		x = nx;
+		y = ny;
+	}
+	return TRV.glyphToScreen(x, y);
+};
+
 // -- Hit test: single node ------------------------------------------
 TRV.hitTestNode = function(sx, sy, radius) {
 	const layer = TRV.getActiveLayer();
@@ -88,7 +108,7 @@ TRV.hitTestNode = function(sx, sy, radius) {
 	let closestDist = Infinity;
 
 	for (const node of allNodes) {
-		const sp = TRV.glyphToScreen(node.x, node.y);
+		const sp = TRV.txGlyphToScreen(node.shapeTx, node.x, node.y);
 		const dx = sp.x - sx;
 		const dy = sp.y - sy;
 		const d2 = dx * dx + dy * dy;
@@ -115,7 +135,7 @@ TRV.hitTestRect = function(x1, y1, x2, y2) {
 	const ids = [];
 
 	for (const node of allNodes) {
-		const sp = TRV.glyphToScreen(node.x, node.y);
+		const sp = TRV.txGlyphToScreen(node.shapeTx, node.x, node.y);
 		if (sp.x >= minX && sp.x <= maxX && sp.y >= minY && sp.y <= maxY) {
 			ids.push(node.id);
 		}
@@ -135,7 +155,7 @@ TRV.hitTestLasso = function(points) {
 	const ids = [];
 
 	for (const node of allNodes) {
-		const sp = TRV.glyphToScreen(node.x, node.y);
+		const sp = TRV.txGlyphToScreen(node.shapeTx, node.x, node.y);
 		if (TRV.pointInPolygon(sp.x, sp.y, points)) {
 			ids.push(node.id);
 		}
@@ -210,7 +230,7 @@ TRV.hitTestContour = function(sx, sy, tolerance) {
 			if (contour.nodes.length < 2) { ci++; continue; }
 
 			ctx.beginPath();
-			TRV.buildContourPath(contour);
+			TRV.buildContourPath(contour, shape.transform);
 
 			// Check filled area first (closed contours)
 			if (ctx.isPointInPath(sx, sy, 'evenodd')) {
@@ -243,7 +263,7 @@ TRV.hitTestContour = function(sx, sy, tolerance) {
 			if (contour.nodes.length < 2) { ci++; continue; }
 
 			for (const node of contour.nodes) {
-				const sp = TRV.glyphToScreen(node.x, node.y);
+				const sp = TRV.txGlyphToScreen(shape.transform, node.x, node.y);
 				const dx = sp.x - sx;
 				const dy = sp.y - sy;
 				const d2 = dx * dx + dy * dy;
