@@ -121,6 +121,236 @@ TRV.walkContour = function(direction) {
 	TRV.selectNode(contourNodes[newIdx].id, false);
 };
 
+// Get contour index (ci) from a node ID like 'c2_n5'
+TRV.getContourIndexForNode = function(nodeId) {
+	var m = nodeId.match(/^c(\d+)/);
+	return m ? parseInt(m[1]) : -1;
+};
+
+// -- Insert node on contour ------------------------------------------
+// Segment iteration: walks contour nodes and yields segments.
+// Each segment is { type, startIdx, endIdx, nodes[] } where nodes
+// are the control points (2 for line, 4 for cubic).
+TRV.getContourSegments = function(contour) {
+	var nodes = contour.nodes;
+	var n = nodes.length;
+	var segments = [];
+	var i = 0;
+
+	while (i < n) {
+		if (nodes[i].type !== 'on') { i++; continue; }
+
+		var next1 = (i + 1) % n;
+		if (nodes[next1].type === 'on') {
+			// Line segment: on → on
+			segments.push({
+				type: 'line',
+				startIdx: i,
+				endIdx: next1,
+				pts: [
+					{ x: nodes[i].x, y: nodes[i].y },
+					{ x: nodes[next1].x, y: nodes[next1].y }
+				]
+			});
+			i++;
+			continue;
+		}
+
+		// Cubic segment: on → off → off → on
+		var next2 = (i + 2) % n;
+		var next3 = (i + 3) % n;
+		if (nodes[next1].type === 'curve' && nodes[next2].type === 'curve' && nodes[next3].type === 'on') {
+			segments.push({
+				type: 'cubic',
+				startIdx: i,
+				endIdx: next3,
+				offIdx1: next1,
+				offIdx2: next2,
+				pts: [
+					{ x: nodes[i].x, y: nodes[i].y },
+					{ x: nodes[next1].x, y: nodes[next1].y },
+					{ x: nodes[next2].x, y: nodes[next2].y },
+					{ x: nodes[next3].x, y: nodes[next3].y }
+				]
+			});
+			i += 3;
+			continue;
+		}
+
+		i++;
+	}
+	return segments;
+};
+
+// Evaluate a cubic bezier at parameter t (de Casteljau)
+TRV._evalCubic = function(pts, t) {
+	var u = 1 - t;
+	var uu = u * u, tt = t * t;
+	var uuu = uu * u, ttt = tt * t;
+	return {
+		x: uuu * pts[0].x + 3 * uu * t * pts[1].x + 3 * u * tt * pts[2].x + ttt * pts[3].x,
+		y: uuu * pts[0].y + 3 * uu * t * pts[1].y + 3 * u * tt * pts[2].y + ttt * pts[3].y
+	};
+};
+
+// Evaluate a line at parameter t
+TRV._evalLine = function(pts, t) {
+	return {
+		x: pts[0].x + t * (pts[1].x - pts[0].x),
+		y: pts[0].y + t * (pts[1].y - pts[0].y)
+	};
+};
+
+// Find nearest point on a segment, returns { t, dist, x, y }
+TRV._nearestOnSegment = function(seg, gx, gy) {
+	var evalFn = seg.type === 'cubic' ? TRV._evalCubic : TRV._evalLine;
+	var pts = seg.pts;
+	var bestT = 0, bestDist = Infinity;
+
+	// Coarse search: sample at 50 points
+	var steps = 50;
+	for (var i = 0; i <= steps; i++) {
+		var t = i / steps;
+		var p = evalFn(pts, t);
+		var dx = p.x - gx, dy = p.y - gy;
+		var d = dx * dx + dy * dy;
+		if (d < bestDist) { bestDist = d; bestT = t; }
+	}
+
+	// Refine with bisection
+	var lo = Math.max(0, bestT - 1 / steps);
+	var hi = Math.min(1, bestT + 1 / steps);
+	for (var iter = 0; iter < 20; iter++) {
+		var mid1 = lo + (hi - lo) / 3;
+		var mid2 = hi - (hi - lo) / 3;
+		var p1 = evalFn(pts, mid1);
+		var p2 = evalFn(pts, mid2);
+		var d1 = (p1.x - gx) * (p1.x - gx) + (p1.y - gy) * (p1.y - gy);
+		var d2 = (p2.x - gx) * (p2.x - gx) + (p2.y - gy) * (p2.y - gy);
+		if (d1 < d2) hi = mid2; else lo = mid1;
+	}
+
+	var t = (lo + hi) / 2;
+	var pt = evalFn(pts, t);
+	var dx = pt.x - gx, dy = pt.y - gy;
+	return { t: t, dist: Math.sqrt(dx * dx + dy * dy), x: pt.x, y: pt.y };
+};
+
+// Hit-test all segments in active layer, return best match or null.
+// Returns { ci, segIdx, seg, t, x, y, dist }
+TRV.hitTestSegment = function(sx, sy) {
+	var layer = TRV.getActiveLayer();
+	if (!layer) return null;
+
+	var gp = TRV.screenToGlyph(sx, sy);
+	var hitRadius = 8 / TRV.state.zoom; // 8 screen pixels in glyph space
+	var best = null;
+	var ci = 0;
+
+	for (var si = 0; si < layer.shapes.length; si++) {
+		var shape = layer.shapes[si];
+		for (var ki = 0; ki < shape.contours.length; ki++) {
+			var segs = TRV.getContourSegments(shape.contours[ki]);
+			for (var gi = 0; gi < segs.length; gi++) {
+				var hit = TRV._nearestOnSegment(segs[gi], gp.x, gp.y);
+				if (hit.dist < hitRadius && (!best || hit.dist < best.dist)) {
+					best = {
+						ci: ci, segIdx: gi, seg: segs[gi],
+						t: hit.t, x: hit.x, y: hit.y, dist: hit.dist,
+						contour: shape.contours[ki]
+					};
+				}
+			}
+			ci++;
+		}
+	}
+	return best;
+};
+
+// De Casteljau split: split cubic at t, returns { left, right }
+// Each is an array of 4 points: [on, off, off, on]
+TRV._splitCubic = function(pts, t) {
+	var p0 = pts[0], p1 = pts[1], p2 = pts[2], p3 = pts[3];
+	var u = 1 - t;
+
+	// Level 1
+	var a = { x: u * p0.x + t * p1.x, y: u * p0.y + t * p1.y };
+	var b = { x: u * p1.x + t * p2.x, y: u * p1.y + t * p2.y };
+	var c = { x: u * p2.x + t * p3.x, y: u * p2.y + t * p3.y };
+
+	// Level 2
+	var d = { x: u * a.x + t * b.x, y: u * a.y + t * b.y };
+	var e = { x: u * b.x + t * c.x, y: u * b.y + t * c.y };
+
+	// Level 3 — point on curve
+	var m = { x: u * d.x + t * e.x, y: u * d.y + t * e.y };
+
+	return {
+		left:  [p0, a, d, m],
+		right: [m, e, c, p3]
+	};
+};
+
+// Insert a node on the segment identified by hitTestSegment result.
+// Modifies the contour's node array in place.
+TRV.insertNodeOnSegment = function(hit) {
+	if (!hit || !hit.contour) return;
+
+	var nodes = hit.contour.nodes;
+	var seg = hit.seg;
+	var round = function(v) { return Math.round(v * 10) / 10; };
+
+	if (seg.type === 'line') {
+		// Insert new on-curve at the interpolated position
+		var newNode = {
+			type: 'on', smooth: false,
+			x: round(hit.x), y: round(hit.y)
+		};
+		// Insert after startIdx
+		var insertAt = seg.startIdx + 1;
+		// Handle wraparound: if endIdx < startIdx, insert at end
+		if (seg.endIdx < seg.startIdx) insertAt = nodes.length;
+		nodes.splice(insertAt, 0, newNode);
+	} else if (seg.type === 'cubic') {
+		var split = TRV._splitCubic(seg.pts, hit.t);
+		var L = split.left;   // [p0, a, d, m]
+		var R = split.right;  // [m, e, c, p3]
+
+		// New nodes to replace the segment interior:
+		// Original: [on(start), off1, off2, on(end)]
+		// New:      [on(start), offL1, offL2, on(new), offR1, offR2, on(end)]
+		// We replace off1, off2 with offL1, offL2, on(new), offR1, offR2
+
+		var newOff1  = { type: 'curve', x: round(L[1].x), y: round(L[1].y) };
+		var newOff2  = { type: 'curve', x: round(L[2].x), y: round(L[2].y) };
+		var newOn    = { type: 'on', smooth: true, x: round(L[3].x), y: round(L[3].y) };
+		var newOff3  = { type: 'curve', x: round(R[1].x), y: round(R[1].y) };
+		var newOff4  = { type: 'curve', x: round(R[2].x), y: round(R[2].y) };
+
+		// Find the actual positions of offIdx1 and offIdx2
+		// They may wrap around, so we need to handle that carefully
+		var idx1 = seg.offIdx1;
+		var idx2 = seg.offIdx2;
+
+		// Replace the two off-curves with the 5 new nodes
+		if (idx2 === idx1 + 1) {
+			// Normal case: consecutive indices
+			nodes.splice(idx1, 2, newOff1, newOff2, newOn, newOff3, newOff4);
+		} else {
+			// Wraparound case: off1 is near end, off2 wraps to start
+			// Remove from idx1 to end, then from 0 to idx2+1
+			// Insert the new nodes at idx1
+			nodes.splice(idx1, nodes.length - idx1, newOff1, newOff2, newOn, newOff3, newOff4);
+			nodes.splice(0, idx2 + 1);
+		}
+	}
+
+	// Rebuild IDs and redraw
+	TRV.state.selectedNodeIds.clear();
+	TRV.draw();
+	TRV.updateStatusSelected();
+};
+
 // -- Retract handles -------------------------------------------------
 // If on-curve selected: retract both adjacent handles to on-curve pos.
 // If handle selected: retract only that handle.

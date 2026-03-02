@@ -344,13 +344,49 @@ dom.canvasWrap.addEventListener('dblclick', function(e) {
 	const absSy = e.clientY - rect.top;
 	const { sx, sy } = interactionCoords(absSx, absSy);
 
-	let ci = -1;
+	// Double-click on a node: select whole contour (existing behavior)
+	var nodeHit = null;
+	withActiveOffset(function() {
+		nodeHit = TRV.hitTestNode(sx, sy);
+	});
+
+	if (nodeHit) {
+		var ci = -1;
+		withActiveOffset(function() {
+			ci = TRV.hitTestContour(sx, sy);
+		});
+		if (ci >= 0) {
+			var ids = TRV.getContourNodeIds(ci);
+			TRV.selectNodes(ids, e.shiftKey);
+		}
+		return;
+	}
+
+	// Double-click on a segment: select that segment's nodes
+	var segHit = null;
+	withActiveOffset(function() {
+		segHit = TRV.hitTestSegment(sx, sy);
+	});
+
+	if (segHit) {
+		var seg = segHit.seg;
+		var ci = segHit.ci;
+		var ids = ['c' + ci + '_n' + seg.startIdx, 'c' + ci + '_n' + seg.endIdx];
+		if (seg.type === 'cubic') {
+			ids.push('c' + ci + '_n' + seg.offIdx1);
+			ids.push('c' + ci + '_n' + seg.offIdx2);
+		}
+		TRV.selectNodes(ids, e.shiftKey);
+		return;
+	}
+
+	// Fallback: try contour hit
+	var ci = -1;
 	withActiveOffset(function() {
 		ci = TRV.hitTestContour(sx, sy);
 	});
-
 	if (ci >= 0) {
-		const ids = TRV.getContourNodeIds(ci);
+		var ids = TRV.getContourNodeIds(ci);
 		TRV.selectNodes(ids, e.shiftKey);
 	}
 });
@@ -678,32 +714,59 @@ function hideContextMenu() {
 	if (ctxMenu) ctxMenu.classList.remove('visible');
 }
 
+// Stored segment hit for "Insert Node" action
+var pendingSegmentHit = null;
+var pendingContourIdx = -1;
+
 dom.canvasWrap.addEventListener('contextmenu', function(e) {
 	e.preventDefault();
+	pendingSegmentHit = null;
+	pendingContourIdx = -1;
 
 	var rect = dom.canvas.getBoundingClientRect();
 	var absSx = e.clientX - rect.left;
 	var absSy = e.clientY - rect.top;
 	var coords = interactionCoords(absSx, absSy);
 
-	// Hit test: did we right-click on a node?
-	var hit = null;
+	// Menu items
+	var toggleItem = ctxMenu.querySelector('[data-action="toggleSmooth"]');
+	var retractItem = ctxMenu.querySelector('[data-action="retractHandles"]');
+	var insertItem = ctxMenu.querySelector('[data-action="insertNode"]');
+	var selectContourItem = ctxMenu.querySelector('[data-action="selectContour"]');
+
+	// Hit test: node first, then segment
+	var nodeHit = null;
+	var segHit = null;
 	withActiveOffset(function() {
-		hit = TRV.hitTestNode(coords.sx, coords.sy);
+		nodeHit = TRV.hitTestNode(coords.sx, coords.sy);
+		if (!nodeHit) {
+			segHit = TRV.hitTestSegment(coords.sx, coords.sy);
+		}
 	});
 
-	if (hit) {
-		// Select the node if not already selected
-		if (!state.selectedNodeIds.has(hit.id)) {
-			TRV.selectNode(hit.id, false);
+	if (nodeHit) {
+		// -- Right-clicked on a node --
+		if (!state.selectedNodeIds.has(nodeHit.id)) {
+			TRV.selectNode(nodeHit.id, false);
 		}
 
-		// Update menu items based on selection
-		var toggleItem = ctxMenu.querySelector('[data-action="toggleSmooth"]');
+		// Find which contour this node belongs to
+		pendingContourIdx = TRV.getContourIndexForNode(nodeHit.id);
+
+		// Show node items, hide segment items
+		if (toggleItem) toggleItem.style.display = '';
+		if (retractItem) retractItem.style.display = '';
+		if (insertItem) insertItem.style.display = 'none';
+		if (selectContourItem) selectContourItem.style.display = '';
+		// Show/hide separators
+		var seps = ctxMenu.querySelectorAll('.ctx-separator');
+		if (seps[0]) seps[0].style.display = 'none';
+		if (seps[1]) seps[1].style.display = '';
+		if (seps[2]) seps[2].style.display = '';
+
+		// Update smooth/sharp label
 		if (toggleItem) {
-			// Check if any selected on-curve is smooth
-			var hasSmooth = false;
-			var hasSharp = false;
+			var hasSmooth = false, hasSharp = false;
 			for (var id of state.selectedNodeIds) {
 				var ref = TRV.findNodeById(id);
 				if (ref && ref.node.type === 'on') {
@@ -711,7 +774,6 @@ dom.canvasWrap.addEventListener('contextmenu', function(e) {
 					else hasSharp = true;
 				}
 			}
-			// Label reflects what the action will do
 			if (hasSmooth && !hasSharp) {
 				toggleItem.textContent = 'Convert to Sharp';
 			} else if (hasSharp && !hasSmooth) {
@@ -720,25 +782,41 @@ dom.canvasWrap.addEventListener('contextmenu', function(e) {
 				toggleItem.textContent = 'Toggle Smooth/Sharp';
 			}
 		}
+	} else if (segHit) {
+		// -- Right-clicked on a segment --
+		pendingSegmentHit = segHit;
 
-		// Position and show menu
-		ctxMenu.style.left = e.clientX + 'px';
-		ctxMenu.style.top = e.clientY + 'px';
-		ctxMenu.classList.add('visible');
-
-		// Clamp to viewport
-		requestAnimationFrame(function() {
-			var mr = ctxMenu.getBoundingClientRect();
-			if (mr.right > window.innerWidth) {
-				ctxMenu.style.left = (e.clientX - mr.width) + 'px';
-			}
-			if (mr.bottom > window.innerHeight) {
-				ctxMenu.style.top = (e.clientY - mr.height) + 'px';
-			}
-		});
+		// Show segment items, hide node items
+		if (toggleItem) toggleItem.style.display = 'none';
+		if (retractItem) retractItem.style.display = 'none';
+		if (insertItem) insertItem.style.display = '';
+		if (selectContourItem) selectContourItem.style.display = '';
+		pendingContourIdx = segHit.ci;
+		// Separators: hide first two, show last
+		var seps = ctxMenu.querySelectorAll('.ctx-separator');
+		if (seps[0]) seps[0].style.display = 'none';
+		if (seps[1]) seps[1].style.display = 'none';
+		if (seps[2]) seps[2].style.display = '';
 	} else {
 		hideContextMenu();
+		return;
 	}
+
+	// Position and show menu
+	ctxMenu.style.left = e.clientX + 'px';
+	ctxMenu.style.top = e.clientY + 'px';
+	ctxMenu.classList.add('visible');
+
+	// Clamp to viewport
+	requestAnimationFrame(function() {
+		var mr = ctxMenu.getBoundingClientRect();
+		if (mr.right > window.innerWidth) {
+			ctxMenu.style.left = (e.clientX - mr.width) + 'px';
+		}
+		if (mr.bottom > window.innerHeight) {
+			ctxMenu.style.top = (e.clientY - mr.height) + 'px';
+		}
+	});
 });
 
 // Menu item click
@@ -752,6 +830,18 @@ if (ctxMenu) {
 			TRV.toggleSmooth();
 		} else if (action === 'retractHandles') {
 			TRV.retractHandles();
+		} else if (action === 'selectContour') {
+			if (pendingContourIdx >= 0) {
+				var ids = TRV.getContourNodeIds(pendingContourIdx);
+				TRV.selectNodes(ids, false);
+				pendingContourIdx = -1;
+			}
+		} else if (action === 'insertNode') {
+			if (pendingSegmentHit) {
+				TRV.insertNodeOnSegment(pendingSegmentHit);
+				pendingSegmentHit = null;
+	pendingContourIdx = -1;
+			}
 		}
 
 		hideContextMenu();

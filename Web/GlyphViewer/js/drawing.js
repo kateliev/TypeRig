@@ -45,6 +45,7 @@ TRV.draw = function() {
 
 	if (state.showMetrics) TRV.drawMetrics(layer, w, h);
 	TRV.drawContours(layer);
+	if (state.showNodes) TRV.drawSelectedSegments(layer);
 	if (state.showAnchors) TRV.drawAnchors(layer);
 	if (state.showNodes) TRV.drawNodes(layer);
 	TRV.drawLayerLabel(layer);
@@ -207,6 +208,62 @@ TRV.buildContourPath = function(contour) {
 	}
 
 	if (contour.closed) ctx.closePath();
+};
+
+
+// -- Highlighted segments (between selected on-curves) --------------
+TRV.drawSelectedSegments = function(layer) {
+	var ctx = TRV.dom.ctx;
+	var sel = TRV.state.selectedNodeIds;
+	if (sel.size === 0) return;
+
+	var ci = 0;
+	for (var si = 0; si < layer.shapes.length; si++) {
+		var shape = layer.shapes[si];
+		for (var ki = 0; ki < shape.contours.length; ki++) {
+			var contour = shape.contours[ki];
+			var segs = TRV.getContourSegments(contour);
+
+			for (var gi = 0; gi < segs.length; gi++) {
+				var seg = segs[gi];
+				var startId = 'c' + ci + '_n' + seg.startIdx;
+				var endId = 'c' + ci + '_n' + seg.endIdx;
+
+				// Highlight if both endpoints are selected
+				if (!sel.has(startId) || !sel.has(endId)) continue;
+
+				ctx.save();
+				ctx.beginPath();
+
+				var sp = TRV.glyphToScreen(seg.pts[0].x, seg.pts[0].y);
+				ctx.moveTo(sp.x, sp.y);
+
+				if (seg.type === 'line') {
+					var ep = TRV.glyphToScreen(seg.pts[1].x, seg.pts[1].y);
+					ctx.lineTo(ep.x, ep.y);
+				} else if (seg.type === 'cubic') {
+					var p1 = TRV.glyphToScreen(seg.pts[1].x, seg.pts[1].y);
+					var p2 = TRV.glyphToScreen(seg.pts[2].x, seg.pts[2].y);
+					var p3 = TRV.glyphToScreen(seg.pts[3].x, seg.pts[3].y);
+					ctx.bezierCurveTo(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+				}
+
+				// Glow effect: wide soft stroke underneath
+				ctx.strokeStyle = 'rgba(220, 60, 60, 0.3)';
+				ctx.lineWidth = 6;
+				ctx.lineCap = 'round';
+				ctx.stroke();
+
+				// Sharp stroke on top
+				ctx.strokeStyle = 'rgba(220, 60, 60, 0.8)';
+				ctx.lineWidth = 2;
+				ctx.stroke();
+
+				ctx.restore();
+			}
+			ci++;
+		}
+	}
 };
 
 // -- Nodes & handles ------------------------------------------------
