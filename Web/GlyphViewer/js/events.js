@@ -211,8 +211,10 @@ window.addEventListener('mousemove', function(e) {
 				var effDx = dx, effDy = dy;
 
 				// Constrained smooth: project onto tangent direction
-				if (state.dragTangents && state.dragTangents.has(nodeId)) {
-					var proj = TRV.projectOntoTangent(dx, dy, state.dragTangents.get(nodeId));
+				// locked tangents (line-curve) always active; free tangents (curve-curve) need Ctrl
+				var tan = state.dragTangents ? state.dragTangents.get(nodeId) : null;
+				if (tan && (tan.locked || e.ctrlKey || e.metaKey)) {
+					var proj = TRV.projectOntoTangent(dx, dy, tan);
 					effDx = proj.dx;
 					effDy = proj.dy;
 				}
@@ -223,6 +225,7 @@ window.addEventListener('mousemove', function(e) {
 			// Follower handles of constrained nodes need the same projected delta
 			if (state.dragTangents && state.dragTangents.size > 0) {
 				for (const [onId, tangent] of state.dragTangents) {
+					if (!tangent.locked && !e.ctrlKey && !e.metaKey) continue;
 					var proj = TRV.projectOntoTangent(dx, dy, tangent);
 					// Find follower handles for this on-curve and reposition them
 					var m = onId.match(/^c(\d+)_n(\d+)$/);
@@ -747,6 +750,8 @@ if (ctxMenu) {
 		var action = item.dataset.action;
 		if (action === 'toggleSmooth') {
 			TRV.toggleSmooth();
+		} else if (action === 'retractHandles') {
+			TRV.retractHandles();
 		}
 
 		hideContextMenu();

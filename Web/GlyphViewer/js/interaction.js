@@ -121,6 +121,60 @@ TRV.walkContour = function(direction) {
 	TRV.selectNode(contourNodes[newIdx].id, false);
 };
 
+// -- Retract handles -------------------------------------------------
+// If on-curve selected: retract both adjacent handles to on-curve pos.
+// If handle selected: retract only that handle.
+TRV.retractHandles = function() {
+	var layer = TRV.getActiveLayer();
+	if (!layer) return;
+
+	var sel = TRV.state.selectedNodeIds;
+	if (sel.size === 0) return;
+
+	var ci = 0;
+	for (var si = 0; si < layer.shapes.length; si++) {
+		var shape = layer.shapes[si];
+		for (var ki = 0; ki < shape.contours.length; ki++) {
+			var nodes = shape.contours[ki].nodes;
+			var n = nodes.length;
+
+			for (var ni = 0; ni < n; ni++) {
+				var id = 'c' + ci + '_n' + ni;
+				if (!sel.has(id)) continue;
+
+				if (nodes[ni].type === 'on') {
+					// On-curve: retract adjacent handles
+					var prevIdx = (ni - 1 + n) % n;
+					var nextIdx = (ni + 1) % n;
+					if (nodes[prevIdx].type !== 'on') {
+						nodes[prevIdx].x = nodes[ni].x;
+						nodes[prevIdx].y = nodes[ni].y;
+					}
+					if (nodes[nextIdx].type !== 'on') {
+						nodes[nextIdx].x = nodes[ni].x;
+						nodes[nextIdx].y = nodes[ni].y;
+					}
+				} else {
+					// Handle: find parent on-curve, retract to it
+					var prevIdx = (ni - 1 + n) % n;
+					var nextIdx = (ni + 1) % n;
+					var parentIdx = -1;
+					if (nodes[prevIdx].type === 'on') parentIdx = prevIdx;
+					else if (nodes[nextIdx].type === 'on') parentIdx = nextIdx;
+					if (parentIdx >= 0) {
+						nodes[ni].x = nodes[parentIdx].x;
+						nodes[ni].y = nodes[parentIdx].y;
+					}
+				}
+			}
+			ci++;
+		}
+	}
+
+	TRV.draw();
+	TRV.updateStatusSelected();
+};
+
 // -- Constrained smooth movement -------------------------------------
 // Compute unit tangent vectors for smooth on-curve nodes at drag start.
 // Tangent = direction through the two adjacent handles (from their
@@ -145,24 +199,46 @@ TRV.computeDragTangents = function(dragStartPositions) {
 
 				var prevIdx = (ni - 1 + n) % n;
 				var nextIdx = (ni + 1) % n;
+				var prevIsOn = (nodes[prevIdx].type === 'on');
+				var nextIsOn = (nodes[nextIdx].type === 'on');
 
-				// Need two handles flanking this on-curve
-				if (nodes[prevIdx].type === 'on' || nodes[nextIdx].type === 'on') continue;
+				// Both sides are lines — no tangent constraint
+				if (prevIsOn && nextIsOn) continue;
 
-				// Use start positions if available, else current
 				var prevId = 'c' + ci + '_n' + prevIdx;
 				var nextId = 'c' + ci + '_n' + nextIdx;
 				var onStart = dragStartPositions.get(id);
-				var prevPos = dragStartPositions.has(prevId) ? dragStartPositions.get(prevId) : nodes[prevIdx];
-				var nextPos = dragStartPositions.has(nextId) ? dragStartPositions.get(nextId) : nodes[nextIdx];
+				var dx, dy;
+				var isLocked = true; // line-curve: always constrained
 
-				// Tangent: vector from prev handle to next handle
-				var dx = nextPos.x - prevPos.x;
-				var dy = nextPos.y - prevPos.y;
+				if (!prevIsOn && !nextIsOn) {
+					// Curve on both sides: tangent from handle to handle
+					// Active only with Ctrl held (locked: false)
+					var prevPos = dragStartPositions.has(prevId) ? dragStartPositions.get(prevId) : nodes[prevIdx];
+					var nextPos = dragStartPositions.has(nextId) ? dragStartPositions.get(nextId) : nodes[nextIdx];
+					dx = nextPos.x - prevPos.x;
+					dy = nextPos.y - prevPos.y;
+					isLocked = false;
+				} else {
+					// Line on one side, curve on the other:
+					// tangent locked to line direction
+					var lineIdx, lineId;
+					if (prevIsOn) {
+						lineIdx = prevIdx; lineId = prevId;
+					} else {
+						lineIdx = nextIdx; lineId = nextId;
+					}
+					// Line neighbor's start position (or current if not dragged)
+					var linePos = dragStartPositions.has(lineId) ? dragStartPositions.get(lineId) : nodes[lineIdx];
+					// Direction from line neighbor to this on-curve
+					dx = onStart.x - linePos.x;
+					dy = onStart.y - linePos.y;
+				}
+
 				var len = Math.sqrt(dx * dx + dy * dy);
 				if (len < 0.001) continue;
 
-				tangents.set(id, { tx: dx / len, ty: dy / len });
+				tangents.set(id, { tx: dx / len, ty: dy / len, locked: isLocked });
 			}
 			ci++;
 		}
@@ -219,36 +295,56 @@ TRV.toggleSmooth = function() {
 TRV._makeSmoothAt = function(nodes, n, onIdx) {
 	var prevIdx = (onIdx - 1 + n) % n;
 	var nextIdx = (onIdx + 1) % n;
+	var prevIsHandle = (nodes[prevIdx].type !== 'on');
+	var nextIsHandle = (nodes[nextIdx].type !== 'on');
 
-	// Need two handles flanking the on-curve
-	var hasPrev = (nodes[prevIdx].type !== 'on');
-	var hasNext = (nodes[nextIdx].type !== 'on');
-	if (!hasPrev || !hasNext) return;
+	// Both sides are lines — nothing to enforce
+	if (!prevIsHandle && !nextIsHandle) return;
 
 	var ox = nodes[onIdx].x, oy = nodes[onIdx].y;
 
-	// Vectors from on-curve to each handle
-	var pDx = nodes[prevIdx].x - ox, pDy = nodes[prevIdx].y - oy;
-	var nDx = nodes[nextIdx].x - ox, nDy = nodes[nextIdx].y - oy;
-	var pLen = Math.sqrt(pDx * pDx + pDy * pDy);
-	var nLen = Math.sqrt(nDx * nDx + nDy * nDy);
+	if (prevIsHandle && nextIsHandle) {
+		// Curve on both sides: keep longer handle, rotate shorter one
+		var pDx = nodes[prevIdx].x - ox, pDy = nodes[prevIdx].y - oy;
+		var nDx = nodes[nextIdx].x - ox, nDy = nodes[nextIdx].y - oy;
+		var pLen = Math.sqrt(pDx * pDx + pDy * pDy);
+		var nLen = Math.sqrt(nDx * nDx + nDy * nDy);
+		if (pLen < 0.001 || nLen < 0.001) return;
 
-	if (pLen < 0.001 || nLen < 0.001) return;
+		var fixDx, fixDy, fixLen, adjIdx, adjLen;
+		if (pLen >= nLen) {
+			fixDx = pDx; fixDy = pDy; fixLen = pLen;
+			adjIdx = nextIdx; adjLen = nLen;
+		} else {
+			fixDx = nDx; fixDy = nDy; fixLen = nLen;
+			adjIdx = prevIdx; adjLen = pLen;
+		}
 
-	// Keep the longer handle fixed, rotate the shorter one
-	var fixDx, fixDy, fixLen, adjIdx, adjLen;
-	if (pLen >= nLen) {
-		fixDx = pDx; fixDy = pDy; fixLen = pLen;
-		adjIdx = nextIdx; adjLen = nLen;
+		var scale = -adjLen / fixLen;
+		nodes[adjIdx].x = Math.round((ox + fixDx * scale) * 10) / 10;
+		nodes[adjIdx].y = Math.round((oy + fixDy * scale) * 10) / 10;
 	} else {
-		fixDx = nDx; fixDy = nDy; fixLen = nLen;
-		adjIdx = prevIdx; adjLen = pLen;
-	}
+		// Line on one side, curve on the other:
+		// align handle to the line direction (opposite sense)
+		var lineIdx = prevIsHandle ? nextIdx : prevIdx;
+		var handleIdx = prevIsHandle ? prevIdx : nextIdx;
 
-	// Place adjusted handle opposite to the fixed one, at its own length
-	var scale = -adjLen / fixLen;
-	nodes[adjIdx].x = Math.round((ox + fixDx * scale) * 10) / 10;
-	nodes[adjIdx].y = Math.round((oy + fixDy * scale) * 10) / 10;
+		// Line direction: from line neighbor to this on-curve
+		var lDx = ox - nodes[lineIdx].x;
+		var lDy = oy - nodes[lineIdx].y;
+		var lLen = Math.sqrt(lDx * lDx + lDy * lDy);
+		if (lLen < 0.001) return;
+
+		// Preserve handle length, place along line direction (away from line neighbor)
+		var hDx = nodes[handleIdx].x - ox;
+		var hDy = nodes[handleIdx].y - oy;
+		var hLen = Math.sqrt(hDx * hDx + hDy * hDy);
+		if (hLen < 0.001) return;
+
+		var scale = hLen / lLen;
+		nodes[handleIdx].x = Math.round((ox + lDx * scale) * 10) / 10;
+		nodes[handleIdx].y = Math.round((oy + lDy * scale) * 10) / 10;
+	}
 };
 
 // -- Smooth node constraint ------------------------------------------
@@ -402,35 +498,51 @@ TRV._enforceOppositeSmooth = function(nodes, n, handleIdx, ci, movedIds) {
 	var parent = nodes[parentIdx];
 	if (!parent.smooth) return; // corner node — nothing to enforce
 
-	// Opposite handle is on the other side of parent
+	// Opposite side of parent
 	var oppositeIdx;
 	if (parentIdx === prevIdx) {
-		// Handle is after parent → opposite is before parent
 		oppositeIdx = (parentIdx - 1 + n) % n;
 	} else {
-		// Handle is before parent → opposite is after parent
 		oppositeIdx = (parentIdx + 1) % n;
 	}
 
-	// Must be a handle; if on-curve, it's a line segment — no constraint
-	if (nodes[oppositeIdx].type === 'on') return;
+	var ox = parent.x, oy = parent.y;
 
-	// Skip if opposite is also being moved (user controls both)
+	if (nodes[oppositeIdx].type === 'on') {
+		// Opposite is a line segment: constrain dragged handle to line direction.
+		// Line direction: from line neighbor to parent on-curve
+		var lDx = ox - nodes[oppositeIdx].x;
+		var lDy = oy - nodes[oppositeIdx].y;
+		var lLen = Math.sqrt(lDx * lDx + lDy * lDy);
+		if (lLen < 0.001) return;
+
+		// Handle extends along lDx,lDy (continuing the line past parent)
+		var ux = lDx / lLen, uy = lDy / lLen;
+		var hx = nodes[handleIdx].x - ox;
+		var hy = nodes[handleIdx].y - oy;
+		var dot = hx * ux + hy * uy;
+		var hLen = Math.max(dot, 0); // clamp: don't flip past parent
+
+		nodes[handleIdx].x = Math.round((ox + ux * hLen) * 10) / 10;
+		nodes[handleIdx].y = Math.round((oy + uy * hLen) * 10) / 10;
+		return;
+	}
+
+	// Skip if opposite handle is also being moved (user controls both)
 	var oppositeId = 'c' + ci + '_n' + oppositeIdx;
 	if (movedIds.has(oppositeId)) return;
 
 	// Vector from parent to dragged handle
-	var ox = parent.x, oy = parent.y;
 	var hx = nodes[handleIdx].x, hy = nodes[handleIdx].y;
 	var vx = hx - ox, vy = hy - oy;
 	var dist = Math.sqrt(vx * vx + vy * vy);
-	if (dist < 0.001) return; // degenerate
+	if (dist < 0.001) return;
 
 	// Preserve opposite handle's distance from parent
 	var opDx = nodes[oppositeIdx].x - ox;
 	var opDy = nodes[oppositeIdx].y - oy;
 	var opLen = Math.sqrt(opDx * opDx + opDy * opDy);
-	if (opLen < 0.001) return; // degenerate
+	if (opLen < 0.001) return;
 
 	// Place opposite at reversed direction, scaled to its length
 	var scale = -opLen / dist;
