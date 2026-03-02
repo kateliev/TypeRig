@@ -1,18 +1,18 @@
 # TypeRig
 
-A Python framework for font design and engineering, providing an extensive suite of tools for professional typeface development inside FontLab, alongside a standalone pure-Python geometry and interpolation core.
+A Python framework for font design and engineering. Started as a personal toolkit for working inside FontLab, grew over the years into a standalone geometry and interpolation core with a bunch of GUI tools on top.
 
-TypeRig offers geometric objects for manipulating font outlines — points, nodes, contours, shapes, layers and glyphs — together with advanced mathematical tools for interpolation, adaptive scaling and curve processing. A parallel proxy layer transparently wraps FontLab internals, so the same operations work both standalone and inside the host application. On top of this foundation sits a large collection of GUI panels, toolbars, and standalone dialog tools that provide professional font designers with a comprehensive production environment within FontLab.
+TypeRig has objects for manipulating font outlines — points, nodes, contours, shapes, layers and glyphs — plus math helpers for interpolation, adaptive scaling and curve processing. A proxy layer wraps FontLab internals so the same code works both standalone and inside the host app. On top of that sits a collection of GUI panels, toolbars, and dialog tools that cover most of what I need in a daily font production workflow. Experimental, evolving, and perpetually work-in-progress.
 
 ## FontLab Scripts and Tools
 
-The FontLab-facing part of TypeRig is its most extensive component — a rich set of GUI-driven tools that cover virtually every aspect of the font design and production workflow. All tools are built with PythonQt, integrate with FontLab's undo system, and support multi-master workflows out of the box.
+The FontLab-facing part of TypeRig is the biggest chunk in practice — a collection of GUI tools that cover most of the font design and production workflow. Built with PythonQt, hooked into FontLab's undo, multi-master aware.
 
 ### TypeRig Panel (`typerig-panel.py`)
 
-The main interface is a dockable, always-on-top panel that dynamically loads sub-panels as tabbed modules. It features a masthead with layer-selection controls (active layer, master layers, selected layers) and glyph-scope selectors (active glyph, glyph window, font window selection). Panel visibility is user-configurable and persisted via JSON. The available sub-panels are:
+The main interface is a dockable panel that loads sub-panels as tabs. Layer selectors and glyph-scope controls in the masthead. Panel visibility persisted via JSON. The available sub-panels are:
 
-**Node** — The most feature-dense panel. Node insertion (at arbitrary time, at extremes, at contour start), removal, conversion between on/off-curve types. Smart node movement with multiple methods: plain shift, proportional (LERP), italic-angle slant, slope-following, and a smart mode that preserves handle relationships. Node alignment to other nodes, to font metrics (ascender, caps height, x-height, baseline, descender, measurement line), and to user-defined targets with optional intercept and dimension-preserving modes. Slope copy/paste with flipping. Hobby spline tension copy/paste. Node coordinate banking for complex multi-step operations.  Primitive drawing tools: circle from 2 or 3 selected nodes, square from diagonal or midpoints.
+**Node** — The panel I use most. Node insertion (at arbitrary time, at extremes, at contour start), removal, conversion between on/off-curve types. Smart node movement with multiple methods: plain shift, proportional (LERP), italic-angle slant, slope-following, and a smart mode that preserves handle relationships. Node alignment to other nodes, to font metrics (ascender, caps height, x-height, baseline, descender, measurement line), and to user-defined targets with optional intercept and dimension-preserving modes. Slope copy/paste with flipping. Hobby spline tension copy/paste. Node coordinate banking for complex multi-step operations.  Primitive drawing tools: circle from 2 or 3 selected nodes, square from diagonal or midpoints.
 
 **Contour** — Contour closing, opening, reversing, and boolean operations (union, subtract, intersect, exclude). Contour alignment to other contours, to font metrics, and bounding-box-relative positioning. Contour group alignment (A-to-B). Distribution (horizontal and vertical) of multiple contours. Contour reordering by position.
 
@@ -22,13 +22,13 @@ The main interface is a dockable, always-on-top panel that dynamically loads sub
 
 **Delta** — The adaptive scaling (delta machine) panel. Virtual axis setup with stem values per master layer. Target layer generation with configurable horizontal/vertical stems, width, and height. Supports extrapolation, intensity control, italic-angle compensation, and multiple transform origins. Axis configurations can be saved/loaded from Font Lib or external JSON files. Integrates with the core delta-scaling engine based on Tim Ahrens' methodology.
 
-**Element** — Shape (element) manipulation: naming, unlinking references, deletion, transform reset, transform rounding, auto-reorder by position, ungroup-all. Shape insertion and replacement from font-wide element library. Shape alignment to other shapes, to layer bounds, and to font metrics. A powerful expression-based element composition system with a full scripting syntax supporting coordinate placement by node tags, anchor names, bbox positions, per-layer overrides, and element swapping.
+**Element** — Shape (element) manipulation: naming, unlinking references, deletion, transform reset, transform rounding, auto-reorder by position, ungroup-all. Shape insertion and replacement from font-wide element library. Shape alignment to other shapes, to layer bounds, and to font metrics. An expression-based element composition system with a scripting syntax supporting coordinate placement by node tags, anchor names, bbox positions, per-layer overrides, and element swapping.
 
-**Clipboard** — Multiple master aware contour clipboard with core-object storage for lossless copy/paste. Copy full contours or partial selections. Paste with configurable transform (translate, scale, rotate, skew), delta machine size fit and transform origin. Supports reversed and partial paste modes as well as drawing and connecting multiple (selected in UI) segments. Save/load clipboard contents to XML files for cross-session and cross-font workflows.
+**Clipboard** — Multi-master aware contour clipboard using core-object storage. Copy full contours or partial selections. Paste with configurable transform (translate, scale, rotate, skew), delta machine size fit and transform origin. Supports reversed and partial paste modes as well as drawing and connecting multiple (selected in UI) segments. Save/load clipboard contents to XML files for cross-session and cross-font workflows.
 
 **Metrics** — Sidebearing and advance width tools. Copy metrics from other glyphs by name with percentage and unit adjustments. Metric expressions: get, set, auto-link from element references, and unlink. Copy bounding-box dimensions (width and height) between glyphs with proportional adjustments.
 
-**Anchor** — Anchor management with tree-view display per layer. Add, move, and clear anchors with flexible coordinate input: absolute positions, font-metric-relative placement (ascender, caps, x-height, baseline, descender), bounding-box-relative positions, and expression-based coordinates. Per-layer coordinate lists for multi-master workflows. Italic-angle-aware positioning.
+**Anchor** — Anchor management with tree-view display per layer. Add, move, and clear anchors with various coordinate input modes: absolute positions, font-metric-relative placement (ascender, caps, x-height, baseline, descender), bounding-box-relative positions, and expression-based coordinates. Per-layer coordinate lists for multi-master workflows. Italic-angle-aware positioning.
 
 **Guide** — Guideline creation at percentage-based positions relative to advance width, bounding box, or font metrics (x-height, caps height, ascender, descender). Named and tagged guidelines with color assignment. Vertical and horizontal guide placement. Source glyph reference for cross-glyph guide alignment. Glyph tagging and node naming tools.
 
@@ -48,13 +48,13 @@ The main interface is a dockable, always-on-top panel that dynamically loads sub
 
 ### TypeRig Manager (`typerig-manager.py`)
 
-A separate dialog for font-level operations, dynamically loading its own set of sub-panels:
+A separate dialog for font-level operations:
 
 **FontMetrics** — Multi-master font metrics editor with table-based interface for all vertical metrics across all master layers. Font zone management: add, remove, import/export zones as JSON. Zone creation from metric references.
 
 ### Toolbars
 
-Dockable toolbars that provide quick access to common operations, complementing the panel system:
+Dockable toolbars for quick access to common operations:
 
 **Node Toolbar** — Node insertion, removal, extreme insertion, start-point management, and corner operations (mitre, round, loop, trap, rebuild) as toolbar buttons.
 
@@ -68,7 +68,7 @@ Dockable toolbars that provide quick access to common operations, complementing 
 
 ### Standalone Tools
 
-Self-contained dialog tools for specialized workflows:
+Separate dialog tools for specific tasks:
 
 **Delta Preview** (`TR-DeltaPreview.py`) — Visual preview of delta machine results without writing to the font. Dual-pane interface with source masters and computed target results rendered as `QPainterPath` objects built from core geometry. Live zoom and padding controls. Execute-to-font mode for committing approved results as real layers.
 
@@ -82,19 +82,19 @@ Self-contained dialog tools for specialized workflows:
 
 **Propagate Anchors** (`TR-PropagateAnchors.py`) — Table-driven batch anchor copying between glyphs. Per-action configuration for source glyph, anchor selection, destination glyphs, layer scope, and copy options (absolute/relative positioning with LSB/RSB/advance-relative modes, collision handling with overwrite or rename, suffix control). Save/load action tables as JSON for repeatable workflows.
 
-**Export Glyph** (`TR-ExportGlyph.py`) — Export individual glyphs as `.trglyph` XML files via the core serialization system. Uses the proxy-to-core eject mechanism for lossless round-trip export.
+**Export Glyph** (`TR-ExportGlyph.py`) — Export individual glyphs as `.trglyph` XML files via the core serialization system. Uses the proxy-to-core eject mechanism for round-trip export.
 
 ## Architecture
 
-The library is split into two complementary packages, bridged by a dual proxy layer.
+Two packages, connected by a proxy layer.
 
 ### Core (`typerig.core`)
 
-Zero external dependencies. Every object lives in pure Python and can run anywhere — CPython, Pyodide in a browser, or any other conforming runtime.
+No external dependencies. Pure Python, runs anywhere — CPython, Pyodide in a browser, whatever.
 
 **`core.objects`** — geometric primitives and containers:
 
-- `Point`, `Line`, `CubicBezier`, `QuadraticBezier` — foundational geometry with full operator overloading and complex-number math.
+- `Point`, `Line`, `CubicBezier`, `QuadraticBezier` — basic geometry with operator overloading and complex-number math.
 - `Node` — on/off-curve point with navigation (`next`, `prev`, `next_on`, `prev_on`), corner operations (mitre, round, trap), Hobby spline insertion and per-node stem weights for adaptive scaling.
 - `Contour` — ordered node sequence supporting winding detection, segment iteration (line / cubic / quadratic with implicit on-curve expansion), Hobby spline solving, analytical outline offset with miter joins, SDF-clamped offset and compensated scaling.
 - `Shape` — contour container with bounds, sorting, SDF computation, outline offset and per-contour angle-compensated scaling.
@@ -123,7 +123,7 @@ Zero external dependencies. Every object lives in pure Python and can run anywhe
 
 ### Proxy — FontLab Layer (`typerig.proxy.fl`)
 
-Depends on FontLab (`fontlab`, `fontgate`, `PythonQt`). Provides production-ready proxy objects, GUI components, and action collectors.
+Depends on FontLab (`fontlab`, `fontgate`, `PythonQt`). Proxy objects, GUI bits, and action collectors.
 
 **`proxy.fl.objects`** — FontLab proxy objects:
 
@@ -134,7 +134,7 @@ Depends on FontLab (`fontlab`, `fontgate`, `PythonQt`). Provides production-read
 - `pNode` / `eNode` / `eNodesContainer` — node proxies with smart-angle access, coordinate manipulation, and batch container operations.
 - `eCurveEx` — extended curve proxy with curvature analysis and Hobby tension control.
 
-**`proxy.fl.actions`** — Action collector classes that encapsulate tool logic separately from GUI:
+**`proxy.fl.actions`** — Action collectors that separate tool logic from GUI:
 
 - `TRNodeActionCollector` — all node operations: insert, remove, move (smart/LERP/slope/slant), align, slope copy/paste, corner operations (mitre, round, loop, trap, rebuild), Hobby tension manipulation.
 - `TRCurveActionCollector` — segment conversion, curve optimization, Hobby tension copy/paste.
@@ -142,7 +142,7 @@ Depends on FontLab (`fontlab`, `fontgate`, `PythonQt`). Provides production-read
 - `TRDrawActionCollector` — primitive drawing (circles, squares from selected nodes).
 - `TRLayerActionCollector` — layer add/delete/duplicate, visibility, type assignment, element operations, cross-layer contour transfer.
 
-**`proxy.fl.gui`** — Reusable GUI components:
+**`proxy.fl.gui`** — GUI components:
 
 - `widgets` — `CustomPushButton` with icon-font support, `TRFlowLayout`, `TRVTabWidget`/`TRHTabWidget`, `TRCheckTableView`, `TRTableView`, `TRSliderCtrl`, `TRTransformCtrl`, `TRDeltaLayerTree`, `CustomSpinBox`/`CustomSpinLabel`/`CustomLineEdit`, `getProcessGlyphs` (glyph-scope resolver), `getTRIconFont`/`getTRIconFontPath` (custom icon font loader).
 - `dialogs` — `TRLayerSelectDLG`/`TRLayerSelectNEW` (layer chooser with search/filter), `TR1FieldDLG`/`TR2FieldDLG` (quick input dialogs), `TRMsgSimple`.
@@ -158,7 +158,7 @@ Depends on FontLab (`fontlab`, `fontgate`, `PythonQt`). Provides production-read
 
 Each proxy class — `trNode`, `trContour`, `trShape`, `trLayer`, `trGlyph`, `trFont`, `trAnchor` — inherits from its core counterpart and holds a `.host` reference to the corresponding FL object.
 
-Attribute access is rerouted through a `__meta__` mapping: reads and writes to mapped names (e.g. `x`, `y`, `name`, `closed`) go straight to the host, while everything else follows the normal core path. This means any core algorithm — interpolation, offset, delta scaling — runs identically on proxy objects with live FL data.
+Attribute access is rerouted through a `__meta__` mapping: reads and writes to mapped names (e.g. `x`, `y`, `name`, `closed`) go straight to the host, everything else follows the normal core path. So the same core algorithms work on proxy objects with live FL data without extra glue.
 
 **Eject / Mount** — every proxy exposes `.eject()` to detach a pure core copy and `.mount(core_obj)` to write values back into the host. Eject for computation, mount to commit — keeps FL undo intact and avoids side-effects during multi-step operations.
 
@@ -166,7 +166,7 @@ Attribute access is rerouted through a `__meta__` mapping: reads and writes to m
 
 ## Web
 
-The core package runs in the browser via Pyodide. The **TR Glyph Viewer** (`Web/GlyphViewer`) loads TypeRig modules directly from GitHub at runtime, stubs the proxy and FL-dependent init files, and exposes the full core API to a live Python editor on an HTML canvas.
+The core package also runs in the browser via Pyodide. The **TR Glyph Viewer** (`Web/GlyphViewer`) loads TypeRig modules from GitHub at runtime, stubs the FL-dependent parts, and gives you a Python editor on an HTML canvas. Still rough around the edges.
 
 ## License
 
