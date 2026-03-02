@@ -1,6 +1,9 @@
 // ===================================================================
 // TypeRig Glyph Viewer — XML Serializer
 // ===================================================================
+// Note: live XML sync removed. Use TRV.xmlRefresh() to regenerate
+// XML from data, and TRV.xmlApply() to parse XML back into data.
+// ===================================================================
 'use strict';
 
 // -- XML escape -----------------------------------------------------
@@ -24,18 +27,18 @@ TRV.fmtTransform = function(t) {
 	return 'matrix(' + t.map(TRV.fmtFloat).join(' ') + ')';
 };
 
-// -- Glyph → XML ----------------------------------------------------
+// -- Glyph to XML ----------------------------------------------------
 TRV.glyphToXml = function(glyph) {
-	let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-	xml += `<glyph name="${TRV.esc(glyph.name)}"`;
-	if (glyph.identifier) xml += ` identifier="${TRV.esc(glyph.identifier)}"`;
-	if (glyph.unicodes) xml += ` unicodes="${TRV.esc(glyph.unicodes)}"`;
-	if (glyph.selected) xml += ` selected="True"`;
-	if (glyph.mark) xml += ` mark="${glyph.mark}"`;
+	var xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+	xml += '<glyph name="' + TRV.esc(glyph.name) + '"';
+	if (glyph.identifier) xml += ' identifier="' + TRV.esc(glyph.identifier) + '"';
+	if (glyph.unicodes) xml += ' unicodes="' + TRV.esc(glyph.unicodes) + '"';
+	if (glyph.selected) xml += ' selected="True"';
+	if (glyph.mark) xml += ' mark="' + glyph.mark + '"';
 	xml += '>\n';
 
-	for (const layer of glyph.layers) {
-		xml += TRV.layerToXml(layer, '  ');
+	for (var i = 0; i < glyph.layers.length; i++) {
+		xml += TRV.layerToXml(glyph.layers[i], '  ');
 	}
 
 	xml += '</glyph>';
@@ -43,101 +46,106 @@ TRV.glyphToXml = function(glyph) {
 };
 
 TRV.layerToXml = function(layer, indent) {
-	let xml = `${indent}<layer name="${TRV.esc(layer.name)}"`;
-	if (layer.identifier) xml += ` identifier="${TRV.esc(layer.identifier)}"`;
-	xml += ` width="${layer.width}" height="${layer.height}"`;
+	var xml = indent + '<layer name="' + TRV.esc(layer.name) + '"';
+	if (layer.identifier) xml += ' identifier="' + TRV.esc(layer.identifier) + '"';
+	xml += ' width="' + layer.width + '" height="' + layer.height + '"';
 	// stx/sty as direct attributes, only when present
-	if (layer.stx !== undefined && layer.stx !== null) xml += ` stx="${TRV.fmtFloat(layer.stx)}"`;
-	if (layer.sty !== undefined && layer.sty !== null) xml += ` sty="${TRV.fmtFloat(layer.sty)}"`;
+	if (layer.stx !== undefined && layer.stx !== null) xml += ' stx="' + TRV.fmtFloat(layer.stx) + '"';
+	if (layer.sty !== undefined && layer.sty !== null) xml += ' sty="' + TRV.fmtFloat(layer.sty) + '"';
 	xml += '>\n';
 
-	for (const shape of layer.shapes) {
-		xml += TRV.shapeToXml(shape, indent + '  ');
+	for (var si = 0; si < layer.shapes.length; si++) {
+		xml += TRV.shapeToXml(layer.shapes[si], indent + '  ');
 	}
 
 	if (layer.anchors) {
-		for (const a of layer.anchors) {
-			xml += `${indent}  <anchor name="${TRV.esc(a.name)}" x="${a.x}" y="${a.y}"/>\n`;
+		for (var ai = 0; ai < layer.anchors.length; ai++) {
+			var a = layer.anchors[ai];
+			xml += indent + '  <anchor name="' + TRV.esc(a.name) + '" x="' + a.x + '" y="' + a.y + '"/>\n';
 		}
 	}
 
-	// Only write lib for truly custom data — stx/sty no longer go here
-	const libData = {};
-	for (const [k, v] of Object.entries(layer.lib || {})) {
-		if (k !== 'stx' && k !== 'sty') libData[k] = v;
+	// Only write lib for truly custom data
+	var libData = {};
+	var libSrc = layer.lib || {};
+	for (var k in libSrc) {
+		if (k !== 'stx' && k !== 'sty') libData[k] = libSrc[k];
 	}
 	if (Object.keys(libData).length > 0) {
 		xml += TRV.plistLibToXml(libData, indent + '  ');
 	}
 
-	xml += `${indent}</layer>\n`;
+	xml += indent + '</layer>\n';
 	return xml;
 };
 
 TRV.shapeToXml = function(shape, indent) {
-	let xml = `${indent}<shape`;
-	if (shape.name) xml += ` name="${TRV.esc(shape.name)}"`;
-	if (shape.identifier) xml += ` identifier="${TRV.esc(shape.identifier)}"`;
+	var xml = indent + '<shape';
+	if (shape.name) xml += ' name="' + TRV.esc(shape.name) + '"';
+	if (shape.identifier) xml += ' identifier="' + TRV.esc(shape.identifier) + '"';
 	// transform as matrix() attribute, skipped when identity or absent
-	const tx = TRV.fmtTransform(shape.transform);
-	if (tx) xml += ` transform="${TRV.esc(tx)}"`;
+	var tx = TRV.fmtTransform(shape.transform);
+	if (tx) xml += ' transform="' + TRV.esc(tx) + '"';
 	xml += '>\n';
 
-	for (const contour of shape.contours) {
-		xml += TRV.contourToXml(contour, indent + '  ');
+	for (var ci = 0; ci < shape.contours.length; ci++) {
+		xml += TRV.contourToXml(shape.contours[ci], indent + '  ');
 	}
 
-	// Only write lib for truly custom data — transform no longer goes here
-	const libData = {};
-	for (const [k, v] of Object.entries(shape.lib || {})) {
-		if (k !== 'transform') libData[k] = v;
+	// Only write lib for truly custom data
+	var libData = {};
+	var libSrc = shape.lib || {};
+	for (var k in libSrc) {
+		if (k !== 'transform') libData[k] = libSrc[k];
 	}
 	if (Object.keys(libData).length > 0) {
 		xml += TRV.plistLibToXml(libData, indent + '  ');
 	}
 
-	xml += `${indent}</shape>\n`;
+	xml += indent + '</shape>\n';
 	return xml;
 };
 
 TRV.contourToXml = function(contour, indent) {
-	let xml = `${indent}<contour`;
-	if (contour.name) xml += ` name="${TRV.esc(contour.name)}"`;
-	if (contour.identifier) xml += ` identifier="${TRV.esc(contour.identifier)}"`;
-	// closed only written when true (false is default, no need to write it)
-	if (contour.closed) xml += ` closed="True"`;
+	var xml = indent + '<contour';
+	if (contour.name) xml += ' name="' + TRV.esc(contour.name) + '"';
+	if (contour.identifier) xml += ' identifier="' + TRV.esc(contour.identifier) + '"';
+	// closed only written when true (false is default)
+	if (contour.closed) xml += ' closed="True"';
 	// clockwise only written when not null
 	if (contour.clockwise !== null && contour.clockwise !== undefined) {
-		xml += ` clockwise="${contour.clockwise ? 'True' : 'False'}"`;
+		xml += ' clockwise="' + (contour.clockwise ? 'True' : 'False') + '"';
 	}
 	xml += '>\n';
 
-	for (const node of contour.nodes) {
-		xml += `${indent}  <node x="${node.x}" y="${node.y}" type="${node.type}"`;
-		if (node.smooth) xml += ` smooth="True"`;
+	for (var ni = 0; ni < contour.nodes.length; ni++) {
+		var node = contour.nodes[ni];
+		xml += indent + '  <node x="' + node.x + '" y="' + node.y + '" type="' + node.type + '"';
+		if (node.smooth) xml += ' smooth="True"';
 		xml += '/>\n';
 	}
 
-	// Only write lib for truly custom data — closed/clockwise no longer go here
-	const libData = {};
-	for (const [k, v] of Object.entries(contour.lib || {})) {
-		if (k !== 'closed' && k !== 'clockwise') libData[k] = v;
+	// Only write lib for truly custom data
+	var libData = {};
+	var libSrc = contour.lib || {};
+	for (var k in libSrc) {
+		if (k !== 'closed' && k !== 'clockwise') libData[k] = libSrc[k];
 	}
 	if (Object.keys(libData).length > 0) {
 		xml += TRV.plistLibToXml(libData, indent + '  ');
 	}
 
-	xml += `${indent}</contour>\n`;
+	xml += indent + '</contour>\n';
 	return xml;
 };
 
 TRV.plistLibToXml = function(data, indent) {
-	let xml = `${indent}<lib>\n${indent}  <dict>\n`;
-	for (const [key, val] of Object.entries(data)) {
-		xml += `${indent}    <key>${TRV.esc(key)}</key>\n`;
-		xml += `${indent}    ${TRV.plistValueToXml(val)}\n`;
+	var xml = indent + '<lib>\n' + indent + '  <dict>\n';
+	for (var key in data) {
+		xml += indent + '    <key>' + TRV.esc(key) + '</key>\n';
+		xml += indent + '    ' + TRV.plistValueToXml(data[key]) + '\n';
 	}
-	xml += `${indent}  </dict>\n${indent}</lib>\n`;
+	xml += indent + '  </dict>\n' + indent + '</lib>\n';
 	return xml;
 };
 
@@ -145,39 +153,33 @@ TRV.plistValueToXml = function(val) {
 	if (val === true) return '<true/>';
 	if (val === false) return '<false/>';
 	if (typeof val === 'number') {
-		return Number.isInteger(val) ? `<integer>${val}</integer>` : `<real>${TRV.fmtFloat(val)}</real>`;
+		return Number.isInteger(val) ? '<integer>' + val + '</integer>' : '<real>' + TRV.fmtFloat(val) + '</real>';
 	}
-	if (typeof val === 'string') return `<string>${TRV.esc(val)}</string>`;
+	if (typeof val === 'string') return '<string>' + TRV.esc(val) + '</string>';
 	if (Array.isArray(val)) {
 		if (val.length === 0) return '<array/>';
-		let xml = '<array>';
-		for (const item of val) xml += TRV.plistValueToXml(item);
+		var xml = '<array>';
+		for (var i = 0; i < val.length; i++) xml += TRV.plistValueToXml(val[i]);
 		xml += '</array>';
 		return xml;
 	}
-	return `<string>${TRV.esc(String(val))}</string>`;
+	return '<string>' + TRV.esc(String(val)) + '</string>';
 };
 
-// -- Sync glyph data → XML textarea --------------------------------
+// -- Sync glyph data to XML (kept for programmatic use) -------------
+// Called by xmlRefresh button and after Python sync.
+// No longer called during drag or editing.
 TRV.syncXmlFromData = function() {
 	if (!TRV.state.glyphData) return;
-	const newXml = TRV.glyphToXml(TRV.state.glyphData);
+	var newXml = TRV.glyphToXml(TRV.state.glyphData);
 	TRV.state.rawXml = newXml;
 
-	// Always update textarea when XML panel is visible
+	// Update textarea when XML panel is visible
 	if (TRV.state.showXml) {
-		const formatted = TRV.formatXml(newXml);
+		var formatted = TRV.formatXml(newXml);
 		TRV.dom.xmlContent.value = formatted;
 		TRV.rebuildLineMaps(formatted);
 		TRV.updateNodeCount();
 		TRV.setParseStatus(true);
 	}
-};
-
-// Debounced version for use during continuous drag
-TRV.syncXmlFromDataDebounced = function() {
-	if (TRV.xmlSyncTimer) clearTimeout(TRV.xmlSyncTimer);
-	TRV.xmlSyncTimer = setTimeout(function() {
-		TRV.syncXmlFromData();
-	}, 80);
 };

@@ -55,6 +55,15 @@ TRV.actions = {
 		TRV.clearSelection();
 	},
 
+	// -- Contour walk (PageUp / PageDown) ---
+	walkNext: function() {
+		TRV.walkContour(1);
+	},
+
+	walkPrev: function() {
+		TRV.walkContour(-1);
+	},
+
 	// -- Node movement (arrow keys) ---
 	moveUp: function(ctx) {
 		var step = TRV.ARROW_STEP;
@@ -84,9 +93,17 @@ TRV.actions = {
 		TRV.moveSelectedNodes(-step, 0);
 	},
 
-	// -- Panels ---
+	// -- XML panel ---
 	toggleXml: function() {
 		document.getElementById('btn-panel').click();
+	},
+
+	xmlRefresh: function() {
+		TRV.xmlRefresh();
+	},
+
+	xmlApply: function() {
+		TRV.xmlApply();
 	},
 };
 
@@ -111,6 +128,10 @@ TRV.keyMap = [
 
 	// Selection
 	{ key: 'Escape',                 action: 'clearSelection', desc: 'Clear selection' },
+
+	// Contour walk
+	{ key: 'PageDown',               action: 'walkNext',       desc: 'Next node in contour' },
+	{ key: 'PageUp',                 action: 'walkPrev',       desc: 'Previous node in contour' },
 
 	// Node movement (only when nodes selected)
 	{ key: 'ArrowUp',    hasSelection: true, action: 'moveUp',    desc: 'Move selected up' },
@@ -153,17 +174,17 @@ TRV.dispatchKey = function(e) {
 // -- Mouse action map -----------------------------------------------
 // Descriptive reference; actual wiring in events.js.
 //
-//   Click         — select/deselect node
-//   Shift+click   — additive node selection
-//   Double-click  — select all nodes on clicked contour
-//   Drag node     — move selected nodes
-//   Shift+drag    — constrain to axis
-//   Drag empty    — rectangle selection
-//   Alt+drag      — lasso selection
-//   Spacebar+drag — pan canvas
-//   Scroll wheel  — zoom in/out
-//   Ctrl+scroll   — rotate grid column (multi-view)
-//   Alt+scroll    — rotate grid row (multi-view)
+//   Click         - select/deselect node
+//   Shift+click   - additive node selection
+//   Double-click  - select all nodes on clicked contour
+//   Drag node     - move selected nodes
+//   Shift+drag    - constrain to axis
+//   Drag empty    - rectangle selection
+//   Alt+drag      - lasso selection
+//   Spacebar+drag - pan canvas
+//   Scroll wheel  - zoom in/out
+//   Ctrl+scroll   - rotate grid column (multi-view)
+//   Alt+scroll    - rotate grid row (multi-view)
 
 // -- Toolbar button map ---------------------------------------------
 // { id, toggle, stateKey, action, desc }
@@ -180,10 +201,10 @@ TRV.toolbarMap = [
 	{ id: 'btn-anchors', toggle: true, stateKey: 'showAnchors', desc: 'Toggle anchors' },
 	{ id: 'btn-mask',    toggle: true, stateKey: 'showMask',    desc: 'Toggle mask' },
 
-	// Fill/outline are exclusive pair — handled specially in events.js
-	// View mode buttons (1×1, 2×1, 2×2) — handled specially in events.js
-	// Join button — handled specially in events.js
-	// XML button — has panel logic, handled specially in events.js
+	// Fill/outline are exclusive pair - handled specially in events.js
+	// View mode buttons (1x1, 2x1, 2x2) - handled specially in events.js
+	// Join button - handled specially in events.js
+	// XML button - has panel logic, handled specially in events.js
 ];
 
 // -- Toolbar dispatch -----------------------------------------------

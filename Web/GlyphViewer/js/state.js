@@ -55,7 +55,6 @@ const TRV = {
 	xmlLineNodeMap: {},
 	xmlNodeLineMap: {},
 	xmlEditTimer: null,
-	xmlSyncTimer: null,   // debounce for real-time XML sync during drag
 };
 
 // Populate DOM refs after DOM is ready

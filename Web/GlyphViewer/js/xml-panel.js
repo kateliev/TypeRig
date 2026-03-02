@@ -1,6 +1,10 @@
 // ===================================================================
 // TypeRig Glyph Viewer — XML Panel
 // ===================================================================
+// XML sync model: manual Refresh (data→XML) and Apply (XML→data).
+// No live sync during editing — canvas is the source of truth.
+// Node selection → XML highlight is kept (one direction only).
+// ===================================================================
 'use strict';
 
 TRV.buildXmlPanel = function() {
@@ -71,7 +75,8 @@ TRV.setParseStatus = function(ok, msg) {
 };
 
 // Highlight first selected node in XML textarea (for multi-selection,
-// scroll to first; all are conceptually selected)
+// scroll to first; all are conceptually selected).
+// Direction: canvas → XML (one way only)
 TRV.highlightXmlNode = function(nodeId) {
 	if (!TRV.state.showXml) return;
 	if (!nodeId) return;
@@ -97,13 +102,25 @@ TRV.highlightXmlNode = function(nodeId) {
 	textarea.scrollTop = Math.max(0, scrollTarget);
 };
 
-// -- XML Editing → live re-parse ------------------------------------
-TRV.onXmlEdit = function() {
-	if (TRV.xmlEditTimer) clearTimeout(TRV.xmlEditTimer);
-	TRV.xmlEditTimer = setTimeout(TRV.applyXmlEdit, 400);
+// -- Refresh: glyph data → XML textarea -----------------------------
+// Regenerates XML from the current in-memory glyph, replacing
+// whatever is in the textarea. Called by Refresh button.
+TRV.xmlRefresh = function() {
+	if (!TRV.state.glyphData) return;
+	const newXml = TRV.glyphToXml(TRV.state.glyphData);
+	TRV.state.rawXml = newXml;
+
+	const formatted = TRV.formatXml(newXml);
+	TRV.dom.xmlContent.value = formatted;
+	TRV.rebuildLineMaps(formatted);
+	TRV.updateNodeCount();
+	TRV.setParseStatus(true);
 };
 
-TRV.applyXmlEdit = function() {
+// -- Apply: XML textarea → glyph data ------------------------------
+// Parses the textarea content and replaces the in-memory glyph.
+// Called by Apply button or Ctrl+Enter in the XML textarea.
+TRV.xmlApply = function() {
 	const xmlString = TRV.dom.xmlContent.value;
 
 	try {
@@ -141,21 +158,6 @@ TRV.applyXmlEdit = function() {
 
 	} catch (e) {
 		TRV.setParseStatus(false, 'Parse error');
-	}
-};
-
-TRV.onXmlClick = function() {
-	const textarea = TRV.dom.xmlContent;
-	const pos = textarea.selectionStart;
-	const text = textarea.value.substring(0, pos);
-	const lineIdx = text.split('\n').length - 1;
-	const nodeId = TRV.xmlLineNodeMap[lineIdx];
-
-	if (nodeId) {
-		TRV.state.selectedNodeIds.clear();
-		TRV.state.selectedNodeIds.add(nodeId);
-		TRV.draw();
-		TRV.updateStatusSelected();
 	}
 };
 

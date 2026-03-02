@@ -410,11 +410,86 @@ body {
 .py-status--ready { color: #50c878; background: rgba(80,200,120,0.1); }
 .py-status--error { color: #ff6b6b; background: rgba(255,107,107,0.1); }
 
+
+/* -- XML action bar (Refresh / Apply) ------------------------ */
+#xml-actions {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 8px;
+	background: var(--bg-tertiary);
+	border-bottom: 1px solid var(--border);
+}
+
+.xml-btn {
+	padding: 3px 10px;
+	background: var(--bg-hover);
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	color: var(--text-secondary);
+	font-family: 'JetBrains Mono', monospace;
+	font-size: 10px;
+	cursor: pointer;
+	transition: all 0.12s;
+}
+
+.xml-btn:hover {
+	background: var(--bg-tertiary);
+	color: var(--text-primary);
+	border-color: var(--accent-dim);
+}
+
+.xml-btn--primary {
+	background: var(--accent-dim);
+	border-color: var(--accent);
+	color: var(--text-primary);
+}
+
+.xml-btn--primary:hover {
+	background: var(--accent);
+}
+
 /* -- Node highlighting in textarea (via overlay) ------------ */
 #xml-highlight-overlay {
 	display: none;
 }
 
+
+/* -- Context menu ------------------------------------------- */
+#context-menu {
+	display: none;
+	position: fixed;
+	z-index: 50;
+	min-width: 160px;
+	background: var(--bg-tertiary);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	padding: 4px 0;
+	box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+	font-family: 'JetBrains Mono', monospace;
+	font-size: 11px;
+}
+
+#context-menu.visible { display: block; }
+
+.ctx-item {
+	padding: 6px 14px;
+	color: var(--text-secondary);
+	cursor: pointer;
+	white-space: nowrap;
+	transition: background 0.1s, color 0.1s;
+}
+
+.ctx-item:hover {
+	background: var(--accent-bg);
+	color: var(--text-primary);
+}
+
+.ctx-separator {
+	height: 1px;
+	background: var(--border);
+	margin: 4px 0;
+}
 /* -- Status bar --------------------------------------------- */
 #statusbar {
 	display: flex;

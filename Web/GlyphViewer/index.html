@@ -127,6 +127,10 @@
 
 			<!-- XML tab content -->
 			<div id="xml-tab" class="panel-content active">
+				<div id="xml-actions">
+					<button class="xml-btn" id="xml-refresh-btn" title="Regenerate XML from glyph data">⟳ Refresh</button>
+					<button class="xml-btn xml-btn--primary" id="xml-apply-btn" title="Apply XML edits to glyph (Ctrl+Enter)">▶ Apply</button>
+				</div>
 				<textarea id="xml-content" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
 			</div>
 
@@ -162,6 +166,11 @@
 	</div>
 </div>
 
+<!-- Context menu -->
+<div id="context-menu">
+	<div class="ctx-item" data-action="toggleSmooth">Convert to Smooth</div>
+</div>
+
 <!-- Drop overlay -->
 <div id="drop-overlay">
 	<div class="drop-icon">
@@ -174,6 +183,9 @@
 
 <!-- Pyodide: Python in WebAssembly (loaded from CDN, ~12MB cached) -->
 <script src="https://cdn.jsdelivr.net/pyodide/v0.27.4/full/pyodide.js"></script>
+
+<!-- Bezier.js: geometry engine for interactive editing (bundled) -->
+<script src="js/bezier.js"></script>
 
 <!-- Scripts: load in dependency order -->
 <script src="js/state.js"></script>

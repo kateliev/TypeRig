@@ -48,7 +48,7 @@ dom.canvasWrap.addEventListener('mousedown', function(e) {
 	const absSx = e.clientX - rect.left;
 	const absSy = e.clientY - rect.top;
 
-	// -- Spacebar held → pan mode
+	// -- Spacebar held -> pan mode
 	if (state.spaceDown) {
 		state.isPanning = true;
 		state.lastMouse = { x: e.clientX, y: e.clientY };
@@ -79,7 +79,7 @@ dom.canvasWrap.addEventListener('mousedown', function(e) {
 			} else if (!state.selectedNodeIds.has(hit.id)) {
 				TRV.selectNode(hit.id, false);
 			}
-			startDrag(sx, sy);
+			startDrag(sx, sy, e);
 			return;
 		}
 	}
@@ -111,12 +111,16 @@ dom.canvasWrap.addEventListener('mousedown', function(e) {
 	}
 });
 
-function startDrag(sx, sy) {
+function startDrag(sx, sy, e) {
 	let gp;
 	withActiveOffset(function() { gp = TRV.screenToGlyph(sx, sy); });
 	state.isDragging = true;
 	state.dragOriginGlyph = { x: gp.x, y: gp.y };
 
+	// Alt+drag: move on-curve only, handles stay put
+	state.dragAltMode = !!(e && e.altKey);
+
+	// Save start positions for all selected nodes
 	state.dragStartPositions = new Map();
 	for (const nodeId of state.selectedNodeIds) {
 		const ref = TRV.findNodeById(nodeId);
@@ -124,6 +128,20 @@ function startDrag(sx, sy) {
 			state.dragStartPositions.set(nodeId, { x: ref.node.x, y: ref.node.y });
 		}
 	}
+
+	// Add follower handles unless Alt is held (detached mode)
+	if (!state.dragAltMode) {
+		var followers = TRV.getFollowerHandles(state.selectedNodeIds);
+		for (const [id, pos] of followers) {
+			if (!state.dragStartPositions.has(id)) {
+				state.dragStartPositions.set(id, { x: pos.x, y: pos.y });
+			}
+		}
+	}
+
+	// Compute tangent constraints for smooth on-curves
+	state.dragTangents = TRV.computeDragTangents(state.dragStartPositions);
+
 	dom.canvasWrap.style.cursor = 'move';
 }
 
@@ -137,7 +155,7 @@ window.addEventListener('mousemove', function(e) {
 	// Cursor position in glyph coords (offset-aware)
 	let gp;
 	withActiveOffset(function() { gp = TRV.screenToGlyph(sx, sy); });
-	dom.statusCursor.textContent = `${Math.round(gp.x)}, ${Math.round(gp.y)}`;
+	dom.statusCursor.textContent = Math.round(gp.x) + ', ' + Math.round(gp.y);
 
 	// -- Rect selection
 	if (state.isSelecting && state.selectMode === 'rect') {
@@ -174,32 +192,69 @@ window.addEventListener('mousemove', function(e) {
 		return;
 	}
 
-	// -- Node drag (moves all selected)
+	// -- Node drag (moves all selected + follower handles)
+	// No XML sync during drag — canvas is source of truth
 	if (state.isDragging && state.dragStartPositions) {
 		withActiveOffset(function() {
 			const dgp = TRV.screenToGlyph(sx, sy);
-			const dx = dgp.x - state.dragOriginGlyph.x;
-			const dy = dgp.y - state.dragOriginGlyph.y;
+			var dx = dgp.x - state.dragOriginGlyph.x;
+			var dy = dgp.y - state.dragOriginGlyph.y;
 
+			// Shift constraint: lock to dominant axis
+			if (e.shiftKey) {
+				if (Math.abs(dx) > Math.abs(dy)) dy = 0;
+				else dx = 0;
+			}
+
+			// Position all nodes absolutely (selected + followers)
 			for (const [nodeId, startPos] of state.dragStartPositions) {
-				let newX = startPos.x + dx;
-				let newY = startPos.y + dy;
+				var effDx = dx, effDy = dy;
 
-				if (e.shiftKey) {
-					if (Math.abs(dx) > Math.abs(dy)) {
-						newY = startPos.y;
-					} else {
-						newX = startPos.x;
-					}
+				// Constrained smooth: project onto tangent direction
+				if (state.dragTangents && state.dragTangents.has(nodeId)) {
+					var proj = TRV.projectOntoTangent(dx, dy, state.dragTangents.get(nodeId));
+					effDx = proj.dx;
+					effDy = proj.dy;
 				}
 
-				TRV.updateNodePosition(nodeId, newX, newY);
+				TRV.updateNodePosition(nodeId, startPos.x + effDx, startPos.y + effDy);
+			}
+
+			// Follower handles of constrained nodes need the same projected delta
+			if (state.dragTangents && state.dragTangents.size > 0) {
+				for (const [onId, tangent] of state.dragTangents) {
+					var proj = TRV.projectOntoTangent(dx, dy, tangent);
+					// Find follower handles for this on-curve and reposition them
+					var m = onId.match(/^c(\d+)_n(\d+)$/);
+					if (!m) continue;
+					var ci = parseInt(m[1]), ni = parseInt(m[2]);
+					var ref = TRV.findNodeById(onId);
+					if (!ref) continue;
+					var nodes = ref.contour.nodes;
+					var n = nodes.length;
+					var prevId = 'c' + ci + '_n' + ((ni - 1 + n) % n);
+					var nextId = 'c' + ci + '_n' + ((ni + 1) % n);
+					// Only reposition if they're followers (in dragStartPositions but not selected)
+					if (state.dragStartPositions.has(prevId) && !state.selectedNodeIds.has(prevId)) {
+						var sp = state.dragStartPositions.get(prevId);
+						TRV.updateNodePosition(prevId, sp.x + proj.dx, sp.y + proj.dy);
+					}
+					if (state.dragStartPositions.has(nextId) && !state.selectedNodeIds.has(nextId)) {
+						var sp = state.dragStartPositions.get(nextId);
+						TRV.updateNodePosition(nextId, sp.x + proj.dx, sp.y + proj.dy);
+					}
+				}
+			}
+
+			// Enforce collinearity on smooth nodes (skip in Alt mode)
+			if (!state.dragAltMode) {
+				var allMoved = new Set(state.dragStartPositions.keys());
+				TRV.enforceSmoothCollinearity(allMoved);
 			}
 		});
 
 		TRV.draw();
 		TRV.updateStatusSelected();
-		TRV.syncXmlFromDataDebounced();
 		return;
 	}
 
@@ -261,17 +316,13 @@ window.addEventListener('mouseup', function(e) {
 		return;
 	}
 
-	// -- Finalize drag
+	// -- Finalize drag (no XML sync — user clicks Refresh when needed)
 	if (state.isDragging) {
-		if (TRV.xmlSyncTimer) {
-			clearTimeout(TRV.xmlSyncTimer);
-			TRV.xmlSyncTimer = null;
-		}
-		TRV.syncXmlFromData();
-
 		state.isDragging = false;
 		state.dragStartPositions = null;
 		state.dragOriginGlyph = null;
+		state.dragAltMode = false;
+		state.dragTangents = null;
 	}
 
 	if (state.isPanning) {
@@ -392,7 +443,7 @@ document.getElementById('btn-panel').addEventListener('click', function() {
 	});
 });
 
-// -- View mode buttons (1×1, 2×1, 2×2) -----------------------------
+// -- View mode buttons (1x1, 2x1, 2x2) -----------------------------
 function setViewMode(cols, rows) {
 	const btn1x1 = document.getElementById('btn-view-1x1');
 	const btn2x1 = document.getElementById('btn-view-2x1');
@@ -505,8 +556,13 @@ document.addEventListener('keydown', function(e) {
 		return;
 	}
 
-	// Don't intercept normal typing in the XML textarea
+	// XML textarea: Ctrl+Enter applies, other typing is free-form
 	if (e.target === dom.xmlContent) {
+		if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+			e.preventDefault();
+			TRV.xmlApply();
+			return;
+		}
 		if (!(e.ctrlKey || e.metaKey)) return;
 	}
 
@@ -566,10 +622,38 @@ document.addEventListener('keyup', function(e) {
 })();
 
 // ===================================================================
-// XML textarea events
+// XML panel: Refresh / Apply buttons (no live sync)
 // ===================================================================
-dom.xmlContent.addEventListener('input', TRV.onXmlEdit);
-dom.xmlContent.addEventListener('click', TRV.onXmlClick);
+var xmlRefreshBtn = document.getElementById('xml-refresh-btn');
+var xmlApplyBtn = document.getElementById('xml-apply-btn');
+
+if (xmlRefreshBtn) {
+	xmlRefreshBtn.addEventListener('click', function() {
+		TRV.xmlRefresh();
+	});
+}
+
+if (xmlApplyBtn) {
+	xmlApplyBtn.addEventListener('click', function() {
+		TRV.xmlApply();
+	});
+}
+
+// XML textarea: click to highlight node on canvas (one-way)
+dom.xmlContent.addEventListener('click', function() {
+	var textarea = dom.xmlContent;
+	var pos = textarea.selectionStart;
+	var text = textarea.value.substring(0, pos);
+	var lineIdx = text.split('\n').length - 1;
+	var nodeId = TRV.xmlLineNodeMap[lineIdx];
+
+	if (nodeId) {
+		state.selectedNodeIds.clear();
+		state.selectedNodeIds.add(nodeId);
+		TRV.draw();
+		TRV.updateStatusSelected();
+	}
+});
 
 // ===================================================================
 // Panel tabs + Python REPL
@@ -581,5 +665,106 @@ TRV.wirePythonPanel();
 // Wire simple toolbar buttons from bindings.js
 // ===================================================================
 TRV.wireToolbar();
+
+// ===================================================================
+// Context menu (right-click)
+// ===================================================================
+var ctxMenu = document.getElementById('context-menu');
+
+function hideContextMenu() {
+	if (ctxMenu) ctxMenu.classList.remove('visible');
+}
+
+dom.canvasWrap.addEventListener('contextmenu', function(e) {
+	e.preventDefault();
+
+	var rect = dom.canvas.getBoundingClientRect();
+	var absSx = e.clientX - rect.left;
+	var absSy = e.clientY - rect.top;
+	var coords = interactionCoords(absSx, absSy);
+
+	// Hit test: did we right-click on a node?
+	var hit = null;
+	withActiveOffset(function() {
+		hit = TRV.hitTestNode(coords.sx, coords.sy);
+	});
+
+	if (hit) {
+		// Select the node if not already selected
+		if (!state.selectedNodeIds.has(hit.id)) {
+			TRV.selectNode(hit.id, false);
+		}
+
+		// Update menu items based on selection
+		var toggleItem = ctxMenu.querySelector('[data-action="toggleSmooth"]');
+		if (toggleItem) {
+			// Check if any selected on-curve is smooth
+			var hasSmooth = false;
+			var hasSharp = false;
+			for (var id of state.selectedNodeIds) {
+				var ref = TRV.findNodeById(id);
+				if (ref && ref.node.type === 'on') {
+					if (ref.node.smooth) hasSmooth = true;
+					else hasSharp = true;
+				}
+			}
+			// Label reflects what the action will do
+			if (hasSmooth && !hasSharp) {
+				toggleItem.textContent = 'Convert to Sharp';
+			} else if (hasSharp && !hasSmooth) {
+				toggleItem.textContent = 'Convert to Smooth';
+			} else {
+				toggleItem.textContent = 'Toggle Smooth/Sharp';
+			}
+		}
+
+		// Position and show menu
+		ctxMenu.style.left = e.clientX + 'px';
+		ctxMenu.style.top = e.clientY + 'px';
+		ctxMenu.classList.add('visible');
+
+		// Clamp to viewport
+		requestAnimationFrame(function() {
+			var mr = ctxMenu.getBoundingClientRect();
+			if (mr.right > window.innerWidth) {
+				ctxMenu.style.left = (e.clientX - mr.width) + 'px';
+			}
+			if (mr.bottom > window.innerHeight) {
+				ctxMenu.style.top = (e.clientY - mr.height) + 'px';
+			}
+		});
+	} else {
+		hideContextMenu();
+	}
+});
+
+// Menu item click
+if (ctxMenu) {
+	ctxMenu.addEventListener('click', function(e) {
+		var item = e.target.closest('.ctx-item');
+		if (!item) return;
+
+		var action = item.dataset.action;
+		if (action === 'toggleSmooth') {
+			TRV.toggleSmooth();
+		}
+
+		hideContextMenu();
+	});
+}
+
+// Dismiss on click outside or Escape
+window.addEventListener('mousedown', function(e) {
+	if (ctxMenu && !ctxMenu.contains(e.target)) {
+		hideContextMenu();
+	}
+});
+
+document.addEventListener('keydown', function(e) {
+	if (e.key === 'Escape' && ctxMenu && ctxMenu.classList.contains('visible')) {
+		e.stopPropagation();
+		hideContextMenu();
+	}
+}, true);
 
 })();
