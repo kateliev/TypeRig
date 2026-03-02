@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TypeRig — Font Engineering Framework</title>
-<meta name="description" content="Python framework for font design and engineering — geometry, interpolation, adaptive scaling, and a full FontLab production environment.">
+<meta name="description" content="Python framework for font design and engineering — geometry, interpolation, adaptive scaling, and FontLab tools. Work in progress.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -121,8 +121,8 @@ nav a svg { width: 14px; height: 14px; flex-shrink: 0; }
 	position: absolute;
 	right: calc(100% + 24px);
 	top: 0;
-	width: 200px;
-	height: 200px;
+	width: 120px;
+	height: 120px;
 }
 
 .hero-logo img {
@@ -475,7 +475,12 @@ footer a { color: var(--text-secondary); }
 /* -- Responsive ------------------------------------------ */
 @media (max-width: 640px) {
 	.hero h1 { font-size: 28px; }
-	.hero-logo { display: none; }
+	.hero-logo {
+		position: static;
+		width: 80px;
+		height: 80px;
+		margin-bottom: 16px;
+	}
 	.grid-3 { grid-template-columns: 1fr; }
 	.grid-2 { grid-template-columns: 1fr; }
 	.mod-item { grid-template-columns: 1fr; gap: 4px; }
@@ -516,15 +521,16 @@ footer a { color: var(--text-secondary); }
 		</div>
 		<h1>Type<span class="accent">Rig</span></h1>
 		<p class="lead">
-			A Python framework for font design and engineering, providing an extensive suite
-			of tools for professional typeface development inside FontLab, alongside a standalone
-			pure-Python geometry and interpolation core.
+			A Python framework for font design and engineering. Started as a personal toolkit
+			for working inside FontLab, grew over the years into a standalone geometry and
+			interpolation core with a bunch of GUI tools on top.
 		</p>
 		<p class="sub">
-			Geometric objects for manipulating font outlines &mdash; points, nodes, contours, shapes,
-			layers and glyphs &mdash; together with advanced mathematical tools for interpolation,
-			adaptive scaling and curve processing. A proxy layer transparently wraps FontLab internals,
-			so the same operations work both standalone and inside the host application.
+			Objects for manipulating font outlines &mdash; points, nodes, contours, shapes,
+			layers and glyphs &mdash; plus math helpers for interpolation, adaptive scaling
+			and curve processing. A proxy layer wraps FontLab internals so the same code
+			works both standalone and inside the host app. Experimental, evolving, and
+			perpetually work-in-progress.
 		</p>
 		<div class="hero-actions">
 			<a class="btn btn-primary" href="https://github.com/kateliev/TypeRig" target="_blank" rel="noopener">
@@ -553,17 +559,17 @@ footer a { color: var(--text-secondary); }
 	<div class="wrap">
 		<div class="section-label">FontLab Scripts &amp; Tools</div>
 		<p class="section-desc">
-			The FontLab-facing part of TypeRig &mdash; a rich set of GUI-driven tools covering virtually every
-			aspect of font design and production. All built with PythonQt, integrated with FontLab's undo
-			system, and supporting multi-master workflows out of the box.
+			The biggest part of TypeRig in practice &mdash; a collection of GUI tools
+			that cover most of what I need in a daily font production workflow.
+			Built with PythonQt, hooked into FontLab's undo, multi-master aware.
 		</p>
 
 		<!-- Main Panel -->
 		<div class="sub-label">TypeRig Panel<code>typerig-panel.py</code></div>
 		<p class="section-desc" style="margin-bottom:16px">
-			Dockable, always-on-top panel with dynamically loaded sub-panels as tabbed modules.
-			Masthead with layer-selection controls and glyph-scope selectors.
-			Panel visibility is user-configurable and persisted via JSON.
+			A dockable panel that loads sub-panels as tabs.
+			Layer selectors and glyph-scope controls in the masthead.
+			Panel visibility persisted via JSON.
 		</p>
 
 		<div class="panel-list">
@@ -613,7 +619,7 @@ footer a { color: var(--text-secondary); }
 					<span class="panel-name">Element</span>
 				</div>
 				<div class="panel-brief">Shape manipulation, element library insertion, alignment, and expression-based composition system.</div>
-				<div class="panel-detail">Naming, unlinking references, deletion, transform reset/rounding, auto-reorder, ungroup-all. Shape insertion and replacement from font-wide element library. Alignment to other shapes, layer bounds, font metrics. Expression-based composition with full scripting syntax: coordinate placement by node tags, anchor names, bbox positions, per-layer overrides, element swapping.</div>
+				<div class="panel-detail">Naming, unlinking references, deletion, transform reset/rounding, auto-reorder, ungroup-all. Shape insertion and replacement from font-wide element library. Alignment to other shapes, layer bounds, font metrics. Expression-based composition with scripting syntax: coordinate placement by node tags, anchor names, bbox positions, per-layer overrides, element swapping.</div>
 			</div>
 			<div class="panel-item">
 				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
@@ -766,20 +772,20 @@ footer a { color: var(--text-secondary); }
 	<div class="wrap">
 		<div class="section-label">Architecture</div>
 		<p class="section-desc">
-			Split into two complementary packages, bridged by a dual proxy layer.
+			Two packages, connected by a proxy layer.
 		</p>
 
 		<!-- Core -->
 		<div class="sub-label">Core<code>typerig.core</code></div>
 		<p class="section-desc" style="margin-bottom:16px">
-			Zero external dependencies. Every object lives in pure Python and can run anywhere &mdash;
-			CPython, Pyodide in a browser, or any other conforming runtime.
+			No external dependencies. Pure Python, runs anywhere &mdash;
+			CPython, Pyodide in a browser, whatever.
 		</p>
 
 		<div class="mod-list">
 			<div class="mod-item">
 				<span class="mod-name">core.objects</span>
-				<span class="mod-desc">Point, Line, CubicBezier, QuadraticBezier &mdash; foundational geometry with operator overloading and complex-number math. Node with navigation, corner ops, Hobby splines, per-node stem weights. Contour with winding, segment iteration, analytical offset, SDF-clamped offset, compensated scaling. Shape, Layer (interpolation, adaptive scaling, virtual axes), Glyph, Anchor. Transform, SDF, HobbySpline, PointArray, DeltaArray, DeltaScale.</span>
+				<span class="mod-desc">Point, Line, CubicBezier, QuadraticBezier &mdash; basic geometry with operator overloading and complex-number math. Node with navigation, corner ops, Hobby splines, per-node stem weights. Contour with winding, segment iteration, analytical offset, SDF-clamped offset, compensated scaling. Shape, Layer (interpolation, adaptive scaling, virtual axes), Glyph, Anchor. Transform, SDF, HobbySpline, PointArray, DeltaArray, DeltaScale.</span>
 			</div>
 			<div class="mod-item">
 				<span class="mod-name">core.func</span>
@@ -794,7 +800,7 @@ footer a { color: var(--text-secondary); }
 		<!-- Proxy FL -->
 		<div class="sub-label">Proxy &mdash; FontLab<code>typerig.proxy.fl</code></div>
 		<p class="section-desc" style="margin-bottom:16px">
-			Depends on FontLab (fontlab, fontgate, PythonQt). Production-ready proxy objects, GUI components, and action collectors.
+			Needs FontLab (fontlab, fontgate, PythonQt). Proxy objects, GUI bits, and action collectors.
 		</p>
 
 		<div class="mod-list">
@@ -808,7 +814,7 @@ footer a { color: var(--text-secondary); }
 			</div>
 			<div class="mod-item">
 				<span class="mod-name">proxy.fl.gui</span>
-				<span class="mod-desc">Reusable widgets (buttons, flow layout, tab widgets, table views, sliders, transform controls, delta layer tree, icon font loader), dialogs (layer chooser with search/filter, quick input), stylesheets with auto dark/light detection, canvas drawing utilities (TRDrawIcon, contour/node rendering).</span>
+				<span class="mod-desc">Widgets (buttons, flow layout, tab widgets, table views, sliders, transform controls, delta layer tree, icon font loader), dialogs (layer chooser with search/filter, quick input), stylesheets with auto dark/light detection, canvas drawing utilities (TRDrawIcon, contour/node rendering).</span>
 			</div>
 			<div class="mod-item">
 				<span class="mod-name">proxy.fl.application</span>
@@ -820,9 +826,9 @@ footer a { color: var(--text-secondary); }
 		<div class="sub-label">Proxy &mdash; Core Bridge<code>typerig.proxy.tr</code></div>
 		<p class="section-desc" style="margin-bottom:16px">
 			Each proxy &mdash; trNode, trContour, trShape, trLayer, trGlyph, trFont, trAnchor &mdash;
-			inherits from its core counterpart and holds a <code>.host</code> reference to the FL object.
-			Attribute access is rerouted through a <code>__meta__</code> mapping so core algorithms run
-			identically on proxy objects with live FL data.
+			inherits from its core counterpart and keeps a <code>.host</code> reference to the FL object.
+			Attribute access goes through a <code>__meta__</code> mapping so the same core algorithms
+			work on live FL data without extra glue.
 		</p>
 
 		<div class="grid-3">
@@ -847,18 +853,18 @@ footer a { color: var(--text-secondary); }
 	<div class="wrap">
 		<div class="section-label">Web</div>
 		<p class="section-desc" style="margin-bottom:24px">
-			The core package runs in the browser via Pyodide. The TR Glyph Viewer loads TypeRig
-			modules directly from GitHub at runtime, stubs the proxy and FL-dependent init files,
-			and exposes the full core API to a live Python editor on an HTML canvas.
+			The core package also runs in the browser via Pyodide. The TR Glyph Viewer
+			loads modules from GitHub at runtime, stubs the FL-dependent parts,
+			and gives you a live Python editor on a canvas. Still rough around the edges.
 		</p>
 		<div class="grid-2">
 			<a class="link-card" href="Web/GlyphViewer/" target="_blank" rel="noopener">
 				<span class="link-title">TR Glyph Viewer &rarr;</span>
-				<span class="link-desc">Browser-based glyph editor with live Python scripting via Pyodide.</span>
+				<span class="link-desc">Glyph viewer with a Python editor in the browser. Experimental.</span>
 			</a>
 			<div class="cell">
 				<h3>How it works</h3>
-				<p>Pyodide loads CPython as WebAssembly, fetches core modules from GitHub, stubs FL-dependent packages. Full core API available in-browser.</p>
+				<p>Pyodide loads CPython as WebAssembly, fetches core modules from GitHub, stubs the FL parts. It works, mostly.</p>
 			</div>
 		</div>
 	</div>
@@ -893,7 +899,7 @@ git clone https://github.com/kateliev/TypeRig.git
 			</a>
 			<a class="link-card" href="Web/GlyphViewer/" target="_blank" rel="noopener">
 				<span class="link-title">TR Glyph Viewer</span>
-				<span class="link-desc">Browser-based glyph editor with live Python scripting.</span>
+				<span class="link-desc">Browser-based glyph viewer with Python scripting. Experimental.</span>
 			</a>
 			<a class="link-card" href="https://www.typerig.com" target="_blank" rel="noopener">
 				<span class="link-title">typerig.com</span>
