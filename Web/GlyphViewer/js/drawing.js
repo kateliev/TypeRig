@@ -50,6 +50,7 @@ TRV.draw = function() {
 	if (!preview && state.showNodes) TRV.drawSelectedSegments(layer);
 	if (!preview && state.showAnchors) TRV.drawAnchors(layer);
 	if (!preview && state.showNodes) TRV.drawNodes(layer);
+	if (preview) TRV.drawPreviewNodes(layer);
 	if (!preview) TRV.drawLayerLabel(layer);
 
 	// Draw selection overlay (rect or lasso)
@@ -511,6 +512,188 @@ TRV.drawNodes = function(layer) {
 			ci++;
 		}
 	}
+};
+
+
+// -- Preview mode: proximity-reveal nodes ---------------------------
+// Draws nodes/handles with opacity based on distance to cursor.
+// Closer = brighter; beyond REVEAL_RADIUS = invisible.
+TRV.PREVIEW_REVEAL_RADIUS = 120; // screen pixels
+
+TRV.drawPreviewNodes = function(layer) {
+	var mouse = TRV.state.previewMouse;
+	if (!mouse) return;
+
+	var ctx = TRV.dom.ctx;
+	var sel = TRV.state.selectedNodeIds;
+	var tn = TRV.theme.node;
+	var radius = TRV.PREVIEW_REVEAL_RADIUS;
+	var savedAlpha = ctx.globalAlpha;
+
+	// Helper: distance-based alpha (quadratic falloff)
+	function nodeAlpha(sp) {
+		var dx = sp.x - mouse.x;
+		var dy = sp.y - mouse.y;
+		var dist = Math.sqrt(dx * dx + dy * dy);
+		var a = 1 - dist / radius;
+		return a > 0 ? a * a : 0;
+	}
+
+	// -- Pass 1: handle lines --
+	var ci = 0;
+	for (var si = 0; si < layer.shapes.length; si++) {
+		var shape = layer.shapes[si];
+		for (var ki = 0; ki < shape.contours.length; ki++) {
+			var contour = shape.contours[ki];
+			var nodes = contour.nodes;
+			var n = nodes.length;
+
+			for (var ni = 0; ni < n; ni++) {
+				var node = nodes[ni];
+				if (node.type !== 'curve' && node.type !== 'off') continue;
+
+				var sp = TRV.glyphToScreen(node.x, node.y);
+				var a = nodeAlpha(sp);
+				if (a <= 0) continue;
+
+				ctx.globalAlpha = a;
+				ctx.strokeStyle = tn.handleLine;
+				ctx.lineWidth = 1;
+
+				var prevIdx = (ni - 1 + n) % n;
+				var nextIdx = (ni + 1) % n;
+
+				if (nodes[prevIdx].type === 'on') {
+					var pp = TRV.glyphToScreen(nodes[prevIdx].x, nodes[prevIdx].y);
+					ctx.beginPath();
+					ctx.moveTo(pp.x, pp.y);
+					ctx.lineTo(sp.x, sp.y);
+					ctx.stroke();
+				}
+
+				if (nodes[nextIdx].type === 'on') {
+					var np = TRV.glyphToScreen(nodes[nextIdx].x, nodes[nextIdx].y);
+					ctx.beginPath();
+					ctx.moveTo(sp.x, sp.y);
+					ctx.lineTo(np.x, np.y);
+					ctx.stroke();
+				}
+			}
+			ci++;
+		}
+	}
+
+	// -- Pass 2: node markers --
+	ci = 0;
+	for (var si = 0; si < layer.shapes.length; si++) {
+		var shape = layer.shapes[si];
+		for (var ki = 0; ki < shape.contours.length; ki++) {
+			var contour = shape.contours[ki];
+			var nodes = contour.nodes;
+			var n = nodes.length;
+
+			var firstOn = 0;
+			for (var j = 0; j < n; j++) {
+				if (nodes[j].type === 'on') { firstOn = j; break; }
+			}
+
+			for (var ni = 0; ni < n; ni++) {
+				if (ni === firstOn) continue;
+
+				var node = nodes[ni];
+				var startNode = nodes[firstOn];
+
+				if (ni === n - 1 && node.x === startNode.x && node.y === startNode.y) continue;
+
+				var sp = TRV.glyphToScreen(node.x, node.y);
+				var a = nodeAlpha(sp);
+				if (a <= 0) continue;
+
+				var id = 'c' + ci + '_n' + ni;
+				var isSelected = sel.has(id);
+				var r = isSelected ? 5 : (node.type === 'on' ? 4 : 3);
+
+				ctx.globalAlpha = a;
+
+				if (node.type === 'on') {
+					ctx.fillStyle = isSelected ? tn.selected : (node.smooth ? tn.onSmooth : tn.onCorner);
+					ctx.strokeStyle = isSelected ? tn.selected : tn.outline;
+					ctx.lineWidth = 1;
+
+					if (node.smooth) {
+						ctx.beginPath();
+						ctx.arc(sp.x, sp.y, r, 0, Math.PI * 2);
+						ctx.fill();
+						ctx.stroke();
+					} else {
+						ctx.fillRect(sp.x - r, sp.y - r, r * 2, r * 2);
+						ctx.strokeRect(sp.x - r, sp.y - r, r * 2, r * 2);
+					}
+				} else {
+					ctx.fillStyle = isSelected ? tn.selected : tn.offCurve;
+					ctx.strokeStyle = isSelected ? tn.selected : tn.outline;
+					ctx.lineWidth = 1;
+					ctx.beginPath();
+					ctx.arc(sp.x, sp.y, r, 0, Math.PI * 2);
+					ctx.fill();
+					ctx.stroke();
+				}
+			}
+			ci++;
+		}
+	}
+
+	// -- Pass 3: start point triangles --
+	ci = 0;
+	for (var si = 0; si < layer.shapes.length; si++) {
+		var shape = layer.shapes[si];
+		for (var ki = 0; ki < shape.contours.length; ki++) {
+			var contour = shape.contours[ki];
+			var nodes = contour.nodes;
+			var n = nodes.length;
+			if (n < 2) { ci++; continue; }
+
+			var firstOn = 0;
+			for (var j = 0; j < n; j++) {
+				if (nodes[j].type === 'on') { firstOn = j; break; }
+			}
+
+			var startNode = nodes[firstOn];
+			var nextNode = nodes[(firstOn + 1) % n];
+			var sp = TRV.glyphToScreen(startNode.x, startNode.y);
+			var a = nodeAlpha(sp);
+			if (a <= 0) { ci++; continue; }
+
+			var np = TRV.glyphToScreen(nextNode.x, nextNode.y);
+			var dx = np.x - sp.x;
+			var dy = np.y - sp.y;
+			var angle = Math.atan2(dy, dx);
+			var isStartSelected = sel.has('c' + ci + '_n' + firstOn);
+			var size = 8;
+
+			ctx.globalAlpha = a;
+			ctx.save();
+			ctx.translate(sp.x, sp.y);
+			ctx.rotate(angle);
+
+			ctx.beginPath();
+			ctx.moveTo(size + 4, 0);
+			ctx.lineTo(-size + 2, -size + 1);
+			ctx.lineTo(-size + 2, size - 1);
+			ctx.closePath();
+
+			ctx.fillStyle = isStartSelected ? tn.selected : tn.startPoint;
+			ctx.fill();
+			ctx.strokeStyle = tn.outline;
+			ctx.lineWidth = 1;
+			ctx.stroke();
+
+			ctx.restore();
+			ci++;
+		}
+	}
+
+	ctx.globalAlpha = savedAlpha;
 };
 
 // -- Anchors --------------------------------------------------------

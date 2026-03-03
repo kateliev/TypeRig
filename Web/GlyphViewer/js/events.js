@@ -208,6 +208,9 @@ window.addEventListener('mousemove', function(e) {
 	const absSx = e.clientX - rect.left;
 	const absSy = e.clientY - rect.top;
 
+	// Preview mode: track cursor for proximity-reveal nodes
+	state.previewMouse = { x: absSx, y: absSy };
+
 	const { sx, sy } = interactionCoords(absSx, absSy);
 
 	// Cursor position in glyph coords (offset-aware)
@@ -366,6 +369,11 @@ window.addEventListener('mousemove', function(e) {
 		state.lastMouse = { x: e.clientX, y: e.clientY };
 		TRV.draw();
 		return;
+	}
+
+	// Preview mode: redraw for proximity-reveal (idle hover)
+	if (state.previewMode) {
+		TRV.draw();
 	}
 
 	// -- Hover cursor hint

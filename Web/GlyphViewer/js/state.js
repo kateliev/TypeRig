@@ -32,6 +32,7 @@ const TRV = {
 		lastMouse: { x: 0, y: 0 },
 		spaceDown: false,
 		previewMode: false,
+		previewMouse: null,		// { x, y } canvas-relative screen coords
 
 		// Multi-layer grid view
 		multiView: false,

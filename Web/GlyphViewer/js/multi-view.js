@@ -265,6 +265,7 @@ TRV.drawJoinedView = function(canvasW, canvasH) {
 				if (!preview && state.showNodes) TRV.drawSelectedSegments(layer);
 				if (!preview && state.showAnchors) TRV.drawAnchors(layer);
 				if (!preview && state.showNodes) TRV.drawNodes(layer);
+				if (preview) TRV.drawPreviewNodes(layer);
 
 				if (!preview && isActive && state.isSelecting) {
 					TRV.drawSelectionOverlay();
@@ -444,6 +445,12 @@ TRV.drawSplitView = function(canvasW, canvasH) {
 			if (!preview && state.showNodes) TRV.drawSelectedSegments(layer);
 			if (!preview && state.showAnchors) TRV.drawAnchors(layer);
 			if (!preview && state.showNodes) TRV.drawNodes(layer);
+			if (preview && state.previewMouse) {
+				var savedMouse = state.previewMouse;
+				state.previewMouse = { x: savedMouse.x - cell.x, y: savedMouse.y - cell.y };
+				TRV.drawPreviewNodes(layer);
+				state.previewMouse = savedMouse;
+			}
 
 			if (!preview && isActive && state.isSelecting) {
 				TRV.drawSelectionOverlay();
