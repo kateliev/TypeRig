@@ -121,6 +121,132 @@ TRV.walkContour = function(direction) {
 	TRV.selectNode(contourNodes[newIdx].id, false);
 };
 
+// -- Open contour at selected node (Del) ----------------------------
+// Splits the contour at the selected on-curve node: duplicates it,
+// sets contour.closed = false. The original node becomes the end,
+// the duplicate becomes the new start.
+TRV.openContourAtNode = function() {
+	var layer = TRV.getActiveLayer();
+	if (!layer) return;
+
+	var sel = TRV.state.selectedNodeIds;
+	if (sel.size !== 1) return; // only works on single node
+
+	var nodeId = sel.values().next().value;
+	var ref = TRV.findNodeById(nodeId);
+	if (!ref || ref.node.type !== 'on') return;
+
+	var contour = ref.contour;
+	if (!contour.closed) return; // already open
+
+	var nodes = contour.nodes;
+	var n = nodes.length;
+
+	// Find index of selected node
+	var m = nodeId.match(/^c(\d+)_n(\d+)$/);
+	if (!m) return;
+	var ni = parseInt(m[2]);
+
+	// Rotate node array so the selected node is at position 0
+	// This makes the selected node the start of the open contour
+	var rotated = nodes.slice(ni).concat(nodes.slice(0, ni));
+
+	// Duplicate the start node at the end (it becomes the endpoint)
+	var startNode = rotated[0];
+	var endNode = {
+		type: startNode.type,
+		smooth: false, // endpoints are sharp
+		x: startNode.x,
+		y: startNode.y
+	};
+	startNode.smooth = false; // start node also sharp
+	rotated.push(endNode);
+
+	// Replace nodes and mark open
+	contour.nodes = rotated;
+	contour.closed = false;
+
+	sel.clear();
+	TRV.draw();
+	TRV.updateStatusSelected();
+};
+
+// -- Delete selected node (Backspace) ------------------------------
+// Removes the selected on-curve and its adjacent handles.
+// Contour stays closed — resulting gap is bridged with a straight line.
+TRV.deleteNode = function() {
+	var layer = TRV.getActiveLayer();
+	if (!layer) return;
+
+	var sel = TRV.state.selectedNodeIds;
+	if (sel.size !== 1) return; // single node only for now
+
+	var nodeId = sel.values().next().value;
+	var ref = TRV.findNodeById(nodeId);
+	if (!ref) return;
+
+	var contour = ref.contour;
+	var nodes = contour.nodes;
+	var n = nodes.length;
+
+	var m = nodeId.match(/^c(\d+)_n(\d+)$/);
+	if (!m) return;
+	var ni = parseInt(m[2]);
+	var node = nodes[ni];
+
+	if (node.type === 'on') {
+		// Collect indices to remove: the on-curve + adjacent handles
+		var toRemove = [ni];
+		var prevIdx = (ni - 1 + n) % n;
+		var nextIdx = (ni + 1) % n;
+
+		// Remove preceding handle(s) that belong to this curve segment
+		if (nodes[prevIdx].type !== 'on') {
+			toRemove.push(prevIdx);
+			// Check one more back for the second BCP of incoming cubic
+			var prevPrev = (prevIdx - 1 + n) % n;
+			if (nodes[prevPrev].type !== 'on' && toRemove.indexOf(prevPrev) < 0) {
+				toRemove.push(prevPrev);
+			}
+		}
+
+		// Remove following handle(s) that belong to the outgoing segment
+		if (nodes[nextIdx].type !== 'on') {
+			toRemove.push(nextIdx);
+			var nextNext = (nextIdx + 1) % n;
+			if (nodes[nextNext].type !== 'on' && toRemove.indexOf(nextNext) < 0) {
+				toRemove.push(nextNext);
+			}
+		}
+
+		// Sort descending and remove
+		toRemove.sort(function(a, b) { return b - a; });
+		for (var i = 0; i < toRemove.length; i++) {
+			nodes.splice(toRemove[i], 1);
+		}
+
+		// If contour has fewer than 2 nodes, remove it entirely
+		if (nodes.length < 2) {
+			var shape = ref.shape;
+			var ci = shape.contours.indexOf(contour);
+			if (ci >= 0) shape.contours.splice(ci, 1);
+		}
+	} else {
+		// Handle selected: just retract it to parent on-curve
+		var prevIdx = (ni - 1 + n) % n;
+		var nextIdx = (ni + 1) % n;
+		var parentIdx = nodes[prevIdx].type === 'on' ? prevIdx : nextIdx;
+		if (nodes[parentIdx]) {
+			nodes[ni].x = nodes[parentIdx].x;
+			nodes[ni].y = nodes[parentIdx].y;
+		}
+	}
+
+	sel.clear();
+	TRV.draw();
+	TRV.updateStatusSelected();
+};
+
 // Get contour index (ci) from a node ID like 'c2_n5'
 TRV.getContourIndexForNode = function(nodeId) {
 	var m = nodeId.match(/^c(\d+)/);

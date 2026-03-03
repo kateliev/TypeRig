@@ -45,6 +45,7 @@ TRV.draw = function() {
 
 	if (state.showMetrics) TRV.drawMetrics(layer, w, h);
 	TRV.drawContours(layer);
+	if (state.showNodes) TRV.drawStackedWarnings(layer);
 	if (state.showNodes) TRV.drawSelectedSegments(layer);
 	if (state.showAnchors) TRV.drawAnchors(layer);
 	if (state.showNodes) TRV.drawNodes(layer);
@@ -125,11 +126,12 @@ TRV.drawContours = function(layer) {
 	const t = TRV.theme.contour;
 
 	if (TRV.state.filled) {
-		// Filled mode: all contours in ONE path so even-odd punches counters
+		// Filled mode: closed contours in ONE path so even-odd punches counters
 		ctx.beginPath();
 		for (const shape of layer.shapes) {
 			for (const contour of shape.contours) {
 				if (contour.nodes.length === 0) continue;
+				if (!contour.closed) continue; // open contours are not filled
 				TRV.buildContourPath(contour);
 			}
 		}
@@ -138,6 +140,18 @@ TRV.drawContours = function(layer) {
 		ctx.strokeStyle = t.stroke;
 		ctx.lineWidth = 1;
 		ctx.stroke();
+
+		// Open contours: stroke only
+		for (const shape of layer.shapes) {
+			for (const contour of shape.contours) {
+				if (contour.nodes.length === 0 || contour.closed) continue;
+				ctx.beginPath();
+				TRV.buildContourPath(contour);
+				ctx.strokeStyle = t.strokePlain || t.stroke;
+				ctx.lineWidth = 1.5;
+				ctx.stroke();
+			}
+		}
 	} else {
 		// Outline mode: stroke each contour independently
 		for (const shape of layer.shapes) {
@@ -264,6 +278,49 @@ TRV.drawSelectedSegments = function(layer) {
 			ci++;
 		}
 	}
+};
+
+
+// -- Stacked node warning glow --------------------------------------
+// Highlights nodes that overlap or are within 2 units of another node.
+// Static red glow — no animation.
+TRV.drawStackedWarnings = function(layer) {
+	var ctx = TRV.dom.ctx;
+	var allNodes = TRV.getAllNodes(layer);
+	var n = allNodes.length;
+	if (n < 2) return;
+
+	// Find stacked pairs (within 2 glyph units)
+	var stacked = new Set();
+	for (var i = 0; i < n; i++) {
+		for (var j = i + 1; j < n; j++) {
+			var dx = allNodes[i].x - allNodes[j].x;
+			var dy = allNodes[i].y - allNodes[j].y;
+			if (dx * dx + dy * dy <= 4.0) {
+				stacked.add(i);
+				stacked.add(j);
+			}
+		}
+	}
+
+	if (stacked.size === 0) return;
+
+	ctx.save();
+	for (var idx of stacked) {
+		var node = allNodes[idx];
+		var sp = TRV.glyphToScreen(node.x, node.y);
+
+		ctx.beginPath();
+		ctx.arc(sp.x, sp.y, 12, 0, Math.PI * 2);
+		ctx.fillStyle = 'rgba(220, 50, 50, 0.15)';
+		ctx.fill();
+
+		ctx.beginPath();
+		ctx.arc(sp.x, sp.y, 7, 0, Math.PI * 2);
+		ctx.fillStyle = 'rgba(220, 50, 50, 0.3)';
+		ctx.fill();
+	}
+	ctx.restore();
 };
 
 // -- Nodes & handles ------------------------------------------------

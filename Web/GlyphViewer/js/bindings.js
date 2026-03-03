@@ -93,6 +93,15 @@ TRV.actions = {
 		TRV.moveSelectedNodes(-step, 0);
 	},
 
+	// -- Node operations ---
+	openContour: function() {
+		TRV.openContourAtNode();
+	},
+
+	deleteNode: function() {
+		TRV.deleteNode();
+	},
+
 	// -- XML panel ---
 	toggleXml: function() {
 		document.getElementById('btn-panel').click();
@@ -123,7 +132,7 @@ TRV.keyMap = [
 
 	// View
 	{ key: 'Home',                   action: 'fitToView',      desc: 'Fit to view' },
-	{ key: 'a',                      action: 'zoomIn',         desc: 'Zoom in' },
+	{ key: 'z',                      action: 'zoomIn',         desc: 'Zoom in' },
 	{ key: 'x',                      action: 'zoomOut',        desc: 'Zoom out' },
 
 	// Selection
@@ -138,6 +147,10 @@ TRV.keyMap = [
 	{ key: 'ArrowDown',  hasSelection: true, action: 'moveDown',  desc: 'Move selected down' },
 	{ key: 'ArrowRight', hasSelection: true, action: 'moveRight', desc: 'Move selected right' },
 	{ key: 'ArrowLeft',  hasSelection: true, action: 'moveLeft',  desc: 'Move selected left' },
+
+	// Node operations
+	{ key: 'Delete',     hasSelection: true, action: 'openContour',  desc: 'Open contour at node' },
+	{ key: 'Backspace',  hasSelection: true, action: 'deleteNode',   desc: 'Delete node' },
 ];
 
 // -- Keyboard dispatch ----------------------------------------------

@@ -259,6 +259,7 @@ TRV.drawJoinedView = function(canvasW, canvasH) {
 
 				if (state.showMetrics) TRV.drawMetrics(layer, canvasW, canvasH);
 				TRV.drawContours(layer);
+				if (state.showNodes) TRV.drawStackedWarnings(layer);
 				if (state.showNodes) TRV.drawSelectedSegments(layer);
 				if (state.showAnchors) TRV.drawAnchors(layer);
 				if (state.showNodes) TRV.drawNodes(layer);
@@ -436,6 +437,7 @@ TRV.drawSplitView = function(canvasW, canvasH) {
 
 			if (state.showMetrics) TRV.drawMetrics(layer, cell.w, cell.h);
 			TRV.drawContours(layer);
+			if (state.showNodes) TRV.drawStackedWarnings(layer);
 			if (state.showNodes) TRV.drawSelectedSegments(layer);
 			if (state.showAnchors) TRV.drawAnchors(layer);
 			if (state.showNodes) TRV.drawNodes(layer);
