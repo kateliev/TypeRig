@@ -96,6 +96,29 @@ TRV.txGlyphToScreen = function(tx, x, y) {
 	return TRV.glyphToScreen(x, y);
 };
 
+// -- Hit test: anchor (screen coords) -------------------------------
+TRV.hitTestAnchor = function(sx, sy, radius) {
+	var layer = TRV.getActiveLayer();
+	if (!layer || !layer.anchors) return null;
+
+	var r2 = (radius || 10) * (radius || 10);
+	var closest = null;
+	var closestDist = Infinity;
+
+	for (var i = 0; i < layer.anchors.length; i++) {
+		var a = layer.anchors[i];
+		var sp = TRV.glyphToScreen(a.x, a.y);
+		var dx = sp.x - sx;
+		var dy = sp.y - sy;
+		var d2 = dx * dx + dy * dy;
+		if (d2 < r2 && d2 < closestDist) {
+			closestDist = d2;
+			closest = i;
+		}
+	}
+	return closest;
+};
+
 // -- Hit test: single node ------------------------------------------
 TRV.hitTestNode = function(sx, sy, radius) {
 	const layer = TRV.getActiveLayer();

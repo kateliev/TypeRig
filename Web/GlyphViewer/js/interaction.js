@@ -83,6 +83,12 @@ TRV.clearUndo = function() {
 	TRV.redoStack.length = 0;
 };
 
+// -- Preview button sync --------------------------------------------
+TRV.updatePreviewButton = function() {
+	var btn = document.getElementById('btn-preview');
+	if (btn) btn.classList.toggle('active', TRV.state.previewLocked);
+};
+
 // -- Selection (multi-node) -----------------------------------------
 TRV.clearSelection = function() {
 	TRV.state.selectedNodeIds.clear();

@@ -130,6 +130,24 @@ dom.canvasWrap.addEventListener('mousedown', function(e) {
 		}
 	}
 
+	// -- Check anchor hit
+	if (state.showAnchors) {
+		let anchorIdx = null;
+		withActiveOffset(function() {
+			anchorIdx = TRV.hitTestAnchor(sx, sy);
+		});
+		if (anchorIdx !== null) {
+			TRV.pushUndo();
+			state.isDragging = true;
+			state.dragAnchorIdx = anchorIdx;
+			let gp;
+			withActiveOffset(function() { gp = TRV.screenToGlyph(sx, sy); });
+			state.dragOriginGlyph = { x: gp.x, y: gp.y };
+			dom.canvasWrap.style.cursor = 'move';
+			return;
+		}
+	}
+
 	// -- No node hit: begin selection mode
 	// Skip if this is the second click of a double-click (let dblclick handle it)
 	if (e.detail >= 2) return;
@@ -284,7 +302,29 @@ window.addEventListener('mousemove', function(e) {
 		return;
 	}
 
-	// -- Node drag (moves all selected + follower handles)
+	// -- Anchor drag
+	if (state.isDragging && state.dragAnchorIdx !== null) {
+		withActiveOffset(function() {
+			var gp = TRV.screenToGlyph(sx, sy);
+			var layer = TRV.getActiveLayer();
+			if (layer && layer.anchors && layer.anchors[state.dragAnchorIdx]) {
+				var a = layer.anchors[state.dragAnchorIdx];
+				// Shift constraint: lock to axis
+				if (e.shiftKey) {
+					var dx = Math.abs(gp.x - state.dragOriginGlyph.x);
+					var dy = Math.abs(gp.y - state.dragOriginGlyph.y);
+					if (dx > dy) gp.y = state.dragOriginGlyph.y;
+					else gp.x = state.dragOriginGlyph.x;
+				}
+				a.x = Math.round(gp.x);
+				a.y = Math.round(gp.y);
+			}
+		});
+		TRV.draw();
+		return;
+	}
+
+// -- Node drag (moves all selected + follower handles)
 	// No XML sync during drag — canvas is source of truth
 	if (state.isDragging && state.dragStartPositions) {
 		withActiveOffset(function() {
@@ -377,10 +417,19 @@ window.addEventListener('mousemove', function(e) {
 	}
 
 	// -- Hover cursor hint
-	if (!state.spaceDown && state.showNodes) {
-		let hit = null;
-		withActiveOffset(function() { hit = TRV.hitTestNode(sx, sy); });
-		dom.canvasWrap.style.cursor = hit ? 'move' : 'default';
+	if (!state.spaceDown) {
+		let cursor = 'default';
+		if (state.showNodes) {
+			let hit = null;
+			withActiveOffset(function() { hit = TRV.hitTestNode(sx, sy); });
+			if (hit) cursor = 'move';
+		}
+		if (cursor === 'default' && state.showAnchors) {
+			let aHit = null;
+			withActiveOffset(function() { aHit = TRV.hitTestAnchor(sx, sy); });
+			if (aHit !== null) cursor = 'move';
+		}
+		dom.canvasWrap.style.cursor = cursor;
 	}
 });
 
@@ -425,8 +474,8 @@ window.addEventListener('mouseup', function(e) {
 
 	// -- Finalize drag (no XML sync — user clicks Refresh when needed)
 	if (state.isDragging) {
-		// Try joining open endpoints after drag
-		TRV.tryJoinEndpoints();
+		// Try joining open endpoints after drag (skip for anchors)
+		if (state.dragAnchorIdx === null) TRV.tryJoinEndpoints();
 
 		state.isDragging = false;
 		state.dragStartPositions = null;
@@ -435,6 +484,7 @@ window.addEventListener('mouseup', function(e) {
 		state.dragTangents = null;
 		state.slideData = null;
 		state.segmentDrag = null;
+		state.dragAnchorIdx = null;
 	}
 
 	if (state.isPanning) {
@@ -695,10 +745,19 @@ document.addEventListener('drop', function(e) {
 // ===================================================================
 document.addEventListener('keydown', function(e) {
 	// Backtick: preview mode (hold) - black on white, no decorations
+	// Backtick + Space: toggle persistent preview lock
 	if (e.code === 'Backquote' && e.target !== dom.xmlContent && e.target !== dom.pyInput) {
-		if (!state.previewMode) {
-			state.previewMode = true;
+		if (state.spaceDown) {
+			// Toggle persistent lock
+			state.previewLocked = !state.previewLocked;
+			state.previewMode = state.previewLocked;
+			TRV.updatePreviewButton();
 			TRV.draw();
+		} else if (!state.previewLocked) {
+			if (!state.previewMode) {
+				state.previewMode = true;
+				TRV.draw();
+			}
 		}
 		e.preventDefault();
 		return;
@@ -760,10 +819,12 @@ document.addEventListener('keydown', function(e) {
 });
 
 document.addEventListener('keyup', function(e) {
-	// Backtick released: exit preview mode
+	// Backtick released: exit preview mode (unless locked)
 	if (e.code === 'Backquote') {
-		state.previewMode = false;
-		TRV.draw();
+		if (!state.previewLocked) {
+			state.previewMode = false;
+			TRV.draw();
+		}
 		return;
 	}
 

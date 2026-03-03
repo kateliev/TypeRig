@@ -29,10 +29,12 @@ const TRV = {
 		isDragging: false,
 		dragStartPositions: null, // Map: nodeId → { x, y } at drag start
 		dragOriginGlyph: null,    // glyph coords where drag started
+		dragAnchorIdx: null,  // index into layer.anchors when dragging an anchor
 		lastMouse: { x: 0, y: 0 },
 		spaceDown: false,
 		previewMode: false,
-		previewMouse: null,		// { x, y } canvas-relative screen coords
+		previewMouse: null,
+		previewLocked: false,		// { x, y } canvas-relative screen coords
 
 		// Multi-layer grid view
 		multiView: false,

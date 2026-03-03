@@ -122,6 +122,14 @@ TRV.actions = {
 		TRV.tryJoinEndpoints();
 	},
 
+	// -- Preview ---
+	togglePreview: function() {
+		TRV.state.previewLocked = !TRV.state.previewLocked;
+		TRV.state.previewMode = TRV.state.previewLocked;
+		TRV.updatePreviewButton();
+		TRV.draw();
+	},
+
 	// -- XML panel ---
 	toggleXml: function() {
 		document.getElementById('btn-panel').click();
@@ -239,6 +247,8 @@ TRV.toolbarMap = [
 	{ id: 'btn-metrics', toggle: true, stateKey: 'showMetrics', desc: 'Toggle metrics' },
 	{ id: 'btn-anchors', toggle: true, stateKey: 'showAnchors', desc: 'Toggle anchors' },
 	{ id: 'btn-mask',    toggle: true, stateKey: 'showMask',    desc: 'Toggle mask' },
+
+	{ id: 'btn-preview', action: 'togglePreview', desc: 'Toggle BW preview' },
 
 	// Fill/outline are exclusive pair - handled specially in events.js
 	// View mode buttons (1x1, 2x1, 2x2) - handled specially in events.js
