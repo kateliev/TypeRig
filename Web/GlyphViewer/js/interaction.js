@@ -137,34 +137,77 @@ TRV.openContourAtNode = function() {
 	if (!ref || ref.node.type !== 'on') return;
 
 	var contour = ref.contour;
-	if (!contour.closed) return; // already open
-
 	var nodes = contour.nodes;
 	var n = nodes.length;
 
-	// Find index of selected node
 	var m = nodeId.match(/^c(\d+)_n(\d+)$/);
 	if (!m) return;
 	var ni = parseInt(m[2]);
 
-	// Rotate node array so the selected node is at position 0
-	// This makes the selected node the start of the open contour
-	var rotated = nodes.slice(ni).concat(nodes.slice(0, ni));
+	if (contour.closed) {
+		// -- Closed contour: open at this node --
+		// Rotate so selected node is at position 0
+		var rotated = nodes.slice(ni).concat(nodes.slice(0, ni));
 
-	// Duplicate the start node at the end (it becomes the endpoint)
-	var startNode = rotated[0];
-	var endNode = {
-		type: startNode.type,
-		smooth: false, // endpoints are sharp
-		x: startNode.x,
-		y: startNode.y
-	};
-	startNode.smooth = false; // start node also sharp
-	rotated.push(endNode);
+		// Duplicate the start node at the end (endpoint)
+		var startNode = rotated[0];
+		var endNode = {
+			type: startNode.type,
+			smooth: false,
+			x: startNode.x,
+			y: startNode.y
+		};
+		startNode.smooth = false;
+		rotated.push(endNode);
 
-	// Replace nodes and mark open
-	contour.nodes = rotated;
-	contour.closed = false;
+		contour.nodes = rotated;
+		contour.closed = false;
+	} else {
+		// -- Open contour: split into two at this node --
+		// Don't split at the very first or last on-curve (endpoints)
+		var ep = TRV.getOpenEndpoints(contour);
+		if (!ep) return;
+		if (ni === ep.startIdx || ni === ep.endIdx) return;
+
+		// First part: nodes from start to ni (inclusive)
+		var firstNodes = nodes.slice(0, ni + 1);
+		// Second part: nodes from ni to end (inclusive — duplicate the split node)
+		var secondNodes = nodes.slice(ni);
+
+		// Make the split node sharp at both new endpoints
+		firstNodes[firstNodes.length - 1] = {
+			type: 'on', smooth: false,
+			x: nodes[ni].x, y: nodes[ni].y
+		};
+		secondNodes[0] = {
+			type: 'on', smooth: false,
+			x: nodes[ni].x, y: nodes[ni].y
+		};
+
+		// Validate: each part needs at least 2 on-curves to be a contour
+		var firstOnCount = 0, secondOnCount = 0;
+		for (var i = 0; i < firstNodes.length; i++) {
+			if (firstNodes[i].type === 'on') firstOnCount++;
+		}
+		for (var i = 0; i < secondNodes.length; i++) {
+			if (secondNodes[i].type === 'on') secondOnCount++;
+		}
+		if (firstOnCount < 2 || secondOnCount < 2) return;
+
+		// Replace original contour with first part
+		contour.nodes = firstNodes;
+		contour.closed = false;
+
+		// Create new contour for second part and add to the same shape
+		var newContour = {
+			nodes: secondNodes,
+			closed: false,
+			clockwise: contour.clockwise
+		};
+		var shape = ref.shape;
+		var ci = shape.contours.indexOf(contour);
+		shape.contours.splice(ci + 1, 0, newContour);
+	}
 
 	sel.clear();
 	TRV.draw();
@@ -694,6 +737,216 @@ TRV._fitMergedSegments = function(P0, P3, inHandle, outHandle, bothCurves) {
 	];
 };
 
+// -- Join open contour endpoints -------------------------------------
+// Returns the open endpoints of a contour:
+// { startIdx, endIdx, startNode, endNode } or null if closed.
+TRV.getOpenEndpoints = function(contour) {
+	if (contour.closed) return null;
+	var nodes = contour.nodes;
+	if (nodes.length < 2) return null;
+
+	// Find first and last on-curve
+	var startIdx = -1, endIdx = -1;
+	for (var i = 0; i < nodes.length; i++) {
+		if (nodes[i].type === 'on') { startIdx = i; break; }
+	}
+	for (var i = nodes.length - 1; i >= 0; i--) {
+		if (nodes[i].type === 'on') { endIdx = i; break; }
+	}
+	if (startIdx < 0 || endIdx < 0 || startIdx === endIdx) return null;
+
+	return {
+		startIdx: startIdx, endIdx: endIdx,
+		startNode: nodes[startIdx], endNode: nodes[endIdx]
+	};
+};
+
+// Check if a node ID refers to an endpoint of an open contour.
+// Returns { contour, shape, ci, end: 'start'|'end' } or null.
+TRV.isOpenEndpoint = function(nodeId) {
+	var layer = TRV.getActiveLayer();
+	if (!layer) return null;
+
+	var m = nodeId.match(/^c(\d+)_n(\d+)$/);
+	if (!m) return null;
+	var targetCi = parseInt(m[1]);
+	var targetNi = parseInt(m[2]);
+
+	var ci = 0;
+	for (var si = 0; si < layer.shapes.length; si++) {
+		var shape = layer.shapes[si];
+		for (var ki = 0; ki < shape.contours.length; ki++) {
+			if (ci === targetCi) {
+				var ep = TRV.getOpenEndpoints(shape.contours[ki]);
+				if (!ep) return null;
+				if (targetNi === ep.startIdx) {
+					return { contour: shape.contours[ki], shape: shape, ci: ci, ki: ki, end: 'start' };
+				}
+				if (targetNi === ep.endIdx) {
+					return { contour: shape.contours[ki], shape: shape, ci: ci, ki: ki, end: 'end' };
+				}
+				return null;
+			}
+			ci++;
+		}
+	}
+	return null;
+};
+
+// Find the nearest open endpoint within threshold (glyph units).
+// Excludes endpoints belonging to excludeCi contour index (the dragged one).
+// Returns { ci, ki, end, contour, shape, dist } or null.
+TRV.findNearOpenEndpoint = function(gx, gy, threshold, excludeCi, excludeEnd) {
+	var layer = TRV.getActiveLayer();
+	if (!layer) return null;
+
+	var best = null;
+	var ci = 0;
+	for (var si = 0; si < layer.shapes.length; si++) {
+		var shape = layer.shapes[si];
+		for (var ki = 0; ki < shape.contours.length; ki++) {
+			var ep = TRV.getOpenEndpoints(shape.contours[ki]);
+			if (ep) {
+				// Check start endpoint
+				if (!(ci === excludeCi && 'start' === excludeEnd)) {
+					var dx = ep.startNode.x - gx, dy = ep.startNode.y - gy;
+					var d = Math.sqrt(dx * dx + dy * dy);
+					if (d <= threshold && (!best || d < best.dist)) {
+						best = { ci: ci, ki: ki, end: 'start', contour: shape.contours[ki], shape: shape, dist: d };
+					}
+				}
+				// Check end endpoint
+				if (!(ci === excludeCi && 'end' === excludeEnd)) {
+					var dx = ep.endNode.x - gx, dy = ep.endNode.y - gy;
+					var d = Math.sqrt(dx * dx + dy * dy);
+					if (d <= threshold && (!best || d < best.dist)) {
+						best = { ci: ci, ki: ki, end: 'end', contour: shape.contours[ki], shape: shape, dist: d };
+					}
+				}
+			}
+			ci++;
+		}
+	}
+	return best;
+};
+
+// Try to join at the currently selected endpoint.
+// Called after drag or manually. Returns true if joined.
+TRV.tryJoinEndpoints = function() {
+	var layer = TRV.getActiveLayer();
+	if (!layer) return false;
+
+	var sel = TRV.state.selectedNodeIds;
+	if (sel.size !== 1) return false;
+
+	var nodeId = sel.values().next().value;
+	var epInfo = TRV.isOpenEndpoint(nodeId);
+	if (!epInfo) return false;
+
+	var node = epInfo.end === 'start'
+		? TRV.getOpenEndpoints(epInfo.contour).startNode
+		: TRV.getOpenEndpoints(epInfo.contour).endNode;
+
+	var threshold = 2; // glyph units
+
+	// Find nearby endpoint (excluding self)
+	var target = TRV.findNearOpenEndpoint(node.x, node.y, threshold, epInfo.ci, epInfo.end);
+
+	if (!target) {
+		// Check if same contour's other end is nearby → close
+		var selfEp = TRV.getOpenEndpoints(epInfo.contour);
+		if (selfEp) {
+			var otherNode = epInfo.end === 'start' ? selfEp.endNode : selfEp.startNode;
+			var dx = otherNode.x - node.x, dy = otherNode.y - node.y;
+			if (Math.sqrt(dx * dx + dy * dy) <= threshold) {
+				return TRV._closeContour(epInfo.contour, epInfo.end);
+			}
+		}
+		return false;
+	}
+
+	// Same contour, other end → close
+	if (target.ci === epInfo.ci) {
+		return TRV._closeContour(epInfo.contour, epInfo.end);
+	}
+
+	// Different contour → merge
+	return TRV._mergeContours(epInfo, target);
+};
+
+// Close an open contour: snap endpoint, remove duplicate, set closed.
+TRV._closeContour = function(contour, draggedEnd) {
+	var ep = TRV.getOpenEndpoints(contour);
+	if (!ep) return false;
+
+	if (draggedEnd === 'start') {
+		// Snap start to end position
+		ep.startNode.x = ep.endNode.x;
+		ep.startNode.y = ep.endNode.y;
+		// Remove the end duplicate
+		contour.nodes.splice(ep.endIdx, 1);
+	} else {
+		// Snap end to start position
+		ep.endNode.x = ep.startNode.x;
+		ep.endNode.y = ep.startNode.y;
+		// Remove the end node (the dragged one snapped to start)
+		contour.nodes.splice(ep.endIdx, 1);
+	}
+
+	contour.closed = true;
+	TRV.state.selectedNodeIds.clear();
+	TRV.draw();
+	TRV.updateStatusSelected();
+	return true;
+};
+
+// Merge two open contours by connecting their endpoints.
+// srcInfo: { contour, shape, ci, ki, end } — the dragged endpoint
+// tgtInfo: { contour, shape, ci, ki, end } — the target endpoint
+TRV._mergeContours = function(srcInfo, tgtInfo) {
+	var srcContour = srcInfo.contour;
+	var tgtContour = tgtInfo.contour;
+	var srcNodes = srcContour.nodes.slice(); // copy
+	var tgtNodes = tgtContour.nodes.slice();
+
+	// Orient both so the joining ends are adjacent:
+	// srcNodes should end at the joining point
+	// tgtNodes should start at the joining point
+	if (srcInfo.end === 'start') {
+		srcNodes.reverse();
+	}
+	if (tgtInfo.end === 'end') {
+		tgtNodes.reverse();
+	}
+
+	// Snap the joining node: remove last of src (duplicate of first of tgt)
+	var srcLast = srcNodes[srcNodes.length - 1];
+	var tgtFirst = tgtNodes[0];
+	// Average position for clean join
+	tgtFirst.x = (srcLast.x + tgtFirst.x) / 2;
+	tgtFirst.y = (srcLast.y + tgtFirst.y) / 2;
+	tgtFirst.x = Math.round(tgtFirst.x * 10) / 10;
+	tgtFirst.y = Math.round(tgtFirst.y * 10) / 10;
+	srcNodes.pop(); // remove the duplicate
+
+	// Merged nodes
+	var mergedNodes = srcNodes.concat(tgtNodes);
+
+	// Replace src contour with merged, remove tgt contour
+	srcContour.nodes = mergedNodes;
+
+	// Remove target contour from its shape
+	var tgtIdx = tgtInfo.shape.contours.indexOf(tgtContour);
+	if (tgtIdx >= 0) {
+		tgtInfo.shape.contours.splice(tgtIdx, 1);
+	}
+
+	TRV.state.selectedNodeIds.clear();
+	TRV.draw();
+	TRV.updateStatusSelected();
+	return true;
+};
+
 // Get contour index (ci) from a node ID like 'c2_n5'
 TRV.getContourIndexForNode = function(nodeId) {
 	var m = nodeId.match(/^c(\d+)/);
@@ -922,6 +1175,328 @@ TRV.insertNodeOnSegment = function(hit) {
 	TRV.state.selectedNodeIds.clear();
 	TRV.draw();
 	TRV.updateStatusSelected();
+};
+
+// -- Slide node along contour ----------------------------------------
+// Hold S while dragging an on-curve node to slide it along the path
+// defined by its two adjacent segments. Both segments are re-split
+// at the new position using de Casteljau + least-squares fitting.
+
+// -- Slide node along contour ----------------------------------------
+// Two modes:
+//   'curve' (S): slide along bezier segments only
+//   'line'  (A): slide along line segments (with extrapolation beyond endpoints)
+//
+// Each mode only considers segment types it cares about.
+// When a node connects a line and a curve, only the matching side is
+// used for sliding; the other side is reconstructed via least-squares.
+
+TRV.initSlideMode = function(nodeId, mode) {
+	mode = mode || 'curve';
+	var ref = TRV.findNodeById(nodeId);
+	if (!ref || ref.node.type !== 'on') return null;
+
+	var contour = ref.contour;
+	var nodes = contour.nodes;
+	var n = nodes.length;
+
+	var m = nodeId.match(/^c(\d+)_n(\d+)$/);
+	if (!m) return null;
+	var ci = parseInt(m[1]);
+	var ni = parseInt(m[2]);
+
+	var incoming = TRV._analyzeIncoming(nodes, n, ni);
+	var outgoing = TRV._analyzeOutgoing(nodes, n, ni);
+
+	// Determine which sides are active based on mode
+	var activeIn = false, activeOut = false;
+	if (mode === 'curve') {
+		activeIn = (incoming.type === 'cubic');
+		activeOut = (outgoing.type === 'cubic');
+	} else if (mode === 'line') {
+		activeIn = (incoming.type === 'line');
+		activeOut = (outgoing.type === 'line');
+	}
+
+	// Need at least one active side
+	if (!activeIn && !activeOut) return null;
+
+	// Build original control points for cubic sides (needed for reconstruction)
+	var inH = incoming.handleIndices;
+	var outH = outgoing.handleIndices;
+	var inPts = null, outPts = null;
+
+	if (incoming.type === 'cubic' && inH.length >= 2) {
+		inPts = [
+			{ x: nodes[incoming.prevOnIdx].x, y: nodes[incoming.prevOnIdx].y },
+			{ x: nodes[inH[inH.length - 1]].x, y: nodes[inH[inH.length - 1]].y },
+			{ x: nodes[inH[0]].x, y: nodes[inH[0]].y },
+			{ x: nodes[ni].x, y: nodes[ni].y }
+		];
+	}
+	if (outgoing.type === 'cubic' && outH.length >= 2) {
+		outPts = [
+			{ x: nodes[ni].x, y: nodes[ni].y },
+			{ x: nodes[outH[0]].x, y: nodes[outH[0]].y },
+			{ x: nodes[outH[outH.length - 1]].x, y: nodes[outH[outH.length - 1]].y },
+			{ x: nodes[outgoing.nextOnIdx].x, y: nodes[outgoing.nextOnIdx].y }
+		];
+	}
+
+	// Endpoints for line segments
+	var prevOn = { x: nodes[incoming.prevOnIdx].x, y: nodes[incoming.prevOnIdx].y };
+	var onNode = { x: nodes[ni].x, y: nodes[ni].y };
+	var nextOn = { x: nodes[outgoing.nextOnIdx].x, y: nodes[outgoing.nextOnIdx].y };
+
+	// Build polyline from active sides only
+	var numSamples = 60;
+	var polyline = [];
+
+	if (activeIn) {
+		if (mode === 'line') {
+			// Straight line: prevOn → node, extended 50% beyond each end
+			for (var i = 0; i <= numSamples; i++) {
+				var t = -0.5 + 2.0 * i / numSamples;
+				polyline.push({
+					x: prevOn.x + t * (onNode.x - prevOn.x),
+					y: prevOn.y + t * (onNode.y - prevOn.y),
+					seg: 0, t: t
+				});
+			}
+		} else {
+			// Normal cubic: strict [0,1] range, no extrapolation
+			for (var i = 0; i <= numSamples; i++) {
+				var t = i / numSamples;
+				var pt = TRV._sampleCubic(inPts[0], inPts[1], inPts[2], inPts[3], t);
+				polyline.push({ x: pt.x, y: pt.y, seg: 0, t: t });
+			}
+		}
+	}
+
+	if (activeOut) {
+		var skip = (activeIn) ? 1 : 0; // skip junction duplicate
+		if (mode === 'line') {
+			for (var i = skip; i <= numSamples; i++) {
+				var t = -0.5 + 2.0 * i / numSamples;
+				polyline.push({
+					x: onNode.x + t * (nextOn.x - onNode.x),
+					y: onNode.y + t * (nextOn.y - onNode.y),
+					seg: 1, t: t
+				});
+			}
+		} else {
+			// Normal cubic: strict [0,1] range
+			for (var i = skip; i <= numSamples; i++) {
+				var t = i / numSamples;
+				var pt = TRV._sampleCubic(outPts[0], outPts[1], outPts[2], outPts[3], t);
+				polyline.push({ x: pt.x, y: pt.y, seg: 1, t: t });
+			}
+		}
+	}
+
+	if (polyline.length < 2) return null;
+
+	// Arc-length parameterize
+	var arcLens = [0];
+	for (var i = 1; i < polyline.length; i++) {
+		var dx = polyline[i].x - polyline[i - 1].x;
+		var dy = polyline[i].y - polyline[i - 1].y;
+		arcLens.push(arcLens[i - 1] + Math.sqrt(dx * dx + dy * dy));
+	}
+
+	return {
+		contour: contour,
+		nodeIdx: ni,
+		ci: ci,
+		mode: mode,
+		incoming: incoming,
+		outgoing: outgoing,
+		activeIn: activeIn,
+		activeOut: activeOut,
+		inPts: inPts,
+		outPts: outPts,
+		prevOn: prevOn,
+		onNode: onNode,
+		nextOn: nextOn,
+		inHandleIndices: inH,
+		outHandleIndices: outH,
+		polyline: polyline,
+		arcLens: arcLens,
+		totalLen: arcLens[arcLens.length - 1]
+	};
+};
+
+// Project glyph point onto the slide polyline.
+TRV._projectOntoSlidePolyline = function(slideData, gx, gy) {
+	var poly = slideData.polyline;
+	var bestDist = Infinity;
+	var bestIdx = 0;
+
+	for (var i = 0; i < poly.length; i++) {
+		var dx = poly[i].x - gx, dy = poly[i].y - gy;
+		var d = dx * dx + dy * dy;
+		if (d < bestDist) { bestDist = d; bestIdx = i; }
+	}
+
+	// Refine between adjacent vertices
+	var lo = Math.max(0, bestIdx - 1);
+	var hi = Math.min(poly.length - 1, bestIdx + 1);
+	var bestFrac = bestIdx;
+	bestDist = Infinity;
+	for (var f = lo; f <= hi; f += 0.05) {
+		var fi = Math.floor(f);
+		var ff = f - fi;
+		if (fi >= poly.length - 1) { fi = poly.length - 2; ff = 1; }
+		var px = poly[fi].x + ff * (poly[fi + 1].x - poly[fi].x);
+		var py = poly[fi].y + ff * (poly[fi + 1].y - poly[fi].y);
+		var dx = px - gx, dy = py - gy;
+		var d = dx * dx + dy * dy;
+		if (d < bestDist) { bestDist = d; bestFrac = f; }
+	}
+
+	var fi = Math.floor(bestFrac);
+	var ff = bestFrac - fi;
+	if (fi >= poly.length - 1) { fi = poly.length - 2; ff = 1; }
+	var p = poly[fi], pn = poly[fi + 1];
+
+	var seg, t;
+	if (p.seg === pn.seg) {
+		seg = p.seg;
+		t = p.t + ff * (pn.t - p.t);
+	} else {
+		if (ff < 0.5) { seg = p.seg; t = p.t; }
+		else { seg = pn.seg; t = pn.t; }
+	}
+
+	// Clamp t for curve mode to avoid degenerate de Casteljau splits
+	if (slideData.mode === 'curve') {
+		t = Math.max(0.02, Math.min(0.98, t));
+	}
+
+	// Evaluate exact position
+	var pt;
+	if (seg === 0) {
+		if (slideData.mode === 'line' && slideData.activeIn) {
+			pt = TRV._sampleLine(slideData.prevOn, slideData.onNode, t);
+		} else if (slideData.inPts) {
+			pt = TRV._sampleCubic(slideData.inPts[0], slideData.inPts[1], slideData.inPts[2], slideData.inPts[3], t);
+		} else {
+			pt = { x: poly[fi].x + ff * (pn.x - poly[fi].x), y: poly[fi].y + ff * (pn.y - poly[fi].y) };
+		}
+	} else {
+		if (slideData.mode === 'line' && slideData.activeOut) {
+			pt = TRV._sampleLine(slideData.onNode, slideData.nextOn, t);
+		} else if (slideData.outPts) {
+			pt = TRV._sampleCubic(slideData.outPts[0], slideData.outPts[1], slideData.outPts[2], slideData.outPts[3], t);
+		} else {
+			pt = { x: poly[fi].x + ff * (pn.x - poly[fi].x), y: poly[fi].y + ff * (pn.y - poly[fi].y) };
+		}
+	}
+
+	return { seg: seg, t: t, x: pt.x, y: pt.y };
+};
+
+// Perform the slide: move node, reconstruct handles on both sides.
+TRV.performSlide = function(slideData, gx, gy) {
+	var proj = TRV._projectOntoSlidePolyline(slideData, gx, gy);
+	var nodes = slideData.contour.nodes;
+	var round = function(v) { return Math.round(v * 10) / 10; };
+	var ni = slideData.nodeIdx;
+	var inH = slideData.inHandleIndices;
+	var outH = slideData.outHandleIndices;
+
+	// Move node to projected position
+	nodes[ni].x = round(proj.x);
+	nodes[ni].y = round(proj.y);
+	var newNode = { x: proj.x, y: proj.y };
+
+	// -- LINE mode: just move the on-curve, nothing else --
+	if (slideData.mode === 'line') {
+		return;
+	}
+
+	// -- CURVE mode: always de Casteljau, no extrapolation --
+	if (slideData.mode === 'curve') {
+		// Clamp t to safe range for de Casteljau
+		var t = Math.max(0.02, Math.min(0.98, proj.t));
+
+		if (proj.seg === 0 && slideData.inPts) {
+			// Slid on incoming cubic: exact split
+			var split = TRV._splitCubic(slideData.inPts, t);
+			nodes[ni].x = round(split.left[3].x);
+			nodes[ni].y = round(split.left[3].y);
+			newNode = { x: split.left[3].x, y: split.left[3].y };
+
+			nodes[inH[inH.length - 1]].x = round(split.left[1].x);
+			nodes[inH[inH.length - 1]].y = round(split.left[1].y);
+			nodes[inH[0]].x = round(split.left[2].x);
+			nodes[inH[0]].y = round(split.left[2].y);
+
+			// Outgoing: right half of incoming + original outgoing
+			if (slideData.outgoing.type === 'cubic' && slideData.outPts && outH.length >= 2) {
+				var samples = [];
+				for (var i = 0; i <= 30; i++) {
+					samples.push(TRV._sampleCubic(split.right[0], split.right[1], split.right[2], split.right[3], i / 30));
+				}
+				for (var i = 1; i <= 30; i++) {
+					samples.push(TRV._sampleCubic(slideData.outPts[0], slideData.outPts[1], slideData.outPts[2], slideData.outPts[3], i / 30));
+				}
+				TRV._fitSamplesToSide(nodes, outH, samples, newNode, slideData.nextOn, 'out');
+			}
+		} else if (proj.seg === 1 && slideData.outPts) {
+			// Slid on outgoing cubic: exact split
+			var split = TRV._splitCubic(slideData.outPts, t);
+			nodes[ni].x = round(split.right[0].x);
+			nodes[ni].y = round(split.right[0].y);
+			newNode = { x: split.right[0].x, y: split.right[0].y };
+
+			nodes[outH[0]].x = round(split.right[1].x);
+			nodes[outH[0]].y = round(split.right[1].y);
+			nodes[outH[outH.length - 1]].x = round(split.right[2].x);
+			nodes[outH[outH.length - 1]].y = round(split.right[2].y);
+
+			// Incoming: original incoming + left half of outgoing
+			if (slideData.incoming.type === 'cubic' && slideData.inPts && inH.length >= 2) {
+				var samples = [];
+				for (var i = 0; i <= 30; i++) {
+					samples.push(TRV._sampleCubic(slideData.inPts[0], slideData.inPts[1], slideData.inPts[2], slideData.inPts[3], i / 30));
+				}
+				for (var i = 1; i <= 30; i++) {
+					samples.push(TRV._sampleCubic(split.left[0], split.left[1], split.left[2], split.left[3], i / 30));
+				}
+				TRV._fitSamplesToSide(nodes, inH, samples, slideData.prevOn, newNode, 'in');
+			}
+		}
+		return;
+	}
+
+};
+
+// Fit a set of samples into a cubic between startPt and endPt,
+// then assign the result to the handle nodes.
+TRV._fitSamplesToSide = function(nodes, handleIndices, samples, startPt, endPt, direction) {
+	if (samples.length < 4) return;
+
+	var params = TRV._arcLengthParameterize(samples);
+	var fit = TRV._fitCubicUnconstrained(samples, params, startPt, endPt);
+	for (var iter = 0; iter < 3; iter++) {
+		params = TRV._reparameterize(samples, params, startPt, fit.P1, fit.P2, endPt);
+		fit = TRV._fitCubicUnconstrained(samples, params, startPt, endPt);
+	}
+
+	if (direction === 'in') {
+		// incoming handleIndices: [0] = closer to node, [last] = closer to prevOn
+		nodes[handleIndices[handleIndices.length - 1]].x = fit.P1.x;
+		nodes[handleIndices[handleIndices.length - 1]].y = fit.P1.y;
+		nodes[handleIndices[0]].x = fit.P2.x;
+		nodes[handleIndices[0]].y = fit.P2.y;
+	} else {
+		// outgoing handleIndices: [0] = closer to node, [last] = closer to nextOn
+		nodes[handleIndices[0]].x = fit.P1.x;
+		nodes[handleIndices[0]].y = fit.P1.y;
+		nodes[handleIndices[handleIndices.length - 1]].x = fit.P2.x;
+		nodes[handleIndices[handleIndices.length - 1]].y = fit.P2.y;
+	}
 };
 
 // -- Retract handles -------------------------------------------------

@@ -142,6 +142,17 @@ function startDrag(sx, sy, e) {
 	// Compute tangent constraints for smooth on-curves
 	state.dragTangents = TRV.computeDragTangents(state.dragStartPositions);
 
+	// Slide mode: if S/A/E is already held, initialize slide
+	state.slideData = null;
+	if (state.selectedNodeIds.size === 1) {
+		var slideNodeId = state.selectedNodeIds.values().next().value;
+		if (state.sKeyDown) {
+			state.slideData = TRV.initSlideMode(slideNodeId, 'curve');
+		} else if (state.aKeyDown) {
+			state.slideData = TRV.initSlideMode(slideNodeId, 'line');
+		}
+	}
+
 	dom.canvasWrap.style.cursor = 'move';
 }
 
@@ -197,6 +208,13 @@ window.addEventListener('mousemove', function(e) {
 	if (state.isDragging && state.dragStartPositions) {
 		withActiveOffset(function() {
 			const dgp = TRV.screenToGlyph(sx, sy);
+
+			// Slide mode: S held, project node along contour
+			if (state.slideData) {
+				TRV.performSlide(state.slideData, dgp.x, dgp.y);
+				return;
+			}
+
 			var dx = dgp.x - state.dragOriginGlyph.x;
 			var dy = dgp.y - state.dragOriginGlyph.y;
 
@@ -321,11 +339,15 @@ window.addEventListener('mouseup', function(e) {
 
 	// -- Finalize drag (no XML sync — user clicks Refresh when needed)
 	if (state.isDragging) {
+		// Try joining open endpoints after drag
+		TRV.tryJoinEndpoints();
+
 		state.isDragging = false;
 		state.dragStartPositions = null;
 		state.dragOriginGlyph = null;
 		state.dragAltMode = false;
 		state.dragTangents = null;
+		state.slideData = null;
 	}
 
 	if (state.isPanning) {
@@ -595,6 +617,36 @@ document.addEventListener('keydown', function(e) {
 		return;
 	}
 
+	// S key: slide along curves (hold while dragging)
+	if (e.code === 'KeyS' && !e.ctrlKey && !e.metaKey && e.target !== dom.xmlContent) {
+		if (!state.sKeyDown) {
+			state.sKeyDown = true;
+			if (state.isDragging && state.selectedNodeIds.size === 1) {
+				var nodeId = state.selectedNodeIds.values().next().value;
+				state.slideData = TRV.initSlideMode(nodeId, 'curve');
+			}
+		}
+		if (state.slideData) {
+			e.preventDefault();
+			return;
+		}
+	}
+
+	// A key: slide along lines (hold while dragging)
+	if (e.code === 'KeyA' && !e.ctrlKey && !e.metaKey && e.target !== dom.xmlContent) {
+		if (!state.aKeyDown) {
+			state.aKeyDown = true;
+			if (state.isDragging && state.selectedNodeIds.size === 1) {
+				var nodeId = state.selectedNodeIds.values().next().value;
+				state.slideData = TRV.initSlideMode(nodeId, 'line');
+			}
+		}
+		if (state.slideData) {
+			e.preventDefault();
+			return;
+		}
+	}
+
 	// XML textarea: Ctrl+Enter applies, other typing is free-form
 	if (e.target === dom.xmlContent) {
 		if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -616,6 +668,16 @@ document.addEventListener('keyup', function(e) {
 			state.isPanning = false;
 		}
 		TRV.updateCanvasCursor();
+	}
+
+	// S/A/E key released: exit slide mode
+	if (e.code === 'KeyS') {
+		state.sKeyDown = false;
+		if (state.slideData && state.slideData.mode === 'curve') state.slideData = null;
+	}
+	if (e.code === 'KeyA') {
+		state.aKeyDown = false;
+		if (state.slideData && state.slideData.mode === 'line') state.slideData = null;
 	}
 });
 
@@ -733,6 +795,7 @@ dom.canvasWrap.addEventListener('contextmenu', function(e) {
 	var retractItem = ctxMenu.querySelector('[data-action="retractHandles"]');
 	var insertItem = ctxMenu.querySelector('[data-action="insertNode"]');
 	var selectContourItem = ctxMenu.querySelector('[data-action="selectContour"]');
+	var joinItem = ctxMenu.querySelector('[data-action="joinContour"]');
 
 	// Hit test: node first, then segment
 	var nodeHit = null;
@@ -752,6 +815,12 @@ dom.canvasWrap.addEventListener('contextmenu', function(e) {
 
 		// Find which contour this node belongs to
 		pendingContourIdx = TRV.getContourIndexForNode(nodeHit.id);
+
+		// Show join only for open endpoints
+		if (joinItem) {
+			var epCheck = TRV.isOpenEndpoint(nodeHit.id);
+			joinItem.style.display = epCheck ? '' : 'none';
+		}
 
 		// Show node items, hide segment items
 		if (toggleItem) toggleItem.style.display = '';
@@ -791,6 +860,7 @@ dom.canvasWrap.addEventListener('contextmenu', function(e) {
 		if (retractItem) retractItem.style.display = 'none';
 		if (insertItem) insertItem.style.display = '';
 		if (selectContourItem) selectContourItem.style.display = '';
+		if (joinItem) joinItem.style.display = 'none';
 		pendingContourIdx = segHit.ci;
 		// Separators: hide first two, show last
 		var seps = ctxMenu.querySelectorAll('.ctx-separator');
@@ -830,6 +900,8 @@ if (ctxMenu) {
 			TRV.toggleSmooth();
 		} else if (action === 'retractHandles') {
 			TRV.retractHandles();
+		} else if (action === 'joinContour') {
+			TRV.tryJoinEndpoints();
 		} else if (action === 'selectContour') {
 			if (pendingContourIdx >= 0) {
 				var ids = TRV.getContourNodeIds(pendingContourIdx);

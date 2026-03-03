@@ -102,6 +102,10 @@ TRV.actions = {
 		TRV.deleteNode();
 	},
 
+	joinContour: function() {
+		TRV.tryJoinEndpoints();
+	},
+
 	// -- XML panel ---
 	toggleXml: function() {
 		document.getElementById('btn-panel').click();
@@ -151,6 +155,7 @@ TRV.keyMap = [
 	// Node operations
 	{ key: 'Delete',     hasSelection: true, action: 'openContour',  desc: 'Open contour at node' },
 	{ key: 'Backspace',  hasSelection: true, action: 'deleteNode',   desc: 'Delete node' },
+	{ key: 'j',          hasSelection: true, action: 'joinContour',  desc: 'Join/close contour at endpoint' },
 ];
 
 // -- Keyboard dispatch ----------------------------------------------

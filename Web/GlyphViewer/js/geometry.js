@@ -224,6 +224,11 @@ TRV.hitTestContour = function(sx, sy, tolerance) {
 	ctx.save();
 	ctx.setTransform(1, 0, 0, 1, 0, 0);
 
+	// Collect all contours whose fill contains the point,
+	// then pick the smallest (innermost) by bounding box area.
+	var fillHits = [];
+	var strokeHit = -1;
+
 	let ci = 0;
 	for (const shape of layer.shapes) {
 		for (const contour of shape.contours) {
@@ -232,17 +237,27 @@ TRV.hitTestContour = function(sx, sy, tolerance) {
 			ctx.beginPath();
 			TRV.buildContourPath(contour, shape.transform);
 
-			// Check filled area first (closed contours)
+			// Check filled area (closed contours)
 			if (ctx.isPointInPath(sx, sy, 'evenodd')) {
-				ctx.restore();
-				return ci;
+				// Compute bounding box area for size comparison
+				var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+				for (var ni = 0; ni < contour.nodes.length; ni++) {
+					var sp = TRV.glyphToScreen(contour.nodes[ni].x, contour.nodes[ni].y);
+					if (sp.x < minX) minX = sp.x;
+					if (sp.y < minY) minY = sp.y;
+					if (sp.x > maxX) maxX = sp.x;
+					if (sp.y > maxY) maxY = sp.y;
+				}
+				var area = (maxX - minX) * (maxY - minY);
+				fillHits.push({ ci: ci, area: area });
 			}
 
-			// Check stroke proximity
-			ctx.lineWidth = tolerance * 2;
-			if (ctx.isPointInStroke(sx, sy)) {
-				ctx.restore();
-				return ci;
+			// Check stroke proximity (first match wins)
+			if (strokeHit < 0) {
+				ctx.lineWidth = tolerance * 2;
+				if (ctx.isPointInStroke(sx, sy)) {
+					strokeHit = ci;
+				}
 			}
 
 			ci++;
@@ -250,6 +265,15 @@ TRV.hitTestContour = function(sx, sy, tolerance) {
 	}
 
 	ctx.restore();
+
+	// Return the smallest fill hit (innermost contour)
+	if (fillHits.length > 0) {
+		fillHits.sort(function(a, b) { return a.area - b.area; });
+		return fillHits[0].ci;
+	}
+
+	// Fall back to stroke hit
+	if (strokeHit >= 0) return strokeHit;
 
 	// Fallback: find the contour whose nearest node is closest
 	// (catches cases where isPointInStroke misses due to curves)
