@@ -46,6 +46,7 @@ TRV.draw = function() {
 
 	if (!preview && state.showMetrics) TRV.drawMetrics(layer, w, h);
 	TRV.drawContours(layer);
+	TRV.drawStemMeasurement(layer);
 	if (!preview && state.showNodes) TRV.drawStackedWarnings(layer);
 	if (!preview && state.showNodes) TRV.drawSelectedSegments(layer);
 	if (!preview && state.showAnchors) TRV.drawAnchors(layer);

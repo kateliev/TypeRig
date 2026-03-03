@@ -411,8 +411,8 @@ window.addEventListener('mousemove', function(e) {
 		return;
 	}
 
-	// Preview mode: redraw for proximity-reveal (idle hover)
-	if (state.previewMode) {
+	// Preview mode / stem measurement: redraw on hover
+	if (state.previewMode || state.showStem) {
 		TRV.draw();
 	}
 

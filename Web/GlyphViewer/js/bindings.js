@@ -249,6 +249,7 @@ TRV.toolbarMap = [
 	{ id: 'btn-mask',    toggle: true, stateKey: 'showMask',    desc: 'Toggle mask' },
 
 	{ id: 'btn-preview', action: 'togglePreview', desc: 'Toggle BW preview' },
+	{ id: 'btn-stem',    toggle: true, stateKey: 'showStem',    desc: 'Toggle stem measurement' },
 
 	// Fill/outline are exclusive pair - handled specially in events.js
 	// View mode buttons (1x1, 2x1, 2x2) - handled specially in events.js

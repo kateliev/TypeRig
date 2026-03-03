@@ -18,6 +18,7 @@ const TRV = {
 		showMetrics: true,
 		showAnchors: true,
 		showMask: true,
+		showStem: false,
 		showXml: false,
 		activePanel: 'xml',    // 'xml' | 'python'
 

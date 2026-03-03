@@ -261,6 +261,7 @@ TRV.drawJoinedView = function(canvasW, canvasH) {
 
 				if (!preview && state.showMetrics) TRV.drawMetrics(layer, canvasW, canvasH);
 				TRV.drawContours(layer);
+				TRV.drawStemMeasurement(layer);
 				if (!preview && state.showNodes) TRV.drawStackedWarnings(layer);
 				if (!preview && state.showNodes) TRV.drawSelectedSegments(layer);
 				if (!preview && state.showAnchors) TRV.drawAnchors(layer);
@@ -441,6 +442,12 @@ TRV.drawSplitView = function(canvasW, canvasH) {
 
 			if (!preview && state.showMetrics) TRV.drawMetrics(layer, cell.w, cell.h);
 			TRV.drawContours(layer);
+			if (state.showStem && state.previewMouse) {
+				var savedStemMouse = state.previewMouse;
+				state.previewMouse = { x: savedStemMouse.x - cell.x, y: savedStemMouse.y - cell.y };
+				TRV.drawStemMeasurement(layer);
+				state.previewMouse = savedStemMouse;
+			}
 			if (!preview && state.showNodes) TRV.drawStackedWarnings(layer);
 			if (!preview && state.showNodes) TRV.drawSelectedSegments(layer);
 			if (!preview && state.showAnchors) TRV.drawAnchors(layer);
