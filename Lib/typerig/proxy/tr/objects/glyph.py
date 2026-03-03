@@ -20,7 +20,7 @@ from typerig.proxy.tr.objects.layer import trLayer
 from typerig.core.objects.glyph import Glyph
 
 # - Init --------------------------------
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 # - Classes -----------------------------
 class trGlyph(Glyph):
@@ -82,9 +82,44 @@ class trGlyph(Glyph):
 	def unicodes(self):
 		return self.host.fgGlyph.unicodes
 
+	@unicodes.setter
+	def unicodes(self, other):
+		if isinstance(other, list):
+			self.host.fgGlyph.unicodes = other
+
 	# - Functions ---------------------------
 	def update(self):
 		fl6.flItems.notifyChangesApplied(self.name, self.host, True)
+
+	# - Layer management ------------------------
+	def add_layer(self, layer_name):
+		'''Create a new empty FL layer and add it to the host glyph.
+
+		Args:
+			layer_name (str): Name for the new layer.
+
+		Returns:
+			trLayer: Proxy wrapping the newly created flLayer.
+		'''
+		new_fl_layer = fl6.flLayer()
+		new_fl_layer.name = str(layer_name)
+		self.host.addLayer(new_fl_layer)
+		return trLayer(new_fl_layer)
+
+	def find_layer(self, layer_name):
+		'''Find an FL layer by name and return its proxy, or None.
+
+		Args:
+			layer_name (str): Layer name to search for.
+
+		Returns:
+			trLayer or None: Proxy if found, None otherwise.
+		'''
+		for fl_layer in self.host.layers:
+			if fl_layer.name == layer_name:
+				return trLayer(fl_layer)
+
+		return None
 
 	# - Eject/mount ----------------------------
 	def eject(self):

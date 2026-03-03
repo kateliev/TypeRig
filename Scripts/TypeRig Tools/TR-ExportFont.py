@@ -1,5 +1,5 @@
 #FLM: TR: Font IO
-# NOTE: Test tool for .trfont write/read round-trip from FontLab
+# NOTE: Tool for .trfont write/read round-trip from FontLab
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2025 		(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
@@ -24,14 +24,14 @@ from typerig.proxy.tr.objects.font import trFontProxy
 from typerig.core.fileio.trfont import TrFontIO
 
 # - Init ---------------------------------
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 _tool_name  = 'trFont Export / Import'
 
 # ================================================
 # Dialog
 # ================================================
 class TrFontTool(QtGui.QDialog):
-	'''Minimal export/import dialog for the .trfont format.
+	'''Export/import dialog for the .trfont format.
 
 	Export section:
 		- checkboxes for each font property component
@@ -39,7 +39,8 @@ class TrFontTool(QtGui.QDialog):
 		- path picker → writes .trfont folder
 
 	Import section:
-		- path picker → reads .trfont folder, prints summary
+		- path picker → reads .trfont folder
+		- inspect or inject into current FL font
 	'''
 
 	def __init__(self, parent=None):
@@ -124,8 +125,8 @@ class TrFontTool(QtGui.QDialog):
 		root.addSpacing(6)
 		root.addWidget(self._hr())
 
-		# Import section
-		root.addWidget(self._section_label('Load path'))
+		# ---- Import section ----------------------------
+		root.addWidget(self._section_label('Import'))
 
 		imp_path_row = QtGui.QHBoxLayout()
 		self._edt_import = QtGui.QLineEdit()
@@ -138,20 +139,24 @@ class TrFontTool(QtGui.QDialog):
 		imp_path_row.addWidget(btn_browse_imp)
 		root.addLayout(imp_path_row)
 
-		btn_import = QtGui.QPushButton('Load .trfont (inspect)')
+		# Import action buttons
+		imp_btn_row = QtGui.QHBoxLayout()
+
+		btn_inspect = QtGui.QPushButton('Inspect')
+		btn_inspect.setToolTip('Load .trfont and show summary without modifying the font')
+		btn_inspect.clicked.connect(self._do_inspect)
+		imp_btn_row.addWidget(btn_inspect)
+
+		btn_import = QtGui.QPushButton('Import into font')
+		btn_import.setToolTip('Load .trfont and inject all glyphs into the current FL font.\nExisting glyphs are updated, missing glyphs are created.')
 		btn_import.clicked.connect(self._do_import)
-		root.addWidget(btn_import)
+		imp_btn_row.addWidget(btn_import)
+
+		root.addLayout(imp_btn_row)
 
 		root.addSpacing(4)
 		root.addWidget(self._hr())
 
-		# Output log
-		root.addWidget(self._section_label('Log'))
-		self._log = QtGui.QTextEdit()
-		self._log.setReadOnly(True)
-		self._log.setFixedHeight(120)
-		self._log.setStyleSheet('font-family: monospace; font-size: 10px;')
-		root.addWidget(self._log)
 
 		btn_close = QtGui.QPushButton('Close')
 		btn_close.clicked.connect(self.close)
@@ -167,9 +172,6 @@ class TrFontTool(QtGui.QDialog):
 		line.setFrameShape(QtGui.QFrame.HLine)
 		line.setFrameShadow(QtGui.QFrame.Sunken)
 		return line
-
-	def _print(self, msg):
-		self._log.append(msg)
 
 	# -- Path pickers -----------------------------------
 	def _browse_export(self):
@@ -206,14 +208,14 @@ class TrFontTool(QtGui.QDialog):
 	def _do_export(self):
 		path = self._edt_export.text.strip()
 		if not path:
-			self._print('ERROR: No export path set.')
+			print('ERROR: No export path set.')
 			return
 
 		if not fl6.CurrentFont():
-			self._print('ERROR: No font open in FontLab.')
+			print('ERROR: No font open in FontLab.')
 			return
 
-		self._print('--- Export ---')
+		print('--- Export ---')
 
 		try:
 			proxy = trFontProxy()
@@ -221,13 +223,13 @@ class TrFontTool(QtGui.QDialog):
 			# Glyph scope
 			if self._rad_selected.isChecked():
 				glyph_names = proxy.selected_glyph_names
-				self._print('Scope: {} selected glyph(s)'.format(len(glyph_names)))
+				print('Scope: {} selected glyph(s)'.format(len(glyph_names)))
 				if not glyph_names:
-					self._print('WARNING: No glyphs selected — exporting nothing.')
+					print('WARNING: No glyphs selected — exporting nothing.')
 					return
 			else:
 				glyph_names = None		# None = all
-				self._print('Scope: all glyphs')
+				print('Scope: all glyphs')
 
 			font = proxy.eject(
 				glyph_names      = glyph_names,
@@ -244,57 +246,92 @@ class TrFontTool(QtGui.QDialog):
 
 			TrFontIO.write(font, path)
 
-			self._print('Written: {}'.format(path))
-			self._print('  Glyphs:   {}'.format(len(font)))
-			self._print('  Masters:  {}'.format(len(font.masters)))
-			self._print('  Encoding: {} entries'.format(len(font.encoding.entries)))
-			self._print('  Axes:     {}'.format(len(font.axes)))
+			print('Written: {}'.format(path))
+			print('  Glyphs:   {}'.format(len(font)))
+			print('  Masters:  {}'.format(len(font.masters)))
+			print('  Encoding: {} entries'.format(len(font.encoding.entries)))
+			print('  Axes:     {}'.format(len(font.axes)))
 
 		except Exception as e:
-			self._print('ERROR: {}'.format(e))
+			print('ERROR: {}'.format(e))
 			import traceback
-			self._print(traceback.format_exc())
+			print(traceback.format_exc())
 
-	def _do_import(self):
-		path = self._edt_import.text.strip()
+	def _load_trfont(self, path):
+		'''Common loader for inspect and import. Returns Font or None.'''
 		if not path:
-			self._print('ERROR: No import path set.')
-			return
+			print('ERROR: No import path set.')
+			return None
 
 		if not os.path.isdir(path):
-			self._print('ERROR: Path is not a folder: {}'.format(path))
-			return
-
-		self._print('--- Load ---')
+			print('ERROR: Path is not a folder: {}'.format(path))
+			return None
 
 		try:
-			font = TrFontIO.read(path)
-
-			self._print('Loaded: {}'.format(path))
-			self._print('  Family:   {}'.format(font.info.family_name))
-			self._print('  Style:    {}'.format(font.info.style_name))
-			self._print('  UPM:      {}'.format(font.metrics.upm))
-			self._print('  Glyphs:   {}'.format(len(font)))
-			self._print('  Masters:  {}'.format(len(font.masters)))
-			self._print('  Encoding: {} entries'.format(len(font.encoding.entries)))
-			self._print('  Axes:     {}'.format(len(font.axes)))
-			self._print('  Kerning:  {} pairs'.format(len(font.kerning.pairs)))
-
-			if font.masters.data:
-				self._print('  Master names:')
-				for m in font.masters:
-					flag = ' [default]' if m.is_default else ''
-					self._print('    {} → layer "{}"{}' .format(m.name, m.layer_name, flag))
-
-			if font.glyph_names:
-				preview = font.glyph_names[:8]
-				suffix  = ' …' if len(font) > 8 else ''
-				self._print('  Glyphs: {}{}'.format(', '.join(preview), suffix))
-
+			return TrFontIO.read(path)
 		except Exception as e:
-			self._print('ERROR: {}'.format(e))
+			print('ERROR: {}'.format(e))
 			import traceback
-			self._print(traceback.format_exc())
+			print(traceback.format_exc())
+			return None
+
+	def _print_font_summary(self, font, path):
+		'''Print font summary to log.'''
+		print('Loaded: {}'.format(path))
+		print('  Family:   {}'.format(font.info.family_name))
+		print('  Style:    {}'.format(font.info.style_name))
+		print('  UPM:      {}'.format(font.metrics.upm))
+		print('  Glyphs:   {}'.format(len(font)))
+		print('  Masters:  {}'.format(len(font.masters)))
+		print('  Encoding: {} entries'.format(len(font.encoding.entries)))
+		print('  Axes:     {}'.format(len(font.axes)))
+		print('  Kerning:  {} pairs'.format(len(font.kerning.pairs)))
+
+		if font.masters.data:
+			print('  Master names:')
+			for m in font.masters:
+				flag = ' [default]' if m.is_default else ''
+				print('    {} → layer "{}"{}' .format(m.name, m.layer_name, flag))
+
+		if font.glyph_names:
+			preview = font.glyph_names[:8]
+			suffix  = ' …' if len(font) > 8 else ''
+			print('  Glyphs: {}{}'.format(', '.join(preview), suffix))
+
+	def _do_inspect(self):
+		'''Load .trfont and show summary without modifying the font.'''
+		path = self._edt_import.text.strip()
+		print('--- Inspect ---')
+
+		font = self._load_trfont(path)
+		if font is None:
+			return
+
+		self._print_font_summary(font, path)
+
+	def _do_import(self):
+		'''Load .trfont and inject all glyphs into the current FL font.'''
+		path = self._edt_import.text.strip()
+		print('--- Import ---')
+
+		if not fl6.CurrentFont():
+			print('ERROR: No font open in FontLab.')
+			return
+
+		font = self._load_trfont(path)
+		if font is None:
+			return
+
+		self._print_font_summary(font, path)
+		print('')
+		print('Injecting into current font...')
+
+		
+		proxy = trFontProxy()
+		proxy.mount(font)
+
+		fl6.flItems.notifyPackageContentUpdated(proxy.host.fgPackage.id)
+
 
 
 # ================================================

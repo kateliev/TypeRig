@@ -172,14 +172,18 @@ TRV.openContourAtNode = function() {
 };
 
 // -- Delete selected node (Backspace) ------------------------------
-// Removes the selected on-curve and its adjacent handles.
-// Contour stays closed — resulting gap is bridged with a straight line.
+// Removes the selected on-curve and reconstructs adjacent beziers.
+// Curve-Curve: merges two cubics into one, keeping outer handles
+//   with proportionally scaled lengths.
+// Curve-Line or Line-Curve: converts to a single cubic using the
+//   surviving handle and a synthetic one for the line side.
+// Line-Line: simple removal, straight line remains.
 TRV.deleteNode = function() {
 	var layer = TRV.getActiveLayer();
 	if (!layer) return;
 
 	var sel = TRV.state.selectedNodeIds;
-	if (sel.size !== 1) return; // single node only for now
+	if (sel.size !== 1) return;
 
 	var nodeId = sel.values().next().value;
 	var ref = TRV.findNodeById(nodeId);
@@ -194,45 +198,8 @@ TRV.deleteNode = function() {
 	var ni = parseInt(m[2]);
 	var node = nodes[ni];
 
-	if (node.type === 'on') {
-		// Collect indices to remove: the on-curve + adjacent handles
-		var toRemove = [ni];
-		var prevIdx = (ni - 1 + n) % n;
-		var nextIdx = (ni + 1) % n;
-
-		// Remove preceding handle(s) that belong to this curve segment
-		if (nodes[prevIdx].type !== 'on') {
-			toRemove.push(prevIdx);
-			// Check one more back for the second BCP of incoming cubic
-			var prevPrev = (prevIdx - 1 + n) % n;
-			if (nodes[prevPrev].type !== 'on' && toRemove.indexOf(prevPrev) < 0) {
-				toRemove.push(prevPrev);
-			}
-		}
-
-		// Remove following handle(s) that belong to the outgoing segment
-		if (nodes[nextIdx].type !== 'on') {
-			toRemove.push(nextIdx);
-			var nextNext = (nextIdx + 1) % n;
-			if (nodes[nextNext].type !== 'on' && toRemove.indexOf(nextNext) < 0) {
-				toRemove.push(nextNext);
-			}
-		}
-
-		// Sort descending and remove
-		toRemove.sort(function(a, b) { return b - a; });
-		for (var i = 0; i < toRemove.length; i++) {
-			nodes.splice(toRemove[i], 1);
-		}
-
-		// If contour has fewer than 2 nodes, remove it entirely
-		if (nodes.length < 2) {
-			var shape = ref.shape;
-			var ci = shape.contours.indexOf(contour);
-			if (ci >= 0) shape.contours.splice(ci, 1);
-		}
-	} else {
-		// Handle selected: just retract it to parent on-curve
+	if (node.type !== 'on') {
+		// Handle selected: retract to parent
 		var prevIdx = (ni - 1 + n) % n;
 		var nextIdx = (ni + 1) % n;
 		var parentIdx = nodes[prevIdx].type === 'on' ? prevIdx : nextIdx;
@@ -240,11 +207,273 @@ TRV.deleteNode = function() {
 			nodes[ni].x = nodes[parentIdx].x;
 			nodes[ni].y = nodes[parentIdx].y;
 		}
+		sel.clear();
+		TRV.draw();
+		TRV.updateStatusSelected();
+		return;
+	}
+
+	// -- On-curve node deletion --
+	// Analyze incoming and outgoing segments
+	var incoming = TRV._analyzeIncoming(nodes, n, ni);
+	var outgoing = TRV._analyzeOutgoing(nodes, n, ni);
+
+	// Build replacement nodes to insert between prev on-curve and next on-curve
+	var replacement = TRV._buildReplacement(nodes, incoming, outgoing);
+
+	// Collect all indices to remove (the on-curve + its adjacent handles)
+	var toRemove = new Set();
+	toRemove.add(ni);
+	for (var i = 0; i < incoming.handleIndices.length; i++) {
+		toRemove.add(incoming.handleIndices[i]);
+	}
+	for (var i = 0; i < outgoing.handleIndices.length; i++) {
+		toRemove.add(outgoing.handleIndices[i]);
+	}
+
+	// Build new node array
+	var newNodes = [];
+	for (var i = 0; i < n; i++) {
+		if (toRemove.has(i)) {
+			// At the position of the deleted on-curve, insert replacement
+			if (i === ni) {
+				for (var j = 0; j < replacement.length; j++) {
+					newNodes.push(replacement[j]);
+				}
+			}
+			continue;
+		}
+		newNodes.push(nodes[i]);
+	}
+
+	contour.nodes = newNodes;
+
+	// If fewer than 2 on-curve nodes remain, remove contour
+	var onCount = 0;
+	for (var i = 0; i < contour.nodes.length; i++) {
+		if (contour.nodes[i].type === 'on') onCount++;
+	}
+	if (onCount < 2) {
+		var shape = ref.shape;
+		var ci = shape.contours.indexOf(contour);
+		if (ci >= 0) shape.contours.splice(ci, 1);
 	}
 
 	sel.clear();
 	TRV.draw();
 	TRV.updateStatusSelected();
+};
+
+// Analyze the incoming segment (ending at onIdx).
+// Returns { type, prevOnIdx, handleIndices, outerHandle }
+TRV._analyzeIncoming = function(nodes, n, onIdx) {
+	var result = { type: 'line', prevOnIdx: -1, handleIndices: [], outerHandle: null };
+	var i = (onIdx - 1 + n) % n;
+
+	if (nodes[i].type === 'on') {
+		// Line segment: prev on-curve directly
+		result.prevOnIdx = i;
+		return result;
+	}
+
+	// Walk backwards past handles
+	var handles = [];
+	while (nodes[i].type !== 'on') {
+		handles.push(i);
+		i = (i - 1 + n) % n;
+	}
+	result.prevOnIdx = i;
+	result.handleIndices = handles;
+
+	if (handles.length >= 2) {
+		result.type = 'cubic';
+		// Outer handle is the one closest to prevOnIdx (first in the segment)
+		result.outerHandle = { x: nodes[handles[handles.length - 1]].x, y: nodes[handles[handles.length - 1]].y };
+	} else if (handles.length === 1) {
+		result.type = 'quad';
+		result.outerHandle = { x: nodes[handles[0]].x, y: nodes[handles[0]].y };
+	}
+
+	return result;
+};
+
+// Analyze the outgoing segment (starting at onIdx).
+// Returns { type, nextOnIdx, handleIndices, outerHandle }
+TRV._analyzeOutgoing = function(nodes, n, onIdx) {
+	var result = { type: 'line', nextOnIdx: -1, handleIndices: [], outerHandle: null };
+	var i = (onIdx + 1) % n;
+
+	if (nodes[i].type === 'on') {
+		// Line segment: next on-curve directly
+		result.nextOnIdx = i;
+		return result;
+	}
+
+	// Walk forward past handles
+	var handles = [];
+	while (nodes[i].type !== 'on') {
+		handles.push(i);
+		i = (i + 1) % n;
+	}
+	result.nextOnIdx = i;
+	result.handleIndices = handles;
+
+	if (handles.length >= 2) {
+		result.type = 'cubic';
+		// Outer handle is the one closest to nextOnIdx (last in the segment)
+		result.outerHandle = { x: nodes[handles[handles.length - 1]].x, y: nodes[handles[handles.length - 1]].y };
+	} else if (handles.length === 1) {
+		result.type = 'quad';
+		result.outerHandle = { x: nodes[handles[0]].x, y: nodes[handles[0]].y };
+	}
+
+	return result;
+};
+
+// Build replacement nodes between prevOn and nextOn after deleting
+// the node between incoming and outgoing segments.
+TRV._buildReplacement = function(nodes, incoming, outgoing) {
+	var round = function(v) { return Math.round(v * 10) / 10; };
+	var prevOn = nodes[incoming.prevOnIdx];
+	var nextOn = nodes[outgoing.nextOnIdx];
+
+	var inType = incoming.type;
+	var outType = outgoing.type;
+
+	// Line-Line: no replacement nodes needed, straight line
+	if (inType === 'line' && outType === 'line') {
+		return [];
+	}
+
+	// Curve-Curve: merge into single cubic with scaled outer handles
+	if (inType === 'cubic' && outType === 'cubic') {
+		return TRV._mergeCubics(prevOn, incoming.outerHandle, outgoing.outerHandle, nextOn);
+	}
+
+	// Curve-Line: cubic from prevOn with incoming outer handle → nextOn
+	if (inType === 'cubic' && outType === 'line') {
+		return TRV._curveToLine(prevOn, incoming.outerHandle, nextOn);
+	}
+
+	// Line-Curve: cubic from prevOn → nextOn with outgoing outer handle
+	if (inType === 'line' && outType === 'cubic') {
+		return TRV._lineToCurve(prevOn, outgoing.outerHandle, nextOn);
+	}
+
+	// Fallback for quad or mixed: just line
+	return [];
+};
+
+// Merge two cubics: keep outer handles, scale proportionally.
+// inHandle: the outer BCP of incoming segment (near prevOn)
+// outHandle: the outer BCP of outgoing segment (near nextOn)
+TRV._mergeCubics = function(prevOn, inHandle, outHandle, nextOn) {
+	var round = function(v) { return Math.round(v * 10) / 10; };
+
+	// Original handle vectors
+	var inDx = inHandle.x - prevOn.x;
+	var inDy = inHandle.y - prevOn.y;
+	var outDx = outHandle.x - nextOn.x;
+	var outDy = outHandle.y - nextOn.y;
+
+	// Original handle lengths
+	var inLen = Math.sqrt(inDx * inDx + inDy * inDy);
+	var outLen = Math.sqrt(outDx * outDx + outDy * outDy);
+
+	// Chord between endpoints
+	var chordDx = nextOn.x - prevOn.x;
+	var chordDy = nextOn.y - prevOn.y;
+	var chordLen = Math.sqrt(chordDx * chordDx + chordDy * chordDy);
+
+	if (chordLen < 0.001) {
+		// Degenerate: endpoints overlap
+		return [];
+	}
+
+	// Scale factor: handles should be proportional to chord.
+	// Heuristic: scale = chord / (sum of original sub-chords) * handle length
+	// Simpler: extend handles by ratio of new chord to sum of old handle lengths
+	var totalHandleLen = inLen + outLen;
+	var scale = totalHandleLen > 0.001 ? chordLen / (chordLen + totalHandleLen * 0.15) : 1;
+
+	// Keep direction, adjust length (scale up slightly for better approximation)
+	var newIn = {
+		type: 'curve',
+		x: round(prevOn.x + inDx * scale * 1.25),
+		y: round(prevOn.y + inDy * scale * 1.25)
+	};
+	var newOut = {
+		type: 'curve',
+		x: round(nextOn.x + outDx * scale * 1.25),
+		y: round(nextOn.y + outDy * scale * 1.25)
+	};
+
+	return [newIn, newOut];
+};
+
+// Curve→Line merge: use incoming handle, synthesize outgoing handle
+TRV._curveToLine = function(prevOn, inHandle, nextOn) {
+	var round = function(v) { return Math.round(v * 10) / 10; };
+
+	// Keep incoming handle direction, scale to ~1/3 chord
+	var inDx = inHandle.x - prevOn.x;
+	var inDy = inHandle.y - prevOn.y;
+	var inLen = Math.sqrt(inDx * inDx + inDy * inDy);
+
+	var chordDx = nextOn.x - prevOn.x;
+	var chordDy = nextOn.y - prevOn.y;
+	var chordLen = Math.sqrt(chordDx * chordDx + chordDy * chordDy);
+
+	if (chordLen < 0.001 || inLen < 0.001) return [];
+
+	// Scale incoming handle
+	var scale = Math.min(inLen, chordLen * 0.66) / inLen;
+	var newIn = {
+		type: 'curve',
+		x: round(prevOn.x + inDx * scale),
+		y: round(prevOn.y + inDy * scale)
+	};
+
+	// Synthesize outgoing: 1/3 of chord from nextOn back toward prevOn
+	var newOut = {
+		type: 'curve',
+		x: round(nextOn.x - chordDx * 0.33),
+		y: round(nextOn.y - chordDy * 0.33)
+	};
+
+	return [newIn, newOut];
+};
+
+// Line→Curve merge: synthesize incoming handle, keep outgoing handle
+TRV._lineToCurve = function(prevOn, outHandle, nextOn) {
+	var round = function(v) { return Math.round(v * 10) / 10; };
+
+	var outDx = outHandle.x - nextOn.x;
+	var outDy = outHandle.y - nextOn.y;
+	var outLen = Math.sqrt(outDx * outDx + outDy * outDy);
+
+	var chordDx = nextOn.x - prevOn.x;
+	var chordDy = nextOn.y - prevOn.y;
+	var chordLen = Math.sqrt(chordDx * chordDx + chordDy * chordDy);
+
+	if (chordLen < 0.001 || outLen < 0.001) return [];
+
+	// Synthesize incoming: 1/3 of chord from prevOn toward nextOn
+	var newIn = {
+		type: 'curve',
+		x: round(prevOn.x + chordDx * 0.33),
+		y: round(prevOn.y + chordDy * 0.33)
+	};
+
+	// Scale outgoing handle
+	var scale = Math.min(outLen, chordLen * 0.66) / outLen;
+	var newOut = {
+		type: 'curve',
+		x: round(nextOn.x + outDx * scale),
+		y: round(nextOn.y + outDy * scale)
+	};
+
+	return [newIn, newOut];
 };
 
 // Get contour index (ci) from a node ID like 'c2_n5'

@@ -48,7 +48,7 @@ from typerig.core.objects.kern import Kerning
 from typerig.core.fileio.trfont import TrFontIO
 
 # - Init --------------------------------
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 
 # - Helpers -----------------------------
 def _fl_info(fg_font):
@@ -71,22 +71,19 @@ def _fl_info(fg_font):
 
 def _fl_metrics(fg_font):
 	'''Extract vertical metrics from fgFont → FontMetrics.'''
-	def _int(attr, default):
-		val = getattr(fg_font, attr, None)
-		try: return int(val) if val is not None else default
-		except (TypeError, ValueError): return default
+	get = lambda attr, default: getattr(fg_font, attr, default) or default
 
 	return FontMetrics(
-		upm 	   = _int('upm', 		1000),
-		ascender   = _int('ascender',   800),
-		descender  = _int('descender',  -200),
-		x_height   = _int('xHeight',    500),
-		cap_height = _int('capHeight',  700),
-		line_gap   = _int('lineGap',    0),
+		upm 		= get('upm', 		1000),
+		ascender 	= get('ascender', 	800),
+		descender 	= get('descender', 	-200),
+		x_height 	= get('xHeight', 	500),
+		cap_height 	= get('capHeight', 	700),
+		line_gap 	= get('lineGap', 	0),
 	)
 
 def _fl_axes(fl_package):
-	'''Extract axes, masters, instances from flPackage → (list[Axis], Masters, Instances).
+	'''Build (axes_list, Masters, Instances) from an flPackage.
 
 	FL's master concept maps directly to Master.layer_name — in FL the
 	master name IS the layer name inside every glyph.
@@ -218,6 +215,10 @@ class trFontProxy(object):
 		return self.host.fgPackage
 
 	@property
+	def fl(self):
+		return self.host
+
+	@property
 	def all_glyph_names(self):
 		'''All glyph names in font order.'''
 		return [g.name for g in self.fg.glyphs]
@@ -241,6 +242,59 @@ class trFontProxy(object):
 			return [g.name for g in self.fg.glyphs if g.mark]
 		except Exception:
 			return []
+
+	# -- Basics -------------------------
+	def glyph(self, glyph, extend=None):
+		'''Return TypeRig proxy glyph object (trGlyph) by index (int) or name (str).'''
+		if isinstance(glyph, int) or isinstance(glyph, str):
+			return trGlyph(self.fg, self.fg[glyph])
+		else:
+			return trGlyph(self.fg, glyph)
+
+	def has_glyph(self, glyphName):
+		return self.fg.has_key(glyphName)
+
+	def add_glyph(self, glyph):
+		'''Adds a Glyph (fgGlyph or flGlyph) to font'''
+		if isinstance(glyph, fgt.fgGlyph):
+			glyph = fl6.flGlyph(glyph)
+		
+		self.fl.addGlyph(glyph)
+
+	def create_glyph(self, glyph_name, layers=[], unicode_int=None):
+		'''Creates new glyph and adds it to the font
+		Args:
+			glyph_name (str): New glyph name
+			layers (list(str) or list(flLayer)): List of layers to be added to the new glyph
+			unicode_int (int): Unicode int of the new glyph
+		Returns:
+			pGlyph
+		'''
+
+		# - Build
+		base_glyph = fl6.flGlyph()
+		base_glyph.name = glyph_name
+		self.add_glyph(base_glyph)
+
+		# - Get the newly added glyph (all sane methods exhausted)
+		new_glyph = self.glyph(glyph_name)
+
+		# - Set Unicode
+		if unicode_int is not None: new_glyph.fg.setUnicode(unicode_int)
+		
+		# - Add layers
+		if len(layers):
+			for layer in layers:
+				if isinstance(layer, str):
+					new_layer = fl6.flLayer()
+					new_layer.name = layer
+					new_glyph.host.addLayer(new_layer)
+				
+				elif isinstance(layer, fl6.flLayer):
+					new_glyph.host.addLayer(layer)
+
+		# - Add to font
+		return new_glyph
 
 	# -- FL → core ----------------------
 	def _build_info(self):
@@ -346,7 +400,7 @@ class trFontProxy(object):
 
 	# -- Load ---------------------------
 	@staticmethod
-	def load(path):
+	def load_raw(path):
 		'''Read a .trfont folder and return a pure core Font.
 
 		This is a static method — no FL connection needed.
@@ -359,55 +413,27 @@ class trFontProxy(object):
 		'''
 		return TrFontIO.read(path)
 
-	# -- Inject -------------------------
-	def inject(self, font, layer_names=None, verbose=False):
-		'''Push core Font geometry back into the live FL session.
-
-		Finds each glyph by name in FL, then mounts each master layer from
-		the core Font back into the FL glyph via the trLayer.mount() chain.
-		Only layers that exist in both sides are updated — no new glyphs or
-		layers are created here.
-
-		Args:
-			font (Font)              : source core Font to push
-			layer_names (list|None)  : restrict to specific layer names;
-			                           None → all master layer names in font
-			verbose (bool)           : print per-glyph progress
-		'''
-		if layer_names is None:
-			layer_names = [m.layer_name for m in font.masters]
-
+	def mount(self, font):
+	
 		for glyph_name in font.glyph_names:
-			fg_glyph = self.fg[glyph_name]
-			if fg_glyph is None:
-				if verbose:
-					print('  SKIP (not in FL): {}'.format(glyph_name))
-				continue
-
 			core_glyph = font[glyph_name]
-			if core_glyph is None:
-				continue
 
-			tr_glyph = trGlyph(fg_glyph, self.fg)
+			if self.has_glyph(glyph_name):
+				tr_glyph = self.glyph(glyph_name)
+			else:
+				layer_names = [layer.name for layer in core_glyph.layers if '#' not in layer.name]
+				tr_glyph = self.create_glyph(glyph_name, layer_names)
 
-			for layer_name in layer_names:
-				core_layer = core_glyph.layer(layer_name)
-				fl_layer   = None
+			unicodes = font.encoding.unicodes(glyph_name) if font.encoding else []
+			if len(unicodes): tr_glyph.unicodes = unicodes
 
-				for fll in tr_glyph.host.layers:
-					if fll.name == layer_name:
-						fl_layer = trLayer(fll)
-						break
+			for core_layer in core_glyph.layers:
+				if '#' not in layer.name: continue
 
-				if core_layer is None or fl_layer is None:
-					continue
+				fl_layer_proxy = tr_glyph.find_layer(core_layer.name)
 
-				try:
-					fl_layer.mount(core_layer)
-					if verbose:
-						print('  injected: {} / {}'.format(glyph_name, layer_name))
-				except Exception as e:
-					if verbose:
-						print('  ERROR injecting {} / {}: {}'.format(glyph_name, layer_name, e))
+				if fl_layer_proxy is None:
+					fl_layer_proxy = tr_glyph.add_layer(core_layer.name)
 
-			tr_glyph.update()
+				fl_layer_proxy.mount(core_layer)
+
