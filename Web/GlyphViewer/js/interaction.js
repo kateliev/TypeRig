@@ -218,8 +218,17 @@ TRV.deleteNode = function() {
 	var incoming = TRV._analyzeIncoming(nodes, n, ni);
 	var outgoing = TRV._analyzeOutgoing(nodes, n, ni);
 
+	// Collect dense samples from both segments BEFORE removing anything.
+	// Skip duplicate at the junction (the deleted node itself).
+	var samplesIn = TRV._sampleSegment(nodes, n, ni, 'incoming', 40);
+	var samplesOut = TRV._sampleSegment(nodes, n, ni, 'outgoing', 40);
+	// Merge: incoming ends at deleted node, outgoing starts there — skip first of outgoing
+	if (samplesOut.length > 0) samplesOut.shift();
+	TRV._pendingSamples = samplesIn.concat(samplesOut);
+
 	// Build replacement nodes to insert between prev on-curve and next on-curve
 	var replacement = TRV._buildReplacement(nodes, incoming, outgoing);
+	TRV._pendingSamples = null;
 
 	// Collect all indices to remove (the on-curve + its adjacent handles)
 	var toRemove = new Set();
@@ -364,116 +373,325 @@ TRV._buildReplacement = function(nodes, incoming, outgoing) {
 	return [];
 };
 
-// Merge two cubics: keep outer handles, scale proportionally.
-// inHandle: the outer BCP of incoming segment (near prevOn)
-// outHandle: the outer BCP of outgoing segment (near nextOn)
-TRV._mergeCubics = function(prevOn, inHandle, outHandle, nextOn) {
+// -- Least-squares cubic Bezier fitting ------------------------------
+// Sample a cubic at parameter t
+TRV._sampleCubic = function(p0, p1, p2, p3, t) {
+	var u = 1 - t;
+	var uu = u * u, tt = t * t;
+	return {
+		x: uu * u * p0.x + 3 * uu * t * p1.x + 3 * u * tt * p2.x + tt * t * p3.x,
+		y: uu * u * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + tt * t * p3.y
+	};
+};
+
+// Sample a line at parameter t
+TRV._sampleLine = function(p0, p1, t) {
+	return {
+		x: p0.x + t * (p1.x - p0.x),
+		y: p0.y + t * (p1.y - p0.y)
+	};
+};
+
+// Collect dense samples from a segment, returns [{ x, y }]
+TRV._sampleSegment = function(nodes, n, onIdx, direction, numSamples) {
+	var samples = [];
+	var i, pts;
+
+	if (direction === 'incoming') {
+		// Walk backward from onIdx to find segment start
+		i = (onIdx - 1 + n) % n;
+		if (nodes[i].type === 'on') {
+			// Line
+			for (var s = 0; s <= numSamples; s++) {
+				var t = s / numSamples;
+				samples.push(TRV._sampleLine(nodes[i], nodes[onIdx], t));
+			}
+			return samples;
+		}
+		// Cubic: walk back to find start on-curve
+		var handles = [];
+		while (nodes[i].type !== 'on') {
+			handles.unshift(i);
+			i = (i - 1 + n) % n;
+		}
+		// i is the start on-curve, handles go toward onIdx
+		if (handles.length >= 2) {
+			var p0 = nodes[i];
+			var p1 = nodes[handles[0]];
+			var p2 = nodes[handles[1]];
+			var p3 = nodes[onIdx];
+			for (var s = 0; s <= numSamples; s++) {
+				samples.push(TRV._sampleCubic(p0, p1, p2, p3, s / numSamples));
+			}
+		}
+		return samples;
+	} else {
+		// Outgoing: walk forward from onIdx
+		i = (onIdx + 1) % n;
+		if (nodes[i].type === 'on') {
+			for (var s = 0; s <= numSamples; s++) {
+				samples.push(TRV._sampleLine(nodes[onIdx], nodes[i], s / numSamples));
+			}
+			return samples;
+		}
+		var handles = [];
+		while (nodes[i].type !== 'on') {
+			handles.push(i);
+			i = (i + 1) % n;
+		}
+		if (handles.length >= 2) {
+			var p0 = nodes[onIdx];
+			var p1 = nodes[handles[0]];
+			var p2 = nodes[handles[1]];
+			var p3 = nodes[i];
+			for (var s = 0; s <= numSamples; s++) {
+				samples.push(TRV._sampleCubic(p0, p1, p2, p3, s / numSamples));
+			}
+		}
+		return samples;
+	}
+};
+
+// Arc-length parameterization: assign t values to samples based on
+// cumulative distance, normalized to [0, 1].
+TRV._arcLengthParameterize = function(samples) {
+	var params = [0];
+	var total = 0;
+	for (var i = 1; i < samples.length; i++) {
+		var dx = samples[i].x - samples[i - 1].x;
+		var dy = samples[i].y - samples[i - 1].y;
+		total += Math.sqrt(dx * dx + dy * dy);
+		params.push(total);
+	}
+	if (total > 0.001) {
+		for (var i = 0; i < params.length; i++) {
+			params[i] /= total;
+		}
+	}
+	return params;
+};
+
+// Unconstrained least-squares: fit cubic P0→P1→P2→P3 to samples.
+// P0 and P3 are fixed endpoints. Solves for P1, P2.
+TRV._fitCubicUnconstrained = function(samples, params, P0, P3) {
 	var round = function(v) { return Math.round(v * 10) / 10; };
 
-	// Original handle vectors
-	var inDx = inHandle.x - prevOn.x;
-	var inDy = inHandle.y - prevOn.y;
-	var outDx = outHandle.x - nextOn.x;
-	var outDy = outHandle.y - nextOn.y;
+	// Build normal equations for: A1*P1 + A2*P2 = R
+	// A1i = 3(1-t)²t,  A2i = 3(1-t)t²
+	var C00 = 0, C01 = 0, C11 = 0;
+	var Rx0 = 0, Ry0 = 0, Rx1 = 0, Ry1 = 0;
 
-	// Original handle lengths
-	var inLen = Math.sqrt(inDx * inDx + inDy * inDy);
-	var outLen = Math.sqrt(outDx * outDx + outDy * outDy);
+	for (var i = 0; i < samples.length; i++) {
+		var t = params[i];
+		var u = 1 - t;
+		var A1 = 3 * u * u * t;
+		var A2 = 3 * u * t * t;
 
-	// Chord between endpoints
-	var chordDx = nextOn.x - prevOn.x;
-	var chordDy = nextOn.y - prevOn.y;
-	var chordLen = Math.sqrt(chordDx * chordDx + chordDy * chordDy);
+		// Residual: sample minus endpoint contribution
+		var rx = samples[i].x - (u * u * u * P0.x + t * t * t * P3.x);
+		var ry = samples[i].y - (u * u * u * P0.y + t * t * t * P3.y);
 
-	if (chordLen < 0.001) {
-		// Degenerate: endpoints overlap
-		return [];
+		C00 += A1 * A1;
+		C01 += A1 * A2;
+		C11 += A2 * A2;
+		Rx0 += A1 * rx;
+		Ry0 += A1 * ry;
+		Rx1 += A2 * rx;
+		Ry1 += A2 * ry;
 	}
 
-	// Scale factor: handles should be proportional to chord.
-	// Heuristic: scale = chord / (sum of original sub-chords) * handle length
-	// Simpler: extend handles by ratio of new chord to sum of old handle lengths
-	var totalHandleLen = inLen + outLen;
-	var scale = totalHandleLen > 0.001 ? chordLen / (chordLen + totalHandleLen * 0.15) : 1;
+	// Solve 2x2 system: [C00, C01; C01, C11] * [p1, p2] = [R0, R1]
+	var det = C00 * C11 - C01 * C01;
+	if (Math.abs(det) < 1e-12) {
+		// Degenerate: fall back to 1/3 rule
+		return {
+			P1: { x: round(P0.x + (P3.x - P0.x) / 3), y: round(P0.y + (P3.y - P0.y) / 3) },
+			P2: { x: round(P3.x - (P3.x - P0.x) / 3), y: round(P3.y - (P3.y - P0.y) / 3) }
+		};
+	}
 
-	// Keep direction, adjust length (scale up slightly for better approximation)
-	var newIn = {
-		type: 'curve',
-		x: round(prevOn.x + inDx * scale * 1.25),
-		y: round(prevOn.y + inDy * scale * 1.25)
+	var invDet = 1 / det;
+	return {
+		P1: {
+			x: round((C11 * Rx0 - C01 * Rx1) * invDet),
+			y: round((C11 * Ry0 - C01 * Ry1) * invDet)
+		},
+		P2: {
+			x: round((C00 * Rx1 - C01 * Rx0) * invDet),
+			y: round((C00 * Ry1 - C01 * Ry0) * invDet)
+		}
 	};
-	var newOut = {
-		type: 'curve',
-		x: round(nextOn.x + outDx * scale * 1.25),
-		y: round(nextOn.y + outDy * scale * 1.25)
-	};
-
-	return [newIn, newOut];
 };
 
-// Curve→Line merge: use incoming handle, synthesize outgoing handle
+// Tangent-constrained least-squares: P1 = P0 + α₁·T1, P2 = P3 + α₂·T2.
+// Solves for scalar distances α₁, α₂ (preserves G1 continuity).
+TRV._fitCubicConstrained = function(samples, params, P0, P3, T1, T2) {
+	var round = function(v) { return Math.round(v * 10) / 10; };
+	var dot12 = T1.x * T2.x + T1.y * T2.y;
+
+	var C00 = 0, C01 = 0, C11 = 0;
+	var R0 = 0, R1 = 0;
+
+	for (var i = 0; i < samples.length; i++) {
+		var t = params[i];
+		var u = 1 - t;
+		var b1 = 3 * u * u * t;
+		var b2 = 3 * u * t * t;
+
+		// With P1 = P0 + α₁T1 and P2 = P3 + α₂T2, the fixed part is
+		// (B0+B1)·P0 + (B2+B3)·P3, not just B0·P0 + B3·P3
+		var fixedP0 = u * u * u + b1;   // B0 + B1
+		var fixedP3 = b2 + t * t * t;   // B2 + B3
+		var rx = samples[i].x - (fixedP0 * P0.x + fixedP3 * P3.x);
+		var ry = samples[i].y - (fixedP0 * P0.y + fixedP3 * P3.y);
+
+		C00 += b1 * b1;           // T1·T1 = 1
+		C01 += b1 * b2 * dot12;   // T1·T2
+		C11 += b2 * b2;           // T2·T2 = 1
+		R0  += b1 * (T1.x * rx + T1.y * ry);
+		R1  += b2 * (T2.x * rx + T2.y * ry);
+	}
+
+	var det = C00 * C11 - C01 * C01;
+	var alpha1, alpha2;
+
+	if (Math.abs(det) < 1e-12) {
+		// Degenerate: use chord thirds
+		var chordDx = P3.x - P0.x;
+		var chordDy = P3.y - P0.y;
+		var chordLen = Math.sqrt(chordDx * chordDx + chordDy * chordDy);
+		alpha1 = chordLen / 3;
+		alpha2 = chordLen / 3;
+	} else {
+		alpha1 = (C11 * R0 - C01 * R1) / det;
+		alpha2 = (C00 * R1 - C01 * R0) / det;
+	}
+
+	// Clamp: prevent degenerate negative or extreme handles
+	var chordDx = P3.x - P0.x;
+	var chordDy = P3.y - P0.y;
+	var chordLen = Math.sqrt(chordDx * chordDx + chordDy * chordDy);
+	var maxLen = chordLen * 4; // large arcs need long handles
+	alpha1 = Math.max(0.01, Math.min(alpha1, maxLen));
+	alpha2 = Math.max(0.01, Math.min(alpha2, maxLen));
+
+	return {
+		P1: {
+			x: round(P0.x + alpha1 * T1.x),
+			y: round(P0.y + alpha1 * T1.y)
+		},
+		P2: {
+			x: round(P3.x + alpha2 * T2.x),
+			y: round(P3.y + alpha2 * T2.y)
+		}
+	};
+};
+
+// Newton-Raphson reparameterization: improve t values for each sample
+// by projecting onto the current fitted curve.
+TRV._reparameterize = function(samples, params, P0, P1, P2, P3) {
+	var newParams = [];
+	for (var i = 0; i < samples.length; i++) {
+		var t = params[i];
+		var Q = samples[i];
+
+		// Evaluate curve and derivative at t
+		var u = 1 - t;
+		var Bt = {
+			x: u*u*u*P0.x + 3*u*u*t*P1.x + 3*u*t*t*P2.x + t*t*t*P3.x,
+			y: u*u*u*P0.y + 3*u*u*t*P1.y + 3*u*t*t*P2.y + t*t*t*P3.y
+		};
+		// First derivative
+		var Bd = {
+			x: 3*u*u*(P1.x-P0.x) + 6*u*t*(P2.x-P1.x) + 3*t*t*(P3.x-P2.x),
+			y: 3*u*u*(P1.y-P0.y) + 6*u*t*(P2.y-P1.y) + 3*t*t*(P3.y-P2.y)
+		};
+		// Second derivative
+		var Bdd = {
+			x: 6*u*(P2.x-2*P1.x+P0.x) + 6*t*(P3.x-2*P2.x+P1.x),
+			y: 6*u*(P2.y-2*P1.y+P0.y) + 6*t*(P3.y-2*P2.y+P1.y)
+		};
+
+		var dx = Bt.x - Q.x, dy = Bt.y - Q.y;
+		var num = dx * Bd.x + dy * Bd.y;
+		var den = Bd.x*Bd.x + Bd.y*Bd.y + dx*Bdd.x + dy*Bdd.y;
+
+		var newT = (Math.abs(den) > 1e-12) ? t - num / den : t;
+		newParams.push(Math.max(0, Math.min(1, newT)));
+	}
+	return newParams;
+};
+
+// High-level: merge two cubics by sampling + least-squares fitting
+// with tangent-constrained optimization and Newton refinement.
+TRV._mergeCubics = function(prevOn, inHandle, outHandle, nextOn) {
+	return TRV._fitMergedSegments(prevOn, nextOn, inHandle, outHandle, true);
+};
+
 TRV._curveToLine = function(prevOn, inHandle, nextOn) {
-	var round = function(v) { return Math.round(v * 10) / 10; };
-
-	// Keep incoming handle direction, scale to ~1/3 chord
-	var inDx = inHandle.x - prevOn.x;
-	var inDy = inHandle.y - prevOn.y;
-	var inLen = Math.sqrt(inDx * inDx + inDy * inDy);
-
-	var chordDx = nextOn.x - prevOn.x;
-	var chordDy = nextOn.y - prevOn.y;
-	var chordLen = Math.sqrt(chordDx * chordDx + chordDy * chordDy);
-
-	if (chordLen < 0.001 || inLen < 0.001) return [];
-
-	// Scale incoming handle
-	var scale = Math.min(inLen, chordLen * 0.66) / inLen;
-	var newIn = {
-		type: 'curve',
-		x: round(prevOn.x + inDx * scale),
-		y: round(prevOn.y + inDy * scale)
-	};
-
-	// Synthesize outgoing: 1/3 of chord from nextOn back toward prevOn
-	var newOut = {
-		type: 'curve',
-		x: round(nextOn.x - chordDx * 0.33),
-		y: round(nextOn.y - chordDy * 0.33)
-	};
-
-	return [newIn, newOut];
+	return TRV._fitMergedSegments(prevOn, nextOn, inHandle, null, false);
 };
 
-// Line→Curve merge: synthesize incoming handle, keep outgoing handle
 TRV._lineToCurve = function(prevOn, outHandle, nextOn) {
+	return TRV._fitMergedSegments(prevOn, nextOn, null, outHandle, false);
+};
+
+// Unified fitting: collects samples from both segments around the
+// deleted node, then fits a single cubic.
+// inHandle/outHandle may be null for line sides.
+TRV._fitMergedSegments = function(P0, P3, inHandle, outHandle, bothCurves) {
 	var round = function(v) { return Math.round(v * 10) / 10; };
 
-	var outDx = outHandle.x - nextOn.x;
-	var outDy = outHandle.y - nextOn.y;
-	var outLen = Math.sqrt(outDx * outDx + outDy * outDy);
+	// Collect samples from the deleteNode caller — we stored them
+	var samples = TRV._pendingSamples;
+	var params = TRV._arcLengthParameterize(samples);
 
-	var chordDx = nextOn.x - prevOn.x;
-	var chordDy = nextOn.y - prevOn.y;
-	var chordLen = Math.sqrt(chordDx * chordDx + chordDy * chordDy);
+	if (samples.length < 4) {
+		// Not enough data — 1/3 rule fallback
+		return [
+			{ type: 'curve', x: round(P0.x + (P3.x - P0.x) / 3), y: round(P0.y + (P3.y - P0.y) / 3) },
+			{ type: 'curve', x: round(P3.x - (P3.x - P0.x) / 3), y: round(P3.y - (P3.y - P0.y) / 3) }
+		];
+	}
 
-	if (chordLen < 0.001 || outLen < 0.001) return [];
+	var fit;
 
-	// Synthesize incoming: 1/3 of chord from prevOn toward nextOn
-	var newIn = {
-		type: 'curve',
-		x: round(prevOn.x + chordDx * 0.33),
-		y: round(prevOn.y + chordDy * 0.33)
-	};
+	if (bothCurves && inHandle && outHandle) {
+		// Tangent-constrained: preserve G1 at endpoints
+		var t1dx = inHandle.x - P0.x, t1dy = inHandle.y - P0.y;
+		var t1len = Math.sqrt(t1dx * t1dx + t1dy * t1dy);
+		var t2dx = outHandle.x - P3.x, t2dy = outHandle.y - P3.y;
+		var t2len = Math.sqrt(t2dx * t2dx + t2dy * t2dy);
 
-	// Scale outgoing handle
-	var scale = Math.min(outLen, chordLen * 0.66) / outLen;
-	var newOut = {
-		type: 'curve',
-		x: round(nextOn.x + outDx * scale),
-		y: round(nextOn.y + outDy * scale)
-	};
+		if (t1len < 0.001 || t2len < 0.001) {
+			fit = TRV._fitCubicUnconstrained(samples, params, P0, P3);
+		} else {
+			var T1 = { x: t1dx / t1len, y: t1dy / t1len };
+			var T2 = { x: t2dx / t2len, y: t2dy / t2len };
 
-	return [newIn, newOut];
+			fit = TRV._fitCubicConstrained(samples, params, P0, P3, T1, T2);
+
+			// Newton-Raphson refinement: 3 iterations
+			for (var iter = 0; iter < 3; iter++) {
+				params = TRV._reparameterize(samples, params, P0, fit.P1, fit.P2, P3);
+				fit = TRV._fitCubicConstrained(samples, params, P0, P3, T1, T2);
+			}
+		}
+	} else {
+		// Unconstrained for mixed line/curve
+		fit = TRV._fitCubicUnconstrained(samples, params, P0, P3);
+
+		// Newton-Raphson refinement: 3 iterations
+		for (var iter = 0; iter < 3; iter++) {
+			params = TRV._reparameterize(samples, params, P0, fit.P1, fit.P2, P3);
+			fit = TRV._fitCubicUnconstrained(samples, params, P0, P3);
+		}
+	}
+
+	return [
+		{ type: 'curve', x: fit.P1.x, y: fit.P1.y },
+		{ type: 'curve', x: fit.P2.x, y: fit.P2.y }
+	];
 };
 
 // Get contour index (ci) from a node ID like 'c2_n5'
