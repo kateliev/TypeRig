@@ -1252,6 +1252,10 @@ TRV.initSlideMode = function(nodeId, mode) {
 	var numSamples = 60;
 	var polyline = [];
 
+	// When only one curve side is active (line-curve node), allow extrapolation.
+	// Two curves: strict [0,1] to avoid boundary jitter between segments.
+	var canExtrapolate = (mode === 'curve') && (activeIn !== activeOut);
+
 	if (activeIn) {
 		if (mode === 'line') {
 			// Straight line: prevOn → node, extended 50% beyond each end
@@ -1264,9 +1268,11 @@ TRV.initSlideMode = function(nodeId, mode) {
 				});
 			}
 		} else {
-			// Normal cubic: strict [0,1] range, no extrapolation
+			// Cubic: extend range if single active side
+			var tMin = canExtrapolate ? -0.4 : 0;
+			var tMax = canExtrapolate ? 1.4 : 1;
 			for (var i = 0; i <= numSamples; i++) {
-				var t = i / numSamples;
+				var t = tMin + (tMax - tMin) * i / numSamples;
 				var pt = TRV._sampleCubic(inPts[0], inPts[1], inPts[2], inPts[3], t);
 				polyline.push({ x: pt.x, y: pt.y, seg: 0, t: t });
 			}
@@ -1285,9 +1291,11 @@ TRV.initSlideMode = function(nodeId, mode) {
 				});
 			}
 		} else {
-			// Normal cubic: strict [0,1] range
+			// Cubic: extend range if single active side
+			var tMin = canExtrapolate ? -0.4 : 0;
+			var tMax = canExtrapolate ? 1.4 : 1;
 			for (var i = skip; i <= numSamples; i++) {
-				var t = i / numSamples;
+				var t = tMin + (tMax - tMin) * i / numSamples;
 				var pt = TRV._sampleCubic(outPts[0], outPts[1], outPts[2], outPts[3], t);
 				polyline.push({ x: pt.x, y: pt.y, seg: 1, t: t });
 			}
@@ -1322,7 +1330,8 @@ TRV.initSlideMode = function(nodeId, mode) {
 		outHandleIndices: outH,
 		polyline: polyline,
 		arcLens: arcLens,
-		totalLen: arcLens[arcLens.length - 1]
+		totalLen: arcLens[arcLens.length - 1],
+		canExtrapolate: canExtrapolate
 	};
 };
 
@@ -1368,10 +1377,8 @@ TRV._projectOntoSlidePolyline = function(slideData, gx, gy) {
 		else { seg = pn.seg; t = pn.t; }
 	}
 
-	// Clamp t for curve mode to avoid degenerate de Casteljau splits
-	if (slideData.mode === 'curve') {
-		t = Math.max(0.02, Math.min(0.98, t));
-	}
+	// No clamping here — polyline range controls bounds,
+	// performSlide handles in-range vs extrapolated
 
 	// Evaluate exact position
 	var pt;
@@ -1415,13 +1422,18 @@ TRV.performSlide = function(slideData, gx, gy) {
 		return;
 	}
 
-	// -- CURVE mode: always de Casteljau, no extrapolation --
+	// -- CURVE mode: de Casteljau for all t values --
+	// Works for extrapolated t too — pure polynomial math
 	if (slideData.mode === 'curve') {
-		// Clamp t to safe range for de Casteljau
-		var t = Math.max(0.02, Math.min(0.98, proj.t));
+		var t = proj.t;
+
+		// Two curves: clamp to safe range (no extrapolation allowed)
+		if (!slideData.canExtrapolate) {
+			t = Math.max(0.02, Math.min(0.98, t));
+		}
 
 		if (proj.seg === 0 && slideData.inPts) {
-			// Slid on incoming cubic: exact split
+			// De Casteljau works for any t — exact even when extrapolated
 			var split = TRV._splitCubic(slideData.inPts, t);
 			nodes[ni].x = round(split.left[3].x);
 			nodes[ni].y = round(split.left[3].y);
@@ -1432,7 +1444,7 @@ TRV.performSlide = function(slideData, gx, gy) {
 			nodes[inH[0]].x = round(split.left[2].x);
 			nodes[inH[0]].y = round(split.left[2].y);
 
-			// Outgoing: right half of incoming + original outgoing
+			// Outgoing cubic (only exists in two-curve case): combined refit
 			if (slideData.outgoing.type === 'cubic' && slideData.outPts && outH.length >= 2) {
 				var samples = [];
 				for (var i = 0; i <= 30; i++) {
@@ -1444,7 +1456,6 @@ TRV.performSlide = function(slideData, gx, gy) {
 				TRV._fitSamplesToSide(nodes, outH, samples, newNode, slideData.nextOn, 'out');
 			}
 		} else if (proj.seg === 1 && slideData.outPts) {
-			// Slid on outgoing cubic: exact split
 			var split = TRV._splitCubic(slideData.outPts, t);
 			nodes[ni].x = round(split.right[0].x);
 			nodes[ni].y = round(split.right[0].y);
@@ -1455,7 +1466,7 @@ TRV.performSlide = function(slideData, gx, gy) {
 			nodes[outH[outH.length - 1]].x = round(split.right[2].x);
 			nodes[outH[outH.length - 1]].y = round(split.right[2].y);
 
-			// Incoming: original incoming + left half of outgoing
+			// Incoming cubic (only exists in two-curve case): combined refit
 			if (slideData.incoming.type === 'cubic' && slideData.inPts && inH.length >= 2) {
 				var samples = [];
 				for (var i = 0; i <= 30; i++) {
