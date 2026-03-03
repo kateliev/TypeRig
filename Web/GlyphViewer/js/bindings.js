@@ -25,6 +25,15 @@ TRV.actions = {
 		TRV.saveXml();
 	},
 
+	// -- Undo / Redo ---
+	undo: function() {
+		TRV.undo();
+	},
+
+	redo: function() {
+		TRV.redo();
+	},
+
 	// -- View ---
 	fitToView: function() {
 		TRV.fitToView();
@@ -69,6 +78,7 @@ TRV.actions = {
 		var step = TRV.ARROW_STEP;
 		if (ctx.e.shiftKey) step = TRV.ARROW_STEP_SHIFT;
 		if (ctx.e.ctrlKey || ctx.e.metaKey) step = TRV.ARROW_STEP_CTRL;
+		TRV.pushUndoNudge();
 		TRV.moveSelectedNodes(0, step);
 	},
 
@@ -76,6 +86,7 @@ TRV.actions = {
 		var step = TRV.ARROW_STEP;
 		if (ctx.e.shiftKey) step = TRV.ARROW_STEP_SHIFT;
 		if (ctx.e.ctrlKey || ctx.e.metaKey) step = TRV.ARROW_STEP_CTRL;
+		TRV.pushUndoNudge();
 		TRV.moveSelectedNodes(0, -step);
 	},
 
@@ -83,6 +94,7 @@ TRV.actions = {
 		var step = TRV.ARROW_STEP;
 		if (ctx.e.shiftKey) step = TRV.ARROW_STEP_SHIFT;
 		if (ctx.e.ctrlKey || ctx.e.metaKey) step = TRV.ARROW_STEP_CTRL;
+		TRV.pushUndoNudge();
 		TRV.moveSelectedNodes(step, 0);
 	},
 
@@ -90,19 +102,23 @@ TRV.actions = {
 		var step = TRV.ARROW_STEP;
 		if (ctx.e.shiftKey) step = TRV.ARROW_STEP_SHIFT;
 		if (ctx.e.ctrlKey || ctx.e.metaKey) step = TRV.ARROW_STEP_CTRL;
+		TRV.pushUndoNudge();
 		TRV.moveSelectedNodes(-step, 0);
 	},
 
 	// -- Node operations ---
 	openContour: function() {
+		TRV.pushUndo();
 		TRV.openContourAtNode();
 	},
 
 	deleteNode: function() {
+		TRV.pushUndo();
 		TRV.deleteNode();
 	},
 
 	joinContour: function() {
+		TRV.pushUndo();
 		TRV.tryJoinEndpoints();
 	},
 
@@ -116,6 +132,7 @@ TRV.actions = {
 	},
 
 	xmlApply: function() {
+		TRV.pushUndo();
 		TRV.xmlApply();
 	},
 };
@@ -128,6 +145,10 @@ TRV.actions = {
 //   action:       key into TRV.actions
 //   desc:         human-readable description
 TRV.keyMap = [
+	// Undo / Redo
+	{ key: 'z',         ctrl: true,  action: 'undo',           desc: 'Undo' },
+	{ key: 'Z',         ctrl: true,  action: 'redo',           desc: 'Redo' },
+
 	// File
 	{ key: 'o',         ctrl: true,  action: 'openFile',       desc: 'Open file' },
 	{ key: 's',         ctrl: true,  action: 'saveFile',       desc: 'Save file' },

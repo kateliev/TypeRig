@@ -3,6 +3,86 @@
 // ===================================================================
 'use strict';
 
+// -- Undo / Redo (snapshot-based) -----------------------------------
+TRV.undoStack = [];
+TRV.redoStack = [];
+TRV.UNDO_MAX = 99;
+TRV._nudgeTimer = null;
+TRV._nudgeUndoPushed = false;
+
+// Deep-clone the active layer's shape tree (shapes → contours → nodes)
+TRV._snapshotLayer = function() {
+	var layer = TRV.getActiveLayer();
+	if (!layer) return null;
+	return JSON.parse(JSON.stringify(layer.shapes));
+};
+
+// Restore a snapshot into the active layer
+TRV._restoreSnapshot = function(snapshot) {
+	var layer = TRV.getActiveLayer();
+	if (!layer || !snapshot) return;
+	layer.shapes = JSON.parse(JSON.stringify(snapshot));
+};
+
+// Push current state onto undo stack (call before modifying)
+TRV.pushUndo = function() {
+	var snapshot = TRV._snapshotLayer();
+	if (!snapshot) return;
+	TRV.undoStack.push(snapshot);
+	if (TRV.undoStack.length > TRV.UNDO_MAX) {
+		TRV.undoStack.shift();
+	}
+	// Any new action clears redo
+	TRV.redoStack.length = 0;
+};
+
+// Push undo for nudge with timer coalescing.
+// Multiple nudges within 400ms count as one undo step.
+TRV.pushUndoNudge = function() {
+	if (!TRV._nudgeUndoPushed) {
+		TRV.pushUndo();
+		TRV._nudgeUndoPushed = true;
+	}
+	clearTimeout(TRV._nudgeTimer);
+	TRV._nudgeTimer = setTimeout(function() {
+		TRV._nudgeUndoPushed = false;
+	}, 400);
+};
+
+TRV.undo = function() {
+	if (TRV.undoStack.length === 0) return;
+	// Save current state to redo
+	var current = TRV._snapshotLayer();
+	if (current) TRV.redoStack.push(current);
+	// Restore previous
+	var snapshot = TRV.undoStack.pop();
+	TRV._restoreSnapshot(snapshot);
+	TRV.state.selectedNodeIds.clear();
+	TRV.draw();
+	TRV.updateStatusSelected();
+	TRV.xmlRefresh();
+};
+
+TRV.redo = function() {
+	if (TRV.redoStack.length === 0) return;
+	// Save current state to undo
+	var current = TRV._snapshotLayer();
+	if (current) TRV.undoStack.push(current);
+	// Restore next
+	var snapshot = TRV.redoStack.pop();
+	TRV._restoreSnapshot(snapshot);
+	TRV.state.selectedNodeIds.clear();
+	TRV.draw();
+	TRV.updateStatusSelected();
+	TRV.xmlRefresh();
+};
+
+// Clear undo history (e.g. when loading new glyph)
+TRV.clearUndo = function() {
+	TRV.undoStack.length = 0;
+	TRV.redoStack.length = 0;
+};
+
 // -- Selection (multi-node) -----------------------------------------
 TRV.clearSelection = function() {
 	TRV.state.selectedNodeIds.clear();
@@ -2077,6 +2157,7 @@ TRV.loadXmlString = function(xmlString, filename) {
 
 		TRV.fitToView();
 		TRV.buildXmlPanel();
+		TRV.clearUndo();
 	} catch (e) {
 		alert('Error loading XML: ' + e.message);
 	}

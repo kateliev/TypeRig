@@ -110,6 +110,7 @@ dom.canvasWrap.addEventListener('mousedown', function(e) {
 			var B2 = 3 * u * t * t;
 			var denom = B1 * B1 + B2 * B2;
 
+			TRV.pushUndo();
 			state.isDragging = true;
 			state.segmentDrag = {
 				ci: ci,
@@ -157,6 +158,7 @@ dom.canvasWrap.addEventListener('mousedown', function(e) {
 });
 
 function startDrag(sx, sy, e) {
+	TRV.pushUndo();
 	let gp;
 	withActiveOffset(function() { gp = TRV.screenToGlyph(sx, sy); });
 	state.isDragging = true;
@@ -728,6 +730,7 @@ document.addEventListener('keydown', function(e) {
 	if (e.target === dom.xmlContent) {
 		if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
 			e.preventDefault();
+			TRV.pushUndo();
 			TRV.xmlApply();
 			return;
 		}
@@ -813,6 +816,7 @@ if (xmlRefreshBtn) {
 
 if (xmlApplyBtn) {
 	xmlApplyBtn.addEventListener('click', function() {
+		TRV.pushUndo();
 		TRV.xmlApply();
 	});
 }
@@ -974,10 +978,13 @@ if (ctxMenu) {
 
 		var action = item.dataset.action;
 		if (action === 'toggleSmooth') {
+			TRV.pushUndo();
 			TRV.toggleSmooth();
 		} else if (action === 'retractHandles') {
+			TRV.pushUndo();
 			TRV.retractHandles();
 		} else if (action === 'joinContour') {
+			TRV.pushUndo();
 			TRV.tryJoinEndpoints();
 		} else if (action === 'selectContour') {
 			if (pendingContourIdx >= 0) {
@@ -987,6 +994,7 @@ if (ctxMenu) {
 			}
 		} else if (action === 'insertNode') {
 			if (pendingSegmentHit) {
+				TRV.pushUndo();
 				TRV.insertNodeOnSegment(pendingSegmentHit);
 				pendingSegmentHit = null;
 	pendingContourIdx = -1;
