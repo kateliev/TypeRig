@@ -18,8 +18,9 @@ TRV.draw = function() {
 	canvas.style.height = h + 'px';
 	ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-	// Clear
-	ctx.fillStyle = TRV.getBgColor();
+	// Clear — preview mode: white bg, black fill, no decorations
+	var preview = state.previewMode;
+	ctx.fillStyle = preview ? '#ffffff' : TRV.getBgColor();
 	ctx.fillRect(0, 0, w, h);
 
 	if (!state.glyphData) return;
@@ -38,21 +39,21 @@ TRV.draw = function() {
 	if (!layer) return;
 
 	// Draw mask layer underneath (if visible)
-	if (state.showMask) {
+	if (!preview && state.showMask) {
 		const mask = TRV.getMaskFor(layer.name);
 		if (mask) TRV.drawMaskContours(mask);
 	}
 
-	if (state.showMetrics) TRV.drawMetrics(layer, w, h);
+	if (!preview && state.showMetrics) TRV.drawMetrics(layer, w, h);
 	TRV.drawContours(layer);
-	if (state.showNodes) TRV.drawStackedWarnings(layer);
-	if (state.showNodes) TRV.drawSelectedSegments(layer);
-	if (state.showAnchors) TRV.drawAnchors(layer);
-	if (state.showNodes) TRV.drawNodes(layer);
-	TRV.drawLayerLabel(layer);
+	if (!preview && state.showNodes) TRV.drawStackedWarnings(layer);
+	if (!preview && state.showNodes) TRV.drawSelectedSegments(layer);
+	if (!preview && state.showAnchors) TRV.drawAnchors(layer);
+	if (!preview && state.showNodes) TRV.drawNodes(layer);
+	if (!preview) TRV.drawLayerLabel(layer);
 
 	// Draw selection overlay (rect or lasso)
-	if (state.isSelecting) TRV.drawSelectionOverlay();
+	if (!preview && state.isSelecting) TRV.drawSelectionOverlay();
 };
 
 // -- Metrics --------------------------------------------------------
@@ -124,8 +125,10 @@ TRV.drawMetrics = function(layer, w, h) {
 TRV.drawContours = function(layer) {
 	const ctx = TRV.dom.ctx;
 	const t = TRV.theme.contour;
+	var preview = TRV.state.previewMode;
 
-	if (TRV.state.filled) {
+	// Preview mode: always filled, black on white
+	if (preview || TRV.state.filled) {
 		// Filled mode: closed contours in ONE path so even-odd punches counters
 		ctx.beginPath();
 		for (const shape of layer.shapes) {
@@ -135,21 +138,25 @@ TRV.drawContours = function(layer) {
 				TRV.buildContourPath(contour);
 			}
 		}
-		ctx.fillStyle = t.fill;
+		ctx.fillStyle = preview ? '#000000' : t.fill;
 		ctx.fill('evenodd');
-		ctx.strokeStyle = t.stroke;
-		ctx.lineWidth = 1;
-		ctx.stroke();
+		if (!preview) {
+			ctx.strokeStyle = t.stroke;
+			ctx.lineWidth = 1;
+			ctx.stroke();
+		}
 
-		// Open contours: stroke only
-		for (const shape of layer.shapes) {
-			for (const contour of shape.contours) {
-				if (contour.nodes.length === 0 || contour.closed) continue;
-				ctx.beginPath();
-				TRV.buildContourPath(contour);
-				ctx.strokeStyle = t.strokePlain || t.stroke;
-				ctx.lineWidth = 1.5;
-				ctx.stroke();
+		// Open contours: stroke only (hidden in preview)
+		if (!preview) {
+			for (const shape of layer.shapes) {
+				for (const contour of shape.contours) {
+					if (contour.nodes.length === 0 || contour.closed) continue;
+					ctx.beginPath();
+					TRV.buildContourPath(contour);
+					ctx.strokeStyle = t.strokePlain || t.stroke;
+					ctx.lineWidth = 1.5;
+					ctx.stroke();
+				}
 			}
 		}
 	} else {

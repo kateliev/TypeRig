@@ -251,25 +251,27 @@ TRV.drawJoinedView = function(canvasW, canvasH) {
 
 			// Draw with pan shifted to place this layer
 			TRV.withJoinedOffset(r, c, function() {
+				var preview = state.previewMode;
+
 				// Mask layer underneath
-				if (state.showMask) {
+				if (!preview && state.showMask) {
 					const mask = TRV.getMaskFor(layer.name);
 					if (mask) TRV.drawMaskContours(mask);
 				}
 
-				if (state.showMetrics) TRV.drawMetrics(layer, canvasW, canvasH);
+				if (!preview && state.showMetrics) TRV.drawMetrics(layer, canvasW, canvasH);
 				TRV.drawContours(layer);
-				if (state.showNodes) TRV.drawStackedWarnings(layer);
-				if (state.showNodes) TRV.drawSelectedSegments(layer);
-				if (state.showAnchors) TRV.drawAnchors(layer);
-				if (state.showNodes) TRV.drawNodes(layer);
+				if (!preview && state.showNodes) TRV.drawStackedWarnings(layer);
+				if (!preview && state.showNodes) TRV.drawSelectedSegments(layer);
+				if (!preview && state.showAnchors) TRV.drawAnchors(layer);
+				if (!preview && state.showNodes) TRV.drawNodes(layer);
 
-				if (isActive && state.isSelecting) {
+				if (!preview && isActive && state.isSelecting) {
 					TRV.drawSelectionOverlay();
 				}
 
 				// Layer name badge
-				TRV.drawLayerLabel(layer);
+				if (!preview) TRV.drawLayerLabel(layer);
 			});
 
 			if (!isActive) {
@@ -279,10 +281,10 @@ TRV.drawJoinedView = function(canvasW, canvasH) {
 	}
 
 	// Soft dividers between layers
-	TRV.drawJoinedDividers(canvasW, canvasH, layout);
+	if (!state.previewMode) TRV.drawJoinedDividers(canvasW, canvasH, layout);
 
 	// Active cell indicator — subtle highlight along the baseline area
-	TRV.drawJoinedActiveIndicator(layout);
+	if (!state.previewMode) TRV.drawJoinedActiveIndicator(layout);
 };
 
 // -- Soft dividers for joined mode ----------------------------------
@@ -424,39 +426,40 @@ TRV.drawSplitView = function(canvasW, canvasH) {
 			ctx.clip();
 			ctx.translate(cell.x, cell.y);
 
-			ctx.fillStyle = TRV.getBgColor();
+			var preview = state.previewMode;
+			ctx.fillStyle = preview ? '#ffffff' : TRV.getBgColor();
 			ctx.fillRect(0, 0, cell.w, cell.h);
 
 			if (!isActive) state.selectedNodeIds = new Set();
 
 			// Mask layer underneath
-			if (state.showMask) {
+			if (!preview && state.showMask) {
 				const mask = TRV.getMaskFor(layer.name);
 				if (mask) TRV.drawMaskContours(mask);
 			}
 
-			if (state.showMetrics) TRV.drawMetrics(layer, cell.w, cell.h);
+			if (!preview && state.showMetrics) TRV.drawMetrics(layer, cell.w, cell.h);
 			TRV.drawContours(layer);
-			if (state.showNodes) TRV.drawStackedWarnings(layer);
-			if (state.showNodes) TRV.drawSelectedSegments(layer);
-			if (state.showAnchors) TRV.drawAnchors(layer);
-			if (state.showNodes) TRV.drawNodes(layer);
+			if (!preview && state.showNodes) TRV.drawStackedWarnings(layer);
+			if (!preview && state.showNodes) TRV.drawSelectedSegments(layer);
+			if (!preview && state.showAnchors) TRV.drawAnchors(layer);
+			if (!preview && state.showNodes) TRV.drawNodes(layer);
 
-			if (isActive && state.isSelecting) {
+			if (!preview && isActive && state.isSelecting) {
 				TRV.drawSelectionOverlay();
 			}
 
 			if (!isActive) state.selectedNodeIds = savedSelection;
 
 			// Layer name badge
-			TRV.drawLayerLabel(layer);
+			if (!preview) TRV.drawLayerLabel(layer);
 
 			ctx.restore();
 		}
 	}
 
 	// Soft fade dividers between cells
-	TRV.drawSplitDividers(canvasW, canvasH);
+	if (!state.previewMode) TRV.drawSplitDividers(canvasW, canvasH);
 
 	// Active cell border
 	TRV.drawActiveCellBorder();

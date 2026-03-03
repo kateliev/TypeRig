@@ -686,6 +686,16 @@ document.addEventListener('drop', function(e) {
 // Keyboard — dispatch via bindings.js keyMap
 // ===================================================================
 document.addEventListener('keydown', function(e) {
+	// Backtick: preview mode (hold) - black on white, no decorations
+	if (e.code === 'Backquote' && e.target !== dom.xmlContent && e.target !== dom.pyInput) {
+		if (!state.previewMode) {
+			state.previewMode = true;
+			TRV.draw();
+		}
+		e.preventDefault();
+		return;
+	}
+
 	// Spacebar: panning mode (hold)
 	if (e.code === 'Space' && e.target !== dom.xmlContent) {
 		if (!state.spaceDown) {
@@ -742,6 +752,13 @@ document.addEventListener('keydown', function(e) {
 });
 
 document.addEventListener('keyup', function(e) {
+	// Backtick released: exit preview mode
+	if (e.code === 'Backquote') {
+		state.previewMode = false;
+		TRV.draw();
+		return;
+	}
+
 	if (e.code === 'Space') {
 		state.spaceDown = false;
 		if (state.isPanning) {

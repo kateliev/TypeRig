@@ -31,6 +31,7 @@ const TRV = {
 		dragOriginGlyph: null,    // glyph coords where drag started
 		lastMouse: { x: 0, y: 0 },
 		spaceDown: false,
+		previewMode: false,
 
 		// Multi-layer grid view
 		multiView: false,
