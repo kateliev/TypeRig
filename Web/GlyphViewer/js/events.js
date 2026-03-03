@@ -82,6 +82,51 @@ dom.canvasWrap.addEventListener('mousedown', function(e) {
 			startDrag(sx, sy, e);
 			return;
 		}
+
+		// -- Check segment hit: grab cubic segments for direct manipulation
+		let segHit = null;
+		withActiveOffset(function() {
+			segHit = TRV.hitTestSegment(sx, sy);
+		});
+		if (segHit && segHit.seg.type === 'cubic') {
+			let gp;
+			withActiveOffset(function() { gp = TRV.screenToGlyph(sx, sy); });
+
+			// Select the segment's nodes
+			var seg = segHit.seg;
+			var ci = segHit.ci;
+			var ids = [
+				'c' + ci + '_n' + seg.startIdx,
+				'c' + ci + '_n' + seg.endIdx,
+				'c' + ci + '_n' + seg.offIdx1,
+				'c' + ci + '_n' + seg.offIdx2
+			];
+			TRV.selectNodes(ids, e.shiftKey);
+
+			// Bernstein basis values at hit t
+			var t = segHit.t;
+			var u = 1 - t;
+			var B1 = 3 * u * u * t;
+			var B2 = 3 * u * t * t;
+			var denom = B1 * B1 + B2 * B2;
+
+			state.isDragging = true;
+			state.segmentDrag = {
+				ci: ci,
+				seg: seg,
+				t: t,
+				B1: B1,
+				B2: B2,
+				denom: denom,
+				h1Id: 'c' + ci + '_n' + seg.offIdx1,
+				h2Id: 'c' + ci + '_n' + seg.offIdx2,
+				h1Start: { x: segHit.contour.nodes[seg.offIdx1].x, y: segHit.contour.nodes[seg.offIdx1].y },
+				h2Start: { x: segHit.contour.nodes[seg.offIdx2].x, y: segHit.contour.nodes[seg.offIdx2].y }
+			};
+			state.dragOriginGlyph = { x: gp.x, y: gp.y };
+			dom.canvasWrap.style.cursor = 'move';
+			return;
+		}
 	}
 
 	// -- No node hit: begin selection mode
@@ -197,6 +242,37 @@ window.addEventListener('mousemove', function(e) {
 		});
 		if (!e.shiftKey) state.selectedNodeIds.clear();
 		for (const id of ids) state.selectedNodeIds.add(id);
+
+		TRV.draw();
+		TRV.updateStatusSelected();
+		return;
+	}
+
+	// -- Segment drag: reshape curve by distributing delta to handles
+	if (state.isDragging && state.segmentDrag) {
+		withActiveOffset(function() {
+			const dgp = TRV.screenToGlyph(sx, sy);
+			var dx = dgp.x - state.dragOriginGlyph.x;
+			var dy = dgp.y - state.dragOriginGlyph.y;
+
+			// Shift constraint: lock to dominant axis
+			if (e.shiftKey) {
+				if (Math.abs(dx) > Math.abs(dy)) dy = 0;
+				else dx = 0;
+			}
+
+			var sd = state.segmentDrag;
+			// Distribute delta to handles weighted by Bernstein basis
+			var w1 = sd.B1 / sd.denom;
+			var w2 = sd.B2 / sd.denom;
+
+			TRV.updateNodePosition(sd.h1Id, sd.h1Start.x + dx * w1, sd.h1Start.y + dy * w1);
+			TRV.updateNodePosition(sd.h2Id, sd.h2Start.x + dx * w2, sd.h2Start.y + dy * w2);
+
+			// Enforce collinearity on smooth nodes at segment endpoints
+			var movedHandles = new Set([sd.h1Id, sd.h2Id]);
+			TRV.enforceSmoothCollinearity(movedHandles);
+		});
 
 		TRV.draw();
 		TRV.updateStatusSelected();
@@ -348,6 +424,7 @@ window.addEventListener('mouseup', function(e) {
 		state.dragAltMode = false;
 		state.dragTangents = null;
 		state.slideData = null;
+		state.segmentDrag = null;
 	}
 
 	if (state.isPanning) {
@@ -844,11 +921,11 @@ dom.canvasWrap.addEventListener('contextmenu', function(e) {
 				}
 			}
 			if (hasSmooth && !hasSharp) {
-				toggleItem.textContent = 'Convert to Sharp';
+				toggleItem.innerHTML = '<span class="tri">node_sharp</span>Convert to Sharp';
 			} else if (hasSharp && !hasSmooth) {
-				toggleItem.textContent = 'Convert to Smooth';
+				toggleItem.innerHTML = '<span class="tri">node_smooth</span>Convert to Smooth';
 			} else {
-				toggleItem.textContent = 'Toggle Smooth/Sharp';
+				toggleItem.innerHTML = '<span class="tri">node_smooth</span>Toggle Smooth/Sharp';
 			}
 		}
 	} else if (segHit) {

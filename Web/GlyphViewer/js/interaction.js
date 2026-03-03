@@ -1617,6 +1617,9 @@ TRV.computeDragTangents = function(dragStartPositions) {
 					} else {
 						lineIdx = nextIdx; lineId = nextId;
 					}
+					// If the line neighbor is also selected, both ends
+					// move together — constraint is meaningless, skip
+					if (TRV.state.selectedNodeIds.has(lineId)) continue;
 					// Line neighbor's start position (or current if not dragged)
 					var linePos = dragStartPositions.has(lineId) ? dragStartPositions.get(lineId) : nodes[lineIdx];
 					// Direction from line neighbor to this on-curve

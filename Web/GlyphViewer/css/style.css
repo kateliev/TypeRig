@@ -1,6 +1,13 @@
 /* -- Fonts -------------------------------------------------- */
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap');
 
+@font-face {
+	font-family: 'TypeRig Icons';
+	src: url('../typerig-icons.ttf') format('truetype');
+	font-weight: normal;
+	font-style: normal;
+}
+
 /* -- Variables ---------------------------------------------- */
 :root {
 	--bg-primary: #1a1a1e;
@@ -119,6 +126,16 @@ body {
 }
 
 .tb-btn svg { width: 14px; height: 14px; }
+
+.tri {
+	font-family: 'TypeRig Icons';
+	font-size: 16px;
+	line-height: 1;
+	font-style: normal;
+	font-weight: normal;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
 
 .tb-group {
 	display: flex;
@@ -449,6 +466,9 @@ body {
 	background: var(--accent);
 }
 
+.xml-btn .tri { font-size: 11px; }
+.ctx-item .tri { font-size: 13px; margin-right: 6px; }
+
 /* -- Node highlighting in textarea (via overlay) ------------ */
 #xml-highlight-overlay {
 	display: none;
@@ -532,6 +552,7 @@ body {
 }
 
 #drop-overlay .drop-icon svg { width: 24px; height: 24px; color: var(--accent); }
+#drop-overlay .drop-icon .tri { font-size: 32px; color: var(--accent); }
 
 #drop-overlay .drop-text {
 	font-size: 14px;
@@ -555,6 +576,7 @@ body {
 #empty-state.hidden { display: none; }
 
 #empty-state svg { width: 40px; height: 40px; opacity: 0.3; }
+#empty-state .tri { font-size: 48px; opacity: 0.3; }
 #empty-state .hint { font-size: 11px; opacity: 0.6; }
 
 /* -- Hidden file input -------------------------------------- */
