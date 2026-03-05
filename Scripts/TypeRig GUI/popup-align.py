@@ -9,6 +9,7 @@
 
 # - Dependencies -----------------
 from __future__ import absolute_import, print_function
+import math
 
 import fontlab as fl6
 from PythonQt import QtCore, QtGui
@@ -19,7 +20,7 @@ from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomPushButton, TR
 from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 
 # - Init --------------------------
-tool_version = '1.5'
+tool_version = '1.6'
 tool_name = 'TR Popup Align'
 
 TRToolFont_path = getTRIconFontPath()
@@ -158,6 +159,16 @@ class TRPopupAlign(QtGui.QWidget):
 		self.lay_main.addWidget(self.btn_node_align_selection_y)
 		self.btn_node_align_selection_y.clicked.connect(lambda: self.do_align('E'))
 
+		# -- Safe distance spin box
+		self.spn_safe_distance = QtGui.QSpinBox()
+		self.spn_safe_distance.setMinimum(0)
+		self.spn_safe_distance.setMaximum(100)
+		self.spn_safe_distance.setValue(0)
+		self.spn_safe_distance.setSingleStep(5)
+		self.spn_safe_distance.setSuffix('u')
+		self.spn_safe_distance.setToolTip('Safe distance: pull back from target by this amount on each axis.')
+		self.lay_main.addWidget(self.spn_safe_distance)
+
 
 		# - Set container layout
 		self.container.setLayout(self.lay_main)
@@ -175,7 +186,7 @@ class TRPopupAlign(QtGui.QWidget):
 		self._apply_style()
 
 		# - Position at cursor and show
-		self.setGeometry(100,100,100,100)
+		self.setGeometry(100, 100, 20, 160)
 		self._position_at_cursor()
 		self.show()
 
@@ -263,11 +274,28 @@ class TRPopupAlign(QtGui.QWidget):
 
 				if len(selection) > 1:
 					# Set target in the middle of selection
-					med_x = round(sum([n.x for n in selection])/len(selection))
-					med_y = round(sum([n.y for n in selection])/len(selection))
-					self.ext_target[layer] = fl6.flNode(QtCore.QPointF(med_x, med_y))
+					target_x = round(sum([n.x for n in selection])/len(selection))
+					target_y = round(sum([n.y for n in selection])/len(selection))
+					
 				elif len(selection) == 1:
-					self.ext_target[layer] = selection[0]
+					target_x = selection[0].x
+					target_y = selection[0].y
+
+				# - Set target with safe distance
+				safe_distance = self.spn_safe_distance.value
+
+				if safe_distance != 0.:
+					dx = target_x - self.x
+					dy = target_y - self.y
+
+					if abs(dx) > 1e-6:
+						target_x -= math.copysign(safe_distance, dx)
+
+					if abs(dy) > 1e-6:
+						target_y -= math.copysign(safe_distance, dy)
+
+				self.ext_target[layer] = fl6.flNode(QtCore.QPointF(target_x, target_y))
+
 		else:
 			self.ext_target = {}
 
