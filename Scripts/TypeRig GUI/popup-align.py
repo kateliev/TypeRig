@@ -161,7 +161,7 @@ class TRPopupAlign(QtGui.QWidget):
 
 		# -- Safe distance spin box
 		self.spn_safe_distance = QtGui.QSpinBox()
-		self.spn_safe_distance.setMinimum(0)
+		self.spn_safe_distance.setMinimum(-100)
 		self.spn_safe_distance.setMaximum(100)
 		self.spn_safe_distance.setValue(0)
 		self.spn_safe_distance.setSingleStep(5)
@@ -271,28 +271,16 @@ class TRPopupAlign(QtGui.QWidget):
 
 			for layer in wLayers:
 				selection = glyph.selectedNodes(layer)
+				safe_distance = self.spn_safe_distance.value
 
 				if len(selection) > 1:
 					# Set target in the middle of selection
-					target_x = round(sum([n.x for n in selection])/len(selection))
-					target_y = round(sum([n.y for n in selection])/len(selection))
+					target_x = round(sum([n.x for n in selection])/len(selection)) + safe_distance
+					target_y = round(sum([n.y for n in selection])/len(selection)) + safe_distance
 					
 				elif len(selection) == 1:
-					target_x = selection[0].x
-					target_y = selection[0].y
-
-				# - Set target with safe distance
-				safe_distance = self.spn_safe_distance.value
-
-				if safe_distance != 0.:
-					dx = target_x - self.x
-					dy = target_y - self.y
-
-					if abs(dx) > 1e-6:
-						target_x -= math.copysign(safe_distance, dx)
-
-					if abs(dy) > 1e-6:
-						target_y -= math.copysign(safe_distance, dy)
+					target_x = selection[0].x + safe_distance
+					target_y = selection[0].y + safe_distance
 
 				self.ext_target[layer] = fl6.flNode(QtCore.QPointF(target_x, target_y))
 
