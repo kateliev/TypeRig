@@ -58,28 +58,46 @@ TRV.stem.raySegmentCrossings = function(ox, oy, dx, dy, seg) {
 		return results;
 	}
 
-	// Cubic: build f(t) = (B(t)-O) x D as polynomial at^3 + bt^2 + ct + d
+	// Quadratic or cubic: build f(t) = (B(t)-O) x D as polynomial
 	var p0 = pts[0], p1 = pts[1], p2 = pts[2], p3 = pts[3];
+	var A, B, C, D, N;
 
-	// Power-form coefficients for B(t)
-	var ax3 = -p0.x + 3*p1.x - 3*p2.x + p3.x;
-	var bx2 =  3*p0.x - 6*p1.x + 3*p2.x;
-	var cx1 = -3*p0.x + 3*p1.x;
-	var dx0 =  p0.x;
+	if (seg.type === 'quadratic') {
+		// Power-form for quadratic: B(t) = (1-t)^2*P0 + 2(1-t)t*P1 + t^2*P2
+		// = P0 + 2t*(P1-P0) + t^2*(P0 - 2*P1 + P2)
+		var ax2 = p0.x - 2*p1.x + p2.x;
+		var bx1 = 2*(p1.x - p0.x);
+		var cx0 = p0.x;
+		var ay2 = p0.y - 2*p1.y + p2.y;
+		var by1 = 2*(p1.y - p0.y);
+		var cy0 = p0.y;
 
-	var ay3 = -p0.y + 3*p1.y - 3*p2.y + p3.y;
-	var by2 =  3*p0.y - 6*p1.y + 3*p2.y;
-	var cy1 = -3*p0.y + 3*p1.y;
-	var dy0 =  p0.y;
+		A = 0; // quadratic has no t^3 term
+		B = ax2 * dy - ay2 * dx;
+		C = bx1 * dy - by1 * dx;
+		D = (cx0 - ox) * dy - (cy0 - oy) * dx;
+		N = 8;
+	} else {
+		// Cubic power-form
+		var ax3 = -p0.x + 3*p1.x - 3*p2.x + p3.x;
+		var bx2 =  3*p0.x - 6*p1.x + 3*p2.x;
+		var cx1 = -3*p0.x + 3*p1.x;
+		var dx0 =  p0.x;
+		var ay3 = -p0.y + 3*p1.y - 3*p2.y + p3.y;
+		var by2 =  3*p0.y - 6*p1.y + 3*p2.y;
+		var cy1 = -3*p0.y + 3*p1.y;
+		var dy0 =  p0.y;
 
-	// f(t) = A*t^3 + B*t^2 + C*t + D
-	var A = ax3 * dy - ay3 * dx;
-	var B = bx2 * dy - by2 * dx;
-	var C = cx1 * dy - cy1 * dx;
-	var D = (dx0 - ox) * dy - (dy0 - oy) * dx;
+		A = ax3 * dy - ay3 * dx;
+		B = bx2 * dy - by2 * dx;
+		C = cx1 * dy - cy1 * dx;
+		D = (dx0 - ox) * dy - (dy0 - oy) * dx;
+		N = 12;
+	}
 
-	// Find roots via sampling + bisection (robust for any cubic)
-	var N = 12; // samples
+	var evalFn = seg.type === 'quadratic' ? TRV._evalQuadratic : TRV._evalCubic;
+
+	// Find roots via sampling + bisection (robust for any polynomial)
 	var vals = new Array(N + 1);
 	for (var i = 0; i <= N; i++) {
 		var tt = i / N;
@@ -105,7 +123,7 @@ TRV.stem.raySegmentCrossings = function(ox, oy, dx, dy, seg) {
 		if (t < -1e-6 || t > 1 + 1e-6) continue;
 		t = Math.max(0, Math.min(1, t));
 
-		var pt = TRV._evalCubic(pts, t);
+		var pt = evalFn(pts, t);
 		var s = ((pt.x - ox) * dx + (pt.y - oy) * dy) / len2;
 		results.push({ t: t, x: pt.x, y: pt.y, s: s });
 	}
@@ -169,6 +187,14 @@ TRV.stem.measurePerp = function(gx, gy, layer) {
 	var tang;
 	if (nearest.seg.type === 'cubic') {
 		tang = TRV.stem.cubicDeriv(nearest.seg.pts, nearest.t);
+	} else if (nearest.seg.type === 'quadratic') {
+		// Quadratic derivative: B'(t) = 2(1-t)(P1-P0) + 2t(P2-P1)
+		var qp = nearest.seg.pts;
+		var u = 1 - nearest.t;
+		tang = {
+			x: 2 * u * (qp[1].x - qp[0].x) + 2 * nearest.t * (qp[2].x - qp[1].x),
+			y: 2 * u * (qp[1].y - qp[0].y) + 2 * nearest.t * (qp[2].y - qp[1].y)
+		};
 	} else {
 		var pts = nearest.seg.pts;
 		tang = { x: pts[1].x - pts[0].x, y: pts[1].y - pts[0].y };

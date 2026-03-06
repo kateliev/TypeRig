@@ -269,6 +269,10 @@ TRV.drawSelectedSegments = function(layer) {
 					var p2 = TRV.glyphToScreen(seg.pts[2].x, seg.pts[2].y);
 					var p3 = TRV.glyphToScreen(seg.pts[3].x, seg.pts[3].y);
 					ctx.bezierCurveTo(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+				} else if (seg.type === 'quadratic') {
+					var p1 = TRV.glyphToScreen(seg.pts[1].x, seg.pts[1].y);
+					var p2 = TRV.glyphToScreen(seg.pts[2].x, seg.pts[2].y);
+					ctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y);
 				}
 
 				// Glow effect: wide soft stroke underneath

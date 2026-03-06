@@ -328,14 +328,21 @@ TRV.deleteNode = function() {
 	var node = nodes[ni];
 
 	if (node.type !== 'on') {
-		// Handle selected: retract to parent
-		var prevIdx = (ni - 1 + n) % n;
-		var nextIdx = (ni + 1) % n;
-		var parentIdx = nodes[prevIdx].type === 'on' ? prevIdx : nextIdx;
-		if (nodes[parentIdx]) {
-			nodes[ni].x = nodes[parentIdx].x;
-			nodes[ni].y = nodes[parentIdx].y;
+		// Off-curve selected: convert parent segment to line
+		// Find segment containing this off-curve node
+		var segs = TRV.getContourSegments(contour);
+		for (var gi = 0; gi < segs.length; gi++) {
+			var seg = segs[gi];
+			var isInSeg = false;
+			if (seg.type === 'cubic' && (ni === seg.offIdx1 || ni === seg.offIdx2)) isInSeg = true;
+			if (seg.type === 'quadratic' && ni === seg.offIdx) isInSeg = true;
+			if (isInSeg) {
+				// Build a synthetic hit for convertSegmentToLine
+				TRV.convertSegmentToLine({ contour: contour, seg: seg });
+				return;
+			}
 		}
+		// Fallback: just clear selection
 		sel.clear();
 		TRV.draw();
 		TRV.updateStatusSelected();
@@ -1068,7 +1075,7 @@ TRV.getContourSegments = function(contour) {
 			continue;
 		}
 
-		// Cubic segment: on → off → off → on
+		// Cubic segment: on → curve → curve → on
 		var next2 = (i + 2) % n;
 		var next3 = (i + 3) % n;
 		if (nodes[next1].type === 'curve' && nodes[next2].type === 'curve' && nodes[next3].type === 'on') {
@@ -1087,6 +1094,26 @@ TRV.getContourSegments = function(contour) {
 			});
 			i += 3;
 			continue;
+		}
+
+		// Quadratic segment: on → off → on
+		if (nodes[next1].type === 'off') {
+			var next2q = (i + 2) % n;
+			if (nodes[next2q].type === 'on') {
+				segments.push({
+					type: 'quadratic',
+					startIdx: i,
+					endIdx: next2q,
+					offIdx: next1,
+					pts: [
+						{ x: nodes[i].x, y: nodes[i].y },
+						{ x: nodes[next1].x, y: nodes[next1].y },
+						{ x: nodes[next2q].x, y: nodes[next2q].y }
+					]
+				});
+				i += 2;
+				continue;
+			}
 		}
 
 		i++;
@@ -1113,9 +1140,19 @@ TRV._evalLine = function(pts, t) {
 	};
 };
 
+// Evaluate a quadratic bezier at parameter t
+TRV._evalQuadratic = function(pts, t) {
+	var u = 1 - t;
+	return {
+		x: u * u * pts[0].x + 2 * u * t * pts[1].x + t * t * pts[2].x,
+		y: u * u * pts[0].y + 2 * u * t * pts[1].y + t * t * pts[2].y
+	};
+};
+
 // Find nearest point on a segment, returns { t, dist, x, y }
 TRV._nearestOnSegment = function(seg, gx, gy) {
-	var evalFn = seg.type === 'cubic' ? TRV._evalCubic : TRV._evalLine;
+	var evalFn = seg.type === 'cubic' ? TRV._evalCubic :
+	             seg.type === 'quadratic' ? TRV._evalQuadratic : TRV._evalLine;
 	var pts = seg.pts;
 	var bestT = 0, bestDist = Infinity;
 
@@ -1255,9 +1292,131 @@ TRV.insertNodeOnSegment = function(hit) {
 			nodes.splice(idx1, nodes.length - idx1, newOff1, newOff2, newOn, newOff3, newOff4);
 			nodes.splice(0, idx2 + 1);
 		}
+	} else if (seg.type === 'quadratic') {
+		// De Casteljau split for quadratic: P0,Q1,P2 at t
+		var t = hit.t, u = 1 - t;
+		var p0 = seg.pts[0], q1 = seg.pts[1], p2 = seg.pts[2];
+		var a = { x: u * p0.x + t * q1.x, y: u * p0.y + t * q1.y };
+		var b = { x: u * q1.x + t * p2.x, y: u * q1.y + t * p2.y };
+		var m = { x: u * a.x + t * b.x, y: u * a.y + t * b.y };
+
+		// Replace single off-curve with: offL, on(new), offR
+		var newOffL = { type: 'off', smooth: false, x: round(a.x), y: round(a.y) };
+		var newOn   = { type: 'on', smooth: true, x: round(m.x), y: round(m.y) };
+		var newOffR = { type: 'off', smooth: false, x: round(b.x), y: round(b.y) };
+
+		nodes.splice(seg.offIdx, 1, newOffL, newOn, newOffR);
 	}
 
 	// Rebuild IDs and redraw
+	TRV.state.selectedNodeIds.clear();
+	TRV.draw();
+	TRV.updateStatusSelected();
+};
+
+// -- Segment type conversions ----------------------------------------
+// Helper: remove off-curve nodes from a segment, leaving on-curves as a line.
+// Works for both cubic (2 off-curves) and quadratic (1 off-curve).
+TRV.convertSegmentToLine = function(hit) {
+	if (!hit || !hit.contour) return;
+	var nodes = hit.contour.nodes;
+	var seg = hit.seg;
+	if (seg.type === 'line') return;
+
+	// Collect off-curve indices to remove (descending order for safe splice)
+	var toRemove = [];
+	if (seg.type === 'cubic') {
+		toRemove = [seg.offIdx1, seg.offIdx2];
+	} else if (seg.type === 'quadratic') {
+		toRemove = [seg.offIdx];
+	}
+	toRemove.sort(function(a, b) { return b - a; });
+	for (var i = 0; i < toRemove.length; i++) {
+		nodes.splice(toRemove[i], 1);
+	}
+
+	TRV.state.selectedNodeIds.clear();
+	TRV.draw();
+	TRV.updateStatusSelected();
+};
+
+// Convert line or quadratic segment to cubic bezier.
+// Line: insert two cubic handles at 1/3 and 2/3.
+// Quadratic: degree elevation — replace single off with two curve nodes.
+TRV.convertSegmentToCubic = function(hit) {
+	if (!hit || !hit.contour) return;
+	var nodes = hit.contour.nodes;
+	var seg = hit.seg;
+	if (seg.type === 'cubic') return;
+
+	var round = function(v) { return Math.round(v * 10) / 10; };
+
+	if (seg.type === 'line') {
+		var p0 = seg.pts[0], p3 = seg.pts[1];
+		var h1 = { type: 'curve', smooth: false,
+			x: round(p0.x + (p3.x - p0.x) / 3),
+			y: round(p0.y + (p3.y - p0.y) / 3)
+		};
+		var h2 = { type: 'curve', smooth: false,
+			x: round(p0.x + 2 * (p3.x - p0.x) / 3),
+			y: round(p0.y + 2 * (p3.y - p0.y) / 3)
+		};
+		// Insert after startIdx
+		var insertAt = seg.startIdx + 1;
+		if (seg.endIdx < seg.startIdx) insertAt = nodes.length;
+		nodes.splice(insertAt, 0, h1, h2);
+
+	} else if (seg.type === 'quadratic') {
+		// Degree elevation: Q0,Q1,Q2 → P0,P1,P2,P3
+		// P1 = Q0 + 2/3*(Q1-Q0), P2 = Q2 + 2/3*(Q1-Q2)
+		var q0 = seg.pts[0], q1 = seg.pts[1], q2 = seg.pts[2];
+		var p1 = {
+			x: round(q0.x + 2/3 * (q1.x - q0.x)),
+			y: round(q0.y + 2/3 * (q1.y - q0.y))
+		};
+		var p2 = {
+			x: round(q2.x + 2/3 * (q1.x - q2.x)),
+			y: round(q2.y + 2/3 * (q1.y - q2.y))
+		};
+		// Replace the single off-curve with two curve nodes
+		nodes.splice(seg.offIdx, 1,
+			{ type: 'curve', smooth: false, x: p1.x, y: p1.y },
+			{ type: 'curve', smooth: false, x: p2.x, y: p2.y }
+		);
+	}
+
+	TRV.state.selectedNodeIds.clear();
+	TRV.draw();
+	TRV.updateStatusSelected();
+};
+
+// Convert cubic segment to quadratic bezier.
+// Approximation: Q1 = (3*(P1+P2) - (P0+P3)) / 4
+TRV.convertSegmentToQuadratic = function(hit) {
+	if (!hit || !hit.contour) return;
+	var nodes = hit.contour.nodes;
+	var seg = hit.seg;
+	if (seg.type !== 'cubic') return;
+
+	var round = function(v) { return Math.round(v * 10) / 10; };
+	var p0 = seg.pts[0], p1 = seg.pts[1], p2 = seg.pts[2], p3 = seg.pts[3];
+
+	var q1 = {
+		x: round((3 * (p1.x + p2.x) - (p0.x + p3.x)) / 4),
+		y: round((3 * (p1.y + p2.y) - (p0.y + p3.y)) / 4)
+	};
+
+	// Replace two curve nodes with one off node
+	// Remove in descending index order, then insert
+	var idx1 = seg.offIdx1, idx2 = seg.offIdx2;
+	if (idx2 === idx1 + 1) {
+		nodes.splice(idx1, 2, { type: 'off', smooth: false, x: q1.x, y: q1.y });
+	} else {
+		// Wraparound: remove from end first, then start
+		nodes.splice(idx1, nodes.length - idx1, { type: 'off', smooth: false, x: q1.x, y: q1.y });
+		nodes.splice(0, idx2 + 1);
+	}
+
 	TRV.state.selectedNodeIds.clear();
 	TRV.draw();
 	TRV.updateStatusSelected();

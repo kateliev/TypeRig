@@ -117,6 +117,11 @@ TRV.actions = {
 		TRV.deleteNode();
 	},
 
+	retractHandles: function() {
+		TRV.pushUndo();
+		TRV.retractHandles();
+	},
+
 	joinContour: function() {
 		TRV.pushUndo();
 		TRV.tryJoinEndpoints();
@@ -182,7 +187,7 @@ TRV.keyMap = [
 	{ key: 'ArrowLeft',  hasSelection: true, action: 'moveLeft',  desc: 'Move selected left' },
 
 	// Node operations
-	{ key: 'Delete',     hasSelection: true, action: 'openContour',  desc: 'Open contour at node' },
+	{ key: 'Delete',     hasSelection: true, action: 'retractHandles', desc: 'Retract handles' },
 	{ key: 'Backspace',  hasSelection: true, action: 'deleteNode',   desc: 'Delete node' },
 	{ key: 'j',          hasSelection: true, action: 'joinContour',  desc: 'Join/close contour at endpoint' },
 ];

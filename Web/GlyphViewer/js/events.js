@@ -128,6 +128,19 @@ dom.canvasWrap.addEventListener('mousedown', function(e) {
 			dom.canvasWrap.style.cursor = 'move';
 			return;
 		}
+
+		// Quadratic segment click: select all 3 nodes (no drag-reshape)
+		if (segHit && segHit.seg.type === 'quadratic') {
+			var seg = segHit.seg;
+			var ci = segHit.ci;
+			var ids = [
+				'c' + ci + '_n' + seg.startIdx,
+				'c' + ci + '_n' + seg.endIdx,
+				'c' + ci + '_n' + seg.offIdx
+			];
+			TRV.selectNodes(ids, e.shiftKey);
+			return;
+		}
 	}
 
 	// -- Check anchor hit
@@ -534,6 +547,8 @@ dom.canvasWrap.addEventListener('dblclick', function(e) {
 		if (seg.type === 'cubic') {
 			ids.push('c' + ci + '_n' + seg.offIdx1);
 			ids.push('c' + ci + '_n' + seg.offIdx2);
+		} else if (seg.type === 'quadratic') {
+			ids.push('c' + ci + '_n' + seg.offIdx);
 		}
 		TRV.selectNodes(ids, e.shiftKey);
 		return;
@@ -961,6 +976,9 @@ dom.canvasWrap.addEventListener('contextmenu', function(e) {
 	var toggleItem = ctxMenu.querySelector('[data-action="toggleSmooth"]');
 	var retractItem = ctxMenu.querySelector('[data-action="retractHandles"]');
 	var insertItem = ctxMenu.querySelector('[data-action="insertNode"]');
+	var toLineItem = ctxMenu.querySelector('[data-action="convertToLine"]');
+	var toCurveItem = ctxMenu.querySelector('[data-action="convertToCurve"]');
+	var toQuadItem = ctxMenu.querySelector('[data-action="convertToQuadratic"]');
 	var selectContourItem = ctxMenu.querySelector('[data-action="selectContour"]');
 	var joinItem = ctxMenu.querySelector('[data-action="joinContour"]');
 
@@ -993,6 +1011,9 @@ dom.canvasWrap.addEventListener('contextmenu', function(e) {
 		if (toggleItem) toggleItem.style.display = '';
 		if (retractItem) retractItem.style.display = '';
 		if (insertItem) insertItem.style.display = 'none';
+		if (toLineItem) toLineItem.style.display = 'none';
+		if (toCurveItem) toCurveItem.style.display = 'none';
+		if (toQuadItem) toQuadItem.style.display = 'none';
 		if (selectContourItem) selectContourItem.style.display = '';
 		// Show/hide separators
 		var seps = ctxMenu.querySelectorAll('.ctx-separator');
@@ -1029,6 +1050,13 @@ dom.canvasWrap.addEventListener('contextmenu', function(e) {
 		if (selectContourItem) selectContourItem.style.display = '';
 		if (joinItem) joinItem.style.display = 'none';
 		pendingContourIdx = segHit.ci;
+
+		// Conversion items based on segment type
+		var stype = segHit.seg.type;
+		if (toLineItem) toLineItem.style.display = (stype === 'cubic' || stype === 'quadratic') ? '' : 'none';
+		if (toCurveItem) toCurveItem.style.display = (stype === 'line' || stype === 'quadratic') ? '' : 'none';
+		if (toQuadItem) toQuadItem.style.display = (stype === 'cubic') ? '' : 'none';
+
 		// Separators: hide first two, show last
 		var seps = ctxMenu.querySelectorAll('.ctx-separator');
 		if (seps[0]) seps[0].style.display = 'none';
@@ -1084,6 +1112,27 @@ if (ctxMenu) {
 				TRV.insertNodeOnSegment(pendingSegmentHit);
 				pendingSegmentHit = null;
 	pendingContourIdx = -1;
+			}
+		} else if (action === 'convertToLine') {
+			if (pendingSegmentHit) {
+				TRV.pushUndo();
+				TRV.convertSegmentToLine(pendingSegmentHit);
+				pendingSegmentHit = null;
+				pendingContourIdx = -1;
+			}
+		} else if (action === 'convertToCurve') {
+			if (pendingSegmentHit) {
+				TRV.pushUndo();
+				TRV.convertSegmentToCubic(pendingSegmentHit);
+				pendingSegmentHit = null;
+				pendingContourIdx = -1;
+			}
+		} else if (action === 'convertToQuadratic') {
+			if (pendingSegmentHit) {
+				TRV.pushUndo();
+				TRV.convertSegmentToQuadratic(pendingSegmentHit);
+				pendingSegmentHit = null;
+				pendingContourIdx = -1;
 			}
 		}
 
