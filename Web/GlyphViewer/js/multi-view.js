@@ -794,6 +794,8 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 						state.pan.x = savedPanX + cellOffX * state.zoom;
 						state.pan.y = savedPanY - cellOffY * state.zoom;
 
+						if (!isActiveCell) state.selectedNodeIds = new Set();
+
 						if (!preview && state.showMask) {
 							var mask = TRV.getMaskFor(layer.name);
 							if (mask) TRV.drawMaskContours(mask);
@@ -810,6 +812,8 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 						if (!preview && isActiveCell && state.isSelecting) {
 							TRV.drawSelectionOverlay();
 						}
+
+						if (!isActiveCell) state.selectedNodeIds = savedSelection;
 
 						if (!preview) TRV.drawLayerLabel(layer);
 					}
@@ -843,6 +847,9 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 			state.pan.y = savedPanY;
 
 			TRV.drawContours(layer);
+
+			// Restore selection so active glyph sees it
+			state.selectedNodeIds = savedSelection;
 
 			// Non-active widget: name + close button only
 			if (!preview) {
