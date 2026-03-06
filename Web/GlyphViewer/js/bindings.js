@@ -90,6 +90,15 @@ TRV.actions = {
 		TRV.stepGlyph(-1);
 	},
 
+	// -- Layer cycling (Alt+. / Alt+,) ---
+	nextLayer: function() {
+		TRV.cycleLayer(1);
+	},
+
+	prevLayer: function() {
+		TRV.cycleLayer(-1);
+	},
+
 	// -- Node movement (arrow keys) ---
 	moveUp: function(ctx) {
 		var step = TRV.ARROW_STEP;
@@ -199,6 +208,8 @@ TRV.keyMap = [
 	{ key: 'PageUp',                 action: 'walkPrev',       desc: 'Previous node in contour' },
 	{ key: 'PageDown',  ctrl: true,  action: 'nextGlyph',     desc: 'Next glyph' },
 	{ key: 'PageUp',    ctrl: true,  action: 'prevGlyph',     desc: 'Previous glyph' },
+	{ code: 'Period',   alt: true,   action: 'nextLayer',     desc: 'Next layer' },
+	{ code: 'Comma',    alt: true,   action: 'prevLayer',     desc: 'Previous layer' },
 
 	// Node movement (only when nodes selected)
 	{ key: 'ArrowUp',    hasSelection: true, action: 'moveUp',    desc: 'Move selected up' },
@@ -216,23 +227,30 @@ TRV.keyMap = [
 // Called from events.js keydown handler. Returns true if handled.
 TRV.dispatchKey = function(e) {
 	var isCtrl = e.ctrlKey || e.metaKey;
+	var isAlt = e.altKey;
 	var isTyping = (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT');
 
 	for (var i = 0; i < TRV.keyMap.length; i++) {
 		var b = TRV.keyMap[i];
 
-		// Match key
-		if (e.key !== b.key) continue;
+		// Match key (code takes priority for layout independence with modifiers)
+		if (b.code) {
+			if (e.code !== b.code) continue;
+		} else {
+			if (e.key !== b.key) continue;
+		}
 
 		// Match modifier requirements
 		if (b.ctrl && !isCtrl) continue;
 		if (!b.ctrl && isCtrl) continue;
+		if (b.alt && !isAlt) continue;
+		if (!b.alt && isAlt) continue;
 
 		// Skip if requires selection but none active
 		if (b.hasSelection && TRV.state.selectedNodeIds.size === 0) continue;
 
 		// Skip plain keys when typing in any text field
-		if (isTyping && !b.ctrl) continue;
+		if (isTyping && !b.ctrl && !b.alt) continue;
 
 		e.preventDefault();
 		var action = TRV.actions[b.action];

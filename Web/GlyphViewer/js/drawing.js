@@ -26,8 +26,10 @@ TRV.draw = function() {
 	if (!state.glyphData) return;
 
 	// Multi-view: delegate to split or joined renderer
-	if (state.multiView) {
-		if (state.joinedView) {
+	if (state.multiView || state.glyphViewMode) {
+		if (state.glyphViewMode && TRV.font) {
+			TRV.drawGlyphStrip(w, h);
+		} else if (state.joinedView) {
 			TRV.drawJoinedView(w, h);
 		} else {
 			TRV.drawSplitView(w, h);
@@ -113,22 +115,40 @@ TRV.drawMetrics = function(layer, w, h) {
 		ctx.setLineDash([]);
 	}
 
-	// LSB line (x=0)
+	// LSB line (x=0) — solid within UPM, fade beyond
 	const lsbX = TRV.glyphToScreen(0, 0).x;
-	ctx.strokeStyle = t.sidebearing;
+	var descY = TRV.font ? TRV.font.metrics.descender : -200;
+	var ascY = TRV.font ? TRV.font.metrics.ascender : 800;
+	var fadeMargin = (ascY - descY) * 0.4;
+	var sbTop = TRV.glyphToScreen(0, ascY + fadeMargin).y;
+	var sbAscY = TRV.glyphToScreen(0, ascY).y;
+	var sbDescY = TRV.glyphToScreen(0, descY).y;
+	var sbBot = TRV.glyphToScreen(0, descY - fadeMargin).y;
+
+	var lsbGrad = ctx.createLinearGradient(0, sbTop, 0, sbBot);
+	lsbGrad.addColorStop(0, 'rgba(255,120,80,0)');
+	lsbGrad.addColorStop((sbAscY - sbTop) / (sbBot - sbTop), t.sidebearing);
+	lsbGrad.addColorStop((sbDescY - sbTop) / (sbBot - sbTop), t.sidebearing);
+	lsbGrad.addColorStop(1, 'rgba(255,120,80,0)');
+	ctx.strokeStyle = lsbGrad;
 	ctx.lineWidth = 1;
 	ctx.setLineDash([]);
 	ctx.beginPath();
-	ctx.moveTo(lsbX, 0);
-	ctx.lineTo(lsbX, h);
+	ctx.moveTo(lsbX, sbTop);
+	ctx.lineTo(lsbX, sbBot);
 	ctx.stroke();
 
-	// RSB / Advance width line
+	// RSB / Advance width line — solid within UPM, fade beyond
 	const rsbX = TRV.glyphToScreen(advW, 0).x;
-	ctx.strokeStyle = t.advance;
+	var rsbGrad = ctx.createLinearGradient(0, sbTop, 0, sbBot);
+	rsbGrad.addColorStop(0, 'rgba(91,157,239,0)');
+	rsbGrad.addColorStop((sbAscY - sbTop) / (sbBot - sbTop), t.advance);
+	rsbGrad.addColorStop((sbDescY - sbTop) / (sbBot - sbTop), t.advance);
+	rsbGrad.addColorStop(1, 'rgba(91,157,239,0)');
+	ctx.strokeStyle = rsbGrad;
 	ctx.beginPath();
-	ctx.moveTo(rsbX, 0);
-	ctx.lineTo(rsbX, h);
+	ctx.moveTo(rsbX, sbTop);
+	ctx.lineTo(rsbX, sbBot);
 	ctx.stroke();
 
 	// Labels
@@ -158,7 +178,8 @@ TRV.drawContours = function(layer) {
 
 	// Preview mode: always filled, black on white
 	if (preview || TRV.state.filled) {
-		// Filled mode: closed contours in ONE path so even-odd punches counters
+		// Filled mode: closed contours in ONE path; nonzero winding rule
+		// Same-direction contours fill solid, opposite-direction hollows out
 		ctx.beginPath();
 		for (const shape of layer.shapes) {
 			for (const contour of shape.contours) {
@@ -168,7 +189,7 @@ TRV.drawContours = function(layer) {
 			}
 		}
 		ctx.fillStyle = preview ? '#000000' : t.fill;
-		ctx.fill('evenodd');
+		ctx.fill('nonzero');
 		if (!preview) {
 			ctx.strokeStyle = t.stroke;
 			ctx.lineWidth = 1;

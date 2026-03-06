@@ -40,9 +40,11 @@ const TRV = {
 		// Multi-layer grid view
 		multiView: false,
 		joinedView: false,        // true = shared canvas, false = split cells
+		glyphViewMode: false,     // true = cells show different glyphs
 		gridCols: 2,
 		gridRows: 1,
 		gridLayers: null,
+		gridGlyphs: null,         // [row][col] = glyph name (glyph view mode)
 		activeCell: { row: 0, col: 0 },
 
 		// Rect / lasso selection

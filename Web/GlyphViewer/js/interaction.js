@@ -47,6 +47,12 @@ TRV.pushUndo = function() {
 	if (TRV.font && TRV.activeGlyph) {
 		TRV.dirtyGlyphs.add(TRV.activeGlyph);
 		TRV.updateGlyphPanelDirty();
+		// Debounced thumbnail refresh
+		clearTimeout(TRV._thumbRefreshTimer);
+		var name = TRV.activeGlyph;
+		TRV._thumbRefreshTimer = setTimeout(function() {
+			TRV.refreshThumbnail(name);
+		}, 300);
 	}
 };
 
@@ -2211,6 +2217,13 @@ TRV.fitToView = function() {
 
 	const canvasW = TRV.dom.canvasWrap.clientWidth;
 	const canvasH = TRV.dom.canvasWrap.clientHeight;
+
+	// Glyph strip mode: fit the strip
+	if (TRV.state.glyphViewMode && TRV.font) {
+		TRV.fitGlyphStrip();
+		TRV.draw();
+		return;
+	}
 
 	// Joined multi-view: fit the entire joined layout
 	if (TRV.state.multiView && TRV.state.joinedView) {

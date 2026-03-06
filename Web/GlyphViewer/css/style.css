@@ -213,12 +213,20 @@ body {
 .glyph-entry {
 	display: flex;
 	align-items: center;
-	padding: 3px 8px;
+	padding: 2px 8px;
 	cursor: pointer;
 	font: 11px 'JetBrains Mono', monospace;
 	color: var(--text-secondary);
 	border-left: 2px solid transparent;
 	gap: 4px;
+}
+
+.glyph-thumb {
+	width: 28px;
+	height: 36px;
+	flex-shrink: 0;
+	border-radius: 2px;
+	background: rgba(255,255,255,0.03);
 }
 
 .glyph-entry:hover { background: var(--bg-hover); }
@@ -227,6 +235,10 @@ body {
 	background: var(--accent-bg);
 	border-left-color: var(--accent);
 	color: var(--text-primary);
+}
+
+.glyph-entry.in-strip {
+	border-left-color: var(--accent-dim);
 }
 
 .glyph-entry-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

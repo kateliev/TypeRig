@@ -68,7 +68,15 @@ TRV.setActiveCell = function(row, col) {
 	const state = TRV.state;
 	state.activeCell = { row, col };
 	state.selectedNodeIds.clear();
-	TRV.syncActiveCellToLayer();
+
+	if (state.glyphViewMode && TRV.font) {
+		// In strip mode, cell click is handled by mousedown → getStripSlotAt
+		// This just updates the layer cell within the active glyph's expansion
+		TRV.syncActiveCellToLayer();
+	} else {
+		TRV.syncActiveCellToLayer();
+	}
+
 	TRV.draw();
 	TRV.updateStatusSelected();
 };
@@ -77,9 +85,13 @@ TRV.syncActiveCellToLayer = function() {
 	const state = TRV.state;
 	if (!state.glyphData || !state.gridLayers) return;
 
+	var r = state.activeCell.row;
+	var c = state.activeCell.col;
+	if (!state.gridLayers[r] || state.gridLayers[r][c] === undefined) return;
+
 	const layers = state.glyphData.layers;
 	const N = layers.length;
-	const layerIdx = state.gridLayers[state.activeCell.row][state.activeCell.col] % N;
+	const layerIdx = state.gridLayers[r][c] % N;
 
 	state.activeLayer = layers[layerIdx].name;
 	TRV.dom.layerSelect.value = layers[layerIdx].name;
@@ -545,4 +557,668 @@ TRV.drawActiveCellBorder = function() {
 	ctx.strokeStyle = TRV.theme.grid.activeBorder;
 	ctx.lineWidth = 2;
 	ctx.strokeRect(cell.x + 1, cell.y + 1, cell.w - 2, cell.h - 2);
+};
+
+
+// ===================================================================
+// GLYPH STRIP — glyphs on a shared baseline
+// ===================================================================
+// Active glyph can expand into a layer grid (2x1, 2x2, etc.).
+// Non-active glyphs show one layer on the baseline.
+// Future: any glyph can be expanded independently.
+
+// -- Ensure active glyph is in the workspace strip ------------------
+// Does NOT auto-populate neighbors. User adds glyphs via double-click.
+TRV.updateWorkspaceStrip = function() {
+	if (!TRV.font || !TRV.activeGlyph) return;
+
+	var ws = TRV.workspace;
+	var idx = ws.glyphs.indexOf(TRV.activeGlyph);
+
+	if (idx < 0) {
+		// Active glyph not in strip — add it
+		ws.glyphs.push(TRV.activeGlyph);
+		ws.activeIdx = ws.glyphs.length - 1;
+	} else {
+		ws.activeIdx = idx;
+	}
+
+	// Preload neighbors
+	for (var i = 0; i < ws.glyphs.length; i++) {
+		TRV._ensureGlyphLoaded(ws.glyphs[i]);
+	}
+};
+
+// -- Add a glyph to the workspace strip -----------------------------
+// Inserts after active glyph, or at end if not found.
+TRV.addGlyphToStrip = function(name) {
+	var ws = TRV.workspace;
+	if (ws.glyphs.indexOf(name) >= 0) return; // already in strip
+
+	// Insert after active position
+	ws.glyphs.splice(ws.activeIdx + 1, 0, name);
+	TRV._ensureGlyphLoaded(name);
+	TRV.updateGlyphPanelActive();
+
+	if (TRV.state.glyphViewMode) {
+		TRV.draw();
+	}
+};
+
+// -- Remove a glyph from the workspace strip ------------------------
+TRV.removeGlyphFromStrip = function(name) {
+	var ws = TRV.workspace;
+	var idx = ws.glyphs.indexOf(name);
+	if (idx < 0) return;
+	if (name === TRV.activeGlyph) return; // can't remove active
+
+	ws.glyphs.splice(idx, 1);
+	// Fix activeIdx if needed
+	if (ws.activeIdx >= ws.glyphs.length) {
+		ws.activeIdx = ws.glyphs.length - 1;
+	} else if (idx < ws.activeIdx) {
+		ws.activeIdx--;
+	}
+
+	TRV.updateGlyphPanelActive();
+
+	if (TRV.state.glyphViewMode) {
+		TRV.draw();
+	}
+};
+
+// -- Glyph strip layout computation ---------------------------------
+// Returns { slots, totalW, rowH }
+TRV.getGlyphStripLayout = function() {
+	var state = TRV.state;
+	var ws = TRV.workspace;
+	var gap = TRV.STRIP_GAP;
+	var upm = TRV.font ? TRV.font.metrics.upm : 1000;
+	var rowH = upm + gap;
+
+	// Active glyph expansion
+	var aCols = (state.multiView && !state.glyphViewMode) ? 1 : state.gridCols;
+	var aRows = (state.multiView && !state.glyphViewMode) ? 1 : state.gridRows;
+	// In glyph strip mode: gridCols/gridRows apply to active glyph
+	if (state.glyphViewMode) {
+		aCols = state.gridCols;
+		aRows = state.gridRows;
+	} else {
+		aCols = 1;
+		aRows = 1;
+	}
+
+	var slots = [];
+	var x = 0;
+
+	for (var i = 0; i < ws.glyphs.length; i++) {
+		var name = ws.glyphs[i];
+		var isActive = (i === ws.activeIdx);
+
+		// Get advance width from cached glyph using active layer
+		var advW = upm * 0.6; // fallback
+		var cacheEntry = TRV.glyphCache.get(name);
+		if (cacheEntry) {
+			// Try active layer first, then default
+			var layer = TRV.getLayerByName(cacheEntry.glyphData, TRV.state.activeLayer);
+			if (!layer) {
+				var defLayer = TRV.getDefaultLayerName(cacheEntry.glyphData);
+				layer = TRV.getLayerByName(cacheEntry.glyphData, defLayer);
+			}
+			if (layer) advW = layer.width || advW;
+		}
+
+		var cols = isActive ? aCols : 1;
+		var rows = isActive ? aRows : 1;
+		var slotW = advW * cols + (cols > 1 ? gap * (cols - 1) : 0);
+
+		slots.push({
+			name: name,
+			x: x,
+			w: slotW,
+			advW: advW,
+			active: isActive,
+			cols: cols,
+			rows: rows,
+			cached: !!cacheEntry
+		});
+
+		x += slotW + gap;
+	}
+
+	return { slots: slots, totalW: x - gap, rowH: rowH };
+};
+
+// -- Draw glyph strip -----------------------------------------------
+TRV.drawGlyphStrip = function(canvasW, canvasH) {
+	var ctx = TRV.dom.ctx;
+	var state = TRV.state;
+	var preview = state.previewMode;
+	var layout = TRV.getGlyphStripLayout();
+	var upm = TRV.font ? TRV.font.metrics.upm : 1000;
+
+	// Clear close button hit rects from previous draw
+	TRV.workspace._closeRects = {};
+
+	// Save global state we'll swap per slot
+	var savedGlyphData = state.glyphData;
+	var savedActiveLayer = state.activeLayer;
+	var savedSelection = state.selectedNodeIds;
+	var savedPanX = state.pan.x;
+	var savedPanY = state.pan.y;
+
+	// (gridLayers built on demand inside active slot when expanded)
+
+	for (var si = 0; si < layout.slots.length; si++) {
+		var slot = layout.slots[si];
+		var cacheEntry = TRV.glyphCache.get(slot.name);
+		if (!cacheEntry) {
+			TRV._ensureGlyphLoaded(slot.name);
+			continue;
+		}
+
+		var glyphData = cacheEntry.glyphData;
+
+		if (slot.active) {
+			// -- Active glyph: raised background highlight --
+			if (!preview) {
+				var xL = TRV.glyphToScreen(slot.x - TRV.STRIP_GAP * 0.3, 0).x;
+				var xR = TRV.glyphToScreen(slot.x + slot.w + TRV.STRIP_GAP * 0.3, 0).x;
+				var gTop = TRV.glyphToScreen(0, upm * 1.1).y;
+				var gBot = TRV.glyphToScreen(0, -upm * 0.3).y;
+				var activeGrad = ctx.createLinearGradient(0, gTop, 0, gBot);
+				activeGrad.addColorStop(0, 'rgba(91,157,239,0)');
+				activeGrad.addColorStop(0.15, 'rgba(91,157,239,0.04)');
+				activeGrad.addColorStop(0.85, 'rgba(91,157,239,0.04)');
+				activeGrad.addColorStop(1, 'rgba(91,157,239,0)');
+				ctx.fillStyle = activeGrad;
+				ctx.fillRect(xL, gTop, xR - xL, gBot - gTop);
+				ctx.strokeStyle = 'rgba(91,157,239,0.12)';
+				ctx.lineWidth = 1;
+				ctx.beginPath();
+				ctx.moveTo(xL, gTop); ctx.lineTo(xL, gBot);
+				ctx.moveTo(xR, gTop); ctx.lineTo(xR, gBot);
+				ctx.stroke();
+			}
+
+			state.glyphData = glyphData;
+			var isExpanded = (slot.cols > 1 || slot.rows > 1);
+
+			if (!isExpanded) {
+				// -- Single cell (1x1): draw activeLayer directly --
+				var layer = TRV.getLayerByName(glyphData, savedActiveLayer);
+				if (!layer) layer = glyphData.layers[0];
+				if (layer) {
+					state.activeLayer = layer.name;
+					state.pan.x = savedPanX + slot.x * state.zoom;
+					state.pan.y = savedPanY;
+
+					if (!preview && state.showMask) {
+						var mask = TRV.getMaskFor(layer.name);
+						if (mask) TRV.drawMaskContours(mask);
+					}
+					if (!preview && state.showMetrics) TRV.drawMetrics(layer, canvasW, canvasH);
+					TRV.drawContours(layer);
+					TRV.drawStemMeasurement(layer);
+					if (!preview && state.showNodes) TRV.drawStackedWarnings(layer);
+					if (!preview && state.showNodes) TRV.drawSelectedSegments(layer);
+					if (!preview && state.showAnchors) TRV.drawAnchors(layer);
+					if (!preview && state.showNodes) TRV.drawNodes(layer);
+					if (preview) TRV.drawPreviewNodes(layer);
+					if (!preview && state.isSelecting) TRV.drawSelectionOverlay();
+				}
+			} else {
+				// -- Expanded grid: build gridLayers, draw per cell --
+				TRV._ensureStripGrid();
+
+				for (var r = 0; r < slot.rows; r++) {
+					for (var c = 0; c < slot.cols; c++) {
+						var layerIdx = 0;
+						if (state.gridLayers && state.gridLayers[r] &&
+							state.gridLayers[r][c] !== undefined) {
+							layerIdx = state.gridLayers[r][c];
+						}
+						if (layerIdx >= glyphData.layers.length) layerIdx = 0;
+						var layer = glyphData.layers[layerIdx];
+						var isActiveCell = (r === state.activeCell.row && c === state.activeCell.col);
+
+						state.activeLayer = layer.name;
+
+						var cellOffX = slot.x + c * (slot.advW + TRV.STRIP_GAP);
+						var cellOffY = r * layout.rowH;
+
+						state.pan.x = savedPanX + cellOffX * state.zoom;
+						state.pan.y = savedPanY - cellOffY * state.zoom;
+
+						if (!isActiveCell) state.selectedNodeIds = new Set();
+
+						if (!preview && state.showMask) {
+							var mask = TRV.getMaskFor(layer.name);
+							if (mask) TRV.drawMaskContours(mask);
+						}
+						if (!preview && state.showMetrics) TRV.drawMetrics(layer, canvasW, canvasH);
+						TRV.drawContours(layer);
+						TRV.drawStemMeasurement(layer);
+						if (!preview && state.showNodes) TRV.drawStackedWarnings(layer);
+						if (!preview && state.showNodes) TRV.drawSelectedSegments(layer);
+						if (!preview && state.showAnchors) TRV.drawAnchors(layer);
+						if (!preview && state.showNodes) TRV.drawNodes(layer);
+						if (preview) TRV.drawPreviewNodes(layer);
+
+						if (!preview && isActiveCell && state.isSelecting) {
+							TRV.drawSelectionOverlay();
+						}
+						if (!isActiveCell) state.selectedNodeIds = savedSelection;
+
+						if (!preview) TRV._drawLayerTag(ctx, layer, slot, c, r, layout.rowH);
+					}
+				}
+			}
+
+			// Active glyph info widget (below baseline)
+			if (!preview) {
+				state.pan.x = savedPanX + slot.x * state.zoom;
+				state.pan.y = savedPanY;
+				state.glyphData = glyphData;
+				state.activeLayer = savedActiveLayer;
+				var baseLayer = TRV.getLayerByName(glyphData, savedActiveLayer);
+				if (!baseLayer) baseLayer = glyphData.layers[0];
+				if (baseLayer) TRV._drawGlyphWidget(ctx, slot, baseLayer, true);
+			}
+		} else {
+			// -- Non-active glyph: same layer as active glyph --
+			state.glyphData = glyphData;
+			var layer = TRV.getLayerByName(glyphData, savedActiveLayer);
+			if (!layer) {
+				var defName = TRV.getDefaultLayerName(glyphData);
+				layer = TRV.getLayerByName(glyphData, defName);
+			}
+			if (!layer) continue;
+
+			state.activeLayer = layer.name;
+			state.selectedNodeIds = new Set();
+
+			state.pan.x = savedPanX + slot.x * state.zoom;
+			state.pan.y = savedPanY;
+
+			TRV.drawContours(layer);
+
+			// Non-active widget: name + close button only
+			if (!preview) {
+				TRV._drawGlyphWidget(ctx, slot, layer, false);
+			}
+		}
+	}
+
+	// Restore global state
+	state.glyphData = savedGlyphData;
+	state.activeLayer = savedActiveLayer;
+	state.selectedNodeIds = savedSelection;
+	state.pan.x = savedPanX;
+	state.pan.y = savedPanY;
+};
+
+// -- Ensure gridLayers is populated for strip expanded view ---------
+TRV._ensureStripGrid = function() {
+	var state = TRV.state;
+	var cols = state.gridCols;
+	var rows = state.gridRows;
+	if (cols <= 1 && rows <= 1) return;
+
+	var glyphData = state.glyphData;
+	if (!glyphData) return;
+
+	// Build valid (non-mask) layer indices
+	var validIndices = [];
+	for (var i = 0; i < glyphData.layers.length; i++) {
+		if (!TRV.isMaskLayer(glyphData.layers[i].name)) validIndices.push(i);
+	}
+	if (validIndices.length === 0) return;
+
+	// Find starting index from activeLayer
+	var startLayerIdx = validIndices[0];
+	for (var i = 0; i < validIndices.length; i++) {
+		if (glyphData.layers[validIndices[i]].name === state.activeLayer) {
+			startLayerIdx = validIndices[i];
+			break;
+		}
+	}
+
+	// Only rebuild if gridLayers doesn't match dimensions
+	if (!state.gridLayers || state.gridLayers.length !== rows ||
+		(state.gridLayers[0] && state.gridLayers[0].length !== cols)) {
+		state.gridLayers = [];
+		var idx = validIndices.indexOf(startLayerIdx);
+		for (var r = 0; r < rows; r++) {
+			var row = [];
+			for (var c = 0; c < cols; c++) {
+				row.push(validIndices[idx % validIndices.length]);
+				idx++;
+			}
+			state.gridLayers.push(row);
+		}
+	}
+};
+
+// -- Layer tag at top-left corner of expanded cell ------------------
+TRV._drawLayerTag = function(ctx, layer, slot, col, row, rowH) {
+	var name = layer.name || '(unnamed)';
+	var layers = TRV.state.glyphData ? TRV.state.glyphData.layers : [];
+	var idx = layers.indexOf(layer);
+	var color = TRV.getLayerColor(idx >= 0 ? idx : 0);
+
+	// Position: near ascender, left side of cell
+	var ascY = TRV.font ? TRV.font.metrics.ascender : 800;
+	var tagGx = slot.x + col * (slot.advW + TRV.STRIP_GAP) + 4 / TRV.state.zoom;
+	var tagGy = ascY - 10 / TRV.state.zoom;
+	if (row > 0) tagGy += rowH; // offset for upper rows
+	var pos = TRV.glyphToScreen(tagGx, tagGy);
+
+	ctx.font = '9px "JetBrains Mono", monospace';
+	var tw = ctx.measureText(name).width;
+	var padX = 4, padY = 2;
+
+	ctx.fillStyle = color;
+	ctx.globalAlpha = 0.8;
+	ctx.fillRect(pos.x, pos.y - 10, tw + padX * 2, 14);
+	ctx.globalAlpha = 1;
+
+	ctx.fillStyle = '#000000';
+	ctx.textAlign = 'left';
+	ctx.textBaseline = 'middle';
+	ctx.fillText(name, pos.x + padX, pos.y - 3);
+	ctx.textBaseline = 'alphabetic';
+
+};
+
+
+
+// -- Fit glyph strip to view ----------------------------------------
+TRV.fitGlyphStrip = function() {
+	var layout = TRV.getGlyphStripLayout();
+	var canvasW = TRV.dom.canvasWrap.clientWidth;
+	var canvasH = TRV.dom.canvasWrap.clientHeight;
+	var upm = TRV.font ? TRV.font.metrics.upm : 1000;
+	var desc = TRV.font ? Math.abs(TRV.font.metrics.descender) : 200;
+	var totalH = upm + desc * 0.5;
+
+	// Find active slot for centering
+	var activeSlot = null;
+	for (var i = 0; i < layout.slots.length; i++) {
+		if (layout.slots[i].active) { activeSlot = layout.slots[i]; break; }
+	}
+
+	// Zoom: fit total height + some extra rows if expanded
+	var rows = activeSlot ? activeSlot.rows : 1;
+	var viewH = totalH + (rows - 1) * layout.rowH;
+	var padding = 40;
+	var scaleY = (canvasH - padding * 2) / viewH;
+	var scaleX = (canvasW - padding * 2) / layout.totalW;
+	TRV.state.zoom = Math.min(scaleX, scaleY);
+
+	// Center on active glyph
+	if (activeSlot) {
+		var cx = activeSlot.x + activeSlot.w / 2;
+		TRV.state.pan.x = canvasW / 2 - cx * TRV.state.zoom;
+		TRV.state.pan.y = canvasH * 0.75 + (rows - 1) * layout.rowH * TRV.state.zoom * 0.3;
+	}
+
+	TRV.updateZoomStatus();
+};
+
+// -- Strip offset for interaction -----------------------------------
+// Temporarily shift pan to the active cell's position in the strip
+TRV.withStripOffset = function(row, col, fn) {
+	var layout = TRV.getGlyphStripLayout();
+	var state = TRV.state;
+
+	// Find active slot
+	var activeSlot = null;
+	for (var i = 0; i < layout.slots.length; i++) {
+		if (layout.slots[i].active) { activeSlot = layout.slots[i]; break; }
+	}
+	if (!activeSlot) { fn(); return; }
+
+	var cellOffX = activeSlot.x + col * (activeSlot.advW + TRV.STRIP_GAP);
+	var cellOffY = row * layout.rowH;
+
+	var savedPanX = state.pan.x;
+	var savedPanY = state.pan.y;
+
+	state.pan.x += cellOffX * state.zoom;
+	state.pan.y -= cellOffY * state.zoom;
+
+	fn();
+
+	state.pan.x = savedPanX;
+	state.pan.y = savedPanY;
+};
+
+// -- Hit test: which strip slot/cell was clicked --------------------
+TRV.getStripSlotAt = function(sx, sy) {
+	var layout = TRV.getGlyphStripLayout();
+	var state = TRV.state;
+
+	// Convert screen to glyph x
+	var gp = TRV.screenToGlyph(sx, sy);
+
+	for (var si = 0; si < layout.slots.length; si++) {
+		var slot = layout.slots[si];
+
+		if (slot.active && (slot.cols > 1 || slot.rows > 1)) {
+			// Check each cell of expanded active glyph
+			for (var r = 0; r < slot.rows; r++) {
+				for (var c = 0; c < slot.cols; c++) {
+					var cx = slot.x + c * (slot.advW + TRV.STRIP_GAP);
+					var cy = r * layout.rowH;
+					if (gp.x >= cx && gp.x <= cx + slot.advW &&
+						gp.y >= -cy && gp.y <= -cy + layout.rowH) {
+						return { slotIdx: si, slot: slot, row: r, col: c };
+					}
+				}
+			}
+		}
+
+		// Simple slot bounds check (baseline row)
+		if (gp.x >= slot.x && gp.x <= slot.x + slot.w) {
+			return { slotIdx: si, slot: slot, row: 0, col: 0 };
+		}
+	}
+
+	return null;
+};
+
+// -- Glyph info widget (drawn below baseline in strip) ---------------
+TRV._drawGlyphWidget = function(ctx, slot, layer, isActive) {
+	var advW = layer.width || 0;
+	var lsb = TRV.glyphToScreen(0, 0);
+	var rsb = TRV.glyphToScreen(advW, 0);
+	var midX = (lsb.x + rsb.x) / 2;
+	var widgetY = lsb.y + 8;
+
+	var name = slot.name;
+	var dirty = TRV.dirtyGlyphs.has(name);
+	var font10 = '10px "JetBrains Mono", monospace';
+	var font9 = '9px "JetBrains Mono", monospace';
+	var padX = 8, radius = 3;
+
+	if (isActive) {
+		// -- Full info: name + unicode (line 1), LSB / w / RSB (line 2) --
+		var enc = TRV.font ? (TRV.font.encoding[name] || '') : '';
+		var bounds = TRV._getLayerBounds(layer);
+		var lsbVal = bounds ? Math.round(bounds.minX) : 0;
+		var rsbVal = bounds ? Math.round(advW - bounds.maxX) : 0;
+
+		var line1 = name + (enc ? '  U+' + enc : '') + (dirty ? '  *' : '');
+		var line2 = 'L:' + lsbVal + '  w:' + Math.round(advW) + '  R:' + rsbVal;
+
+		ctx.font = font10;
+		var tw1 = ctx.measureText(line1).width;
+		ctx.font = font9;
+		var tw2 = ctx.measureText(line2).width;
+		var boxW = Math.max(tw1, tw2) + padX * 2;
+		var boxH = 30;
+		var boxX = midX - boxW / 2;
+		var boxY = widgetY;
+
+		// Background pill
+		ctx.fillStyle = 'rgba(91,157,239,0.15)';
+		TRV._roundRect(ctx, boxX, boxY, boxW, boxH, radius);
+		ctx.fill();
+
+		// Line 1: name + unicode
+		ctx.font = font10;
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'top';
+		ctx.fillStyle = 'rgba(91,157,239,0.9)';
+		ctx.fillText(line1, midX, boxY + 3);
+
+		// Line 2: metrics
+		ctx.font = font9;
+		ctx.fillStyle = 'rgba(91,157,239,0.55)';
+		ctx.fillText(line2, midX, boxY + 17);
+
+		ctx.textBaseline = 'alphabetic';
+	} else {
+		// -- Minimal: name + close button --
+		ctx.font = font10;
+		var tw = ctx.measureText(name).width;
+		var closeW = 16;
+		var boxW = tw + padX * 2 + closeW;
+		var boxH = 16;
+		var boxX = midX - boxW / 2;
+		var boxY = widgetY;
+
+		// Background pill
+		ctx.fillStyle = 'rgba(255,255,255,0.06)';
+		TRV._roundRect(ctx, boxX, boxY, boxW, boxH, radius);
+		ctx.fill();
+
+		// Name
+		ctx.textAlign = 'left';
+		ctx.textBaseline = 'middle';
+		ctx.fillStyle = 'rgba(255,255,255,0.45)';
+		ctx.fillText(name, boxX + padX, boxY + boxH / 2);
+
+		// Close button (×)
+		var closeX = boxX + boxW - 10;
+		var closeY = boxY + boxH / 2;
+		ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+		ctx.lineWidth = 1;
+		ctx.beginPath();
+		ctx.moveTo(closeX - 3, closeY - 3); ctx.lineTo(closeX + 3, closeY + 3);
+		ctx.moveTo(closeX + 3, closeY - 3); ctx.lineTo(closeX - 3, closeY + 3);
+		ctx.stroke();
+
+		// Store close button hit rect
+		if (!TRV.workspace._closeRects) TRV.workspace._closeRects = {};
+		TRV.workspace._closeRects[slot.name] = {
+			x: closeX - 6, y: closeY - 6, w: 12, h: 12
+		};
+
+		ctx.textBaseline = 'alphabetic';
+	}
+};
+
+// -- Rounded rect helper --------------------------------------------
+TRV._roundRect = function(ctx, x, y, w, h, r) {
+	ctx.beginPath();
+	ctx.moveTo(x + r, y);
+	ctx.lineTo(x + w - r, y);
+	ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+	ctx.lineTo(x + w, y + h - r);
+	ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+	ctx.lineTo(x + r, y + h);
+	ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+	ctx.lineTo(x, y + r);
+	ctx.quadraticCurveTo(x, y, x + r, y);
+	ctx.closePath();
+};
+
+// -- Get contour bounding box for a layer ---------------------------
+TRV._getLayerBounds = function(layer) {
+	var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+	var found = false;
+	for (var si = 0; si < layer.shapes.length; si++) {
+		var shape = layer.shapes[si];
+		for (var ki = 0; ki < shape.contours.length; ki++) {
+			var nodes = shape.contours[ki].nodes;
+			for (var ni = 0; ni < nodes.length; ni++) {
+				found = true;
+				if (nodes[ni].x < minX) minX = nodes[ni].x;
+				if (nodes[ni].y < minY) minY = nodes[ni].y;
+				if (nodes[ni].x > maxX) maxX = nodes[ni].x;
+				if (nodes[ni].y > maxY) maxY = nodes[ni].y;
+			}
+		}
+	}
+	return found ? { minX: minX, minY: minY, maxX: maxX, maxY: maxY } : null;
+};
+
+// -- Glyph rotation in strip ----------------------------------------
+TRV.rotateGlyphColumn = function(col, direction) {
+	// Rotate the glyph at a strip position
+	var state = TRV.state;
+	if (!TRV.font) return;
+	var manifest = TRV.font.manifest;
+	var N = manifest.length;
+	if (N === 0) return;
+
+	// Find which workspace slot to rotate
+	var slotIdx = TRV.workspace.activeIdx;
+	if (slotIdx < 0 || slotIdx >= TRV.workspace.glyphs.length) return;
+
+	var current = TRV.workspace.glyphs[slotIdx];
+	var idx = 0;
+	for (var i = 0; i < N; i++) {
+		if ((manifest[i].alias || manifest[i].name) === current) { idx = i; break; }
+	}
+	idx = ((idx + direction) % N + N) % N;
+	var newName = manifest[idx].alias || manifest[idx].name;
+	TRV.workspace.glyphs[slotIdx] = newName;
+	TRV._ensureGlyphLoaded(newName);
+};
+
+TRV.rotateGlyphRow = function(row, direction) {
+	TRV.rotateGlyphColumn(0, direction);
+};
+
+// -- Ensure glyph is loaded into cache (async, triggers redraw) -----
+TRV._loadQueue = new Set();
+TRV._loadRunning = false;
+
+TRV._ensureGlyphLoaded = function(name) {
+	if (TRV.glyphCache.has(name) || TRV._loadQueue.has(name)) return;
+	TRV._loadQueue.add(name);
+	TRV._processLoadQueue();
+};
+
+TRV._processLoadQueue = async function() {
+	if (TRV._loadRunning) return;
+	TRV._loadRunning = true;
+
+	while (TRV._loadQueue.size > 0) {
+		var name = TRV._loadQueue.values().next().value;
+		TRV._loadQueue.delete(name);
+
+		if (!TRV.glyphCache.has(name)) {
+			var glyphData = await TRV.loadGlyphFile(name);
+			if (glyphData) {
+				TRV.glyphCache.set(name, {
+					glyphData: glyphData,
+					undoStack: [],
+					redoStack: [],
+					selection: new Set(),
+					pan: null,
+					zoom: null
+				});
+				TRV._evictCache();
+			}
+		}
+
+		TRV.draw();
+		await new Promise(function(r) { requestAnimationFrame(r); });
+	}
+
+	TRV._loadRunning = false;
 };

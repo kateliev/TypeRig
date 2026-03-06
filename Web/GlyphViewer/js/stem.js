@@ -53,7 +53,8 @@ TRV.stem.raySegmentCrossings = function(ox, oy, dx, dy, seg) {
 			var py = ay + t * (pts[1].y - ay);
 			var len2 = dx * dx + dy * dy;
 			var s = ((px - ox) * dx + (py - oy) * dy) / len2;
-			results.push({ t: t, x: px, y: py, s: s });
+			var windSign = (by > 0) ? 1 : -1;
+			results.push({ t: t, x: px, y: py, s: s, windSign: windSign });
 		}
 		return results;
 	}
@@ -125,7 +126,21 @@ TRV.stem.raySegmentCrossings = function(ox, oy, dx, dy, seg) {
 
 		var pt = evalFn(pts, t);
 		var s = ((pt.x - ox) * dx + (pt.y - oy) * dy) / len2;
-		results.push({ t: t, x: pt.x, y: pt.y, s: s });
+
+		// Winding sign: tangent y-component relative to ray direction
+		// For nonzero fill rule inside test
+		var tangY = 0;
+		if (seg.type === 'line') {
+			tangY = pts[1].y - pts[0].y;
+		} else if (seg.type === 'quadratic') {
+			var u2 = 1 - t;
+			tangY = 2 * u2 * (pts[1].y - pts[0].y) + 2 * t * (pts[2].y - pts[1].y);
+		} else {
+			var u3 = 1 - t;
+			tangY = 3*u3*u3*(pts[1].y-pts[0].y) + 6*u3*t*(pts[2].y-pts[1].y) + 3*t*t*(pts[3].y-pts[2].y);
+		}
+
+		results.push({ t: t, x: pt.x, y: pt.y, s: s, windSign: tangY > 0 ? 1 : -1 });
 	}
 
 	return results;
@@ -147,15 +162,15 @@ TRV.stem.rayLayerCrossings = function(ox, oy, dx, dy, layer) {
 	return all;
 };
 
-// -- Point-in-glyph (even-odd via horizontal ray) -------------------
+// -- Point-in-glyph (nonzero winding via horizontal ray) ------------
 TRV.stem.isInside = function(gx, gy, layer) {
 	var crossings = TRV.stem.rayLayerCrossings(gx, gy, 1, 0, layer);
-	// Count crossings to the right (s > 0)
-	var count = 0;
+	// Nonzero winding: sum signed crossings to the right
+	var winding = 0;
 	for (var i = 0; i < crossings.length; i++) {
-		if (crossings[i].s > 1e-6) count++;
+		if (crossings[i].s > 1e-6) winding += crossings[i].windSign;
 	}
-	return (count % 2) === 1;
+	return winding !== 0;
 };
 
 // -- Find nearest contour point (glyph coords) ---------------------

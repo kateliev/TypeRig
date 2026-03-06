@@ -261,7 +261,7 @@ TRV.hitTestContour = function(sx, sy, tolerance) {
 			TRV.buildContourPath(contour, shape.transform);
 
 			// Check filled area (closed contours)
-			if (ctx.isPointInPath(sx, sy, 'evenodd')) {
+			if (ctx.isPointInPath(sx, sy, 'nonzero')) {
 				// Compute bounding box area for size comparison
 				var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 				for (var ni = 0; ni < contour.nodes.length; ni++) {

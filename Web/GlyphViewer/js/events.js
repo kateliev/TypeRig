@@ -20,18 +20,20 @@ function getCellAtScreen(sx, sy) {
 }
 
 // Get screen coords suitable for hit testing in active cell.
-// Split mode: cell-relative. Joined/single: absolute.
+// Split mode: cell-relative. Joined/single/strip: absolute.
 function interactionCoords(sx, sy) {
-	if (state.multiView && !state.joinedView) {
+	if (state.multiView && !state.joinedView && !state.glyphViewMode) {
 		const cell = TRV.getCellRect(state.activeCell.row, state.activeCell.col);
 		return { sx: sx - cell.x, sy: sy - cell.y };
 	}
 	return { sx: sx, sy: sy };
 }
 
-// Execute fn with pan shifted for active cell (joined mode only)
+// Execute fn with pan shifted for active cell (joined/strip mode)
 function withActiveOffset(fn) {
-	if (state.multiView && state.joinedView) {
+	if (state.glyphViewMode && TRV.font) {
+		TRV.withStripOffset(state.activeCell.row, state.activeCell.col, fn);
+	} else if (state.multiView && state.joinedView) {
 		TRV.withJoinedOffset(state.activeCell.row, state.activeCell.col, fn);
 	} else {
 		fn();
@@ -56,8 +58,36 @@ dom.canvasWrap.addEventListener('mousedown', function(e) {
 		return;
 	}
 
+	// -- Glyph strip: click to switch glyph or layer cell
+	if (state.glyphViewMode && TRV.font) {
+		var stripHit = TRV.getStripSlotAt(absSx, absSy);
+		if (stripHit) {
+			// Check close button on non-active slots
+			if (!stripHit.slot.active && TRV.workspace._closeRects) {
+				var cr = TRV.workspace._closeRects[stripHit.slot.name];
+				if (cr && absSx >= cr.x && absSx <= cr.x + cr.w &&
+					absSy >= cr.y && absSy <= cr.y + cr.h) {
+					TRV.removeGlyphFromStrip(stripHit.slot.name);
+					TRV.updateGlyphPanelActive();
+					return;
+				}
+			}
+
+			if (stripHit.slot.active) {
+				// Clicked active glyph — switch layer cell if different
+				if (stripHit.row !== state.activeCell.row || stripHit.col !== state.activeCell.col) {
+					TRV.setActiveCell(stripHit.row, stripHit.col);
+				}
+			} else {
+				// Clicked non-active glyph — switch to it
+				TRV.switchGlyph(stripHit.slot.name);
+				return;
+			}
+		}
+	}
+
 	// -- Multi-view: switch active cell on click
-	if (state.multiView) {
+	if (state.multiView && !state.glyphViewMode) {
 		const clicked = getCellAtScreen(absSx, absSy);
 		if (clicked && (clicked.row !== state.activeCell.row || clicked.col !== state.activeCell.col)) {
 			TRV.setActiveCell(clicked.row, clicked.col);
@@ -575,24 +605,6 @@ dom.canvasWrap.addEventListener('wheel', function(e) {
 	const absSx = e.clientX - rect.left;
 	const absSy = e.clientY - rect.top;
 
-	// Multi-view ribbon rotation
-	if (state.multiView) {
-		const cell = getCellAtScreen(absSx, absSy);
-		const direction = e.deltaY > 0 ? 1 : -1;
-
-		if (e.ctrlKey) {
-			TRV.rotateColumn(cell.col, direction);
-			TRV.draw();
-			return;
-		}
-
-		if (e.altKey) {
-			TRV.rotateRow(cell.row, direction);
-			TRV.draw();
-			return;
-		}
-	}
-
 	// Normal zoom (centred on cursor)
 	const { sx: mx, sy: my } = interactionCoords(absSx, absSy);
 	const factor = e.deltaY > 0 ? TRV.WHEEL_ZOOM_OUT : TRV.WHEEL_ZOOM_IN;
@@ -666,18 +678,26 @@ function setViewMode(cols, rows) {
 	btn2x1.classList.remove('active');
 	btn2x2.classList.remove('active');
 
-	if (cols === 1 && rows === 1) {
+	state.gridCols = cols;
+	state.gridRows = rows;
+
+	if (state.glyphViewMode) {
+		// Strip mode: grid size controls active glyph expansion
+		state.multiView = (cols > 1 || rows > 1);
+		state.activeCell = { row: 0, col: 0 };
+		// Force gridLayers rebuild on next draw
+		state.gridLayers = null;
+	} else if (cols === 1 && rows === 1) {
 		state.multiView = false;
 		state.gridLayers = null;
-		btn1x1.classList.add('active');
 	} else {
 		state.multiView = true;
-		state.gridCols = cols;
-		state.gridRows = rows;
 		TRV.initMultiGrid();
-		if (cols === 2 && rows === 1) btn2x1.classList.add('active');
-		if (cols === 2 && rows === 2) btn2x2.classList.add('active');
 	}
+
+	if (cols === 1 && rows === 1) btn1x1.classList.add('active');
+	if (cols === 2 && rows === 1) btn2x1.classList.add('active');
+	if (cols === 2 && rows === 2) btn2x2.classList.add('active');
 
 	TRV.fitToView();
 }
@@ -688,6 +708,13 @@ document.getElementById('btn-view-2x2').addEventListener('click', function() { s
 
 // -- Join toggle (split vs joined canvas) ---------------------------
 document.getElementById('btn-join').addEventListener('click', function() {
+	// If glyph mode is active, clicking Join exits glyph mode
+	if (state.glyphViewMode) {
+		state.glyphViewMode = false;
+		document.getElementById('btn-glyph-view').classList.remove('active');
+		TRV.updateGlyphPanelActive();
+	}
+
 	state.joinedView = !state.joinedView;
 	this.classList.toggle('active', state.joinedView);
 
@@ -699,26 +726,62 @@ document.getElementById('btn-join').addEventListener('click', function() {
 	TRV.fitToView();
 });
 
+// -- Glyph view toggle (glyph strip on shared baseline) -------------
+document.getElementById('btn-glyph-view').addEventListener('click', function() {
+	if (!TRV.font) return;
+
+	state.glyphViewMode = !state.glyphViewMode;
+	this.classList.toggle('active', state.glyphViewMode);
+
+	if (state.glyphViewMode) {
+		// Enter strip mode with 1x1 (no layer expansion)
+		state.gridCols = 1;
+		state.gridRows = 1;
+		state.multiView = false;
+		state.gridLayers = null;
+		state.activeCell = { row: 0, col: 0 };
+
+		// Update view buttons
+		document.getElementById('btn-view-1x1').classList.add('active');
+		document.getElementById('btn-view-2x1').classList.remove('active');
+		document.getElementById('btn-view-2x2').classList.remove('active');
+
+		TRV.updateWorkspaceStrip();
+		TRV.fitGlyphStrip();
+	} else {
+		// Exit strip mode
+		state.gridLayers = null;
+		TRV.fitToView();
+	}
+
+	TRV.updateGlyphPanelActive();
+	TRV.draw();
+});
+
 // -- Layer dropdown -------------------------------------------------
 dom.layerSelect.addEventListener('change', function() {
 	state.activeLayer = this.value;
 	state.selectedNodeIds.clear();
 
-	// In multi-view, update the active cell to show selected layer
-	// (mask layers are not allowed in the grid)
-	if (state.multiView && state.glyphData) {
+	// In multi-view or expanded strip, update the active cell's gridLayers
+	if (state.gridLayers && state.glyphData) {
 		if (!TRV.isMaskLayer(this.value)) {
-			const layers = state.glyphData.layers;
-			const idx = layers.findIndex(function(l) { return l.name === this.value; }.bind(this));
-			if (idx >= 0 && state.gridLayers) {
-				const r = state.activeCell.row;
-				const c = state.activeCell.col;
-				state.gridLayers[r][c] = idx;
+			var layers = state.glyphData.layers;
+			var idx = -1;
+			for (var i = 0; i < layers.length; i++) {
+				if (layers[i].name === this.value) { idx = i; break; }
+			}
+			if (idx >= 0) {
+				var r = state.activeCell.row;
+				var c = state.activeCell.col;
+				if (state.gridLayers[r] && state.gridLayers[r][c] !== undefined) {
+					state.gridLayers[r][c] = idx;
+				}
 			}
 		}
 	}
 
-	TRV.fitToView();
+	TRV.draw();
 	TRV.buildXmlPanel();
 });
 
@@ -732,11 +795,23 @@ dom.layerSelect.addEventListener('change', function() {
 	var glyphCount = document.getElementById('glyph-count');
 
 	if (glyphList) {
+		// Single click: switch to glyph
 		glyphList.addEventListener('click', function(e) {
 			var entry = e.target.closest('.glyph-entry');
 			if (!entry) return;
 			var name = entry.dataset.name;
 			if (name) TRV.switchGlyph(name);
+		});
+
+		// Double click: add glyph to workspace strip
+		glyphList.addEventListener('dblclick', function(e) {
+			var entry = e.target.closest('.glyph-entry');
+			if (!entry) return;
+			var name = entry.dataset.name;
+			if (!name || !TRV.state.glyphViewMode) return;
+
+			TRV.addGlyphToStrip(name);
+			TRV.updateGlyphPanelActive();
 		});
 	}
 

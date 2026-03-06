@@ -12,6 +12,58 @@ TRV.dirtyGlyphs = new Set();
 TRV.activeGlyph = null;     // current glyph name
 TRV.CACHE_MAX = 32;         // LRU eviction threshold
 
+// -- Workspace (glyph strip) ----------------------------------------
+TRV.workspace = {
+	glyphs: [],       // ordered glyph names in strip (user-controlled)
+	activeIdx: 0,     // index of active glyph in strip
+};
+TRV.STRIP_GAP = 40;  // glyph units between strip glyphs
+
+// -- Resolve default layer name for thumbnails & strip ---------------
+// Priority: font master default → 'Regular' → first non-mask layer
+TRV.getDefaultLayerName = function(glyphData) {
+	if (!glyphData || !glyphData.layers || glyphData.layers.length === 0) return null;
+
+	// 1. If font has masters defined, use the default master's layer name
+	if (TRV.font && TRV.font.masters && TRV.font.masters.length > 0) {
+		for (var i = 0; i < TRV.font.masters.length; i++) {
+			if (TRV.font.masters[i].isDefault) {
+				var lname = TRV.font.masters[i].layerName;
+				for (var j = 0; j < glyphData.layers.length; j++) {
+					if (glyphData.layers[j].name === lname) return lname;
+				}
+			}
+		}
+		// Fallback: first master's layer name
+		var firstMasterLayer = TRV.font.masters[0].layerName;
+		for (var j = 0; j < glyphData.layers.length; j++) {
+			if (glyphData.layers[j].name === firstMasterLayer) return firstMasterLayer;
+		}
+	}
+
+	// 2. Try 'Regular'
+	for (var j = 0; j < glyphData.layers.length; j++) {
+		if (glyphData.layers[j].name === 'Regular') return 'Regular';
+	}
+
+	// 3. First non-mask layer
+	for (var j = 0; j < glyphData.layers.length; j++) {
+		if (!TRV.isMaskLayer(glyphData.layers[j].name)) return glyphData.layers[j].name;
+	}
+
+	// 4. Whatever's there
+	return glyphData.layers[0].name;
+};
+
+// Helper: get layer object by name from glyphData
+TRV.getLayerByName = function(glyphData, name) {
+	if (!glyphData) return null;
+	for (var i = 0; i < glyphData.layers.length; i++) {
+		if (glyphData.layers[i].name === name) return glyphData.layers[i];
+	}
+	return null;
+};
+
 // -- Parse font.xml -------------------------------------------------
 TRV.parseFontXml = function(xmlString) {
 	var parser = new DOMParser();
@@ -274,8 +326,10 @@ TRV.switchGlyph = async function(name) {
 
 	TRV.dom.emptyState.classList.add('hidden');
 
-	// Restore or fit viewport
-	if (entry.pan !== null) {
+	// Restore or fit viewport (skip in strip mode — zoom persists)
+	if (TRV.state.glyphViewMode && TRV.font) {
+		// Strip mode: zoom stays, just update strip membership
+	} else if (entry.pan !== null) {
 		TRV.state.pan = entry.pan;
 		TRV.state.zoom = entry.zoom;
 	} else {
@@ -283,7 +337,13 @@ TRV.switchGlyph = async function(name) {
 	}
 
 	// Re-init multi-view if active
-	if (TRV.state.multiView) TRV.initMultiGrid();
+	if (TRV.state.glyphViewMode) {
+		TRV.updateWorkspaceStrip();
+		TRV.state.activeCell = { row: 0, col: 0 };
+		TRV.syncActiveCellToLayer();
+	} else if (TRV.state.multiView) {
+		TRV.initMultiGrid();
+	}
 
 	TRV.buildXmlPanel();
 	TRV.draw();
@@ -355,6 +415,9 @@ TRV.buildGlyphPanel = function() {
 	panel.classList.add('visible');
 	list.innerHTML = '';
 
+	// Disconnect previous observer
+	if (TRV._thumbObserver) TRV._thumbObserver.disconnect();
+
 	if (!TRV.font) return;
 
 	for (var i = 0; i < TRV.font.manifest.length; i++) {
@@ -363,6 +426,13 @@ TRV.buildGlyphPanel = function() {
 		var div = document.createElement('div');
 		div.className = 'glyph-entry';
 		div.dataset.name = name;
+
+		// Thumbnail canvas
+		var cvs = document.createElement('canvas');
+		cvs.className = 'glyph-thumb';
+		cvs.width = 28;
+		cvs.height = 36;
+		div.appendChild(cvs);
 
 		var nameSpan = document.createElement('span');
 		nameSpan.className = 'glyph-entry-name';
@@ -388,6 +458,172 @@ TRV.buildGlyphPanel = function() {
 
 	// Show count
 	if (countEl) countEl.textContent = TRV.font.manifest.length;
+
+	// Setup IntersectionObserver for lazy thumbnail loading
+	TRV._thumbObserver = new IntersectionObserver(function(entries) {
+		for (var i = 0; i < entries.length; i++) {
+			if (!entries[i].isIntersecting) continue;
+			var el = entries[i].target;
+			var name = el.dataset.name;
+			if (!name || el.dataset.thumbLoaded) continue;
+			TRV._queueThumbnail(name, el);
+		}
+	}, { root: list, rootMargin: '100px 0px' });
+
+	var allEntries = list.querySelectorAll('.glyph-entry');
+	for (var i = 0; i < allEntries.length; i++) {
+		TRV._thumbObserver.observe(allEntries[i]);
+	}
+};
+
+// -- Thumbnail rendering queue --------------------------------------
+TRV._thumbQueue = [];
+TRV._thumbRunning = false;
+
+TRV._queueThumbnail = function(name, el) {
+	// Skip if already queued or rendered
+	if (el.dataset.thumbLoaded) return;
+	TRV._thumbQueue.push({ name: name, el: el });
+	TRV._processThumbQueue();
+};
+
+TRV._processThumbQueue = async function() {
+	if (TRV._thumbRunning) return;
+	TRV._thumbRunning = true;
+
+	while (TRV._thumbQueue.length > 0) {
+		var item = TRV._thumbQueue.shift();
+		var name = item.name;
+		var el = item.el;
+
+		if (el.dataset.thumbLoaded) continue;
+
+		// Load glyph if not cached
+		var cacheEntry = TRV.glyphCache.get(name);
+		var glyphData = cacheEntry ? cacheEntry.glyphData : null;
+
+		if (!glyphData) {
+			glyphData = await TRV.loadGlyphFile(name);
+			if (!glyphData) {
+				el.dataset.thumbLoaded = 'empty';
+				continue;
+			}
+			// Don't pollute the editing cache with thumbnail loads
+			// Just use the data temporarily
+		}
+
+		TRV._renderThumbnail(el, glyphData);
+		el.dataset.thumbLoaded = 'true';
+
+		// Yield every 8 thumbnails to keep UI responsive
+		if (TRV._thumbQueue.length > 0 && TRV._thumbQueue.length % 8 === 0) {
+			await new Promise(function(r) { requestAnimationFrame(r); });
+		}
+	}
+
+	TRV._thumbRunning = false;
+};
+
+// -- Render a single glyph thumbnail --------------------------------
+TRV._renderThumbnail = function(entryEl, glyphData) {
+	var cvs = entryEl.querySelector('.glyph-thumb');
+	if (!cvs) return;
+
+	var ctx = cvs.getContext('2d');
+	var w = cvs.width;
+	var h = cvs.height;
+
+	// Find default layer (consistent across all glyphs)
+	var layerName = TRV.getDefaultLayerName(glyphData);
+	var layer = TRV.getLayerByName(glyphData, layerName);
+	if (!layer || layer.shapes.length === 0) return;
+
+	// Compute transform to fit glyph in thumbnail
+	var upm = TRV.font ? TRV.font.metrics.upm : 1000;
+	var desc = TRV.font ? Math.abs(TRV.font.metrics.descender) : 200;
+	var advW = layer.width || upm;
+	var totalH = upm + desc * 0.3;
+
+	var scale = Math.min((w - 4) / advW, (h - 4) / totalH);
+	var ox = (w - advW * scale) / 2;
+	var oy = h - 3 - desc * 0.3 * scale;
+
+	ctx.clearRect(0, 0, w, h);
+
+	// Draw filled contours
+	ctx.beginPath();
+	for (var si = 0; si < layer.shapes.length; si++) {
+		var shape = layer.shapes[si];
+		for (var ki = 0; ki < shape.contours.length; ki++) {
+			var contour = shape.contours[ki];
+			if (!contour.closed || contour.nodes.length === 0) continue;
+			TRV._buildThumbPath(ctx, contour.nodes, scale, ox, oy);
+		}
+	}
+
+	ctx.fillStyle = 'rgba(200,200,210,0.55)';
+	ctx.fill('nonzero');
+};
+
+// -- Build a contour path for thumbnail (mini version of buildContourPath)
+TRV._buildThumbPath = function(ctx, nodes, scale, ox, oy) {
+	var n = nodes.length;
+	if (n === 0) return;
+
+	// Find first on-curve
+	var firstOn = 0;
+	for (var j = 0; j < n; j++) {
+		if (nodes[j].type === 'on') { firstOn = j; break; }
+	}
+
+	var tx = function(x) { return x * scale + ox; };
+	var ty = function(y) { return -y * scale + oy; };
+
+	ctx.moveTo(tx(nodes[firstOn].x), ty(nodes[firstOn].y));
+
+	var i = (firstOn + 1) % n;
+	var count = 0;
+
+	while (count < n - 1) {
+		var node = nodes[i];
+
+		if (node.type === 'on') {
+			ctx.lineTo(tx(node.x), ty(node.y));
+		} else if (node.type === 'curve') {
+			var b1 = node;
+			var b2 = nodes[(i + 1) % n];
+			var on = nodes[(i + 2) % n];
+			ctx.bezierCurveTo(tx(b1.x), ty(b1.y), tx(b2.x), ty(b2.y), tx(on.x), ty(on.y));
+			i = (i + 2) % n;
+			count += 2;
+		} else if (node.type === 'off') {
+			var off = node;
+			var on = nodes[(i + 1) % n];
+			ctx.quadraticCurveTo(tx(off.x), ty(off.y), tx(on.x), ty(on.y));
+			i = (i + 1) % n;
+			count += 1;
+		}
+
+		i = (i + 1) % n;
+		count++;
+	}
+
+	ctx.closePath();
+};
+
+// -- Refresh a single thumbnail after editing -----------------------
+TRV.refreshThumbnail = function(name) {
+	var list = document.getElementById('glyph-list');
+	if (!list) return;
+	var entry = list.querySelector('.glyph-entry[data-name="' + name + '"]');
+	if (!entry) return;
+
+	var cacheEntry = TRV.glyphCache.get(name);
+	if (cacheEntry) {
+		entry.dataset.thumbLoaded = '';
+		TRV._renderThumbnail(entry, cacheEntry.glyphData);
+		entry.dataset.thumbLoaded = 'true';
+	}
 };
 
 // -- Update active highlight in glyph panel -------------------------
@@ -395,9 +631,13 @@ TRV.updateGlyphPanelActive = function() {
 	var list = document.getElementById('glyph-list');
 	if (!list) return;
 
+	var stripSet = new Set(TRV.workspace.glyphs);
+
 	var entries = list.querySelectorAll('.glyph-entry');
 	for (var i = 0; i < entries.length; i++) {
-		entries[i].classList.toggle('active', entries[i].dataset.name === TRV.activeGlyph);
+		var name = entries[i].dataset.name;
+		entries[i].classList.toggle('active', name === TRV.activeGlyph);
+		entries[i].classList.toggle('in-strip', TRV.state.glyphViewMode && stripSet.has(name));
 	}
 
 	// Scroll active entry into view
@@ -436,6 +676,28 @@ TRV.updateFontInfo = function() {
 	document.title = 'TR:GLYPH — ' + info.family + ' ' + info.style;
 };
 
+// -- Fit active glyph to its cell in glyph view mode ----------------
+TRV.fitGlyphToCell = function() {
+	if (!TRV.font || !TRV.state.multiView) return;
+
+	var cell = TRV.getCellRect(TRV.state.activeCell.row, TRV.state.activeCell.col);
+	var layer = TRV.getActiveLayer();
+	if (!layer) return;
+
+	var upm = TRV.font.metrics.upm;
+	var desc = Math.abs(TRV.font.metrics.descender);
+	var advW = layer.width || upm;
+	var totalH = upm + desc * 0.5;
+	var fitZoom = (cell.h * 0.8) / totalH;
+
+	TRV.state.zoom = fitZoom;
+	TRV.state.pan = {
+		x: (cell.w - advW * fitZoom) / 2,
+		y: cell.h * 0.75
+	};
+	TRV.updateZoomStatus();
+};
+
 // -- Unsaved changes warning ----------------------------------------
 window.addEventListener('beforeunload', function(e) {
 	if (TRV.dirtyGlyphs.size > 0) {
@@ -443,6 +705,49 @@ window.addEventListener('beforeunload', function(e) {
 		e.returnValue = '';
 	}
 });
+
+// -- Cycle through layers -------------------------------------------
+// Rotates the active cell's layer in gridLayers (multi-view/strip).
+// Falls back to global activeLayer rotation in single view.
+TRV.cycleLayer = function(direction) {
+	var state = TRV.state;
+	var glyphData = state.glyphData;
+	if (!glyphData) return;
+
+	// Build valid (non-mask) layer indices
+	var valid = [];
+	for (var i = 0; i < glyphData.layers.length; i++) {
+		if (!TRV.isMaskLayer(glyphData.layers[i].name)) valid.push(i);
+	}
+	if (valid.length <= 1) return;
+
+	// Per-cell rotation when gridLayers is active
+	if (state.gridLayers && state.gridLayers[state.activeCell.row] &&
+		state.gridLayers[state.activeCell.row][state.activeCell.col] !== undefined) {
+		var r = state.activeCell.row;
+		var c = state.activeCell.col;
+		var current = state.gridLayers[r][c];
+		var pos = valid.indexOf(current);
+		if (pos < 0) pos = 0;
+		pos = ((pos + direction) % valid.length + valid.length) % valid.length;
+		state.gridLayers[r][c] = valid[pos];
+
+		state.activeLayer = glyphData.layers[valid[pos]].name;
+		TRV.dom.layerSelect.value = state.activeLayer;
+	} else {
+		// Single view: rotate global activeLayer
+		var names = valid.map(function(i) { return glyphData.layers[i].name; });
+		var idx = names.indexOf(state.activeLayer);
+		if (idx < 0) idx = 0;
+		idx = ((idx + direction) % names.length + names.length) % names.length;
+		state.activeLayer = names[idx];
+		TRV.dom.layerSelect.value = state.activeLayer;
+	}
+
+	state.selectedNodeIds.clear();
+	TRV.draw();
+	TRV.updateStatusSelected();
+};
 
 // -- Step to next/previous glyph in manifest ------------------------
 TRV.stepGlyph = function(direction) {
