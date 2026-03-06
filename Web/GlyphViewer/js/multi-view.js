@@ -717,6 +717,10 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 			continue;
 		}
 
+		// Reset pan to base for each slot (previous slot may have shifted it)
+		state.pan.x = savedPanX;
+		state.pan.y = savedPanY;
+
 		var glyphData = cacheEntry.glyphData;
 
 		if (slot.active) {
@@ -790,8 +794,6 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 						state.pan.x = savedPanX + cellOffX * state.zoom;
 						state.pan.y = savedPanY - cellOffY * state.zoom;
 
-						if (!isActiveCell) state.selectedNodeIds = new Set();
-
 						if (!preview && state.showMask) {
 							var mask = TRV.getMaskFor(layer.name);
 							if (mask) TRV.drawMaskContours(mask);
@@ -808,9 +810,8 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 						if (!preview && isActiveCell && state.isSelecting) {
 							TRV.drawSelectionOverlay();
 						}
-						if (!isActiveCell) state.selectedNodeIds = savedSelection;
 
-						if (!preview) TRV._drawLayerTag(ctx, layer, slot, c, r, layout.rowH);
+						if (!preview) TRV.drawLayerLabel(layer);
 					}
 				}
 			}
@@ -900,37 +901,6 @@ TRV._ensureStripGrid = function() {
 	}
 };
 
-// -- Layer tag at top-left corner of expanded cell ------------------
-TRV._drawLayerTag = function(ctx, layer, slot, col, row, rowH) {
-	var name = layer.name || '(unnamed)';
-	var layers = TRV.state.glyphData ? TRV.state.glyphData.layers : [];
-	var idx = layers.indexOf(layer);
-	var color = TRV.getLayerColor(idx >= 0 ? idx : 0);
-
-	// Position: near ascender, left side of cell
-	var ascY = TRV.font ? TRV.font.metrics.ascender : 800;
-	var tagGx = slot.x + col * (slot.advW + TRV.STRIP_GAP) + 4 / TRV.state.zoom;
-	var tagGy = ascY - 10 / TRV.state.zoom;
-	if (row > 0) tagGy += rowH; // offset for upper rows
-	var pos = TRV.glyphToScreen(tagGx, tagGy);
-
-	ctx.font = '9px "JetBrains Mono", monospace';
-	var tw = ctx.measureText(name).width;
-	var padX = 4, padY = 2;
-
-	ctx.fillStyle = color;
-	ctx.globalAlpha = 0.8;
-	ctx.fillRect(pos.x, pos.y - 10, tw + padX * 2, 14);
-	ctx.globalAlpha = 1;
-
-	ctx.fillStyle = '#000000';
-	ctx.textAlign = 'left';
-	ctx.textBaseline = 'middle';
-	ctx.fillText(name, pos.x + padX, pos.y - 3);
-	ctx.textBaseline = 'alphabetic';
-
-};
-
 
 
 // -- Fit glyph strip to view ----------------------------------------
@@ -1007,12 +977,15 @@ TRV.getStripSlotAt = function(sx, sy) {
 
 		if (slot.active && (slot.cols > 1 || slot.rows > 1)) {
 			// Check each cell of expanded active glyph
+			// In base-pan glyph space: row r baseline is at y = r * rowH
+			var desc = TRV.font ? Math.abs(TRV.font.metrics.descender) : 200;
 			for (var r = 0; r < slot.rows; r++) {
 				for (var c = 0; c < slot.cols; c++) {
 					var cx = slot.x + c * (slot.advW + TRV.STRIP_GAP);
-					var cy = r * layout.rowH;
+					var cellYlo = r * layout.rowH - desc;
+					var cellYhi = (r + 1) * layout.rowH;
 					if (gp.x >= cx && gp.x <= cx + slot.advW &&
-						gp.y >= -cy && gp.y <= -cy + layout.rowH) {
+						gp.y >= cellYlo && gp.y <= cellYhi) {
 						return { slotIdx: si, slot: slot, row: r, col: c };
 					}
 				}
