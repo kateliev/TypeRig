@@ -86,6 +86,33 @@ TRV.drawMetrics = function(layer, w, h) {
 	ctx.stroke();
 	ctx.setLineDash([]);
 
+	// Font-level metrics (ascender, descender, x-height, cap-height)
+	if (TRV.font) {
+		var fm = TRV.font.metrics;
+		var fmLines = [
+			{ y: fm.ascender,  label: 'Asc',  color: 'rgba(80,200,120,0.25)' },
+			{ y: fm.descender, label: 'Desc', color: 'rgba(80,200,120,0.25)' },
+			{ y: fm.xHeight,   label: 'xH',   color: 'rgba(200,160,80,0.2)' },
+			{ y: fm.capHeight, label: 'CapH',  color: 'rgba(200,160,80,0.2)' }
+		];
+		ctx.lineWidth = 1;
+		for (var i = 0; i < fmLines.length; i++) {
+			var fy = TRV.glyphToScreen(0, fmLines[i].y).y;
+			ctx.strokeStyle = fmLines[i].color;
+			ctx.setLineDash([3, 5]);
+			ctx.beginPath();
+			ctx.moveTo(0, fy);
+			ctx.lineTo(w, fy);
+			ctx.stroke();
+
+			ctx.font = '9px "JetBrains Mono", monospace';
+			ctx.fillStyle = fmLines[i].color.replace(/[\d.]+\)$/, '0.5)');
+			ctx.textAlign = 'right';
+			ctx.fillText(fmLines[i].label + ' ' + fmLines[i].y, w - 6, fy - 3);
+		}
+		ctx.setLineDash([]);
+	}
+
 	// LSB line (x=0)
 	const lsbX = TRV.glyphToScreen(0, 0).x;
 	ctx.strokeStyle = t.sidebearing;

@@ -21,8 +21,16 @@ TRV.actions = {
 		TRV.dom.fileInput.click();
 	},
 
+	openFont: function() {
+		TRV.openFont();
+	},
+
 	saveFile: function() {
-		TRV.saveXml();
+		if (TRV.font) {
+			TRV.saveDirtyGlyphs();
+		} else {
+			TRV.saveXml();
+		}
 	},
 
 	// -- Undo / Redo ---
@@ -71,6 +79,15 @@ TRV.actions = {
 
 	walkPrev: function() {
 		TRV.walkContour(-1);
+	},
+
+	// -- Glyph navigation (Ctrl+PageDown / Ctrl+PageUp) ---
+	nextGlyph: function() {
+		TRV.stepGlyph(1);
+	},
+
+	prevGlyph: function() {
+		TRV.stepGlyph(-1);
 	},
 
 	// -- Node movement (arrow keys) ---
@@ -164,6 +181,7 @@ TRV.keyMap = [
 
 	// File
 	{ key: 'o',         ctrl: true,  action: 'openFile',       desc: 'Open file' },
+	{ key: 'O',         ctrl: true,  action: 'openFont',      desc: 'Open .trfont folder' },
 	{ key: 's',         ctrl: true,  action: 'saveFile',       desc: 'Save file' },
 	{ key: 'e',         ctrl: true,  action: 'toggleXml',      desc: 'Toggle XML panel' },
 	{ key: 'a',         ctrl: true,  action: 'selectAll',      desc: 'Select all nodes' },
@@ -179,6 +197,8 @@ TRV.keyMap = [
 	// Contour walk
 	{ key: 'PageDown',               action: 'walkNext',       desc: 'Next node in contour' },
 	{ key: 'PageUp',                 action: 'walkPrev',       desc: 'Previous node in contour' },
+	{ key: 'PageDown',  ctrl: true,  action: 'nextGlyph',     desc: 'Next glyph' },
+	{ key: 'PageUp',    ctrl: true,  action: 'prevGlyph',     desc: 'Previous glyph' },
 
 	// Node movement (only when nodes selected)
 	{ key: 'ArrowUp',    hasSelection: true, action: 'moveUp',    desc: 'Move selected up' },
@@ -244,6 +264,7 @@ TRV.dispatchKey = function(e) {
 // Buttons with action call TRV.actions[action].
 TRV.toolbarMap = [
 	{ id: 'btn-load',    action: 'openFile',  desc: 'Load .trglyph file' },
+	{ id: 'btn-open-font', action: 'openFont', desc: 'Open .trfont folder' },
 	{ id: 'btn-save',    action: 'saveFile',  desc: 'Save .trglyph file' },
 	{ id: 'btn-fit',     action: 'fitToView', desc: 'Fit glyph to view' },
 

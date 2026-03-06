@@ -19,6 +19,11 @@
 			Load
 		</button>
 
+		<button class="tb-btn" id="btn-open-font" title="Open .trfont folder (Ctrl+Shift+O)">
+			<span class="tri">file</span>
+			Font
+		</button>
+
 		<button class="tb-btn" id="btn-save" title="Save file (Ctrl+S)">
 			<span class="tri">file_save</span>
 			Save
@@ -112,12 +117,20 @@
 
 	<!-- Main -->
 	<div id="main">
+		<!-- Glyph list panel (visible when .trfont open) -->
+		<div id="glyph-panel">
+			<div id="glyph-panel-header">
+				<input type="text" id="glyph-search" placeholder="Filter glyphs..." spellcheck="false" autocomplete="off">
+				<span id="glyph-count"></span>
+			</div>
+			<div id="glyph-list"></div>
+		</div>
 		<div id="canvas-wrap">
 			<canvas id="glyph-canvas"></canvas>
 			<div id="empty-state">
 				<span class="tri">file</span>
-				<span>Load a TypeRig glyph file (.trglyph)</span>
-				<span class="hint">Drop file here or use Load button</span>
+				<span>Load a glyph file or open a .trfont folder</span>
+				<span class="hint">Drop .trglyph file, use Load, or Font button</span>
 			</div>
 		</div>
 		<div id="split-handle"></div>
@@ -220,6 +233,7 @@
 <script src="js/python-panel.js"></script>
 <script src="js/interaction.js"></script>
 <script src="js/stem.js"></script>
+<script src="js/font.js"></script>
 <script src="js/bindings.js"></script>
 <script src="js/events.js"></script>
 <script src="js/sample.js"></script>

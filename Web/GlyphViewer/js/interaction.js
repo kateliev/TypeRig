@@ -4,11 +4,19 @@
 'use strict';
 
 // -- Undo / Redo (snapshot-based) -----------------------------------
+// Per-glyph stacks when a font is open; global stacks for loose files.
 TRV.undoStack = [];
 TRV.redoStack = [];
 TRV.UNDO_MAX = 99;
 TRV._nudgeTimer = null;
 TRV._nudgeUndoPushed = false;
+
+// Resolve active undo/redo stacks (per-glyph or global)
+TRV._undoStacks = function() {
+	var entry = TRV._getUndoEntry ? TRV._getUndoEntry() : null;
+	if (entry) return { undo: entry.undoStack, redo: entry.redoStack };
+	return { undo: TRV.undoStack, redo: TRV.redoStack };
+};
 
 // Deep-clone the active layer's shape tree (shapes → contours → nodes)
 TRV._snapshotLayer = function() {
@@ -28,12 +36,18 @@ TRV._restoreSnapshot = function(snapshot) {
 TRV.pushUndo = function() {
 	var snapshot = TRV._snapshotLayer();
 	if (!snapshot) return;
-	TRV.undoStack.push(snapshot);
-	if (TRV.undoStack.length > TRV.UNDO_MAX) {
-		TRV.undoStack.shift();
+	var stacks = TRV._undoStacks();
+	stacks.undo.push(snapshot);
+	if (stacks.undo.length > TRV.UNDO_MAX) {
+		stacks.undo.shift();
 	}
 	// Any new action clears redo
-	TRV.redoStack.length = 0;
+	stacks.redo.length = 0;
+	// Mark glyph dirty
+	if (TRV.font && TRV.activeGlyph) {
+		TRV.dirtyGlyphs.add(TRV.activeGlyph);
+		TRV.updateGlyphPanelDirty();
+	}
 };
 
 // Push undo for nudge with timer coalescing.
@@ -50,12 +64,13 @@ TRV.pushUndoNudge = function() {
 };
 
 TRV.undo = function() {
-	if (TRV.undoStack.length === 0) return;
+	var stacks = TRV._undoStacks();
+	if (stacks.undo.length === 0) return;
 	// Save current state to redo
 	var current = TRV._snapshotLayer();
-	if (current) TRV.redoStack.push(current);
+	if (current) stacks.redo.push(current);
 	// Restore previous
-	var snapshot = TRV.undoStack.pop();
+	var snapshot = stacks.undo.pop();
 	TRV._restoreSnapshot(snapshot);
 	TRV.state.selectedNodeIds.clear();
 	TRV.draw();
@@ -64,12 +79,13 @@ TRV.undo = function() {
 };
 
 TRV.redo = function() {
-	if (TRV.redoStack.length === 0) return;
+	var stacks = TRV._undoStacks();
+	if (stacks.redo.length === 0) return;
 	// Save current state to undo
 	var current = TRV._snapshotLayer();
-	if (current) TRV.undoStack.push(current);
+	if (current) stacks.undo.push(current);
 	// Restore next
-	var snapshot = TRV.redoStack.pop();
+	var snapshot = stacks.redo.pop();
 	TRV._restoreSnapshot(snapshot);
 	TRV.state.selectedNodeIds.clear();
 	TRV.draw();
@@ -79,8 +95,9 @@ TRV.redo = function() {
 
 // Clear undo history (e.g. when loading new glyph)
 TRV.clearUndo = function() {
-	TRV.undoStack.length = 0;
-	TRV.redoStack.length = 0;
+	var stacks = TRV._undoStacks();
+	stacks.undo.length = 0;
+	stacks.redo.length = 0;
 };
 
 // -- Preview button sync --------------------------------------------
@@ -2296,6 +2313,14 @@ TRV.loadXmlString = function(xmlString, filename) {
 		TRV.state.glyphData = TRV.parseGlyphXML(xmlString);
 		TRV.state.rawXml = xmlString;
 
+		// Clear font mode if loading a loose file
+		TRV.font = null;
+		TRV.glyphCache.clear();
+		TRV.dirtyGlyphs.clear();
+		TRV.activeGlyph = null;
+		var glyphPanel = document.getElementById('glyph-panel');
+		if (glyphPanel) glyphPanel.classList.remove('visible');
+
 		TRV.dom.layerSelect.innerHTML = '';
 		for (const layer of TRV.state.glyphData.layers) {
 			const opt = document.createElement('option');
@@ -2323,6 +2348,7 @@ TRV.loadXmlString = function(xmlString, filename) {
 		TRV.fitToView();
 		TRV.buildXmlPanel();
 		TRV.clearUndo();
+		document.title = 'TR:GLYPH — ' + (g.name || 'untitled');
 	} catch (e) {
 		alert('Error loading XML: ' + e.message);
 	}

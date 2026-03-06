@@ -162,6 +162,95 @@ body {
 }
 
 /* -- Canvas ------------------------------------------------- */
+
+/* -- Glyph List Panel (left sidebar) ------------------------ */
+#glyph-panel {
+	display: none;
+	flex-direction: column;
+	width: 180px;
+	min-width: 120px;
+	max-width: 300px;
+	background: var(--bg-secondary);
+	border-right: 1px solid var(--border);
+	overflow: hidden;
+}
+
+#glyph-panel.visible { display: flex; }
+
+#glyph-panel-header {
+	padding: 6px;
+	border-bottom: 1px solid var(--border-subtle);
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+#glyph-search {
+	flex: 1;
+	background: var(--bg-tertiary);
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	color: var(--text-primary);
+	font: 11px 'JetBrains Mono', monospace;
+	padding: 4px 6px;
+	outline: none;
+}
+
+#glyph-search:focus { border-color: var(--accent-dim); }
+
+#glyph-count {
+	font: 10px 'JetBrains Mono', monospace;
+	color: var(--text-dim);
+	white-space: nowrap;
+}
+
+#glyph-list {
+	flex: 1;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.glyph-entry {
+	display: flex;
+	align-items: center;
+	padding: 3px 8px;
+	cursor: pointer;
+	font: 11px 'JetBrains Mono', monospace;
+	color: var(--text-secondary);
+	border-left: 2px solid transparent;
+	gap: 4px;
+}
+
+.glyph-entry:hover { background: var(--bg-hover); }
+
+.glyph-entry.active {
+	background: var(--accent-bg);
+	border-left-color: var(--accent);
+	color: var(--text-primary);
+}
+
+.glyph-entry-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.glyph-entry-uni {
+	font-size: 9px;
+	color: var(--text-dim);
+	flex-shrink: 0;
+}
+
+.glyph-entry-dirty {
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	flex-shrink: 0;
+	opacity: 0;
+}
+
+.glyph-entry.dirty .glyph-entry-dirty {
+	background: var(--accent);
+	opacity: 1;
+}
+
+/* -- Canvas (original) -------------------------------------- */
 #canvas-wrap {
 	position: relative;
 	overflow: hidden;

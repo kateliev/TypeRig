@@ -723,6 +723,35 @@ dom.layerSelect.addEventListener('change', function() {
 });
 
 // ===================================================================
+// ===================================================================
+// Glyph panel — click and search
+// ===================================================================
+(function() {
+	var glyphList = document.getElementById('glyph-list');
+	var glyphSearch = document.getElementById('glyph-search');
+	var glyphCount = document.getElementById('glyph-count');
+
+	if (glyphList) {
+		glyphList.addEventListener('click', function(e) {
+			var entry = e.target.closest('.glyph-entry');
+			if (!entry) return;
+			var name = entry.dataset.name;
+			if (name) TRV.switchGlyph(name);
+		});
+	}
+
+	if (glyphSearch) {
+		glyphSearch.addEventListener('input', function() {
+			TRV.filterGlyphPanel(this.value);
+			// Update visible count
+			if (glyphCount && glyphList) {
+				var visible = glyphList.querySelectorAll('.glyph-entry:not([style*="display: none"])');
+				glyphCount.textContent = visible.length + '/' + (TRV.font ? TRV.font.manifest.length : 0);
+			}
+		});
+	}
+})();
+
 // File input / Drag and drop
 // ===================================================================
 dom.fileInput.addEventListener('change', function(e) {
