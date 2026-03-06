@@ -787,6 +787,57 @@ dom.layerSelect.addEventListener('change', function() {
 
 // ===================================================================
 // ===================================================================
+// Toolbar dropdown menus
+// ===================================================================
+(function() {
+	var dropdowns = document.querySelectorAll('.tb-dropdown');
+
+	// Toggle dropdown on trigger click
+	for (var i = 0; i < dropdowns.length; i++) {
+		(function(dd) {
+			var trigger = dd.querySelector('.tb-dropdown-trigger');
+			if (!trigger) return;
+
+			trigger.addEventListener('click', function(e) {
+				e.stopPropagation();
+				var wasOpen = dd.classList.contains('open');
+
+				// Close all dropdowns first
+				for (var j = 0; j < dropdowns.length; j++) {
+					dropdowns[j].classList.remove('open');
+				}
+
+				if (!wasOpen) dd.classList.add('open');
+			});
+		})(dropdowns[i]);
+	}
+
+	// Close on click outside
+	window.addEventListener('mousedown', function(e) {
+		if (!e.target.closest('.tb-dropdown')) {
+			for (var i = 0; i < dropdowns.length; i++) {
+				dropdowns[i].classList.remove('open');
+			}
+		}
+	});
+
+	// Close after clicking a menu item (except toggles in View menu)
+	var menuItems = document.querySelectorAll('.tb-menu-item');
+	for (var i = 0; i < menuItems.length; i++) {
+		menuItems[i].addEventListener('click', function(e) {
+			// View menu toggle items stay open
+			var parent = this.closest('.tb-dropdown');
+			var trigger = parent ? parent.querySelector('.tb-dropdown-trigger') : null;
+			if (trigger && trigger.id === 'menu-view') return; // keep open
+
+			for (var j = 0; j < dropdowns.length; j++) {
+				dropdowns[j].classList.remove('open');
+			}
+		});
+	}
+})();
+
+// ===================================================================
 // Glyph panel — click and search
 // ===================================================================
 (function() {

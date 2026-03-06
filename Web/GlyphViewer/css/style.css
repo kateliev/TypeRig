@@ -145,6 +145,73 @@ body {
 
 .tb-spacer { flex: 1; }
 
+/* -- Toolbar dropdowns -------------------------------------- */
+.tb-dropdown {
+	position: relative;
+}
+
+.tb-dropdown-menu {
+	display: none;
+	position: absolute;
+	top: 100%;
+	left: 0;
+	margin-top: 4px;
+	min-width: 180px;
+	background: var(--bg-secondary);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 4px 0;
+	box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+	z-index: 100;
+}
+
+.tb-dropdown.open .tb-dropdown-menu { display: block; }
+
+.tb-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 5px 12px 5px 10px;
+	font-family: 'DM Sans', sans-serif;
+	font-size: 12px;
+	color: var(--text-secondary);
+	cursor: pointer;
+	white-space: nowrap;
+	border-left: 2px solid transparent;
+}
+
+.tb-menu-item:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+.tb-menu-item.active {
+	border-left-color: var(--accent);
+	color: var(--accent);
+}
+
+.tb-menu-item .tri { font-size: 14px; width: 16px; text-align: center; }
+
+.tb-shortcut {
+	margin-left: auto;
+	font-size: 10px;
+	color: var(--text-dim);
+	font-family: 'JetBrains Mono', monospace;
+}
+
+.tb-menu-sep {
+	height: 1px;
+	background: var(--border-subtle);
+	margin: 4px 8px;
+}
+
+/* -- Layer icon in toolbar ---------------------------------- */
+.tb-layer-icon {
+	color: var(--text-dim);
+	font-size: 14px;
+	margin-right: -2px;
+}
+
 #glyph-info {
 	font-family: 'JetBrains Mono', monospace;
 	font-size: 11px;

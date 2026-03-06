@@ -14,75 +14,51 @@
 		<span class="logo">TR:GLYPH</span>
 		<div class="separator"></div>
 
-		<button class="tb-btn" id="btn-load" title="Load file (Ctrl+O)">
-			<span class="tri">file_open</span>
-			Load
-		</button>
-
-		<button class="tb-btn" id="btn-open-font" title="Open .trfont folder (Ctrl+Shift+O)">
-			<span class="tri">file</span>
-			Font
-		</button>
-
-		<button class="tb-btn" id="btn-save" title="Save file (Ctrl+S)">
-			<span class="tri">file_save</span>
-			Save
-		</button>
-
-		<div class="separator"></div>
-
-		<div class="tb-group">
-			<button class="tb-btn active" id="btn-filled" title="Filled preview">
-				<span class="tri">shape</span>
-				Filled
+		<!-- File dropdown -->
+		<div class="tb-dropdown">
+			<button class="tb-btn tb-dropdown-trigger" id="menu-file">
+				<span class="tri">file</span>
+				File
 			</button>
-			<button class="tb-btn" id="btn-outline" title="Outline preview">
-				<span class="tri">contour</span>
-				Outline
+			<div class="tb-dropdown-menu">
+				<div class="tb-menu-item" id="btn-load"><span class="tri">file_open</span>Load File<span class="tb-shortcut">Ctrl+O</span></div>
+				<div class="tb-menu-item" id="btn-open-font"><span class="tri">file</span>Open Font<span class="tb-shortcut">Ctrl+Shift+O</span></div>
+				<div class="tb-menu-sep"></div>
+				<div class="tb-menu-item" id="btn-save"><span class="tri">file_save</span>Save<span class="tb-shortcut">Ctrl+S</span></div>
+			</div>
+		</div>
+
+		<!-- View dropdown -->
+		<div class="tb-dropdown">
+			<button class="tb-btn tb-dropdown-trigger" id="menu-view">
+				<span class="tri">visible</span>
+				View
 			</button>
+			<div class="tb-dropdown-menu">
+				<div class="tb-menu-item active" id="btn-filled"><span class="tri">shape</span>Filled</div>
+				<div class="tb-menu-item" id="btn-outline"><span class="tri">contour</span>Outline</div>
+				<div class="tb-menu-sep"></div>
+				<div class="tb-menu-item active" id="btn-nodes"><span class="tri">node</span>Nodes</div>
+				<div class="tb-menu-item active" id="btn-metrics"><span class="tri">metrics_advance_alt</span>Metrics</div>
+				<div class="tb-menu-item active" id="btn-anchors"><span class="tri">icon_anchor</span>Anchors</div>
+				<div class="tb-menu-item active" id="btn-mask"><span class="tri">layer_mask</span>Mask</div>
+				<div class="tb-menu-sep"></div>
+				<div class="tb-menu-item" id="btn-stem"><span class="tri">stem_vertical</span>Stem</div>
+			</div>
 		</div>
 
 		<div class="separator"></div>
 
-		<button class="tb-btn active" id="btn-nodes" title="Toggle nodes/handles">
-			<span class="tri">node</span>
-			Nodes
-		</button>
-
-		<button class="tb-btn active" id="btn-metrics" title="Toggle metrics">
-			<span class="tri">metrics_advance_alt</span>
-			Metrics
-		</button>
-
-		<button class="tb-btn active" id="btn-anchors" title="Toggle anchors">
-			<span class="tri">icon_anchor</span>
-			Anchors
-		</button>
-
-		<button class="tb-btn active" id="btn-mask" title="Toggle mask layers">
-			<span class="tri">layer_mask</span>
-			Mask
-		</button>
-
-		<button class="tb-btn" id="btn-preview" title="Toggle BW preview (` + Space)">
-			<span class="tri">visible</span>
-			Preview
-		</button>
-
-		<button class="tb-btn" id="btn-stem" title="Toggle stem measurement">
-			<span class="tri">stem_vertical</span>
-			Stem
-		</button>
-
-		<div class="separator"></div>
-
+		<!-- Layer selector -->
+		<span class="tri tb-layer-icon">layer_active</span>
 		<select id="layer-select" title="Layer"><option value="">-- no glyph --</option></select>
 
 		<div class="separator"></div>
 
-		<button class="tb-btn" id="btn-panel" title="Toggle side panel (Ctrl+E)">
-			<span class="tri">code_tag</span>
-			Panel
+		<!-- Viewport controls -->
+		<button class="tb-btn" id="btn-preview" title="Toggle BW preview (` + Space)">
+			<span class="tri">visible</span>
+			Preview
 		</button>
 
 		<div class="tb-group">
@@ -105,14 +81,22 @@
 			Join
 		</button>
 
-		<button class="tb-btn" id="btn-glyph-view" title="Multi-glyph view — different glyph per cell">
-			<span class="tri">glyph</span>
+		<button class="tb-btn" id="btn-glyph-view" title="Multi-glyph strip view">
+			<span class="tri">visible_sbs</span>
 			Glyphs
 		</button>
 
 		<button class="tb-btn" id="btn-fit" title="Fit to view (Home)">
 			<span class="tri">arrows_expand</span>
 			Fit
+		</button>
+
+		<div class="separator"></div>
+
+		<!-- Panel toggle -->
+		<button class="tb-btn" id="btn-panel" title="Toggle side panel (Ctrl+E)">
+			<span class="tri">code_tag</span>
+			Panel
 		</button>
 
 		<div class="tb-spacer"></div>
