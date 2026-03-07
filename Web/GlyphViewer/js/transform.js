@@ -77,7 +77,7 @@ TRV.activateTransform = function() {
 	TRV.tf.cumSkewY = 0;
 
 	TRV._tfUpdateStatus();
-	TRV.draw();
+	// (draw handled by caller)
 };
 
 // -- Deactivate transform frame -------------------------------------
@@ -87,7 +87,7 @@ TRV.deactivateTransform = function() {
 	TRV.tf.startPositions = null;
 	TRV.tf.dragType = null;
 	TRV._tfClearStatus();
-	TRV.draw();
+	// (draw handled by caller)
 };
 
 // -- Cycle mode on double-click -------------------------------------
@@ -96,7 +96,7 @@ TRV.cycleTransformMode = function() {
 	var idx = modes.indexOf(TRV.tf.mode);
 	TRV.tf.mode = modes[(idx + 1) % modes.length];
 	TRV._tfUpdateStatus();
-	TRV.draw();
+	// (draw handled by caller)
 };
 
 // -- Hit test: which handle or zone was clicked ---------------------
@@ -430,7 +430,7 @@ TRV.tfMouseMove = function(sx, sy, e) {
 	if (TRV.tf.dragType === 'origin') {
 		TRV.tf.origin.x = Math.round(gp.x);
 		TRV.tf.origin.y = Math.round(gp.y);
-		TRV.draw();
+		// (draw handled by caller)
 		return true;
 	}
 
@@ -442,13 +442,13 @@ TRV.tfMouseMove = function(sx, sy, e) {
 		} else if (TRV.tf.mode === 'rotate') {
 			TRV._tfApplyRotate(gp.x, gp.y);
 		}
-		TRV.draw();
+		// (draw handled by caller)
 		return true;
 	}
 
 	if (TRV.tf.dragType === 'rotate') {
 		TRV._tfApplyRotate(gp.x, gp.y);
-		TRV.draw();
+		// (draw handled by caller)
 		return true;
 	}
 
@@ -465,7 +465,7 @@ TRV.tfMouseUp = function() {
 	// Recalculate bbox from new positions
 	TRV._tfRecalcBbox();
 	TRV._tfUpdateStatus();
-	TRV.draw();
+	// (draw handled by caller)
 	return true;
 };
 

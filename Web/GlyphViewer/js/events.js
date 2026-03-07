@@ -103,7 +103,10 @@ dom.canvasWrap.addEventListener('mousedown', function(e) {
 		withActiveOffset(function() {
 			tfHandled = TRV.tfMouseDown(sx, sy, e);
 		});
-		if (tfHandled) return;
+		if (tfHandled) {
+			TRV.draw();
+			return;
+		}
 	}
 
 	// -- Check node hit (with pan offset in joined mode)
@@ -294,7 +297,10 @@ window.addEventListener('mousemove', function(e) {
 		withActiveOffset(function() {
 			tfHandled = TRV.tfMouseMove(sx, sy, e);
 		});
-		if (tfHandled) return;
+		if (tfHandled) {
+			TRV.draw(); // draw AFTER offset is restored
+			return;
+		}
 	}
 
 	// -- Rect selection
@@ -498,6 +504,7 @@ window.addEventListener('mouseup', function(e) {
 	// -- Transform frame drag end
 	if (TRV.tf.active && TRV.tf.dragType) {
 		TRV.tfMouseUp();
+		TRV.draw();
 		return;
 	}
 
@@ -576,7 +583,10 @@ dom.canvasWrap.addEventListener('dblclick', function(e) {
 		withActiveOffset(function() {
 			tfHandled = TRV.tfDblClick(sx, sy);
 		});
-		if (tfHandled) return;
+		if (tfHandled) {
+			TRV.draw();
+			return;
+		}
 	}
 
 	// Double-click on a node: select whole contour (existing behavior)
@@ -1328,6 +1338,7 @@ if (ctxMenu) {
 			}
 		} else if (action === 'transformSelection') {
 			TRV.activateTransform();
+			TRV.draw();
 		}
 
 		hideContextMenu();
@@ -1344,6 +1355,7 @@ window.addEventListener('mousedown', function(e) {
 document.addEventListener('keydown', function(e) {
 	if (e.key === 'Escape' && TRV.tf.active) {
 		TRV.deactivateTransform();
+		TRV.draw();
 		e.stopPropagation();
 		return;
 	}
