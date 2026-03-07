@@ -731,10 +731,10 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 		if (slot.active) {
 			// -- Active glyph: raised background highlight --
 			if (!preview) {
-				var xL = TRV.glyphToScreen(slot.x - TRV.STRIP_GAP * 0.3, 0).x;
-				var xR = TRV.glyphToScreen(slot.x + slot.w + TRV.STRIP_GAP * 0.3, 0).x;
-				var gTop = TRV.glyphToScreen(0, upm * 1.1).y;
-				var gBot = TRV.glyphToScreen(0, -upm * 0.3).y;
+				var xL = TRV.glyphToScreen(slot.x, 0).x;
+				var xR = TRV.glyphToScreen(slot.x + slot.w, 0).x;
+				var gTop = TRV.glyphToScreen(0, upm * 2).y;
+				var gBot = TRV.glyphToScreen(0, -upm).y;
 				var activeGrad = ctx.createLinearGradient(0, gTop, 0, gBot);
 				activeGrad.addColorStop(0, 'rgba(91,157,239,0)');
 				activeGrad.addColorStop(0.15, 'rgba(91,157,239,0.04)');
