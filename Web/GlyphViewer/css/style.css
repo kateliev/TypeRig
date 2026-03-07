@@ -695,6 +695,53 @@ body {
 #statusbar .status-label { color: var(--text-dim); }
 #statusbar .status-value { color: var(--text-secondary); }
 
+.status-sep {
+	width: 1px;
+	height: 14px;
+	background: var(--border);
+	margin: 0 6px;
+}
+
+/* -- Transform numeric controls --------------------------------- */
+#tf-controls {
+	gap: 6px;
+	align-items: center;
+}
+
+.tf-mode-label {
+	font: 600 10px 'JetBrains Mono', monospace;
+	color: var(--accent);
+	padding: 2px 6px;
+	background: var(--accent-bg);
+	border-radius: 3px;
+	margin-right: 2px;
+}
+
+.tf-field {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	font: 10px 'JetBrains Mono', monospace;
+	color: var(--text-dim);
+}
+
+.tf-field input {
+	width: 48px;
+	background: var(--bg-tertiary);
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	color: var(--text-primary);
+	font: 10px 'JetBrains Mono', monospace;
+	padding: 2px 4px;
+	outline: none;
+	-moz-appearance: textfield;
+}
+
+.tf-field input::-webkit-inner-spin-button,
+.tf-field input::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+.tf-field input:focus { border-color: var(--accent-dim); }
+
 /* -- Drop overlay ------------------------------------------- */
 #drop-overlay {
 	display: none;

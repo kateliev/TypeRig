@@ -97,6 +97,15 @@ dom.canvasWrap.addEventListener('mousedown', function(e) {
 	// Interaction coords (cell-relative in split, absolute in joined/single)
 	const { sx, sy } = interactionCoords(absSx, absSy);
 
+	// -- Transform frame: check before node hit test
+	if (TRV.tf.active) {
+		var tfHandled = false;
+		withActiveOffset(function() {
+			tfHandled = TRV.tfMouseDown(sx, sy, e);
+		});
+		if (tfHandled) return;
+	}
+
 	// -- Check node hit (with pan offset in joined mode)
 	if (state.showNodes) {
 		let hit = null;
@@ -278,6 +287,15 @@ window.addEventListener('mousemove', function(e) {
 	let gp;
 	withActiveOffset(function() { gp = TRV.screenToGlyph(sx, sy); });
 	dom.statusCursor.textContent = Math.round(gp.x) + ', ' + Math.round(gp.y);
+
+	// -- Transform frame drag
+	if (TRV.tf.active && TRV.tf.dragType) {
+		var tfHandled = false;
+		withActiveOffset(function() {
+			tfHandled = TRV.tfMouseMove(sx, sy, e);
+		});
+		if (tfHandled) return;
+	}
 
 	// -- Rect selection
 	if (state.isSelecting && state.selectMode === 'rect') {
@@ -477,6 +495,12 @@ window.addEventListener('mousemove', function(e) {
 });
 
 window.addEventListener('mouseup', function(e) {
+	// -- Transform frame drag end
+	if (TRV.tf.active && TRV.tf.dragType) {
+		TRV.tfMouseUp();
+		return;
+	}
+
 	// -- Finalize rect selection
 	if (state.isSelecting && state.selectMode === 'rect') {
 		let ids;
@@ -545,6 +569,15 @@ dom.canvasWrap.addEventListener('dblclick', function(e) {
 	const absSx = e.clientX - rect.left;
 	const absSy = e.clientY - rect.top;
 	const { sx, sy } = interactionCoords(absSx, absSy);
+
+	// Transform frame: double-click cycles mode
+	if (TRV.tf.active) {
+		var tfHandled = false;
+		withActiveOffset(function() {
+			tfHandled = TRV.tfDblClick(sx, sy);
+		});
+		if (tfHandled) return;
+	}
 
 	// Double-click on a node: select whole contour (existing behavior)
 	var nodeHit = null;
@@ -1103,6 +1136,7 @@ TRV.wirePythonPanel();
 // Wire simple toolbar buttons from bindings.js
 // ===================================================================
 TRV.wireToolbar();
+TRV.wireTransformInputs();
 
 // ===================================================================
 // Context menu (right-click)
@@ -1136,6 +1170,7 @@ dom.canvasWrap.addEventListener('contextmenu', function(e) {
 	var toQuadItem = ctxMenu.querySelector('[data-action="convertToQuadratic"]');
 	var selectContourItem = ctxMenu.querySelector('[data-action="selectContour"]');
 	var joinItem = ctxMenu.querySelector('[data-action="joinContour"]');
+	var transformItem = ctxMenu.querySelector('[data-action="transformSelection"]');
 
 	// Hit test: node first, then segment
 	var nodeHit = null;
@@ -1170,6 +1205,7 @@ dom.canvasWrap.addEventListener('contextmenu', function(e) {
 		if (toCurveItem) toCurveItem.style.display = 'none';
 		if (toQuadItem) toQuadItem.style.display = 'none';
 		if (selectContourItem) selectContourItem.style.display = '';
+		if (transformItem) transformItem.style.display = (state.selectedNodeIds.size >= 2) ? '' : 'none';
 		// Show/hide separators
 		var seps = ctxMenu.querySelectorAll('.ctx-separator');
 		if (seps[0]) seps[0].style.display = 'none';
@@ -1204,6 +1240,7 @@ dom.canvasWrap.addEventListener('contextmenu', function(e) {
 		if (insertItem) insertItem.style.display = '';
 		if (selectContourItem) selectContourItem.style.display = '';
 		if (joinItem) joinItem.style.display = 'none';
+		if (transformItem) transformItem.style.display = (state.selectedNodeIds.size >= 2) ? '' : 'none';
 		pendingContourIdx = segHit.ci;
 
 		// Conversion items based on segment type
@@ -1289,6 +1326,8 @@ if (ctxMenu) {
 				pendingSegmentHit = null;
 				pendingContourIdx = -1;
 			}
+		} else if (action === 'transformSelection') {
+			TRV.activateTransform();
 		}
 
 		hideContextMenu();
@@ -1303,6 +1342,11 @@ window.addEventListener('mousedown', function(e) {
 });
 
 document.addEventListener('keydown', function(e) {
+	if (e.key === 'Escape' && TRV.tf.active) {
+		TRV.deactivateTransform();
+		e.stopPropagation();
+		return;
+	}
 	if (e.key === 'Escape' && ctxMenu && ctxMenu.classList.contains('visible')) {
 		e.stopPropagation();
 		hideContextMenu();

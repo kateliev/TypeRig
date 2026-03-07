@@ -56,6 +56,9 @@ TRV.draw = function() {
 	if (preview) TRV.drawPreviewNodes(layer);
 	if (!preview) TRV.drawLayerLabel(layer);
 
+	// Transform frame overlay (single-view — pan is already correct)
+	if (!preview && TRV.tf.active) TRV.drawTransformFrame();
+
 	// Draw selection overlay (rect or lasso)
 	if (!preview && state.isSelecting) TRV.drawSelectionOverlay();
 };

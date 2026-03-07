@@ -70,9 +70,8 @@ TRV.setActiveCell = function(row, col) {
 	state.selectedNodeIds.clear();
 
 	if (state.glyphViewMode && TRV.font) {
-		// In strip mode, cell click is handled by mousedown → getStripSlotAt
-		// This just updates the layer cell within the active glyph's expansion
-		TRV.syncActiveCellToLayer();
+		// Strip mode: cell click switches editing target but does NOT
+		// change state.activeLayer — non-active glyphs keep their layer
 	} else {
 		TRV.syncActiveCellToLayer();
 	}
@@ -283,6 +282,9 @@ TRV.drawJoinedView = function(canvasW, canvasH) {
 				if (!preview && isActive && state.isSelecting) {
 					TRV.drawSelectionOverlay();
 				}
+				if (!preview && isActive && TRV.tf.active) {
+					TRV.drawTransformFrame();
+				}
 
 				// Layer name badge
 				if (!preview) TRV.drawLayerLabel(layer);
@@ -473,6 +475,9 @@ TRV.drawSplitView = function(canvasW, canvasH) {
 
 			if (!preview && isActive && state.isSelecting) {
 				TRV.drawSelectionOverlay();
+			}
+			if (!preview && isActive && TRV.tf.active) {
+				TRV.drawTransformFrame();
 			}
 
 			if (!isActive) state.selectedNodeIds = savedSelection;
@@ -770,6 +775,7 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 					if (!preview && state.showNodes) TRV.drawNodes(layer);
 					if (preview) TRV.drawPreviewNodes(layer);
 					if (!preview && state.isSelecting) TRV.drawSelectionOverlay();
+					if (!preview && TRV.tf.active) TRV.drawTransformFrame();
 				}
 			} else {
 				// -- Expanded grid: build gridLayers, draw per cell --
@@ -811,6 +817,9 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 
 						if (!preview && isActiveCell && state.isSelecting) {
 							TRV.drawSelectionOverlay();
+						}
+						if (!preview && isActiveCell && TRV.tf.active) {
+							TRV.drawTransformFrame();
 						}
 
 						if (!isActiveCell) state.selectedNodeIds = savedSelection;
