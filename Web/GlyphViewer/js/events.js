@@ -103,7 +103,10 @@ dom.canvasWrap.addEventListener('mousedown', function(e) {
 		withActiveOffset(function() {
 			tfHandled = TRV.tfMouseDown(sx, sy, e);
 		});
-		if (tfHandled) return;
+		if (tfHandled) {
+			TRV.draw();
+			return;
+		}
 	}
 
 	// -- Check node hit (with pan offset in joined mode)
@@ -294,7 +297,10 @@ window.addEventListener('mousemove', function(e) {
 		withActiveOffset(function() {
 			tfHandled = TRV.tfMouseMove(sx, sy, e);
 		});
-		if (tfHandled) return;
+		if (tfHandled) {
+			TRV.draw(); // draw AFTER offset is restored
+			return;
+		}
 	}
 
 	// -- Rect selection
@@ -498,6 +504,7 @@ window.addEventListener('mouseup', function(e) {
 	// -- Transform frame drag end
 	if (TRV.tf.active && TRV.tf.dragType) {
 		TRV.tfMouseUp();
+		TRV.draw();
 		return;
 	}
 
@@ -576,7 +583,10 @@ dom.canvasWrap.addEventListener('dblclick', function(e) {
 		withActiveOffset(function() {
 			tfHandled = TRV.tfDblClick(sx, sy);
 		});
-		if (tfHandled) return;
+		if (tfHandled) {
+			TRV.draw();
+			return;
+		}
 	}
 
 	// Double-click on a node: select whole contour (existing behavior)
@@ -678,7 +688,17 @@ document.getElementById('btn-outline').addEventListener('click', function() {
 });
 
 // XML panel (has panel show/hide logic)
-document.getElementById('btn-panel').addEventListener('click', function() {
+document.getElementById('btn-panel').addEventListener('click', function(e) {
+	// Shift+click or click when detached → toggle detach
+	if (e.shiftKey || TRV.panelBridge.isDetached) {
+		if (TRV.panelBridge.isDetached) {
+			TRV.attachPanel();
+		} else {
+			TRV.detachPanel();
+		}
+		return;
+	}
+
 	state.showXml = !state.showXml;
 	this.classList.toggle('active');
 
@@ -699,6 +719,11 @@ document.getElementById('btn-panel').addEventListener('click', function() {
 		TRV.draw();
 		if (state.showXml && state.activePanel === 'xml') TRV.buildXmlPanel();
 	});
+});
+
+// Popout button inside panel header
+document.getElementById('btn-popout').addEventListener('click', function() {
+	TRV.detachPanel();
 });
 
 // -- View mode buttons (1x1, 2x1, 2x2) -----------------------------
@@ -1328,6 +1353,7 @@ if (ctxMenu) {
 			}
 		} else if (action === 'transformSelection') {
 			TRV.activateTransform();
+			TRV.draw();
 		}
 
 		hideContextMenu();
@@ -1344,6 +1370,7 @@ window.addEventListener('mousedown', function(e) {
 document.addEventListener('keydown', function(e) {
 	if (e.key === 'Escape' && TRV.tf.active) {
 		TRV.deactivateTransform();
+		TRV.draw();
 		e.stopPropagation();
 		return;
 	}

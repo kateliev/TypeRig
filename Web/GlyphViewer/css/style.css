@@ -428,6 +428,36 @@ body {
 	border-bottom-color: var(--accent);
 }
 
+/* Popout / detach button in panel header */
+.panel-popout {
+	margin-left: 4px;
+	padding: 3px 6px;
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: 3px;
+	color: var(--text-dim);
+	cursor: pointer;
+	font-size: 12px;
+}
+.panel-popout:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+	border-color: var(--border);
+}
+
+/* Detached indicator on toolbar Panel button */
+.tb-btn.detached {
+	border-color: var(--accent-dim);
+	border-style: dashed;
+	color: var(--accent);
+}
+.tb-btn.detached::after {
+	content: '↗';
+	font-size: 9px;
+	margin-left: 2px;
+	opacity: 0.6;
+}
+
 .panel-tab-info {
 	font-size: 10px;
 	color: var(--text-dim);
