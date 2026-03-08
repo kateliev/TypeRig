@@ -2398,10 +2398,6 @@ TRV.updateCanvasCursor = function() {
 };
 
 // -- Node movement by keyboard (moves all selected) -----------------
-TRV.ARROW_STEP = 1;
-TRV.ARROW_STEP_SHIFT = 10;
-TRV.ARROW_STEP_CTRL = 100;
-
 TRV.moveSelectedNodes = function(dx, dy) {
 	const sel = TRV.state.selectedNodeIds;
 	if (sel.size === 0) return;

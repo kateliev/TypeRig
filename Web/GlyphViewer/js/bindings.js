@@ -101,33 +101,33 @@ TRV.actions = {
 
 	// -- Node movement (arrow keys) ---
 	moveUp: function(ctx) {
-		var step = TRV.ARROW_STEP;
-		if (ctx.e.shiftKey) step = TRV.ARROW_STEP_SHIFT;
-		if (ctx.e.ctrlKey || ctx.e.metaKey) step = TRV.ARROW_STEP_CTRL;
+		var step = TRV.theme.keyboard.arrowStep;
+		if (ctx.e.shiftKey) step = TRV.theme.keyboard.arrowStep_SHIFT;
+		if (ctx.e.ctrlKey || ctx.e.metaKey) step = TRV.theme.keyboard.arrowStep_CTRL;
 		TRV.pushUndoNudge();
 		TRV.moveSelectedNodes(0, step);
 	},
 
 	moveDown: function(ctx) {
-		var step = TRV.ARROW_STEP;
-		if (ctx.e.shiftKey) step = TRV.ARROW_STEP_SHIFT;
-		if (ctx.e.ctrlKey || ctx.e.metaKey) step = TRV.ARROW_STEP_CTRL;
+		var step = TRV.theme.keyboard.arrowStep;
+		if (ctx.e.shiftKey) step = TRV.theme.keyboard.arrowStep_SHIFT;
+		if (ctx.e.ctrlKey || ctx.e.metaKey) step = TRV.theme.keyboard.arrowStep_CTRL;
 		TRV.pushUndoNudge();
 		TRV.moveSelectedNodes(0, -step);
 	},
 
 	moveRight: function(ctx) {
-		var step = TRV.ARROW_STEP;
-		if (ctx.e.shiftKey) step = TRV.ARROW_STEP_SHIFT;
-		if (ctx.e.ctrlKey || ctx.e.metaKey) step = TRV.ARROW_STEP_CTRL;
+		var step = TRV.theme.keyboard.arrowStep;
+		if (ctx.e.shiftKey) step = TRV.theme.keyboard.arrowStep_SHIFT;
+		if (ctx.e.ctrlKey || ctx.e.metaKey) step = TRV.theme.keyboard.arrowStep_CTRL;
 		TRV.pushUndoNudge();
 		TRV.moveSelectedNodes(step, 0);
 	},
 
 	moveLeft: function(ctx) {
-		var step = TRV.ARROW_STEP;
-		if (ctx.e.shiftKey) step = TRV.ARROW_STEP_SHIFT;
-		if (ctx.e.ctrlKey || ctx.e.metaKey) step = TRV.ARROW_STEP_CTRL;
+		var step = TRV.theme.keyboard.arrowStep;
+		if (ctx.e.shiftKey) step = TRV.theme.keyboard.arrowStep_SHIFT;
+		if (ctx.e.ctrlKey || ctx.e.metaKey) step = TRV.theme.keyboard.arrowStep_CTRL;
 		TRV.pushUndoNudge();
 		TRV.moveSelectedNodes(-step, 0);
 	},

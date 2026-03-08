@@ -20,7 +20,7 @@ TRV.draw = function() {
 
 	// Clear — preview mode: white bg, black fill, no decorations
 	var preview = state.previewMode;
-	ctx.fillStyle = preview ? '#ffffff' : TRV.getBgColor();
+	ctx.fillStyle = preview ? TRV.theme.bgPreview : TRV.getBgColor();
 	ctx.fillRect(0, 0, w, h);
 
 	if (!state.glyphData) return;

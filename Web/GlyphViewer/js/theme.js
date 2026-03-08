@@ -110,6 +110,13 @@ TRV.theme = {
 		label:     		'#06b6d4',               // distance label
 		labelFont: 		'11px "JetBrains Mono", monospace',
 	},
+
+	// -- Keyaboard movement ----------------------------------------
+	keyboard: {
+				arrowStep : 		1,
+				arrowStep_SHIFT : 	10,
+				arrowStep_CTRL : 	100,
+	},
 };
 
 // -- Helpers --------------------------------------------------------
