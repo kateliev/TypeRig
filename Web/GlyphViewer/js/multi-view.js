@@ -121,6 +121,74 @@ TRV.rotateRow = function(row, direction) {
 	TRV.syncActiveCellToLayer();
 };
 
+// ===================================================================
+// Layer Render
+// ===================================================================
+TRV.withIsolatedSelection = function(isActive, fn) {
+	const state = TRV.state;
+	const saved = state.selectedNodeIds;
+
+	if (!isActive) state.selectedNodeIds = new Set();
+
+	fn();
+
+	state.selectedNodeIds = saved;
+};
+
+TRV.renderLayer = function(layer, opts) {
+	const state = TRV.state;
+	const preview = state.previewMode;
+	const isActive = opts && opts.isActive;
+	const canvasW = opts && opts.canvasW;
+	const canvasH = opts && opts.canvasH;
+
+	// Mask layer
+	if (!preview && state.showMask) {
+		const mask = TRV.getMaskFor(layer.name);
+		if (mask) TRV.drawMaskContours(mask);
+	}
+
+	// Contours + measurements
+	TRV.drawContours(layer);
+	TRV.drawStemMeasurement(layer);
+
+	// Metrics
+	if (!preview && state.showMetrics) {
+		TRV.drawMetrics(layer, canvasW, canvasH);
+	}
+
+	// Preview nodes
+	if (preview) {
+		TRV.drawPreviewNodes(layer);
+	}
+
+	// Nodes
+	if (!preview && state.showNodes) {
+		TRV.drawStackedWarnings(layer);
+		TRV.drawSelectedSegments(layer);
+		TRV.drawNodes(layer);
+	}
+
+	// Anchors
+	if (!preview && state.showAnchors) {
+		TRV.drawAnchors(layer);
+	}
+
+	// Selection overlay
+	if (!preview && isActive && state.isSelecting) {
+		TRV.drawSelectionOverlay();
+	}
+
+	// Transform frame
+	if (!preview && isActive && TRV.tf.active) {
+		TRV.drawTransformFrame();
+	}
+
+	// Layer label
+	if (!preview) {
+		TRV.drawLayerLabel(layer);
+	}
+};
 
 // ===================================================================
 // JOINED MODE — shared canvas, layers in glyph space
@@ -233,74 +301,39 @@ TRV.getJoinedCellAt = function(sx, sy) {
 
 // -- Joined view drawing --------------------------------------------
 TRV.drawJoinedView = function(canvasW, canvasH) {
-	const ctx = TRV.dom.ctx;
 	const state = TRV.state;
-	const cols = state.gridCols;
-	const rows = state.gridRows;
 	const layers = state.glyphData ? state.glyphData.layers : [];
-	if (layers.length === 0) return;
+	if (!layers.length) return;
 
-	const layout = TRV.getJoinedLayout();
-	const savedSelection = state.selectedNodeIds;
+	const rows = state.gridRows;
+	const cols = state.gridCols;
 
 	for (let r = 0; r < rows; r++) {
 		for (let c = 0; c < cols; c++) {
+
 			const layerIdx = state.gridLayers[r][c] % layers.length;
 			const layer = layers[layerIdx];
-			const isActive = (r === state.activeCell.row && c === state.activeCell.col);
+			const isActive = (
+				r === state.activeCell.row &&
+				c === state.activeCell.col
+			);
 
-			if (!isActive) {
-				state.selectedNodeIds = new Set();
-				state.selectedNodeIds = savedSelection;
-			}
+			TRV.withJoinedOffset(r, c, () => {
 
-			// Draw with pan shifted to place this layer
-			TRV.withJoinedOffset(r, c, function() {
-				var preview = state.previewMode;
+				TRV.withIsolatedSelection(isActive, () => {
+					TRV.renderLayer(layer, {
+						isActive,
+						canvasW,
+						canvasH
+					});
+				});
 
-				// Mask layer underneath
-				if (!preview && state.showMask) {
-					const mask = TRV.getMaskFor(layer.name);
-					if (mask) TRV.drawMaskContours(mask);
-				}
-
-				// Outlines and stem measurment
-				TRV.drawContours(layer);
-				TRV.drawStemMeasurement(layer);
-
-				// View Options: Nodes and types
-				if (preview) TRV.drawPreviewNodes(layer);
-				
-				// View Options: Metrics
-				if (!preview && state.showMetrics) TRV.drawMetrics(layer, canvasW, canvasH);
-				
-				// View Options: Nodes
-				if (!preview && state.showNodes) {
-					TRV.drawStackedWarnings(layer);
-					TRV.drawSelectedSegments(layer);
-					TRV.drawNodes(layer);
-				}
-				
-				// View Options: Anchors
-				if (!preview && state.showAnchors) TRV.drawAnchors(layer);
-				
-				// Selection and transform
-				if (!preview && isActive && state.isSelecting) TRV.drawSelectionOverlay();
-				if (!preview && isActive && TRV.tf.active) TRV.drawTransformFrame();
-				
-				// Layer name badge
-				if (!preview) TRV.drawLayerLabel(layer);
 			});
-
 		}
 	}
 
-	// Soft dividers between layers
-	//if (!state.previewMode) TRV.drawJoinedDividers(canvasW, canvasH, layout);
-
-	// Active cell indicator — subtle highlight along the baseline area
-	// Small brackets at the baseline?
-	if (!state.previewMode) TRV.drawJoinedActiveIndicator(layout);
+	if (!state.previewMode)
+		TRV.drawJoinedActiveIndicator(TRV.getJoinedLayout());
 };
 
 // -- Soft dividers for joined mode ----------------------------------
@@ -450,58 +483,17 @@ TRV.drawSplitView = function(canvasW, canvasH) {
 				state.selectedNodeIds = savedSelection;
 			}
 
-			// Draw outlines
-			TRV.drawContours(layer);
-
-			// View options: Mask layer underneath
-			if (!preview && state.showMask) {
-				const mask = TRV.getMaskFor(layer.name);
-				if (mask) TRV.drawMaskContours(mask);
-			}
-
-			// View options: Metrics
-			if (!preview && state.showMetrics) TRV.drawMetrics(layer, cell.w, cell.h);
-
-			// On stem measurement 
-			if (state.showStem && state.previewMouse) {
-				var savedStemMouse = state.previewMouse;
-				state.previewMouse = { x: savedStemMouse.x - cell.x, y: savedStemMouse.y - cell.y };
-				TRV.drawStemMeasurement(layer);
-				state.previewMouse = savedStemMouse;
-			}
-
-			// View options: Nodes
-			if (!preview && state.showNodes) {
-				TRV.drawStackedWarnings(layer);
-				TRV.drawSelectedSegments(layer);
-				TRV.drawNodes(layer);
-			}
-			
-			// View options: Anchors
-			if (!preview && state.showAnchors) TRV.drawAnchors(layer);
-			
-			// Preview mode: show ghost nodes when mouse approaches
-			if (preview && state.previewMouse) {
-				var savedMouse = state.previewMouse;
-				state.previewMouse = { x: savedMouse.x - cell.x, y: savedMouse.y - cell.y };
-				TRV.drawPreviewNodes(layer);
-				state.previewMouse = savedMouse;
-			}
-
-			// View options: Selection
-			if (!preview && isActive && state.isSelecting) {
-				TRV.drawSelectionOverlay();
-			}
-
-			// View options: Transformation frame
-			if (!preview && isActive && TRV.tf.active) {
-				TRV.drawTransformFrame();
-			}
-
-			// Layer name label
-			if (!preview) TRV.drawLayerLabel(layer);
+			TRV.renderLayer(layer, {
+				isActive,
+				canvasW: cell.w,
+				canvasH: cell.h
+			});
 
 			ctx.restore();
+			
+			if (!isActive){
+				state.selectedNodeIds = savedSelection;
+			}
 		}
 	}
 
@@ -776,21 +768,13 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 					state.activeLayer = layer.name;
 					state.pan.x = savedPanX + slot.x * state.zoom;
 					state.pan.y = savedPanY;
+					
+					TRV.renderLayer(layer, {
+						isActive: true,
+						canvasW: canvasW,
+						canvasH: canvasH
+					});
 
-					if (!preview && state.showMask) {
-						var mask = TRV.getMaskFor(layer.name);
-						if (mask) TRV.drawMaskContours(mask);
-					}
-					if (!preview && state.showMetrics) TRV.drawMetrics(layer, canvasW, canvasH);
-					TRV.drawContours(layer);
-					TRV.drawStemMeasurement(layer);
-					if (!preview && state.showNodes) TRV.drawStackedWarnings(layer);
-					if (!preview && state.showNodes) TRV.drawSelectedSegments(layer);
-					if (!preview && state.showAnchors) TRV.drawAnchors(layer);
-					if (!preview && state.showNodes) TRV.drawNodes(layer);
-					if (preview) TRV.drawPreviewNodes(layer);
-					if (!preview && state.isSelecting) TRV.drawSelectionOverlay();
-					if (!preview && TRV.tf.active) TRV.drawTransformFrame();
 				}
 			} else {
 				// -- Expanded grid: build gridLayers, draw per cell --
@@ -803,6 +787,7 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 							state.gridLayers[r][c] !== undefined) {
 							layerIdx = state.gridLayers[r][c];
 						}
+
 						if (layerIdx >= glyphData.layers.length) layerIdx = 0;
 						var layer = glyphData.layers[layerIdx];
 						var isActiveCell = (r === state.activeCell.row && c === state.activeCell.col);
@@ -817,29 +802,11 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 
 						if (!isActiveCell) state.selectedNodeIds = new Set();
 
-						if (!preview && state.showMask) {
-							var mask = TRV.getMaskFor(layer.name);
-							if (mask) TRV.drawMaskContours(mask);
-						}
-						if (!preview && state.showMetrics) TRV.drawMetrics(layer, canvasW, canvasH);
-						TRV.drawContours(layer);
-						TRV.drawStemMeasurement(layer);
-						if (!preview && state.showNodes) TRV.drawStackedWarnings(layer);
-						if (!preview && state.showNodes) TRV.drawSelectedSegments(layer);
-						if (!preview && state.showAnchors) TRV.drawAnchors(layer);
-						if (!preview && state.showNodes) TRV.drawNodes(layer);
-						if (preview) TRV.drawPreviewNodes(layer);
-
-						if (!preview && isActiveCell && state.isSelecting) {
-							TRV.drawSelectionOverlay();
-						}
-						if (!preview && isActiveCell && TRV.tf.active) {
-							TRV.drawTransformFrame();
-						}
-
-						if (!isActiveCell) state.selectedNodeIds = savedSelection;
-
-						if (!preview) TRV.drawLayerLabel(layer);
+						TRV.renderLayer(layer, {
+							isActive,
+							canvasW: cell.w,
+							canvasH: cell.h
+						});
 					}
 				}
 			}
@@ -931,8 +898,6 @@ TRV._ensureStripGrid = function() {
 		}
 	}
 };
-
-
 
 // -- Fit glyph strip to view ----------------------------------------
 TRV.fitGlyphStrip = function() {
