@@ -7,15 +7,6 @@
 
 TRV.stem = {};
 
-// -- Theme ----------------------------------------------------------
-TRV.stem.theme = {
-	line:      'rgba(6,182,212,0.7)',   // cyan measurement line
-	linePreview: 'rgba(6,182,212,0.5)', // lighter for BW preview
-	mark:      '#06b6d4',               // endpoint marks
-	label:     '#06b6d4',               // distance label
-	labelFont: '11px "JetBrains Mono", monospace',
-};
-
 // -- Cubic derivative at t ------------------------------------------
 TRV.stem.cubicDeriv = function(pts, t) {
 	var u = 1 - t;
@@ -302,7 +293,7 @@ TRV.drawStemMeasurement = function(layer) {
 	if (!m) return;
 
 	var ctx = TRV.dom.ctx;
-	var th = TRV.stem.theme;
+	var th = TRV.theme.onStemMeasurment;
 	var preview = TRV.state.previewMode;
 
 	// Convert endpoints to screen coords

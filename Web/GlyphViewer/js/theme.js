@@ -10,6 +10,7 @@ TRV.theme = {
 	// -- Canvas background ------------------------------------------
 	bgFilled:       '#18181b',
 	bgOutline:      '#1a1a1e',
+	bgPreview: 		'#ffffff',
 	// Same as RGB tuple for gradient fading (dividers)
 	bgFadeRgb:      '24,24,27',
 
@@ -83,9 +84,29 @@ TRV.theme = {
 	grid: {
 		dividerHairline:   'rgba(255,255,255,0.06)',
 		dividerHairlineJ:  'rgba(255,255,255,0.05)', // joined mode
-		dividerFadeAlpha:  0.6,                       // split mode fade
-		dividerFadeAlphaJ: 0.55,                      // joined mode fade
+		dividerFadeAlpha:  	0.6,                       // split mode fade
+		dividerFadeAlphaJ: 	0.55,                      // joined mode fade
 		activeBorder:      'rgba(91,157,239,0.35)',
+		fade: 				24,
+	},
+
+	// -- Cell highlight in glyphs mode ------------------------------
+	activeCellHightlight: {
+		backgroundGradient: 
+							[[0, 'rgba(91,157,239,0)'],
+							[0.15, 'rgba(91,157,239,0.04)'],
+							[0.85, 'rgba(91,157,239,0.04)'],
+							[1, 'rgba(91,157,239,0)']],
+		strokeStyle: 		'rgba(91,157,239,0.12)',
+	},
+
+	// -- On stem measurment ----------------------------------------
+	onStemMeasurment: {
+		line:      		'rgba(6,182,212,0.7)',   // cyan measurement line
+		linePreview: 	'rgba(6,182,212,0.5)', // lighter for BW preview
+		mark:      		'#06b6d4',               // endpoint marks
+		label:     		'#06b6d4',               // distance label
+		labelFont: 		'11px "JetBrains Mono", monospace',
 	},
 };
 

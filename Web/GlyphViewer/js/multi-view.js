@@ -68,14 +68,7 @@ TRV.setActiveCell = function(row, col) {
 	const state = TRV.state;
 	state.activeCell = { row, col };
 	state.selectedNodeIds.clear();
-
-	if (state.glyphViewMode && TRV.font) {
-		// Strip mode: cell click switches editing target but does NOT
-		// change state.activeLayer — non-active glyphs keep their layer
-	} else {
-		TRV.syncActiveCellToLayer();
-	}
-
+	TRV.syncActiveCellToLayer();
 	TRV.draw();
 	TRV.updateStatusSelected();
 };
@@ -258,6 +251,7 @@ TRV.drawJoinedView = function(canvasW, canvasH) {
 
 			if (!isActive) {
 				state.selectedNodeIds = new Set();
+				state.selectedNodeIds = savedSelection;
 			}
 
 			// Draw with pan shifted to place this layer
@@ -270,36 +264,42 @@ TRV.drawJoinedView = function(canvasW, canvasH) {
 					if (mask) TRV.drawMaskContours(mask);
 				}
 
-				if (!preview && state.showMetrics) TRV.drawMetrics(layer, canvasW, canvasH);
+				// Outlines and stem measurment
 				TRV.drawContours(layer);
 				TRV.drawStemMeasurement(layer);
-				if (!preview && state.showNodes) TRV.drawStackedWarnings(layer);
-				if (!preview && state.showNodes) TRV.drawSelectedSegments(layer);
-				if (!preview && state.showAnchors) TRV.drawAnchors(layer);
-				if (!preview && state.showNodes) TRV.drawNodes(layer);
+
+				// View Options: Nodes and types
 				if (preview) TRV.drawPreviewNodes(layer);
-
-				if (!preview && isActive && state.isSelecting) {
-					TRV.drawSelectionOverlay();
+				
+				// View Options: Metrics
+				if (!preview && state.showMetrics) TRV.drawMetrics(layer, canvasW, canvasH);
+				
+				// View Options: Nodes
+				if (!preview && state.showNodes) {
+					TRV.drawStackedWarnings(layer);
+					TRV.drawSelectedSegments(layer);
+					TRV.drawNodes(layer);
 				}
-				if (!preview && isActive && TRV.tf.active) {
-					TRV.drawTransformFrame();
-				}
-
+				
+				// View Options: Anchors
+				if (!preview && state.showAnchors) TRV.drawAnchors(layer);
+				
+				// Selection and transform
+				if (!preview && isActive && state.isSelecting) TRV.drawSelectionOverlay();
+				if (!preview && isActive && TRV.tf.active) TRV.drawTransformFrame();
+				
 				// Layer name badge
 				if (!preview) TRV.drawLayerLabel(layer);
 			});
 
-			if (!isActive) {
-				state.selectedNodeIds = savedSelection;
-			}
 		}
 	}
 
 	// Soft dividers between layers
-	if (!state.previewMode) TRV.drawJoinedDividers(canvasW, canvasH, layout);
+	//if (!state.previewMode) TRV.drawJoinedDividers(canvasW, canvasH, layout);
 
 	// Active cell indicator — subtle highlight along the baseline area
+	// Small brackets at the baseline?
 	if (!state.previewMode) TRV.drawJoinedActiveIndicator(layout);
 };
 
@@ -416,7 +416,6 @@ TRV.drawJoinedActiveIndicator = function(layout) {
 // ===================================================================
 // SPLIT MODE — clipped cells (existing)
 // ===================================================================
-
 TRV.drawSplitView = function(canvasW, canvasH) {
 	const ctx = TRV.dom.ctx;
 	const state = TRV.state;
@@ -443,29 +442,45 @@ TRV.drawSplitView = function(canvasW, canvasH) {
 			ctx.translate(cell.x, cell.y);
 
 			var preview = state.previewMode;
-			ctx.fillStyle = preview ? '#ffffff' : TRV.getBgColor();
+			ctx.fillStyle = preview ? TRV.theme.bgPreview : TRV.getBgColor();
 			ctx.fillRect(0, 0, cell.w, cell.h);
 
-			if (!isActive) state.selectedNodeIds = new Set();
+			if (!isActive) {
+				state.selectedNodeIds = new Set();
+				state.selectedNodeIds = savedSelection;
+			}
 
-			// Mask layer underneath
+			// Draw outlines
+			TRV.drawContours(layer);
+
+			// View options: Mask layer underneath
 			if (!preview && state.showMask) {
 				const mask = TRV.getMaskFor(layer.name);
 				if (mask) TRV.drawMaskContours(mask);
 			}
 
+			// View options: Metrics
 			if (!preview && state.showMetrics) TRV.drawMetrics(layer, cell.w, cell.h);
-			TRV.drawContours(layer);
+
+			// On stem measurement 
 			if (state.showStem && state.previewMouse) {
 				var savedStemMouse = state.previewMouse;
 				state.previewMouse = { x: savedStemMouse.x - cell.x, y: savedStemMouse.y - cell.y };
 				TRV.drawStemMeasurement(layer);
 				state.previewMouse = savedStemMouse;
 			}
-			if (!preview && state.showNodes) TRV.drawStackedWarnings(layer);
-			if (!preview && state.showNodes) TRV.drawSelectedSegments(layer);
+
+			// View options: Nodes
+			if (!preview && state.showNodes) {
+				TRV.drawStackedWarnings(layer);
+				TRV.drawSelectedSegments(layer);
+				TRV.drawNodes(layer);
+			}
+			
+			// View options: Anchors
 			if (!preview && state.showAnchors) TRV.drawAnchors(layer);
-			if (!preview && state.showNodes) TRV.drawNodes(layer);
+			
+			// Preview mode: show ghost nodes when mouse approaches
 			if (preview && state.previewMouse) {
 				var savedMouse = state.previewMouse;
 				state.previewMouse = { x: savedMouse.x - cell.x, y: savedMouse.y - cell.y };
@@ -473,56 +488,57 @@ TRV.drawSplitView = function(canvasW, canvasH) {
 				state.previewMouse = savedMouse;
 			}
 
+			// View options: Selection
 			if (!preview && isActive && state.isSelecting) {
 				TRV.drawSelectionOverlay();
 			}
+
+			// View options: Transformation frame
 			if (!preview && isActive && TRV.tf.active) {
 				TRV.drawTransformFrame();
 			}
 
-			if (!isActive) state.selectedNodeIds = savedSelection;
-
-			// Layer name badge
+			// Layer name label
 			if (!preview) TRV.drawLayerLabel(layer);
 
 			ctx.restore();
 		}
 	}
 
-	// Soft fade dividers between cells
+	// Drop shadow dividers between cells in CAD style multiview
 	if (!state.previewMode) TRV.drawSplitDividers(canvasW, canvasH);
 
 	// Active cell border
 	TRV.drawActiveCellBorder();
 };
 
-// -- Split mode fade dividers ---------------------------------------
+// -- Drop shadow dividers between cells in CAD style multiview
 TRV.drawSplitDividers = function(w, h) {
 	const ctx = TRV.dom.ctx;
 	const state = TRV.state;
-	const tg = TRV.theme.grid;
+	const grid = TRV.theme.grid;
 	const rgb = TRV.theme.bgFadeRgb;
-	const a = tg.dividerFadeAlpha;
+	const fade =  TRV.theme.grid.fade;
+	const alpha = TRV.theme.grid.dividerFadeAlpha;
 	const cols = state.gridCols;
 	const rows = state.gridRows;
-	const fade = 24;
 
 	for (let c = 1; c < cols; c++) {
 		const x = Math.round(c * w / cols);
 
 		const gradL = ctx.createLinearGradient(x - fade, 0, x, 0);
 		gradL.addColorStop(0, 'rgba(' + rgb + ',0)');
-		gradL.addColorStop(1, 'rgba(' + rgb + ',' + a + ')');
+		gradL.addColorStop(1, 'rgba(' + rgb + ',' + alpha + ')');
 		ctx.fillStyle = gradL;
 		ctx.fillRect(x - fade, 0, fade, h);
 
 		const gradR = ctx.createLinearGradient(x, 0, x + fade, 0);
-		gradR.addColorStop(0, 'rgba(' + rgb + ',' + a + ')');
+		gradR.addColorStop(0, 'rgba(' + rgb + ',' + alpha + ')');
 		gradR.addColorStop(1, 'rgba(' + rgb + ',0)');
 		ctx.fillStyle = gradR;
 		ctx.fillRect(x, 0, fade, h);
 
-		ctx.strokeStyle = tg.dividerHairline;
+		ctx.strokeStyle = grid.dividerHairline;
 		ctx.lineWidth = 1;
 		ctx.beginPath();
 		ctx.moveTo(x + 0.5, 0);
@@ -535,17 +551,17 @@ TRV.drawSplitDividers = function(w, h) {
 
 		const gradT = ctx.createLinearGradient(0, y - fade, 0, y);
 		gradT.addColorStop(0, 'rgba(' + rgb + ',0)');
-		gradT.addColorStop(1, 'rgba(' + rgb + ',' + a + ')');
+		gradT.addColorStop(1, 'rgba(' + rgb + ',' + alpha + ')');
 		ctx.fillStyle = gradT;
 		ctx.fillRect(0, y - fade, w, fade);
 
 		const gradB = ctx.createLinearGradient(0, y, 0, y + fade);
-		gradB.addColorStop(0, 'rgba(' + rgb + ',' + a + ')');
+		gradB.addColorStop(0, 'rgba(' + rgb + ',' + alpha + ')');
 		gradB.addColorStop(1, 'rgba(' + rgb + ',0)');
 		ctx.fillStyle = gradB;
 		ctx.fillRect(0, y, w, fade);
 
-		ctx.strokeStyle = tg.dividerHairline;
+		ctx.strokeStyle = grid.dividerHairline;
 		ctx.lineWidth = 1;
 		ctx.beginPath();
 		ctx.moveTo(0, y + 0.5);
@@ -698,6 +714,7 @@ TRV.getGlyphStripLayout = function() {
 TRV.drawGlyphStrip = function(canvasW, canvasH) {
 	var ctx = TRV.dom.ctx;
 	var state = TRV.state;
+	var theme = TRV.theme.activeCellHightlight;
 	var preview = state.previewMode;
 	var layout = TRV.getGlyphStripLayout();
 	var upm = TRV.font ? TRV.font.metrics.upm : 1000;
@@ -736,13 +753,11 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 				var gTop = TRV.glyphToScreen(0, upm * 2).y;
 				var gBot = TRV.glyphToScreen(0, -upm).y;
 				var activeGrad = ctx.createLinearGradient(0, gTop, 0, gBot);
-				activeGrad.addColorStop(0, 'rgba(91,157,239,0)');
-				activeGrad.addColorStop(0.15, 'rgba(91,157,239,0.04)');
-				activeGrad.addColorStop(0.85, 'rgba(91,157,239,0.04)');
-				activeGrad.addColorStop(1, 'rgba(91,157,239,0)');
+				theme.backgroundGradient.forEach(([p, c]) => activeGrad.addColorStop(p, c));
+		
 				ctx.fillStyle = activeGrad;
 				ctx.fillRect(xL, gTop, xR - xL, gBot - gTop);
-				ctx.strokeStyle = 'rgba(91,157,239,0.12)';
+				ctx.strokeStyle = theme.strokeStyle;
 				ctx.lineWidth = 1;
 				ctx.beginPath();
 				ctx.moveTo(xL, gTop); ctx.lineTo(xL, gBot);
