@@ -194,9 +194,6 @@ TRV.renderLayer = function(layer, opts) {
 // JOINED MODE — shared canvas, layers in glyph space
 // ===================================================================
 
-// Gap between layers in glyph units
-TRV.JOINED_GAP = 80;
-
 // -- Layout computation ---------------------------------------------
 // Returns glyph-space offsets for each cell and total bounding box
 TRV.getJoinedLayout = function() {
@@ -204,7 +201,7 @@ TRV.getJoinedLayout = function() {
 	const layers = state.glyphData ? state.glyphData.layers : [];
 	const cols = state.gridCols;
 	const rows = state.gridRows;
-	const gap = TRV.JOINED_GAP;
+	const gap = TRV.theme.grid.joinedGap;
 
 	// Compute actual bounding box across non-mask layers
 	let maxW = 0, maxH = 0;
@@ -480,7 +477,7 @@ TRV.drawSplitView = function(canvasW, canvasH) {
 
 			if (!isActive) {
 				state.selectedNodeIds = new Set();
-				state.selectedNodeIds = savedSelection;
+				
 			}
 
 			TRV.renderLayer(layer, {
@@ -645,7 +642,7 @@ TRV.removeGlyphFromStrip = function(name) {
 TRV.getGlyphStripLayout = function() {
 	var state = TRV.state;
 	var ws = TRV.workspace;
-	var gap = TRV.STRIP_GAP;
+	var gap = TRV.theme.grid.stripGap;
 	var upm = TRV.font ? TRV.font.metrics.upm : 1000;
 	var rowH = upm + gap;
 
@@ -794,7 +791,7 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 
 						state.activeLayer = layer.name;
 
-						var cellOffX = slot.x + c * (slot.advW + TRV.STRIP_GAP);
+						var cellOffX = slot.x + c * (slot.advW + TRV.theme.grid.stripGap);
 						var cellOffY = r * layout.rowH;
 
 						state.pan.x = savedPanX + cellOffX * state.zoom;
@@ -803,10 +800,12 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 						if (!isActiveCell) state.selectedNodeIds = new Set();
 
 						TRV.renderLayer(layer, {
-							isActive,
-							canvasW: cell.w,
-							canvasH: cell.h
+							isActive: true,
+							canvasW: canvasW,
+							canvasH: canvasH
 						});
+
+						state.selectedNodeIds = savedSelection;
 					}
 				}
 			}
@@ -945,7 +944,7 @@ TRV.withStripOffset = function(row, col, fn) {
 	}
 	if (!activeSlot) { fn(); return; }
 
-	var cellOffX = activeSlot.x + col * (activeSlot.advW + TRV.STRIP_GAP);
+	var cellOffX = activeSlot.x + col * (activeSlot.advW + TRV.theme.grid.stripGap);
 	var cellOffY = row * layout.rowH;
 
 	var savedPanX = state.pan.x;
@@ -977,7 +976,7 @@ TRV.getStripSlotAt = function(sx, sy) {
 			var desc = TRV.font ? Math.abs(TRV.font.metrics.descender) : 200;
 			for (var r = 0; r < slot.rows; r++) {
 				for (var c = 0; c < slot.cols; c++) {
-					var cx = slot.x + c * (slot.advW + TRV.STRIP_GAP);
+					var cx = slot.x + c * (slot.advW + TRV.theme.grid.stripGap);
 					var cellYlo = r * layout.rowH - desc;
 					var cellYhi = (r + 1) * layout.rowH;
 					if (gp.x >= cx && gp.x <= cx + slot.advW &&

@@ -83,11 +83,13 @@ TRV.theme = {
 	// -- Grid / multi-view ------------------------------------------
 	grid: {
 		dividerHairline:   'rgba(255,255,255,0.06)',
-		dividerHairlineJ:  'rgba(255,255,255,0.05)', // joined mode
-		dividerFadeAlpha:  	0.6,                       // split mode fade
-		dividerFadeAlphaJ: 	0.55,                      // joined mode fade
+		dividerHairlineJ:  'rgba(255,255,255,0.05)', 	// joined mode
+		dividerFadeAlpha:  	0.6,                       	// split mode fade
+		dividerFadeAlphaJ: 	0.55,                      	// joined mode fade
 		activeBorder:      'rgba(91,157,239,0.35)',
 		fade: 				24,
+		joinedGap: 			80,							// joined mode gap between cells
+		stripGap: 			40,  						// glyph strip gap between glyphs
 	},
 
 	// -- Cell highlight in glyphs mode ------------------------------

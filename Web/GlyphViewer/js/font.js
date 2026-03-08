@@ -17,7 +17,6 @@ TRV.workspace = {
 	glyphs: [],       // ordered glyph names in strip (user-controlled)
 	activeIdx: 0,     // index of active glyph in strip
 };
-TRV.STRIP_GAP = 40;  // glyph units between strip glyphs
 
 // -- Resolve default layer name for thumbnails & strip ---------------
 // Priority: font master default → 'Regular' → first non-mask layer
