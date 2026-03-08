@@ -688,7 +688,17 @@ document.getElementById('btn-outline').addEventListener('click', function() {
 });
 
 // XML panel (has panel show/hide logic)
-document.getElementById('btn-panel').addEventListener('click', function() {
+document.getElementById('btn-panel').addEventListener('click', function(e) {
+	// Shift+click or click when detached → toggle detach
+	if (e.shiftKey || TRV.panelBridge.isDetached) {
+		if (TRV.panelBridge.isDetached) {
+			TRV.attachPanel();
+		} else {
+			TRV.detachPanel();
+		}
+		return;
+	}
+
 	state.showXml = !state.showXml;
 	this.classList.toggle('active');
 
@@ -709,6 +719,11 @@ document.getElementById('btn-panel').addEventListener('click', function() {
 		TRV.draw();
 		if (state.showXml && state.activePanel === 'xml') TRV.buildXmlPanel();
 	});
+});
+
+// Popout button inside panel header
+document.getElementById('btn-popout').addEventListener('click', function() {
+	TRV.detachPanel();
 });
 
 // -- View mode buttons (1x1, 2x1, 2x2) -----------------------------
