@@ -892,42 +892,7 @@ TRV.withStripOffset = function(row, col, fn) {
 	state.pan.y = savedPanY;
 };
 
-// -- Hit test: which strip slot/cell was clicked --------------------
-TRV.getStripSlotAt = function(sx, sy) {
-	var layout = TRV.getGlyphStripLayout();
-	var state = TRV.state;
 
-	// Convert screen to glyph x
-	var gp = TRV.screenToGlyph(sx, sy);
-
-	for (var si = 0; si < layout.slots.length; si++) {
-		var slot = layout.slots[si];
-
-		if (slot.active && (slot.cols > 1 || slot.rows > 1)) {
-			// Check each cell of expanded active glyph
-			// In base-pan glyph space: row r baseline is at y = r * rowH
-			var desc = TRV.font ? Math.abs(TRV.font.metrics.descender) : 200;
-			for (var r = 0; r < slot.rows; r++) {
-				for (var c = 0; c < slot.cols; c++) {
-					var cx = slot.x + c * (slot.advW + TRV.theme.grid.stripGap);
-					var cellYlo = r * layout.rowH - desc;
-					var cellYhi = (r + 1) * layout.rowH;
-					if (gp.x >= cx && gp.x <= cx + slot.advW &&
-						gp.y >= cellYlo && gp.y <= cellYhi) {
-						return { slotIdx: si, slot: slot, row: r, col: c };
-					}
-				}
-			}
-		}
-
-		// Simple slot bounds check (baseline row)
-		if (gp.x >= slot.x && gp.x <= slot.x + slot.w) {
-			return { slotIdx: si, slot: slot, row: 0, col: 0 };
-		}
-	}
-
-	return null;
-};
 
 // -- Glyph info widget (drawn below baseline in strip) ---------------
 TRV._drawGlyphWidget = function(ctx, slot, layer, isActive) {

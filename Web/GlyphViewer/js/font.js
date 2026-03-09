@@ -302,6 +302,7 @@ TRV.switchGlyph = async function(name) {
 		TRV.dom.layerSelect.appendChild(opt);
 	}
 
+
 	if (entry.glyphData.layers.length > 0) {
 		TRV.state.activeLayer = entry.glyphData.layers[0].name;
 		TRV.dom.layerSelect.value = TRV.state.activeLayer;
