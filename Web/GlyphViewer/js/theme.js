@@ -7,6 +7,7 @@
 'use strict';
 
 TRV.theme = {
+	appTitle: 		'TR:EDIT', 
 	// -- Canvas background ------------------------------------------
 	bgFilled:       '#18181b',
 	bgOutline:      '#1a1a1e',

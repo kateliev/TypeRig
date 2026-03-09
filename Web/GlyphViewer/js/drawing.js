@@ -5,6 +5,67 @@
 // ===================================================================
 'use strict';
 
+// ===================================================================
+// Layer Render
+// ===================================================================
+TRV.renderLayer = function(layer, opts) {
+	const state = TRV.state;
+	const preview = state.previewMode;
+	const isActive = opts && opts.isActive;
+	const canvasW = opts && opts.canvasW;
+	const canvasH = opts && opts.canvasH;
+
+	// Mask layer
+	if (!preview && state.showMask) {
+		const mask = TRV.getMaskFor(layer.name);
+		if (mask) TRV.drawMaskContours(mask);
+	}
+
+	// Contours + measurements
+	TRV.drawContours(layer);
+	TRV.drawStemMeasurement(layer);
+
+	// Metrics
+	if (!preview && state.showMetrics) {
+		TRV.drawMetrics(layer, canvasW, canvasH);
+	}
+
+	// Preview nodes
+	if (preview) {
+		TRV.drawPreviewNodes(layer);
+	}
+
+	// Nodes
+	if (!preview && state.showNodes) {
+		TRV.drawStackedWarnings(layer);
+		TRV.drawSelectedSegments(layer);
+		TRV.drawNodes(layer);
+	}
+
+	// Anchors
+	if (!preview && state.showAnchors) {
+		TRV.drawAnchors(layer);
+	}
+
+	// Selection overlay
+	if (!preview && isActive && state.isSelecting) {
+		TRV.drawSelectionOverlay();
+	}
+
+	// Transform frame
+	if (!preview && isActive && TRV.tf.active) {
+		TRV.drawTransformFrame();
+	}
+
+	// Layer label
+	if (!preview) {
+		TRV.drawLayerLabel(layer);
+	}
+};
+
+// ===================================================================
+// Glyph Render
+// ===================================================================
 TRV.draw = function() {
 	const { canvas, ctx, canvasWrap } = TRV.dom;
 	const state = TRV.state;
@@ -40,27 +101,12 @@ TRV.draw = function() {
 	const layer = TRV.getActiveLayer();
 	if (!layer) return;
 
-	// Draw mask layer underneath (if visible)
-	if (!preview && state.showMask) {
-		const mask = TRV.getMaskFor(layer.name);
-		if (mask) TRV.drawMaskContours(mask);
-	}
+	TRV.renderLayer(layer, {
+					isActive: true,
+					canvasW: w,
+					canvasH: h
+				});
 
-	if (!preview && state.showMetrics) TRV.drawMetrics(layer, w, h);
-	TRV.drawContours(layer);
-	TRV.drawStemMeasurement(layer);
-	if (!preview && state.showNodes) TRV.drawStackedWarnings(layer);
-	if (!preview && state.showNodes) TRV.drawSelectedSegments(layer);
-	if (!preview && state.showAnchors) TRV.drawAnchors(layer);
-	if (!preview && state.showNodes) TRV.drawNodes(layer);
-	if (preview) TRV.drawPreviewNodes(layer);
-	if (!preview) TRV.drawLayerLabel(layer);
-
-	// Transform frame overlay (single-view — pan is already correct)
-	if (!preview && TRV.tf.active) TRV.drawTransformFrame();
-
-	// Draw selection overlay (rect or lasso)
-	if (!preview && state.isSelecting) TRV.drawSelectionOverlay();
 };
 
 // -- Metrics --------------------------------------------------------

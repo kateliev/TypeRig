@@ -3,6 +3,59 @@
 // ===================================================================
 'use strict';
 
+// -- Cycle through layers -------------------------------------------
+// Rotates the active cell's layer in gridLayers (multi-view/strip).
+// Falls back to global activeLayer rotation in single view.
+TRV.cycleLayer = function(direction) {
+	var state = TRV.state;
+	var glyphData = state.glyphData;
+	if (!glyphData) return;
+
+	// Build valid (non-mask) layer indices
+	var valid = [];
+	for (var i = 0; i < glyphData.layers.length; i++) {
+		if (!TRV.isMaskLayer(glyphData.layers[i].name)) valid.push(i);
+	}
+	if (valid.length <= 1) return;
+
+	// Per-cell rotation when gridLayers is active
+	if (state.gridLayers && state.gridLayers[state.activeCell.row] &&
+		state.gridLayers[state.activeCell.row][state.activeCell.col] !== undefined) {
+		var r = state.activeCell.row;
+		var c = state.activeCell.col;
+		var current = state.gridLayers[r][c];
+		var pos = valid.indexOf(current);
+		if (pos < 0) pos = 0;
+		pos = ((pos + direction) % valid.length + valid.length) % valid.length;
+		state.gridLayers[r][c] = valid[pos];
+
+		state.activeLayer = glyphData.layers[valid[pos]].name;
+		TRV.dom.layerSelect.value = state.activeLayer;
+	} else {
+		// Single view: rotate global activeLayer
+		var names = valid.map(function(i) { return glyphData.layers[i].name; });
+		var idx = names.indexOf(state.activeLayer);
+		if (idx < 0) idx = 0;
+		idx = ((idx + direction) % names.length + names.length) % names.length;
+		state.activeLayer = names[idx];
+		TRV.dom.layerSelect.value = state.activeLayer;
+	}
+
+	state.selectedNodeIds.clear();
+	TRV.draw();
+	TRV.updateStatusSelected();
+};
+
+// Helper: get layer object by name from glyphData
+TRV.getLayerByName = function(glyphData, name) {
+	if (!glyphData) return null;
+	for (var i = 0; i < glyphData.layers.length; i++) {
+		if (glyphData.layers[i].name === name) return glyphData.layers[i];
+	}
+	return null;
+};
+
+
 // -- Undo / Redo (snapshot-based) -----------------------------------
 // Per-glyph stacks when a font is open; global stacks for loose files.
 TRV.undoStack = [];
@@ -2361,7 +2414,7 @@ TRV.loadXmlString = function(xmlString, filename) {
 		TRV.fitToView();
 		TRV.buildXmlPanel();
 		TRV.clearUndo();
-		document.title = 'TR:GLYPH — ' + (g.name || 'untitled');
+		document.title = TRV.theme.appTitle + ' | ' + (g.name || 'untitled');
 	} catch (e) {
 		alert('Error loading XML: ' + e.message);
 	}

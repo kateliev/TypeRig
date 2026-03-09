@@ -1,6 +1,5 @@
-// ===================================================================
+
 // TypeRig Glyph Viewer — Multi-Layer Grid View
-// ===================================================================
 // Two rendering modes:
 //   Split  — independent clipped cells, each a mini viewport
 //   Joined — layers placed side by side on a shared baseline,
@@ -8,7 +7,6 @@
 //
 // Ribbon rotation: Ctrl+scroll columns, Alt+scroll rows.
 // Layers loop infinitely (A,B,C,A,B,C...).
-// ===================================================================
 'use strict';
 
 // -- Grid initialization --------------------------------------------
@@ -121,9 +119,6 @@ TRV.rotateRow = function(row, direction) {
 	TRV.syncActiveCellToLayer();
 };
 
-// ===================================================================
-// Layer Render
-// ===================================================================
 TRV.withIsolatedSelection = function(isActive, fn) {
 	const state = TRV.state;
 	const saved = state.selectedNodeIds;
@@ -135,65 +130,7 @@ TRV.withIsolatedSelection = function(isActive, fn) {
 	state.selectedNodeIds = saved;
 };
 
-TRV.renderLayer = function(layer, opts) {
-	const state = TRV.state;
-	const preview = state.previewMode;
-	const isActive = opts && opts.isActive;
-	const canvasW = opts && opts.canvasW;
-	const canvasH = opts && opts.canvasH;
-
-	// Mask layer
-	if (!preview && state.showMask) {
-		const mask = TRV.getMaskFor(layer.name);
-		if (mask) TRV.drawMaskContours(mask);
-	}
-
-	// Contours + measurements
-	TRV.drawContours(layer);
-	TRV.drawStemMeasurement(layer);
-
-	// Metrics
-	if (!preview && state.showMetrics) {
-		TRV.drawMetrics(layer, canvasW, canvasH);
-	}
-
-	// Preview nodes
-	if (preview) {
-		TRV.drawPreviewNodes(layer);
-	}
-
-	// Nodes
-	if (!preview && state.showNodes) {
-		TRV.drawStackedWarnings(layer);
-		TRV.drawSelectedSegments(layer);
-		TRV.drawNodes(layer);
-	}
-
-	// Anchors
-	if (!preview && state.showAnchors) {
-		TRV.drawAnchors(layer);
-	}
-
-	// Selection overlay
-	if (!preview && isActive && state.isSelecting) {
-		TRV.drawSelectionOverlay();
-	}
-
-	// Transform frame
-	if (!preview && isActive && TRV.tf.active) {
-		TRV.drawTransformFrame();
-	}
-
-	// Layer label
-	if (!preview) {
-		TRV.drawLayerLabel(layer);
-	}
-};
-
-// ===================================================================
-// JOINED MODE — shared canvas, layers in glyph space
-// ===================================================================
-
+// -- JOINED MODE — shared canvas, layers in glyph space -------------
 // -- Layout computation ---------------------------------------------
 // Returns glyph-space offsets for each cell and total bounding box
 TRV.getJoinedLayout = function() {
@@ -443,9 +380,7 @@ TRV.drawJoinedActiveIndicator = function(layout) {
 };
 
 
-// ===================================================================
-// SPLIT MODE — clipped cells (existing)
-// ===================================================================
+// -- SPLIT MODE — clipped cells (existing) -------------------------------------
 TRV.drawSplitView = function(canvasW, canvasH) {
 	const ctx = TRV.dom.ctx;
 	const state = TRV.state;
@@ -570,9 +505,7 @@ TRV.drawActiveCellBorder = function() {
 };
 
 
-// ===================================================================
-// GLYPH STRIP — glyphs on a shared baseline
-// ===================================================================
+// -- GLYPH STRIP — glyphs on a shared baseline ---------------------
 // Active glyph can expand into a layer grid (2x1, 2x2, etc.).
 // Non-active glyphs show one layer on the baseline.
 // Future: any glyph can be expanded independently.

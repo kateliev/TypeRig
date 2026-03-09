@@ -54,15 +54,6 @@ TRV.getDefaultLayerName = function(glyphData) {
 	return glyphData.layers[0].name;
 };
 
-// Helper: get layer object by name from glyphData
-TRV.getLayerByName = function(glyphData, name) {
-	if (!glyphData) return null;
-	for (var i = 0; i < glyphData.layers.length; i++) {
-		if (glyphData.layers[i].name === name) return glyphData.layers[i];
-	}
-	return null;
-};
-
 // -- Parse font.xml -------------------------------------------------
 TRV.parseFontXml = function(xmlString) {
 	var parser = new DOMParser();
@@ -672,30 +663,9 @@ TRV.filterGlyphPanel = function(query) {
 TRV.updateFontInfo = function() {
 	if (!TRV.font) return;
 	var info = TRV.font.info;
-	document.title = 'TR:GLYPH — ' + info.family + ' ' + info.style;
+	document.title = TRV.theme.appTitle + ' | ' + info.family + ' ' + info.style;
 };
 
-// -- Fit active glyph to its cell in glyph view mode ----------------
-TRV.fitGlyphToCell = function() {
-	if (!TRV.font || !TRV.state.multiView) return;
-
-	var cell = TRV.getCellRect(TRV.state.activeCell.row, TRV.state.activeCell.col);
-	var layer = TRV.getActiveLayer();
-	if (!layer) return;
-
-	var upm = TRV.font.metrics.upm;
-	var desc = Math.abs(TRV.font.metrics.descender);
-	var advW = layer.width || upm;
-	var totalH = upm + desc * 0.5;
-	var fitZoom = (cell.h * 0.8) / totalH;
-
-	TRV.state.zoom = fitZoom;
-	TRV.state.pan = {
-		x: (cell.w - advW * fitZoom) / 2,
-		y: cell.h * 0.75
-	};
-	TRV.updateZoomStatus();
-};
 
 // -- Unsaved changes warning ----------------------------------------
 window.addEventListener('beforeunload', function(e) {
@@ -704,49 +674,6 @@ window.addEventListener('beforeunload', function(e) {
 		e.returnValue = '';
 	}
 });
-
-// -- Cycle through layers -------------------------------------------
-// Rotates the active cell's layer in gridLayers (multi-view/strip).
-// Falls back to global activeLayer rotation in single view.
-TRV.cycleLayer = function(direction) {
-	var state = TRV.state;
-	var glyphData = state.glyphData;
-	if (!glyphData) return;
-
-	// Build valid (non-mask) layer indices
-	var valid = [];
-	for (var i = 0; i < glyphData.layers.length; i++) {
-		if (!TRV.isMaskLayer(glyphData.layers[i].name)) valid.push(i);
-	}
-	if (valid.length <= 1) return;
-
-	// Per-cell rotation when gridLayers is active
-	if (state.gridLayers && state.gridLayers[state.activeCell.row] &&
-		state.gridLayers[state.activeCell.row][state.activeCell.col] !== undefined) {
-		var r = state.activeCell.row;
-		var c = state.activeCell.col;
-		var current = state.gridLayers[r][c];
-		var pos = valid.indexOf(current);
-		if (pos < 0) pos = 0;
-		pos = ((pos + direction) % valid.length + valid.length) % valid.length;
-		state.gridLayers[r][c] = valid[pos];
-
-		state.activeLayer = glyphData.layers[valid[pos]].name;
-		TRV.dom.layerSelect.value = state.activeLayer;
-	} else {
-		// Single view: rotate global activeLayer
-		var names = valid.map(function(i) { return glyphData.layers[i].name; });
-		var idx = names.indexOf(state.activeLayer);
-		if (idx < 0) idx = 0;
-		idx = ((idx + direction) % names.length + names.length) % names.length;
-		state.activeLayer = names[idx];
-		TRV.dom.layerSelect.value = state.activeLayer;
-	}
-
-	state.selectedNodeIds.clear();
-	TRV.draw();
-	TRV.updateStatusSelected();
-};
 
 // -- Step to next/previous glyph in manifest ------------------------
 TRV.stepGlyph = function(direction) {

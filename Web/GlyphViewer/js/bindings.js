@@ -206,8 +206,8 @@ TRV.keyMap = [
 	// Contour walk
 	{ key: 'PageDown',               action: 'walkNext',       desc: 'Next node in contour' },
 	{ key: 'PageUp',                 action: 'walkPrev',       desc: 'Previous node in contour' },
-	{ key: 'PageDown',  ctrl: true,  action: 'nextGlyph',     desc: 'Next glyph' },
-	{ key: 'PageUp',    ctrl: true,  action: 'prevGlyph',     desc: 'Previous glyph' },
+	{ key: ']',  		ctrl: true,  action: 'nextGlyph',     desc: 'Next glyph' },
+	{ key: '[',   		ctrl: true,  action: 'prevGlyph',     desc: 'Previous glyph' },
 	{ code: 'Period',   alt: true,   action: 'nextLayer',     desc: 'Next layer' },
 	{ code: 'Comma',    alt: true,   action: 'prevLayer',     desc: 'Previous layer' },
 
