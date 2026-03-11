@@ -83,4 +83,11 @@ TRV.dom = {
 	statusZoom:     document.getElementById('status-zoom'),
 	statusCursor:   document.getElementById('status-cursor'),
 	statusSelected: document.getElementById('status-selected'),
+	glyphWidget:    document.getElementById('glyph-widget'),
+	glyphWidgets:   document.getElementById('glyph-widgets'),
+	gwName:         document.getElementById('gw-name'),
+	gwUnicode:      document.getElementById('gw-unicode'),
+	gwLsb:          document.getElementById('gw-lsb'),
+	gwAdvance:      document.getElementById('gw-advance'),
+	gwRsb:          document.getElementById('gw-rsb'),
 };

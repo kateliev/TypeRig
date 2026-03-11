@@ -1156,6 +1156,7 @@ dom.xmlContent.addEventListener('click', function() {
 // ===================================================================
 TRV.initPanelTabs();
 TRV.wirePythonPanel();
+TRV.initGlyphWidget();
 
 // ===================================================================
 // Wire simple toolbar buttons from bindings.js

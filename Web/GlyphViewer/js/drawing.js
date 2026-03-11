@@ -84,6 +84,9 @@ TRV.draw = function() {
 	ctx.fillStyle = preview ? TRV.theme.bgPreview : TRV.getBgColor();
 	ctx.fillRect(0, 0, w, h);
 
+	// Hide glyph widget by default (shown only in glyph strip mode)
+	TRV.hideGlyphWidget();
+
 	if (!state.glyphData) return;
 
 	// Multi-view: delegate to split or joined renderer

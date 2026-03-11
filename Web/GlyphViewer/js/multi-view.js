@@ -751,7 +751,10 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 				state.activeLayer = savedActiveLayer;
 				var baseLayer = TRV.getLayerByName(glyphData, savedActiveLayer);
 				if (!baseLayer) baseLayer = glyphData.layers[0];
-				if (baseLayer) TRV._drawGlyphWidget(ctx, slot, baseLayer, true);
+				if (baseLayer) {
+					// Show HTML widget instead of canvas widget
+					TRV.updateGlyphWidget();
+				}
 			}
 		} else {
 			// -- Non-active glyph: same layer as active glyph --
@@ -773,11 +776,6 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 
 			// Restore selection so active glyph sees it
 			state.selectedNodeIds = savedSelection;
-
-			// Non-active widget: name + close button only
-			if (!preview) {
-				TRV._drawGlyphWidget(ctx, slot, layer, false);
-			}
 		}
 	}
 
@@ -995,6 +993,307 @@ TRV._roundRect = function(ctx, x, y, w, h, r) {
 	ctx.lineTo(x, y + r);
 	ctx.quadraticCurveTo(x, y, x + r, y);
 	ctx.closePath();
+};
+
+// -- Glyph Widget HTML Overlay ---------------------------------------
+TRV._widgetSlot = null;
+
+TRV.showGlyphWidget = function(slot, layer) {
+	var widget = TRV.dom.glyphWidget;
+	if (!widget || !slot || !layer) return;
+
+	var state = TRV.state;
+	var bounds = TRV._getLayerBounds(layer);
+	var advW = layer.width || 0;
+
+	// Calculate LSB/RSB from bounds
+	var lsbVal = bounds ? Math.round(bounds.minX) : 0;
+	var rsbVal = bounds ? Math.round(advW - bounds.maxX) : 0;
+
+	// Get glyph unicode
+	var name = slot.name;
+	var unicode = '';
+	if (TRV.font && TRV.font.encoding) {
+		var code = TRV.font.encoding[name];
+		if (code) unicode = 'U+' + code.toString(16).toUpperCase().padStart(4, '0');
+	}
+
+	// Position widget below baseline
+	var lsbScreen = TRV.glyphToScreen(0, 0);
+	var rsbScreen = TRV.glyphToScreen(advW, 0);
+	var midX = (lsbScreen.x + rsbScreen.x) / 2;
+	var widgetY = lsbScreen.y + 12;
+
+	// Get canvas-wrap dimensions for relative positioning
+	var wrapRect = TRV.dom.canvasWrap.getBoundingClientRect();
+	var relX = midX - wrapRect.left;
+	var relY = widgetY - wrapRect.top;
+
+	// Center the widget (width ~230px)
+	var widgetW = 230;
+	relX = relX - widgetW / 2;
+
+	// Clamp to canvas bounds
+	relX = Math.max(8, Math.min(relX, wrapRect.width - widgetW - 8));
+	relY = Math.max(8, Math.min(relY, wrapRect.height - 80));
+
+	// Position and populate
+	widget.style.left = relX + 'px';
+	widget.style.top = relY + 'px';
+
+	TRV.dom.gwName.value = name;
+	TRV.dom.gwUnicode.value = unicode;
+	TRV.dom.gwLsb.value = lsbVal;
+	TRV.dom.gwAdvance.value = advW;
+	TRV.dom.gwRsb.value = rsbVal;
+
+	// Store reference for close button
+	TRV._widgetSlot = name;
+
+	widget.classList.add('visible');
+};
+
+TRV.hideGlyphWidget = function() {
+	if (TRV.dom.glyphWidget) {
+		TRV.dom.glyphWidget.classList.remove('visible');
+	}
+	TRV._widgetSlot = null;
+	// Clear non-active widgets
+	if (TRV.dom.glyphWidgets) {
+		TRV.dom.glyphWidgets.innerHTML = '';
+	}
+};
+
+// -- Create a read-only widget for non-active glyph -------------
+TRV._createReadonlyWidget = function(name, layer, slotX, slotAdvW) {
+	var container = TRV.dom.glyphWidgets;
+	if (!container) return;
+
+	var bounds = TRV._getLayerBounds(layer);
+	var advW = layer.width || 0;
+	var lsbVal = bounds ? Math.round(bounds.minX) : 0;
+	var rsbVal = bounds ? Math.round(advW - bounds.maxX) : 0;
+
+	var unicode = '';
+	if (TRV.font && TRV.font.encoding) {
+		var code = TRV.font.encoding[name];
+		if (code) unicode = 'U+' + code.toString(16).toUpperCase().padStart(4, '0');
+	}
+
+	// Calculate position
+	var lsbScreen = TRV.glyphToScreen(0, 0);
+	var rsbScreen = TRV.glyphToScreen(advW, 0);
+	var midX = (lsbScreen.x + rsbScreen.x) / 2;
+	var widgetY = lsbScreen.y + 12;
+
+	var wrapRect = TRV.dom.canvasWrap.getBoundingClientRect();
+	var relX = midX - wrapRect.left;
+	var relY = widgetY - wrapRect.top;
+
+	var widgetW = 230;
+	relX = relX - widgetW / 2;
+	relX = Math.max(8, Math.min(relX, wrapRect.width - widgetW - 8));
+	relY = Math.max(8, Math.min(relY, wrapRect.height - 80));
+
+	// Create widget HTML
+	var widget = document.createElement('div');
+	widget.className = 'glyph-widget glyph-widget--readonly';
+	widget.style.left = relX + 'px';
+	widget.style.top = relY + 'px';
+	widget.innerHTML =
+		'<div class="gw-row">' +
+			'<div class="gw-field"><span class="tri">label</span><span class="gw-value">' + name + '</span></div>' +
+			'<div class="gw-field"><span class="tri">select_glyph</span><span class="gw-value">' + unicode + '</span></div>' +
+		'</div>' +
+		'<div class="gw-row">' +
+			'<div class="gw-field"><span class="tri">metrics_lsb</span><span class="gw-value">' + lsbVal + '</span></div>' +
+			'<div class="gw-field"><span class="tri">metrics_advance</span><span class="gw-value">' + advW + '</span></div>' +
+			'<div class="gw-field"><span class="tri">metrics_rsb</span><span class="gw-value">' + rsbVal + '</span></div>' +
+		'</div>';
+	container.appendChild(widget);
+};
+
+TRV.updateGlyphWidget = function() {
+	var state = TRV.state;
+	if (!state.glyphData || !state.glyphViewMode) {
+		TRV.hideGlyphWidget();
+		return;
+	}
+
+	var ws = TRV.workspace;
+	if (ws.activeIdx < 0 || ws.activeIdx >= ws.glyphs.length) {
+		TRV.hideGlyphWidget();
+		return;
+	}
+
+	// Clear previous non-active widgets
+	if (TRV.dom.glyphWidgets) {
+		TRV.dom.glyphWidgets.innerHTML = '';
+	}
+
+	var layout = TRV.getGlyphStripLayout();
+
+	// First pass: create read-only widgets for non-active glyphs
+	for (var i = 0; i < layout.slots.length; i++) {
+		var slot = layout.slots[i];
+		if (slot.active) continue;
+
+		var cacheEntry = TRV.glyphCache.get(slot.name);
+		if (!cacheEntry) continue;
+
+		var layer = TRV.getLayerByName(cacheEntry.glyphData, state.activeLayer);
+		if (!layer) layer = cacheEntry.glyphData.layers[0];
+		if (!layer) continue;
+
+		TRV._createReadonlyWidget(slot.name, layer);
+	}
+
+	// Second pass: show editable widget for active glyph
+	var name = ws.glyphs[ws.activeIdx];
+	var cacheEntry = TRV.glyphCache.get(name);
+	if (!cacheEntry) {
+		TRV.hideGlyphWidget();
+		return;
+	}
+
+	var layer = TRV.getLayerByName(cacheEntry.glyphData, state.activeLayer);
+	if (!layer) layer = cacheEntry.glyphData.layers[0];
+	if (!layer) {
+		TRV.hideGlyphWidget();
+		return;
+	}
+
+	var activeSlot = null;
+	for (var i = 0; i < layout.slots.length; i++) {
+		if (layout.slots[i].active) { activeSlot = layout.slots[i]; break; }
+	}
+
+	if (activeSlot) {
+		TRV.showGlyphWidget(activeSlot, layer);
+	}
+};
+
+// -- Handle widget input changes -------------------------------------
+TRV.initGlyphWidget = function() {
+	var nameInput = TRV.dom.gwName;
+	var unicodeInput = TRV.dom.gwUnicode;
+	var lsbInput = TRV.dom.gwLsb;
+	var advInput = TRV.dom.gwAdvance;
+	var rsbInput = TRV.dom.gwRsb;
+
+	// Name change - rename glyph
+	nameInput.addEventListener('change', function() {
+		var oldName = TRV._widgetSlot;
+		var newName = this.value.trim();
+		if (!oldName || !newName || oldName === newName) return;
+
+		// Update in workspace
+		var ws = TRV.workspace;
+		var idx = ws.glyphs.indexOf(oldName);
+		if (idx >= 0) {
+			ws.glyphs[idx] = newName;
+			TRV.activeGlyph = newName;
+			TRV.dirtyGlyphs.add(newName);
+			TRV.dirtyGlyphs.delete(oldName);
+			TRV._widgetSlot = newName;
+			TRV.updateGlyphPanelActive();
+		}
+	});
+
+	// Unicode change
+	unicodeInput.addEventListener('change', function() {
+		var glyphName = TRV._widgetSlot;
+		var val = this.value.trim();
+		if (!glyphName) return;
+
+		var code = null;
+		if (val.startsWith('U+') || val.startsWith('u+')) {
+			code = parseInt(val.slice(2), 16);
+		} else if (/^[0-9a-fA-F]+$/.test(val)) {
+			code = parseInt(val, 16);
+		}
+
+		if (code !== null && code >= 0 && code <= 0x10FFFF) {
+			if (TRV.font && TRV.font.encoding) {
+				TRV.font.encoding[glyphName] = code;
+				TRV.dirtyGlyphs.add(glyphName);
+				this.value = 'U+' + code.toString(16).toUpperCase().padStart(4, '0');
+			}
+		} else {
+			// Reset to current value
+			if (TRV.font && TRV.font.encoding) {
+				var current = TRV.font.encoding[glyphName];
+				if (current) {
+					this.value = 'U+' + current.toString(16).toUpperCase().padStart(4, '0');
+				}
+			}
+		}
+	});
+
+	// Width changes (LSB, Advance, RSB)
+	function updateWidths() {
+		var glyphName = TRV._widgetSlot;
+		if (!glyphName) return;
+
+		var lsb = parseInt(lsbInput.value) || 0;
+		var adv = parseInt(advInput.value) || 0;
+		var rsb = parseInt(rsbInput.value) || 0;
+
+		// Validate: lsb + rsb <= advance
+		if (lsb + rsb > adv) {
+			// Adjust RSB
+			rsb = adv - lsb;
+			rsbInput.value = rsb;
+		}
+
+		var cacheEntry = TRV.glyphCache.get(glyphName);
+		if (!cacheEntry) return;
+
+		var state = TRV.state;
+		var layer = TRV.getLayerByName(cacheEntry.glyphData, state.activeLayer);
+		if (!layer) layer = cacheEntry.glyphData.layers[0];
+		if (!layer) return;
+
+		// Update layer width
+		layer.width = adv;
+
+		// Shift contour nodes if LSB changed
+		var bounds = TRV._getLayerBounds(layer);
+		if (bounds) {
+			var currentLsb = Math.round(bounds.minX);
+			var delta = lsb - currentLsb;
+			if (delta !== 0) {
+				for (var si = 0; si < layer.shapes.length; si++) {
+					var shape = layer.shapes[si];
+					for (var ki = 0; ki < shape.contours.length; ki++) {
+						var nodes = shape.contours[ki].nodes;
+						for (var ni = 0; ni < nodes.length; ni++) {
+							nodes[ni].x += delta;
+						}
+					}
+				}
+			}
+		}
+
+		TRV.dirtyGlyphs.add(glyphName);
+		TRV.draw();
+		TRV.updateGlyphWidget();
+	}
+
+	lsbInput.addEventListener('change', updateWidths);
+	advInput.addEventListener('change', updateWidths);
+	rsbInput.addEventListener('change', updateWidths);
+
+	// Close button
+	var closeBtn = TRV.dom.glyphWidget.querySelector('[data-field="close"]');
+	if (closeBtn) {
+		closeBtn.addEventListener('click', function() {
+			var name = TRV._widgetSlot;
+			if (name) {
+				TRV.removeGlyphFromStrip(name);
+			}
+		});
+	}
 };
 
 // -- Get contour bounding box for a layer ---------------------------

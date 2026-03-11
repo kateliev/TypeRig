@@ -348,6 +348,135 @@ body {
 	height: 100%;
 }
 
+/* -- Glyph Widget Overlay ----------------------------------- */
+#glyph-widgets {
+	position: absolute;
+	top: 0; left: 0;
+	pointer-events: none;
+	z-index: 19;
+}
+
+.glyph-widget {
+	position: absolute;
+	display: none;
+	z-index: 20;
+	background: rgba(34,34,38,0.95);
+	border: 1px solid var(--accent-dim);
+	border-radius: 6px;
+	padding: 6px;
+	box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+	backdrop-filter: blur(4px);
+	pointer-events: auto;
+}
+
+.glyph-widget.visible { display: block; }
+
+/* Non-active glyph widgets - grayed out */
+.glyph-widget--readonly {
+	background: rgba(34,34,38,0.7);
+	border-color: rgba(90,90,100,0.5);
+}
+
+.glyph-widget--readonly .gw-field {
+	background: rgba(0,0,0,0.15);
+}
+
+.glyph-widget--readonly .gw-input {
+	color: var(--text-dim);
+	pointer-events: none;
+}
+
+.glyph-widget--readonly .tri {
+	color: rgba(91,157,239,0.3);
+}
+
+.glyph-widget .gw-value {
+	font-family: 'JetBrains Mono', monospace;
+	font-size: 10px;
+	color: var(--text-dim);
+	margin-left: 2px;
+}
+
+.glyph-widget .gw-row {
+	display: flex;
+	gap: 4px;
+}
+
+.glyph-widget .gw-row + .gw-row {
+	margin-top: 4px;
+}
+
+.glyph-widget .gw-field {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	background: rgba(0,0,0,0.2);
+	border-radius: 4px;
+	padding: 0 6px;
+	min-width: 70px;
+	height: 24px;
+}
+
+.glyph-widget .gw-field input {
+	pointer-events: auto;
+}
+
+.glyph-widget .gw-field--action {
+	cursor: pointer;
+	min-width: 28px;
+	justify-content: center;
+}
+
+.glyph-widget .gw-field--action:hover {
+	background: rgba(220,60,60,0.3);
+}
+
+.glyph-widget .tri {
+	font-family: 'TypeRig Icons', sans-serif;
+	font-size: 12px;
+	color: rgba(91,157,239,0.6);
+	width: 14px;
+	text-align: center;
+}
+
+.glyph-widget .gw-field--action .tri {
+	color: rgba(255,255,255,0.4);
+}
+
+.glyph-widget .gw-field--action:hover .gw-icon {
+	color: #ff6b6b;
+}
+
+.glyph-widget .gw-input {
+	flex: 1;
+	background: transparent;
+	border: none;
+	outline: none;
+	font-family: 'JetBrains Mono', monospace;
+	font-size: 10px;
+	color: var(--text-primary);
+	min-width: 40px;
+}
+
+.glyph-widget .gw-input:focus {
+	color: var(--accent);
+}
+
+.glyph-widget .gw-input::placeholder {
+	color: var(--text-dim);
+}
+
+.glyph-widget input[type="number"] {
+	text-align: right;
+	-moz-appearance: textfield;
+}
+
+.glyph-widget input[type="number"]::-webkit-outer-spin-button,
+.glyph-widget input[type="number"]::-webkit-inner-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+
 /* -- Side Panel (tabbed: XML / Python) ---------------------- */
 #side-panel {
 	display: none;

@@ -116,6 +116,36 @@
 		</div>
 		<div id="canvas-wrap">
 			<canvas id="glyph-canvas"></canvas>
+			<div id="glyph-widgets"></div>
+			<div id="glyph-widget" class="glyph-widget">
+				<div class="gw-row">
+					<div class="gw-field" data-field="name">
+						<span class="tri">label</span>
+						<input type="text" class="gw-input" id="gw-name" spellcheck="false">
+					</div>
+					<div class="gw-field" data-field="unicode">
+						<span class="tri">select_glyph</span>
+						<input type="text" class="gw-input" id="gw-unicode" spellcheck="false" placeholder="U+0000">
+					</div>
+					<div class="gw-field gw-field--action" data-field="close">
+						<span class="tri">close</span>
+					</div>
+				</div>
+				<div class="gw-row">
+					<div class="gw-field" data-field="lsb">
+						<span class="tri">metrics_lsb</span>
+						<input type="number" class="gw-input" id="gw-lsb">
+					</div>
+					<div class="gw-field" data-field="advance">
+						<span class="tri">metrics_advance</span>
+						<input type="number" class="gw-input" id="gw-advance">
+					</div>
+					<div class="gw-field" data-field="rsb">
+						<span class="tri">metrics_rsb</span>
+						<input type="number" class="gw-input" id="gw-rsb">
+					</div>
+				</div>
+			</div>
 			<div id="empty-state">
 				<span class="tri">file</span>
 				<span>Load a glyph file or open a .trfont folder</span>
