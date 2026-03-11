@@ -903,9 +903,9 @@ TRV._drawGlyphWidget = function(ctx, slot, layer, isActive, verticalOffset = 8, 
     var name = slot.name;
     var enc = TRV.font ? (TRV.font.encoding[name] || slot.unicode) : '';
     var dirty = TRV.dirtyGlyphs.has(name);
+    var bounds = TRV._getLayerBounds(layer);
 	var lsbVal = bounds ? Math.round(bounds.minX) : 0;
 	var rsbVal = bounds ? Math.round(advW - bounds.maxX) : 0;
-    var bounds = TRV._getLayerBounds(layer);
     
     // Set up fonts
     var font10 = '10px "JetBrains Mono", monospace';
@@ -995,6 +995,27 @@ TRV._roundRect = function(ctx, x, y, w, h, r) {
 	ctx.closePath();
 };
 
+// -- Compute widget position and size anchored to glyph advance ------
+TRV._getWidgetRect = function(advW, verticalOffset) {
+	var lsbScreen = TRV.glyphToScreen(0, 0);
+	var rsbScreen = TRV.glyphToScreen(advW, 0);
+	var wrapRect = TRV.dom.canvasWrap.getBoundingClientRect();
+
+	var glyphScreenW = rsbScreen.x - lsbScreen.x;
+	var minW = 120;
+	var widgetW = Math.max(minW, glyphScreenW);
+
+	// Anchor left edge to glyph origin, center if widget is wider than glyph
+	var screenX = lsbScreen.x - (widgetW - glyphScreenW) / 2;
+	var screenY = lsbScreen.y + (verticalOffset || 12);
+
+	return {
+		left: screenX - wrapRect.left,
+		top: screenY - wrapRect.top,
+		width: widgetW
+	};
+};
+
 // -- Glyph Widget HTML Overlay ---------------------------------------
 TRV._widgetSlot = null;
 
@@ -1018,28 +1039,13 @@ TRV.showGlyphWidget = function(slot, layer) {
 		if (code) unicode = 'U+' + code.toString(16).toUpperCase().padStart(4, '0');
 	}
 
-	// Position widget below baseline
-	var lsbScreen = TRV.glyphToScreen(0, 0);
-	var rsbScreen = TRV.glyphToScreen(advW, 0);
-	var midX = (lsbScreen.x + rsbScreen.x) / 2;
-	var widgetY = lsbScreen.y + 12;
+	// Position widget anchored to glyph advance
+	var rect = TRV._getWidgetRect(advW, 12);
 
-	// Get canvas-wrap dimensions for relative positioning
-	var wrapRect = TRV.dom.canvasWrap.getBoundingClientRect();
-	var relX = midX - wrapRect.left;
-	var relY = widgetY - wrapRect.top;
-
-	// Center the widget (width ~230px)
-	var widgetW = 230;
-	relX = relX - widgetW / 2;
-
-	// Clamp to canvas bounds
-	relX = Math.max(8, Math.min(relX, wrapRect.width - widgetW - 8));
-	relY = Math.max(8, Math.min(relY, wrapRect.height - 80));
-
-	// Position and populate
-	widget.style.left = relX + 'px';
-	widget.style.top = relY + 'px';
+	// Position and size
+	widget.style.left = rect.left + 'px';
+	widget.style.top = rect.top + 'px';
+	widget.style.width = rect.width + 'px';
 
 	TRV.dom.gwName.value = name;
 	TRV.dom.gwUnicode.value = unicode;
@@ -1065,7 +1071,7 @@ TRV.hideGlyphWidget = function() {
 };
 
 // -- Create a read-only widget for non-active glyph -------------
-TRV._createReadonlyWidget = function(name, layer, slotX, slotAdvW) {
+TRV._createReadonlyWidget = function(name, layer) {
 	var container = TRV.dom.glyphWidgets;
 	if (!container) return;
 
@@ -1080,26 +1086,15 @@ TRV._createReadonlyWidget = function(name, layer, slotX, slotAdvW) {
 		if (code) unicode = 'U+' + code.toString(16).toUpperCase().padStart(4, '0');
 	}
 
-	// Calculate position
-	var lsbScreen = TRV.glyphToScreen(0, 0);
-	var rsbScreen = TRV.glyphToScreen(advW, 0);
-	var midX = (lsbScreen.x + rsbScreen.x) / 2;
-	var widgetY = lsbScreen.y + 12;
-
-	var wrapRect = TRV.dom.canvasWrap.getBoundingClientRect();
-	var relX = midX - wrapRect.left;
-	var relY = widgetY - wrapRect.top;
-
-	var widgetW = 230;
-	relX = relX - widgetW / 2;
-	relX = Math.max(8, Math.min(relX, wrapRect.width - widgetW - 8));
-	relY = Math.max(8, Math.min(relY, wrapRect.height - 80));
+	// Calculate position anchored to glyph advance
+	var rect = TRV._getWidgetRect(advW, 12);
 
 	// Create widget HTML
 	var widget = document.createElement('div');
-	widget.className = 'glyph-widget glyph-widget--readonly';
-	widget.style.left = relX + 'px';
-	widget.style.top = relY + 'px';
+	widget.className = 'glyph-widget glyph-widget--readonly visible';
+	widget.style.left = rect.left + 'px';
+	widget.style.top = rect.top + 'px';
+	widget.style.width = rect.width + 'px';
 	widget.innerHTML =
 		'<div class="gw-row">' +
 			'<div class="gw-field"><span class="tri">label</span><span class="gw-value">' + name + '</span></div>' +
@@ -1134,6 +1129,18 @@ TRV.updateGlyphWidget = function() {
 	var layout = TRV.getGlyphStripLayout();
 
 	// First pass: create read-only widgets for non-active glyphs
+	// Pan is currently shifted to the active slot's position.
+	// Derive base pan so we can shift to each non-active slot.
+	var activeSlot = null;
+	for (var i = 0; i < layout.slots.length; i++) {
+		if (layout.slots[i].active) { activeSlot = layout.slots[i]; break; }
+	}
+
+	var basePanX = state.pan.x - (activeSlot ? activeSlot.x * state.zoom : 0);
+	var basePanY = state.pan.y;
+	var savedPanX = state.pan.x;
+	var savedPanY = state.pan.y;
+
 	for (var i = 0; i < layout.slots.length; i++) {
 		var slot = layout.slots[i];
 		if (slot.active) continue;
@@ -1145,7 +1152,20 @@ TRV.updateGlyphWidget = function() {
 		if (!layer) layer = cacheEntry.glyphData.layers[0];
 		if (!layer) continue;
 
+		// Shift pan to this slot's glyph-space position
+		state.pan.x = basePanX + slot.x * state.zoom;
+		state.pan.y = basePanY;
+
 		TRV._createReadonlyWidget(slot.name, layer);
+	}
+
+	// Restore pan to active slot position for the editable widget
+	state.pan.x = savedPanX;
+	state.pan.y = savedPanY;
+
+	if (!activeSlot) {
+		TRV.hideGlyphWidget();
+		return;
 	}
 
 	// Second pass: show editable widget for active glyph
@@ -1163,14 +1183,7 @@ TRV.updateGlyphWidget = function() {
 		return;
 	}
 
-	var activeSlot = null;
-	for (var i = 0; i < layout.slots.length; i++) {
-		if (layout.slots[i].active) { activeSlot = layout.slots[i]; break; }
-	}
-
-	if (activeSlot) {
-		TRV.showGlyphWidget(activeSlot, layer);
-	}
+	TRV.showGlyphWidget(activeSlot, layer);
 };
 
 // -- Handle widget input changes -------------------------------------
