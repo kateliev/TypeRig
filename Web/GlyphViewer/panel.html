@@ -174,6 +174,12 @@
 		word-break: break-all;
 	}
 
+	.py-entry { margin-bottom: 4px; }
+	.py-input { color: #7cb3f0; }
+	.py-output { color: var(--text-secondary); }
+	.py-error { color: #e06060; }
+	.py-info { color: var(--text-dim); font-style: italic; }
+
 	#py-input-wrap {
 		border-top: 1px solid var(--border);
 		padding: 6px 8px;
@@ -218,6 +224,12 @@
 		color: var(--text-dim);
 		margin-left: auto;
 	}
+
+	.py-status {
+		font: 10px 'JetBrains Mono', monospace;
+		color: var(--text-dim);
+	}
+	.py-status--running { color: var(--accent); }
 
 	/* -- Disconnected overlay ------------------------------------- */
 	#disconnected {
@@ -267,13 +279,13 @@
 		<textarea id="xml-content" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
 	</div>
 
-	<!-- Python tab (placeholder — full Pyodide not loaded here) -->
+	<!-- Python tab -->
 	<div id="python-tab" class="panel-content">
-		<div id="py-output">Python REPL is available in the main window only.\nThis tab is reserved for future detached REPL support.</div>
+		<div id="py-output"></div>
 		<div id="py-input-wrap">
-			<textarea id="py-input" rows="1" disabled placeholder="Python not available in detached mode" spellcheck="false"></textarea>
+			<textarea id="py-input" rows="1" placeholder="Shift+Enter to run" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
 			<div id="py-input-actions">
-				<span class="hint">Detached mode</span>
+				<span class="py-status py-status--idle" id="py-status">Via main window</span>
 			</div>
 		</div>
 	</div>
@@ -415,6 +427,116 @@ var checkInterval = setInterval(function() {
 // -- Notify on close ------------------------------------------------
 window.addEventListener('beforeunload', function() {
 	send({ type: 'panelClosed' });
+});
+
+// -- Python execution via bridge ------------------------------------
+var pyInput = document.getElementById('py-input');
+var pyOutput = document.getElementById('py-output');
+var pyStatus = document.getElementById('py-status');
+var pyHistory = [];
+var pyHistoryIdx = -1;
+var pyExecuteId = 0;
+
+function pyAppendOutput(text, type) {
+	var entry = document.createElement('div');
+	entry.className = 'py-entry py-' + (type || 'output');
+	entry.textContent = text;
+	pyOutput.appendChild(entry);
+	pyOutput.scrollTop = pyOutput.scrollHeight;
+}
+
+function pyExecute() {
+	var code = pyInput.value.trim();
+	if (!code) return;
+
+	// Show input in output
+	var lines = code.split('\n');
+	var formatted = lines.map(function(line, i) {
+		return (i === 0 ? '>>> ' : '... ') + line;
+	}).join('\n');
+	pyAppendOutput(formatted, 'input');
+
+	// Save to history
+	pyHistory.push(code);
+	pyHistoryIdx = pyHistory.length;
+
+	// Send to main window
+	var id = ++pyExecuteId;
+	pyStatus.textContent = 'Running...';
+	pyStatus.className = 'py-status py-status--running';
+	send({ type: 'pyExecute', code: code, id: id });
+
+	pyInput.value = '';
+	pyInput.style.height = 'auto';
+}
+
+function onPyResult(msg) {
+	pyStatus.textContent = 'Via main window';
+	pyStatus.className = 'py-status py-status--idle';
+
+	if (msg.output) {
+		pyAppendOutput(msg.output, 'output');
+	}
+
+	if (msg.error) {
+		pyAppendOutput(msg.error, 'error');
+	}
+
+	if (msg.glyphChanged) {
+		pyAppendOutput('↻ glyph updated in viewer', 'info');
+	}
+}
+
+// Intercept pyResult messages in onMessage
+var origOnMessage = onMessage;
+onMessage = function(msg) {
+	origOnMessage(msg);
+
+	if (msg.type === 'pyResult') {
+		onPyResult(msg);
+	}
+};
+
+// Python input handling
+pyInput.addEventListener('keydown', function(e) {
+	if (e.key === 'Enter' && e.shiftKey) {
+		e.preventDefault();
+		pyExecute();
+	}
+
+	// Arrow up - history
+	if (e.key === 'ArrowUp' && !e.shiftKey && pyInput.value.indexOf('\n') === -1) {
+		var pos = pyInput.selectionStart;
+		if (pos === 0 && pyHistory.length > 0) {
+			e.preventDefault();
+			if (pyHistoryIdx > 0) pyHistoryIdx--;
+			pyInput.value = pyHistory[pyHistoryIdx] || '';
+			pyInput.style.height = 'auto';
+			pyInput.style.height = Math.min(pyInput.scrollHeight, 160) + 'px';
+		}
+	}
+
+	// Arrow down - history
+	if (e.key === 'ArrowDown' && !e.shiftKey && pyInput.value.indexOf('\n') === -1) {
+		var pos = pyInput.selectionStart;
+		if (pos === pyInput.value.length && pyHistory.length > 0) {
+			e.preventDefault();
+			pyHistoryIdx++;
+			if (pyHistoryIdx >= pyHistory.length) {
+				pyHistoryIdx = pyHistory.length;
+				pyInput.value = '';
+			} else {
+				pyInput.value = pyHistory[pyHistoryIdx] || '';
+			}
+			pyInput.style.height = 'auto';
+			pyInput.style.height = Math.min(pyInput.scrollHeight, 160) + 'px';
+		}
+	}
+});
+
+pyInput.addEventListener('input', function() {
+	this.style.height = 'auto';
+	this.style.height = Math.min(this.scrollHeight, 160) + 'px';
 });
 </script>
 </body>

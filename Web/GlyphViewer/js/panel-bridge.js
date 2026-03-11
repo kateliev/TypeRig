@@ -134,6 +134,37 @@ if (typeof TRV !== 'undefined') {
 			TRV._panelSendState();
 		} else if (msg.type === 'panelClosed') {
 			TRV.attachPanel();
+		} else if (msg.type === 'pyExecute') {
+			// Panel requests Python code execution
+			TRV._panelPyExecute(msg.code, msg.id);
+		}
+	};
+
+	// -- Execute Python code from detached panel -----------------------
+	TRV._panelPyExecute = function(code, msgId) {
+		if (!TRV.pyBridge || !TRV.pyBridge.ready) {
+			TRV.panelBridge.channel.postMessage({
+				type: 'pyResult',
+				id: msgId,
+				error: 'Python not ready. Click Init in main window to load.',
+			});
+			return;
+		}
+
+		var result = TRV.pyBridge.run(code);
+
+		// Send result back to panel
+		TRV.panelBridge.channel.postMessage({
+			type: 'pyResult',
+			id: msgId,
+			output: result.output || '',
+			error: result.error || null,
+			glyphChanged: result.glyphChanged || false,
+		});
+
+		// If glyph changed, notify all panels (including this one)
+		if (result.glyphChanged) {
+			TRV._panelSendState();
 		}
 	};
 
