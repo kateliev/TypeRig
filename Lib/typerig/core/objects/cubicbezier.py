@@ -688,6 +688,233 @@ class CubicBezier(object):
 		else:
 			return self
 
+	# -- Arc Length (Gauss-Legendre Quadrature) -------------------------
+	_GAUSS_LEGENDRE_T = [
+		-.06405689286260563, .06405689286260563,
+		-.1911188674736163, .1911188674736163,
+		-.3150426796961634, .3150426796961634,
+		-.4337935076260451, .4337935076260451,
+		-.5454214713888396, .5454214713888396,
+		-.6480936519369755, .6480936519369755,
+		-.7401241915785544, .7401241915785544,
+		-.820001985973903, .820001985973903,
+		-.8864155270044011, .8864155270044011,
+		-.9382745520027328, .9382745520027328,
+		-.9747285559713095, .9747285559713095,
+		-.9951872199970213, .9951872199970213
+	]
+
+	_GAUSS_LEGENDRE_C = [
+		.12793819534675216, .12793819534675216,
+		.1258374563468283, .1258374563468283,
+		.12167047292780339, .12167047292780339,
+		.1155056680537256, .1155056680537256,
+		.10744427011596563, .10744427011596563,
+		.09761865210411388, .09761865210411388,
+		.08619016153195327, .08619016153195327,
+		.0733464814110803, .0733464814110803,
+		.05929858491543678, .05929858491543678,
+		.04427743881741981, .04427743881741981,
+		.028531388628933663, .028531388628933663,
+		.0123412297999872, .0123412297999872
+	]
+
+	def _arc_length_integrand(self, t):
+		pt, d1, _ = self.solve_derivative_at_time(t)
+		return math.sqrt(d1.x**2 + d1.y**2)
+
+	def get_arc_length(self):
+		length = 0.0
+		a, b = 0.0, 1.0
+		c = (b - a) * 0.5
+		m = (b + a) * 0.5
+
+		for i in range(0, len(self._GAUSS_LEGENDRE_T)):
+			t = c * self._GAUSS_LEGENDRE_T[i] + m
+			length += self._GAUSS_LEGENDRE_C[i] * self._arc_length_integrand(t)
+
+		return length * 0.5 * (b - a)
+
+	def get_arc_length_by_parts(self, parts=50):
+		step = 1.0 / parts
+		lengths = [0.0]
+		total = 0.0
+
+		for i in range(parts):
+			t0 = i * step
+			t1 = (i + 1) * step
+
+			seg_len = 0.0
+			c = (t1 - t0) * 0.5
+			m = (t1 + t0) * 0.5
+
+			for j in range(len(self._GAUSS_LEGENDRE_T)):
+				t = c * self._GAUSS_LEGENDRE_T[j] + m
+				seg_len += self._GAUSS_LEGENDRE_C[j] * self._arc_length_integrand(t)
+
+			seg_len *= 0.5 * (t1 - t0)
+			total += seg_len
+			lengths.append(total)
+
+		return lengths
+
+	def get_bbox(self):
+		extremes = self.solve_extremes()
+		all_x = [self.p0.x, self.p3.x]
+		all_y = [self.p0.y, self.p3.y]
+
+		for pt, t in extremes:
+			all_x.append(pt.x)
+			all_y.append(pt.y)
+
+		x = min(all_x)
+		y = min(all_y)
+		x_max = max(all_x)
+		y_max = max(all_y)
+
+		return {'x': x, 'y': y, 'x_max': x_max, 'y_max': y_max, 'width': x_max - x, 'height': y_max - y}
+
+	def project_point(self, point, steps=50):
+		# Step 1: coarse check using LUT
+		lut = self.get_lut(steps)
+		l = len(lut) - 1
+		
+		closest_idx = 0
+		closest_dist = float('inf')
+		
+		for i, pt in enumerate(lut):
+			dist = math.hypot(pt.x - point.x, pt.y - point.y)
+			if dist < closest_dist:
+				closest_dist = dist
+				closest_idx = i
+		
+		# Step 2: fine check around closest segment
+		mpos = closest_idx
+		t1 = (mpos - 1) / l if mpos > 0 else 0
+		t2 = (mpos + 1) / l if mpos < l else 1
+		
+		step = 0.1 / l
+		mdist = closest_dist
+		ft = t1
+		
+		t = t1
+		while t < t2 + step:
+			pt = self.solve_point(t)
+			d = math.hypot(pt.x - point.x, pt.y - point.y)
+			if d < mdist:
+				mdist = d
+				ft = t
+			t += step
+		
+		# Clamp and refine with Newton-Raphson
+		ft = max(0, min(1, ft))
+		pt = self.solve_point(ft)
+		
+		# Newton-Raphson refinement
+		for _ in range(10):
+			d1 = self.solve_derivative_at_time(ft)[1]
+			num = d1.x * (pt.x - point.x) + d1.y * (pt.y - point.y)
+			denom = d1.x**2 + d1.y**2
+			
+			if abs(denom) < 1e-14:
+				break
+			
+			t_new = ft - num / denom
+			
+			if t_new < 0 or t_new > 1:
+				break
+			
+			pt_new = self.solve_point(t_new)
+			d_new = math.hypot(pt_new.x - point.x, pt_new.y - point.y)
+			
+			if d_new < mdist:
+				ft = t_new
+				mdist = d_new
+				pt = pt_new
+			else:
+				break
+		
+		return ft, mdist
+
+	def scale(self, factor, origin=None):
+		if origin is None:
+			origin = self.p0
+
+		return self.__class__(
+			(self.p0.x - origin.x) * factor + origin.x,
+			(self.p1.x - origin.x) * factor + origin.x,
+			(self.p2.x - origin.x) * factor + origin.x,
+			(self.p3.x - origin.x) * factor + origin.x,
+			(self.p0.y - origin.y) * factor + origin.y,
+			(self.p1.y - origin.y) * factor + origin.y,
+			(self.p2.y - origin.y) * factor + origin.y,
+			(self.p3.y - origin.y) * factor + origin.y
+		)
+
+	def get_lut(self, steps=50):
+		return [self.solve_point(i / steps) for i in range(steps + 1)]
+
+	def get_lut_with_lengths(self, steps=50):
+		points = self.get_lut(steps)
+		lengths = self.get_arc_length_by_parts(steps)
+		return points, lengths
+
+	def get_point_at_length(self, distance):
+		total_length = self.get_arc_length()
+		target = distance / total_length
+		step = 1.0 / 1000
+		accum = 0.0
+
+		for i in range(1000):
+			t0 = i * step
+			t1 = (i + 1) * step
+			pt0 = self.solve_point(t0)
+			pt1 = self.solve_point(t1)
+			seg_len = math.hypot(pt1.x - pt0.x, pt1.y - pt0.y)
+
+			if accum + seg_len >= distance:
+				remainder = distance - accum
+				if seg_len > 0:
+					frac = remainder / seg_len
+					return Point(
+						pt0.x + (pt1.x - pt0.x) * frac,
+						pt0.y + (pt1.y - pt0.y) * frac
+					)
+
+			accum += seg_len
+
+		return self.p3
+
+	def divide_at_length(self, distance):
+		total_length = self.get_arc_length()
+		if distance <= 0:
+			return self.__class__(self.p0, self.p0, self.p0, self.p0), self
+
+		if distance >= total_length:
+			return self, self.__class__(self.p3, self.p3, self.p3, self.p3)
+
+		step = 1.0 / 1000
+		accum = 0.0
+
+		for i in range(1000):
+			t0 = i * step
+			t1 = (i + 1) * step
+			pt0 = self.solve_point(t0)
+			pt1 = self.solve_point(t1)
+			seg_len = math.hypot(pt1.x - pt0.x, pt1.y - pt0.y)
+
+			if accum + seg_len >= distance:
+				remainder = distance - accum
+				if seg_len > 0:
+					frac = remainder / seg_len
+					t_split = t0 + (t1 - t0) * frac
+					return self.solve_slice(t_split)
+
+			accum += seg_len
+
+		return self.solve_slice(0.5)
+
+		
 	def lerp_first(self, shift):
 		diffBase = self.p3 - self.p0
 		diffP1 = self.p3 - self.p1
