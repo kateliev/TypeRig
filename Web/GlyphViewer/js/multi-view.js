@@ -892,98 +892,94 @@ TRV.withStripOffset = function(row, col, fn) {
 	state.pan.y = savedPanY;
 };
 
-
-
 // -- Glyph info widget (drawn below baseline in strip) ---------------
-TRV._drawGlyphWidget = function(ctx, slot, layer, isActive) {
-	var advW = layer.width || 0;
-	var lsb = TRV.glyphToScreen(0, 0);
-	var rsb = TRV.glyphToScreen(advW, 0);
-	var midX = (lsb.x + rsb.x) / 2;
-	var widgetY = lsb.y + 8;
+TRV._drawGlyphWidget = function(ctx, slot, layer, isActive, verticalOffset = 8, width = 250, height = 80) {
+    // Init
+    var advW = layer.width || 0;
+    var lsb = TRV.glyphToScreen(0, 0);
+    var rsb = TRV.glyphToScreen(advW, 0);
+    var midX = (lsb.x + rsb.x) / 2;
+    var widgetY = lsb.y + verticalOffset;
 
-	var name = slot.name;
-	var dirty = TRV.dirtyGlyphs.has(name);
-	var font10 = '10px "JetBrains Mono", monospace';
-	var font9 = '9px "JetBrains Mono", monospace';
-	var padX = 8, radius = 3;
-
-	if (isActive) {
-		// -- Full info: name + unicode (line 1), LSB / w / RSB (line 2) --
-		var enc = TRV.font ? (TRV.font.encoding[name] || '') : '';
-		var bounds = TRV._getLayerBounds(layer);
-		var lsbVal = bounds ? Math.round(bounds.minX) : 0;
-		var rsbVal = bounds ? Math.round(advW - bounds.maxX) : 0;
-
-		var line1 = name + (enc ? '  U+' + enc : '') + (dirty ? '  *' : '');
-		var line2 = 'L:' + lsbVal + '  w:' + Math.round(advW) + '  R:' + rsbVal;
-
-		ctx.font = font10;
-		var tw1 = ctx.measureText(line1).width;
-		ctx.font = font9;
-		var tw2 = ctx.measureText(line2).width;
-		var boxW = Math.max(tw1, tw2) + padX * 2;
-		var boxH = 30;
-		var boxX = midX - boxW / 2;
-		var boxY = widgetY;
-
-		// Background pill
-		ctx.fillStyle = 'rgba(91,157,239,0.15)';
-		TRV._roundRect(ctx, boxX, boxY, boxW, boxH, radius);
-		ctx.fill();
-
-		// Line 1: name + unicode
-		ctx.font = font10;
-		ctx.textAlign = 'center';
-		ctx.textBaseline = 'top';
-		ctx.fillStyle = 'rgba(91,157,239,0.9)';
-		ctx.fillText(line1, midX, boxY + 3);
-
-		// Line 2: metrics
-		ctx.font = font9;
-		ctx.fillStyle = 'rgba(91,157,239,0.55)';
-		ctx.fillText(line2, midX, boxY + 17);
-
-		ctx.textBaseline = 'alphabetic';
-	} else {
-		// -- Minimal: name + close button --
-		ctx.font = font10;
-		var tw = ctx.measureText(name).width;
-		var closeW = 16;
-		var boxW = tw + padX * 2 + closeW;
-		var boxH = 16;
-		var boxX = midX - boxW / 2;
-		var boxY = widgetY;
-
-		// Background pill
-		ctx.fillStyle = 'rgba(255,255,255,0.06)';
-		TRV._roundRect(ctx, boxX, boxY, boxW, boxH, radius);
-		ctx.fill();
-
-		// Name
-		ctx.textAlign = 'left';
-		ctx.textBaseline = 'middle';
-		ctx.fillStyle = 'rgba(255,255,255,0.45)';
-		ctx.fillText(name, boxX + padX, boxY + boxH / 2);
-
-		// Close button (×)
-		var closeX = boxX + boxW - 10;
-		var closeY = boxY + boxH / 2;
-		ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-		ctx.lineWidth = 1;
-		ctx.beginPath();
-		ctx.moveTo(closeX - 3, closeY - 3); ctx.lineTo(closeX + 3, closeY + 3);
-		ctx.moveTo(closeX + 3, closeY - 3); ctx.lineTo(closeX - 3, closeY + 3);
-		ctx.stroke();
-
-		// Store close button hit rect
-		if (!TRV.workspace._closeRects) TRV.workspace._closeRects = {};
-		TRV.workspace._closeRects[slot.name] = {
-			x: closeX - 6, y: closeY - 6, w: 12, h: 12
-		};
-
-		ctx.textBaseline = 'alphabetic';
-	}
+    // Glyp specific metadata
+    var name = slot.name;
+    var enc = TRV.font ? (TRV.font.encoding[name] || slot.unicode) : '';
+    var dirty = TRV.dirtyGlyphs.has(name);
+	var lsbVal = bounds ? Math.round(bounds.minX) : 0;
+	var rsbVal = bounds ? Math.round(advW - bounds.maxX) : 0;
+    var bounds = TRV._getLayerBounds(layer);
+    
+    // Set up fonts
+    var font10 = '10px "JetBrains Mono", monospace';
+    var font9 = '9px "JetBrains Mono", monospace';
+    var font_icon = '16px "TypeRig Icons", monospace';
+    var padX = 8, radius = 3;
+    
+    // Calculate widget position and size
+    var boxW = width;
+    var boxH = height;
+    var boxX = midX - boxW / 2;
+    var boxY = widgetY;
+    
+    // Background with different alpha for active/non-active
+    if (isActive) {
+        ctx.fillStyle = 'rgba(91,157,239,0.2)';
+    } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    }
+    
+    TRV._roundRect(ctx, boxX, boxY, boxW, boxH, radius);
+    ctx.fill();
+    
+    // Grid layout: 3x3
+    var cellW = boxW / 3;
+    var cellH = boxH / 3;
+    
+    // Helper function to draw icon + field
+    function drawIconField(ctx, iconChar, text, x, y, width, height, isActive) {
+        // Draw background for the field
+        ctx.fillStyle = 'rgba(0,0,0,0.1)';
+        ctx.fillRect(x, y, width, height);
+        
+        // Draw icon
+        ctx.font = font_icon;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = isActive ? 'rgba(91,157,239,0.7)' : 'rgba(255,255,255,0.3)';
+        ctx.fillText(iconChar, x + 4, y + height / 2);
+        
+        // Draw text field
+        ctx.font = font10;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = isActive ? 'rgba(91,157,239,0.9)' : 'rgba(255,255,255,0.45)';
+        ctx.fillText(text, x + 24, y + height / 2);
+    }
+    
+    // - Glyph info fields
+    // -- Row 1
+    drawIconField(ctx, 'label', 		name, 	boxX			, boxY, cellW, cellH, isActive);
+    drawIconField(ctx, 'select_glyph', 	enc, 	boxX + 1 * cellW, boxY, cellW, cellH, isActive);
+    drawIconField(ctx, 'close', 		'Close',boxX + 2 * cellW, boxY, cellW, cellH, isActive); // Close button
+    
+    // --- Store close button hit rect
+	if (!TRV.workspace._closeRects) TRV.workspace._closeRects = {};
+	
+	TRV.workspace._closeRects[slot.name] = {
+		x: boxX + 2 * cellW,
+		y: boxY,
+		w: cellW,
+		h: cellH
+	};
+    
+    // Row 2
+    // Left side bearing (metrics_lsb)
+    drawIconField(ctx, 'metrics_lsb', 		lsbVal, 	boxX			, boxY + 1 * cellH, cellW, cellH, isActive);
+    drawIconField(ctx, 'metrics_advance', 	advW, 		boxX + 1 * cellW, boxY + 1 * cellH, cellW, cellH, isActive);
+    drawIconField(ctx, 'metrics_rsb', 		rsbVal, 	boxX + 2 * cellW, boxY + 1 * cellH, cellW, cellH, isActive);
+    
+    // Restore text baseline
+    ctx.textBaseline = 'alphabetic';
 };
 
 // -- Rounded rect helper --------------------------------------------
