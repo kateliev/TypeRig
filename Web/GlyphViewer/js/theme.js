@@ -43,8 +43,8 @@ TRV.themeDark = {
 		// Styling
 		lineWidth:    1,
 		dash:         [6, 4],
-		font:         '9px "JetBrains Mono", monospace',
-		labelFont:    '10px "JetBrains Mono", monospace',
+		font:         '9px "IBM Plex Mono", "JetBrains Mono", monospace',
+		labelFont:    '10px "IBM Plex Mono", "JetBrains Mono", monospace',
 		// Font metrics (ascender, descender, x-height, cap-height)
 		fontMetricsColors: {
 			ascender:   'rgba(80,200,120,0.25)',
@@ -87,7 +87,7 @@ TRV.themeDark = {
 	// -- Layer label badge -------------------------------------------
 	label: {
 		textColor:    '#000000',
-		font:         '10px "JetBrains Mono", monospace',
+		font:         '10px "IBM Plex Mono", "JetBrains Mono", monospace',
 	},
 
 	// -- Per-layer color palette (cycled by index) ------------------
@@ -132,7 +132,7 @@ TRV.themeDark = {
 		linePreview: 	'rgba(6,182,212,0.5)', // lighter for BW preview
 		mark:      		'#06b6d4',               // endpoint marks
 		label:     		'#06b6d4',               // distance label
-		labelFont: 		'11px "JetBrains Mono", monospace',
+		labelFont: 		'11px "IBM Plex Mono", "JetBrains Mono", monospace',
 		lineWidth:      	1,
 	},
 
@@ -176,8 +176,8 @@ TRV.themeLight = {
 		// Styling
 		lineWidth:    1.5,                 // thicker for light bg
 		dash:         [6, 4],
-		font:         '9px "JetBrains Mono", monospace',
-		labelFont:    '10px "JetBrains Mono", monospace',
+		font:         '9px "IBM Plex Mono", "JetBrains Mono", monospace',
+		labelFont:    '10px "IBM Plex Mono", "JetBrains Mono", monospace',
 		// Font metrics (ascender, descender, x-height, cap-height)
 		fontMetricsColors: {
 			ascender:   'rgba(22,163,74,0.3)',
@@ -220,7 +220,7 @@ TRV.themeLight = {
 	// -- Layer label badge -------------------------------------------
 	label: {
 		textColor:    '#ffffff',
-		font:         '10px "JetBrains Mono", monospace',
+		font:         '10px "IBM Plex Mono", "JetBrains Mono", monospace',
 	},
 
 	// -- Per-layer color palette (cycled by index) ------------------
@@ -265,7 +265,7 @@ TRV.themeLight = {
 		linePreview: 	'rgba(8,145,178,0.6)', // lighter for BW preview
 		mark:      		'#0891b2',               // endpoint marks
 		label:     		'#0891b2',               // distance label
-		labelFont: 		'11px "JetBrains Mono", monospace',
+		labelFont: 		'11px "IBM Plex Mono", "JetBrains Mono", monospace',
 		lineWidth:      	1.5,
 	},
 
