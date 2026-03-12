@@ -42,7 +42,8 @@ TRV.themeDark = {
 		labelAdvance: 'rgba(91,157,239,0.7)',
 		// Styling
 		lineWidth:    1,
-		dash:         [6, 4],
+		baselineDash: [0],    // dash for baseline/advance lines
+		metricDash:   [3, 3],    // dash for sidebearing lines
 		font:         '9px "IBM Plex Mono", "JetBrains Mono", monospace',
 		labelFont:    '10px "IBM Plex Mono", "JetBrains Mono", monospace',
 		// Font metrics (ascender, descender, x-height, cap-height)
@@ -52,7 +53,7 @@ TRV.themeDark = {
 			xHeight:     'rgba(200,160,80,0.2)',
 			capHeight:   'rgba(200,160,80,0.2)',
 		},
-		fontMetricsDash: [3, 5],
+		fontMetricsDash: [0],
 	},
 
 	// -- Nodes & handles --------------------------------------------
@@ -175,7 +176,8 @@ TRV.themeLight = {
 		labelAdvance: 'rgba(37,99,235,0.8)',
 		// Styling
 		lineWidth:    1.5,                 // thicker for light bg
-		dash:         [6, 4],
+		baselineDash: [6, 4],    // dash for baseline/advance lines
+		metricDash:   [3, 3],    // dash for sidebearing lines
 		font:         '9px "IBM Plex Mono", "JetBrains Mono", monospace',
 		labelFont:    '10px "IBM Plex Mono", "JetBrains Mono", monospace',
 		// Font metrics (ascender, descender, x-height, cap-height)

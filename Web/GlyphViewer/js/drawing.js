@@ -124,7 +124,7 @@ TRV.drawMetrics = function(layer, w, h) {
 	const baseY = TRV.glyphToScreen(0, 0).y;
 	ctx.strokeStyle = t.baseline;
 	ctx.lineWidth = t.lineWidth || 1;
-	ctx.setLineDash(t.dash || [6, 4]);
+	ctx.setLineDash(t.baselineDash || [6, 4]);
 	ctx.beginPath();
 	ctx.moveTo(0, baseY);
 	ctx.lineTo(w, baseY);
@@ -134,7 +134,7 @@ TRV.drawMetrics = function(layer, w, h) {
 	// Advance height line (y=advH)
 	const topY = TRV.glyphToScreen(0, advH).y;
 	ctx.strokeStyle = t.baseline;
-	ctx.setLineDash(t.dash || [6, 4]);
+	ctx.setLineDash(t.baselineDash || [6, 4]);
 	ctx.beginPath();
 	ctx.moveTo(0, topY);
 	ctx.lineTo(w, topY);
@@ -185,11 +185,12 @@ TRV.drawMetrics = function(layer, w, h) {
 	lsbGrad.addColorStop(1, 'rgba(255,120,80,0)');
 	ctx.strokeStyle = lsbGrad;
 	ctx.lineWidth = t.lineWidth || 1;
-	ctx.setLineDash([]);
+	ctx.setLineDash(t.metricDash || [3, 3]);
 	ctx.beginPath();
 	ctx.moveTo(lsbX, sbTop);
 	ctx.lineTo(lsbX, sbBot);
 	ctx.stroke();
+	ctx.setLineDash([]);
 
 	// RSB / Advance width line — solid within UPM, fade beyond
 	const rsbX = TRV.glyphToScreen(advW, 0).x;
@@ -199,10 +200,12 @@ TRV.drawMetrics = function(layer, w, h) {
 	rsbGrad.addColorStop((sbDescY - sbTop) / (sbBot - sbTop), t.advance);
 	rsbGrad.addColorStop(1, 'rgba(91,157,235,0)');
 	ctx.strokeStyle = rsbGrad;
+	ctx.setLineDash(t.metricDash || [3, 3]);
 	ctx.beginPath();
 	ctx.moveTo(rsbX, sbTop);
 	ctx.lineTo(rsbX, sbBot);
 	ctx.stroke();
+	ctx.setLineDash([]);
 
 	// Labels
 	ctx.font = t.labelFont || '10px "JetBrains Mono", monospace';
