@@ -87,6 +87,7 @@ TRV.dom = {
 	glyphWidgets:   document.getElementById('glyph-widgets'),
 	gwName:         document.getElementById('gw-name'),
 	gwUnicode:      document.getElementById('gw-unicode'),
+	gwLayer:        document.getElementById('gw-layer'),
 	gwLsb:          document.getElementById('gw-lsb'),
 	gwAdvance:      document.getElementById('gw-advance'),
 	gwRsb:          document.getElementById('gw-rsb'),

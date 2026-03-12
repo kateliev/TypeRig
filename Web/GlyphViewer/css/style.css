@@ -398,6 +398,10 @@ body {
 	gap: 4px;
 }
 
+.glyph-widget .gw-row + .gw-row {
+	margin-top: 4px;
+}
+
 .glyph-widget .gw-field {
 	display: flex;
 	align-items: center;
@@ -412,6 +416,21 @@ body {
 
 .glyph-widget .gw-field input {
 	pointer-events: auto;
+}
+
+/* Layer indicator field */
+.glyph-widget .gw-field[data-field="layer"] {
+	cursor: default;
+}
+
+.glyph-widget .gw-field[data-field="layer"] .gw-value {
+	font-family: 'JetBrains Mono', monospace;
+	font-size: 10px;
+	font-weight: 500;
+}
+
+.glyph-widget .gw-field[data-field="layer"] .tri {
+	color: var(--accent);
 }
 
 /* Non-active glyph widgets - grayed out, simplified */
