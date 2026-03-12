@@ -40,6 +40,19 @@ TRV.themeDark = {
 		labelBase:    'rgba(255,120,80,0.5)',
 		labelBaseFg:  'rgba(255,120,80,0.6)',
 		labelAdvance: 'rgba(91,157,239,0.7)',
+		// Styling
+		lineWidth:    1,
+		dash:         [6, 4],
+		font:         '9px "JetBrains Mono", monospace',
+		labelFont:    '10px "JetBrains Mono", monospace',
+		// Font metrics (ascender, descender, x-height, cap-height)
+		fontMetricsColors: {
+			ascender:   'rgba(80,200,120,0.25)',
+			descender:  'rgba(80,200,120,0.25)',
+			xHeight:     'rgba(200,160,80,0.2)',
+			capHeight:   'rgba(200,160,80,0.2)',
+		},
+		fontMetricsDash: [3, 5],
 	},
 
 	// -- Nodes & handles --------------------------------------------
@@ -160,6 +173,19 @@ TRV.themeLight = {
 		labelBase:    'rgba(234,88,12,0.6)',
 		labelBaseFg:  'rgba(234,88,12,0.7)',
 		labelAdvance: 'rgba(37,99,235,0.8)',
+		// Styling
+		lineWidth:    1.5,                 // thicker for light bg
+		dash:         [6, 4],
+		font:         '9px "JetBrains Mono", monospace',
+		labelFont:    '10px "JetBrains Mono", monospace',
+		// Font metrics (ascender, descender, x-height, cap-height)
+		fontMetricsColors: {
+			ascender:   'rgba(22,163,74,0.3)',
+			descender:  'rgba(22,163,74,0.3)',
+			xHeight:     'rgba(180,83,9,0.25)',
+			capHeight:   'rgba(180,83,9,0.25)',
+		},
+		fontMetricsDash: [3, 5],
 	},
 
 	// -- Nodes & handles --------------------------------------------

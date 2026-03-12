@@ -123,8 +123,8 @@ TRV.drawMetrics = function(layer, w, h) {
 	// Baseline (y=0)
 	const baseY = TRV.glyphToScreen(0, 0).y;
 	ctx.strokeStyle = t.baseline;
-	ctx.lineWidth = 1;
-	ctx.setLineDash([6, 4]);
+	ctx.lineWidth = t.lineWidth || 1;
+	ctx.setLineDash(t.dash || [6, 4]);
 	ctx.beginPath();
 	ctx.moveTo(0, baseY);
 	ctx.lineTo(w, baseY);
@@ -134,7 +134,7 @@ TRV.drawMetrics = function(layer, w, h) {
 	// Advance height line (y=advH)
 	const topY = TRV.glyphToScreen(0, advH).y;
 	ctx.strokeStyle = t.baseline;
-	ctx.setLineDash([6, 4]);
+	ctx.setLineDash(t.dash || [6, 4]);
 	ctx.beginPath();
 	ctx.moveTo(0, topY);
 	ctx.lineTo(w, topY);
@@ -145,22 +145,22 @@ TRV.drawMetrics = function(layer, w, h) {
 	if (TRV.font) {
 		var fm = TRV.font.metrics;
 		var fmLines = [
-			{ y: fm.ascender,  label: 'Asc',  color: 'rgba(80,200,120,0.25)' },
-			{ y: fm.descender, label: 'Desc', color: 'rgba(80,200,120,0.25)' },
-			{ y: fm.xHeight,   label: 'xH',   color: 'rgba(200,160,80,0.2)' },
-			{ y: fm.capHeight, label: 'CapH',  color: 'rgba(200,160,80,0.2)' }
+			{ y: fm.ascender,  label: 'Asc',  color: t.fontMetricsColors.ascender },
+			{ y: fm.descender, label: 'Desc', color: t.fontMetricsColors.descender },
+			{ y: fm.xHeight,   label: 'xH',   color: t.fontMetricsColors.xHeight },
+			{ y: fm.capHeight, label: 'CapH',  color: t.fontMetricsColors.capHeight }
 		];
-		ctx.lineWidth = 1;
+		ctx.lineWidth = t.lineWidth || 1;
 		for (var i = 0; i < fmLines.length; i++) {
 			var fy = TRV.glyphToScreen(0, fmLines[i].y).y;
 			ctx.strokeStyle = fmLines[i].color;
-			ctx.setLineDash([3, 5]);
+			ctx.setLineDash(t.fontMetricsDash || [3, 5]);
 			ctx.beginPath();
 			ctx.moveTo(0, fy);
 			ctx.lineTo(w, fy);
 			ctx.stroke();
 
-			ctx.font = '9px "JetBrains Mono", monospace';
+			ctx.font = t.font;
 			ctx.fillStyle = fmLines[i].color.replace(/[\d.]+\)$/, '0.5)');
 			ctx.textAlign = 'right';
 			ctx.fillText(fmLines[i].label + ' ' + fmLines[i].y, w - 6, fy - 3);
@@ -184,7 +184,7 @@ TRV.drawMetrics = function(layer, w, h) {
 	lsbGrad.addColorStop((sbDescY - sbTop) / (sbBot - sbTop), t.sidebearing);
 	lsbGrad.addColorStop(1, 'rgba(255,120,80,0)');
 	ctx.strokeStyle = lsbGrad;
-	ctx.lineWidth = 1;
+	ctx.lineWidth = t.lineWidth || 1;
 	ctx.setLineDash([]);
 	ctx.beginPath();
 	ctx.moveTo(lsbX, sbTop);
@@ -194,10 +194,10 @@ TRV.drawMetrics = function(layer, w, h) {
 	// RSB / Advance width line — solid within UPM, fade beyond
 	const rsbX = TRV.glyphToScreen(advW, 0).x;
 	var rsbGrad = ctx.createLinearGradient(0, sbTop, 0, sbBot);
-	rsbGrad.addColorStop(0, 'rgba(91,157,239,0)');
+	rsbGrad.addColorStop(0, 'rgba(91,157,235,0)');
 	rsbGrad.addColorStop((sbAscY - sbTop) / (sbBot - sbTop), t.advance);
 	rsbGrad.addColorStop((sbDescY - sbTop) / (sbBot - sbTop), t.advance);
-	rsbGrad.addColorStop(1, 'rgba(91,157,239,0)');
+	rsbGrad.addColorStop(1, 'rgba(91,157,235,0)');
 	ctx.strokeStyle = rsbGrad;
 	ctx.beginPath();
 	ctx.moveTo(rsbX, sbTop);
@@ -205,7 +205,7 @@ TRV.drawMetrics = function(layer, w, h) {
 	ctx.stroke();
 
 	// Labels
-	ctx.font = '10px "JetBrains Mono", monospace';
+	ctx.font = t.labelFont || '10px "JetBrains Mono", monospace';
 
 	ctx.fillStyle = t.labelBaseFg;
 	ctx.textAlign = 'left';
