@@ -663,7 +663,7 @@ TRV.filterGlyphPanel = function(query) {
 TRV.updateFontInfo = function() {
 	if (!TRV.font) return;
 	var info = TRV.font.info;
-	document.title = TRV.theme.appTitle + ' | ' + info.family + ' ' + info.style;
+	document.title = TRV.getCurrentTheme().appTitle + ' | ' + info.family + ' ' + info.style;
 };
 
 

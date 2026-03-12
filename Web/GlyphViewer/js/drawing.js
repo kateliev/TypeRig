@@ -81,7 +81,8 @@ TRV.draw = function() {
 
 	// Clear — preview mode: white bg, black fill, no decorations
 	var preview = state.previewMode;
-	ctx.fillStyle = preview ? TRV.theme.bgPreview : TRV.getBgColor();
+	var t = TRV.getCurrentTheme();
+	ctx.fillStyle = preview ? t.bgPreview : TRV.getBgColor();
 	ctx.fillRect(0, 0, w, h);
 
 	// Update glyph widget (works in all modes)
@@ -115,7 +116,7 @@ TRV.draw = function() {
 // -- Metrics --------------------------------------------------------
 TRV.drawMetrics = function(layer, w, h) {
 	const ctx = TRV.dom.ctx;
-	const t = TRV.theme.metrics;
+	const t = TRV.getCurrentTheme().metrics;
 	const advW = layer.width;
 	const advH = layer.height;
 
@@ -225,7 +226,7 @@ TRV.drawMetrics = function(layer, w, h) {
 // -- Contours -------------------------------------------------------
 TRV.drawContours = function(layer) {
 	const ctx = TRV.dom.ctx;
-	const t = TRV.theme.contour;
+	const t = TRV.getCurrentTheme().contour;
 	var preview = TRV.state.previewMode;
 
 	// Preview mode: always filled, black on white
@@ -244,7 +245,7 @@ TRV.drawContours = function(layer) {
 		ctx.fill('nonzero');
 		if (!preview) {
 			ctx.strokeStyle = t.stroke;
-			ctx.lineWidth = 1;
+			ctx.lineWidth = t.lineWidth || 1;
 			ctx.stroke();
 		}
 
@@ -256,7 +257,7 @@ TRV.drawContours = function(layer) {
 					ctx.beginPath();
 					TRV.buildContourPath(contour);
 					ctx.strokeStyle = t.strokePlain || t.stroke;
-					ctx.lineWidth = 1.5;
+					ctx.lineWidth = (t.lineWidth || 1) + 0.5;
 					ctx.stroke();
 				}
 			}
@@ -440,7 +441,7 @@ TRV.drawStackedWarnings = function(layer) {
 TRV.drawNodes = function(layer) {
 	const ctx = TRV.dom.ctx;
 	const sel = TRV.state.selectedNodeIds;
-	const tn = TRV.theme.node;
+	const tn = TRV.getCurrentTheme().node;
 
 	// First pass: draw handle lines
 	// Cubic BCPs connect to their parent on-curve only, NOT to each other
@@ -464,7 +465,7 @@ TRV.drawNodes = function(layer) {
 					if (prev.type === 'on') {
 						const pp = TRV.glyphToScreen(prev.x, prev.y);
 						ctx.strokeStyle = tn.handleLine;
-						ctx.lineWidth = 1;
+						ctx.lineWidth = tn.handleWidth;
 						ctx.beginPath();
 						ctx.moveTo(pp.x, pp.y);
 						ctx.lineTo(sp.x, sp.y);
@@ -474,7 +475,7 @@ TRV.drawNodes = function(layer) {
 					if (next.type === 'on') {
 						const np = TRV.glyphToScreen(next.x, next.y);
 						ctx.strokeStyle = tn.handleLine;
-						ctx.lineWidth = 1;
+						ctx.lineWidth = tn.handleWidth;
 						ctx.beginPath();
 						ctx.moveTo(sp.x, sp.y);
 						ctx.lineTo(np.x, np.y);
@@ -489,7 +490,7 @@ TRV.drawNodes = function(layer) {
 					if (nodes[prevIdx].type === 'on') {
 						const pp = TRV.glyphToScreen(nodes[prevIdx].x, nodes[prevIdx].y);
 						ctx.strokeStyle = tn.handleLine;
-						ctx.lineWidth = 1;
+						ctx.lineWidth = tn.handleWidth;
 						ctx.beginPath();
 						ctx.moveTo(pp.x, pp.y);
 						ctx.lineTo(sp.x, sp.y);
@@ -499,7 +500,7 @@ TRV.drawNodes = function(layer) {
 					if (nodes[nextIdx].type === 'on') {
 						const np = TRV.glyphToScreen(nodes[nextIdx].x, nodes[nextIdx].y);
 						ctx.strokeStyle = tn.handleLine;
-						ctx.lineWidth = 1;
+						ctx.lineWidth = tn.handleWidth;
 						ctx.beginPath();
 						ctx.moveTo(sp.x, sp.y);
 						ctx.lineTo(np.x, np.y);
@@ -539,12 +540,12 @@ TRV.drawNodes = function(layer) {
 				const id = `c${ci}_n${ni}`;
 				const sp = TRV.glyphToScreen(node.x, node.y);
 				const isSelected = sel.has(id);
-				const r = isSelected ? 5 : (node.type === 'on' ? 4 : 3);
+				const r = isSelected ? tn.radius + 1 : tn.radius;
 
 				if (node.type === 'on') {
 					ctx.fillStyle = isSelected ? tn.selected : (node.smooth ? tn.onSmooth : tn.onCorner);
 					ctx.strokeStyle = isSelected ? tn.selected : tn.outline;
-					ctx.lineWidth = 1;
+					ctx.lineWidth = tn.strokeWidth;
 
 					if (node.smooth) {
 						ctx.beginPath();
@@ -558,9 +559,9 @@ TRV.drawNodes = function(layer) {
 				} else {
 					ctx.fillStyle = isSelected ? tn.selected : tn.offCurve;
 					ctx.strokeStyle = isSelected ? tn.selected : tn.outline;
-					ctx.lineWidth = 1;
+					ctx.lineWidth = tn.strokeWidth;
 					ctx.beginPath();
-					ctx.arc(sp.x, sp.y, r, 0, Math.PI * 2);
+					ctx.arc(sp.x, sp.y, r - 1, 0, Math.PI * 2);
 					ctx.fill();
 					ctx.stroke();
 				}
@@ -631,7 +632,7 @@ TRV.drawPreviewNodes = function(layer) {
 
 	var ctx = TRV.dom.ctx;
 	var sel = TRV.state.selectedNodeIds;
-	var tn = TRV.theme.node;
+	var tn = TRV.getCurrentTheme().node;
 	var radius = TRV.PREVIEW_REVEAL_RADIUS;
 	var savedAlpha = ctx.globalAlpha;
 
@@ -805,7 +806,7 @@ TRV.drawPreviewNodes = function(layer) {
 TRV.drawAnchors = function(layer) {
 	if (!layer.anchors || layer.anchors.length === 0) return;
 	const ctx = TRV.dom.ctx;
-	const ta = TRV.theme.anchor;
+	const ta = TRV.getCurrentTheme().anchor;
 
 	for (const anchor of layer.anchors) {
 		const sp = TRV.glyphToScreen(anchor.x, anchor.y);
@@ -844,7 +845,7 @@ TRV.drawAnchors = function(layer) {
 TRV.drawSelectionOverlay = function() {
 	const ctx = TRV.dom.ctx;
 	const state = TRV.state;
-	const ts = TRV.theme.selection;
+	const ts = TRV.getCurrentTheme().selection;
 
 	ctx.save();
 
@@ -863,7 +864,7 @@ TRV.drawSelectionOverlay = function() {
 
 		// Dashed border
 		ctx.strokeStyle = ts.stroke;
-		ctx.lineWidth = 1;
+		ctx.lineWidth = ts.strokeWidth || 1;
 		ctx.setLineDash([4, 3]);
 		ctx.strokeRect(
 			Math.min(x1, x2), Math.min(y1, y2),
@@ -905,7 +906,7 @@ TRV.drawSelectionOverlay = function() {
 TRV.drawMaskContours = function(maskLayer) {
 	if (!maskLayer) return;
 	const ctx = TRV.dom.ctx;
-	const tm = TRV.theme.mask;
+	const tm = TRV.getCurrentTheme().mask;
 
 	for (const shape of maskLayer.shapes) {
 		for (const contour of shape.contours) {
@@ -924,7 +925,7 @@ TRV.drawMaskContours = function(maskLayer) {
 // -- Layer name label (filled badge, centered below baseline) -------
 TRV.drawLayerLabel = function(layer) {
 	const ctx = TRV.dom.ctx;
-	const tl = TRV.theme.label;
+	const tl = TRV.getCurrentTheme().label;
 	if (!TRV.state.glyphData) return;
 
 	const layers = TRV.state.glyphData.layers;

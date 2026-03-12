@@ -138,7 +138,7 @@ TRV.getJoinedLayout = function() {
 	const layers = state.glyphData ? state.glyphData.layers : [];
 	const cols = state.gridCols;
 	const rows = state.gridRows;
-	const gap = TRV.theme.grid.joinedGap;
+	const gap = TRV.getCurrentTheme().grid.joinedGap;
 
 	// Compute actual bounding box across non-mask layers
 	let maxW = 0, maxH = 0;
@@ -274,8 +274,8 @@ TRV.drawJoinedView = function(canvasW, canvasH) {
 TRV.drawJoinedDividers = function(canvasW, canvasH, layout) {
 	const ctx = TRV.dom.ctx;
 	const state = TRV.state;
-	const tg = TRV.theme.grid;
-	const rgb = TRV.theme.bgFadeRgb;
+	const tg = TRV.getCurrentTheme().grid;
+	const rgb = TRV.getCurrentTheme().bgFadeRgb;
 	const a = tg.dividerFadeAlphaJ;
 	const fade = 28;
 
@@ -297,7 +297,7 @@ TRV.drawJoinedDividers = function(canvasW, canvasH, layout) {
 		ctx.fillRect(screenX, 0, fade, canvasH);
 
 		ctx.strokeStyle = tg.dividerHairlineJ;
-		ctx.lineWidth = 1;
+		ctx.lineWidth = tg.strokeWidth || 1;
 		ctx.beginPath();
 		ctx.moveTo(Math.round(screenX) + 0.5, 0);
 		ctx.lineTo(Math.round(screenX) + 0.5, canvasH);
@@ -322,7 +322,7 @@ TRV.drawJoinedDividers = function(canvasW, canvasH, layout) {
 		ctx.fillRect(0, screenY, canvasW, fade);
 
 		ctx.strokeStyle = tg.dividerHairlineJ;
-		ctx.lineWidth = 1;
+		ctx.lineWidth = tg.strokeWidth || 1;
 		ctx.beginPath();
 		ctx.moveTo(0, Math.round(screenY) + 0.5);
 		ctx.lineTo(canvasW, Math.round(screenY) + 0.5);
@@ -346,8 +346,9 @@ TRV.drawJoinedActiveIndicator = function(layout) {
 		const br = TRV.glyphToScreen(layer.width, 0);
 		const tick = 8;
 
-		ctx.strokeStyle = TRV.theme.grid.activeBorder;
-		ctx.lineWidth = 1.5;
+		const tg = TRV.getCurrentTheme().grid;
+		ctx.strokeStyle = tg.activeBorder;
+		ctx.lineWidth = tg.strokeWidth || 1;
 
 		// Top-left corner
 		ctx.beginPath();
@@ -407,7 +408,7 @@ TRV.drawSplitView = function(canvasW, canvasH) {
 			ctx.translate(cell.x, cell.y);
 
 			var preview = state.previewMode;
-			ctx.fillStyle = preview ? TRV.theme.bgPreview : TRV.getBgColor();
+			ctx.fillStyle = preview ? TRV.getCurrentTheme().bgPreview : TRV.getBgColor();
 			ctx.fillRect(0, 0, cell.w, cell.h);
 
 			if (!isActive) {
@@ -440,10 +441,10 @@ TRV.drawSplitView = function(canvasW, canvasH) {
 TRV.drawSplitDividers = function(w, h) {
 	const ctx = TRV.dom.ctx;
 	const state = TRV.state;
-	const grid = TRV.theme.grid;
-	const rgb = TRV.theme.bgFadeRgb;
-	const fade =  TRV.theme.grid.fade;
-	const alpha = TRV.theme.grid.dividerFadeAlpha;
+	const grid = TRV.getCurrentTheme().grid;
+	const rgb = TRV.getCurrentTheme().bgFadeRgb;
+	const fade =  TRV.getCurrentTheme().grid.fade;
+	const alpha = TRV.getCurrentTheme().grid.dividerFadeAlpha;
 	const cols = state.gridCols;
 	const rows = state.gridRows;
 
@@ -463,7 +464,7 @@ TRV.drawSplitDividers = function(w, h) {
 		ctx.fillRect(x, 0, fade, h);
 
 		ctx.strokeStyle = grid.dividerHairline;
-		ctx.lineWidth = 1;
+		ctx.lineWidth = grid.strokeWidth || 1;
 		ctx.beginPath();
 		ctx.moveTo(x + 0.5, 0);
 		ctx.lineTo(x + 0.5, h);
@@ -486,7 +487,7 @@ TRV.drawSplitDividers = function(w, h) {
 		ctx.fillRect(0, y, w, fade);
 
 		ctx.strokeStyle = grid.dividerHairline;
-		ctx.lineWidth = 1;
+		ctx.lineWidth = grid.strokeWidth || 1;
 		ctx.beginPath();
 		ctx.moveTo(0, y + 0.5);
 		ctx.lineTo(w, y + 0.5);
@@ -499,7 +500,7 @@ TRV.drawActiveCellBorder = function() {
 	const ctx = TRV.dom.ctx;
 	const cell = TRV.getCellRect(TRV.state.activeCell.row, TRV.state.activeCell.col);
 
-	ctx.strokeStyle = TRV.theme.grid.activeBorder;
+	ctx.strokeStyle = TRV.getCurrentTheme().grid.activeBorder;
 	ctx.lineWidth = 2;
 	ctx.strokeRect(cell.x + 1, cell.y + 1, cell.w - 2, cell.h - 2);
 };
@@ -575,7 +576,7 @@ TRV.removeGlyphFromStrip = function(name) {
 TRV.getGlyphStripLayout = function() {
 	var state = TRV.state;
 	var ws = TRV.workspace;
-	var gap = TRV.theme.grid.stripGap;
+	var gap = TRV.getCurrentTheme().grid.stripGap;
 	var upm = TRV.font ? TRV.font.metrics.upm : 1000;
 	var rowH = upm + gap;
 
@@ -636,7 +637,7 @@ TRV.getGlyphStripLayout = function() {
 TRV.drawGlyphStrip = function(canvasW, canvasH) {
 	var ctx = TRV.dom.ctx;
 	var state = TRV.state;
-	var theme = TRV.theme.activeCellHightlight;
+	var theme = TRV.getCurrentTheme().activeCellHightlight;
 	var preview = state.previewMode;
 	var layout = TRV.getGlyphStripLayout();
 	var upm = TRV.font ? TRV.font.metrics.upm : 1000;
@@ -674,18 +675,18 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 				var xR = TRV.glyphToScreen(slot.x + slot.w, 0).x;
 				var gTop = TRV.glyphToScreen(0, upm * 2).y;
 				var gBot = TRV.glyphToScreen(0, -upm).y;
-				var activeGrad = ctx.createLinearGradient(0, gTop, 0, gBot);
-				theme.backgroundGradient.forEach(([p, c]) => activeGrad.addColorStop(p, c));
-		
-				ctx.fillStyle = activeGrad;
-				ctx.fillRect(xL, gTop, xR - xL, gBot - gTop);
-				ctx.strokeStyle = theme.strokeStyle;
-				ctx.lineWidth = 1;
-				ctx.beginPath();
-				ctx.moveTo(xL, gTop); ctx.lineTo(xL, gBot);
-				ctx.moveTo(xR, gTop); ctx.lineTo(xR, gBot);
-				ctx.stroke();
-			}
+			var activeGrad = ctx.createLinearGradient(0, gTop, 0, gBot);
+			theme.backgroundGradient.forEach(([p, c]) => activeGrad.addColorStop(p, c));
+	
+			ctx.fillStyle = activeGrad;
+			ctx.fillRect(xL, gTop, xR - xL, gBot - gTop);
+			ctx.strokeStyle = theme.strokeStyle;
+			ctx.lineWidth = theme.strokeWidth || 1;
+			ctx.beginPath();
+			ctx.moveTo(xL, gTop); ctx.lineTo(xL, gBot);
+			ctx.moveTo(xR, gTop); ctx.lineTo(xR, gBot);
+			ctx.stroke();
+		}
 
 			state.glyphData = glyphData;
 			var isExpanded = (slot.cols > 1 || slot.rows > 1);
@@ -724,7 +725,7 @@ TRV.drawGlyphStrip = function(canvasW, canvasH) {
 
 						state.activeLayer = layer.name;
 
-						var cellOffX = slot.x + c * (slot.advW + TRV.theme.grid.stripGap);
+						var cellOffX = slot.x + c * (slot.advW + TRV.getCurrentTheme().grid.stripGap);
 						var cellOffY = r * layout.rowH;
 
 						state.pan.x = savedPanX + cellOffX * state.zoom;
@@ -875,7 +876,7 @@ TRV.withStripOffset = function(row, col, fn) {
 	}
 	if (!activeSlot) { fn(); return; }
 
-	var cellOffX = activeSlot.x + col * (activeSlot.advW + TRV.theme.grid.stripGap);
+	var cellOffX = activeSlot.x + col * (activeSlot.advW + TRV.getCurrentTheme().grid.stripGap);
 	var cellOffY = row * layout.rowH;
 
 	var savedPanX = state.pan.x;

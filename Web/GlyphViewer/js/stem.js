@@ -293,7 +293,7 @@ TRV.drawStemMeasurement = function(layer) {
 	if (!m) return;
 
 	var ctx = TRV.dom.ctx;
-	var th = TRV.theme.onStemMeasurment;
+	var th = TRV.getCurrentTheme().onStemMeasurment;
 	var preview = TRV.state.previewMode;
 
 	// Convert endpoints to screen coords

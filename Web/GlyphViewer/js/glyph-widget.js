@@ -36,7 +36,7 @@ TRV._getLayerColor = function(layerName, glyphData) {
 	var layers = glyphData.layers;
 	var idx = layers.findIndex(function(l) { return l.name === layerName; });
 	if (idx < 0) idx = 0;
-	var colors = TRV.theme.layerColors;
+	var colors = TRV.getCurrentTheme().layerColors;
 	return colors[idx % colors.length];
 };
 
@@ -274,46 +274,38 @@ TRV.updateGlyphWidget = function() {
 // -- Position single widget for multi-view/joined mode ---------------
 TRV._positionMultiViewWidget = function() {
 	var state = TRV.state;
-	var container = TRV.dom.glyphWidgets;
-	if (!container) return;
+	var widget = TRV.dom.glyphWidget;
+	if (!widget) return;
 
 	var rows = state.gridRows;
 	var cols = state.gridCols;
 	var w = TRV.dom.canvasWrap.clientWidth;
 	var h = TRV.dom.canvasWrap.clientHeight;
 
-	var widgetX, widgetY;
+	// Position at bottom center
+	var widgetW = Math.min(250, w * 0.4);
+	var widgetX = w / 2 - widgetW / 2;
+	var widgetY = h - 70;
 
-	if (state.joinedView) {
-		// Position at bottom middle of the joined view
-		// For 2x2, this is between the bottom two cells
-		var layout = TRV.getJoinedLayout();
-		var cellW = layout.cellW;
-		var cellH = layout.cellH;
-		
-		// Center horizontally at bottom row, slightly above bottom edge
-		widgetX = w / 2;
-		widgetY = h - 70;
-	} else {
-		// Split mode: position at bottom middle of entire screen
-		widgetX = w / 2;
-		widgetY = h - 70;
-	}
+	// Position the main editable widget
+	widget.style.left = widgetX + 'px';
+	widget.style.top = widgetY + 'px';
+	widget.style.width = widgetW + 'px';
+	widget.classList.add('visible');
 
-	// Create positioned widget
+	// Populate with current glyph data
 	var layer = TRV.getActiveLayer();
 	if (!layer) {
-		TRV.hideGlyphWidget();
+		widget.classList.remove('visible');
 		return;
 	}
 
 	var glyphName = state.glyphData.name || TRV.activeGlyph;
 	if (!glyphName) {
-		TRV.hideGlyphWidget();
+		widget.classList.remove('visible');
 		return;
 	}
 
-	// Create a widget in glyph-widgets container (read-only style)
 	var advW = layer.width || 0;
 	var bounds = TRV._getLayerBounds(layer);
 	var lsbVal = bounds ? Math.round(bounds.minX) : 0;
@@ -325,39 +317,20 @@ TRV._positionMultiViewWidget = function() {
 		if (code) unicode = 'U+' + code.toString(16).toUpperCase().padStart(4, '0');
 	}
 
-	var widgetW = Math.min(250, w * 0.4);
-	var widgetH = 70;
-
-	var widget = document.createElement('div');
-	widget.className = 'glyph-widget glyph-widget--readonly visible';
-	widget.style.position = 'absolute';
-	widget.style.left = (widgetX - widgetW/2) + 'px';
-	widget.style.top = widgetY + 'px';
-	widget.style.width = widgetW + 'px';
-
+	// Update input values
+	TRV.dom.gwName.value = glyphName;
+	TRV.dom.gwUnicode.value = unicode;
+	TRV.dom.gwLayer.textContent = state.activeLayer || '';
+	
 	var layerColor = TRV._getLayerColor(state.activeLayer, state.glyphData);
+	TRV.dom.gwLayer.style.color = layerColor;
+	TRV.dom.gwLayer.previousElementSibling.style.color = layerColor;
 
-	widget.innerHTML =
-		'<div class="gw-row">' +
-			'<div class="gw-field"><span class="tri">label</span><span class="gw-value">' + glyphName + '</span></div>' +
-			'<div class="gw-field"><span class="tri">select_glyph</span><span class="gw-value">' + unicode + '</span></div>' +
-			'<div class="gw-field gw-field--readonly"><span class="tri" style="color:' + layerColor + '">layer_active</span><span class="gw-value" style="color:' + layerColor + '">' + (state.activeLayer || '') + '</span></div>' +
-		'</div>' +
-		'<div class="gw-row">' +
-			'<div class="gw-field"><span class="tri">metrics_lsb</span><span class="gw-value">' + lsbVal + '</span></div>' +
-			'<div class="gw-field"><span class="tri">metrics_advance</span><span class="gw-value">' + advW + '</span></div>' +
-			'<div class="gw-field"><span class="tri">metrics_rsb</span><span class="gw-value">' + rsbVal + '</span></div>' +
-		'</div>';
+	TRV.dom.gwLsb.value = lsbVal;
+	TRV.dom.gwAdvance.value = advW;
+	TRV.dom.gwRsb.value = rsbVal;
 
-	container.appendChild(widget);
-
-	// Stop propagation
-	widget.addEventListener('click', function(e) {
-		e.stopPropagation();
-	});
-	widget.addEventListener('mousedown', function(e) {
-		e.stopPropagation();
-	});
+	TRV._widgetSlot = glyphName;
 };
 
 TRV.initGlyphWidget = function() {

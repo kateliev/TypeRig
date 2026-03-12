@@ -72,7 +72,7 @@ TRV.getStripSlotAt = function(sx, sy) {
 			var desc = TRV.font ? Math.abs(TRV.font.metrics.descender) : 200;
 			for (var r = 0; r < slot.rows; r++) {
 				for (var c = 0; c < slot.cols; c++) {
-					var cx = slot.x + c * (slot.advW + TRV.theme.grid.stripGap);
+					var cx = slot.x + c * (slot.advW + TRV.getCurrentTheme().grid.stripGap);
 					var cellYlo = r * layout.rowH - desc;
 					var cellYhi = (r + 1) * layout.rowH;
 					if (gp.x >= cx && gp.x <= cx + slot.advW &&
@@ -2450,7 +2450,7 @@ TRV.loadXmlString = function(xmlString, filename) {
 		TRV.fitToView();
 		TRV.buildXmlPanel();
 		TRV.clearUndo();
-		document.title = TRV.theme.appTitle + ' | ' + (g.name || 'untitled');
+		document.title = TRV.getCurrentTheme().appTitle + ' | ' + (g.name || 'untitled');
 	} catch (e) {
 		alert('Error loading XML: ' + e.message);
 	}

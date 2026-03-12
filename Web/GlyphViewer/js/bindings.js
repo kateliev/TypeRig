@@ -101,33 +101,37 @@ TRV.actions = {
 
 	// -- Node movement (arrow keys) ---
 	moveUp: function(ctx) {
-		var step = TRV.theme.keyboard.arrowStep;
-		if (ctx.e.shiftKey) step = TRV.theme.keyboard.arrowStep_SHIFT;
-		if (ctx.e.ctrlKey || ctx.e.metaKey) step = TRV.theme.keyboard.arrowStep_CTRL;
+		var t = TRV.getCurrentTheme().keyboard;
+		var step = t.arrowStep;
+		if (ctx.e.shiftKey) step = t.arrowStep_SHIFT;
+		if (ctx.e.ctrlKey || ctx.e.metaKey) step = t.arrowStep_CTRL;
 		TRV.pushUndoNudge();
 		TRV.moveSelectedNodes(0, step);
 	},
 
 	moveDown: function(ctx) {
-		var step = TRV.theme.keyboard.arrowStep;
-		if (ctx.e.shiftKey) step = TRV.theme.keyboard.arrowStep_SHIFT;
-		if (ctx.e.ctrlKey || ctx.e.metaKey) step = TRV.theme.keyboard.arrowStep_CTRL;
+		var t = TRV.getCurrentTheme().keyboard;
+		var step = t.arrowStep;
+		if (ctx.e.shiftKey) step = t.arrowStep_SHIFT;
+		if (ctx.e.ctrlKey || ctx.e.metaKey) step = t.arrowStep_CTRL;
 		TRV.pushUndoNudge();
 		TRV.moveSelectedNodes(0, -step);
 	},
 
 	moveRight: function(ctx) {
-		var step = TRV.theme.keyboard.arrowStep;
-		if (ctx.e.shiftKey) step = TRV.theme.keyboard.arrowStep_SHIFT;
-		if (ctx.e.ctrlKey || ctx.e.metaKey) step = TRV.theme.keyboard.arrowStep_CTRL;
+		var t = TRV.getCurrentTheme().keyboard;
+		var step = t.arrowStep;
+		if (ctx.e.shiftKey) step = t.arrowStep_SHIFT;
+		if (ctx.e.ctrlKey || ctx.e.metaKey) step = t.arrowStep_CTRL;
 		TRV.pushUndoNudge();
 		TRV.moveSelectedNodes(step, 0);
 	},
 
 	moveLeft: function(ctx) {
-		var step = TRV.theme.keyboard.arrowStep;
-		if (ctx.e.shiftKey) step = TRV.theme.keyboard.arrowStep_SHIFT;
-		if (ctx.e.ctrlKey || ctx.e.metaKey) step = TRV.theme.keyboard.arrowStep_CTRL;
+		var t = TRV.getCurrentTheme().keyboard;
+		var step = t.arrowStep;
+		if (ctx.e.shiftKey) step = t.arrowStep_SHIFT;
+		if (ctx.e.ctrlKey || ctx.e.metaKey) step = t.arrowStep_CTRL;
 		TRV.pushUndoNudge();
 		TRV.moveSelectedNodes(-step, 0);
 	},
@@ -159,6 +163,33 @@ TRV.actions = {
 		TRV.state.previewMode = TRV.state.previewLocked;
 		TRV.updatePreviewButton();
 		TRV.draw();
+	},
+
+	// -- GUI Mode ---
+	setGuiMode: function(mode) {
+		var body = document.body;
+		var darkBtn = document.getElementById('btn-gui-mode-dark');
+		var lightBtn = document.getElementById('btn-gui-mode-light');
+		
+		if (mode === 'light') {
+			body.setAttribute('data-theme', 'light');
+			darkBtn.classList.remove('active');
+			lightBtn.classList.add('active');
+		} else {
+			body.removeAttribute('data-theme');
+			darkBtn.classList.add('active');
+			lightBtn.classList.remove('active');
+		}
+		
+		TRV.draw();
+	},
+
+	setGuiModeDark: function() {
+		TRV.actions.setGuiMode('dark');
+	},
+
+	setGuiModeLight: function() {
+		TRV.actions.setGuiMode('light');
 	},
 
 	// -- XML panel ---
@@ -294,6 +325,10 @@ TRV.toolbarMap = [
 
 	{ id: 'btn-preview', action: 'togglePreview', desc: 'Toggle BW preview' },
 	{ id: 'btn-stem',    toggle: true, stateKey: 'showStem',    desc: 'Toggle stem measurement' },
+
+	// GUI mode (exclusive pair - handled specially)
+	{ id: 'btn-gui-mode-dark',  action: 'setGuiModeDark',  desc: 'Dark mode' },
+	{ id: 'btn-gui-mode-light', action: 'setGuiModeLight', desc: 'Light mode' },
 
 	// Fill/outline are exclusive pair - handled specially in events.js
 	// View mode buttons (1x1, 2x1, 2x2) - handled specially in events.js
