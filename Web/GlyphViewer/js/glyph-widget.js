@@ -6,17 +6,21 @@
 // ===================================================================
 'use strict';
 
-// -- Compute widget position and size anchored to glyph advance ------
+// -- Compute widget position and size (centered on glyph middle) ------
 TRV._getWidgetRect = function(advW, verticalOffset) {
 	var lsbScreen = TRV.glyphToScreen(0, 0);
 	var rsbScreen = TRV.glyphToScreen(advW, 0);
 	var wrapRect = TRV.dom.canvasWrap.getBoundingClientRect();
+	var state = TRV.state;
 
-	var glyphScreenW = (rsbScreen.x - lsbScreen.x)*0.6;
-	var minW = 120;
-	var widgetW = Math.max(minW, glyphScreenW);
+	// Fixed size: half of advance width
+	var widgetW = advW * 0.5 * state.zoom;
+	var minW = 100;
+	widgetW = Math.max(minW, widgetW);
 
-	var screenX = lsbScreen.x + widgetW/2;
+	// Center on middle of glyph (advance / 2)
+	var midScreenX = (lsbScreen.x + rsbScreen.x) / 2;
+	var screenX = midScreenX - widgetW / 2;
 	var screenY = lsbScreen.y + (verticalOffset || 12);
 
 	return {
@@ -29,9 +33,9 @@ TRV._getWidgetRect = function(advW, verticalOffset) {
 // -- Glyph Widget HTML Overlay ---------------------------------------
 TRV._widgetSlot = null;
 
-TRV.showGlyphWidget = function(slot, layer) {
+TRV.showGlyphWidget = function(name, layer) {
 	var widget = TRV.dom.glyphWidget;
-	if (!widget || !slot || !layer) return;
+	if (!widget || !name || !layer) return;
 
 	var state = TRV.state;
 	var bounds = TRV._getLayerBounds(layer);
@@ -40,7 +44,6 @@ TRV.showGlyphWidget = function(slot, layer) {
 	var lsbVal = bounds ? Math.round(bounds.minX) : 0;
 	var rsbVal = bounds ? Math.round(advW - bounds.maxX) : 0;
 
-	var name = slot.name;
 	var unicode = '';
 	if (TRV.font && TRV.font.encoding) {
 		var code = TRV.font.encoding[name];
@@ -52,6 +55,15 @@ TRV.showGlyphWidget = function(slot, layer) {
 	widget.style.left = rect.left + 'px';
 	widget.style.top = rect.top + 'px';
 	widget.style.width = rect.width + 'px';
+
+	// Determine if we should stack vertically (when widget is narrow)
+	var stackFields = rect.width < 140;
+
+	if (stackFields) {
+		widget.classList.add('gw-stacked');
+	} else {
+		widget.classList.remove('gw-stacked');
+	}
 
 	TRV.dom.gwName.value = name;
 	TRV.dom.gwUnicode.value = unicode;
@@ -78,10 +90,9 @@ TRV._createReadonlyWidget = function(name, layer) {
 	var container = TRV.dom.glyphWidgets;
 	if (!container) return;
 
+	var state = TRV.state;
 	var bounds = TRV._getLayerBounds(layer);
 	var advW = layer.width || 0;
-	var lsbVal = bounds ? Math.round(bounds.minX) : 0;
-	var rsbVal = bounds ? Math.round(advW - bounds.maxX) : 0;
 
 	var unicode = '';
 	if (TRV.font && TRV.font.encoding) {
@@ -96,88 +107,130 @@ TRV._createReadonlyWidget = function(name, layer) {
 	widget.style.left = rect.left + 'px';
 	widget.style.top = rect.top + 'px';
 	widget.style.width = rect.width + 'px';
+	widget.dataset.glyphName = name;
+
+	// Stacked layout: name, unicode, close button
 	widget.innerHTML =
-		'<div class="gw-row">' +
-			'<div class="gw-field"><span class="tri">label</span><span class="gw-value">' + name + '</span></div>' +
-			'<div class="gw-field"><span class="tri">select_glyph</span><span class="gw-value">' + unicode + '</span></div>' +
-		'</div>' +
-		'<div class="gw-row">' +
-			'<div class="gw-field"><span class="tri">metrics_lsb</span><span class="gw-value">' + lsbVal + '</span></div>' +
-			'<div class="gw-field"><span class="tri">metrics_advance</span><span class="gw-value">' + advW + '</span></div>' +
-			'<div class="gw-field"><span class="tri">metrics_rsb</span><span class="gw-value">' + rsbVal + '</span></div>' +
-		'</div>';
+		'<div class="gw-field"><span class="tri">label</span><span class="gw-value">' + name + '</span></div>' +
+		'<div class="gw-field"><span class="tri">select_glyph</span><span class="gw-value">' + unicode + '</span></div>' +
+		'<div class="gw-field gw-field--action" data-field="close"><span class="tri">close</span></div>';
+
 	container.appendChild(widget);
+
+	// Stop propagation on the widget to prevent canvas click handling
+	widget.addEventListener('click', function(e) {
+		e.stopPropagation();
+	});
+
+	widget.addEventListener('mousedown', function(e) {
+		e.stopPropagation();
+	});
+
+	// Wire close button
+	var closeBtn = widget.querySelector('[data-field="close"]');
+	if (closeBtn) {
+		closeBtn.addEventListener('click', function(e) {
+			e.stopPropagation();
+			e.preventDefault();
+			TRV.removeGlyphFromStrip(name);
+		});
+	}
 };
 
 TRV.updateGlyphWidget = function() {
 	var state = TRV.state;
-	if (!state.glyphData || !state.glyphViewMode) {
+
+	// No glyph loaded - hide widget
+	if (!state.glyphData) {
 		TRV.hideGlyphWidget();
 		return;
 	}
 
-	var ws = TRV.workspace;
-	if (ws.activeIdx < 0 || ws.activeIdx >= ws.glyphs.length) {
-		TRV.hideGlyphWidget();
-		return;
-	}
-
+	// Clear non-active widgets container
 	if (TRV.dom.glyphWidgets) {
 		TRV.dom.glyphWidgets.innerHTML = '';
 	}
 
-	var layout = TRV.getGlyphStripLayout();
+	// --- GLYPH STRIP MODE ---
+	if (state.glyphViewMode && TRV.font) {
+		var ws = TRV.workspace;
+		if (ws.activeIdx < 0 || ws.activeIdx >= ws.glyphs.length) {
+			TRV.hideGlyphWidget();
+			return;
+		}
 
-	var activeSlot = null;
-	for (var i = 0; i < layout.slots.length; i++) {
-		if (layout.slots[i].active) { activeSlot = layout.slots[i]; break; }
-	}
+		var layout = TRV.getGlyphStripLayout();
 
-	var basePanX = state.pan.x - (activeSlot ? activeSlot.x * state.zoom : 0);
-	var basePanY = state.pan.y;
-	var savedPanX = state.pan.x;
-	var savedPanY = state.pan.y;
+		var activeSlot = null;
+		for (var i = 0; i < layout.slots.length; i++) {
+			if (layout.slots[i].active) { activeSlot = layout.slots[i]; break; }
+		}
 
-	for (var i = 0; i < layout.slots.length; i++) {
-		var slot = layout.slots[i];
-		if (slot.active) continue;
+		// Create read-only widgets for non-active glyphs
+		var basePanX = state.pan.x - (activeSlot ? activeSlot.x * state.zoom : 0);
+		var basePanY = state.pan.y;
+		var savedPanX = state.pan.x;
+		var savedPanY = state.pan.y;
 
-		var cacheEntry = TRV.glyphCache.get(slot.name);
-		if (!cacheEntry) continue;
+		for (var i = 0; i < layout.slots.length; i++) {
+			var slot = layout.slots[i];
+			if (slot.active) continue;
+
+			var cacheEntry = TRV.glyphCache.get(slot.name);
+			if (!cacheEntry) continue;
+
+			var layer = TRV.getLayerByName(cacheEntry.glyphData, state.activeLayer);
+			if (!layer) layer = cacheEntry.glyphData.layers[0];
+			if (!layer) continue;
+
+			state.pan.x = basePanX + slot.x * state.zoom;
+			state.pan.y = basePanY;
+
+			TRV._createReadonlyWidget(slot.name, layer);
+		}
+
+		state.pan.x = savedPanX;
+		state.pan.y = savedPanY;
+
+		if (!activeSlot) {
+			TRV.hideGlyphWidget();
+			return;
+		}
+
+		// Show editable widget for active glyph
+		var name = ws.glyphs[ws.activeIdx];
+		var cacheEntry = TRV.glyphCache.get(name);
+		if (!cacheEntry) {
+			TRV.hideGlyphWidget();
+			return;
+		}
 
 		var layer = TRV.getLayerByName(cacheEntry.glyphData, state.activeLayer);
 		if (!layer) layer = cacheEntry.glyphData.layers[0];
-		if (!layer) continue;
+		if (!layer) {
+			TRV.hideGlyphWidget();
+			return;
+		}
 
-		state.pan.x = basePanX + slot.x * state.zoom;
-		state.pan.y = basePanY;
-
-		TRV._createReadonlyWidget(slot.name, layer);
-	}
-
-	state.pan.x = savedPanX;
-	state.pan.y = savedPanY;
-
-	if (!activeSlot) {
-		TRV.hideGlyphWidget();
+		TRV.showGlyphWidget(name, layer);
 		return;
 	}
 
-	var name = ws.glyphs[ws.activeIdx];
-	var cacheEntry = TRV.glyphCache.get(name);
-	if (!cacheEntry) {
-		TRV.hideGlyphWidget();
-		return;
-	}
-
-	var layer = TRV.getLayerByName(cacheEntry.glyphData, state.activeLayer);
-	if (!layer) layer = cacheEntry.glyphData.layers[0];
+	// --- SINGLE GLYPH MODE (not glyphViewMode) ---
+	// Show editable widget for the current glyph
+	var layer = TRV.getActiveLayer();
 	if (!layer) {
 		TRV.hideGlyphWidget();
 		return;
 	}
 
-	TRV.showGlyphWidget(activeSlot, layer);
+	var glyphName = state.glyphData.name || TRV.activeGlyph;
+	if (!glyphName) {
+		TRV.hideGlyphWidget();
+		return;
+	}
+
+	TRV.showGlyphWidget(glyphName, layer);
 };
 
 TRV.initGlyphWidget = function() {
@@ -245,12 +298,21 @@ TRV.initGlyphWidget = function() {
 			rsbInput.value = rsb;
 		}
 
-		var cacheEntry = TRV.glyphCache.get(glyphName);
-		if (!cacheEntry) return;
-
 		var state = TRV.state;
-		var layer = TRV.getLayerByName(cacheEntry.glyphData, state.activeLayer);
-		if (!layer) layer = cacheEntry.glyphData.layers[0];
+		var glyphData = null;
+
+		// Try cache first (glyph strip mode), then state.glyphData (single mode)
+		var cacheEntry = TRV.glyphCache.get(glyphName);
+		if (cacheEntry) {
+			glyphData = cacheEntry.glyphData;
+		} else if (state.glyphData && state.glyphData.name === glyphName) {
+			glyphData = state.glyphData;
+		}
+
+		if (!glyphData) return;
+
+		var layer = TRV.getLayerByName(glyphData, state.activeLayer);
+		if (!layer) layer = glyphData.layers[0];
 		if (!layer) return;
 
 		layer.width = adv;

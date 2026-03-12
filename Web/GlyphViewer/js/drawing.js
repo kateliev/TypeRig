@@ -84,8 +84,8 @@ TRV.draw = function() {
 	ctx.fillStyle = preview ? TRV.theme.bgPreview : TRV.getBgColor();
 	ctx.fillRect(0, 0, w, h);
 
-	// Hide glyph widget by default (shown only in glyph strip mode)
-	TRV.hideGlyphWidget();
+	// Update glyph widget (works in all modes)
+	TRV.updateGlyphWidget();
 
 	if (!state.glyphData) return;
 

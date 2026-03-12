@@ -46,6 +46,11 @@ function withActiveOffset(fn) {
 dom.canvasWrap.addEventListener('mousedown', function(e) {
 	if (e.button !== 0) return;
 
+	// Skip if click is on a glyph widget
+	if (e.target.closest('#glyph-widget') || e.target.closest('#glyph-widgets')) {
+		return;
+	}
+
 	const rect = dom.canvas.getBoundingClientRect();
 	const absSx = e.clientX - rect.left;
 	const absSy = e.clientY - rect.top;
