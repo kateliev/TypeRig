@@ -16,11 +16,13 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
+from typerig.core.func.string import is_hex, hue_to_hex, hex_to_hue
+
 from typerig.proxy.tr.objects.layer import trLayer
 from typerig.core.objects.glyph import Glyph
 
 # - Init --------------------------------
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 
 # - Classes -----------------------------
 class trGlyph(Glyph):
@@ -34,7 +36,7 @@ class trGlyph(Glyph):
 	'''
 	# - Metadata and proxy model
 	#__slots__ = ('name', 'unicodes', 'identifier', 'parent')
-	__meta__ = {'name':'name', 'mark':'mark'}
+	__meta__ = {'name':'name'}
 	__meta_keys = frozenset(__meta__.keys())
 		
 	# -- Some hardcoded properties
@@ -78,6 +80,17 @@ class trGlyph(Glyph):
 			Glyph.__setattr__(self, name, value)
 	
 	# - Properties --------------------------
+	@property
+	def mark(self):
+		return hue_to_hex(self.host.mark)
+
+	@mark.setter
+	def mark(self, value):
+		if isinstance(value, int):
+			self.host.mark = value
+		elif is_hex(value):
+			self.host.mark = hex_to_hue(value)
+
 	@property
 	def unicodes(self):
 		return self.host.fgGlyph.unicodes

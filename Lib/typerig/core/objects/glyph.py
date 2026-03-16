@@ -14,6 +14,7 @@ from __future__ import absolute_import, print_function, division
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.utils import Bounds
 from typerig.core.objects.delta import DeltaScale
+from typerig.core.func.string import is_hex, hue_to_hex, hex_to_hue
 
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 
@@ -21,7 +22,27 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.layer import Layer
 
 # - Init -------------------------------
-__version__ = '0.2.5'
+__version__ = '0.2.6'
+
+# - Mark Color Palette ------------------
+# Predefined glyph flag colors stored as hex strings in XML.
+MARK_COLORS = {
+	'Red':         '#FF3B30',
+	'Orange':      '#FF9500',
+	'Brown':       '#A2845E',
+	'Yellow':      '#FFCC00',
+	'Light Green': '#34C759',
+	'Dark Green':  '#00796B',
+	'Cyan':        '#5AC8FA',
+	'Blue':        '#007AFF',
+	'Purple':      '#AF52DE',
+	'Pink':        '#FF2D55',
+	'Light Gray':  '#AEAEB2',
+	'Dark Gray':   '#636366',
+}
+
+# Reverse lookup: hex -> name
+MARK_COLORS_REV = {v: k for k, v in MARK_COLORS.items()}
 
 # - Classes -----------------------------
 @register_xml_class
@@ -40,7 +61,7 @@ class Glyph(Container, XMLSerializable):
 		# - Metadata
 		if not kwargs.pop('proxy', False): # Initialize in proxy mode
 			self.identifier = kwargs.pop('identifier', None)
-			self.mark = kwargs.pop('mark', 0)
+			self.mark = kwargs.pop('mark', None)  # Hex color string (e.g. '#FF3B30') or empty
 			self.name = kwargs.pop('name', hash(self))
 			self.unicodes = kwargs.pop('unicodes', [])
 			self.selected = kwargs.pop('selected', False)
@@ -175,10 +196,18 @@ class Glyph(Container, XMLSerializable):
 
 	# - Functions -------------------------------
 	def set_mark(self, value):
-		self.mark = value
+		
+		if isinstance(value, str) and '#' not in value and value in MARK_COLORS.keys():
+			self.mark = MARK_COLORS[value]
+		elif is_hex(value): 
+			self.mark = value
+		elif isinstance(value, int):
+			self.mark = hue_to_hex(value)
+		else:
+			self.mark = None
 
 		for layer in self.layers:
-			layer.mark = value
+			layer.mark = self.mark
 
 	# -- Per-contour delta building --------------------------------
 	def build_contour_deltas(self, layer_names):

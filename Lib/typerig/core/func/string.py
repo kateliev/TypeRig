@@ -10,10 +10,11 @@
 
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division, unicode_literals
+import string
 from itertools import product
 
 # - Init --------------------------------
-__version__ = '0.26.4'
+__version__ = '0.26.5'
 
 
 # - Functions ---------------------------
@@ -32,7 +33,6 @@ def getLowercaseInt(unicodeInt):
 def getUppercaseInt(unicodeInt):
 	''' Based on given Lowercase Uniocde (Integer) returns coresponding Uppercase Unicode (Integer) '''
 	return ord(unicode(unichr(unicodeInt)).upper())
-
 
 def getLowercaseCodepoint(unicodeName):
 	''' Based on given Uppercase Unicode Name (String) returns coresponding Lowercase Unicode Name! Names are in Adobe uniXXXX format'''
@@ -128,6 +128,39 @@ def strRepDict(stringItems, replacementDicionary, method = 'replace'):
 
 	elif method == 'unicodeinteger' or method == 'i':
 		return lst2str([replacementDicionary[ord(item)] for item in unicode(stringItems) if ord(item) in replacementDicionary.keys()], ' ')
+
+# - Hex colors ----------------------------------------------
+def is_hex(s):
+	return all(c in string.hexdigits for c in s.strip('#'))
+
+def hue_to_hex(h):
+	h = h % 360 
+	c = 255 
+	x = c * (1 - abs((h / 60.0) % 2 - 1))
+	
+	# Определяне на секторите
+	if 0 <= h < 60:    r, g, b = c, x, 0
+	elif 60 <= h < 120:  r, g, b = x, c, 0
+	elif 120 <= h < 180: r, g, b = 0, c, x
+	elif 180 <= h < 240: r, g, b = 0, x, c
+	elif 240 <= h < 300: r, g, b = x, 0, c
+	else:                r, g, b = c, 0, x
+	
+	return '#%02x%02x%02x' % (int(r), int(g), int(b))
+
+def hex_to_hue(hex_str):
+	hex_str = hex_str.strip('#')
+	r, g, b = [int(hex_str[i:i+2], 16) / 255.0 for i in (0, 2, 4)]
+	
+	mx, mn = max(r, g, b), min(r, g, b)
+	diff = mx - mn
+	
+	if mx == mn: h = 0
+	elif mx == r: h = (60 * ((g - b) / diff) + 360) % 360
+	elif mx == g: h = (60 * ((b - r) / diff) + 120) % 360
+	elif mx == b: h = (60 * ((r - g) / diff) + 240) % 360
+	
+	return round(h)
 
 if __name__ == '__main__':
 	ch = ord('E')
