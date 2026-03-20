@@ -28,12 +28,12 @@ from typerig.core.objects.node import Node
 
 from typerig.core.base.message import *
 from typerig.proxy.fl.actions.node import TRNodeActionCollector
-from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomPushButton, TRFlowLayout, CustomLabel
+from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomPushButton, CustomLabel
 from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 from typerig.proxy.fl.gui.drawing import TRDrawIcon
 
 # - Init --------------------------------------------
-app_name, app_version = 'TypeRig | Symbol Explorer', '1.0'
+app_name, app_version = 'TypeRig | Symbol Explorer', '1.1'
 
 pLayers = (True, True, False, False)
 pMode = 0
@@ -41,9 +41,6 @@ pMode = 0
 delta_app_id_key = 'com.typerig.delta.machine.axissetup'
 delta_axis_group_name = 'Virtual Axis'
 base_layer = 'Regular'
-
-#TRToolFont = os.path.join(os.path.dirname(__file__), 'resource' , 'typerig-icons.ttf')
-#font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
 
 # - Helpers --------------------------------------------
 def flNodes_to_trContour(fl_nodes, is_closed):
@@ -122,14 +119,11 @@ class ContourPartsDelegate(QtGui.QStyledItemDelegate):
 		if not all_paths:
 			return
 		
-		all_bbox = None
-		for path in all_paths:
-			if all_bbox is None:
-				all_bbox = path.boundingRect()
-			else:
-				all_bbox = all_bbox.united(path.boundingRect())
+		all_bbox = all_paths[0].boundingRect()
+		for path in all_paths[1:]:
+			all_bbox = all_bbox.united(path.boundingRect())
 		
-		if all_bbox is None or all_bbox.width() == 0 or all_bbox.height() == 0:
+		if all_bbox.width() == 0 or all_bbox.height() == 0:
 			return
 		
 		glyph_w, glyph_h = all_bbox.width(), all_bbox.height()
@@ -152,6 +146,9 @@ class ContourPartsDelegate(QtGui.QStyledItemDelegate):
 		painter.setTransform(t)
 		
 		pen_w = max(0.5, 1.0 / scale)
+		gray = QtGui.QColor(150, 150, 150)
+		gray_brush = QtGui.QBrush(gray)
+		gray_pen = QtGui.QPen(gray, pen_w)
 		
 		for i, path in enumerate(all_paths):
 			if i == highlight_path_idx:
@@ -159,9 +156,8 @@ class ContourPartsDelegate(QtGui.QStyledItemDelegate):
 				painter.setBrush(QtGui.QBrush(color))
 				painter.setPen(QtGui.QPen(color, pen_w))
 			else:
-				gray = QtGui.QColor(150, 150, 150)
-				painter.setBrush(QtGui.QBrush(gray))
-				painter.setPen(QtGui.QPen(gray, pen_w))
+				painter.setBrush(gray_brush)
+				painter.setPen(gray_pen)
 			painter.drawPath(path)
 		
 		painter.restore()
@@ -262,15 +258,13 @@ class SymbolCore:
 		
 		for tag, icons in self.tag_to_icons.items():
 			if query_lower in tag:
-				for icon in icons:
-					matching_icons.add(icon)
-					if tag == query_lower:
-						exact_matches.add(icon)
+				matching_icons.update(icons)
+				if tag == query_lower:
+					exact_matches.update(icons)
 		
 		for icon_name, tags in self.icon_to_tags.items():
-			for tag in tags:
-				if query_lower == tag:
-					exact_matches.add(icon_name)
+			if query_lower in tags:
+				exact_matches.add(icon_name)
 		
 		priority_results = list(exact_matches)
 		other_results = [i for i in matching_icons if i not in exact_matches]
@@ -282,12 +276,7 @@ class SymbolCore:
 		if not query_lower:
 			return list(self.category_data.keys())
 		
-		matching_categories = []
-		for category_name in self.category_data.keys():
-			if query_lower in category_name.lower():
-				matching_categories.append(category_name)
-		
-		return matching_categories
+		return [cat for cat in self.category_data if query_lower in cat.lower()]
 
 	def get_icons_for_category(self, category_name):
 		return list(self.category_to_icons.get(category_name, set()))
@@ -296,23 +285,17 @@ class SymbolCore:
 		return list(self.icon_to_tags.get(icon_name, set()))
 
 	def find_similar_icons(self, icon_name, max_results=50):
-		if icon_name not in self.icon_to_tags:
+		source_tags = self.icon_to_tags.get(icon_name)
+		if not source_tags:
 			return []
 		
-		source_tags = self.icon_to_tags[icon_name]
-		similar_scores = {}
+		similar_scores = {
+			icon: len(tags & source_tags)
+			for icon, tags in self.icon_to_tags.items()
+			if icon != icon_name and source_tags & tags
+		}
 		
-		for other_icon, other_tags in self.icon_to_tags.items():
-			if other_icon == icon_name:
-				continue
-			
-			common_tags = source_tags & other_tags
-			if common_tags:
-				score = len(common_tags)
-				similar_scores[other_icon] = score
-		
-		sorted_icons = sorted(similar_scores.items(), key=lambda x: x[1], reverse=True)
-		return [icon for icon, score in sorted_icons[:max_results]]
+		return [icon for icon, _ in sorted(similar_scores.items(), key=lambda x: x[1], reverse=True)[:max_results]]
 
 	def get_icon_details(self, icon_name):
 		if icon_name not in self.tags_data:
@@ -910,6 +893,41 @@ class TRSymbolExplorer(QtGui.QWidget):
 		return virtual_axis, target_bounds
 
 	# -- Paste Contour Part
+	def __paste_tr_glyph_to_fl(self, tr_glyph, wGlyph, wLayers, selected_shape_index, do_delta):
+		if do_delta:
+			virtual_axis, target_bounds = self.__prep_delta_parameters(tr_glyph, wGlyph, wLayers)
+			if virtual_axis is None:
+				do_delta = False
+
+		for tr_layer in tr_glyph.layers:
+			layer_name = tr_layer.name
+			work_layer = wGlyph.layer(layer_name)
+			
+			if work_layer is not None:
+				if do_delta:
+					current_bounds = target_bounds.get(layer_name)
+					if current_bounds is not None:
+						process_layer = tr_layer.scale_with_axis(virtual_axis, current_bounds.width, current_bounds.height, transform_origin=TransformOrigin.CENTER)
+						process_layer.align_to(current_bounds.center_point, mode=(TransformOrigin.CENTER, TransformOrigin.CENTER), align=(True, True))
+					else:
+						process_layer = tr_layer
+				else:
+					process_layer = tr_layer
+				
+				fl_contours = []
+				for tr_shape in process_layer.shapes:
+					for tr_cont in tr_shape.contours:
+						fl_cont = trNodes_to_flContour(tr_cont.nodes, is_closed=tr_cont.closed)
+						fl_contours.append(fl_cont)
+				
+				if len(wGlyph.shapes(layer_name)) == 0:
+					selected_shape = fl6.flShape()
+					work_layer.addShape(selected_shape)
+				else:
+					selected_shape = wGlyph.shapes(layer_name)[selected_shape_index]
+				
+				selected_shape.addContours(fl_contours, True)
+
 	def paste_contour_part(self):
 		gallery_selection = [self.mod_contours.itemFromIndex(qidx) for qidx in self.lst_contours.selectedIndexes()]
 		
@@ -955,39 +973,7 @@ class TRSymbolExplorer(QtGui.QWidget):
 				
 				tr_glyph.append(tr_layer)
 			
-			if do_delta:
-				virtual_axis, target_bounds = self.__prep_delta_parameters(tr_glyph, wGlyph, wLayers)
-				if virtual_axis is None:
-					do_delta = False
-			
-			for tr_layer in tr_glyph.layers:
-				layer_name = tr_layer.name
-				work_layer = wGlyph.layer(layer_name)
-				
-				if work_layer is not None:
-					if do_delta:
-						current_bounds = target_bounds.get(layer_name)
-						if current_bounds is not None:
-							process_layer = tr_layer.scale_with_axis(virtual_axis, current_bounds.width, current_bounds.height, transform_origin=TransformOrigin.CENTER)
-							process_layer.align_to(current_bounds.center_point, mode=(TransformOrigin.CENTER, TransformOrigin.CENTER), align=(True, True))
-						else:
-							process_layer = tr_layer
-					else:
-						process_layer = tr_layer
-					
-					fl_contours = []
-					for tr_shape in process_layer.shapes:
-						for tr_cont in tr_shape.contours:
-							fl_cont = trNodes_to_flContour(tr_cont.nodes, is_closed=tr_cont.closed)
-							fl_contours.append(fl_cont)
-					
-					if len(wGlyph.shapes(layer_name)) == 0:
-						selected_shape = fl6.flShape()
-						work_layer.addShape(selected_shape)
-					else:
-						selected_shape = wGlyph.shapes(layer_name)[selected_shape_index]
-					
-					selected_shape.addContours(fl_contours, True)
+			self.__paste_tr_glyph_to_fl(tr_glyph, wGlyph, wLayers, selected_shape_index, do_delta)
 		else:
 			for clipboard_item in gallery_selection:
 				contour_idx = clipboard_item.data(QtCore.Qt.UserRole + 1000)
@@ -1006,39 +992,7 @@ class TRSymbolExplorer(QtGui.QWidget):
 					
 					tr_glyph.append(tr_layer)
 				
-				if do_delta:
-					virtual_axis, target_bounds = self.__prep_delta_parameters(tr_glyph, wGlyph, wLayers)
-					if virtual_axis is None:
-						do_delta = False
-				
-				for tr_layer in tr_glyph.layers:
-					layer_name = tr_layer.name
-					work_layer = wGlyph.layer(layer_name)
-					
-					if work_layer is not None:
-						if do_delta:
-							current_bounds = target_bounds.get(layer_name)
-							if current_bounds is not None:
-								process_layer = tr_layer.scale_with_axis(virtual_axis, current_bounds.width, current_bounds.height, transform_origin=TransformOrigin.CENTER)
-								process_layer.align_to(current_bounds.center_point, mode=(TransformOrigin.CENTER, TransformOrigin.CENTER), align=(True, True))
-							else:
-								process_layer = tr_layer
-						else:
-							process_layer = tr_layer
-						
-						fl_contours = []
-						for tr_shape in process_layer.shapes:
-							for tr_cont in tr_shape.contours:
-								fl_cont = trNodes_to_flContour(tr_cont.nodes, is_closed=tr_cont.closed)
-								fl_contours.append(fl_cont)
-						
-						if len(wGlyph.shapes(layer_name)) == 0:
-							selected_shape = fl6.flShape()
-							work_layer.addShape(selected_shape)
-						else:
-							selected_shape = wGlyph.shapes(layer_name)[selected_shape_index]
-						
-						selected_shape.addContours(fl_contours, True)
+				self.__paste_tr_glyph_to_fl(tr_glyph, wGlyph, wLayers, selected_shape_index, do_delta)
 		
 		if self.opt_round.isChecked():
 			TRNodeActionCollector.node_round(pMode, pLayers, True, True)
