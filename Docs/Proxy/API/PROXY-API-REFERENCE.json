@@ -1,0 +1,1568 @@
+{
+  "metadata": {
+    "module": "typerig.proxy.fl",
+    "description": "FontLab 6 API wrapper with enhanced functionality for glyph editing, font management, and automation",
+    "version": "0.31.8",
+    "dependencies": ["fontlab as fl6", "fontgate as fgt", "PythonQt", "typerig.core.*"],
+    "base_path": "typerig/proxy/fl"
+  },
+
+  "conventions": {
+    "naming": {
+      "p*": "Basic proxy - wraps single FL object",
+      "e*": "Extended proxy - adds advanced functionality to p*",
+      "TR*": "Action collector - static methods for batch operations"
+    },
+    "patterns": {
+      "naked": {
+        "description": "Parameter to control return type",
+        "naked=True": "Returns raw FL object (flNode, flContour, etc.)",
+        "naked=False": "Returns proxy object (pNode, pContour, etc.)"
+      },
+      "layer": {
+        "description": "Layer selection parameter",
+        "layer=None": "Uses active layer (default)",
+        "layer=str": "Layer name (e.g., 'Regular', 'Bold')",
+        "layer=int": "Layer index"
+      },
+      "extend": {
+        "description": "Wrapper class for container items",
+        "extend=None": "Returns raw FL objects",
+        "extend=pNode": "Returns list of pNode wrappers",
+        "extend=eNode": "Returns list of eNode wrappers"
+      },
+      "updateObject": {
+        "description": "Updates FL object with undo support",
+        "usage": "glyph.updateObject(glyph.fl, 'Undo message')"
+      },
+      "selection_index": {
+        "description": "Node selection uses (contour_index, node_index) tuples"
+      }
+    }
+  },
+
+  "classes": {
+    "pNode": {
+      "file": "objects/node.py",
+      "description": "Proxy to flNode - represents a single point in a contour",
+      "inherits": null,
+      "constructor": {
+        "args": [{"name": "node", "type": "flNode", "description": "FontLab node object"}],
+        "returns": "pNode"
+      },
+      "attributes": {
+        "fl": {"type": "flNode", "description": "Original FontLab node"},
+        "id": {"type": "int", "description": "Unique node identifier"},
+        "parent": {"type": "flContour", "description": "Parent contour (readonly)"},
+        "contour": {"type": "flContour", "description": "Parent contour (readonly)"}
+      },
+      "properties": {
+        "x": {"type": "float", "access": "read/write", "description": "X coordinate"},
+        "y": {"type": "float", "access": "read/write", "description": "Y coordinate"},
+        "index": {"type": "int", "access": "read/write", "description": "Node index in contour"},
+        "name": {"type": "str", "access": "read/write", "description": "Node name/tag"},
+        "type": {"type": "int", "access": "read/write", "description": "Node type (1=corner, 2=smooth, etc.)"},
+        "smooth": {"type": "bool", "access": "read/write", "description": "Smooth flag"},
+        "selected": {"type": "bool", "access": "read", "description": "Selection state"},
+        "isOn": {"type": "bool", "access": "read", "description": "True if on-curve node"},
+        "time": {"type": "float", "access": "read", "description": "Position along contour (0.0-1.0)"},
+        "angle": {"type": "float", "access": "read", "description": "Node angle"},
+        "tuple": {"type": "tuple[float,float]", "access": "read", "description": "(x, y) coordinates"},
+        "ccw": {"type": "bool", "access": "read", "description": "Counter-clockwise test"}
+      },
+      "methods": {
+        "getTime": {"returns": "float", "description": "Get position along contour (0-1)"},
+        "getNext": {
+          "args": [{"name": "naked", "type": "bool", "default": true, "description": "Return raw flNode if True, pNode if False"}],
+          "returns": "flNode|pNode",
+          "description": "Get next node in contour"
+        },
+        "getPrev": {
+          "args": [{"name": "naked", "type": "bool", "default": true}],
+          "returns": "flNode|pNode",
+          "description": "Get previous node in contour"
+        },
+        "getNextOn": {
+          "args": [{"name": "naked", "type": "bool", "default": true}],
+          "returns": "flNode|pNode",
+          "description": "Get next on-curve node"
+        },
+        "getPrevOn": {
+          "args": [{"name": "naked", "type": "bool", "default": true}],
+          "returns": "flNode|pNode",
+          "description": "Get previous on-curve node"
+        },
+        "getOn": {
+          "args": [{"name": "naked", "type": "bool", "default": true}],
+          "returns": "flNode|pNode",
+          "description": "Get on-curve node at this position"
+        },
+        "getMaxY": {
+          "args": [{"name": "naked", "type": "bool", "default": true}],
+          "returns": "flNode|pNode",
+          "description": "Get node with maximum Y between prev/next on-curve"
+        },
+        "getMinY": {
+          "args": [{"name": "naked", "type": "bool", "default": true}],
+          "returns": "flNode|pNode",
+          "description": "Get node with minimum Y between prev/next on-curve"
+        },
+        "getSegment": {
+          "args": [{"name": "relativeTime", "type": "float", "default": 0}],
+          "returns": "CurveEx",
+          "description": "Get segment at position (relative to current time)"
+        },
+        "getSegmentNodes": {
+          "args": [{"name": "relativeTime", "type": "float", "default": 0}],
+          "returns": "tuple[flNode,...]",
+          "description": "Get all nodes in segment (2 for line, 4 for curve)"
+        },
+        "distanceTo": {
+          "args": [{"name": "node", "type": "flNode|pNode"}],
+          "returns": "float",
+          "description": "Distance to another node"
+        },
+        "distanceToNext": {"returns": "float", "description": "Distance to next node"},
+        "distanceToPrev": {"returns": "float", "description": "Distance to previous node"},
+        "angleTo": {
+          "args": [{"name": "node", "type": "flNode|pNode"}],
+          "returns": "float",
+          "description": "Angle to another node (degrees)"
+        },
+        "angleToNext": {"returns": "float", "description": "Angle to next node"},
+        "angleToPrev": {"returns": "float", "description": "Angle to previous node"},
+        "insertAfter": {
+          "args": [{"name": "time", "type": "float", "description": "Time offset from current position (0-1 range)"}],
+          "returns": "flNode",
+          "description": "Insert node after current position"
+        },
+        "insertBefore": {
+          "args": [{"name": "time", "type": "float"}],
+          "returns": "flNode",
+          "description": "Insert node before current position"
+        },
+        "insertAfterDist": {
+          "args": [{"name": "distance", "type": "float"}],
+          "returns": "flNode",
+          "description": "Insert node at distance from current position"
+        },
+        "insertBeforeDist": {
+          "args": [{"name": "distance", "type": "float"}],
+          "returns": "flNode",
+          "description": "Insert node at distance before current position"
+        },
+        "reloc": {
+          "args": [{"name": "newX", "type": "float"}, {"name": "newY", "type": "float"}],
+          "description": "Move node to absolute coordinates"
+        },
+        "shift": {
+          "args": [{"name": "deltaX", "type": "float"}, {"name": "deltaY", "type": "float"}],
+          "description": "Shift node by delta (moves node only)"
+        },
+        "smartReloc": {
+          "args": [{"name": "newX", "type": "float"}, {"name": "newY", "type": "float"}],
+          "description": "Move node and adjacent BCPs to absolute coordinates"
+        },
+        "smartShift": {
+          "args": [{"name": "deltaX", "type": "float"}, {"name": "deltaY", "type": "float"}],
+          "description": "Shift node and adjacent BCPs by delta"
+        },
+        "randomize": {
+          "args": [
+            {"name": "cx", "type": "float", "description": "X bleed constraint"},
+            {"name": "cy", "type": "float", "description": "Y bleed constraint"},
+            {"name": "bleed_mode", "type": "int", "default": 0, "description": "0=any, 1=positive, 2=negative"}
+          ],
+          "description": "Randomize node within constraints"
+        },
+        "remove": {"description": "Remove node from contour"},
+        "update": {"description": "Update node after modifications"},
+        "getSmartAngle": {"returns": "tuple[bool,float]", "description": "Get smart angle state and radius"},
+        "setSmartAngle": {
+          "args": [{"name": "radius", "type": "float"}],
+          "returns": "bool",
+          "description": "Enable smart angle with radius"
+        },
+        "delSmartAngle": {"returns": "bool", "description": "Disable smart angle"}
+      },
+      "examples": [
+        {
+          "description": "Create proxy and access properties",
+          "code": "node = pNode(fl_node)\nprint(node.x, node.y)\nnode.x = 100\nnode.smooth = True"
+        },
+        {
+          "description": "Navigate contour",
+          "code": "next_node = current.getNext(naked=False)  # Returns pNode\nraw_next = current.getNext(naked=True)  # Returns flNode"
+        },
+        {
+          "description": "Move node with BCPs",
+          "code": "node.smartShift(10, 20)  # Moves node and handles"
+        }
+      ]
+    },
+
+    "eNode": {
+      "file": "objects/node.py",
+      "description": "Extended pNode with advanced geometric operations",
+      "inherits": "pNode",
+      "constructor": {"args": [{"name": "node", "type": "flNode"}], "returns": "eNode"},
+      "additional_methods": {
+        "asCoord": {"returns": "Coord", "description": "Return Coord object of node position"},
+        "getNextLine": {"returns": "Line", "description": "Line from node to next on-curve"},
+        "getPrevLine": {"returns": "Line", "description": "Line from prev on-curve to node"},
+        "getNextOffLine": {"returns": "Line", "description": "Line from node to next (any)"},
+        "getPrevOffLine": {"returns": "Line", "description": "Line from prev (any) to node"},
+        "diffTo": {
+          "args": [{"name": "node", "type": "flNode|eNode"}],
+          "returns": "tuple[float,float]",
+          "description": "Return (dx, dy) to target node"
+        },
+        "diffToNext": {"returns": "tuple[float,float]", "description": "(dx, dy) to next node"},
+        "diffToPrev": {"returns": "tuple[float,float]", "description": "(dx, dy) to prev node"},
+        "shiftFromNext": {
+          "args": [{"name": "diffX", "type": "float"}, {"name": "diffY", "type": "float"}],
+          "description": "Move relative to next node position"
+        },
+        "shiftFromPrev": {
+          "args": [{"name": "diffX", "type": "float"}, {"name": "diffY", "type": "float"}],
+          "description": "Move relative to prev node position"
+        },
+        "polarTo": {
+          "args": [{"name": "node", "type": "flNode|eNode"}],
+          "returns": "tuple[float,float]",
+          "description": "Return (angle_degrees, distance) to node"
+        },
+        "polarToNext": {"returns": "tuple[float,float]"},
+        "polarToPrev": {"returns": "tuple[float,float]"},
+        "polarReloc": {
+          "args": [{"name": "angle", "type": "float"}, {"name": "distance", "type": "float"}],
+          "description": "Move to (angle, distance) from current position"
+        },
+        "smartPolarReloc": {
+          "args": [{"name": "angle", "type": "float"}, {"name": "distance", "type": "float"}],
+          "description": "Move to (angle, distance) including BCPs"
+        },
+        "cornerMitre": {
+          "args": [
+            {"name": "mitreSize", "type": "float", "default": 5},
+            {"name": "isRadius", "type": "bool", "default": false}
+          ],
+          "returns": "tuple[flNode,flNode]",
+          "description": "Create mitre corner. Returns (corner_node, new_node)"
+        },
+        "cornerRound": {
+          "args": [
+            {"name": "size", "type": "float", "default": 5},
+            {"name": "proportion", "type": "float|null", "default": null},
+            {"name": "curvature", "type": "tuple[float,float]", "default": [1,1]},
+            {"name": "isRadius", "type": "bool", "default": false},
+            {"name": "insert", "type": "bool", "default": true}
+          ],
+          "returns": "list[flNode]",
+          "description": "Create round corner"
+        },
+        "cornerTrap": {
+          "args": [
+            {"name": "aperture", "type": "float", "default": 10, "description": "Trap opening width"},
+            {"name": "depth", "type": "float", "default": 20, "description": "Trap depth"},
+            {"name": "trap", "type": "float", "default": 2, "description": "Trap bottom width"}
+          ],
+          "returns": "tuple[flNode,flNode,flNode,flNode]",
+          "description": "Create ink trap corner"
+        },
+        "cornerTrapInc": {
+          "args": [
+            {"name": "incision", "type": "float", "default": 10, "description": "Cut depth into glyph"},
+            {"name": "depth", "type": "float", "default": 50},
+            {"name": "trap", "type": "float", "default": 2},
+            {"name": "smooth", "type": "bool", "default": true}
+          ],
+          "returns": "tuple[flNode,flNode,flNode,flNode]",
+          "description": "Create smooth ink trap corner"
+        },
+        "cornerLoopToTargets": {
+          "args": [
+            {"name": "target_x", "type": "float"},
+            {"name": "target_y", "type": "float"},
+            {"name": "safe_distance", "type": "float", "default": 0}
+          ],
+          "returns": "tuple[flNode,flNode]|None",
+          "description": "Loop corner extending toward target position"
+        },
+        "interpShift": {
+          "args": [{"name": "shift_x", "type": "float"}, {"name": "shift_y", "type": "float"}],
+          "description": "Interpolated nudge - moves with curve bias"
+        },
+        "slantShift": {
+          "args": [
+            {"name": "shift_x", "type": "float"},
+            {"name": "shift_y", "type": "float"},
+            {"name": "angle", "type": "float", "description": "Angle in degrees"}
+          ],
+          "description": "Shift in slanted space"
+        },
+        "alignTo": {
+          "args": [
+            {"name": "entity", "type": "flNode|pNode|Line", "description": "Target to align to"},
+            {"name": "align", "type": "tuple[bool,bool]", "default": [true,true], "description": "(align_x, align_y)"},
+            {"name": "smart", "type": "bool", "default": true, "description": "Move with BCPs"},
+            {"name": "lerp", "type": "bool", "default": false, "description": "Use interpolation"}
+          ],
+          "description": "Align node to target entity"
+        }
+      },
+      "examples": [
+        {
+          "description": "Corner operations",
+          "code": "node = eNode(selected_node)\nnode.cornerRound(size=10, curvature=[1,1])\nglyph.updateObject(glyph.fl, 'Round corner')"
+        },
+        {
+          "description": "Polar movement",
+          "code": "node.polarReloc(angle=45, distance=50)  # Move 50 units at 45 degrees"
+        }
+      ]
+    },
+
+    "pGlyph": {
+      "file": "objects/glyph.py",
+      "description": "Proxy to flGlyph and fgGlyph - represents a single glyph",
+      "inherits": null,
+      "constructor": {
+        "variants": [
+          {"args": [], "description": "Current glyph in current font"},
+          {"args": [{"name": "fl_glyph", "type": "flGlyph"}], "description": "From flGlyph"},
+          {"args": [{"name": "fg_font", "type": "fgFont"}, {"name": "fg_glyph", "type": "fgGlyph"}], "description": "Explicit font and glyph"}
+        ],
+        "returns": "pGlyph"
+      },
+      "attributes": {
+        "fl": {"type": "flGlyph", "description": "FontLab glyph object"},
+        "fg": {"type": "fgGlyph", "description": "FontGate glyph object"},
+        "parent": {"type": "fgFont", "description": "Parent font"},
+        "builders": {"type": "dict", "description": "Shape builders cache"}
+      },
+      "properties": {
+        "name": {"type": "str", "access": "read/write", "description": "Glyph name"},
+        "index": {"type": "int", "access": "read", "description": "Glyph index in font"},
+        "id": {"type": "int", "access": "read", "description": "Unique glyph ID"},
+        "unicode": {"type": "int|null", "access": "read/write", "description": "Primary unicode value"},
+        "unicodes": {"type": "list[int]", "access": "read/write", "description": "All unicode values"},
+        "mark": {"type": "str", "access": "read/write", "description": "Mark color"},
+        "tags": {"type": "list[str]", "access": "read/write", "description": "Glyph tags"}
+      },
+      "methods": {
+        "activeLayer": {"returns": "flLayer", "description": "Get active layer"},
+        "layers": {"returns": "list[flLayer]", "description": "All layers excluding '#'"},
+        "layer": {
+          "args": [{"name": "layer", "type": "str|int|null", "default": null}],
+          "returns": "flLayer",
+          "description": "Get layer by name/index, or active layer"
+        },
+        "hasLayer": {"args": [{"name": "layerName", "type": "str"}], "returns": "bool"},
+        "masters": {"returns": "list[flLayer]", "description": "Master layers only"},
+        "masks": {"returns": "list[flLayer]", "description": "Mask layers only"},
+        "services": {"returns": "list[flLayer]", "description": "Service layers only"},
+        "nodes": {
+          "args": [
+            {"name": "layer", "type": "str|int|null", "default": null},
+            {"name": "extend", "type": "type|null", "default": null, "description": "Wrap in pNode/eNode"},
+            {"name": "deep", "type": "bool", "default": false}
+          ],
+          "returns": "list[flNode]|list[pNode]|list[eNode]",
+          "description": "All nodes at layer"
+        },
+        "contours": {
+          "args": [
+            {"name": "layer", "type": "str|int|null", "default": null},
+            {"name": "deep", "type": "bool", "default": false},
+            {"name": "extend", "type": "type|null", "default": null}
+          ],
+          "returns": "list[flContour]|list[pContour]|list[eContour]"
+        },
+        "shapes": {
+          "args": [
+            {"name": "layer", "type": "str|int|null", "default": null},
+            {"name": "extend", "type": "type|null", "default": null},
+            {"name": "deep", "type": "bool", "default": false}
+          ],
+          "returns": "list[flShape]",
+          "description": "All shapes at layer"
+        },
+        "containers": {
+          "args": [{"name": "layer", "type": "str|int|null", "default": null}, {"name": "extend", "type": "type|null", "default": null}],
+          "returns": "list[flShape]",
+          "description": "Complex shapes containing others"
+        },
+        "components": {
+          "args": [{"name": "layer", "type": "str|int|null", "default": null}, {"name": "extend", "type": "type|null", "default": null}],
+          "returns": "list[flShape]",
+          "description": "Component/reference shapes"
+        },
+        "noncomplex": {
+          "args": [{"name": "layer", "type": "str|int|null", "default": null}, {"name": "extend", "type": "type|null", "default": null}],
+          "returns": "list[flShape]",
+          "description": "Shapes that are not components"
+        },
+        "decompose": {
+          "args": [{"name": "layer", "type": "str|int|null", "default": null}],
+          "description": "Decompose all complex shapes"
+        },
+        "dereference": {
+          "args": [{"name": "layer", "type": "str|int|null", "default": null}],
+          "returns": "list[flShape]",
+          "description": "Remove references, keep components"
+        },
+        "addShape": {
+          "args": [
+            {"name": "shape", "type": "flShape"},
+            {"name": "layer", "type": "str|int|null", "default": null},
+            {"name": "clone", "type": "bool", "default": false}
+          ],
+          "returns": "flShape",
+          "description": "Add shape to layer"
+        },
+        "removeShape": {
+          "args": [
+            {"name": "shape", "type": "flShape"},
+            {"name": "layer", "type": "str|int|null", "default": null},
+            {"name": "recursive", "type": "bool", "default": true}
+          ]
+        },
+        "findShape": {
+          "args": [
+            {"name": "shapeName", "type": "str"},
+            {"name": "layer", "type": "str|int|null", "default": null},
+            {"name": "deep", "type": "bool", "default": true}
+          ],
+          "returns": "flShape|null",
+          "description": "Find shape by name"
+        },
+        "addLayer": {
+          "args": [{"name": "layer", "type": "flLayer|fgLayer"}, {"name": "toBack", "type": "bool", "default": false}]
+        },
+        "removeLayer": {"args": [{"name": "layer", "type": "str|int|null"}]},
+        "duplicateLayer": {
+          "args": [
+            {"name": "layer", "type": "str|int|null", "default": null},
+            {"name": "newLayerName", "type": "str", "default": "New Layer"},
+            {"name": "references", "type": "bool", "default": false}
+          ],
+          "returns": "flLayer"
+        },
+        "importLayer": {
+          "args": [
+            {"name": "srcGlyph", "type": "pGlyph"},
+            {"name": "srcLayerName", "type": "str"},
+            {"name": "dstLayerName", "type": "str"},
+            {"name": "options", "type": "dict", "default": {"out":true,"gui":true,"anc":true,"lsb":true,"adv":true,"rsb":true,"lnk":true,"ref":true}},
+            {"name": "addLayer", "type": "bool", "default": false},
+            {"name": "cleanDST", "type": "bool", "default": true},
+            {"name": "toBack", "type": "bool", "default": true},
+            {"name": "mode", "type": "str", "default": "new", "description": "'new'|'insert'|'mask'"}
+          ],
+          "returns": "flLayer"
+        },
+        "isEmpty": {
+          "args": [{"name": "strong", "type": "bool", "default": true}],
+          "returns": "bool",
+          "description": "strong=True: all layers empty; strong=False: any layer empty"
+        },
+        "isCompatible": {
+          "args": [{"name": "strong", "type": "bool", "default": false}],
+          "returns": "bool",
+          "description": "Test if glyph is interpolation-ready"
+        },
+        "update": {"args": [{"name": "layer", "type": "str|int|null", "default": null}]},
+        "updateObject": {
+          "args": [
+            {"name": "flObject", "type": "flGlyph|flLayer|flShape|flNode|flContour"},
+            {"name": "undoMessage", "type": "str", "default": "TypeRig"},
+            {"name": "verbose", "type": "bool", "default": true}
+          ],
+          "description": "Update with undo support"
+        },
+        "selectedNodes": {
+          "args": [
+            {"name": "layer", "type": "str|int|null", "default": null},
+            {"name": "filterOn", "type": "bool", "default": false, "description": "Only on-curve nodes"},
+            {"name": "extend", "type": "type|null", "default": null},
+            {"name": "deep", "type": "bool", "default": false}
+          ],
+          "returns": "list[flNode]|list[pNode]|list[eNode]"
+        },
+        "selectedNodeIndices": {
+          "args": [
+            {"name": "filterOn", "type": "bool", "default": false},
+            {"name": "deep", "type": "bool", "default": false}
+          ],
+          "returns": "list[int]"
+        },
+        "selectedAtContours": {
+          "args": [
+            {"name": "index", "type": "bool", "default": true},
+            {"name": "layer", "type": "str|int|null", "default": null},
+            {"name": "filterOn", "type": "bool", "default": false},
+            {"name": "deep", "type": "bool", "default": false}
+          ],
+          "returns": "list[tuple[int,int]]|list[tuple[flContour,flNode]]",
+          "description": "Selected nodes as (contour_idx, node_idx) or (contour, node)"
+        },
+        "selectedContours": {
+          "args": [
+            {"name": "layer", "type": "str|int|null", "default": null},
+            {"name": "allNodesSelected", "type": "bool", "default": false},
+            {"name": "deep", "type": "bool", "default": false}
+          ],
+          "returns": "list[flContour]"
+        },
+        "selectedCoords": {
+          "args": [
+            {"name": "layer", "type": "str|int|null", "default": null},
+            {"name": "filterOn", "type": "bool", "default": false},
+            {"name": "applyTransform", "type": "bool", "default": false},
+            {"name": "deep", "type": "bool", "default": false}
+          ],
+          "returns": "list[QPointF]"
+        },
+        "getLSB": {"args": [{"name": "layer", "type": "str|int|null", "default": null}], "returns": "int"},
+        "getRSB": {"args": [{"name": "layer", "type": "str|int|null", "default": null}], "returns": "int"},
+        "getAdvance": {"args": [{"name": "layer", "type": "str|int|null", "default": null}], "returns": "int"},
+        "getVSB": {"args": [{"name": "layer", "type": "str|int|null", "default": null}], "returns": "int"},
+        "getTSB": {"args": [{"name": "layer", "type": "str|int|null", "default": null}], "returns": "int"},
+        "getBounds": {"args": [{"name": "layer", "type": "str|int|null", "default": null}], "returns": "QRectF"},
+        "setLSB": {"args": [{"name": "newLSB", "type": "int"}, {"name": "layer", "type": "str|int|null", "default": null}]},
+        "setRSB": {"args": [{"name": "newRSB", "type": "int"}, {"name": "layer", "type": "str|int|null", "default": null}]},
+        "setAdvance": {"args": [{"name": "newAdvance", "type": "int"}, {"name": "layer", "type": "str|int|null", "default": null}]},
+        "setLSBeq": {"args": [{"name": "equationStr", "type": "str"}, {"name": "layer", "type": "str|int|null", "default": null}]},
+        "setRSBeq": {"args": [{"name": "equationStr", "type": "str"}, {"name": "layer", "type": "str|int|null", "default": null}]},
+        "anchors": {
+          "args": [{"name": "layer", "type": "str|int|null", "default": null}],
+          "returns": "list[flAnchor]"
+        },
+        "addAnchor": {
+          "args": [
+            {"name": "coordTuple", "type": "tuple[float,float]"},
+            {"name": "name", "type": "str"},
+            {"name": "layer", "type": "str|int|null", "default": null},
+            {"name": "isAnchor", "type": "bool", "default": true}
+          ],
+          "returns": "flPinPoint"
+        },
+        "clearAnchors": {"args": [{"name": "layer", "type": "str|int|null", "default": null}]},
+        "guidelines": {
+          "args": [{"name": "layer", "type": "str|int|null", "default": null}],
+          "returns": "list[flGuideline]"
+        },
+        "addGuideline": {
+          "args": [
+            {"name": "coordTuple", "type": "tuple[float,float]|tuple[float,float,float,float]"},
+            {"name": "layer", "type": "str|int|null", "default": null},
+            {"name": "angle", "type": "float", "default": 0},
+            {"name": "name", "type": "str", "default": ""},
+            {"name": "color", "type": "str", "default": "darkMagenta"}
+          ],
+          "returns": "flGuideLine"
+        },
+        "translate": {
+          "args": [
+            {"name": "dx", "type": "float"},
+            {"name": "dy", "type": "float"},
+            {"name": "layer", "type": "str|int|null", "default": null}
+          ]
+        },
+        "scale": {
+          "args": [
+            {"name": "sx", "type": "float"},
+            {"name": "sy", "type": "float"},
+            {"name": "layer", "type": "str|int|null", "default": null}
+          ]
+        },
+        "slant": {
+          "args": [
+            {"name": "deg", "type": "float"},
+            {"name": "layer", "type": "str|int|null", "default": null}
+          ]
+        },
+        "rotate": {
+          "args": [
+            {"name": "deg", "type": "float"},
+            {"name": "layer", "type": "str|int|null", "default": null}
+          ]
+        },
+        "draw": {
+          "args": [{"name": "pen", "type": "AbstractPen"}, {"name": "layer", "type": "str|int|null", "default": null}],
+          "description": "Draw glyph to pen"
+        },
+        "drawPoints": {
+          "args": [{"name": "pen", "type": "AbstractPointPen"}, {"name": "layer", "type": "str|int|null", "default": null}],
+          "description": "Draw glyph using point pen protocol"
+        },
+        "mapNodes2Times": {
+          "args": [{"name": "layer", "type": "str|int|null", "default": null}],
+          "returns": "dict[int,dict[int,int]]",
+          "description": "Map contour/node indices to contour times"
+        }
+      },
+      "examples": [
+        {
+          "description": "Basic glyph operations",
+          "code": "glyph = pGlyph()  # Current glyph\nglyph.name = 'newName'\nnodes = glyph.nodes(layer='Regular', extend=eNode)\nfor node in nodes:\n    node.shift(10, 0)\nglyph.updateObject(glyph.fl, 'Shift nodes')"
+        },
+        {
+          "description": "Selection handling",
+          "code": "glyph = pGlyph()\nselected = glyph.selectedAtContours(index=True)\n# Returns: [(contour_idx, node_idx), ...]\nfor cID, nID in selected:\n    contour = glyph.contours()[cID]\n    node = contour.nodes()[nID]"
+        },
+        {
+          "description": "Metrics",
+          "code": "glyph = pGlyph()\nlsb = glyph.getLSB()\nadv = glyph.getAdvance()\nglyph.setAdvance(adv + 50)\nglyph.updateObject(glyph.fl, 'Widen glyph')"
+        }
+      ]
+    },
+
+    "eGlyph": {
+      "file": "objects/glyph.py",
+      "description": "Extended pGlyph with multi-layer processing tools",
+      "inherits": "pGlyph",
+      "additional_methods": {
+        "_prepareLayers": {
+          "args": [
+            {"name": "layers", "type": "tuple[bool,bool,bool,bool]|list[str]|null", "description": "Layer control tuple (active, masters, masks, services) or list of layer names"},
+            {"name": "compatible", "type": "bool", "default": true}
+          ],
+          "returns": "list[str]",
+          "description": "Internal: Prepare layer names for tools. Filters banned layers ('#', 'img'). Returns list of layer names."
+        },
+        "_compatibleLayers": {
+          "args": [{"name": "layerName", "type": "str|null", "default": null}],
+          "returns": "list[bool]",
+          "description": "Internal: Check layer compatibility with reference layer"
+        }
+      }
+    },
+
+    "pFont": {
+      "file": "objects/font.py",
+      "description": "Proxy to fgFont and flPackage - represents a font",
+      "inherits": null,
+      "constructor": {
+        "variants": [
+          {"args": [], "description": "Current font"},
+          {"args": [{"name": "fg_font", "type": "fgFont"}], "description": "From fgFont"},
+          {"args": [{"name": "file_path", "type": "str"}], "description": "Load from file path"}
+        ],
+        "returns": "pFont"
+      },
+      "attributes": {
+        "fg": {"type": "fgFont", "description": "FontGate font"},
+        "fl": {"type": "flPackage", "description": "FontLab package"},
+        "pMasters": {"type": "pMasters", "description": "Master management"},
+        "pDesignSpace": {"type": "pDesignSpace", "description": "Axis management"}
+      },
+      "properties": {
+        "name": {"type": "str", "access": "read", "description": "Font family name"},
+        "familyName": {"type": "str", "access": "read"},
+        "path": {"type": "str", "access": "read", "description": "File path"},
+        "italic_angle": {"type": "float", "access": "read"},
+        "info": {"type": "fgFontInfo", "access": "read"},
+        "font_lib": {"type": "dict", "access": "read", "description": "Package library data"}
+      },
+      "methods": {
+        "glyph": {
+          "args": [{"name": "glyph", "type": "str|int"}, {"name": "extend", "type": "type|null", "default": null}],
+          "returns": "pGlyph|eGlyph",
+          "description": "Get glyph by name or index"
+        },
+        "glyphs": {
+          "args": [
+            {"name": "indexList", "type": "list[int]", "default": []},
+            {"name": "extend", "type": "type|null", "default": null}
+          ],
+          "returns": "list[fgGlyph]|list[pGlyph]|list[eGlyph]"
+        },
+        "pGlyphs": {
+          "args": [{"name": "fgGlyphList", "type": "list[fgGlyph]", "default": []}],
+          "returns": "list[pGlyph]"
+        },
+        "selectedGlyphs": {
+          "args": [{"name": "extend", "type": "type|null", "default": null}],
+          "returns": "list[fgGlyph]|list[pGlyph]"
+        },
+        "hasGlyph": {"args": [{"name": "glyphName", "type": "str"}], "returns": "bool"},
+        "fontMetrics": {"returns": "pFontMetrics"},
+        "masters": {"returns": "list[str]", "description": "Master layer names"},
+        "hasMaster": {"args": [{"name": "layerName", "type": "str"}], "returns": "bool"},
+        "addEmptyMaster": {
+          "args": [
+            {"name": "master_name", "type": "str"},
+            {"name": "location_dict", "type": "dict|null", "default": null}
+          ]
+        },
+        "addSynthMaster": {
+          "args": [
+            {"name": "source_location_dict", "type": "dict"},
+            {"name": "new_location_dict", "type": "dict"},
+            {"name": "new_master_name", "type": "str|null", "default": null},
+            {"name": "deactivate_master", "type": "bool", "default": true}
+          ],
+          "returns": "bool"
+        },
+        "instances": {"returns": "list"},
+        "generateInstance": {
+          "args": [
+            {"name": "location_dict", "type": "dict"},
+            {"name": "round_coordinates", "type": "bool", "default": true}
+          ],
+          "returns": "flInstance"
+        },
+        "newGlyph": {
+          "args": [
+            {"name": "glyph_name", "type": "str"},
+            {"name": "layers", "type": "list[str|flLayer]", "default": []},
+            {"name": "unicode_int", "type": "int|null", "default": null}
+          ],
+          "returns": "pGlyph"
+        },
+        "duplicateGlyph": {
+          "args": [
+            {"name": "src_name", "type": "str"},
+            {"name": "dst_name", "type": "str"},
+            {"name": "dst_unicode", "type": "int|null", "default": null}
+          ],
+          "returns": "pGlyph"
+        },
+        "uppercase": {"args": [{"name": "namesOnly", "type": "bool", "default": false}], "returns": "list"},
+        "lowercase": {"args": [{"name": "namesOnly", "type": "bool", "default": false}], "returns": "list"},
+        "figures": {"args": [{"name": "namesOnly", "type": "bool", "default": false}], "returns": "list"},
+        "kerning": {
+          "args": [{"name": "layer", "type": "str|int|null", "default": null}],
+          "returns": "fgKerning"
+        },
+        "kerning_to_list": {
+          "args": [{"name": "layer", "type": "str|int|null", "default": null}],
+          "returns": "list"
+        },
+        "kerning_dump": {
+          "args": [
+            {"name": "layer", "type": "str|int|null", "default": null},
+            {"name": "mark_groups", "type": "str", "default": "@"},
+            {"name": "pairs_only", "type": "bool", "default": false}
+          ],
+          "returns": "list[tuple[tuple[str,str],int]]|list[tuple[str,str]]"
+        },
+        "kerning_groups": {
+          "args": [{"name": "layer", "type": "str|int|null", "default": null}],
+          "returns": "fgKerningGroups"
+        },
+        "add_kerning_group": {
+          "args": [
+            {"name": "key", "type": "str"},
+            {"name": "glyphNameList", "type": "list[str]"},
+            {"name": "type", "type": "str", "description": "'L'|'R'|'B' (Left/Right/Both)"},
+            {"name": "layer", "type": "str|int|null", "default": null}
+          ]
+        },
+        "getFeatures": {"returns": "fgFeatures"},
+        "getFeature": {"args": [{"name": "tag", "type": "str"}], "returns": "str|null"},
+        "setFeature": {"args": [{"name": "tag", "type": "str"}, {"name": "feaString", "type": "str"}]},
+        "delFeature": {"args": [{"name": "tag", "type": "str"}]},
+        "getOTgroups": {"returns": "fgGroups"},
+        "guidelines": {
+          "args": [
+            {"name": "hostInf", "type": "bool", "default": false},
+            {"name": "fontgate", "type": "bool", "default": false}
+          ],
+          "returns": "list[flGuideline]|list[fgGuideline]"
+        },
+        "getZones": {
+          "args": [
+            {"name": "layer", "type": "str|int|null", "default": null},
+            {"name": "HintingDataType", "type": "int", "default": 0, "description": "0=PS, 1=TT"}
+          ],
+          "returns": "tuple[list,list]"
+        },
+        "updateObject": {
+          "args": [
+            {"name": "flObject", "type": "flObject"},
+            {"name": "undoMessage", "type": "str", "default": "TypeRig"},
+            {"name": "verbose", "type": "bool", "default": true}
+          ]
+        },
+        "update": {}
+      },
+      "examples": [
+        {
+          "description": "Font and glyph access",
+          "code": "font = pFont()\nglyph = font.glyph('A')\nfor glyph in font.uppercase():\n    print(glyph.name)"
+        },
+        {
+          "description": "Kerning operations",
+          "code": "font = pFont()\nkern = font.kerning()\nfont.add_kerning_group('@KR1', ['A', 'V'], 'L')\npairs = font.kerning_dump(pairs_only=True)"
+        }
+      ]
+    },
+
+    "pContour": {
+      "file": "objects/contour.py",
+      "description": "Proxy to flContour",
+      "inherits": null,
+      "properties": {
+        "bounds": {"type": "QRectF", "access": "read"},
+        "closed": {"type": "bool", "access": "read"},
+        "area": {"type": "float", "access": "read"}
+      },
+      "methods": {
+        "indexOn": {"returns": "list[int]", "description": "Indices of on-curve nodes"},
+        "reverse": {"description": "Reverse contour direction"},
+        "isCW": {"returns": "bool", "description": "Clockwise?"},
+        "isCCW": {"returns": "bool", "description": "Counter-clockwise?"},
+        "setCW": {"description": "Make clockwise"},
+        "setCCW": {"description": "Make counter-clockwise"},
+        "translate": {"args": [{"name": "dx", "type": "float"}, {"name": "dy", "type": "float"}]},
+        "scale": {"args": [{"name": "sx", "type": "float"}, {"name": "sy", "type": "float"}]},
+        "slant": {"args": [{"name": "deg", "type": "float"}]},
+        "rotate": {"args": [{"name": "deg", "type": "float"}]},
+        "pointInPolygon": {"args": [{"name": "point", "type": "QPointF"}], "returns": "bool"}
+      }
+    },
+
+    "eContour": {
+      "file": "objects/contour.py",
+      "description": "Extended pContour",
+      "inherits": "pContour",
+      "additional_methods": {
+        "asCoord": {"returns": "Coord", "description": "Bottom-left corner as Coord"},
+        "randomize": {
+          "args": [
+            {"name": "cx", "type": "float"},
+            {"name": "cy", "type": "float"},
+            {"name": "bleedMode", "type": "int", "default": 0}
+          ]
+        },
+        "linearize": {"description": "Convert curves to lines"},
+        "curverize": {
+          "args": [{"name": "smooth", "type": "bool", "default": true}],
+          "description": "Convert lines to curves"
+        },
+        "alignTo": {
+          "args": [
+            {"name": "entity"},
+            {"name": "alignMode", "type": "str", "default": ""},
+            {"name": "align", "type": "tuple[bool,bool]", "default": [true,true]}
+          ]
+        }
+      }
+    },
+
+    "pShape": {
+      "file": "objects/shape.py",
+      "description": "Proxy to flShape",
+      "inherits": null,
+      "constructor": {
+        "args": [
+          {"name": "shape", "type": "flShape"},
+          {"name": "layer", "type": "str|int|null", "default": null},
+          {"name": "glyph", "type": "pGlyph|null", "default": null}
+        ]
+      },
+      "properties": {
+        "name": {"type": "str", "access": "read", "description": "Shape name"},
+        "refs": {"type": "int", "access": "read", "description": "Reference count"},
+        "bounds": {"type": "QRectF", "access": "read"}
+      },
+      "methods": {
+        "data": {"returns": "flShapeData"},
+        "builder": {"returns": "flShapeBuilder|null"},
+        "container": {"returns": "list[flShape]"},
+        "decompose": {"description": "Decompose complex shape"},
+        "nodes": {"returns": "list[flNode]"},
+        "contours": {"returns": "list[flContour]"},
+        "shift": {
+          "args": [
+            {"name": "dx", "type": "float"},
+            {"name": "dy", "type": "float"},
+            {"name": "reset", "type": "bool", "default": false}
+          ]
+        },
+        "scale": {
+          "args": [
+            {"name": "sx", "type": "float"},
+            {"name": "sy", "type": "float"},
+            {"name": "reset", "type": "bool", "default": false}
+          ]
+        },
+        "rotate": {
+          "args": [
+            {"name": "angle", "type": "float"},
+            {"name": "reset", "type": "bool", "default": false}
+          ]
+        },
+        "goUp": {"description": "Move up in z-order"},
+        "goDown": {"description": "Move down in z-order"},
+        "draw": {"args": [{"name": "pen", "type": "AbstractPen"}]}
+      }
+    },
+
+    "eShape": {
+      "file": "objects/shape.py",
+      "description": "Extended pShape",
+      "inherits": "pShape",
+      "additional_methods": {
+        "asCoord": {"returns": "Coord", "description": "Bottom-left corner as Coord"},
+        "contourOrder": {
+          "args": [{"name": "order", "type": "tuple[bool,bool]", "default": [true,true]}],
+          "description": "Reorder contours (x, y)"
+        },
+        "alignTo": {
+          "args": [
+            {"name": "entity"},
+            {"name": "alignMode", "type": "str", "default": ""},
+            {"name": "align", "type": "tuple[bool,bool]", "default": [true,true]}
+          ]
+        },
+        "round": {"description": "Round transformation values to 2 decimals"}
+      }
+    },
+
+    "pNodesContainer": {
+      "file": "objects/node.py",
+      "description": "Container for multiple nodes with batch operations",
+      "inherits": null,
+      "constructor": {
+        "args": [
+          {"name": "nodeList", "type": "list[flNode]", "default": []},
+          {"name": "extend", "type": "type|null", "default": "pNode"}
+        ]
+      },
+      "properties": {
+        "bounds": {"type": "Bounds", "access": "read"},
+        "x": {"type": "float", "access": "read"},
+        "y": {"type": "float", "access": "read"},
+        "width": {"type": "float", "access": "read"},
+        "height": {"type": "float", "access": "read"},
+        "naked": {"type": "list[flNode]", "access": "read", "description": "Raw FL nodes"}
+      },
+      "methods": {
+        "clone": {"returns": "pNodesContainer"},
+        "reverse": {"returns": "pNodesContainer"},
+        "shift": {"args": [{"name": "dx", "type": "float"}, {"name": "dy", "type": "float"}]},
+        "smartShift": {"args": [{"name": "dx", "type": "float"}, {"name": "dy", "type": "float"}]},
+        "applyTransform": {"args": [{"name": "transform", "type": "QTransform"}]},
+        "cloneTransform": {"args": [{"name": "transform", "type": "QTransform"}], "returns": "pNodesContainer"}
+      }
+    },
+
+    "eNodesContainer": {
+      "file": "objects/node.py",
+      "description": "Extended nodes container with alignment",
+      "inherits": "pNodesContainer",
+      "additional_methods": {
+        "alignTo": {
+          "args": [
+            {"name": "entity"},
+            {"name": "alignMode", "type": "str", "default": ""},
+            {"name": "align", "type": "tuple[bool,bool]", "default": [true,true]}
+          ],
+          "description": "Align modes: 'L','R','C' (x) + 'T','B','E' (y), e.g., 'LT', 'RB'"
+        }
+      }
+    },
+
+    "eCurveEx": {
+      "file": "objects/curve.py",
+      "description": "Extended curve segment with optimization",
+      "constructor": {
+        "variants": [
+          {"args": [{"name": "flCurveEx", "type": "flCurveEx"}]},
+          {"args": [{"name": "nodes", "type": "list[flNode]"}]},
+          {"args": [{"name": "contour", "type": "flContour"}, {"name": "time", "type": "float"}]}
+        ]
+      },
+      "properties": {
+        "nodes": {"type": "list[flNode]", "access": "read"},
+        "isCurve": {"type": "bool", "access": "read", "description": "True if cubic, False if line"},
+        "curve": {"type": "CubicBezier", "access": "read"},
+        "line": {"type": "Line", "access": "read"}
+      },
+      "methods": {
+        "updateNodes": {"description": "Apply curve changes to nodes"},
+        "eqTunni": {
+          "args": [{"name": "apply", "type": "bool", "default": true}],
+          "description": "Equalize tunni (tau/opening)"
+        },
+        "eqProportionalHandles": {
+          "args": [
+            {"name": "proportion", "type": "float", "default": 0.3},
+            {"name": "apply", "type": "bool", "default": true}
+          ]
+        },
+        "eqHobbySpline": {
+          "args": [
+            {"name": "curvature", "type": "tuple[float,float]", "default": [0.9,0.9]},
+            {"name": "apply", "type": "bool", "default": true}
+          ],
+          "description": "Hobby spline optimization"
+        },
+        "make_collinear": {
+          "args": [
+            {"name": "other", "type": "eCurveEx"},
+            {"name": "mode", "type": "int", "default": 0},
+            {"name": "equalize", "type": "bool", "default": false},
+            {"name": "target_width", "type": "float|null", "default": null},
+            {"name": "apply", "type": "bool", "default": true}
+          ],
+          "returns": "tuple[eCurveEx,eCurveEx]"
+        }
+      }
+    },
+
+    "pWorkspace": {
+      "file": "application/app.py",
+      "description": "Proxy to flWorkspace - current application state",
+      "inherits": null,
+      "constructor": {"args": []},
+      "attributes": {
+        "fl": {"type": "flWorkspace"},
+        "main": {"type": "QWidget", "description": "Main window"},
+        "name": {"type": "str"}
+      },
+      "methods": {
+        "getCanvas": {
+          "args": [{"name": "atCursor", "type": "bool", "default": false}],
+          "returns": "flCanvas"
+        },
+        "getCanvasList": {"returns": "list[flCanvas]"},
+        "getSelectedNodes": {"returns": "list[flNode]"},
+        "getTextBlockList": {
+          "args": [{"name": "atCursor", "type": "bool", "default": false}],
+          "returns": "list[flTextBlock]"
+        },
+        "getTextBlockGlyphs": {
+          "args": [{"name": "tbi", "type": "int", "default": 0}],
+          "returns": "list[fgGlyph]"
+        },
+        "getActiveGlyph": {
+          "args": [{"name": "tbi", "type": "int", "default": 0}],
+          "returns": "fgGlyph"
+        },
+        "getActiveKernPair": {
+          "args": [{"name": "tbi", "type": "int", "default": 0}],
+          "returns": "tuple[str,str]"
+        },
+        "createFrame": {
+          "args": [
+            {"name": "string", "type": "str"},
+            {"name": "x", "type": "float"},
+            {"name": "y", "type": "float"}
+          ]
+        }
+      }
+    },
+
+    "pTextBlock": {
+      "file": "application/app.py",
+      "description": "Proxy to flTextBlock - text editing block",
+      "inherits": null,
+      "constructor": {"args": [{"name": "textBlock", "type": "flTextBlock"}]},
+      "attributes": {
+        "fl": {"type": "flTextBlock"},
+        "fontSize": {"type": "float"},
+        "textFrame": {"type": "QRectF"},
+        "textWarp": {"type": "bool"}
+      },
+      "methods": {
+        "getFontSize": {"returns": "float"},
+        "setFontSize": {"args": [{"name": "fontSize", "type": "float"}]},
+        "getFrameSize": {"returns": "QSizeF"},
+        "setFrameSize": {"args": [{"name": "width", "type": "float"}, {"name": "height", "type": "float"}]},
+        "setPageSize": {"args": [{"name": "sizeName", "type": "str"}]},
+        "x": {"returns": "float"},
+        "y": {"returns": "float"},
+        "width": {"returns": "float"},
+        "height": {"returns": "float"},
+        "reloc": {"args": [{"name": "x", "type": "float"}, {"name": "y", "type": "float"}]},
+        "update": {}
+      }
+    },
+
+    "pItems": {
+      "file": "application/app.py",
+      "description": "Proxy to flItems",
+      "inherits": null,
+      "constructor": {"args": []},
+      "methods": {
+        "outputString": {
+          "args": [
+            {"name": "string", "type": "str"},
+            {"name": "cursor_location", "type": "int", "default": 0}
+          ]
+        },
+        "outputGlyphNames": {
+          "args": [
+            {"name": "glyphNamesList", "type": "list[str]"},
+            {"name": "layerList", "type": "list[str]", "default": []},
+            {"name": "cursor_location", "type": "int", "default": 0}
+          ]
+        },
+        "openFont": {"args": [{"name": "font_package"}]},
+        "loadFont": {"args": [{"name": "file_path", "type": "str"}]}
+      }
+    },
+
+    "Automat": {
+      "file": "application/automat.py",
+      "description": "FL action runner",
+      "inherits": null,
+      "constructor": {"args": []},
+      "methods": {
+        "run": {"args": [{"name": "action_code", "type": "str"}], "description": "Execute FL action by code"},
+        "help": {"args": [{"name": "action_code", "type": "str"}], "description": "Get action documentation"},
+        "helpAll": {"returns": "dict", "description": "All available actions"},
+        "getQAction": {"args": [{"name": "code", "type": "str"}], "returns": "QAction"}
+      }
+    },
+
+    "pKerning": {
+      "file": "objects/kern.py",
+      "description": "Proxy to fgKerning",
+      "inherits": null,
+      "constructor": {"args": [{"name": "fg_kerning", "type": "fgKerning"}]},
+      "methods": {
+        "clear": {"description": "Clear all kerning pairs"},
+        "groups": {"returns": "fgKerningGroups"},
+        "asDict": {"returns": "dict"},
+        "asList": {"returns": "list"},
+        "groupsAsDict": {"returns": "dict"},
+        "setPair": {
+          "args": [
+            {"name": "pairTuple", "type": "tuple"},
+            {"name": "modeTuple", "type": "tuple[int,int]", "default": [0,0]}
+          ]
+        },
+        "getPair": {"args": [{"name": "pairTuple", "type": "tuple"}], "returns": "int|null"},
+        "removeGroup": {"args": [{"name": "key", "type": "str"}]},
+        "addGroup": {
+          "args": [
+            {"name": "key", "type": "str"},
+            {"name": "glyphs", "type": "list[str]"},
+            {"name": "type", "type": "str", "description": "'L'|'R'|'B'"}
+          ]
+        }
+      }
+    },
+
+    "pFontMetrics": {
+      "file": "objects/font.py",
+      "description": "Font metrics getter/setter",
+      "inherits": null,
+      "constructor": {"args": [{"name": "fl_package", "type": "flPackage"}]},
+      "methods": {
+        "getAscender": {"args": [{"name": "layer", "type": "str|int|null", "default": null}], "returns": "float"},
+        "getCapsHeight": {"args": [{"name": "layer", "type": "str|int|null", "default": null}], "returns": "float"},
+        "getDescender": {"args": [{"name": "layer", "type": "str|int|null", "default": null}], "returns": "float"},
+        "getXHeight": {"args": [{"name": "layer", "type": "str|int|null", "default": null}], "returns": "float"},
+        "getItalicAngle": {"args": [{"name": "layer", "type": "str|int|null", "default": null}], "returns": "float"},
+        "getUpm": {"returns": "int"},
+        "setAscender": {"args": [{"name": "value", "type": "float"}, {"name": "layer", "type": "str|int|null", "default": null}]},
+        "setXHeight": {"args": [{"name": "value", "type": "float"}, {"name": "layer", "type": "str|int|null", "default": null}]},
+        "asDict": {"args": [{"name": "layer", "type": "str|int|null", "default": null}], "returns": "dict"},
+        "fromDict": {"args": [{"name": "metricDict", "type": "dict"}, {"name": "layer", "type": "str|int|null", "default": null}]}
+      }
+    }
+  },
+
+  "action_collectors": {
+    "TRNodeActionCollector": {
+      "file": "actions/node.py",
+      "description": "Static methods for node operations",
+      "methods": {
+        "node_insert": {
+          "args": [
+            {"name": "pMode", "type": "int", "description": "0=active, 1=window, 2=selected, 3=all"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]", "description": "(active, masters, masks, services)"},
+            {"name": "time", "type": "float", "description": "Position along segment (0-1)"},
+            {"name": "select_one_node", "type": "bool", "default": false}
+          ]
+        },
+        "node_insert_dlg": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "select_one_node", "type": "bool", "default": false}
+          ],
+          "description": "Insert node with dialog for time parameter"
+        },
+        "node_remove": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"}
+          ]
+        },
+        "node_round": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "round_up", "type": "bool", "default": true},
+            {"name": "round_all", "type": "bool", "default": false}
+          ]
+        },
+        "node_smooth": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "set_smooth", "type": "bool", "default": true}
+          ]
+        },
+        "corner_mitre": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "radius", "type": "float"}
+          ]
+        },
+        "corner_round": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "radius", "type": "float"},
+            {"name": "curvature", "type": "float", "default": 1.0},
+            {"name": "is_radius", "type": "bool", "default": true}
+          ]
+        },
+        "corner_trap": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "incision", "type": "float"},
+            {"name": "depth", "type": "float"},
+            {"name": "trap", "type": "float"},
+            {"name": "smooth", "type": "bool", "default": true}
+          ]
+        },
+        "nodes_align": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "mode", "type": "str", "description": "'L'|'R'|'T'|'B'|'C'|'E'|'Y'|'X'|'BBoxCenterX'|'BBoxCenterY'|..."}
+          ]
+        },
+        "nodes_copy": {
+          "args": [
+            {"name": "glyph", "type": "eGlyph"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"}
+          ],
+          "returns": "dict",
+          "description": "Copy selected nodes to clipboard bank"
+        },
+        "nodes_paste": {
+          "args": [
+            {"name": "glyph", "type": "eGlyph"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "node_bank", "type": "dict"},
+            {"name": "align", "type": "str|null", "default": null},
+            {"name": "mode", "type": "tuple[bool,bool,bool,bool,bool,bool]", "default": [false,false,false,false,false,false], "description": "(flip_h, flip_v, reverse, inject, overwrite_nodes, overwrite_coords)"}
+          ]
+        },
+        "nodes_move": {
+          "args": [
+            {"name": "glyph", "type": "eGlyph"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "offset_x", "type": "float"},
+            {"name": "offset_y", "type": "float"},
+            {"name": "method", "type": "str", "description": "'SMART'|'MOVE'|'LERP'|'SLANT'|'SLOPE'"}
+          ]
+        },
+        "slope_copy": {
+          "args": [
+            {"name": "glyph", "type": "eGlyph"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"}
+          ],
+          "returns": "dict"
+        },
+        "slope_paste": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "slope_dict", "type": "dict"},
+            {"name": "mode", "type": "tuple[bool,bool]", "description": "(maxY, flip)"}
+          ]
+        },
+        "make_collinear": {
+          "args": [
+            {"name": "glyph", "type": "eGlyph"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "equalize", "type": "bool", "default": false}
+          ]
+        }
+      }
+    },
+
+    "TRContourActionCollector": {
+      "file": "actions/contour.py",
+      "description": "Static methods for contour operations",
+      "methods": {
+        "contour_close": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"}
+          ]
+        },
+        "contour_break": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "expand", "type": "float", "default": 20.0}
+          ]
+        },
+        "contour_bool": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "operation", "type": "str", "description": "'add'|'subtract'|'intersect'|'exclude'"},
+            {"name": "reverse_order", "type": "bool", "default": false}
+          ]
+        },
+        "contour_set_start": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"}
+          ]
+        },
+        "contour_set_winding": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "ccw", "type": "bool", "default": true}
+          ]
+        }
+      }
+    },
+
+    "TRCurveActionCollector": {
+      "file": "actions/curve.py",
+      "description": "Static methods for curve optimization",
+      "methods": {
+        "segment_convert": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "to_curve", "type": "bool", "default": false}
+          ]
+        },
+        "curve_optimize": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "method_tuple", "type": "tuple[str,float,float]", "description": "('tunni'|'hobby'|'proportional', p0, p1)"}
+          ]
+        },
+        "hobby_tension_copy": {
+          "args": [
+            {"name": "glyph", "type": "eGlyph"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"}
+          ],
+          "returns": "dict"
+        }
+      }
+    },
+
+    "TRLayerActionCollector": {
+      "file": "actions/layer.py",
+      "description": "Static methods for layer operations",
+      "methods": {
+        "layer_add": {"args": [{"name": "parent"}]},
+        "layer_delete": {"args": [{"name": "parent"}]},
+        "layer_duplicate": {"args": [{"name": "parent"}, {"name": "ask_user", "type": "bool", "default": false}]},
+        "layer_toggle_visible": {"args": [{"name": "parent"}]},
+        "layer_set_visible": {"args": [{"name": "parent"}, {"name": "visible", "type": "bool", "default": false}]},
+        "layer_copy_shapes": {
+          "args": [
+            {"name": "glyph", "type": "pGlyph"},
+            {"name": "layerName", "type": "str"},
+            {"name": "copy", "type": "bool", "default": true}
+          ]
+        },
+        "layer_copy_metrics": {
+          "args": [
+            {"name": "glyph", "type": "pGlyph"},
+            {"name": "layerName", "type": "str"},
+            {"name": "copy", "type": "bool", "default": true},
+            {"name": "mode", "type": "str", "default": "'ADV'", "description": "'ADV'|'ALL'"}
+          ]
+        },
+        "layer_swap": {"args": [{"name": "parent"}]},
+        "layer_push": {"args": [{"name": "parent"}]},
+        "layer_pull": {"args": [{"name": "parent"}]}
+      }
+    },
+
+    "TRDrawActionCollector": {
+      "file": "actions/draw.py",
+      "description": "Static methods for drawing operations",
+      "methods": {
+        "draw_circle_from_selection": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "mode", "type": "int", "default": 1, "description": "0=2-point, 1=3-point"},
+            {"name": "rotated", "type": "bool", "default": false}
+          ]
+        },
+        "draw_square_from_selection": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "mode", "type": "int", "default": 0, "description": "0=diagonal, 1=midpoints"}
+          ]
+        },
+        "nodes_collect": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"}
+          ],
+          "returns": "dict",
+          "description": "Collect nodes for tracing"
+        },
+        "nodes_trace": {
+          "args": [
+            {"name": "pMode", "type": "int"},
+            {"name": "pLayers", "type": "tuple[bool,bool,bool,bool]"},
+            {"name": "nodes_bank", "type": "dict"},
+            {"name": "mode", "type": "int", "default": 0, "description": "0=keep nodes, 1=lines, 2=hobby splines"}
+          ]
+        }
+      }
+    }
+  },
+
+  "widgets": {
+    "getProcessGlyphs": {
+      "file": "gui/widgets.py",
+      "description": "Get glyphs for processing based on mode",
+      "args": [
+        {"name": "mode", "type": "int", "default": 0, "description": "0=active, 1=window, 2=selected, 3=all"},
+        {"name": "font", "type": "pFont|null", "default": null},
+        {"name": "workspace", "type": "pWorkspace|null", "default": null}
+      ],
+      "returns": "list[eGlyph]"
+    },
+    "TR1SpinDLG": {
+      "file": "gui/dialogs.py",
+      "description": "Single value spin dialog",
+      "args": [
+        {"name": "title", "type": "str"},
+        {"name": "message", "type": "str"},
+        {"name": "label", "type": "str"},
+        {"name": "range", "type": "tuple[float,float,float,float]", "description": "(min, max, default, step)"}
+      ],
+      "returns": "TR1SpinDLG",
+      "attributes": {"values": "float|null"}
+    },
+    "TRNSpinDLG": {
+      "file": "gui/dialogs.py",
+      "description": "Multiple value spin dialog",
+      "args": [
+        {"name": "title", "type": "str"},
+        {"name": "message", "type": "str"},
+        {"name": "params", "type": "dict[str,tuple[float,float,float,float]]"}
+      ],
+      "returns": "TRNSpinDLG",
+      "attributes": {"values": "list[float]|null"}
+    },
+    "TRLayerSelectDLG": {
+      "file": "gui/dialogs.py",
+      "description": "Layer selection dialog",
+      "args": [
+        {"name": "parent"},
+        {"name": "mode", "type": "int", "default": 0, "description": "0=glyph layers, 1=font masters"}
+      ],
+      "methods": {
+        "getTable": {"returns": "list[str]", "description": "Returns checked layer names"}
+      }
+    },
+    "TRTransformCtrl": {
+      "file": "gui/widgets.py",
+      "description": "Transform control widget",
+      "methods": {
+        "getTransform": {
+          "args": [{"name": "rect", "type": "QRectF"}],
+          "returns": "tuple[QTransform,QPointF,bool]"
+        },
+        "reset": {}
+      }
+    }
+  },
+
+  "pens": {
+    "OutlinePen": {
+      "file": "pens/outlinePen.py",
+      "description": "Pen for generating outline offsets",
+      "constructor": {
+        "args": [
+          {"name": "offset", "type": "float", "default": 10},
+          {"name": "contrast", "type": "float", "default": 0},
+          {"name": "contrastAngle", "type": "float", "default": 0},
+          {"name": "connection", "type": "str", "default": "square", "description": "'square'|'round'|'butt'"},
+          {"name": "cap", "type": "str", "default": "round", "description": "'round'|'square'|'butt'"},
+          {"name": "closeOpenPaths", "type": "bool", "default": true},
+          {"name": "optimizeCurve", "type": "bool", "default": false},
+          {"name": "filterDoubles", "type": "bool", "default": true},
+          {"name": "miterLimit", "type": "float|null", "default": null}
+        ]
+      },
+      "methods": {
+        "getGlyphs": {"returns": "tuple[flGlyph,flGlyph,flGlyph]", "description": "(inner, outer, original)"},
+        "getShapes": {"returns": "tuple[flShape,flShape,flShape]", "description": "(inner, outer, original)"}
+      },
+      "usage_example": "pen = OutlinePen(offset=20, connection='round')\nglyph.draw(pen)\ninner, outer, _ = pen.getShapes()"
+    }
+  },
+
+  "common_patterns": {
+    "layer_control_tuple": {
+      "description": "Used to specify which layers to process",
+      "format": "tuple[bool,bool,bool,bool]",
+      "components": ["active_layer", "master_layers", "mask_layers", "service_layers"],
+      "example": {
+        "active_only": "(True, False, False, False)",
+        "masters_and_active": "(True, True, False, False)",
+        "all_layers": "(True, True, True, True)"
+      }
+    },
+    "process_mode": {
+      "description": "Determines which glyphs to process",
+      "values": {
+        "0": "Active glyph only",
+        "1": "All glyphs in current window",
+        "2": "Selected glyphs",
+        "3": "All glyphs in font"
+      }
+    },
+    "selection_indexing": {
+      "description": "Nodes are indexed as (contour_index, node_index)",
+      "example": "for cID, nID in glyph.selectedAtContours():\n    contour = glyph.contours()[cID]\n    node = contour.nodes()[nID]"
+    },
+    "undo_pattern": {
+      "description": "Always use updateObject for undo-enabled changes",
+      "code": "glyph.updateObject(glyph.fl, 'Descriptive undo message')"
+    }
+  },
+
+  "type_aliases": {
+    "flNode": "fontlab.flNode",
+    "flContour": "fontlab.flContour",
+    "flShape": "fontlab.flShape",
+    "flGlyph": "fontlab.flGlyph",
+    "flLayer": "fontlab.flLayer",
+    "flPackage": "fontlab.flPackage",
+    "flWorkspace": "fontlab.flWorkspace",
+    "flCanvas": "fontlab.flCanvas",
+    "flTextBlock": "fontlab.flTextBlock",
+    "fgFont": "fontgate.fgFont",
+    "fgGlyph": "fontgate.fgGlyph",
+    "fgKerning": "fontgate.fgKerning",
+    "QPointF": "PythonQt.QtCore.QPointF",
+    "QRectF": "PythonQt.QtCore.QRectF",
+    "QTransform": "PythonQt.QtGui.QTransform",
+    "QWidget": "PythonQt.QtWidgets.QWidget"
+  }
+}

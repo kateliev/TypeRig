@@ -1,0 +1,611 @@
+{
+    "version": "0.6.2",
+    "description": "TypeRig Core API Reference - Font engineering framework for Python",
+    "note": "This file describes the actual API of the TypeRig Core module. It provides geometric primitives, interpolation, delta scaling, and transformation tools for font engineering.",
+    
+    "imports": {
+        "main": "from typerig.core.objects import Node, Contour, Shape, Layer, Glyph, Anchor",
+        "transform": "from typerig.core.objects.transform import Transform, TransformOrigin",
+        "delta": "from typerig.core.objects.delta import DeltaScale, DeltaArray",
+        "point": "from typerig.core.objects.point import Point",
+        "math": "from typerig.core.func.math import *",
+        "geometry": "from typerig.core.func.geometry import *"
+    },
+    
+    "classes": {
+        "Glyph": {
+            "description": "Main glyph object containing layers, contours, nodes, and anchors. Inherits from Container and XMLSerializable.",
+            "constructor": "Glyph(layers=None, **kwargs)",
+            "constructor_kwargs": {
+                "name": "str - Glyph name (default: hash)",
+                "unicodes": "list - Unicode codepoints (default: [])",
+                "identifier": "str - Unique identifier",
+                "mark": "str - Mark color as hex (e.g., '#FF3B30')",
+                "selected": "bool - Selection state (default: False)",
+                "default_factory": "class - Factory for layers (default: Layer)"
+            },
+            "properties": {
+                "name": "str - Glyph name",
+                "unicodes": "list - Unicode codepoints",
+                "layers": "list - Layer objects (also: data attribute)",
+                "unicode": "First unicode codepoint (read-only property)",
+                "mark": "str - Mark color as hex string or None",
+                "is_compatible": "bool - True if all layers are structurally compatible"
+            },
+            "methods": {
+                "layer(layer_name=None)": "Get layer by name. Returns Layer or None.",
+                "shapes(layer_name=None)": "Get shapes list from named layer.",
+                "contours(layer_name=None)": "Get contours list from named layer.",
+                "nodes(layer_name=None)": "Get all nodes from named layer.",
+                "anchors(layer_name=None)": "Get all anchors from named layer.",
+                "selected_nodes(layer_name=None)": "Get selected nodes from named layer.",
+                "set_mark(value)": "Set glyph mark color. Accepts hex '#FF3B30', color name 'Red', or hue int.",
+                "build_delta(layer_names_list, attrib)": "Build DeltaScale for specific attribute across layers. Requires layers have stems set.",
+                "create_virtual_axis(layer_names, attributes=None)": "Create interpolation axis dict. Defaults to ['point_array', 'metric_array']. Returns dict of DeltaScale objects.",
+                "build_contour_deltas(layer_names)": "Build per-contour DeltaScale objects for angle-dependent scaling.",
+                "build_contour_deltas_with_metrics(layer_names)": "Returns (contour_deltas, metric_delta) tuple."
+            },
+            "mark_colors": {
+                "Red": "#FF3B30", "Orange": "#FF9500", "Brown": "#A2845E", "Yellow": "#FFCC00",
+                "Light Green": "#34C759", "Dark Green": "#00796B", "Cyan": "#5AC8FA",
+                "Blue": "#007AFF", "Purple": "#AF52DE", "Pink": "#FF2D55",
+                "Light Gray": "#AEAEB2", "Dark Gray": "#636366"
+            }
+        },
+        
+        "Layer": {
+            "description": "Layer within a glyph containing shapes, contours, nodes, and anchors. Core unit for interpolation.",
+            "constructor": "Layer(shapes=None, **kwargs)",
+            "constructor_kwargs": {
+                "name": "str - Layer name (default: hash)",
+                "width": "float - Advance width (default: 0.0)",
+                "height": "float - Advance height (default: 1000.0)",
+                "stx": "float - Horizontal stem width (optional)",
+                "sty": "float - Vertical stem width (optional)",
+                "anchors": "list - Anchor objects (default: [])",
+                "transform": "Transform - Layer transform (default: Transform())"
+            },
+            "properties": {
+                "name": "str - Layer name",
+                "shapes": "list - Shape objects (also: data attribute)",
+                "contours": "list - All contours from all shapes",
+                "nodes": "list - All nodes from all contours",
+                "anchors": "list - Anchor objects",
+                "selected_nodes": "list - All selected nodes",
+                "selected_indices": "list - Indices of selected nodes",
+                "stems": "tuple - (stx, sty) or None if not set",
+                "has_stems": "bool - True if stems are defined",
+                "bounds": "Bounds - Bounding box of all contours",
+                "signature": "int - Hash of node types for compatibility check",
+                "advance_width": "float - Glyph width",
+                "advance_height": "float - Glyph height",
+                "width": "Alias for advance_width",
+                "height": "Alias for advance_height",
+                "LSB": "float - Left sidebearing (getter/setter)",
+                "RSB": "float - Right sidebearing (getter/setter)",
+                "BSB": "float - Bottom sidebearing (getter/setter)",
+                "TSB": "float - Top sidebearing (getter/setter)",
+                "ADV": "float - Advance width (getter/setter)",
+                "VADV": "float - Advance height (getter/setter)",
+                "center_of_mass": "Point - Area-weighted centroid or None",
+                "align_matrix": "dict - Comprehensive alignment positions including metrics and outline positions",
+                "sdf": "SignedDistanceField - Cached SDF (None until compute_sdf called)",
+                "point_array": "PointArray - All node positions",
+                "anchor_array": "list - All anchor coordinates as [(x,y),...]",
+                "metric_array": "list - [[0,0], [ADV, VADV]]"
+            },
+            "methods": {
+                "clear()": "Remove all content from layer.",
+                "copy()": "Create a shallow copy (alias: clone()).",
+                "clone()": "Create a copy of the layer.",
+                "is_compatible(other)": "Check if layer structure matches other layer.",
+                "set_weight(wx, wy)": "Set x/y weights (stems) for all nodes.",
+                "shift(delta_x, delta_y)": "Translate all nodes and anchors.",
+                "align_to(entity, mode, align)": "Align layer to another entity using TransformOrigin.",
+                "apply_transform()": "Apply stored transform to all nodes and anchors.",
+                "find_anchor(name)": "Find anchor by name. Returns Anchor or None.",
+                "add_anchor(name, position, align, tolerance, italic_angle)": "Add new anchor with optional alignment.",
+                "move_anchor(name, offset, align, tolerance, italic_angle)": "Move existing anchor by name.",
+                "remove_anchor(name)": "Remove anchor by name. Returns Anchor or None.",
+                "outline_centers(tolerance=5)": "Compute X centers at min/max Y for mark positioning.",
+                "lerp_function(other)": "Return linear interpolation function: func(tx, ty) -> Layer.",
+                "delta_function(other)": "Return adaptive scaling function: func(scale, time, translate, angle, compensate) -> Layer.",
+                "scale_with_axis(virtual_axis, target_width, target_height, fix_scale_direction, transform_origin, ...)": "Non-destructive scaling to target dimensions using DeltaScale.",
+                "analyze_contours()": "Return list of (contour_index, angle_radians, angle_degrees) for each contour.",
+                "delta_scale_compensated(contour_deltas, scale, intensity, compensation, ...)": "Per-contour delta scaling with diagonal compensation. Returns new Layer.",
+                "compute_sdf(resolution=10.0, padding=50, steps_per_segment=64, verbose=False)": "Compute and cache SignedDistanceField.",
+                "clear_sdf()": "Clear cached SDF to free memory.",
+                "to_directional()": "Export as Adobe-style directional representation [[DirectionalNode per contour per shape]].",
+                "directional_lerp_function(other)": "Angular interpolation function. func(t, t_angle=None) -> Layer.",
+                "directional_delta_function(other)": "Directional adaptive scaling function."
+            }
+        },
+        
+        "Shape": {
+            "description": "Collection of contours forming a filled region. Container for Contour objects.",
+            "constructor": "Shape(contours=None, **kwargs)",
+            "constructor_kwargs": {
+                "name": "str - Shape name (default: '')",
+                "transform": "Transform - Shape transform (default: Transform())"
+            },
+            "properties": {
+                "contours": "list - Contour objects (also: data attribute)",
+                "nodes": "list - All nodes from all contours",
+                "selected_nodes": "list - All selected nodes",
+                "selected_indices": "list - Indices of selected nodes",
+                "bounds": "Bounds - Bounding box of all contours",
+                "signature": "int - Hash of node types",
+                "sdf": "SignedDistanceField - Cached SDF (None until compute_sdf called)",
+                "point_array": "PointArray - All node positions"
+            },
+            "methods": {
+                "reverse()": "Reverse contour order.",
+                "sort(direction=0, mode='BL')": "Sort contours by bounding box position.",
+                "set_weight(wx, wy)": "Set x/y weights for all nodes.",
+                "is_compatible(other)": "Check structural compatibility.",
+                "shift(delta_x, delta_y)": "Translate all nodes.",
+                "align_to(entity, mode, align)": "Align shape to another entity.",
+                "lerp_function(other)": "Linear interpolation function.",
+                "delta_function(other)": "Adaptive scaling function.",
+                "compute_sdf(resolution=10.0, padding=50, steps_per_segment=64, verbose=False)": "Compute SignedDistanceField.",
+                "clear_sdf()": "Clear cached SDF.",
+                "offset_outline(distance, curvature_correction=True)": "Offset all contours. Returns new Shape.",
+                "offset_outline_inplace(distance, curvature_correction=True)": "Offset in place.",
+                "offset_outline_sdf(distance, sdf=None, clamp_factor=0.9)": "Offset with SDF distance clamping. Returns new Shape.",
+                "analyze_contours()": "Analyze contour orientations.",
+                "scale_compensated(sx, sy, stx, sty, intensity=1.0, transform_origin=...)": "Compensated scaling. Returns new Shape.",
+                "delta_scale_compensated(contour_deltas, stems, scale, intensity, ...)": "Per-contour delta scaling. Returns new Shape.",
+                "to_directional()": "Export as directional representation.",
+                "directional_lerp_function(other)": "Angular interpolation function."
+            }
+        },
+        
+        "Contour": {
+            "description": "A single closed or open path composed of nodes. Supports cubic Bezier, quadratic (TT), and line segments.",
+            "constructor": "Contour(nodes=None, closed=True, **kwargs)",
+            "constructor_kwargs": {
+                "name": "str - Contour name (default: '')",
+                "closed": "bool - Whether contour is closed (default: False)",
+                "transform": "Transform - Contour transform (default: Transform())"
+            },
+            "properties": {
+                "nodes": "list - Node objects (also: data attribute)",
+                "selected_nodes": "list - Selected nodes",
+                "selected_indices": "list - Indices of selected nodes",
+                "bounds": "Bounds - Bounding box",
+                "closed": "bool - Whether contour is closed",
+                "clockwise": "bool - Winding direction (read-only)",
+                "segments": "list - Line/CubicBezier/QuadraticBezier objects for each segment",
+                "node_segments": "list - Lists of nodes per segment",
+                "point_segments": "list - Lists of Points per segment",
+                "point_array": "PointArray - All node positions",
+                "on_curve_points": "list - On-curve Points for each segment",
+                "all_points_flat": "list - Flat coordinates for polyline rendering",
+                "signed_area": "float - Signed area via shoelace (positive=CCW)",
+                "is_ccw": "bool - True if counter-clockwise",
+                "has_quadratic": "bool - True if contains TT quadratic segments",
+                "is_mixed": "bool - True if contains both cubic and quadratic"
+            },
+            "methods": {
+                "reverse()": "Reverse node order and winding.",
+                "set_start(index)": "Rotate contour to start at given node index.",
+                "set_weight(wx, wy)": "Set x/y weights for all nodes.",
+                "shift(delta_x, delta_y)": "Translate all nodes.",
+                "align_to(entity, mode, align)": "Align contour to another entity.",
+                "lerp_function(other)": "Linear interpolation function.",
+                "delta_function(other)": "Adaptive scaling function.",
+                "sample(steps_per_segment=64)": "Sample contour into polyline of (x,y) tuples.",
+                "sample_with_normals(steps_per_segment=64)": "Sample with outward unit normals.",
+                "offset_outline(distance, curvature_correction=True)": "Offset using analytical normals. Returns new Contour.",
+                "offset_outline_inplace(distance, curvature_correction=True)": "Offset in place.",
+                "offset_outline_sdf(distance, sdf, clamp_factor=0.9)": "Offset with SDF clamping. Returns new Contour.",
+                "scale_compensated(sx, sy, stx, sty, intensity=1.0)": "Compensated scaling. Returns new Contour.",
+                "scale_compensated_inplace(sx, sy, stx, sty, intensity=1.0)": "Compensated scaling in place.",
+                "delta_scale_compensated(delta, stems, scale, intensity, ...)": "Delta scaling with compensation. Returns new Contour.",
+                "to_cubic_contour()": "Convert TT quadratic to PS cubic. Returns new Contour.",
+                "to_quadratic_contour(max_err=1.0)": "Convert cubic to TT quadratic using fontTools.",
+                "to_directional()": "Export as list of DirectionalNode entries.",
+                "from_directional(cls, data, closed=True)": "Classmethod: reconstruct from DirectionalNode list."
+            }
+        },
+        
+        "Node": {
+            "description": "Single point on a contour. Can be on-curve, off-curve (BCP), or curve type.",
+            "constructor": "Node(x, y, type='on', smooth=False, **kwargs) or Node(point) or Node((x,y))",
+            "constructor_kwargs": {
+                "type": "str - 'on', 'off', 'curve' (default: 'on')",
+                "smooth": "bool - Smooth point flag (default: False)",
+                "selected": "bool - Selection state (default: False)",
+                "angle": "float - Node angle (default: 0)",
+                "weight": "tuple - (wx, wy) stem weights (default: (0,0))",
+                "g2": "bool - G2 continuity flag (default: False)"
+            },
+            "properties": {
+                "x": "float - X coordinate",
+                "y": "float - Y coordinate",
+                "type": "str - 'on', 'off', 'curve'",
+                "smooth": "bool - Smooth point flag",
+                "selected": "bool - Selection state",
+                "g2": "bool - G2 continuity flag",
+                "index": "int - Index in parent contour (alias: idx)",
+                "parent": "Contour - Parent contour",
+                "contour": "Contour - Parent contour (alias for parent)",
+                "point": "Point - Position as Point object (read/write)",
+                "tuple": "tuple - Position as (x, y)",
+                "complex": "complex - Position as complex number",
+                "is_on": "bool - True if on-curve",
+                "is_off": "bool - True if off-curve",
+                "clockwise": "bool - True if contour turns clockwise at this node",
+                "next_on": "Node - Next on-curve node",
+                "prev_on": "Node - Previous on-curve node",
+                "segment": "Line/CubicBezier/QuadraticBezier - Current segment",
+                "segment_nodes": "list - Nodes in current segment",
+                "triad": "tuple - (prev, self, next)",
+                "triad_on": "tuple - (prev_on, self, next_on)",
+                "distance_to_next": "float - Distance to next node",
+                "distance_to_prev": "float - Distance to previous node",
+                "angle_to_next": "float - Angle to next node in radians",
+                "angle_to_prev": "float - Angle to previous node in radians",
+                "angle_poly_turn": "float - Angle turned by polyline at this node"
+            },
+            "methods": {
+                "clone()": "Create a copy of the node.",
+                "shift(delta_x, delta_y)": "Translate node.",
+                "reloc(new_x, new_y)": "Move node to new position.",
+                "smart_shift(delta_x, delta_y)": "Shift node and adjacent BCPs.",
+                "smart_reloc(new_x, new_y)": "Relocate node and adjacent BCPs.",
+                "align_to(entity, align, smart)": "Align to node, Point, or Line.",
+                "lerp_to(entity, time)": "Linear interpolation toward entity.",
+                "lerp_function(entity)": "Return interpolation function: func(tx, ty).",
+                "delta_to(other, scale, time, translate, angle, compensate)": "Adaptive scaling to other node.",
+                "delta_function(other)": "Return adaptive scaling function.",
+                "insert_after(time)": "Insert node at t (0-1) along current segment.",
+                "insert_before(time)": "Insert node before current on-curve.",
+                "insert_after_distance(distance)": "Insert node at given distance along segment.",
+                "insert_before_distance(distance)": "Insert node at distance before current node.",
+                "remove()": "Remove node from contour.",
+                "line_to(other)": "Draw line to other node.",
+                "curve_to(self_bcp, other_bcp, other)": "Draw cubic curve to other node.",
+                "qcurve_to(off_curve, other)": "Draw quadratic curve.",
+                "corner_mitre(mitre_size, is_radius)": "Create mitered corner.",
+                "corner_round(rounding_size, proportion, curvature, is_radius)": "Create rounded corner.",
+                "corner_trap(parameter, depth, trap, smooth, incision)": "Create ink trap.",
+                "slant_shift(shift_x, shift_y, angle)": "Move in inclined space.",
+                "randomize(cx, cy, bleed_mode)": "Randomize position within constraints.",
+                "distance_to(other)": "Calculate distance to other node.",
+                "angle_to(other)": "Calculate angle to other node.",
+                "from_VFJ(cls, string)": "Classmethod: create from VarFly Journal format string.",
+                "from_tuple(cls, coords, **kwargs)": "Classmethod: create from (x, y) tuple.",
+                "from_object(cls, other, **kwargs)": "Classmethod: clone from Node or Point."
+            },
+            "node_types": {
+                "on": "On-curve point",
+                "off": "TT off-curve point",
+                "curve": "PostScript off-curve (BCP) point"
+            }
+        },
+        
+        "Knot": {
+            "description": "Node variant for Hobby spline paths. Includes tension, angle, and control point properties.",
+            "constructor": "Knot(x=0, y=0, **kwargs)",
+            "constructor_kwargs": {
+                "name": "str - Knot name",
+                "alpha": "float - Outgoing tension (default: 1.0)",
+                "beta": "float - Incoming tension (default: 1.0)",
+                "theta": "float - Outgoing angle (default: 0)",
+                "phi": "float - Incoming angle (default: 0)"
+            },
+            "properties": {
+                "x": "float - X coordinate",
+                "y": "float - Y coordinate",
+                "theta": "float - Outgoing angle",
+                "phi": "float - Incoming angle",
+                "alpha": "float - Outgoing tension",
+                "beta": "float - Incoming tension",
+                "v_left": "complex - Left control point",
+                "u_right": "complex - Right control point",
+                "clockwise": "bool - Winding direction",
+                "is_on": "bool - Always True for Knot",
+                "xi": "float - Angle turned by polyline",
+                "d_ant": "float - Distance to previous",
+                "d_post": "float - Distance to next"
+            },
+            "methods": {
+                "distance_to(other)": "Calculate distance.",
+                "angle_to(other)": "Calculate angle.",
+                "shift(delta_x, delta_y)": "Translate.",
+                "handle_out": "DirectionalHandle - Outgoing handle (angle, magnitude) or None",
+                "handle_in": "DirectionalHandle - Incoming handle or None",
+                "handle_out_angle": "float - Outgoing handle angle in radians",
+                "handle_in_angle": "float - Incoming handle angle in radians",
+                "handle_out_magnitude": "float - Outgoing handle magnitude",
+                "handle_in_magnitude": "float - Incoming handle magnitude",
+                "is_smooth_directional": "bool - True if handles are collinear"
+            }
+        },
+        
+        "Anchor": {
+            "description": "Position marker for mark attachment, component placement, and cursive connection.",
+            "constructor": "Anchor(x, y, name='', **kwargs) or Anchor((x,y)), Anchor(point), Anchor(anchor)",
+            "constructor_kwargs": {
+                "name": "str - Anchor name (default: '')",
+                "color": "str - Anchor color as hex (default: None)",
+                "selected": "bool - Selection state (default: False)"
+            },
+            "properties": {
+                "x": "float - X coordinate",
+                "y": "float - Y coordinate",
+                "name": "str - Anchor name",
+                "color": "str - Anchor color or None",
+                "selected": "bool - Selection state",
+                "point": "Point - Position as Point object (read/write)",
+                "tuple": "tuple - Position as (x, y)"
+            },
+            "methods": {
+                "shift(delta_x, delta_y)": "Translate anchor.",
+                "scale(sx, sy, center)": "Scale position around center.",
+                "clone()": "Create a copy.",
+                "from_tuple(cls, coords, **kwargs)": "Classmethod: create from (x,y) or (x,y,name).",
+                "from_point(cls, point, **kwargs)": "Classmethod: create from Point."
+            }
+        },
+        
+        "Transform": {
+            "description": "2D affine transformation matrix supporting translate, scale, rotate, skew operations.",
+            "constructor": "Transform(xx=1.0, xy=0.0, yx=0.0, yy=1.0, dx=0.0, dy=0.0) or Transform(other)",
+            "properties": {
+                "matrix_values": "Access via index [0-5] returns xx, xy, yx, yy, dx, dy"
+            },
+            "methods": {
+                "applyTransformation(x, y)": "Apply transform. Returns (new_x, new_y).",
+                "translate(dx, dy)": "Add translation. Returns new Transform.",
+                "shift(dx, dy)": "Alias for translate.",
+                "scale(sx, sy)": "Add scale. Returns new Transform.",
+                "rotate(angle)": "Rotate by angle in degrees. Returns new Transform.",
+                "skew(ax, ay)": "Skew by angles in degrees. Returns new Transform.",
+                "transform(other)": "Compose with other transform. Returns new Transform.",
+                "reverseTransform(other)": "Reverse compose. Returns new Transform.",
+                "inverse()": "Get inverse transform. Returns new Transform.",
+                "clone()": "Create a deep copy."
+            }
+        },
+        
+        "TransformOrigin": {
+            "description": "Enum for transformation origin points. Supports bounding box, metrics, outline, and statistical origins.",
+            "values": {
+                "bounds_tier": ["BASELINE", "BOTTOM_LEFT", "BOTTOM_MIDDLE", "BOTTOM_RIGHT", "TOP_LEFT", "TOP_MIDDLE", "TOP_RIGHT", "CENTER_LEFT", "CENTER", "CENTER_RIGHT"],
+                "metrics_tier": ["METRICS_LSB", "METRICS_RSB", "METRICS_ADVANCE", "METRICS_ADVANCE_MIDDLE"],
+                "outline_tier": ["OUTLINE_BOTTOM_LEFT", "OUTLINE_BOTTOM_RIGHT", "OUTLINE_BOTTOM_CENTER", "OUTLINE_TOP_LEFT", "OUTLINE_TOP_RIGHT", "OUTLINE_TOP_CENTER"],
+                "statistical_tier": ["CENTER_OF_MASS"]
+            },
+            "properties": {
+                "text": "str - Full name (e.g., 'bottom_left')",
+                "caption": "str - Title case (e.g., 'Bottom Left')",
+                "code": "str - Short code (e.g., 'BL')",
+                "is_bounds": "bool - True if resolvable by Bounds.align_matrix",
+                "is_metrics": "bool - True if requires metrics (advance width)",
+                "is_outline": "bool - True if requires outline analysis",
+                "is_statistical": "bool - True if requires centroid computation"
+            }
+        },
+        
+        "Point": {
+            "description": "2D point with vector math operations and angle/magnitude properties.",
+            "constructor": "Point(x=0, y=0) or Point(point) or Point((x,y))",
+            "operators": {
+                "+": "Addition (Point + Point, Point + float, Point + tuple)",
+                "-": "Subtraction",
+                "*": "Multiplication (Point * scalar, Point * Point = complex product, Point * tuple = component)",
+                "/": "Division (Point / scalar, Point / Point = complex division, Point / tuple)",
+                "&": "Dot product (scalar)",
+                "|": "Cross product (scalar)",
+                "abs()": "Magnitude (hypotenuse)",
+                "neg": "Negation"
+            },
+            "properties": {
+                "x": "float - X coordinate",
+                "y": "float - Y coordinate",
+                "angle": "float - Angle in radians",
+                "magnitude": "float - Distance from origin",
+                "unit": "Point - Unit vector",
+                "slope": "float - tan(90 - angle) in degrees",
+                "y_intercept": "float - Y intercept of line through origin",
+                "tuple": "tuple - (x, y)"
+            },
+            "methods": {
+                "solve_width(y)": "Find X at given Y on line through origin.",
+                "solve_y(x)": "Solve line equation for Y.",
+                "solve_x(y)": "Solve line equation for X.",
+                "diff_to(other)": "Distance to other point.",
+                "angle_to(other, add)": "Angle to other point in radians.",
+                "doSwap()": "Swap X and Y.",
+                "doFlip(sign)": "Flip X and/or Y.",
+                "doTransform(transform)": "Apply transform in place."
+            }
+        },
+        
+        "DeltaScale": {
+            "description": "Delta Machine for interpolation/extrapolation between multiple master layers. Built from point arrays and stem values.",
+            "constructor": "DeltaScale(points, stems) or DeltaScale(other)",
+            "constructor_args": {
+                "points": "list of point arrays (same length each)",
+                "stems": "list of stem tuples corresponding to each point array"
+            },
+            "properties": {
+                "dim": "tuple - (number_of_masters, number_of_points)",
+                "x": "list - X coordinate data",
+                "y": "list - Y coordinate data",
+                "stems": "list - Stem values per master"
+            },
+            "methods": {
+                "scale_by_time(time, scale_or_dimension, compensation, shift, italic_angle, extrapolate, to_dimension)": "Scale by interpolation time. Returns iterator of (x,y) tuples.",
+                "scale_by_stem(stem, scale_or_dimension, compensation, shift, italic_angle, extrapolate, to_dimension)": "Scale by stem width. Returns iterator of (x,y) tuples.",
+                "dump()": "Export (x, y, stems) tuple.",
+                "load(other)": "Load from DeltaScale or tuple."
+            }
+        },
+        
+        "DeltaArray": {
+            "description": "Simple delta interpolation array for linear interpolation between multiple point arrays.",
+            "constructor": "DeltaArray(data)",
+            "constructor_args": {
+                "data": "list of point arrays (minimum 2 required)"
+            },
+            "methods": {
+                "__call__(global_time, extrapolate)": "Interpolate at time. Returns PointArray.",
+                "mixer(global_time)": "Get coordinate arrays at time. Returns (PointArray, PointArray).",
+                "timer(global_time, extrapolate)": "Get index and fraction for time."
+            }
+        },
+        
+        "Bounds": {
+            "description": "Bounding box with alignment matrix for positioning.",
+            "properties": {
+                "x": "float - Left edge X",
+                "y": "float - Bottom edge Y",
+                "xmax": "float - Right edge X",
+                "ymax": "float - Top edge Y",
+                "width": "float - Width (xmax - x)",
+                "height": "float - Height (ymax - y)",
+                "align_matrix": "dict - Positions keyed by TransformOrigin code"
+            }
+        },
+        
+        "SignedDistanceField": {
+            "description": "Signed distance field for outline-based operations like offset clamping.",
+            "methods": {
+                "compute(verbose=False)": "Compute SDF from contours.",
+                "query(x, y)": "Query distance at point. Positive=outside, negative=inside.",
+                "is_computed": "bool - True if SDF has been computed"
+            }
+        },
+        
+        "DirectionalNode": {
+            "description": "Named tuple for Adobe-style directional contour representation.",
+            "fields": ["x", "y", "angle_out", "mag_out", "angle_in", "mag_in", "smooth"],
+            "note": "Each on-curve node owns its outgoing/incoming handle positions as (angle, magnitude) vectors."
+        },
+        
+        "DirectionalHandle": {
+            "description": "Named tuple for directional handle representation.",
+            "fields": ["angle", "magnitude"],
+            "note": "Angle in radians (standard math, CCW from +X). Magnitude in font units."
+        }
+    },
+    
+    "functions": {
+        "typerig.core.func.math": {
+            "linear_algebra": {
+                "zero_matrix(rows, cols)": "Create zero-filled matrix.",
+                "solve_equations(AM, BM)": "Solve linear system Ax = B."
+            },
+            "data_normalization": {
+                "normalize2max(values)": "Normalize to maximum value.",
+                "normalize2sum(values)": "Normalize to sum = 1.0.",
+                "renormalize(values, newRange, oldRange)": "Remap values to new range."
+            },
+            "geometry_mapping": {
+                "maploc(axis_range, map_value)": "Piecewise interpolation over axis range."
+            },
+            "comparisons": {
+                "isclose(a, b, abs_tol, rel_tol)": "Approximate equality test.",
+                "isBetween(x, a, b)": "Range membership test."
+            },
+            "rounding": {
+                "roundFloat(f, error)": "Round float to precision.",
+                "round2base(x, base)": "Round to base increments."
+            },
+            "progressions": {
+                "ratfrac(part, whole, fraction)": "Calculate ratio as fraction.",
+                "linspread(start, end, count)": "Generate linearly spaced values.",
+                "geospread(start, end, count)": "Generate geometrically spaced values.",
+                "randomize(value, constrain)": "Randomize within constraints."
+            },
+            "interpolation": {
+                "linInterp(t0, t1, t)": "Linear interpolation.",
+                "bilinInterp(x, y, points)": "Bilinear interpolation.",
+                "slerp_angle(a0, a1, t)": "Spherical linear interpolation for angles (short arc).",
+                "interpolate_directional(data_a, data_b, t, t_angle)": "Interpolate DirectionalNode lists."
+            },
+            "geometry": {
+                "two_point_circle(p1, p2)": "Circle from diameter endpoints. Returns (center, radius).",
+                "three_point_circle(p1, p2, p3)": "Circle from three points. Returns (center, radius).",
+                "two_point_square(p1, p2)": "Square from diagonal. Returns 4 corner tuples.",
+                "two_mid_square(m1, m2)": "Square from side midpoints."
+            },
+            "hobby_spline": {
+                "hobby_velocity(theta, phi)": "Hobby spline velocity function.",
+                "hobby_control_points(z0, z1, theta, phi, alpha, beta)": "Compute Bezier control points using Hobby algorithm."
+            }
+        },
+        
+        "typerig.core.func.geometry": {
+            "point_operations": {
+                "get_angle(x, y, degrees)": "Angle from displacement.",
+                "ccw(A, B, C)": "Counter-clockwise turn test.",
+                "intersect(A, B, C, D)": "Line segment intersection test.",
+                "point_in_triangle(point, triangle)": "Point in triangle test.",
+                "point_in_polygon(point, polygon)": "Point in polygon test.",
+                "point_rotate(center, point, angle)": "Rotate point around center."
+            },
+            "line_operations": {
+                "line_slope(p0, p1)": "Slope between two points.",
+                "line_angle(p0, p1, degrees)": "Angle between two points.",
+                "line_y_intercept(p0, p1)": "Y intercept of line.",
+                "line_solve_y(p0, p1, x)": "Solve line for Y.",
+                "line_solve_x(p0, p1, y)": "Solve line for X.",
+                "line_intersect(a0, a1, b0, b1)": "Line intersection point."
+            },
+            "connection_tests": {
+                "checkSmooth(firstAngle, lastAngle, error)": "Smooth connection test.",
+                "checkInnerOuter(firstAngle, lastAngle)": "Inner/outer corner test."
+            },
+            "polygons": {
+                "poly_area(vertices)": "Polygon area via shoelace."
+            }
+        },
+        
+        "typerig.core.func.transform": {
+            "scaling": {
+                "adaptive_scale(...)": "Stem-aware interpolation/scaling.",
+                "adaptive_scale_directional(...)": "Directional (polar) handle scaling.",
+                "lerp(a, b, t)": "Linear interpolation."
+            },
+            "compensation": {
+                "timer(target, start, end, fix_boundary)": "Compute interpolation time from stem width.",
+                "diagonal_correction_offset(theta, sx, sy, stx, sty, intensity)": "Diagonal stroke correction offset.",
+                "contour_dominant_angle(points)": "PCA-based dominant angle of contour.",
+                "adjust_stems_for_angle(stx, sty, angle, sx, sy, intensity)": "Adjust stems for diagonal contours."
+            }
+        }
+    },
+    
+    "usage_examples": {
+        "create_glyph_with_layers": "layer1 = Layer(name='Light'); layer2 = Layer(name='Bold'); glyph = Glyph([layer1, layer2], name='A')",
+        "iterate_glyph_nodes": "for node in glyph.nodes('LayerName'): print(node.x, node.y)",
+        "node_construction": "node = Node(100, 200); node = Node((100, 200)); node = Node(point)",
+        "add_nodes_to_contour": "node = Node(100, 200); contour.nodes.append(node)",
+        "delta_interpolation": "layer1.stems = (80, 80); layer2.stems = (120, 120); axis = glyph.create_virtual_axis(['Light', 'Bold']); scaled = glyph.layer('Light').scale_with_axis(axis, target_width=600)",
+        "directional_interpolation": "func = layer1.directional_lerp_function(layer2); new_layer = func(0.5)",
+        "contour_offset": "offset = contour.offset_outline(10)  # expand by 10 units",
+        "corner_rounding": "segment = node.corner_round(5)  # 5 unit radius",
+        "anchor_creation": "anchor = Anchor(100, 700, name='top')",
+        "transform_usage": "t = Transform(); t.scale(1.5, 1.5); t.rotate(90); node.x, node.y = t.applyTransformation(node.x, node.y)",
+        "point_math": "p = Point(100, 200); p2 = p + Point(10, 20); dist = abs(p2 - p)",
+        "set_glyph_mark": "glyph.set_mark('#FF3B30'); glyph.set_mark('Red'); glyph.set_mark(0.5)"
+    },
+    
+    "xml_serialization": {
+        "note": "All major objects inherit from XMLSerializable and support to_XML() and from_XML() methods.",
+        "export": "object.to_XML() -> str - Returns XML string representation",
+        "import": "ObjectClass.from_XML(xml_string) -> ObjectClass - Reconstruct from XML"
+    },
+    
+    "compatibility_notes": [
+        "All contour/layer/shape operations require compatible structure (same number of nodes per contour).",
+        "Delta operations require stems to be set on layers (layer.stems = (stx, sty)).",
+        "Directional methods require cubic (PostScript) contours. Use to_cubic_contour() for TT contours.",
+        "SDF operations require fontTools library for cubic-to-quadratic conversion.",
+        "Node triad properties require parent contour to be set (orphan nodes raise AssertionError)."
+    ]
+}
