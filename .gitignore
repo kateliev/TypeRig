@@ -10,3 +10,4 @@ dmypy.json
 .idea/
 *.vfpyc
 .DS_Store
+_ideas
