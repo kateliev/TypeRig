@@ -369,7 +369,604 @@ def hobby_control_points(z0, z1, theta=0., phi=0., alpha=1., beta=1.):
 	v = z1 - cmath.exp(-i*phi)*(z1 - z0)*hobby_velocity(phi, theta)/beta #was *beta
 	return (u,v)
 
-# - Test ----------------------------------------------------------------	
+# -- Geometric primitives ---------------
+def midpoint(p1, p2):
+	'''Return the midpoint between two points.
+
+	Arguments:
+		p1, p2 (tuple): Points as (x, y).
+
+	Returns:
+		tuple: Midpoint (x, y).
+	'''
+	return ((p1[0] + p2[0]) / 2., (p1[1] + p2[1]) / 2.)
+
+def reflect_point(point, axis_p1, axis_p2):
+	'''Reflect a point across an arbitrary line defined by two points.
+
+	Arguments:
+		point (tuple): Point to reflect (x, y).
+		axis_p1, axis_p2 (tuple): Two points defining the reflection axis.
+
+	Returns:
+		tuple: Reflected point (x, y).
+	'''
+	px, py = point
+	x1, y1 = axis_p1
+	x2, y2 = axis_p2
+
+	dx, dy = x2 - x1, y2 - y1
+	len_sq = dx * dx + dy * dy
+
+	if len_sq < 1e-12:
+		return point
+
+	t = ((px - x1) * dx + (py - y1) * dy) / len_sq
+	proj_x = x1 + t * dx
+	proj_y = y1 + t * dy
+
+	return (2. * proj_x - px, 2. * proj_y - py)
+
+def rotate_points(points, center, angle_deg):
+	'''Rotate a list of points around a center by a given angle.
+
+	Arguments:
+		points (list[tuple]): Points as [(x, y), ...].
+		center (tuple): Center of rotation (x, y).
+		angle_deg (float): Rotation angle in degrees (CCW positive).
+
+	Returns:
+		list[tuple]: Rotated points.
+	'''
+	cx, cy = center
+	angle_rad = math.radians(angle_deg)
+	cos_a = math.cos(angle_rad)
+	sin_a = math.sin(angle_rad)
+
+	result = []
+
+	for px, py in points:
+		dx = px - cx
+		dy = py - cy
+		result.append((cx + dx * cos_a - dy * sin_a, cy + dx * sin_a + dy * cos_a))
+
+	return result
+
+def perpendicular_bisector(p1, p2, length=1000.):
+	'''Return two points defining the perpendicular bisector of a segment.
+
+	Arguments:
+		p1, p2 (tuple): Segment endpoints (x, y).
+		length (float): Half-length of the returned bisector line.
+
+	Returns:
+		tuple: Two points ((x1, y1), (x2, y2)) on the bisector.
+	'''
+	mx, my = midpoint(p1, p2)
+	dx, dy = p2[0] - p1[0], p2[1] - p1[1]
+	seg_len = math.hypot(dx, dy)
+
+	if seg_len < 1e-12:
+		return ((mx, my - length), (mx, my + length))
+
+	# Perpendicular direction (normalized)
+	nx, ny = -dy / seg_len, dx / seg_len
+
+	return ((mx - nx * length, my - ny * length), (mx + nx * length, my + ny * length))
+
+def angle_bisector(p1, vertex, p2, length=1000.):
+	'''Return two points defining the angle bisector at a vertex.
+
+	Arguments:
+		p1 (tuple): First ray endpoint (x, y).
+		vertex (tuple): Vertex of the angle (x, y).
+		p2 (tuple): Second ray endpoint (x, y).
+		length (float): Length of the returned bisector ray from vertex.
+
+	Returns:
+		tuple: Two points (vertex, bisector_point) on the bisector.
+	'''
+	vx, vy = vertex
+
+	# Unit vectors from vertex to each point
+	d1x, d1y = p1[0] - vx, p1[1] - vy
+	d2x, d2y = p2[0] - vx, p2[1] - vy
+	len1 = math.hypot(d1x, d1y)
+	len2 = math.hypot(d2x, d2y)
+
+	if len1 < 1e-12 or len2 < 1e-12:
+		return (vertex, vertex)
+
+	u1x, u1y = d1x / len1, d1y / len1
+	u2x, u2y = d2x / len2, d2y / len2
+
+	# Bisector direction = sum of unit vectors
+	bx, by = u1x + u2x, u1y + u2y
+	blen = math.hypot(bx, by)
+
+	if blen < 1e-12:
+		# Points are opposite — bisector is perpendicular
+		bx, by = -u1y, u1x
+		blen = 1.
+
+	bx, by = bx / blen, by / blen
+
+	return (vertex, (vx + bx * length, vy + by * length))
+
+# -- Ellipses ----------------------------
+def two_point_ellipse(p1, p2):
+	'''Axis-aligned ellipse inscribed in the rectangle defined by
+	two diagonally opposite corners.
+
+	Arguments:
+		p1, p2 (tuple): Diagonal corners (x, y).
+
+	Returns:
+		tuple: (center, (semi_a, semi_b)) where center is (cx, cy)
+			and semi_a, semi_b are the horizontal and vertical semi-axes.
+	'''
+	cx = (p1[0] + p2[0]) / 2.
+	cy = (p1[1] + p2[1]) / 2.
+	a = abs(p2[0] - p1[0]) / 2.
+	b = abs(p2[1] - p1[1]) / 2.
+
+	return ((cx, cy), (a, b))
+
+def three_point_ellipse(center, p_width, p_height):
+	'''Ellipse from center and a point on each axis.
+
+	Arguments:
+		center (tuple): Center (x, y).
+		p_width (tuple): A point on the horizontal axis (x, y).
+		p_height (tuple): A point on the vertical axis (x, y).
+
+	Returns:
+		tuple: (center, (semi_a, semi_b)).
+	'''
+	a = math.hypot(p_width[0] - center[0], p_width[1] - center[1])
+	b = math.hypot(p_height[0] - center[0], p_height[1] - center[1])
+
+	return (center, (a, b))
+
+def ellipse_points(center, semi_a, semi_b, angle_deg=0., num_points=64):
+	'''Sample points along an ellipse.
+
+	Arguments:
+		center (tuple): Center (x, y).
+		semi_a (float): Horizontal semi-axis.
+		semi_b (float): Vertical semi-axis.
+		angle_deg (float): Rotation angle of the ellipse in degrees.
+		num_points (int): Number of sample points.
+
+	Returns:
+		list[tuple]: Points along the ellipse [(x, y), ...].
+	'''
+	cx, cy = center
+	angle_rad = math.radians(angle_deg)
+	cos_r = math.cos(angle_rad)
+	sin_r = math.sin(angle_rad)
+
+	result = []
+
+	for i in range(num_points):
+		t = 2. * math.pi * i / num_points
+		ex = semi_a * math.cos(t)
+		ey = semi_b * math.sin(t)
+
+		# Rotate
+		rx = cx + ex * cos_r - ey * sin_r
+		ry = cy + ex * sin_r + ey * cos_r
+		result.append((rx, ry))
+
+	return result
+
+# -- Regular polygons --------------------
+def n_gon(center, radius, n, start_angle=0.):
+	'''Regular n-sided polygon vertices.
+
+	Arguments:
+		center (tuple): Center (x, y).
+		radius (float): Circumscribed radius (center to vertex).
+		n (int): Number of sides (3 = triangle, 5 = pentagon, etc.).
+		start_angle (float): Rotation of first vertex in degrees.
+
+	Returns:
+		list[tuple]: Vertices [(x, y), ...] in CCW order.
+	'''
+	cx, cy = center
+	result = []
+
+	for i in range(n):
+		angle = math.radians(start_angle + 360. * i / n)
+		result.append((cx + radius * math.cos(angle), cy + radius * math.sin(angle)))
+
+	return result
+
+def star_polygon(center, outer_r, inner_r, n, start_angle=0.):
+	'''Star polygon with alternating outer and inner vertices.
+
+	Arguments:
+		center (tuple): Center (x, y).
+		outer_r (float): Outer (tip) radius.
+		inner_r (float): Inner (valley) radius.
+		n (int): Number of points/tips.
+		start_angle (float): Rotation of first tip in degrees.
+
+	Returns:
+		list[tuple]: Vertices [(x, y), ...] alternating outer/inner.
+	'''
+	cx, cy = center
+	result = []
+
+	for i in range(n * 2):
+		angle = math.radians(start_angle + 360. * i / (n * 2))
+		r = outer_r if i % 2 == 0 else inner_r
+		result.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
+
+	return result
+
+# -- Rectangles / Parallelograms ---------
+def rectangle(origin, width, height):
+	'''Axis-aligned rectangle from origin, width, and height.
+
+	Arguments:
+		origin (tuple): Bottom-left corner (x, y).
+		width (float): Width.
+		height (float): Height.
+
+	Returns:
+		list[tuple]: Four corners [(BL), (BR), (TR), (TL)] in CCW order.
+	'''
+	ox, oy = origin
+	return [(ox, oy), (ox + width, oy), (ox + width, oy + height), (ox, oy + height)]
+
+def parallelogram(origin, width, height, slant_angle):
+	'''Parallelogram (slanted rectangle).
+
+	Arguments:
+		origin (tuple): Bottom-left corner (x, y).
+		width (float): Base width.
+		height (float): Height.
+		slant_angle (float): Slant angle in degrees (0 = rectangle).
+
+	Returns:
+		list[tuple]: Four corners [(BL), (BR), (TR), (TL)] in CCW order.
+	'''
+	ox, oy = origin
+	slant = height * math.tan(math.radians(slant_angle))
+
+	return [
+		(ox, oy),
+		(ox + width, oy),
+		(ox + width + slant, oy + height),
+		(ox + slant, oy + height)
+	]
+
+def trapezoid(base_center, top_width, bottom_width, height):
+	'''Symmetric trapezoid centered on a vertical axis.
+
+	Arguments:
+		base_center (tuple): Center of the bottom edge (x, y).
+		top_width (float): Width of the top edge.
+		bottom_width (float): Width of the bottom edge.
+		height (float): Height.
+
+	Returns:
+		list[tuple]: Four corners [(BL), (BR), (TR), (TL)] in CCW order.
+	'''
+	cx, cy = base_center
+	bw2 = bottom_width / 2.
+	tw2 = top_width / 2.
+
+	return [
+		(cx - bw2, cy),
+		(cx + bw2, cy),
+		(cx + tw2, cy + height),
+		(cx - tw2, cy + height)
+	]
+
+# -- Arcs --------------------------------
+def circular_arc_3point(p1, p2, p3, num_points=32):
+	'''Circular arc through three points. Returns sampled points
+	along the arc from p1 through p2 to p3.
+
+	Arguments:
+		p1, p2, p3 (tuple): Three points (x, y) on the arc.
+		num_points (int): Number of sample points.
+
+	Returns:
+		tuple: (points, center, radius) where points is list[(x, y)],
+			or (None, None, None) if points are collinear.
+	'''
+	result = three_point_circle(p1, p2, p3)
+
+	if result[0] is None:
+		return (None, None, None)
+
+	center, radius = result
+	cx, cy = center
+
+	# Compute angles for each point
+	a1 = math.atan2(p1[1] - cy, p1[0] - cx)
+	a2 = math.atan2(p2[1] - cy, p2[0] - cx)
+	a3 = math.atan2(p3[1] - cy, p3[0] - cx)
+
+	# Ensure arc goes p1 -> p2 -> p3 in the correct direction
+	# Normalize angles relative to a1
+	def normalize(a, ref):
+		while a - ref < -math.pi:
+			a += 2. * math.pi
+		while a - ref > math.pi:
+			a -= 2. * math.pi
+		return a
+
+	a2 = normalize(a2, a1)
+	a3 = normalize(a3, a1)
+
+	# If a2 is not between a1 and a3, flip direction
+	if a3 > a1:
+		if not (a1 <= a2 <= a3):
+			a3 -= 2. * math.pi
+	else:
+		if not (a3 <= a2 <= a1):
+			a3 += 2. * math.pi
+
+	points = []
+
+	for i in range(num_points):
+		t = float(i) / (num_points - 1)
+		angle = a1 + t * (a3 - a1)
+		points.append((cx + radius * math.cos(angle), cy + radius * math.sin(angle)))
+
+	return (points, center, radius)
+
+def annulus_sector(center, inner_r, outer_r, start_angle, end_angle, num_points=16):
+	'''Ring sector (annulus segment) defined by inner/outer radii and angle range.
+	Returns vertices forming the closed outline (outer arc + inner arc reversed).
+
+	Arguments:
+		center (tuple): Center (x, y).
+		inner_r (float): Inner radius.
+		outer_r (float): Outer radius.
+		start_angle (float): Start angle in degrees.
+		end_angle (float): End angle in degrees.
+		num_points (int): Points per arc.
+
+	Returns:
+		list[tuple]: Vertices forming the sector outline.
+	'''
+	cx, cy = center
+	outer_pts = []
+	inner_pts = []
+
+	for i in range(num_points):
+		t = float(i) / (num_points - 1)
+		angle = math.radians(start_angle + t * (end_angle - start_angle))
+		cos_a = math.cos(angle)
+		sin_a = math.sin(angle)
+		outer_pts.append((cx + outer_r * cos_a, cy + outer_r * sin_a))
+		inner_pts.append((cx + inner_r * cos_a, cy + inner_r * sin_a))
+
+	# Outer arc forward, inner arc reversed to form closed outline
+	return outer_pts + list(reversed(inner_pts))
+
+# -- Tangent constructions ---------------
+def tangent_circle_to_two_lines(line1_p1, line1_p2, line2_p1, line2_p2, radius):
+	'''Find circles of given radius tangent to two lines.
+	This is the geometric core of corner filleting — the fillet circle.
+
+	Arguments:
+		line1_p1, line1_p2 (tuple): Two points on the first line.
+		line2_p1, line2_p2 (tuple): Two points on the second line.
+		radius (float): Desired tangent circle radius.
+
+	Returns:
+		list[tuple]: List of (center, tangent_point_1, tangent_point_2) for each
+			valid tangent circle (up to 4 solutions). Each center is (x, y),
+			each tangent point is (x, y).
+			Returns empty list if lines are parallel or radius is invalid.
+	'''
+	if radius <= 0.:
+		return []
+
+	# Direction vectors and normals for each line
+	d1x = line1_p2[0] - line1_p1[0]
+	d1y = line1_p2[1] - line1_p1[1]
+	len1 = math.hypot(d1x, d1y)
+
+	d2x = line2_p2[0] - line2_p1[0]
+	d2y = line2_p2[1] - line2_p1[1]
+	len2 = math.hypot(d2x, d2y)
+
+	if len1 < 1e-12 or len2 < 1e-12:
+		return []
+
+	# Unit normals (two orientations each)
+	n1x, n1y = -d1y / len1, d1x / len1
+	n2x, n2y = -d2y / len2, d2x / len2
+
+	results = []
+
+	# Try all 4 combinations of normal orientations
+	for s1 in (1., -1.):
+		for s2 in (1., -1.):
+			# Offset lines by radius along their normals
+			# Line 1 offset: point + s1 * radius * normal
+			o1x = line1_p1[0] + s1 * radius * n1x
+			o1y = line1_p1[1] + s1 * radius * n1y
+
+			o2x = line2_p1[0] + s2 * radius * n2x
+			o2y = line2_p1[1] + s2 * radius * n2y
+
+			# Intersect offset lines
+			# Line 1: (o1x, o1y) + t * (d1x, d1y)
+			# Line 2: (o2x, o2y) + s * (d2x, d2y)
+			denom = d1x * d2y - d1y * d2x
+
+			if abs(denom) < 1e-12:
+				continue  # Parallel
+
+			dx = o2x - o1x
+			dy = o2y - o1y
+			t = (dx * d2y - dy * d2x) / denom
+
+			cx = o1x + t * d1x
+			cy = o1y + t * d1y
+
+			# Tangent points: project center onto each original line
+			# Line 1: closest point on line to center
+			t1 = ((cx - line1_p1[0]) * d1x + (cy - line1_p1[1]) * d1y) / (len1 * len1)
+			tp1 = (line1_p1[0] + t1 * d1x, line1_p1[1] + t1 * d1y)
+
+			t2 = ((cx - line2_p1[0]) * d2x + (cy - line2_p1[1]) * d2y) / (len2 * len2)
+			tp2 = (line2_p1[0] + t2 * d2x, line2_p1[1] + t2 * d2y)
+
+			results.append(((cx, cy), tp1, tp2))
+
+	return results
+
+def tangent_lines_to_two_circles(c1, r1, c2, r2):
+	'''Find external and internal common tangent lines between two circles.
+
+	Arguments:
+		c1 (tuple): Center of first circle (x, y).
+		r1 (float): Radius of first circle.
+		c2 (tuple): Center of second circle (x, y).
+		r2 (float): Radius of second circle.
+
+	Returns:
+		dict: {'external': [(p1, p2), ...], 'internal': [(p1, p2), ...]}
+			where each (p1, p2) is a pair of tangent points, one on each circle.
+			Returns empty lists for degenerate cases.
+	'''
+	dx = c2[0] - c1[0]
+	dy = c2[1] - c1[1]
+	d = math.hypot(dx, dy)
+
+	result = {'external': [], 'internal': []}
+
+	if d < 1e-12:
+		return result
+
+	# Base angle between centers
+	base_angle = math.atan2(dy, dx)
+
+	# External tangents (same side)
+	if d >= abs(r1 - r2):
+		if d > abs(r1 - r2) + 1e-12:
+			angle = math.acos((r1 - r2) / d)
+		else:
+			angle = 0.
+
+		for sign in (1., -1.):
+			a = base_angle + sign * angle + math.pi / 2.
+			tp1 = (c1[0] + r1 * math.cos(a), c1[1] + r1 * math.sin(a))
+			tp2 = (c2[0] + r2 * math.cos(a), c2[1] + r2 * math.sin(a))
+			result['external'].append((tp1, tp2))
+
+	# Internal tangents (cross side)
+	if d > r1 + r2 + 1e-12:
+		angle = math.acos((r1 + r2) / d)
+
+		for sign in (1., -1.):
+			a1 = base_angle + sign * angle + math.pi / 2.
+			a2 = a1 + math.pi  # opposite side for second circle
+			tp1 = (c1[0] + r1 * math.cos(a1), c1[1] + r1 * math.sin(a1))
+			tp2 = (c2[0] + r2 * math.cos(a2), c2[1] + r2 * math.sin(a2))
+			result['internal'].append((tp1, tp2))
+
+	return result
+
+def tangent_circle_to_line_and_point(line_p1, line_p2, point, radius):
+	'''Find circles of given radius tangent to a line and passing through a point.
+
+	Arguments:
+		line_p1, line_p2 (tuple): Two points on the line.
+		point (tuple): The point the circle must pass through (x, y).
+		radius (float): Circle radius.
+
+	Returns:
+		list[tuple]: List of centers (x, y) for valid circles (up to 4).
+			Returns empty list if no solution exists.
+	'''
+	if radius <= 0.:
+		return []
+
+	px, py = point
+	dx = line_p2[0] - line_p1[0]
+	dy = line_p2[1] - line_p1[1]
+	line_len = math.hypot(dx, dy)
+
+	if line_len < 1e-12:
+		return []
+
+	# Normal to line (unit)
+	nx, ny = -dy / line_len, dx / line_len
+
+	results = []
+
+	# Center lies on a line parallel to the given line at distance = radius
+	for sign in (1., -1.):
+		# Offset line: any point on it is line_p1 + sign * radius * normal + t * direction
+		ox = line_p1[0] + sign * radius * nx
+		oy = line_p1[1] + sign * radius * ny
+
+		# Center must be at distance = radius from the point
+		# |center - point| = radius
+		# center = (ox + t * dx/line_len, oy + t * dy/line_len) parameterized by arc length
+		# Substituting into distance equation:
+		# (ox + t*ux - px)^2 + (oy + t*uy - py)^2 = radius^2
+		ux, uy = dx / line_len, dy / line_len
+		ax = ox - px
+		ay = oy - py
+
+		# Quadratic: t^2 + 2(ax*ux + ay*uy)*t + (ax^2 + ay^2 - r^2) = 0
+		A = 1.
+		B = 2. * (ax * ux + ay * uy)
+		C = ax * ax + ay * ay - radius * radius
+		disc = B * B - 4. * A * C
+
+		if disc < 0.:
+			continue
+
+		sqrt_disc = math.sqrt(disc)
+
+		for t in ((-B + sqrt_disc) / (2. * A), (-B - sqrt_disc) / (2. * A)):
+			cx = ox + t * ux
+			cy = oy + t * uy
+			results.append((cx, cy))
+
+	return results
+
+def parallel_line(p1, p2, distance, side=1):
+	'''Compute a parallel (offset) line at a given distance.
+
+	Arguments:
+		p1, p2 (tuple): Two points on the original line.
+		distance (float): Offset distance.
+		side (int): 1 = left side (CCW normal), -1 = right side.
+
+	Returns:
+		tuple: Two points ((x1, y1), (x2, y2)) on the parallel line.
+	'''
+	dx = p2[0] - p1[0]
+	dy = p2[1] - p1[1]
+	length = math.hypot(dx, dy)
+
+	if length < 1e-12:
+		return (p1, p2)
+
+	# Normal direction (left = CCW)
+	nx = -dy / length * side
+	ny = dx / length * side
+
+	offset = distance
+	return (
+		(p1[0] + nx * offset, p1[1] + ny * offset),
+		(p2[0] + nx * offset, p2[1] + ny * offset)
+	)
+
+# - Test ----------------------------------------------------------------
 if __name__ == '__main__':
 	r = range(105,415,10)
 	a = 0.5

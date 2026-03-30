@@ -19,7 +19,16 @@ from typerig.core.objects.hobbyspline import HobbySpline, HobbyKnot, HOBBY, LINE
 from typerig.core.objects.shape import Shape
 from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
-from typerig.core.func.math import three_point_circle, two_point_circle, two_point_square, two_mid_square
+from typerig.core.func.math import (
+	three_point_circle, two_point_circle, two_point_square, two_mid_square,
+	midpoint, reflect_point, rotate_points, perpendicular_bisector, angle_bisector,
+	two_point_ellipse, three_point_ellipse, ellipse_points,
+	n_gon, star_polygon,
+	rectangle, parallelogram, trapezoid,
+	circular_arc_3point, annulus_sector,
+	tangent_circle_to_two_lines, tangent_lines_to_two_circles,
+	tangent_circle_to_line_and_point, parallel_line
+)
 
 # - Init ------------------------------------------------------------------------
 __version__ = '1.1'
@@ -1032,3 +1041,603 @@ class HobbyDrawActions(object):
 		hs.add_knot((ox, oy + r))							# BL corner start -> hobby
 
 		return hs
+
+
+class PrimitiveDrawActions(object):
+	'''Collection of geometric primitive drawing actions.
+
+	Provides tools for creating ellipses, regular polygons, stars,
+	rectangles, parallelograms, trapezoids, arcs, annulus sectors,
+	and tangent/construction geometry.
+
+	All methods are static. They return Contour, HobbySpline, or
+	geometric data on success, or None on failure.
+	'''
+
+	# -- Ellipses ---------------------------------------------------------------
+	@staticmethod
+	def draw_ellipse(center, semi_a, semi_b, angle_deg=0., tension=1.):
+		'''Create an ellipse contour using Hobby splines. The four
+		cardinal points of the ellipse are used as knots.
+
+		Arguments:
+			center (tuple(float, float)): Center (x, y).
+			semi_a (float): Horizontal semi-axis.
+			semi_b (float): Vertical semi-axis.
+			angle_deg (float): Rotation angle in degrees.
+			tension (float): Hobby tension (affects roundness).
+
+		Returns:
+			HobbySpline or None: The ellipse path.
+		'''
+		if semi_a <= 0. or semi_b <= 0.:
+			return None
+
+		cx, cy = float(center[0]), float(center[1])
+		angle_rad = math.radians(angle_deg)
+		cos_r = math.cos(angle_rad)
+		sin_r = math.sin(angle_rad)
+
+		# Four cardinal points of the ellipse
+		raw_points = [
+			(0., -semi_b),	# Bottom
+			(semi_a, 0.),	# Right
+			(0., semi_b),	# Top
+			(-semi_a, 0.)	# Left
+		]
+
+		# Rotate and translate
+		knots = []
+		for ex, ey in raw_points:
+			rx = cx + ex * cos_r - ey * sin_r
+			ry = cy + ex * sin_r + ey * cos_r
+			knots.append((rx, ry))
+
+		return HobbySpline(knots, closed=True, tension=tension)
+
+	@staticmethod
+	def draw_ellipse_from_rect(p1, p2, angle_deg=0., tension=1.):
+		'''Create an ellipse inscribed in the rectangle defined by two
+		diagonally opposite corners.
+
+		Arguments:
+			p1 (tuple): First corner (x, y).
+			p2 (tuple): Opposite corner (x, y).
+			angle_deg (float): Rotation angle in degrees.
+			tension (float): Hobby tension.
+
+		Returns:
+			HobbySpline or None: The ellipse path.
+		'''
+		center, (a, b) = two_point_ellipse(p1, p2)
+
+		if a <= 0. or b <= 0.:
+			return None
+
+		return PrimitiveDrawActions.draw_ellipse(center, a, b, angle_deg, tension)
+
+	@staticmethod
+	def draw_ellipse_from_3points(center, p_width, p_height, angle_deg=0., tension=1.):
+		'''Create an ellipse from center and a point on each axis.
+
+		Arguments:
+			center (tuple): Center (x, y).
+			p_width (tuple): A point on the horizontal axis.
+			p_height (tuple): A point on the vertical axis.
+			angle_deg (float): Rotation angle in degrees.
+			tension (float): Hobby tension.
+
+		Returns:
+			HobbySpline or None: The ellipse path.
+		'''
+		_, (a, b) = three_point_ellipse(center, p_width, p_height)
+
+		if a <= 0. or b <= 0.:
+			return None
+
+		return PrimitiveDrawActions.draw_ellipse(center, a, b, angle_deg, tension)
+
+	@staticmethod
+	def draw_ellipse_contour(center, semi_a, semi_b, angle_deg=0., tension=1.):
+		'''Create an ellipse and return as a solved Contour.
+
+		Arguments:
+			center (tuple): Center (x, y).
+			semi_a (float): Horizontal semi-axis.
+			semi_b (float): Vertical semi-axis.
+			angle_deg (float): Rotation angle in degrees.
+			tension (float): Hobby tension.
+
+		Returns:
+			Contour or None: The ellipse contour.
+		'''
+		hs = PrimitiveDrawActions.draw_ellipse(center, semi_a, semi_b, angle_deg, tension)
+
+		if hs is None:
+			return None
+
+		return hs.to_contour()
+
+	# -- Regular polygons -------------------------------------------------------
+	@staticmethod
+	def draw_n_gon(center, radius, n, start_angle=0.):
+		'''Create a regular polygon contour (all line segments).
+
+		Arguments:
+			center (tuple): Center (x, y).
+			radius (float): Circumscribed radius (center to vertex).
+			n (int): Number of sides (3 = triangle, 5 = pentagon, etc.).
+			start_angle (float): Rotation of first vertex in degrees.
+
+		Returns:
+			Contour or None: The polygon contour.
+		'''
+		if n < 3 or radius <= 0.:
+			return None
+
+		vertices = n_gon(center, radius, n, start_angle)
+		new_nodes = [Node(p[0], p[1]) for p in vertices]
+		return Contour(new_nodes, closed=True)
+
+	@staticmethod
+	def draw_n_gon_hobby(center, radius, n, start_angle=0., tension=1.):
+		'''Create a regular polygon with Hobby-smoothed corners.
+
+		Arguments:
+			center (tuple): Center (x, y).
+			radius (float): Circumscribed radius.
+			n (int): Number of sides.
+			start_angle (float): Rotation of first vertex in degrees.
+			tension (float): Hobby tension. Higher values make sharper corners.
+
+		Returns:
+			HobbySpline or None: The smoothed polygon path.
+		'''
+		if n < 3 or radius <= 0.:
+			return None
+
+		vertices = n_gon(center, radius, n, start_angle)
+		return HobbySpline(vertices, closed=True, tension=tension)
+
+	# -- Star polygons ----------------------------------------------------------
+	@staticmethod
+	def draw_star(center, outer_r, inner_r, n, start_angle=0.):
+		'''Create a star polygon contour (all line segments).
+
+		Arguments:
+			center (tuple): Center (x, y).
+			outer_r (float): Outer (tip) radius.
+			inner_r (float): Inner (valley) radius.
+			n (int): Number of points/tips.
+			start_angle (float): Rotation of first tip in degrees.
+
+		Returns:
+			Contour or None: The star contour.
+		'''
+		if n < 3 or outer_r <= 0. or inner_r <= 0.:
+			return None
+
+		vertices = star_polygon(center, outer_r, inner_r, n, start_angle)
+		new_nodes = [Node(p[0], p[1]) for p in vertices]
+		return Contour(new_nodes, closed=True)
+
+	@staticmethod
+	def draw_star_hobby(center, outer_r, inner_r, n, start_angle=0., tension=1.):
+		'''Create a star polygon with Hobby-smoothed corners.
+
+		Arguments:
+			center (tuple): Center (x, y).
+			outer_r (float): Outer (tip) radius.
+			inner_r (float): Inner (valley) radius.
+			n (int): Number of points/tips.
+			start_angle (float): Rotation of first tip in degrees.
+			tension (float): Hobby tension.
+
+		Returns:
+			HobbySpline or None: The smoothed star path.
+		'''
+		if n < 3 or outer_r <= 0. or inner_r <= 0.:
+			return None
+
+		vertices = star_polygon(center, outer_r, inner_r, n, start_angle)
+		return HobbySpline(vertices, closed=True, tension=tension)
+
+	# -- Rectangles / Parallelograms / Trapezoids -------------------------------
+	@staticmethod
+	def draw_rectangle(origin, width, height):
+		'''Create an axis-aligned rectangle contour.
+
+		Arguments:
+			origin (tuple): Bottom-left corner (x, y).
+			width (float): Width.
+			height (float): Height.
+
+		Returns:
+			Contour or None: The rectangle contour.
+		'''
+		if width <= 0. or height <= 0.:
+			return None
+
+		vertices = rectangle(origin, width, height)
+		new_nodes = [Node(p[0], p[1]) for p in vertices]
+		return Contour(new_nodes, closed=True)
+
+	@staticmethod
+	def draw_parallelogram(origin, width, height, slant_angle):
+		'''Create a parallelogram (slanted rectangle) contour.
+
+		Arguments:
+			origin (tuple): Bottom-left corner (x, y).
+			width (float): Base width.
+			height (float): Height.
+			slant_angle (float): Slant angle in degrees (0 = rectangle).
+
+		Returns:
+			Contour or None: The parallelogram contour.
+		'''
+		if width <= 0. or height <= 0.:
+			return None
+
+		vertices = parallelogram(origin, width, height, slant_angle)
+		new_nodes = [Node(p[0], p[1]) for p in vertices]
+		return Contour(new_nodes, closed=True)
+
+	@staticmethod
+	def draw_trapezoid(base_center, top_width, bottom_width, height):
+		'''Create a symmetric trapezoid contour.
+
+		Arguments:
+			base_center (tuple): Center of the bottom edge (x, y).
+			top_width (float): Width of the top edge.
+			bottom_width (float): Width of the bottom edge.
+			height (float): Height.
+
+		Returns:
+			Contour or None: The trapezoid contour.
+		'''
+		if height <= 0. or (top_width <= 0. and bottom_width <= 0.):
+			return None
+
+		vertices = trapezoid(base_center, top_width, bottom_width, height)
+		new_nodes = [Node(p[0], p[1]) for p in vertices]
+		return Contour(new_nodes, closed=True)
+
+	# -- Arcs -------------------------------------------------------------------
+	@staticmethod
+	def draw_arc_3point(p1, p2, p3, tension=1.):
+		'''Create an arc through three points using Hobby splines.
+		Uses the three-point circle to find center and radius,
+		then builds a Hobby arc with direction-pinned tangents.
+
+		Arguments:
+			p1, p2, p3 (tuple): Three points (x, y) on the arc.
+			tension (float): Hobby tension.
+
+		Returns:
+			HobbySpline or None: The arc path (open), or None if collinear.
+		'''
+		result = three_point_circle(p1, p2, p3)
+
+		if result[0] is None:
+			return None
+
+		center, radius = result
+		cx, cy = center
+
+		# Compute angles for each point
+		a1 = math.atan2(p1[1] - cy, p1[0] - cx)
+		a2 = math.atan2(p2[1] - cy, p2[0] - cx)
+		a3 = math.atan2(p3[1] - cy, p3[0] - cx)
+
+		# Build arc with tangent-pinned directions (perpendicular to radius)
+		# Determine arc direction from p1 through p2 to p3
+		def normalize_angle(a, ref):
+			while a - ref < -math.pi:
+				a += 2. * math.pi
+			while a - ref > math.pi:
+				a -= 2. * math.pi
+			return a
+
+		a2n = normalize_angle(a2, a1)
+		a3n = normalize_angle(a3, a1)
+		ccw = a3n > a1  # Counter-clockwise if a3 > a1 after normalization
+
+		# Fix direction if a2 is not between a1 and a3
+		if ccw and not (a1 <= a2n <= a3n):
+			ccw = False
+		elif not ccw and not (a3n <= a2n <= a1):
+			ccw = True
+
+		tangent_offset = math.pi / 2. if ccw else -math.pi / 2.
+
+		hs = HobbySpline(closed=False, tension=tension)
+		hs.add_knot(p1, dir_out=a1 + tangent_offset, dir_in=a1 + tangent_offset)
+		hs.add_knot(p2, dir_out=a2 + tangent_offset, dir_in=a2 + tangent_offset)
+		hs.add_knot(p3, dir_out=a3 + tangent_offset, dir_in=a3 + tangent_offset)
+
+		return hs
+
+	@staticmethod
+	def draw_arc_3point_contour(p1, p2, p3, tension=1.):
+		'''Create an arc through three points, returned as a Contour.
+
+		Arguments:
+			p1, p2, p3 (tuple): Three points (x, y) on the arc.
+			tension (float): Hobby tension.
+
+		Returns:
+			Contour or None: The arc contour (open).
+		'''
+		hs = PrimitiveDrawActions.draw_arc_3point(p1, p2, p3, tension)
+
+		if hs is None:
+			return None
+
+		return hs.to_contour()
+
+	@staticmethod
+	def draw_annulus_sector(center, inner_r, outer_r, start_angle, end_angle):
+		'''Create an annulus (ring) sector contour.
+
+		Arguments:
+			center (tuple): Center (x, y).
+			inner_r (float): Inner radius.
+			outer_r (float): Outer radius.
+			start_angle (float): Start angle in degrees.
+			end_angle (float): End angle in degrees.
+
+		Returns:
+			Contour or None: The annulus sector contour.
+		'''
+		if inner_r < 0. or outer_r <= inner_r:
+			return None
+
+		vertices = annulus_sector(center, inner_r, outer_r, start_angle, end_angle)
+
+		if not vertices:
+			return None
+
+		new_nodes = [Node(p[0], p[1]) for p in vertices]
+		return Contour(new_nodes, closed=True)
+
+	@staticmethod
+	def draw_annulus_sector_hobby(center, inner_r, outer_r, start_angle, end_angle, tension=1.):
+		'''Create an annulus (ring) sector with Hobby-smoothed arcs.
+		Lines connect the arc endpoints, hobby curves form the arcs.
+
+		Arguments:
+			center (tuple): Center (x, y).
+			inner_r (float): Inner radius.
+			outer_r (float): Outer radius.
+			start_angle (float): Start angle in degrees.
+			end_angle (float): End angle in degrees.
+			tension (float): Hobby tension for the arcs.
+
+		Returns:
+			HobbySpline or None: The annulus sector path.
+		'''
+		if inner_r < 0. or outer_r <= inner_r:
+			return None
+
+		cx, cy = float(center[0]), float(center[1])
+		sa = math.radians(start_angle)
+		ea = math.radians(end_angle)
+		ma = (sa + ea) / 2.
+
+		hs = HobbySpline(closed=True, tension=tension)
+
+		# Outer arc: start -> mid -> end
+		tangent_offset = math.pi / 2. if ea > sa else -math.pi / 2.
+
+		hs.add_knot(
+			(cx + outer_r * math.cos(sa), cy + outer_r * math.sin(sa)),
+			dir_out=sa + tangent_offset, dir_in=sa + tangent_offset
+		)
+		hs.add_knot(
+			(cx + outer_r * math.cos(ma), cy + outer_r * math.sin(ma)),
+			dir_out=ma + tangent_offset, dir_in=ma + tangent_offset
+		)
+		hs.add_knot(
+			(cx + outer_r * math.cos(ea), cy + outer_r * math.sin(ea)),
+			segment=LINE,
+			dir_out=ea + tangent_offset, dir_in=ea + tangent_offset
+		)
+
+		# Inner arc: end -> mid -> start (reversed)
+		tangent_rev = -tangent_offset
+		hs.add_knot(
+			(cx + inner_r * math.cos(ea), cy + inner_r * math.sin(ea)),
+			dir_out=ea + tangent_rev, dir_in=ea + tangent_rev
+		)
+		hs.add_knot(
+			(cx + inner_r * math.cos(ma), cy + inner_r * math.sin(ma)),
+			dir_out=ma + tangent_rev, dir_in=ma + tangent_rev
+		)
+		hs.add_knot(
+			(cx + inner_r * math.cos(sa), cy + inner_r * math.sin(sa)),
+			segment=LINE,
+			dir_out=sa + tangent_rev, dir_in=sa + tangent_rev
+		)
+
+		return hs
+
+	# -- Tangent constructions --------------------------------------------------
+	@staticmethod
+	def draw_tangent_fillet(line1_p1, line1_p2, line2_p1, line2_p2, radius, tension=1.):
+		'''Create a fillet (tangent circle arc) between two lines.
+		Finds the tangent circle and returns a Hobby arc connecting
+		the two tangent points.
+
+		Arguments:
+			line1_p1, line1_p2 (tuple): Two points on the first line.
+			line2_p1, line2_p2 (tuple): Two points on the second line.
+			radius (float): Fillet radius.
+			tension (float): Hobby tension for the arc.
+
+		Returns:
+			list[dict] or None: List of solutions, each dict containing:
+				'arc' (HobbySpline): The fillet arc.
+				'center' (tuple): Center of the tangent circle.
+				'tangent1' (tuple): Tangent point on line 1.
+				'tangent2' (tuple): Tangent point on line 2.
+			Returns None if no solutions exist.
+		'''
+		solutions = tangent_circle_to_two_lines(line1_p1, line1_p2, line2_p1, line2_p2, radius)
+
+		if not solutions:
+			return None
+
+		results = []
+
+		for center, tp1, tp2 in solutions:
+			cx, cy = center
+
+			# Tangent directions at each point (perpendicular to radius)
+			a1 = math.atan2(tp1[1] - cy, tp1[0] - cx)
+			a2 = math.atan2(tp2[1] - cy, tp2[0] - cx)
+
+			# Determine arc direction (shorter arc)
+			da = a2 - a1
+			while da > math.pi:
+				da -= 2. * math.pi
+			while da < -math.pi:
+				da += 2. * math.pi
+
+			tangent_offset = math.pi / 2. if da > 0. else -math.pi / 2.
+
+			# Mid-angle for a 3-knot arc
+			mid_a = a1 + da / 2.
+			mid_pt = (cx + radius * math.cos(mid_a), cy + radius * math.sin(mid_a))
+
+			hs = HobbySpline(closed=False, tension=tension)
+			hs.add_knot(tp1, dir_out=a1 + tangent_offset, dir_in=a1 + tangent_offset)
+			hs.add_knot(mid_pt, dir_out=mid_a + tangent_offset, dir_in=mid_a + tangent_offset)
+			hs.add_knot(tp2, dir_out=a2 + tangent_offset, dir_in=a2 + tangent_offset)
+
+			results.append({
+				'arc': hs,
+				'center': center,
+				'tangent1': tp1,
+				'tangent2': tp2
+			})
+
+		return results
+
+	@staticmethod
+	def draw_tangent_lines_between_circles(c1, r1, c2, r2):
+		'''Find external and internal common tangent lines between two circles
+		and return them as line contours.
+
+		Arguments:
+			c1 (tuple): Center of first circle (x, y).
+			r1 (float): Radius of first circle.
+			c2 (tuple): Center of second circle (x, y).
+			r2 (float): Radius of second circle.
+
+		Returns:
+			dict or None: {'external': [Contour, ...], 'internal': [Contour, ...]}
+				Each Contour is a 2-node open line contour.
+		'''
+		data = tangent_lines_to_two_circles(c1, r1, c2, r2)
+
+		result = {'external': [], 'internal': []}
+
+		for key in ('external', 'internal'):
+			for tp1, tp2 in data[key]:
+				nodes = [Node(tp1[0], tp1[1]), Node(tp2[0], tp2[1])]
+				result[key].append(Contour(nodes, closed=False))
+
+		return result
+
+	# -- Construction aids ------------------------------------------------------
+	@staticmethod
+	def draw_bisector(p1, p2, length=1000.):
+		'''Create the perpendicular bisector of a segment as a line contour.
+
+		Arguments:
+			p1, p2 (tuple): Segment endpoints (x, y).
+			length (float): Half-length of the bisector line.
+
+		Returns:
+			Contour: A 2-node open contour representing the bisector.
+		'''
+		bp1, bp2 = perpendicular_bisector(p1, p2, length)
+		nodes = [Node(bp1[0], bp1[1]), Node(bp2[0], bp2[1])]
+		return Contour(nodes, closed=False)
+
+	@staticmethod
+	def draw_angle_bisector(p1, vertex, p2, length=1000.):
+		'''Create the angle bisector at a vertex as a line contour.
+
+		Arguments:
+			p1 (tuple): First ray endpoint (x, y).
+			vertex (tuple): Vertex of the angle (x, y).
+			p2 (tuple): Second ray endpoint (x, y).
+			length (float): Length of the bisector ray.
+
+		Returns:
+			Contour: A 2-node open contour from vertex along the bisector.
+		'''
+		v, bp = angle_bisector(p1, vertex, p2, length)
+		nodes = [Node(v[0], v[1]), Node(bp[0], bp[1])]
+		return Contour(nodes, closed=False)
+
+	@staticmethod
+	def draw_parallel_line(p1, p2, distance, side=1):
+		'''Create a parallel (offset) line as a contour.
+
+		Arguments:
+			p1, p2 (tuple): Two points on the original line.
+			distance (float): Offset distance.
+			side (int): 1 = left side (CCW normal), -1 = right side.
+
+		Returns:
+			Contour: A 2-node open contour of the parallel line.
+		'''
+		pp1, pp2 = parallel_line(p1, p2, distance, side)
+		nodes = [Node(pp1[0], pp1[1]), Node(pp2[0], pp2[1])]
+		return Contour(nodes, closed=False)
+
+	@staticmethod
+	def mirror_contour(contour, axis_p1, axis_p2):
+		'''Create a mirrored copy of a contour reflected across an axis line.
+
+		Arguments:
+			contour (Contour): The contour to mirror.
+			axis_p1, axis_p2 (tuple): Two points defining the reflection axis.
+
+		Returns:
+			Contour or None: The mirrored contour.
+		'''
+		if contour is None or not contour.nodes:
+			return None
+
+		new_nodes = []
+
+		for node in contour.nodes:
+			rx, ry = reflect_point((node.x, node.y), axis_p1, axis_p2)
+			new_nodes.append(Node(rx, ry, type=node.type))
+
+		return Contour(new_nodes, closed=contour.closed)
+
+	@staticmethod
+	def rotate_contour(contour, center, angle_deg):
+		'''Create a rotated copy of a contour.
+
+		Arguments:
+			contour (Contour): The contour to rotate.
+			center (tuple): Center of rotation (x, y).
+			angle_deg (float): Rotation angle in degrees (CCW positive).
+
+		Returns:
+			Contour or None: The rotated contour.
+		'''
+		if contour is None or not contour.nodes:
+			return None
+
+		points = [(n.x, n.y) for n in contour.nodes]
+		types = [n.type for n in contour.nodes]
+		rotated = rotate_points(points, center, angle_deg)
+
+		new_nodes = [Node(p[0], p[1], type=t) for p, t in zip(rotated, types)]
+		return Contour(new_nodes, closed=contour.closed)
