@@ -1149,9 +1149,15 @@ class HobbySpline(Container):
 		# Get on-curve nodes and their segments
 		on_nodes = [n for n in contour.nodes if n.is_on]
 
+		# Skip duplicate closing node in closed contours
+		if (contour.closed and len(on_nodes) > 1
+			and abs(on_nodes[0].x - on_nodes[-1].x) < 1e-6
+			and abs(on_nodes[0].y - on_nodes[-1].y) < 1e-6):
+			on_nodes = on_nodes[:-1]
+
 		for i, node in enumerate(on_nodes):
-			# Get the segment following this on-curve node
-			seg = node.segment  # returns (on, bcp_out, bcp_in, next_on) or (on, next_on)
+			# Get the segment nodes following this on-curve node
+			seg = node.segment_nodes  # returns [on, bcp_out, bcp_in, next_on] or [on, next_on]
 
 			if seg is None or len(seg) <= 2:
 				# Line segment
@@ -1217,17 +1223,17 @@ class HobbySpline(Container):
 						adj_t = (t - t_offset) / (1. - t_offset)
 
 						if 0.01 < adj_t < 0.99:
-							parts = remaining.solve_slice(adj_t)
+							first_part, second_part = remaining.solve_slice(adj_t)
 
 							# First part: add its BCPs
-							result_nodes.append(Node(parts[0][1][0], parts[0][1][1], type='curve'))
-							result_nodes.append(Node(parts[0][2][0], parts[0][2][1], type='curve'))
+							result_nodes.append(Node(first_part.p1.x, first_part.p1.y, type='curve'))
+							result_nodes.append(Node(first_part.p2.x, first_part.p2.y, type='curve'))
 
 							# Extreme point as on-curve
 							result_nodes.append(Node(point.x, point.y, type='on'))
 
 							# Continue with second part
-							remaining = CubicBezier(*parts[1])
+							remaining = second_part
 							t_offset = t
 
 					# Final part BCPs
