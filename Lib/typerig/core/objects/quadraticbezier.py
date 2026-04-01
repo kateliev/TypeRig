@@ -81,6 +81,22 @@ class QuadraticBezier(object):
 	def line(self):
 		return Line(self.p0, self.p2)
 
+	def asList(self):
+		return list(self.points)
+
+	def __eq__(self, other):
+		if not isinstance(other, QuadraticBezier):
+			return False
+		return (self.p0 == other.p0 and 
+				self.p1 == other.p1 and 
+				self.p2 == other.p2)
+
+	def __ne__(self, other):
+		return not self.__eq__(other)
+
+	def __hash__(self):
+		return hash((self.p0.tuple, self.p1.tuple, self.p2.tuple))
+
 	@property
 	def x(self):
 		return min(self.p0.x, self.p1.x, self.p2.x)
@@ -215,7 +231,10 @@ class QuadraticBezier(object):
 	def solve_curvature(self, time):
 		'''Find curvature of on-curve point at given time'''
 		pt, d1, d2 = self.solve_derivative_at_time(time)
-		return (d1.x * d2.y - d1.y * d2.x) / (d1.x**2 + d1.y**2)**1.5
+		denom = (d1.x**2 + d1.y**2)**1.5
+		if abs(denom) < 1e-14:
+			return 0.0
+		return (d1.x * d2.y - d1.y * d2.x) / denom
 
 	def solve_slice(self, time):
 		'''Returns two segments representing quadratic bezier sliced at given time.
