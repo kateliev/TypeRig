@@ -28,13 +28,15 @@ from typerig.core.objects.point import Point
 from typerig.core.func.math import linInterp
 from typerig.core.objects.transform import TransformOrigin
 from typerig.core.objects.utils import Bounds
+from typerig.core.objects.contour import Contour
+from typerig.core.objects.node import Node
 
 from typerig.core.base.message import *
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.string import diactiricalMarks
 
 # - Init -------------------------------------------
-__version__ = '0.31.8'
+__version__ = '0.31.9'
 
 # - Keep compatibility for basestring checks
 try:
@@ -1361,7 +1363,6 @@ class pGlyph(object):
 		self.layer(layer).appendGuidelines([newGuideline])
 		return newGuideline
 
-
 	# - Tags -----------------------------------------------
 	def getTags(self):
 		return self.fl.tags
@@ -1543,6 +1544,64 @@ class eGlyph(pGlyph):
 			if len(layer_anchors) == len(anchorArray):
 				for aid in range(len(layer_anchors)):
 					anchorArray[aid].point = pqt.QtCore.QPointF(*layer_anchors[aid])
+
+	@staticmethod
+	def _flNodes_to_trContour(fl_nodes, is_closed):
+		'''Convert list of flNodes to trContour (core Contour object)'''
+		tr_nodes = []
+		for fl_node in fl_nodes:
+			tr_node = Node(fl_node.x, fl_node.y, type=fl_node.type, smooth=fl_node.smooth)
+			tr_nodes.append(tr_node)
+		
+		return Contour(tr_nodes, closed=is_closed, proxy=False)
+
+	@staticmethod
+	def _trNodes_to_flContour(tr_nodes, is_closed):
+		'''Convert trContour nodes back to flContour'''
+		fl_nodes = []
+		
+		for tr_node in tr_nodes:
+			fl_node = fl6.flNode(pqt.QtCore.QPointF(tr_node.x, tr_node.y), nodeType=tr_node.type)
+			fl_node.smooth = tr_node.smooth
+			fl_nodes.append(fl_node)
+		
+		fl_contour = fl6.flContour(fl_nodes, closed=is_closed)
+		fl_contour_nodes = fl_contour.nodes()
+
+		for nid in range(len(fl_contour_nodes)):
+			if tr_nodes[nid].smooth:
+				fl_contour_nodes[nid].smooth = True
+
+		return fl_contour
+
+	def _getTRContours(self, layer=None):
+		''' Exctract and convert layer contours to TR contorus '''
+		tr_contours = []
+
+		for contour in self.contours(layer):
+			tr_contours.append(self._flNodes_to_trContour(contour.nodes(), contour.closed))
+
+		return tr_contours
+
+	def _addTRContours(self, layer, tr_contours, add_shape=None):
+		layer_shapes = self.shapes(layer)
+
+		if not len(layer_shapes) and addShape is None: return
+
+		if add_shape is None:
+			active_shape = layer_shapes[0]
+		else:
+			active_shape = fl6.flShape()
+		
+		new_fl_contours = []
+
+		for contour in tr_contours:
+			new_fl_contours.append(self._trNodes_to_flContour(contour.nodes, contour.closed))
+		
+		active_shape.addContours(new_fl_contours, True)
+
+		if add_shape is not None:
+			self.layer(layer_name).addShape(active_shape)
 
 	# - Nodes ----------------------------------------------
 	def breakContour(self, contourId, nodeId, layer=None, expand=0):
