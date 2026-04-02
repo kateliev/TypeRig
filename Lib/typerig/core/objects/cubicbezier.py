@@ -82,6 +82,23 @@ class CubicBezier(object):
 	def line(self):
 		return Line(self.p0, self.p3)
 
+	def asList(self):
+		return list(self.points)
+
+	def __eq__(self, other):
+		if not isinstance(other, CubicBezier):
+			return False
+		return (self.p0 == other.p0 and 
+				self.p1 == other.p1 and 
+				self.p2 == other.p2 and 
+				self.p3 == other.p3)
+
+	def __ne__(self, other):
+		return not self.__eq__(other)
+
+	def __hash__(self):
+		return hash((self.p0.tuple, self.p1.tuple, self.p2.tuple, self.p3.tuple))
+
 	@property
 	def x(self):
 		return min(self.p0.x, self.p1.x, self.p2.x, self.p3.x)
@@ -105,6 +122,132 @@ class CubicBezier(object):
 	@property
 	def height(self):
 		return abs(self.y_max - self.y)
+
+	def flatten(self, tolerance=0.5):
+		'''Flatten cubic bezier into list of Line segments using adaptive subdivision.
+		
+		Args:
+			tolerance: Maximum deviation allowed from curve (user units)
+		
+		Returns:
+			list[Line]: Sequence of line segments approximating the curve
+		'''
+		def _de_casteljau(p0, p1, p2, p3, t):
+			q0 = Point((p0.x + (p1.x - p0.x) * t), (p0.y + (p1.y - p0.y) * t))
+			q1 = Point((p1.x + (p2.x - p1.x) * t), (p1.y + (p2.y - p1.y) * t))
+			q2 = Point((p2.x + (p3.x - p2.x) * t), (p2.y + (p3.y - p2.y) * t))
+			
+			r0 = Point((q0.x + (q1.x - q0.x) * t), (q0.y + (q1.y - q0.y) * t))
+			r1 = Point((q1.x + (q2.x - q1.x) * t), (q1.y + (q2.y - q1.y) * t))
+			
+			s0 = Point((r0.x + (r1.x - r0.x) * t), (r0.y + (r1.y - r0.y) * t))
+			
+			return (
+				(p0, q0, r0, s0),
+				(s0, r1, q2, p3)
+			)
+
+		def _flatten_recursive(cp0, cp1, cp2, cp3):
+			if self._is_flat(cp0, cp1, cp2, cp3, tolerance):
+				return [Line((cp0.x, cp0.y), (cp3.x, cp3.y))]
+			
+			left_ctrl, right_ctrl = _de_casteljau(cp0, cp1, cp2, cp3, 0.5)
+			return (_flatten_recursive(*left_ctrl) + 
+					_flatten_recursive(*right_ctrl))
+
+		return _flatten_recursive(self.p0, self.p1, self.p2, self.p3)
+
+	def _is_flat(self, p0, p1, p2, p3, tol):
+		'''Check if segment is flat enough to approximate as line using bounding box method.'''
+		cross_x = (p0.x - 3*p1.x + 3*p2.x - p3.x) / 6.0
+		cross_y = (p0.y - 3*p1.y + 3*p2.y - p3.y) / 6.0
+		
+		dist_to_chord = max(abs(cross_x), abs(cross_y))
+		
+		return dist_to_chord <= tol
+
+	def interpolate(self, other, t):
+		'''Linear interpolation between two CubicBezier curves at each control point.
+		
+		Args:
+			other: Another CubicBezier to interpolate with
+			t: Interpolation factor (0.0 = self, 1.0 = other)
+		
+		Returns:
+			CubicBezier: Blended curve
+		'''
+		if not isinstance(other, CubicBezier):
+			raise TypeError("Can only interpolate between CubicBezier objects")
+		
+		return CubicBezier(
+			self.p0 * (1 - t) + other.p0 * t,
+			self.p1 * (1 - t) + other.p1 * t,
+			self.p2 * (1 - t) + other.p2 * t,
+			self.p3 * (1 - t) + other.p3 * t
+		)
+		
+		return CubicBezier(
+			self.p0 * (1 - t) + other.p0 * t,
+			self.p1 * (1 - t) + other.p1 * t,
+			self.p2 * (1 - t) + other.p2 * t,
+			self.p3 * (1 - t) + other.p3 * t
+		)
+
+	def point_on_curve(self, point, tolerance=1e-6):
+		'''Check if a point lies on the curve within tolerance.
+		
+		Args:
+			point: Point to test
+			tolerance: Maximum distance to be considered "on" curve
+		
+		Returns:
+			bool: True if point is on curve
+		'''
+		if isinstance(point, CubicBezier):
+			dist = min(self.p0.diff_to(point.p0), self.p3.diff_to(point.p3))
+		else:
+			dist = self.project_point(point)[1]
+		
+		return dist <= tolerance
+
+	def closest_point_on_curve(self, point):
+		'''Find the closest point on the curve to an external point.
+		
+		Args:
+			point: External Point object
+		
+		Returns:
+			tuple: (closest_Point, t_parameter, distance)
+		'''
+		t, dist = self.project_point(point)
+		closest = self.solve_point(t)
+		return closest, t, dist
+
+	def is_convex(self):
+		'''Check if the bezier segment has no inflection points.
+		
+		Returns:
+			bool: True if curve is convex (no sign change in cross product)
+		'''
+		extremes = self.solve_extremes()
+		return len(extremes) <= 1
+
+	def get_inflection_points(self):
+		'''Find inflection points where curvature changes sign.
+		
+		Returns:
+			list[tuple]: List of (Point, t) tuples for inflection points
+		'''
+		inflections = []
+		for i in range(100):
+			t = i / 100.0
+			pt, d1, d2 = self.solve_derivative_at_time(t)
+			cross = d1.x * d2.y - d1.y * d2.x
+			
+			if abs(cross) < 1e-6:
+				inflections.append((pt, t))
+		
+		return inflections
 	
 	# -- Modifiers
 	def align_to(self, other_line):
@@ -209,7 +352,13 @@ class CubicBezier(object):
 		# - Init
 		pi = math.pi
 		tau = 2 * pi
+		
+		# Handle edge cases: zero-length or degenerate curves
 		d, a, b, c = self.find_coeffs()
+		
+		# If all control points are the same (degenerate), return no roots
+		if abs(d.x) < 1e-10 and abs(a.x) < 1e-10:
+			return [], []
 		
 		# - Calculate
 		return root_dim(a.x, b.x, c.x, d.x), root_dim(a.y, b.y, c.y, d.y)
@@ -294,7 +443,10 @@ class CubicBezier(object):
 	def solve_curvature(self, time):
 		'''Find Curvature of on-curve point at given time'''
 		pt, d1, d2 = self.solve_derivative_at_time(time)
-		return (d1.x * d2.y - d1.y * d2.x) / (d1.x**2 + d1.y**2)**1.5
+		denom = (d1.x**2 + d1.y**2)**1.5
+		if abs(denom) < 1e-14:
+			return 0.0
+		return (d1.x * d2.y - d1.y * d2.x) / denom
 
 	def solve_slice(self, time):
 		'''Returns two segments representing cubic bezier sliced at given time. 
