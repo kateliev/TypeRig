@@ -689,23 +689,82 @@ def pen_stroke_edge(segments, nibs, method=METHOD_DIRECTION, ignore_dirs=None, i
 		result.append(point)
 		types.append(ntype)
 
-	def _emit_arc_interior(arc_points):
-		'''Emit only interior points from an arc (strip first and last on-curves).
-		Arc from arc_between: [on, bcp, bcp, on, bcp, bcp, on] (7 points)
-		or short: [on, on] (2 points — degenerate, nothing interior).
-		The boundary on-curves are already emitted by the edge segments.
+	def _emit_round_join(from_pt, to_pt, center):
+		'''Emit a circular arc join from from_pt to to_pt around center.
+		Only emits interior points (BCPs + mid on-curve). The caller
+		must emit from_pt and to_pt as on-curves.
+		Uses the same geometric approach as cap computation.
 		'''
-		if len(arc_points) <= 2:
-			return  # Degenerate — no interior
+		r_from = from_pt - center
+		r_to = to_pt - center
 
-		# Strip first and last points (boundary on-curves)
-		interior = arc_points[1:-1]
-		for k, p in enumerate(interior):
-			# Interior of [bcp, bcp, on, bcp, bcp, ...]: k%3==2 is on-curve
-			if (k + 1) % 3 == 0:
-				_emit(p, 'on')
-			else:
-				_emit(p, 'curve')
+		# Angle between the two radii
+		dot = r_from.real * r_to.real + r_from.imag * r_to.imag
+		r_len = (abs(r_from) + abs(r_to)) * 0.5
+
+		if r_len < 1e-6:
+			return
+
+		cos_a = max(-1.0, min(1.0, dot / (abs(r_from) * abs(r_to))))
+		full_angle = math.acos(cos_a)
+
+		if full_angle < 0.01:
+			return  # Nearly coincident — no arc needed
+
+		# Arc midpoint: bisect the angle
+		mid_dir = r_from / abs(r_from) + r_to / abs(r_to)
+
+		if abs(mid_dir) < 1e-10:
+			# 180° — perpendicular bisector
+			cross_check = r_from.real * r_to.imag - r_from.imag * r_to.real
+			mid_dir = r_from * (1j if cross_check > 0 else -1j)
+
+		r_mid = mid_dir / abs(mid_dir) * r_len
+		p_mid = center + r_mid
+
+		# Determine rotation sense from cross product
+		cross = r_from.real * r_mid.imag - r_from.imag * r_mid.real
+		rot = 1j if cross > 0 else -1j
+
+		# Kappa for each half-arc: standard formula k = 4/3 * tan(θ/4)
+		# where θ is the arc angle of each half
+		half_angle = full_angle * 0.5
+		kappa = 4.0 / 3.0 * math.tan(half_angle / 4.0)
+
+		# First half: from_pt → p_mid
+		bcp1 = from_pt + kappa * (r_from * rot)
+		bcp2 = p_mid - kappa * (r_mid * rot)
+
+		# Second half: p_mid → to_pt
+		bcp3 = p_mid + kappa * (r_mid * rot)
+		bcp4 = to_pt - kappa * (r_to * rot)
+
+		_emit(bcp1, 'curve')
+		_emit(bcp2, 'curve')
+		_emit(p_mid, 'on')
+		_emit(bcp3, 'curve')
+		_emit(bcp4, 'curve')
+
+	def _compute_miter(from_pt, to_pt, from_dir, to_dir):
+		'''Compute miter join analytically via line-line intersection.
+		Extends the edge lines from from_pt along from_dir and
+		from to_pt along -to_dir, and finds where they meet.
+		Returns the intersection point, or None if parallel.
+		'''
+		# Line 1: from_pt + t * from_dir
+		# Line 2: to_pt - s * to_dir
+		# Solve: from_pt + t * from_dir = to_pt - s * to_dir
+		d1 = from_dir
+		d2 = -to_dir
+		dx = to_pt - from_pt
+
+		denom = d1.real * d2.imag - d1.imag * d2.real
+
+		if abs(denom) < 1e-10:
+			return None  # Parallel — no intersection
+
+		t = (dx.real * d2.imag - dx.imag * d2.real) / denom
+		return from_pt + t * d1
 
 	for i in range(n_seg):
 		qa, q1, q2, qb = edge_segs[i]
@@ -727,29 +786,27 @@ def pen_stroke_edge(segments, nibs, method=METHOD_DIRECTION, ignore_dirs=None, i
 			gap = abs(qb - qa_next)
 
 			if gap > 0.5:
+				# Skeleton corner position
+				node_pos = segments[i][3]
+
 				if join == JOIN_MITER:
-					edge_post = edge_segs[next_i]
-					tip = compute_tip(
-						(qa, q1, q2, qb), edge_post
-					)
-					# tip replaces the corner — emit tip then qa_next
-					for p in tip:
-						_emit(p, 'on')
+					# Analytical line-line intersection
+					dir_pre = robust_direction_end(*segments[i])
+					dir_post = robust_direction(*segments[next_i])
+					miter_pt = _compute_miter(qb, qa_next, dir_pre, dir_post)
+
+					if miter_pt is not None:
+						_emit(miter_pt, 'on')
+					else:
+						# Parallel — fall back to bevel
+						_emit(qb, 'on')
+
 					_emit(qa_next, 'on')
 
 				elif join == JOIN_ROUND:
-					# qb anchors the arc, arc interior fills the gap, qa_next closes it
+					# Geometric arc from qb to qa_next around skeleton corner
 					_emit(qb, 'on')
-					z_pre = segments[i]
-					z_post = segments[next_i]
-					dir_arr = robust_direction_end(*z_pre)
-					dir_dep = robust_direction(*z_post)
-					nib_corner = nibs[(i + 1) % len(nibs)]
-					node_pos = z_pre[3]
-					arc = nib_corner.arc_between(dir_arr, dir_dep, node_pos)
-
-					if arc:
-						_emit_arc_interior(arc)
+					_emit_round_join(qb, qa_next, node_pos)
 					_emit(qa_next, 'on')
 
 				else:
