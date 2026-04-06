@@ -452,65 +452,77 @@ class NodeStrokeOpts(object):
 class StrokeResult(object):
 	'''Container for pen stroke expansion results.
 
+	Each edge/cap stores both geometry (complex points) and parallel
+	node type tags ('on' or 'curve') so that to_nodes() can produce
+	correct PS cubic contours without guessing.
+
 	Attributes:
-		right : list of complex — right edge of envelope 
-		left  : list of complex — left edge of envelope
-		begin : list of complex — cap at path start (open paths only)
-		end   : list of complex — cap at path end (open paths only)
-		outline : list of complex — complete closed outline
+		right       : list of complex — right edge points
+		right_types : list of str — node types for right edge
+		left        : list of complex — left edge points
+		left_types  : list of str — node types for left edge
+		begin       : list of complex — begin cap points
+		begin_types : list of str — node types for begin cap
+		end         : list of complex — end cap points
+		end_types   : list of str — node types for end cap
 	'''
 
 	def __init__(self):
 		self.right = []
+		self.right_types = []
 		self.left = []
+		self.left_types = []
 		self.begin = []
+		self.begin_types = []
 		self.end = []
+		self.end_types = []
 
 	@property
 	def outline(self):
-		'''Complete closed outline path'''
+		'''Complete closed outline path.
+
+		The right edge runs start→end along the path direction.
+		The left edge (computed from reversed segments) already runs
+		end→start, so it naturally continues the loop without reversal.
+
+		Open path:  right(start→end) + end_cap + left(end→start) + begin_cap
+		Closed path: right(CW outer) + left(CCW inner) — single donut contour
+		'''
 		if self.begin or self.end:
-			# Open path: right + end_cap + left_reversed + begin_cap
-			return self.right + self.end + list(reversed(self.left)) + self.begin
+			return self.right + self.end + self.left + self.begin
 		else:
-			# Closed path: right + left_reversed
-			return self.right + list(reversed(self.left))
+			return self.right + self.left
+
+	@property
+	def outline_types(self):
+		'''Parallel node type list for outline.'''
+		if self.begin_types or self.end_types:
+			return self.right_types + self.end_types + self.left_types + self.begin_types
+		else:
+			return self.right_types + self.left_types
 
 	def to_nodes(self):
-		'''Convert outline to Node list for Contour construction'''
-		result = []
+		'''Convert outline to Node list for Contour construction.
+		Uses tracked node types — no heuristic guessing.
+		'''
 		points = self.outline
+		types = self.outline_types
 
 		if not points:
-			return result
+			return []
 
-		# Convert complex points to Nodes
-		# Determine structure: groups of (on, bcp_out, bcp_in, on, ...)
-		for i, z in enumerate(points):
-			# Simple heuristic: every 3rd point starting from 0 is on-curve
-			if i % 3 == 0:
-				result.append(Node(z.real, z.imag, type='on'))
-			else:
-				result.append(Node(z.real, z.imag, type='curve'))
-
-		return result
+		return [Node(z.real, z.imag, type=t) for z, t in zip(points, types)]
 
 	def to_node_lists(self):
 		'''Return separate Node lists for right edge, left edge, caps'''
-		def to_nodes(points):
-			result = []
-			for i, z in enumerate(points):
-				if i % 3 == 0:
-					result.append(Node(z.real, z.imag, type='on'))
-				else:
-					result.append(Node(z.real, z.imag, type='curve'))
-			return result
+		def to_nodes(points, types):
+			return [Node(z.real, z.imag, type=t) for z, t in zip(points, types)]
 
 		return {
-			'right': to_nodes(self.right),
-			'left': to_nodes(self.left),
-			'begin': to_nodes(self.begin),
-			'end': to_nodes(self.end),
+			'right': to_nodes(self.right, self.right_types),
+			'left': to_nodes(self.left, self.left_types),
+			'begin': to_nodes(self.begin, self.begin_types),
+			'end': to_nodes(self.end, self.end_types),
 			'outline': self.to_nodes(),
 		}
 
@@ -633,25 +645,26 @@ def pen_stroke_edge_segment(z0, z1, z2, z3, nib_start, nib_end, method=METHOD_DI
 	return (qa, qa, qb, qb)  # Fallback
 
 
-def pen_stroke_edge(segments, nibs, method=METHOD_DIRECTION, ignore_dirs=None, is_closed=False):
+def pen_stroke_edge(segments, nibs, method=METHOD_DIRECTION, ignore_dirs=None, is_closed=False, join=JOIN_ROUND):
 	'''Compute a full edge of the pen envelope.
 
-	Processes each segment of the skeleton path, computing the offset 
+	Processes each segment of the skeleton path, computing the offset
 	edge and joining consecutive edge segments at corners.
 
 	Args:
 		segments     : list of (z0, z1, z2, z3) — skeleton segments as complex tuples
-		nibs         : list of Nib — one per skeleton node (len = len(segments) + 1 for open, 
+		nibs         : list of Nib — one per skeleton node (len = len(segments) + 1 for open,
 		               len(segments) for closed)
 		method       : int — stroke method
 		ignore_dirs  : set of int or None — node indices where direction forcing is disabled
 		is_closed    : bool — whether the skeleton path is closed
+		join         : str — join type at corners ('round', 'miter', 'bevel')
 
 	Returns:
-		list of complex — edge path points (on-curves and BCPs)
+		tuple of (list of complex, list of str) — edge path points and parallel node types
 	'''
 	if not segments:
-		return []
+		return [], []
 
 	if ignore_dirs is None:
 		ignore_dirs = set()
@@ -670,17 +683,40 @@ def pen_stroke_edge(segments, nibs, method=METHOD_DIRECTION, ignore_dirs=None, i
 
 	# Assemble edge path with corner joins
 	result = []
+	types = []
+
+	def _emit(point, ntype):
+		result.append(point)
+		types.append(ntype)
+
+	def _emit_arc_interior(arc_points):
+		'''Emit only interior points from an arc (strip first and last on-curves).
+		Arc from arc_between: [on, bcp, bcp, on, bcp, bcp, on] (7 points)
+		or short: [on, on] (2 points — degenerate, nothing interior).
+		The boundary on-curves are already emitted by the edge segments.
+		'''
+		if len(arc_points) <= 2:
+			return  # Degenerate — no interior
+
+		# Strip first and last points (boundary on-curves)
+		interior = arc_points[1:-1]
+		for k, p in enumerate(interior):
+			# Interior of [bcp, bcp, on, bcp, bcp, ...]: k%3==2 is on-curve
+			if (k + 1) % 3 == 0:
+				_emit(p, 'on')
+			else:
+				_emit(p, 'curve')
 
 	for i in range(n_seg):
 		qa, q1, q2, qb = edge_segs[i]
 
 		if i == 0:
-			result.append(qa)
+			_emit(qa, 'on')
 
 		# Add BCPs (skip for lines)
 		if not _is_line(qa, q1, q2, qb):
-			result.append(q1)
-			result.append(q2)
+			_emit(q1, 'curve')
+			_emit(q2, 'curve')
 
 		# Corner join to next segment
 		if i < n_seg - 1 or is_closed:
@@ -691,17 +727,41 @@ def pen_stroke_edge(segments, nibs, method=METHOD_DIRECTION, ignore_dirs=None, i
 			gap = abs(qb - qa_next)
 
 			if gap > 0.5:
-				# Need a corner join — for now, straight connection
-				# TODO: pen arc join using nib.arc_between
-				result.append(qb)
-				if not is_closed or i < n_seg - 1:
-					result.append(qa_next)
-			else:
-				result.append(qb)
-		else:
-			result.append(qb)
+				if join == JOIN_MITER:
+					edge_post = edge_segs[next_i]
+					tip = compute_tip(
+						(qa, q1, q2, qb), edge_post
+					)
+					# tip replaces the corner — emit tip then qa_next
+					for p in tip:
+						_emit(p, 'on')
+					_emit(qa_next, 'on')
 
-	return result
+				elif join == JOIN_ROUND:
+					# qb anchors the arc, arc interior fills the gap, qa_next closes it
+					_emit(qb, 'on')
+					z_pre = segments[i]
+					z_post = segments[next_i]
+					dir_arr = robust_direction_end(*z_pre)
+					dir_dep = robust_direction(*z_post)
+					nib_corner = nibs[(i + 1) % len(nibs)]
+					node_pos = z_pre[3]
+					arc = nib_corner.arc_between(dir_arr, dir_dep, node_pos)
+
+					if arc:
+						_emit_arc_interior(arc)
+					_emit(qa_next, 'on')
+
+				else:
+					# Bevel: qb and qa_next as on-curves (straight line)
+					_emit(qb, 'on')
+					_emit(qa_next, 'on')
+			else:
+				_emit(qb, 'on')
+		else:
+			_emit(qb, 'on')
+
+	return result, types
 
 
 # - Cut (butt cap) computation ----------
@@ -990,9 +1050,9 @@ class PenStroke(object):
 				ignore_l.add(idx)
 
 		# Compute right edge (following path direction)
-		result.right = pen_stroke_edge(
-			self._segments, nibs_right, self.method, 
-			ignore_r, self.closed
+		result.right, result.right_types = pen_stroke_edge(
+			self._segments, nibs_right, self.method,
+			ignore_r, self.closed, self.join
 		)
 
 		# Compute left edge (reverse path direction)
@@ -1000,15 +1060,15 @@ class PenStroke(object):
 		reversed_segs = [(z3, z2, z1, z0) for z0, z1, z2, z3 in reversed(self._segments)]
 		reversed_nibs = list(reversed(nibs_left))
 
-		result.left = pen_stroke_edge(
-			reversed_segs, reversed_nibs, self.method, 
-			ignore_l, self.closed
+		result.left, result.left_types = pen_stroke_edge(
+			reversed_segs, reversed_nibs, self.method,
+			ignore_l, self.closed, self.join
 		)
 
 		# Caps for open paths
 		if not self.closed:
 			# Begin cap: connects left edge end to right edge start
-			result.begin = self._compute_cap(
+			result.begin, result.begin_types = self._compute_cap(
 				0,  # start node
 				result.left[-1] if result.left else complex(0, 0),
 				result.right[0] if result.right else complex(0, 0),
@@ -1016,7 +1076,7 @@ class PenStroke(object):
 			)
 
 			# End cap: connects right edge end to left edge start
-			result.end = self._compute_cap(
+			result.end, result.end_types = self._compute_cap(
 				self._n_nodes - 1,  # end node
 				result.right[-1] if result.right else complex(0, 0),
 				result.left[0] if result.left else complex(0, 0),
@@ -1028,36 +1088,81 @@ class PenStroke(object):
 	def _compute_cap(self, node_index, from_point, to_point, forward=True):
 		'''Compute a path cap at an open path endpoint.
 
+		Returns only INTERIOR points — the boundary on-curves (from_point
+		and to_point) are already emitted by the edge lists. For a closed
+		contour the adjacent on-curves connect with an implicit line (butt)
+		or through the returned BCPs/mid-points (round).
+
 		Args:
 			node_index : int
-			from_point : complex — end of outgoing edge
-			to_point   : complex — start of return edge
+			from_point : complex — end of outgoing edge (already in outline)
+			to_point   : complex — start of return edge (already in outline)
 			forward    : bool — True for end cap, False for begin cap
 
 		Returns:
-			list of complex — cap path points
+			tuple of (list of complex, list of str) — interior cap points and node types
 		'''
+		# Per-node cut overrides everything — butt (straight line, no interior)
 		opts = self._node_opts.get(node_index)
 
 		if opts is not None and opts.has_cut:
-			# Butt cut: straight line
-			return [from_point, to_point]
+			return [], []
 
-		# Default: use pen arc
+		# Butt cap: straight line — no interior points needed
+		if self.cap == CAP_BUTT:
+			return [], []
+
+		# Round cap: semicircular arc anchored to actual edge endpoints
 		direction = self._direction_at_node(node_index)
 
 		if not forward:
 			direction = -direction
 
+		# Midpoint of the arc — on the nib outline in the outward direction
+		# (the direction the cap bulges: forward past end, backward past start)
 		nib = self._get_nib(node_index, 'right')
 		node_pos = self._segments[min(node_index, len(self._segments) - 1)][0 if node_index == 0 else 3]
 
-		arc = nib.arc_between(direction, -direction, node_pos)
+		shifted = nib.shifted(node_pos)
+		# Support point (farthest in outward direction) = tangent_point
+		# rotated -90°. tangent_point(d) gives where tangent ∥ d, but we
+		# need where the NORMAL points in direction d (= farthest point).
+		p_mid = shifted.tangent_point(direction * (-1j))
 
-		if arc:
-			return arc
+		# Approximate semicircle with two quarter-circle cubic arcs:
+		#   from_point → p_mid → to_point
+		#
+		# For a quarter arc, BCPs lie along the tangent at each on-curve
+		# point, at a distance of kappa * radius from that point.
+		# Tangent at a point on a circle is perpendicular to the radius.
+		# Kappa for quarter-circle: 4/3 * tan(π/4) ≈ 0.5522847
+		kappa = 0.5522847498
 
-		return [from_point, to_point]
+		# Radii from center to each on-curve point
+		r_from = from_point - node_pos
+		r_mid = p_mid - node_pos
+		r_to = to_point - node_pos
+
+		# Tangent at each point = radius rotated 90° in arc direction.
+		# Arc goes from_point → p_mid → to_point (outward semicircle).
+		# Determine arc rotation sense from cross product.
+		cross = r_from.real * r_mid.imag - r_from.imag * r_mid.real
+		rot = 1j if cross > 0 else -1j
+
+		# First quarter: from_point → p_mid
+		bcp1 = from_point + kappa * (r_from * rot)
+		bcp2 = p_mid - kappa * (r_mid * rot)
+
+		# Second quarter: p_mid → to_point
+		bcp3 = p_mid + kappa * (r_mid * rot)
+		bcp4 = to_point - kappa * (r_to * rot)
+
+		# Return interior only: bcp, bcp, mid_on, bcp, bcp
+		# (from_point and to_point are already in the edges)
+		return (
+			[bcp1, bcp2, p_mid, bcp3, bcp4],
+			['curve', 'curve', 'on', 'curve', 'curve']
+		)
 
 	# - Convenience API -------------------------
 	@classmethod

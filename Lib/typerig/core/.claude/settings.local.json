@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//d/Remote/GitHub/TypeRig/**)",
+      "Bash(python -c \"from typerig.core.objects.hobbyspline import HobbySpline, HobbyKnot, HOBBY, LINE, FIXED; print\\(''HobbySpline imports OK''\\); hs = HobbySpline\\([\\(0,0\\),\\(100,200\\),\\(200,0\\)], closed=True\\); print\\(''Nodes:'', len\\(hs.nodes\\)\\); print\\(''Segments:'', len\\(hs.segments\\)\\)\")",
+      "Bash(python -c \":*)"
+    ]
+  }
+}
