@@ -21,6 +21,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 from typerig.core.objects.cubicbezier import CubicBezier
 from typerig.core.objects.node import Node, node_types
+from typerig.core.objects.contour import Contour
 
 from typerig.core.objects.hobbyspline import (
 	robust_direction,
@@ -32,9 +33,12 @@ from typerig.core.objects.hobbyspline import (
 )
 
 # - Init --------------------------------
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 # - Constants ---------------------------
+# Default miter limit — ratio of miter length to half stroke width.
+# When exceeded, miter falls back to bevel. SVG default is 4.0.
+MITER_LIMIT_DEFAULT = 4.0
 # Join types at corners
 JOIN_ROUND = 'round'    # Pen arc (linejoin:=rounded)
 JOIN_MITER = 'miter'    # Extrapolate edges until intersection (linejoin:=mitered)
@@ -135,13 +139,15 @@ class Nib(object):
 		)
 
 	def tangent_point(self, direction):
-		'''Find the point on the nib where the tangent is parallel 
+		'''Find the point on the nib where the tangent is parallel
 		to the given direction vector (complex).
 
-		For elliptic nibs: finds the time on the nib path where 
-		directiontime matches, then returns that point.
+		For elliptic nibs: solves analytically. The tangent of a cubic
+		segment is quadratic in t; requiring its cross product with the
+		direction to be zero gives a quadratic equation with closed-form
+		roots. Exact — no sampling.
 
-		For razor nibs: returns the endpoint whose normal faces 
+		For razor nibs: returns the endpoint whose normal faces
 		the direction. Based on MetaType1 tangent_point.
 
 		Args:
@@ -156,72 +162,99 @@ class Nib(object):
 		d = direction / abs(direction)  # Normalize
 
 		if self.is_razor:
-			# Razor nib: two endpoints
-			# Choose the one where the cross product with direction
-			# indicates the correct side
 			p0, p1 = self.path[0], self.path[1]
 			edge = p1 - p0
 
 			if abs(edge) < 1e-10:
 				return p0
 
-			# Check turning angle to determine which endpoint
 			ta = turning_angle(direction, edge)
 
 			if ta is None:
-				return (p0 + p1) * 0.5  # Parallel — use midpoint
+				return (p0 + p1) * 0.5
 
 			if ta < 0:
 				return p0
 			else:
 				return p1
 
-		# Elliptic nib: find directiontime
-		# Walk segments, find where tangent aligns with direction
+		# Elliptic nib: analytical directiontime.
+		# For each cubic segment (z0,z1,z2,z3), the tangent is:
+		#   T(t) = 3(1-t)²(z1-z0) + 6(1-t)t(z2-z1) + 3t²(z3-z2)
+		# We need T(t) × d = 0 (cross product, i.e. T parallel to d).
+		# Writing T(t) = At² + Bt + C and expanding the cross product
+		# gives a quadratic in t.
 		segs = self.segments
-		best_t = 0
 		best_dot = -2.
 		best_point = self.path[0]
 
-		for seg_idx, (z0, z1, z2, z3) in enumerate(segs):
-			# Sample tangent at several points along segment
-			for sub_t in range(21):
-				t = sub_t / 20.
+		dx, dy = d.real, d.imag
 
-				# Tangent of cubic at parameter t
-				mt = 1 - t
-				tangent = (3 * mt * mt * (z1 - z0) +
-						   6 * mt * t * (z2 - z1) +
-						   3 * t * t * (z3 - z2))
+		for z0, z1, z2, z3 in segs:
+			# Tangent coefficients: T(t) = A*t² + B*t + C
+			# where C = 3(z1-z0), B = 6(z2-z1) - 6(z1-z0), A = 3(z3-z2) - 6(z2-z1) + 3(z1-z0)
+			c0 = z1 - z0
+			c1 = z2 - z1
+			c2 = z3 - z2
+
+			C = 3. * c0
+			B = 6. * (c1 - c0)
+			A = 3. * (c2 - 2. * c1 + c0)
+
+			# Cross product T(t) × d = (Tx*dy - Ty*dx) = 0
+			# Expand: (Ax*dy - Ay*dx)t² + (Bx*dy - By*dx)t + (Cx*dy - Cy*dx) = 0
+			qa = A.real * dy - A.imag * dx
+			qb = B.real * dy - B.imag * dx
+			qc = C.real * dy - C.imag * dx
+
+			# Collect candidate t values
+			candidates = []
+
+			if abs(qa) < 1e-12:
+				# Linear or constant
+				if abs(qb) > 1e-12:
+					candidates.append(-qc / qb)
+			else:
+				disc = qb * qb - 4. * qa * qc
+
+				if disc >= 0:
+					sq = math.sqrt(disc)
+					candidates.append((-qb + sq) / (2. * qa))
+					candidates.append((-qb - sq) / (2. * qa))
+
+			# Evaluate candidates within [0, 1]
+			for t in candidates:
+				if t < -1e-6 or t > 1. + 1e-6:
+					continue
+
+				t = max(0., min(1., t))
+				mt = 1. - t
+
+				# Tangent at t (for dot-product check)
+				tangent = mt * mt * C + mt * t * (C + B) + t * t * (C + B + A)
 
 				if abs(tangent) < 1e-10:
 					continue
 
 				tn = tangent / abs(tangent)
-
-				# We want tangent parallel to direction
-				# Maximize dot product (real part of conj(d)*tn)
 				dot = (d.conjugate() * tn).real
 
 				if dot > best_dot:
 					best_dot = dot
-					best_t = t
 
 					# Evaluate point on curve
-					best_point = (mt**3 * z0 + 3 * mt**2 * t * z1 +
-								  3 * mt * t**2 * z2 + t**3 * z3)
+					best_point = (mt**3 * z0 + 3. * mt**2 * t * z1 +
+								  3. * mt * t**2 * z2 + t**3 * z3)
 
-		# Refine with Newton-Raphson (one iteration)
-		# Find segment containing best_t and refine
 		return best_point
 
 	def arc_between(self, dir_a, dir_b, center):
-		'''Extract the nib arc between two directions.
-		Returns list of complex points forming the arc subpath.
+		'''DEPRECATED — kept for compatibility. Use _emit_round_join() or
+		_compute_cap() instead, which anchor arcs to actual edge endpoints
+		and use the correct kappa formula.
 
-		This is the pen_join operation: given arrival and departure 
-		directions at a corner, extract the nib outline between the 
-		corresponding tangent points.
+		Original: extract the nib arc between two directions using coarse
+		tangent_point sampling and approximate BCP placement.
 
 		Args:
 			dir_a  : complex — first direction (arrival)
@@ -467,7 +500,7 @@ class StrokeResult(object):
 		end_types   : list of str — node types for end cap
 	'''
 
-	def __init__(self):
+	def __init__(self, closed=False):
 		self.right = []
 		self.right_types = []
 		self.left = []
@@ -476,19 +509,26 @@ class StrokeResult(object):
 		self.begin_types = []
 		self.end = []
 		self.end_types = []
+		self._closed = closed
+
+	@property
+	def is_closed_path(self):
+		'''True if this result comes from a closed skeleton path (no caps).
+		Set by expand() — not inferred from cap contents, since butt caps
+		are empty lists.
+		'''
+		return self._closed
 
 	@property
 	def outline(self):
-		'''Complete closed outline path.
+		'''Complete outline path(s) as a flat point list.
 
-		The right edge runs start→end along the path direction.
-		The left edge (computed from reversed segments) already runs
-		end→start, so it naturally continues the loop without reversal.
-
-		Open path:  right(start→end) + end_cap + left(end→start) + begin_cap
-		Closed path: right(CW outer) + left(CCW inner) — single donut contour
+		Open path:  single closed contour — right + end_cap + left + begin_cap.
+		Closed path: single flat list — right + left (for backward compatibility).
+		             Prefer to_contours() for closed paths which returns two
+		             separate contours (outer and inner).
 		'''
-		if self.begin or self.end:
+		if not self.is_closed_path:
 			return self.right + self.end + self.left + self.begin
 		else:
 			return self.right + self.left
@@ -496,7 +536,7 @@ class StrokeResult(object):
 	@property
 	def outline_types(self):
 		'''Parallel node type list for outline.'''
-		if self.begin_types or self.end_types:
+		if not self.is_closed_path:
 			return self.right_types + self.end_types + self.left_types + self.begin_types
 		else:
 			return self.right_types + self.left_types
@@ -504,6 +544,9 @@ class StrokeResult(object):
 	def to_nodes(self):
 		'''Convert outline to Node list for Contour construction.
 		Uses tracked node types — no heuristic guessing.
+
+		For open paths: returns nodes for one closed contour.
+		For closed paths: returns all nodes flat (use to_contours() instead).
 		'''
 		points = self.outline
 		types = self.outline_types
@@ -512,6 +555,37 @@ class StrokeResult(object):
 			return []
 
 		return [Node(z.real, z.imag, type=t) for z, t in zip(points, types)]
+
+	def to_contours(self):
+		'''Convert to Contour objects — the preferred output method.
+
+		Open path:  returns [contour] — one closed contour with caps.
+		Closed path: returns [outer_contour, inner_contour] — two separate
+		             closed contours with correct winding for PS/OT rendering.
+		'''
+		if not self.is_closed_path:
+			# Open path: single closed contour
+			nodes = self.to_nodes()
+
+			if nodes:
+				return [Contour(nodes, closed=True)]
+
+			return []
+		else:
+			# Closed path: two separate contours (outer + inner)
+			contours = []
+
+			if self.right and self.right_types:
+				outer_nodes = [Node(z.real, z.imag, type=t)
+							   for z, t in zip(self.right, self.right_types)]
+				contours.append(Contour(outer_nodes, closed=True))
+
+			if self.left and self.left_types:
+				inner_nodes = [Node(z.real, z.imag, type=t)
+							   for z, t in zip(self.left, self.left_types)]
+				contours.append(Contour(inner_nodes, closed=True))
+
+			return contours
 
 	def to_node_lists(self):
 		'''Return separate Node lists for right edge, left edge, caps'''
@@ -645,7 +719,7 @@ def pen_stroke_edge_segment(z0, z1, z2, z3, nib_start, nib_end, method=METHOD_DI
 	return (qa, qa, qb, qb)  # Fallback
 
 
-def pen_stroke_edge(segments, nibs, method=METHOD_DIRECTION, ignore_dirs=None, is_closed=False, join=JOIN_ROUND):
+def pen_stroke_edge(segments, nibs, method=METHOD_DIRECTION, ignore_dirs=None, is_closed=False, join=JOIN_ROUND, miter_limit=MITER_LIMIT_DEFAULT):
 	'''Compute a full edge of the pen envelope.
 
 	Processes each segment of the skeleton path, computing the offset
@@ -659,6 +733,7 @@ def pen_stroke_edge(segments, nibs, method=METHOD_DIRECTION, ignore_dirs=None, i
 		ignore_dirs  : set of int or None — node indices where direction forcing is disabled
 		is_closed    : bool — whether the skeleton path is closed
 		join         : str — join type at corners ('round', 'miter', 'bevel')
+		miter_limit  : float — max miter length / half stroke width before bevel fallback
 
 	Returns:
 		tuple of (list of complex, list of str) — edge path points and parallel node types
@@ -790,13 +865,23 @@ def pen_stroke_edge(segments, nibs, method=METHOD_DIRECTION, ignore_dirs=None, i
 				node_pos = segments[i][3]
 
 				if join == JOIN_MITER:
-					# Analytical line-line intersection
+					# Analytical line-line intersection with miter limit
 					dir_pre = robust_direction_end(*segments[i])
 					dir_post = robust_direction(*segments[next_i])
 					miter_pt = _compute_miter(qb, qa_next, dir_pre, dir_post)
 
 					if miter_pt is not None:
-						_emit(miter_pt, 'on')
+						# Check miter limit: distance from corner to miter point
+						# vs half the nib width (approximate stroke radius)
+						nib_corner = nibs[(i + 1) % len(nibs)]
+						half_width = abs(nib_corner.tangent_point(dir_pre))
+						miter_len = abs(miter_pt - node_pos)
+
+						if half_width > 1e-6 and miter_len / half_width > miter_limit:
+							# Exceeds limit — fall back to bevel
+							_emit(qb, 'on')
+						else:
+							_emit(miter_pt, 'on')
 					else:
 						# Parallel — fall back to bevel
 						_emit(qb, 'on')
@@ -823,7 +908,7 @@ def pen_stroke_edge(segments, nibs, method=METHOD_DIRECTION, ignore_dirs=None, i
 
 # - Cut (butt cap) computation ----------
 def compute_cut(nib, direction, angle, center, relative=False):
-	'''Compute a razor cut across the stroke at a given angle.
+	'''Compute a razor cut across the stroke at a given angle. Still in active use.
 	Based on MetaType1 cut macro.
 
 	Projects the nib along the path direction onto a line at the 
@@ -867,8 +952,11 @@ def compute_cut(nib, direction, angle, center, relative=False):
 
 # - Tip (miter) computation -------------
 def compute_tip(edge_pre, edge_post, pre_elongation=0.5, post_elongation=0.5):
-	'''Compute miter join by extrapolating two edge segments until they intersect.
-	Based on MetaType1 tip macro.
+	'''DEPRECATED — kept for compatibility. Use _compute_miter() instead,
+	which solves line-line intersection analytically.
+
+	Original: compute miter join by brute-force 21x21 sampling of two
+	extrapolated edge segments. Based on MetaType1 tip macro.
 
 	Args:
 		edge_pre       : tuple of 4 complex — preceding edge segment
@@ -943,18 +1031,21 @@ class PenStroke(object):
 	def __init__(self, segments, default_nib, **kwargs):
 		'''
 		Args:
-			segments    : list — CubicBezier/Line objects or (z0,z1,z2,z3) complex tuples
-			default_nib : Nib — default pen shape
-			closed      : bool — whether path is closed
-			method      : int — stroke method (0, 1, or 2)
-			cap         : str — cap type for open paths ('round' or 'butt')
-			join        : str — default join type at corners ('round', 'miter', 'bevel')
+			segments     : list — CubicBezier/Line objects or (z0,z1,z2,z3) complex tuples
+			default_nib  : Nib — default pen shape
+			closed       : bool — whether path is closed
+			method       : int — stroke method (0, 1, or 2)
+			cap          : str — cap type for open paths ('round' or 'butt')
+			join         : str — default join type at corners ('round', 'miter', 'bevel')
+			miter_limit  : float — miter length limit as ratio of half stroke width.
+			               When exceeded, miter falls back to bevel. Default 4.0.
 		'''
 		self.default_nib = default_nib
 		self.closed = kwargs.pop('closed', False)
 		self.method = kwargs.pop('method', METHOD_DIRECTION)
 		self.cap = kwargs.pop('cap', CAP_ROUND)
 		self.join = kwargs.pop('join', JOIN_ROUND)
+		self.miter_limit = kwargs.pop('miter_limit', MITER_LIMIT_DEFAULT)
 
 		# Convert segments to complex tuples
 		self._segments = []
@@ -1086,7 +1177,7 @@ class PenStroke(object):
 		Returns:
 			StrokeResult
 		'''
-		result = StrokeResult()
+		result = StrokeResult(closed=self.closed)
 		n_seg = len(self._segments)
 
 		if n_seg == 0:
@@ -1109,7 +1200,7 @@ class PenStroke(object):
 		# Compute right edge (following path direction)
 		result.right, result.right_types = pen_stroke_edge(
 			self._segments, nibs_right, self.method,
-			ignore_r, self.closed, self.join
+			ignore_r, self.closed, self.join, self.miter_limit
 		)
 
 		# Compute left edge (reverse path direction)
@@ -1119,7 +1210,7 @@ class PenStroke(object):
 
 		result.left, result.left_types = pen_stroke_edge(
 			reversed_segs, reversed_nibs, self.method,
-			ignore_l, self.closed, self.join
+			ignore_l, self.closed, self.join, self.miter_limit
 		)
 
 		# Caps for open paths
