@@ -33,7 +33,7 @@ from typerig.core.objects.hobbyspline import (
 )
 
 # - Init --------------------------------
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 
 # - Constants ---------------------------
 # Default miter limit — ratio of miter length to half stroke width.
@@ -1328,6 +1328,1182 @@ class PenStroke(object):
 			closed=hobby_spline.closed,
 			**kwargs
 		)
+
+
+# =====================================================================
+# METAFONT-inspired extensions (v0.3.0)
+# =====================================================================
+# The following classes and functions implement concepts from Knuth's
+# METAFONT and Hobby's MetaPost that go beyond the original MetaType1
+# control-polygon-offsetting approach:
+#
+# 1. NibPolygon — convex polygon pen (METAFONT's native pen type)
+# 2. Polygon envelope — exact translated Béziers + pen edge connectors
+# 3. PenPos / VarStroke — variable-width strokes (MetaPost penstroke)
+# 4. turning_number — winding validation (METAFONT turningcheck)
+# 5. find_offset_cusps — cusp detection in offset curves
+# =====================================================================
+
+# - Constants (METAFONT extensions) -----
+_CUSP_SAMPLES = 64          # Sampling density for cusp detection
+_POLY_CIRCLE_VERTS = 12     # Default polygon vertices for circle approximation
+
+# - NibPolygon --------------------------
+class NibPolygon(object):
+	'''Convex polygon pen — METAFONT's native pen representation.
+
+	In METAFONT, every pen (including pencircle) is ultimately a convex
+	polygon. The key advantage: offsetting by a polygon vertex is an
+	exact translation of the Bézier — no approximation error.
+
+	The polygon is stored as CCW-ordered vertices. Each edge has a
+	precomputed direction (complex unit vector) used for critical angle
+	detection.
+
+	Attributes:
+		vertices   : list of complex — CCW polygon vertices
+		edges      : list of complex — unit direction of each edge (v[i] → v[i+1])
+		edge_angles: list of float  — angle in radians of each edge direction
+	'''
+
+	def __init__(self, vertices):
+		'''Create from a list of complex vertices (must be convex, CCW).
+
+		Args:
+			vertices : list of complex — at least 2 vertices, convex hull, CCW order
+		'''
+		if len(vertices) < 2:
+			raise ValueError('NibPolygon needs at least 2 vertices')
+
+		self.vertices = list(vertices)
+		n = len(self.vertices)
+
+		# Precompute edge directions and angles
+		self.edges = []
+		self.edge_angles = []
+
+		for i in range(n):
+			edge = self.vertices[(i + 1) % n] - self.vertices[i]
+
+			if abs(edge) < 1e-12:
+				# Degenerate edge — use previous direction or default
+				if self.edges:
+					self.edges.append(self.edges[-1])
+					self.edge_angles.append(self.edge_angles[-1])
+				else:
+					self.edges.append(complex(1, 0))
+					self.edge_angles.append(0.0)
+			else:
+				d = edge / abs(edge)
+				self.edges.append(d)
+				self.edge_angles.append(cmath.phase(d))
+
+	def __repr__(self):
+		return '<NibPolygon vertices={}>'.format(len(self.vertices))
+
+	def __len__(self):
+		return len(self.vertices)
+
+	@property
+	def n(self):
+		'''Number of vertices'''
+		return len(self.vertices)
+
+	def shifted(self, z):
+		'''Return copy shifted by complex z'''
+		return NibPolygon([v + z for v in self.vertices])
+
+	def scaled(self, factor):
+		'''Return copy scaled uniformly'''
+		return NibPolygon([v * factor for v in self.vertices])
+
+	def rotated(self, angle_deg):
+		'''Return copy rotated by angle in degrees'''
+		r = cmath.exp(1j * math.radians(angle_deg))
+		return NibPolygon([v * r for v in self.vertices])
+
+	def support_vertex(self, direction):
+		'''Find the vertex farthest in the given direction (support point).
+
+		This is the polygon equivalent of Nib.tangent_point(d * (-1j)).
+		Returns the vertex index and point.
+
+		Args:
+			direction : complex — query direction
+
+		Returns:
+			(int, complex) — (vertex_index, vertex_point)
+		'''
+		if abs(direction) < 1e-10:
+			return 0, self.vertices[0]
+
+		d = direction / abs(direction)
+		best_i = 0
+		best_dot = -1e30
+
+		for i, v in enumerate(self.vertices):
+			dot = v.real * d.real + v.imag * d.imag
+
+			if dot > best_dot:
+				best_dot = dot
+				best_i = i
+
+		return best_i, self.vertices[best_i]
+
+	def active_vertex(self, direction):
+		'''Find the active vertex for a given path direction.
+
+		The active vertex on the RIGHT side of the path is the one whose
+		two adjacent edges "straddle" the path direction. Specifically,
+		vertex i is active when the path direction falls in the angular
+		range between edge[i-1] and edge[i] (measuring CCW).
+
+		This is METAFONT's offset_prep core logic.
+
+		Args:
+			direction : complex — path tangent direction
+
+		Returns:
+			int — index of the active vertex for the right-side envelope
+		'''
+		if abs(direction) < 1e-10:
+			return 0
+
+		d_angle = cmath.phase(direction)
+		n = self.n
+
+		for i in range(n):
+			# Edge before vertex i
+			prev_edge_angle = self.edge_angles[(i - 1) % n]
+			# Edge after vertex i
+			curr_edge_angle = self.edge_angles[i]
+
+			# Check if d_angle is between prev_edge_angle and curr_edge_angle
+			# (in the CCW angular sense)
+			if _angle_between_ccw(d_angle, prev_edge_angle, curr_edge_angle):
+				return i
+
+		# Fallback: closest edge direction
+		return self._closest_vertex(d_angle)
+
+	def _closest_vertex(self, d_angle):
+		'''Fallback: find vertex whose incoming edge direction is closest.'''
+		best_i = 0
+		best_diff = 1e30
+
+		for i in range(self.n):
+			diff = abs(_wrap_angle(d_angle - self.edge_angles[i]))
+
+			if diff < best_diff:
+				best_diff = diff
+				best_i = (i + 1) % self.n
+
+		return best_i
+
+	# - Factory methods -------------------------
+	@classmethod
+	def regular(cls, n_sides, radius):
+		'''Create a regular polygon with n sides inscribed in a circle.
+
+		Args:
+			n_sides : int — number of sides (>=3)
+			radius  : float — circumscribed circle radius
+		'''
+		if n_sides < 3:
+			raise ValueError('Regular polygon needs at least 3 sides')
+
+		verts = []
+
+		for i in range(n_sides):
+			angle = 2.0 * math.pi * i / n_sides + math.pi / 2  # Start from top
+			verts.append(complex(radius * math.cos(angle), radius * math.sin(angle)))
+
+		return cls(verts)
+
+	@classmethod
+	def from_circle(cls, diameter, n_vertices=_POLY_CIRCLE_VERTS):
+		'''Approximate a circular pen as a regular polygon.
+
+		METAFONT's pencircle: a circle approximated by a polygon whose
+		vertex count is tuned for good results. Default 12 vertices
+		(dodecagon) gives max error of ~3.4% of radius — imperceptible
+		in font work.
+
+		Args:
+			diameter   : float — circle diameter
+			n_vertices : int — number of polygon vertices (default 12)
+		'''
+		return cls.regular(n_vertices, diameter / 2.0)
+
+	@classmethod
+	def from_ellipse(cls, x_diam, y_diam, angle=0.0, n_vertices=_POLY_CIRCLE_VERTS):
+		'''Approximate an elliptic pen as a polygon.
+
+		Args:
+			x_diam     : float — horizontal diameter
+			y_diam     : float — vertical diameter
+			angle      : float — rotation in degrees
+			n_vertices : int — vertex count
+		'''
+		rx, ry = x_diam / 2.0, y_diam / 2.0
+		r = cmath.exp(1j * math.radians(angle))
+		verts = []
+
+		for i in range(n_vertices):
+			a = 2.0 * math.pi * i / n_vertices + math.pi / 2
+			p = complex(rx * math.cos(a), ry * math.sin(a))
+			verts.append(p * r)
+
+		return cls(verts)
+
+	@classmethod
+	def from_nib(cls, nib, n_vertices=_POLY_CIRCLE_VERTS):
+		'''Convert an existing Nib (cubic Bézier representation) to polygon
+		by sampling its outline.
+
+		Args:
+			nib        : Nib — elliptic or razor nib
+			n_vertices : int — how many sample points
+		'''
+		if nib.is_razor:
+			return cls(list(nib.path))
+
+		# Sample the nib outline at n_vertices evenly-spaced angles
+		verts = []
+
+		for i in range(n_vertices):
+			angle = 2.0 * math.pi * i / n_vertices
+			d = complex(math.cos(angle), math.sin(angle))
+			# tangent_point(d * (-1j)) gives the support point in direction d
+			p = nib.tangent_point(d * (-1j))
+			verts.append(p)
+
+		# Ensure CCW order (should already be, but verify)
+		if _polygon_signed_area(verts) < 0:
+			verts.reverse()
+
+		return cls(verts)
+
+	@classmethod
+	def rectangle(cls, width, height, angle=0.0):
+		'''Create a rectangular (calligraphic) pen.
+
+		Args:
+			width  : float — pen width
+			height : float — pen height
+			angle  : float — rotation in degrees
+		'''
+		hw, hh = width / 2.0, height / 2.0
+		r = cmath.exp(1j * math.radians(angle))
+		verts = [
+			complex(-hw, -hh) * r,
+			complex(hw, -hh) * r,
+			complex(hw, hh) * r,
+			complex(-hw, hh) * r,
+		]
+
+		# Ensure CCW
+		if _polygon_signed_area(verts) < 0:
+			verts.reverse()
+
+		return cls(verts)
+
+
+# - Angle utilities ---------------------
+def _wrap_angle(a):
+	'''Wrap angle to (-π, π]'''
+	while a > math.pi:
+		a -= 2.0 * math.pi
+	while a <= -math.pi:
+		a += 2.0 * math.pi
+	return a
+
+
+def _angle_between_ccw(angle, start, end):
+	'''Check if angle lies in the CCW arc from start to end.
+
+	All angles in radians. Returns True if going CCW from start you
+	reach angle before reaching end.
+	'''
+	# Normalize all to [0, 2π)
+	def norm(a):
+		a = a % (2.0 * math.pi)
+		return a if a >= 0 else a + 2.0 * math.pi
+
+	a = norm(angle)
+	s = norm(start)
+	e = norm(end)
+
+	if s <= e:
+		# Normal arc: s ≤ a ≤ e
+		return s <= a <= e
+	else:
+		# Arc wraps around 0: a >= s or a <= e
+		return a >= s or a <= e
+
+
+def _polygon_signed_area(verts):
+	'''Signed area of polygon. Positive = CCW, negative = CW.'''
+	n = len(verts)
+	area = 0.0
+
+	for i in range(n):
+		v0 = verts[i]
+		v1 = verts[(i + 1) % n]
+		area += v0.real * v1.imag - v1.real * v0.imag
+
+	return area * 0.5
+
+
+# - Critical angle subdivision ---------
+def find_critical_params(z0, z1, z2, z3, nib_poly):
+	'''Find parameter values where the path tangent crosses a critical angle.
+
+	A critical angle is the direction of a polygon edge — at these
+	angles, the active pen vertex switches. This is METAFONT's
+	offset_prep logic.
+
+	The tangent of cubic Bézier (z0,z1,z2,z3) is quadratic:
+	  T(t) = A·t² + B·t + C
+	For each edge direction d_k of the polygon, we solve:
+	  T(t) × d_k = 0  (cross product = 0, meaning T ∥ d_k)
+	This is a quadratic in t — same solver as Nib.tangent_point.
+
+	Args:
+		z0, z1, z2, z3 : complex — skeleton segment
+		nib_poly        : NibPolygon
+
+	Returns:
+		list of (float, int, int) — sorted list of (t, vertex_before, vertex_after)
+		where vertex_before is active for t < t_crit and vertex_after for t > t_crit
+	'''
+	# Tangent coefficients
+	c0 = z1 - z0
+	c1 = z2 - z1
+	c2 = z3 - z2
+
+	C = 3.0 * c0
+	B = 6.0 * (c1 - c0)
+	A = 3.0 * (c2 - 2.0 * c1 + c0)
+
+	crits = []
+
+	for k in range(nib_poly.n):
+		d = nib_poly.edges[k]
+		dx, dy = d.real, d.imag
+
+		# Cross product T(t) × d = 0 → quadratic
+		qa = A.real * dy - A.imag * dx
+		qb = B.real * dy - B.imag * dx
+		qc = C.real * dy - C.imag * dx
+
+		candidates = []
+
+		if abs(qa) < 1e-12:
+			if abs(qb) > 1e-12:
+				candidates.append(-qc / qb)
+		else:
+			disc = qb * qb - 4.0 * qa * qc
+
+			if disc >= 0:
+				sq = math.sqrt(disc)
+				candidates.append((-qb + sq) / (2.0 * qa))
+				candidates.append((-qb - sq) / (2.0 * qa))
+
+		for t in candidates:
+			if t <= 1e-6 or t >= 1.0 - 1e-6:
+				continue  # Only interior splits
+
+			t = max(0.0, min(1.0, t))
+
+			# vertex_before = k+1 (the vertex after this edge),
+			# vertex_after = k+1's successor... actually we need to
+			# determine which vertex is active on each side.
+			# When tangent crosses edge k (direction from v[k] to v[k+1]),
+			# the active vertex transitions from v[k+1] to v[k] or vice versa,
+			# depending on whether we're looking at right or left side.
+			# For the RIGHT side: vertex k+1 is active before the crossing,
+			# vertex (k+2) mod n is active after (the next vertex in CCW order).
+			v_before = (k + 1) % nib_poly.n
+			v_after = (k + 2) % nib_poly.n
+			crits.append((t, v_before, v_after))
+
+	# Sort by parameter
+	crits.sort(key=lambda x: x[0])
+
+	# Remove duplicates (two edges may give nearly the same t)
+	filtered = []
+	for c in crits:
+		if not filtered or abs(c[0] - filtered[-1][0]) > 1e-6:
+			filtered.append(c)
+
+	return filtered
+
+
+def subdivide_bezier(z0, z1, z2, z3, t):
+	'''Subdivide cubic Bézier at parameter t using de Casteljau.
+
+	Returns:
+		((a0,a1,a2,a3), (b0,b1,b2,b3)) — left and right sub-segments
+	'''
+	# Level 1
+	p01 = z0 + t * (z1 - z0)
+	p12 = z1 + t * (z2 - z1)
+	p23 = z2 + t * (z3 - z2)
+
+	# Level 2
+	p012 = p01 + t * (p12 - p01)
+	p123 = p12 + t * (p23 - p12)
+
+	# Level 3 — split point
+	p0123 = p012 + t * (p123 - p012)
+
+	return ((z0, p01, p012, p0123), (p0123, p123, p23, z3))
+
+
+def subdivide_at_params(z0, z1, z2, z3, params):
+	'''Subdivide a cubic Bézier at multiple parameter values.
+
+	Args:
+		z0, z1, z2, z3 : complex — segment
+		params          : list of float — parameter values in (0,1), SORTED
+
+	Returns:
+		list of (z0,z1,z2,z3) — sub-segments
+	'''
+	if not params:
+		return [(z0, z1, z2, z3)]
+
+	result = []
+	current = (z0, z1, z2, z3)
+	consumed = 0.0  # How much of the original [0,1] range has been consumed
+
+	for t in params:
+		# Remap t into the remaining segment's local parameter
+		remaining = 1.0 - consumed
+
+		if remaining < 1e-10:
+			break
+
+		t_local = (t - consumed) / remaining
+		t_local = max(0.0, min(1.0, t_local))
+
+		left, right = subdivide_bezier(*current, t_local)
+		result.append(left)
+		current = right
+		consumed = t
+
+	result.append(current)
+	return result
+
+
+# - Polygon envelope computation --------
+def pen_stroke_edge_polygon(segments, nib_poly, is_closed=False, join=JOIN_ROUND, miter_limit=MITER_LIMIT_DEFAULT):
+	'''Compute a full edge of the pen envelope using METAFONT's polygon
+	decomposition method.
+
+	Instead of approximating offset curves (Tiller-Hanson), this:
+	1. For each Bézier segment, finds critical angles where the active
+	   pen vertex switches
+	2. Subdivides at those parameters
+	3. Translates each sub-segment by its active vertex (EXACT)
+	4. Connects transitions with pen edge segments (straight lines)
+
+	Zero approximation error in the curve geometry.
+
+	Args:
+		segments    : list of (z0,z1,z2,z3) — skeleton segments
+		nib_poly    : NibPolygon — polygon pen
+		is_closed   : bool — closed skeleton path
+		join        : str — join type at skeleton corners
+		miter_limit : float — miter limit ratio
+
+	Returns:
+		tuple of (list of complex, list of str) — edge points and node types
+	'''
+	if not segments:
+		return [], []
+
+	n_seg = len(segments)
+	result = []
+	types = []
+
+	def _emit(point, ntype):
+		result.append(point)
+		types.append(ntype)
+
+	# Process each skeleton segment
+	prev_end_pt = None
+	prev_end_dir = None
+
+	for i in range(n_seg):
+		z0, z1, z2, z3 = segments[i]
+
+		# Find critical parameter values for this segment
+		crits = find_critical_params(z0, z1, z2, z3, nib_poly)
+		params = [c[0] for c in crits]
+
+		# Subdivide the skeleton segment
+		sub_segs = subdivide_at_params(z0, z1, z2, z3, params)
+
+		# Determine active vertex for each sub-segment
+		# Start vertex: determined by direction at segment start
+		dir_start = robust_direction(z0, z1, z2, z3)
+		start_vi = nib_poly.active_vertex(dir_start)
+
+		# Build list: [(sub_seg, active_vertex_index), ...]
+		active_vertices = [start_vi]
+
+		for ci, (t, v_before, v_after) in enumerate(crits):
+			# After crossing critical angle, vertex switches
+			# We use the tangent direction just after the split to confirm
+			if ci + 1 < len(sub_segs):
+				sub = sub_segs[ci + 1]
+				d_after = robust_direction(*sub)
+				active_vertices.append(nib_poly.active_vertex(d_after))
+
+		# Emit offset sub-segments with pen-edge connectors
+		for si, sub in enumerate(sub_segs):
+			vi = active_vertices[min(si, len(active_vertices) - 1)]
+			offset = nib_poly.vertices[vi]
+
+			# Translate sub-segment by offset (EXACT — the key insight)
+			qa = sub[0] + offset
+			q1 = sub[1] + offset
+			q2 = sub[2] + offset
+			qb = sub[3] + offset
+
+			if si == 0 and i == 0:
+				# Very first point
+				# Handle join from previous skeleton segment if closed
+				_emit(qa, 'on')
+			elif si == 0:
+				# First sub-segment of a new skeleton segment
+				# Corner join between skeleton segments
+				if prev_end_pt is not None:
+					gap = abs(prev_end_pt - qa)
+
+					if gap > 0.5:
+						_join_polygon(result, types, prev_end_pt, qa,
+									  segments[i - 1][3], prev_end_dir,
+									  robust_direction(*segments[i]),
+									  nib_poly, join, miter_limit, _emit)
+					else:
+						_emit(qa, 'on')
+				else:
+					_emit(qa, 'on')
+			else:
+				# Pen-edge connector between sub-segments (vertex transition)
+				if abs(prev_end_pt - qa) > 0.5:
+					# Insert pen edge — straight line between prev vertex
+					# and current vertex positions at the split point
+					_emit(qa, 'on')
+				# else: coincident, skip
+
+			# Emit curve BCPs (skip for lines)
+			if not _is_line(qa, q1, q2, qb):
+				_emit(q1, 'curve')
+				_emit(q2, 'curve')
+
+			prev_end_pt = qb
+			prev_end_dir = robust_direction_end(*sub)
+
+		# Emit final on-curve of this skeleton segment
+		if i < n_seg - 1 or not is_closed:
+			_emit(prev_end_pt, 'on')
+
+	# Close: join last segment back to first
+	if is_closed and n_seg > 0 and result:
+		first_pt = result[0]
+		gap = abs(prev_end_pt - first_pt)
+
+		if gap > 0.5:
+			_join_polygon(result, types, prev_end_pt, first_pt,
+						  segments[-1][3], prev_end_dir,
+						  robust_direction(*segments[0]),
+						  nib_poly, join, miter_limit, _emit)
+		else:
+			_emit(prev_end_pt, 'on')
+
+	return result, types
+
+
+def _join_polygon(result, types, from_pt, to_pt, corner_pos,
+				  dir_pre, dir_post, nib_poly, join, miter_limit, _emit):
+	'''Emit a join between two edge segments for polygon envelope.
+
+	Args:
+		from_pt, to_pt : complex — edge endpoints to join
+		corner_pos     : complex — skeleton corner position
+		dir_pre        : complex — direction arriving at corner
+		dir_post       : complex — direction leaving corner
+		nib_poly       : NibPolygon
+		join           : str — join type
+		miter_limit    : float
+		_emit          : callable(point, type)
+	'''
+	if join == JOIN_MITER:
+		# Analytical line-line intersection
+		d1 = dir_pre
+		d2 = -dir_post
+		dx = to_pt - from_pt
+		denom = d1.real * d2.imag - d1.imag * d2.real
+
+		if abs(denom) > 1e-10:
+			t = (dx.real * d2.imag - dx.imag * d2.real) / denom
+			miter_pt = from_pt + t * d1
+
+			# Miter limit check
+			miter_len = abs(miter_pt - corner_pos)
+			_, sv = nib_poly.support_vertex(dir_pre)
+			half_width = abs(sv)
+
+			if half_width > 1e-6 and miter_len / half_width > miter_limit:
+				# Exceed limit → bevel
+				_emit(from_pt, 'on')
+			else:
+				_emit(miter_pt, 'on')
+		else:
+			# Parallel → bevel
+			_emit(from_pt, 'on')
+
+		_emit(to_pt, 'on')
+
+	elif join == JOIN_ROUND:
+		_emit(from_pt, 'on')
+		# Circular arc between endpoints around corner
+		_emit_round_join_standalone(result, types, from_pt, to_pt, corner_pos, _emit)
+		_emit(to_pt, 'on')
+
+	else:
+		# Bevel
+		_emit(from_pt, 'on')
+		_emit(to_pt, 'on')
+
+
+def _emit_round_join_standalone(result, types, from_pt, to_pt, center, _emit):
+	'''Emit round join interior points (same logic as pen_stroke_edge's version).'''
+	r_from = from_pt - center
+	r_to = to_pt - center
+
+	dot = r_from.real * r_to.real + r_from.imag * r_to.imag
+	r_len = (abs(r_from) + abs(r_to)) * 0.5
+
+	if r_len < 1e-6:
+		return
+
+	cos_a = max(-1.0, min(1.0, dot / (abs(r_from) * abs(r_to))))
+	full_angle = math.acos(cos_a)
+
+	if full_angle < 0.01:
+		return
+
+	mid_dir = r_from / abs(r_from) + r_to / abs(r_to)
+
+	if abs(mid_dir) < 1e-10:
+		cross_check = r_from.real * r_to.imag - r_from.imag * r_to.real
+		mid_dir = r_from * (1j if cross_check > 0 else -1j)
+
+	r_mid = mid_dir / abs(mid_dir) * r_len
+	p_mid = center + r_mid
+
+	cross = r_from.real * r_mid.imag - r_from.imag * r_mid.real
+	rot = 1j if cross > 0 else -1j
+
+	half_angle = full_angle * 0.5
+	kappa = 4.0 / 3.0 * math.tan(half_angle / 4.0)
+
+	bcp1 = from_pt + kappa * (r_from * rot)
+	bcp2 = p_mid - kappa * (r_mid * rot)
+	bcp3 = p_mid + kappa * (r_mid * rot)
+	bcp4 = to_pt - kappa * (r_to * rot)
+
+	_emit(bcp1, 'curve')
+	_emit(bcp2, 'curve')
+	_emit(p_mid, 'on')
+	_emit(bcp3, 'curve')
+	_emit(bcp4, 'curve')
+
+
+# - Polygon-based PenStroke expander ----
+class PolyPenStroke(object):
+	'''Stroke expander using METAFONT's polygon decomposition method.
+
+	Like PenStroke but uses NibPolygon instead of Nib. Produces
+	exact translated Bézier offset segments (zero approximation error)
+	connected by pen-edge straight lines at vertex transitions.
+
+	Usage:
+		nib = NibPolygon.from_circle(80)
+		stroke = PolyPenStroke(segments, nib)
+		result = stroke.expand()
+	'''
+
+	def __init__(self, segments, nib_poly, **kwargs):
+		'''
+		Args:
+			segments    : list — CubicBezier/Line or (z0,z1,z2,z3) tuples
+			nib_poly    : NibPolygon — polygon pen
+			closed      : bool — closed path
+			cap         : str — cap type ('round' or 'butt')
+			join        : str — join type ('round', 'miter', 'bevel')
+			miter_limit : float — miter limit ratio
+		'''
+		self.nib_poly = nib_poly
+		self.closed = kwargs.pop('closed', False)
+		self.cap = kwargs.pop('cap', CAP_ROUND)
+		self.join = kwargs.pop('join', JOIN_ROUND)
+		self.miter_limit = kwargs.pop('miter_limit', MITER_LIMIT_DEFAULT)
+
+		# Convert segments to complex tuples
+		self._segments = []
+
+		for seg in segments:
+			if isinstance(seg, (tuple, list)) and len(seg) == 4:
+				self._segments.append(tuple(seg))
+			elif isinstance(seg, (CubicBezier, Line)):
+				self._segments.append(_segment_to_complex(seg))
+			else:
+				raise TypeError('Segment must be CubicBezier, Line, or 4-tuple of complex')
+
+	def expand(self):
+		'''Expand stroke and return StrokeResult.
+
+		Returns:
+			StrokeResult
+		'''
+		result = StrokeResult(closed=self.closed)
+		n_seg = len(self._segments)
+
+		if n_seg == 0:
+			return result
+
+		# Right edge: polygon envelope following path direction
+		result.right, result.right_types = pen_stroke_edge_polygon(
+			self._segments, self.nib_poly, self.closed,
+			self.join, self.miter_limit
+		)
+
+		# Left edge: reversed path with mirrored polygon
+		# Mirror polygon: negate all vertices (equivalent to using -nib on reversed path)
+		mirrored_nib = NibPolygon([-v for v in self.nib_poly.vertices])
+		reversed_segs = [(z3, z2, z1, z0) for z0, z1, z2, z3 in reversed(self._segments)]
+
+		result.left, result.left_types = pen_stroke_edge_polygon(
+			reversed_segs, mirrored_nib, self.closed,
+			self.join, self.miter_limit
+		)
+
+		# Caps for open paths
+		if not self.closed:
+			result.begin, result.begin_types = self._compute_cap(
+				True,  # is_begin
+				result.left[-1] if result.left else 0j,
+				result.right[0] if result.right else 0j
+			)
+			result.end, result.end_types = self._compute_cap(
+				False,  # is_begin
+				result.right[-1] if result.right else 0j,
+				result.left[0] if result.left else 0j
+			)
+
+		return result
+
+	def _compute_cap(self, is_begin, from_point, to_point):
+		'''Compute cap for open path endpoint.
+
+		Returns interior points only (from_point and to_point are in edges).
+		'''
+		if self.cap == CAP_BUTT:
+			return [], []
+
+		# Round cap: semicircular arc
+		if is_begin:
+			node_pos = self._segments[0][0]
+			direction = -robust_direction(*self._segments[0])
+		else:
+			node_pos = self._segments[-1][3]
+			direction = robust_direction_end(*self._segments[-1])
+
+		# Support point as arc midpoint
+		_, sv = self.nib_poly.support_vertex(direction)
+		p_mid = node_pos + sv
+
+		kappa = 0.5522847498
+
+		r_from = from_point - node_pos
+		r_mid = p_mid - node_pos
+		r_to = to_point - node_pos
+
+		cross = r_from.real * r_mid.imag - r_from.imag * r_mid.real
+		rot = 1j if cross > 0 else -1j
+
+		bcp1 = from_point + kappa * (r_from * rot)
+		bcp2 = p_mid - kappa * (r_mid * rot)
+		bcp3 = p_mid + kappa * (r_mid * rot)
+		bcp4 = to_point - kappa * (r_to * rot)
+
+		return (
+			[bcp1, bcp2, p_mid, bcp3, bcp4],
+			['curve', 'curve', 'on', 'curve', 'curve']
+		)
+
+
+# - PenPos / Variable-width strokes ----
+class PenPos(object):
+	'''MetaPost-style pen position at a skeleton point.
+
+	Defines a local cross-section: width and angle at a single point.
+	The left and right offset points are computed from:
+		z_right = center + (width/2) * e^(i·angle)
+		z_left  = center - (width/2) * e^(i·angle)
+
+	This is exactly MetaPost's penpos macro.
+	'''
+
+	def __init__(self, width, angle_deg=0.0):
+		'''
+		Args:
+			width     : float — local stroke width
+			angle_deg : float — pen angle in degrees (0 = horizontal)
+		'''
+		self.width = width
+		self.angle_deg = angle_deg
+
+	def __repr__(self):
+		return '<PenPos w={:.1f} a={:.1f}°>'.format(self.width, self.angle_deg)
+
+	def offsets(self):
+		'''Return (right_offset, left_offset) as complex numbers.
+
+		These are relative to center — add to skeleton point to get
+		absolute positions.
+		'''
+		half = self.width / 2.0
+		d = cmath.exp(1j * math.radians(self.angle_deg))
+		return (half * d, -half * d)
+
+	def right(self, center):
+		'''Absolute right-side point'''
+		r, _ = self.offsets()
+		return center + r
+
+	def left(self, center):
+		'''Absolute left-side point'''
+		_, l = self.offsets()
+		return center + l
+
+	@classmethod
+	def uniform(cls, width):
+		'''Constant-width penpos (angle follows path tangent automatically).'''
+		return cls(width, 0.0)
+
+
+def var_stroke(skeleton_points, pen_positions, closed=False):
+	'''MetaPost-style penstroke: variable-width stroke expansion.
+
+	Given skeleton points and a PenPos at each point, computes
+	separate left and right offset point sequences, then interpolates
+	curves through each side independently.
+
+	This is MetaPost's:
+		fill z0r..z1r..z2r -- reverse(z0l..z1l..z2l) -- cycle;
+
+	For smooth results, the caller should provide skeleton points from
+	a smooth curve (e.g., Hobby spline nodes or Bézier on-curve points).
+
+	Args:
+		skeleton_points : list of complex — skeleton path points
+		pen_positions   : list of PenPos — one per skeleton point
+		closed          : bool — closed path
+
+	Returns:
+		StrokeResult — with right/left edges as point sequences.
+		               Use to_contours() for output.
+	'''
+	if len(skeleton_points) != len(pen_positions):
+		raise ValueError('Need one PenPos per skeleton point (got {} points, {} penpos)'.format(
+			len(skeleton_points), len(pen_positions)))
+
+	n = len(skeleton_points)
+
+	if n < 2:
+		return StrokeResult(closed=closed)
+
+	# Compute right and left point sequences
+	rights = []
+	lefts = []
+
+	for i in range(n):
+		z = skeleton_points[i]
+		pp = pen_positions[i]
+
+		# If angle is 0, orient perpendicular to path tangent
+		if pp.angle_deg == 0.0:
+			# Estimate tangent direction from neighbors
+			if i == 0:
+				tangent = skeleton_points[1] - skeleton_points[0]
+			elif i == n - 1:
+				tangent = skeleton_points[-1] - skeleton_points[-2]
+			else:
+				tangent = skeleton_points[i + 1] - skeleton_points[i - 1]
+
+			if abs(tangent) > 1e-10:
+				# Perpendicular to tangent
+				perp = tangent * 1j / abs(tangent)
+			else:
+				perp = complex(0, 1)
+
+			half = pp.width / 2.0
+			rights.append(z + half * perp)
+			lefts.append(z - half * perp)
+		else:
+			rights.append(pp.right(z))
+			lefts.append(pp.left(z))
+
+	# Build contour segments from point sequences
+	# Use Catmull-Rom → Bézier conversion for smooth interpolation
+	right_segs = _catmull_rom_to_bezier(rights, closed)
+	left_segs = _catmull_rom_to_bezier(lefts, closed)
+
+	# Assemble result
+	result = StrokeResult(closed=closed)
+
+	# Right edge: flatten segments to point + type lists
+	for si, seg in enumerate(right_segs):
+		if si == 0:
+			result.right.append(seg[0])
+			result.right_types.append('on')
+
+		if not _is_line(seg[0], seg[1], seg[2], seg[3]):
+			result.right.append(seg[1])
+			result.right_types.append('curve')
+			result.right.append(seg[2])
+			result.right_types.append('curve')
+
+		result.right.append(seg[3])
+		result.right_types.append('on')
+
+	# Left edge: reverse for correct winding
+	left_segs_rev = [(z3, z2, z1, z0) for z0, z1, z2, z3 in reversed(left_segs)]
+
+	for si, seg in enumerate(left_segs_rev):
+		if si == 0:
+			result.left.append(seg[0])
+			result.left_types.append('on')
+
+		if not _is_line(seg[0], seg[1], seg[2], seg[3]):
+			result.left.append(seg[1])
+			result.left_types.append('curve')
+			result.left.append(seg[2])
+			result.left_types.append('curve')
+
+		result.left.append(seg[3])
+		result.left_types.append('on')
+
+	return result
+
+
+def _catmull_rom_to_bezier(points, closed=False):
+	'''Convert a point sequence to cubic Bézier segments via Catmull-Rom.
+
+	Catmull-Rom splines pass through all control points and have C1
+	continuity. Each segment is converted to cubic Bézier form.
+
+	Args:
+		points : list of complex — interpolation points
+		closed : bool — closed curve
+
+	Returns:
+		list of (z0,z1,z2,z3) — cubic Bézier segments
+	'''
+	n = len(points)
+
+	if n < 2:
+		return []
+
+	if n == 2:
+		# Straight line
+		z0, z3 = points[0], points[1]
+		return [(z0, z0, z3, z3)]
+
+	segments = []
+	count = n if closed else n - 1
+
+	for i in range(count):
+		# Four Catmull-Rom control points: P_{i-1}, P_i, P_{i+1}, P_{i+2}
+		if closed:
+			p0 = points[(i - 1) % n]
+			p1 = points[i]
+			p2 = points[(i + 1) % n]
+			p3 = points[(i + 2) % n]
+		else:
+			p0 = points[max(0, i - 1)]
+			p1 = points[i]
+			p2 = points[min(n - 1, i + 1)]
+			p3 = points[min(n - 1, i + 2)]
+
+		# Catmull-Rom → cubic Bézier (alpha=0.5, tau=0 → standard uniform)
+		# BCP1 = P1 + (P2 - P0) / 6
+		# BCP2 = P2 - (P3 - P1) / 6
+		bcp1 = p1 + (p2 - p0) / 6.0
+		bcp2 = p2 - (p3 - p1) / 6.0
+
+		segments.append((p1, bcp1, bcp2, p2))
+
+	return segments
+
+
+# - Turning number / winding validation -
+def turning_number_from_segments(segments, closed=True):
+	'''Compute the turning number of a path defined by Bézier segments.
+
+	The turning number is the total tangent rotation divided by 2π.
+	For a simple closed CCW path it is +1, for CW it is -1.
+	Self-intersecting paths give 0 or other values.
+
+	This is METAFONT's turningcheck.
+
+	Args:
+		segments : list of (z0,z1,z2,z3) — Bézier segments
+		closed   : bool — must be True for meaningful result
+
+	Returns:
+		float — turning number (should be ±1 for simple contours)
+	'''
+	if not segments or not closed:
+		return 0.0
+
+	total_angle = 0.0
+	n_samples = 16  # Samples per segment for tangent tracking
+
+	prev_angle = None
+
+	for seg in segments:
+		z0, z1, z2, z3 = seg
+
+		for j in range(n_samples):
+			t = j / float(n_samples)
+			tangent = _bezier_tangent(z0, z1, z2, z3, t)
+
+			if abs(tangent) < 1e-10:
+				continue
+
+			angle = cmath.phase(tangent)
+
+			if prev_angle is not None:
+				delta = _wrap_angle(angle - prev_angle)
+				total_angle += delta
+
+			prev_angle = angle
+
+	# Final segment end → first segment start
+	if prev_angle is not None:
+		first_tangent = _bezier_tangent(*segments[0], 0.0)
+
+		if abs(first_tangent) > 1e-10:
+			angle = cmath.phase(first_tangent)
+			delta = _wrap_angle(angle - prev_angle)
+			total_angle += delta
+
+	return total_angle / (2.0 * math.pi)
+
+
+def validate_contour_winding(segments, closed=True, tolerance=0.3):
+	'''Check if a closed contour has valid winding (turning number ≈ ±1).
+
+	Returns:
+		(bool, float) — (is_valid, turning_number)
+	'''
+	tn = turning_number_from_segments(segments, closed)
+	is_valid = abs(abs(tn) - 1.0) < tolerance
+	return is_valid, tn
+
+
+# - Cusp detection ----------------------
+def bezier_curvature(z0, z1, z2, z3, t):
+	'''Compute signed curvature of cubic Bézier at parameter t.
+
+	κ(t) = (x'·y'' - y'·x'') / (x'² + y'²)^(3/2)
+
+	Returns:
+		float — signed curvature (positive = CCW bending)
+	'''
+	mt = 1.0 - t
+
+	# First derivative
+	d1 = 3.0 * mt * mt * (z1 - z0) + 6.0 * mt * t * (z2 - z1) + 3.0 * t * t * (z3 - z2)
+
+	# Second derivative
+	d2 = 6.0 * mt * (z2 - 2.0 * z1 + z0) + 6.0 * t * (z3 - 2.0 * z2 + z1)
+
+	# Cross product of d1 and d2
+	cross = d1.real * d2.imag - d1.imag * d2.real
+	speed_sq = d1.real * d1.real + d1.imag * d1.imag
+	speed_cubed = speed_sq * math.sqrt(speed_sq) if speed_sq > 1e-20 else 1e-30
+
+	return cross / speed_cubed
+
+
+def find_offset_cusps(z0, z1, z2, z3, offset_distance, n_samples=_CUSP_SAMPLES):
+	'''Find parameter values where the offset curve develops cusps.
+
+	A cusp occurs where the curvature κ(t) = ±1/offset_distance,
+	meaning the center of curvature coincides with the offset curve.
+	At these points the inner offset self-intersects.
+
+	Uses sampling + bisection refinement for robustness.
+
+	Args:
+		z0, z1, z2, z3  : complex — skeleton segment
+		offset_distance  : float — signed offset distance (positive = right)
+		n_samples        : int — initial sampling density
+
+	Returns:
+		list of float — parameter values where cusps occur, sorted
+	'''
+	if abs(offset_distance) < 1e-10:
+		return []
+
+	target_curvature = 1.0 / offset_distance
+	cusps = []
+
+	# Sample curvature and look for sign changes of (κ - target)
+	prev_val = None
+	prev_t = 0.0
+
+	for i in range(n_samples + 1):
+		t = i / float(n_samples)
+		k = bezier_curvature(z0, z1, z2, z3, t)
+		val = k - target_curvature
+
+		if prev_val is not None and prev_val * val < 0:
+			# Sign change — bisect to find exact crossing
+			t_cusp = _bisect_curvature(z0, z1, z2, z3, prev_t, t, target_curvature)
+			cusps.append(t_cusp)
+
+		prev_val = val
+		prev_t = t
+
+	return cusps
+
+
+def _bisect_curvature(z0, z1, z2, z3, t_lo, t_hi, target, max_iter=20):
+	'''Bisection search for parameter where curvature equals target.'''
+	for _ in range(max_iter):
+		t_mid = (t_lo + t_hi) * 0.5
+		k_mid = bezier_curvature(z0, z1, z2, z3, t_mid)
+		k_lo = bezier_curvature(z0, z1, z2, z3, t_lo)
+
+		if (k_mid - target) * (k_lo - target) < 0:
+			t_hi = t_mid
+		else:
+			t_lo = t_mid
+
+		if t_hi - t_lo < 1e-10:
+			break
+
+	return (t_lo + t_hi) * 0.5
 
 
 # - Test ----------------------------------------------------------------
