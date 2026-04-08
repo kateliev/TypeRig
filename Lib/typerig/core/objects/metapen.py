@@ -20,6 +20,7 @@ import cmath
 from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 from typerig.core.objects.cubicbezier import CubicBezier
+from typerig.core.objects.quadraticbezier import QuadraticBezier
 from typerig.core.objects.node import Node, node_types
 from typerig.core.objects.contour import Contour
 
@@ -613,11 +614,21 @@ def _bezier_tangent(z0, z1, z2, z3, t):
 	return 3 * mt**2 * (z1 - z0) + 6 * mt * t * (z2 - z1) + 3 * t**2 * (z3 - z2)
 
 def _segment_to_complex(segment):
-	'''Convert a CubicBezier or Line to tuple of 4 complex numbers'''
+	'''Convert a CubicBezier, QuadraticBezier, or Line to tuple of 4 complex numbers'''
 	if isinstance(segment, Line):
 		z0 = complex(segment.p0.x, segment.p0.y)
 		z3 = complex(segment.p1.x, segment.p1.y)
 		return (z0, z0, z3, z3)  # Degenerate cubic
+
+	elif isinstance(segment, QuadraticBezier):
+		# Degree-elevate: quad (p0, p1, p2) → cubic (p0, q1, q2, p2)
+		z0 = complex(segment.p0.x, segment.p0.y)
+		z1q = complex(segment.p1.x, segment.p1.y)
+		z3 = complex(segment.p2.x, segment.p2.y)
+		z1 = z0 + (2.0 / 3.0) * (z1q - z0)
+		z2 = z3 + (2.0 / 3.0) * (z1q - z3)
+		return (z0, z1, z2, z3)
+
 	else:
 		return (complex(segment.p0.x, segment.p0.y),
 				complex(segment.p1.x, segment.p1.y),
@@ -1802,6 +1813,13 @@ def pen_stroke_edge_polygon(segments, nib_poly, is_closed=False, join=JOIN_ROUND
 	'''Compute a full edge of the pen envelope using METAFONT's polygon
 	decomposition method.
 
+	NOTE: This method produces many nodes due to pen-edge connectors at
+	every vertex transition. It is designed for analysis/debugging and
+	matches METAFONT's rasterization-oriented approach. For clean outline
+	output with minimal nodes, use pen_stroke_edge() with a Bézier Nib,
+	or use pen_stroke_edge_hybrid() which uses polygon analysis to guide
+	Bézier offsetting.
+
 	Instead of approximating offset curves (Tiller-Hanson), this:
 	1. For each Bézier segment, finds critical angles where the active
 	   pen vertex switches
@@ -1874,12 +1892,13 @@ def pen_stroke_edge_polygon(segments, nib_poly, is_closed=False, join=JOIN_ROUND
 			qb = sub[3] + offset
 
 			if si == 0 and i == 0:
-				# Very first point
-				# Handle join from previous skeleton segment if closed
+				# Very first point of the whole edge
 				_emit(qa, 'on')
 			elif si == 0:
-				# First sub-segment of a new skeleton segment
-				# Corner join between skeleton segments
+				# First sub-segment of a new skeleton segment →
+				# corner join from previous segment's endpoint.
+				# _join_polygon emits from_pt, join interior, and to_pt,
+				# so we do NOT emit qa here (it's the to_pt of the join).
 				if prev_end_pt is not None:
 					gap = abs(prev_end_pt - qa)
 
@@ -1889,16 +1908,17 @@ def pen_stroke_edge_polygon(segments, nib_poly, is_closed=False, join=JOIN_ROUND
 									  robust_direction(*segments[i]),
 									  nib_poly, join, miter_limit, _emit)
 					else:
+						# Coincident — just emit once
 						_emit(qa, 'on')
 				else:
 					_emit(qa, 'on')
 			else:
 				# Pen-edge connector between sub-segments (vertex transition)
+				# Emit prev endpoint, then new start (straight pen-edge line)
+				_emit(prev_end_pt, 'on')
+
 				if abs(prev_end_pt - qa) > 0.5:
-					# Insert pen edge — straight line between prev vertex
-					# and current vertex positions at the split point
 					_emit(qa, 'on')
-				# else: coincident, skip
 
 			# Emit curve BCPs (skip for lines)
 			if not _is_line(qa, q1, q2, qb):
@@ -1908,8 +1928,10 @@ def pen_stroke_edge_polygon(segments, nib_poly, is_closed=False, join=JOIN_ROUND
 			prev_end_pt = qb
 			prev_end_dir = robust_direction_end(*sub)
 
-		# Emit final on-curve of this skeleton segment
-		if i < n_seg - 1 or not is_closed:
+		# Emit endpoint only for the LAST skeleton segment (open path)
+		# or not at all for closed paths. Intermediate segment endpoints
+		# are handled by the join logic of the next segment's si==0 branch.
+		if i == n_seg - 1 and not is_closed:
 			_emit(prev_end_pt, 'on')
 
 	# Close: join last segment back to first
@@ -2025,9 +2047,72 @@ def _emit_round_join_standalone(result, types, from_pt, to_pt, center, _emit):
 	_emit(bcp4, 'curve')
 
 
+# - Hybrid envelope (Bézier output + polygon-guided subdivision) ----
+def pen_stroke_edge_hybrid(segments, nib, method=METHOD_DIRECTION, ignore_dirs=None,
+						   is_closed=False, join=JOIN_ROUND, miter_limit=MITER_LIMIT_DEFAULT,
+						   cusp_subdivide=True, offset_distance=None):
+	'''Compute a full edge using Bézier offsetting with optional cusp-aware
+	subdivision.
+
+	This is the recommended method for production outline output. It uses
+	the classic Bézier nib for clean curves (minimal nodes) but optionally
+	subdivides segments at cusp points before offsetting, preventing the
+	self-intersection artifacts that occur when stroke width > curve radius.
+
+	Args:
+		segments         : list of (z0,z1,z2,z3)
+		nib              : Nib (Bézier nib, not polygon)
+		method           : int — stroke method
+		ignore_dirs      : set of int or None
+		is_closed        : bool
+		join             : str — join type
+		miter_limit      : float
+		cusp_subdivide   : bool — if True, subdivide at cusp points
+		offset_distance  : float or None — signed offset distance for cusp
+		                   detection (auto-estimated from nib if None)
+
+	Returns:
+		tuple of (list of complex, list of str) — edge points and node types
+	'''
+	if not cusp_subdivide or not segments:
+		# Fall back to standard Bézier offsetting
+		return pen_stroke_edge(segments, [nib] * (len(segments) + (0 if is_closed else 1)),
+							   method, ignore_dirs, is_closed, join, miter_limit)
+
+	# Auto-estimate offset distance from nib
+	if offset_distance is None:
+		# Use the support point magnitude as half-width
+		tp = nib.tangent_point(complex(1, 0) * (-1j))
+		offset_distance = abs(tp)
+
+	# Pre-process: subdivide segments at cusp points
+	processed_segs = []
+
+	for seg in segments:
+		cusps = find_offset_cusps(*seg, -offset_distance)
+
+		if cusps:
+			# Subdivide at cusp parameters
+			subs = subdivide_at_params(*seg, cusps)
+			processed_segs.extend(subs)
+		else:
+			processed_segs.append(seg)
+
+	# Build nib list for processed segments
+	n_nibs = len(processed_segs) + (0 if is_closed else 1)
+	nibs = [nib] * n_nibs
+
+	return pen_stroke_edge(processed_segs, nibs, method, ignore_dirs,
+						   is_closed, join, miter_limit)
+
+
 # - Polygon-based PenStroke expander ----
 class PolyPenStroke(object):
 	'''Stroke expander using METAFONT's polygon decomposition method.
+
+	NOTE: Produces many nodes due to pen-edge connectors. Use for
+	analysis/debugging. For production output, use PenStroke (classic)
+	or HybridPenStroke (cusp-aware Bézier offsetting).
 
 	Like PenStroke but uses NibPolygon instead of Nib. Produces
 	exact translated Bézier offset segments (zero approximation error)
@@ -2147,6 +2232,109 @@ class PolyPenStroke(object):
 			[bcp1, bcp2, p_mid, bcp3, bcp4],
 			['curve', 'curve', 'on', 'curve', 'curve']
 		)
+
+
+# - Hybrid PenStroke expander -----------
+class HybridPenStroke(PenStroke):
+	'''Stroke expander with cusp-aware subdivision.
+
+	Inherits all PenStroke functionality but pre-subdivides segments
+	at cusp points (where curvature = 1/offset_distance) before
+	offsetting. This prevents inner-offset self-intersections on
+	tight curves with large stroke widths.
+
+	For most font work the classic PenStroke is sufficient. Use this
+	when you see artifacts on tight curves with thick strokes.
+
+	Usage:
+		nib = Nib.circle(80)
+		stroke = HybridPenStroke(segments, nib, closed=True)
+		result = stroke.expand()
+	'''
+
+	def expand(self):
+		'''Expand with cusp-aware subdivision.'''
+		result = StrokeResult(closed=self.closed)
+		n_seg = len(self._segments)
+
+		if n_seg == 0:
+			return result
+
+		# Estimate offset distance from default nib
+		tp = self.default_nib.tangent_point(complex(1, 0) * (-1j))
+		offset_dist = abs(tp)
+
+		# Pre-subdivide segments at cusp points
+		processed = []
+		seg_map = []  # Maps processed index back to original segment index
+
+		for i, seg in enumerate(self._segments):
+			cusps = find_offset_cusps(*seg, -offset_dist)
+
+			if cusps:
+				subs = subdivide_at_params(*seg, cusps)
+				processed.extend(subs)
+				seg_map.extend([i] * len(subs))
+			else:
+				processed.append(seg)
+				seg_map.append(i)
+
+		# Build nib lists for the processed (potentially longer) segment list
+		n_proc = len(processed)
+		n_nodes_proc = n_proc if self.closed else n_proc + 1
+
+		nibs_right = []
+		nibs_left = []
+
+		for j in range(n_nodes_proc):
+			# Map back to original node index for nib resolution
+			if j < len(seg_map):
+				orig_i = seg_map[j]
+			else:
+				orig_i = self._n_nodes - 1
+
+			nibs_right.append(self._get_nib(min(orig_i, self._n_nodes - 1), 'right'))
+			nibs_left.append(self._get_nib(min(orig_i, self._n_nodes - 1), 'left'))
+
+		# Compute edges using processed segments
+		ignore_r = set()
+		ignore_l = set()
+
+		for idx, opts in self._node_opts.items():
+			if opts.ignore_dir_r:
+				ignore_r.add(idx)
+			if opts.ignore_dir_l:
+				ignore_l.add(idx)
+
+		result.right, result.right_types = pen_stroke_edge(
+			processed, nibs_right, self.method,
+			ignore_r, self.closed, self.join, self.miter_limit
+		)
+
+		reversed_segs = [(z3, z2, z1, z0) for z0, z1, z2, z3 in reversed(processed)]
+		reversed_nibs = list(reversed(nibs_left))
+
+		result.left, result.left_types = pen_stroke_edge(
+			reversed_segs, reversed_nibs, self.method,
+			ignore_l, self.closed, self.join, self.miter_limit
+		)
+
+		# Caps for open paths (same as PenStroke)
+		if not self.closed:
+			result.begin, result.begin_types = self._compute_cap(
+				0,
+				result.left[-1] if result.left else 0j,
+				result.right[0] if result.right else 0j,
+				forward=False
+			)
+			result.end, result.end_types = self._compute_cap(
+				self._n_nodes - 1,
+				result.right[-1] if result.right else 0j,
+				result.left[0] if result.left else 0j,
+				forward=True
+			)
+
+		return result
 
 
 # - PenPos / Variable-width strokes ----
