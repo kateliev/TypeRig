@@ -11,3 +11,4 @@ dmypy.json
 *.vfpyc
 .DS_Store
 _ideas
+.claude
