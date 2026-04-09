@@ -25,7 +25,7 @@ from typerig.core.func.geometry import point_in_polygon
 from typerig.core.func.math import three_point_circle
 
 # - Init -------------------------------
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 # - Constants --------------------------
 _EPS = 1e-9
@@ -63,6 +63,8 @@ class MATNode(object):
 		return self.degree >= 3
 
 	def connect(self, other):
+		if other is self:
+			return
 		if other not in self.neighbors:
 			self.neighbors.append(other)
 		if self not in other.neighbors:
@@ -944,6 +946,121 @@ def classify_nodes(graph):
 			)
 
 
+# - Step 7.5: Merge Duplicate Nodes ----------
+def merge_duplicate_nodes(graph, epsilon=1.0):
+	"""Merge MAT nodes that are at nearly the same position.
+
+	When multiple Voronoi vertices coincide (within epsilon distance),
+	this function merges them into a single node, combining neighbors.
+	
+	Only merges if the nodes would form a self-referential edge (same position)
+	or are extremely close. Does NOT merge terminals with other nodes.
+
+	Args:
+		graph: MATGraph (modified in place)
+		epsilon: maximum distance to consider nodes as duplicates (font units)
+
+	Returns:
+		graph (modified in place)
+	"""
+	epsilon_sq = epsilon * epsilon
+
+	changed = True
+	while changed:
+		changed = False
+
+		for i, node_a in enumerate(graph.nodes):
+			if node_a not in graph.nodes:
+				continue
+
+			for node_b in graph.nodes[i + 1:]:
+				if node_b not in graph.nodes:
+					continue
+
+				dx = node_b.x - node_a.x
+				dy = node_b.y - node_a.y
+				dist_sq = dx * dx + dy * dy
+
+				if dist_sq < epsilon_sq:
+					# Only merge forks (degree >= 3) at same/near position
+					# This handles duplicate Voronoi vertices at stroke intersections
+					# DO NOT merge regular nodes (degree 2) - they are valid MAT points
+					# DO NOT merge terminals (degree 1) - they are stroke endpoints
+					if node_a.degree >= 3 and node_b.degree >= 3:
+						_merge_nodes(graph, node_a, node_b)
+						changed = True
+						break
+
+	return graph
+
+
+def _merge_nodes(graph, node_a, node_b):
+	"""Merge node_b into node_a.
+
+	All neighbors of node_b become neighbors of node_a.
+	Radius is averaged. node_b is removed from the graph.
+	"""
+	node_a.x = (node_a.x + node_b.x) * 0.5
+	node_a.y = (node_a.y + node_b.y) * 0.5
+	node_a.radius = (node_a.radius + node_b.radius) * 0.5
+
+	for nb in list(node_b.neighbors):
+		if nb is node_a:
+			continue
+		node_b.disconnect(nb)
+		node_a.connect(nb)
+
+	if node_b in graph.nodes:
+		graph.nodes.remove(node_b)
+	
+	node_b.neighbors = []
+	
+	seen = set()
+	unique_neighbors = []
+	for nb in node_a.neighbors:
+		if nb is node_a or nb is node_b:
+			continue
+		key = (round(nb.x, 2), round(nb.y, 2))
+		if key not in seen:
+			seen.add(key)
+			unique_neighbors.append(nb)
+	node_a.neighbors = unique_neighbors
+
+
+def merge_nodes_at_same_position(graph, epsilon=0.1):
+	"""Merge any remaining nodes that are at exactly the same position as forks.
+	
+	This handles cases where a fork was merged with another fork, but other
+	regular nodes at that position were not merged.
+	"""
+	epsilon_sq = epsilon * epsilon
+	
+	changed = True
+	while changed:
+		changed = False
+		
+		forks = [n for n in graph.nodes if n.degree >= 3]
+		
+		for fork in forks:
+			if fork not in graph.nodes:
+				continue
+			
+			for node in list(graph.nodes):
+				if node is fork or node not in graph.nodes:
+					continue
+				if node.degree <= 1:
+					continue
+					
+				dx = node.x - fork.x
+				dy = node.y - fork.y
+				dist_sq = dx * dx + dy * dy
+				
+				if dist_sq < epsilon_sq:
+					_merge_nodes(graph, fork, node)
+					changed = True
+					break
+
+
 # - Step 8: Concavity Detection ----------
 def find_concavities(contours, angle_threshold=150.0):
 	"""Find concave vertices on the outline.
@@ -1092,13 +1209,19 @@ def compute_mat(contours, sample_step=None, beta_min=1.5, quality='normal'):
 	graph = build_mat_graph(vertices, edges, interior_indices, cubic_contours,
 							sdf=sdf, spatial_grid=spatial_grid)
 
-	# 8. Prune
+	# 8. Merge duplicate nodes (Voronoi vertices at same position)
+	merge_duplicate_nodes(graph, epsilon=0.5)
+	
+	# 8.5. Merge any remaining nodes at same position as forks
+	merge_nodes_at_same_position(graph)
+
+	# 9. Prune
 	graph = prune_mat(graph, beta_min=beta_min)
 
-	# 9. Classify
+	# 10. Classify
 	classify_nodes(graph)
 
-	# 10. Concavities (from outline geometry, not exterior MAT)
+	# 11. Concavities (from outline geometry, not exterior MAT)
 	concavities = find_concavities(cubic_contours)
 
 	return graph, concavities
