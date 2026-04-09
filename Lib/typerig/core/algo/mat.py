@@ -542,66 +542,72 @@ class BowyerWatson(object):
 		triangles.add((n, n + 1, n + 2))
 
 		# Circumcircle cache: tri -> (cx, cy, r_sq)
+		# Inlined computation avoids function-call overhead in tight loop
 		circ_cache = {}
+		pts = self._points  # local ref for speed
 
-		def circumcircle(tri):
-			if tri in circ_cache:
-				return circ_cache[tri]
+		def _compute_circ(tri):
+			"""Compute and cache circumcircle for a triangle."""
 			i, j, k = tri
-			p1 = self._points[i]
-			p2 = self._points[j]
-			p3 = self._points[k]
-			result = three_point_circle(p1, p2, p3)
-			if result[0] is None:
-				# Degenerate (collinear) — use very large circle
-				cx = (p1[0] + p2[0] + p3[0]) / 3.0
-				cy = (p1[1] + p2[1] + p3[1]) / 3.0
-				circ_cache[tri] = (cx, cy, float('inf'))
+			p1x, p1y = pts[i]
+			p2x, p2y = pts[j]
+			p3x, p3y = pts[k]
+			# Inlined three_point_circle
+			temp = p2x * p2x + p2y * p2y
+			bc = (p1x * p1x + p1y * p1y - temp) * 0.5
+			cd = (temp - p3x * p3x - p3y * p3y) * 0.5
+			det = (p1x - p2x) * (p2y - p3y) - (p2x - p3x) * (p1y - p2y)
+			if abs(det) < 1e-6:
+				cx = (p1x + p2x + p3x) / 3.0
+				cy = (p1y + p2y + p3y) / 3.0
+				val = (cx, cy, float('inf'))
 			else:
-				center, radius = result
-				circ_cache[tri] = (center[0], center[1], radius * radius)
-			return circ_cache[tri]
+				inv_det = 1.0 / det
+				cx = (bc * (p2y - p3y) - cd * (p1y - p2y)) * inv_det
+				cy = ((p1x - p2x) * cd - (p2x - p3x) * bc) * inv_det
+				r_sq = (cx - p1x) ** 2 + (cy - p1y) ** 2
+				val = (cx, cy, r_sq)
+			circ_cache[tri] = val
+			return val
 
-		def in_circumcircle(tri, px, py):
-			cx, cy, r_sq = circumcircle(tri)
-			if r_sq == float('inf'):
-				return True
-			dist_sq = (px - cx) ** 2 + (py - cy) ** 2
-			return dist_sq < r_sq - _EPS
+		# Pre-compute circumcircle for super-triangle
+		_compute_circ((n, n + 1, n + 2))
 
 		# Insert points one by one
 		for p_idx in range(n):
-			px, py = self._points[p_idx]
+			px, py = pts[p_idx]
 
 			# Find all triangles whose circumcircle contains the point
-			bad_triangles = set()
+			bad_triangles = []
+			cache = circ_cache  # local ref
 			for tri in triangles:
-				if in_circumcircle(tri, px, py):
-					bad_triangles.add(tri)
+				cc = cache.get(tri)
+				if cc is None:
+					cc = _compute_circ(tri)
+				cx, cy, r_sq = cc
+				if r_sq == float('inf') or (px - cx) * (px - cx) + (py - cy) * (py - cy) < r_sq:
+					bad_triangles.append(tri)
 
 			# Find boundary polygon (edges shared by exactly one bad triangle)
 			edge_count = defaultdict(int)
-			edge_to_tri = {}
 			for tri in bad_triangles:
 				i, j, k = tri
-				for edge in ((i, j), (j, k), (k, i)):
-					e = (min(edge), max(edge))
-					edge_count[e] += 1
-					edge_to_tri[e] = tri
+				e1 = (i, j) if i < j else (j, i)
+				e2 = (j, k) if j < k else (k, j)
+				e3 = (i, k) if i < k else (k, i)
+				edge_count[e1] += 1
+				edge_count[e2] += 1
+				edge_count[e3] += 1
 
-			boundary = []
-			for edge, count in edge_count.items():
-				if count == 1:
-					boundary.append(edge)
+			boundary = [e for e, c in edge_count.items() if c == 1]
 
 			# Remove bad triangles
 			for tri in bad_triangles:
 				triangles.discard(tri)
-				circ_cache.pop(tri, None)
+				cache.pop(tri, None)
 
 			# Re-triangulate hole with new point
-			for edge in boundary:
-				a, b = edge
+			for a, b in boundary:
 				new_tri = tuple(sorted((a, b, p_idx)))
 				triangles.add(new_tri)
 
@@ -673,40 +679,157 @@ class BowyerWatson(object):
 		return vertices, edges
 
 
+# - Spatial Grid for fast proximity queries ----------
+class _SpatialGrid(object):
+	"""Uniform grid spatial index for fast nearest-edge queries.
+
+	Buckets polyline edges into grid cells so that distance/inside
+	queries only check edges in nearby cells instead of all edges.
+	"""
+
+	def __init__(self, polylines, cell_size):
+		self._cell = float(cell_size)
+		self._grid = defaultdict(list)  # (gx, gy) -> [(ax, ay, bx, by), ...]
+		self._polylines = polylines
+
+		# Index all edges into grid cells (for min_distance)
+		# and into y-buckets (for is_inside ray casting)
+		self._y_buckets = defaultdict(list)
+		for poly in polylines:
+			n = len(poly)
+			for i in range(n):
+				ax, ay = poly[i]
+				bx, by = poly[(i + 1) % n]
+				self._insert_edge(ax, ay, bx, by)
+				# Y-bucket: insert edge into all y-rows it spans
+				gy0 = int(math.floor(min(ay, by) / self._cell))
+				gy1 = int(math.floor(max(ay, by) / self._cell))
+				edge_data = (ax, ay, bx, by)
+				for gy in range(gy0, gy1 + 1):
+					self._y_buckets[gy].append(edge_data)
+
+	def _cell_key(self, x, y):
+		return (int(math.floor(x / self._cell)), int(math.floor(y / self._cell)))
+
+	def _insert_edge(self, ax, ay, bx, by):
+		"""Insert edge into all cells it overlaps."""
+		edge = (ax, ay, bx, by)
+		gx0 = int(math.floor(min(ax, bx) / self._cell))
+		gx1 = int(math.floor(max(ax, bx) / self._cell))
+		gy0 = int(math.floor(min(ay, by) / self._cell))
+		gy1 = int(math.floor(max(ay, by) / self._cell))
+		for gx in range(gx0, gx1 + 1):
+			for gy in range(gy0, gy1 + 1):
+				self._grid[(gx, gy)].append(edge)
+
+	def min_distance(self, px, py):
+		"""Minimum unsigned distance from (px, py) to any polyline edge.
+
+		Searches outward from the point's grid cell until the search
+		radius exceeds the best distance found so far.
+		"""
+		gx0, gy0 = self._cell_key(px, py)
+		min_d = float('inf')
+		ring = 0
+
+		while True:
+			# Search cells in current ring
+			found_any = False
+			for gx in range(gx0 - ring, gx0 + ring + 1):
+				for gy in range(gy0 - ring, gy0 + ring + 1):
+					# Only process cells on the ring boundary (skip interior on ring > 0)
+					if ring > 0 and (gx0 - ring < gx < gx0 + ring) and (gy0 - ring < gy < gy0 + ring):
+						continue
+					edges = self._grid.get((gx, gy))
+					if edges:
+						found_any = True
+						for ax, ay, bx, by in edges:
+							d = _point_to_seg_dist(px, py, ax, ay, bx, by)
+							if d < min_d:
+								min_d = d
+
+			# If best distance is within this ring's guaranteed reach, we're done
+			if min_d <= ring * self._cell:
+				break
+
+			ring += 1
+
+			# Safety: if we've searched far enough with no edges found, fall back
+			if ring > 100 and not found_any:
+				break
+
+		return min_d
+
+	def is_inside(self, px, py):
+		"""Ray casting odd-crossing test using y-bucketed edges for speed."""
+		crossings = 0
+		y_buckets = self._y_buckets
+		cell = self._cell
+		gy = int(math.floor(py / cell))
+
+		# Only check edges in y-buckets that straddle py
+		edges = y_buckets.get(gy)
+		if edges:
+			for ax, ay, bx, by in edges:
+				if (ay <= py < by) or (by <= py < ay):
+					t = (py - ay) / (by - ay)
+					ix = ax + t * (bx - ax)
+					if px < ix:
+						crossings += 1
+
+		return (crossings % 2) == 1
+
+
+def _point_to_seg_dist(px, py, ax, ay, bx, by):
+	"""Minimum distance from point (px, py) to line segment (ax,ay)-(bx,by)."""
+	dx, dy = bx - ax, by - ay
+	len_sq = dx * dx + dy * dy
+	if len_sq < 1e-12:
+		return math.hypot(px - ax, py - ay)
+	t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / len_sq))
+	proj_x = ax + t * dx
+	proj_y = ay + t * dy
+	return math.hypot(px - proj_x, py - proj_y)
+
+
 # - Step 3: Interior/Exterior Filtering ----------
-def filter_interior_vertices_sdf(voronoi_vertices, contours):
-	"""Classify Voronoi vertices as interior or exterior using SDF ray casting.
+def filter_interior_vertices_sdf(voronoi_vertices, contours, sdf=None, spatial_grid=None):
+	"""Classify Voronoi vertices as interior or exterior using ray casting.
 
 	Args:
 		voronoi_vertices: list of (x, y) tuples from Voronoi computation
 		contours: list of TypeRig Contour objects
+		sdf: optional pre-built SignedDistanceField (avoids duplicate creation)
+		spatial_grid: optional _SpatialGrid for fast is_inside queries
 
 	Returns:
 		interior_indices: set of vertex indices inside the glyph
 		exterior_indices: set of vertex indices outside the glyph
 	"""
-	sdf = SignedDistanceField(contours, resolution=1.0, padding=20, steps_per_segment=64)
+	if sdf is None and spatial_grid is None:
+		sdf = SignedDistanceField(contours, resolution=1.0, padding=20, steps_per_segment=64)
 
 	interior = set()
 	exterior = set()
 
-	for idx, (vx, vy) in enumerate(voronoi_vertices):
-		if sdf._is_inside(vx, vy):
-			interior.add(idx)
-		else:
-			exterior.add(idx)
+	if spatial_grid is not None:
+		for idx, (vx, vy) in enumerate(voronoi_vertices):
+			if spatial_grid.is_inside(vx, vy):
+				interior.add(idx)
+			else:
+				exterior.add(idx)
+	else:
+		for idx, (vx, vy) in enumerate(voronoi_vertices):
+			if sdf._is_inside(vx, vy):
+				interior.add(idx)
+			else:
+				exterior.add(idx)
 
 	return interior, exterior
 
 
-# - Step 4: Radius Computation (via SDF) ----------
-def _inscribed_radius_sdf(px, py, sdf):
-	"""Unsigned distance to nearest boundary using SDF polylines."""
-	return sdf._min_distance(px, py)
-
-
 # - Step 5: Build MAT Graph ----------
-def build_mat_graph(voronoi_vertices, voronoi_edges, interior_indices, contours, sdf=None):
+def build_mat_graph(voronoi_vertices, voronoi_edges, interior_indices, contours, sdf=None, spatial_grid=None):
 	"""Build MATGraph from interior Voronoi vertices.
 
 	Args:
@@ -715,18 +838,22 @@ def build_mat_graph(voronoi_vertices, voronoi_edges, interior_indices, contours,
 		interior_indices: set of vertex indices inside the glyph
 		contours: glyph contours (for radius computation)
 		sdf: optional pre-built SignedDistanceField
+		spatial_grid: optional _SpatialGrid for fast radius queries
 
 	Returns:
 		MATGraph
 	"""
-	if sdf is None:
+	if sdf is None and spatial_grid is None:
 		sdf = SignedDistanceField(contours, resolution=1.0, padding=20, steps_per_segment=64)
 
 	# Create MATNode for each interior vertex
 	nodes = {}
 	for idx in interior_indices:
 		x, y = voronoi_vertices[idx]
-		r = _inscribed_radius_sdf(x, y, sdf)
+		if spatial_grid is not None:
+			r = spatial_grid.min_distance(x, y)
+		else:
+			r = sdf._min_distance(x, y)
 		node = MATNode(x, y, r)
 		nodes[idx] = node
 
@@ -881,20 +1008,36 @@ def find_concavities(contours, angle_threshold=150.0):
 	return concavities
 
 
+# - Quality presets ----------
+_QUALITY_PRESETS = {
+	'draft':  {'sample_step': 10.0, 'sdf_steps': 32},
+	'normal': {'sample_step':  5.0, 'sdf_steps': 48},
+	'fine':   {'sample_step':  3.0, 'sdf_steps': 64},
+}
+
+
 # - Step 9: Main Entry Point ----------
-def compute_mat(contours, sample_step=3.0, beta_min=1.5):
+def compute_mat(contours, sample_step=None, beta_min=1.5, quality='normal'):
 	"""Compute the Medial Axis Transform of a glyph.
 
 	Args:
 		contours: list of TypeRig Contour objects (the glyph outline)
-		sample_step: outline sampling density in font units (2-4 for 1000 UPM)
+		sample_step: outline sampling density in font units.
+			If None, determined by quality preset.
 		beta_min: pruning threshold (1.5 = paper default)
+		quality: 'draft' (fast preview), 'normal' (default), or 'fine' (highest fidelity)
 
 	Returns:
 		graph: MATGraph — the pruned interior MAT
 		concavities: list of concave outline points as
 			(contour_idx, node_idx, x, y, angle) tuples
 	"""
+	# Resolve quality preset
+	preset = _QUALITY_PRESETS.get(quality, _QUALITY_PRESETS['normal'])
+	if sample_step is None:
+		sample_step = preset['sample_step']
+	sdf_steps = preset['sdf_steps']
+
 	# 0. Ensure cubic-only contours
 	cubic_contours = []
 	for c in contours:
@@ -932,25 +1075,30 @@ def compute_mat(contours, sample_step=3.0, beta_min=1.5):
 	if not vertices:
 		return MATGraph(), []
 
-	# 4. Build SDF for radius computation and inside/outside testing
-	sdf = SignedDistanceField(cubic_contours, resolution=1.0, padding=20, steps_per_segment=64)
+	# 4. Build SDF once — shared by filtering and radius computation
+	sdf = SignedDistanceField(cubic_contours, resolution=1.0, padding=20, steps_per_segment=sdf_steps)
 
-	# 5. Filter interior
-	interior_indices, exterior_indices = filter_interior_vertices_sdf(vertices, cubic_contours)
+	# 5. Build spatial grid for fast radius queries
+	spatial_grid = _SpatialGrid(sdf._polylines, cell_size=max(sample_step * 10, 20.0))
+
+	# 6. Filter interior (use spatial grid for fast ray casting)
+	interior_indices, exterior_indices = filter_interior_vertices_sdf(vertices, cubic_contours,
+																	  sdf=sdf, spatial_grid=spatial_grid)
 
 	if not interior_indices:
 		return MATGraph(), []
 
-	# 6. Build graph with radii
-	graph = build_mat_graph(vertices, edges, interior_indices, cubic_contours, sdf=sdf)
+	# 7. Build graph with radii (use spatial grid for fast distance)
+	graph = build_mat_graph(vertices, edges, interior_indices, cubic_contours,
+							sdf=sdf, spatial_grid=spatial_grid)
 
-	# 7. Prune
+	# 8. Prune
 	graph = prune_mat(graph, beta_min=beta_min)
 
-	# 8. Classify
+	# 9. Classify
 	classify_nodes(graph)
 
-	# 9. Concavities (from outline geometry, not exterior MAT)
+	# 10. Concavities (from outline geometry, not exterior MAT)
 	concavities = find_concavities(cubic_contours)
 
 	return graph, concavities
