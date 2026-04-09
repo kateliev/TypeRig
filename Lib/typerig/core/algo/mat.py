@@ -18,6 +18,8 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 from typerig.core.objects.cubicbezier import CubicBezier
 from typerig.core.objects.quadraticbezier import QuadraticBezier
+from typerig.core.objects.node import Node
+from typerig.core.objects.contour import Contour
 from typerig.core.objects.sdf import SignedDistanceField
 from typerig.core.func.geometry import point_in_polygon
 from typerig.core.func.math import three_point_circle
@@ -127,6 +129,312 @@ class MATGraph(object):
 				break
 			prev, cur = cur, nxt[0]
 		return path
+
+	def extract_branches(self):
+		"""Extract all skeleton branches as ordered point sequences.
+
+		Each branch runs from a terminal or fork to the next terminal or fork,
+		passing through regular (degree-2) nodes.
+
+		Returns:
+			list of lists of MATNode — one list per branch
+		"""
+		branches = []
+		visited_edges = set()
+
+		# Start from every terminal and fork
+		start_nodes = [n for n in self.nodes if n.degree != 2]
+
+		for start in start_nodes:
+			for nb in start.neighbors:
+				edge_key = (min(id(start), id(nb)), max(id(start), id(nb)))
+				if edge_key in visited_edges:
+					continue
+
+				branch = self.walk_branch(start, nb)
+
+				# Mark all edges in this branch as visited
+				for i in range(len(branch) - 1):
+					a, b = branch[i], branch[i + 1]
+					ek = (min(id(a), id(b)), max(id(a), id(b)))
+					visited_edges.add(ek)
+
+				branches.append(branch)
+
+		return branches
+
+	def to_contours(self, smooth=True, simplify_tolerance=1.0):
+		"""Convert MAT skeleton to TypeRig Contours for visual inspection.
+
+		Each branch becomes an open Contour. If smooth=True, cubic Bezier
+		curves are fitted to the point sequence. Otherwise, simplified
+		polyline (line segments only).
+
+		The radius at each on-curve node is stored in node.lib['radius']
+		for downstream use (e.g. MetaPen nib sizing).
+
+		Args:
+			smooth: if True, fit cubic Bezier curves; if False, polyline only
+			simplify_tolerance: max deviation (font units) for point reduction.
+				Lower = more points, higher fidelity.
+
+		Returns:
+			list of TypeRig Contour objects (open contours)
+		"""
+		contours = []
+
+		for branch in self.extract_branches():
+			if len(branch) < 2:
+				continue
+
+			if smooth and len(branch) >= 3:
+				contour = _branch_to_cubic_contour(branch, simplify_tolerance)
+			else:
+				contour = _branch_to_line_contour(branch, simplify_tolerance)
+
+			if contour is not None:
+				contours.append(contour)
+
+		return contours
+
+	def to_contours_with_radii(self, smooth=True, simplify_tolerance=1.0):
+		"""Convert MAT skeleton to contours, also returning per-node radii.
+
+		Returns:
+			contours: list of TypeRig Contour objects (open)
+			radii: list of lists of float — one radius list per contour,
+				aligned with on-curve nodes in each contour
+		"""
+		contours = []
+		all_radii = []
+
+		for branch in self.extract_branches():
+			if len(branch) < 2:
+				continue
+
+			if smooth and len(branch) >= 3:
+				contour, radii = _branch_to_cubic_contour(branch, simplify_tolerance, return_radii=True)
+			else:
+				contour, radii = _branch_to_line_contour(branch, simplify_tolerance, return_radii=True)
+
+			if contour is not None:
+				contours.append(contour)
+				all_radii.append(radii)
+
+		return contours, all_radii
+
+
+# - Skeleton to Contour helpers ----------
+def _simplify_branch(branch, tolerance):
+	"""Reduce dense MAT branch to key points using Douglas-Peucker.
+
+	Preserves first, last, and points where deviation exceeds tolerance.
+	Returns indices into the original branch list.
+	"""
+	if len(branch) <= 2:
+		return list(range(len(branch)))
+
+	def _perpendicular_dist(pt, line_start, line_end):
+		dx = line_end.x - line_start.x
+		dy = line_end.y - line_start.y
+		len_sq = dx * dx + dy * dy
+		if len_sq < _EPS:
+			return math.hypot(pt.x - line_start.x, pt.y - line_start.y)
+		t = max(0.0, min(1.0, ((pt.x - line_start.x) * dx + (pt.y - line_start.y) * dy) / len_sq))
+		proj_x = line_start.x + t * dx
+		proj_y = line_start.y + t * dy
+		return math.hypot(pt.x - proj_x, pt.y - proj_y)
+
+	def _dp(indices, tol):
+		if len(indices) <= 2:
+			return indices
+
+		start = branch[indices[0]]
+		end = branch[indices[-1]]
+
+		max_dist = 0.0
+		max_idx = 0
+		for i in range(1, len(indices) - 1):
+			d = _perpendicular_dist(branch[indices[i]], start, end)
+			if d > max_dist:
+				max_dist = d
+				max_idx = i
+
+		if max_dist > tol:
+			left = _dp(indices[:max_idx + 1], tol)
+			right = _dp(indices[max_idx:], tol)
+			return left + right[1:]
+		else:
+			return [indices[0], indices[-1]]
+
+	all_indices = list(range(len(branch)))
+	return _dp(all_indices, tolerance)
+
+
+def _catmull_rom_tangent(prev_pt, curr_pt, next_pt):
+	"""Compute Catmull-Rom tangent at curr_pt given its neighbors.
+
+	Returns a unit tangent vector. For open-path endpoints where
+	prev or next is None, falls back to the chord direction.
+	"""
+	if prev_pt is not None and next_pt is not None:
+		tx = next_pt[0] - prev_pt[0]
+		ty = next_pt[1] - prev_pt[1]
+	elif next_pt is not None:
+		tx = next_pt[0] - curr_pt[0]
+		ty = next_pt[1] - curr_pt[1]
+	elif prev_pt is not None:
+		tx = curr_pt[0] - prev_pt[0]
+		ty = curr_pt[1] - prev_pt[1]
+	else:
+		return (1.0, 0.0)
+
+	mag = math.hypot(tx, ty)
+	if mag < _EPS:
+		return (1.0, 0.0)
+	return (tx / mag, ty / mag)
+
+
+def _branch_to_line_contour(branch, simplify_tolerance=0.0, return_radii=False):
+	"""Convert a MAT branch to a polyline Contour (on-curve nodes only).
+
+	Args:
+		branch: list of MATNode
+		simplify_tolerance: if > 0, reduce points via Douglas-Peucker
+		return_radii: if True, also return radii at retained nodes
+	"""
+	if len(branch) < 2:
+		if return_radii:
+			return None, []
+		return None
+
+	# Simplify if requested
+	if simplify_tolerance > 0 and len(branch) > 2:
+		key_indices = _simplify_branch(branch, simplify_tolerance)
+		branch = [branch[i] for i in key_indices]
+
+	nodes = []
+	radii = []
+	for mat_node in branch:
+		n = Node((mat_node.x, mat_node.y), type='on')
+		n.lib = {'radius': mat_node.radius}
+		nodes.append(n)
+		radii.append(mat_node.radius)
+
+	contour = Contour(nodes, closed=False)
+
+	if return_radii:
+		return contour, radii
+	return contour
+
+
+def _branch_to_cubic_contour(branch, tolerance=1.0, return_radii=False):
+	"""Convert a MAT branch to a smooth cubic Bezier Contour.
+
+	1. Simplify dense points via Douglas-Peucker to key knots
+	2. Compute Catmull-Rom tangent at each knot from its neighbors
+	3. Place BCPs at knot +/- tangent * (chord / 3)
+	4. Build Contour with on, curve, curve, on node pattern
+
+	The Catmull-Rom approach guarantees well-behaved handles:
+	tangent direction comes from the neighbor knots, and handle
+	length is always proportional to chord length (never overshoots).
+
+	Args:
+		branch: list of MATNode
+		tolerance: simplification tolerance in font units
+		return_radii: if True, also return radii at on-curve nodes
+
+	Returns:
+		Contour (or (Contour, radii) if return_radii=True)
+	"""
+	if len(branch) < 2:
+		if return_radii:
+			return None, []
+		return None
+
+	# Simplify to key points
+	key_indices = _simplify_branch(branch, tolerance)
+	if len(key_indices) < 2:
+		key_indices = [0, len(branch) - 1]
+
+	knots = [(branch[i].x, branch[i].y) for i in key_indices]
+	knot_radii = [branch[i].radius for i in key_indices]
+	n_knots = len(knots)
+
+	# Two points only — single cubic that's effectively a line
+	if n_knots == 2:
+		p0, p3 = Point(*knots[0]), Point(*knots[1])
+		p1 = p0 + (p3 - p0) * (1.0 / 3.0)
+		p2 = p0 + (p3 - p0) * (2.0 / 3.0)
+
+		on0 = Node((p0.x, p0.y), type='on')
+		on0.lib = {'radius': knot_radii[0]}
+		bcp0 = Node((p1.x, p1.y), type='curve')
+		bcp1 = Node((p2.x, p2.y), type='curve')
+		on1 = Node((p3.x, p3.y), type='on')
+		on1.lib = {'radius': knot_radii[1]}
+
+		contour = Contour([on0, bcp0, bcp1, on1], closed=False)
+		if return_radii:
+			return contour, [knot_radii[0], knot_radii[1]]
+		return contour
+
+	# Compute tangent at each knot (Catmull-Rom: direction from prev to next)
+	tangents = []
+	for i in range(n_knots):
+		prev_pt = knots[i - 1] if i > 0 else None
+		next_pt = knots[i + 1] if i < n_knots - 1 else None
+		tangents.append(_catmull_rom_tangent(prev_pt, knots[i], next_pt))
+
+	# Build contour: for each consecutive pair of knots, place BCPs
+	contour_nodes = []
+	radii = []
+
+	for seg_i in range(n_knots - 1):
+		ax, ay = knots[seg_i]
+		bx, by = knots[seg_i + 1]
+		chord = math.hypot(bx - ax, by - ay)
+
+		# Handle length = chord / 3 — the standard Catmull-Rom to Bezier ratio
+		handle_len = chord / 3.0
+
+		# BCP out from knot[seg_i]: along tangent
+		tx0, ty0 = tangents[seg_i]
+		p1x = ax + tx0 * handle_len
+		p1y = ay + ty0 * handle_len
+
+		# BCP in to knot[seg_i+1]: against tangent (arriving)
+		tx1, ty1 = tangents[seg_i + 1]
+		p2x = bx - tx1 * handle_len
+		p2y = by - ty1 * handle_len
+
+		if seg_i == 0:
+			on_node = Node((ax, ay), type='on')
+			on_node.lib = {'radius': knot_radii[seg_i]}
+			contour_nodes.append(on_node)
+			radii.append(knot_radii[seg_i])
+
+		bcp_out = Node((p1x, p1y), type='curve')
+		bcp_in = Node((p2x, p2y), type='curve')
+		is_inner = seg_i < n_knots - 2
+		on_end = Node((bx, by), type='on', smooth=is_inner)
+		on_end.lib = {'radius': knot_radii[seg_i + 1]}
+
+		contour_nodes.append(bcp_out)
+		contour_nodes.append(bcp_in)
+		contour_nodes.append(on_end)
+		radii.append(knot_radii[seg_i + 1])
+
+	if len(contour_nodes) < 2:
+		if return_radii:
+			return None, []
+		return None
+
+	contour = Contour(contour_nodes, closed=False)
+	if return_radii:
+		return contour, radii
+	return contour
 
 
 # - Step 1: Contour Sampling ----------
