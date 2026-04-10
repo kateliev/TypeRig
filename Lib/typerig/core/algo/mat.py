@@ -25,7 +25,7 @@ from typerig.core.func.geometry import point_in_polygon
 from typerig.core.func.math import three_point_circle
 
 # - Init -------------------------------
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 
 # - Constants --------------------------
 _EPS = 1e-9
@@ -1225,3 +1225,241 @@ def compute_mat(contours, sample_step=None, beta_min=1.5, quality='normal'):
 	concavities = find_concavities(cubic_contours)
 
 	return graph, concavities
+
+
+# - Exterior MAT helpers ----------
+
+def _sample_bbox_contour(bbox, step):
+	"""Sample points along a bounding box rectangle at ~step spacing.
+
+	Args:
+		bbox: (x0, y0, x1, y1)
+		step: approximate spacing in font units
+
+	Returns:
+		list of (x, y) tuples (closed loop, last point does NOT repeat first)
+	"""
+	x0, y0, x1, y1 = bbox
+	points = []
+
+	w = x1 - x0
+	h = y1 - y0
+
+	# Bottom edge: left → right
+	n = max(2, int(w / step))
+	for i in range(n):
+		points.append((x0 + w * i / n, y0))
+
+	# Right edge: bottom → top
+	n = max(2, int(h / step))
+	for i in range(n):
+		points.append((x1, y0 + h * i / n))
+
+	# Top edge: right → left
+	n = max(2, int(w / step))
+	for i in range(n):
+		points.append((x1 - w * i / n, y1))
+
+	# Left edge: top → bottom
+	n = max(2, int(h / step))
+	for i in range(n):
+		points.append((x0, y1 - h * i / n))
+
+	return points
+
+
+def _find_closest_point_on_polylines(px, py, polylines):
+	"""Find the closest point on any polyline edge to (px, py).
+
+	Args:
+		px, py: query point
+		polylines: list of lists of (x, y) — each sub-list is a closed polygon
+
+	Returns:
+		(cx, cy): closest point on the polylines to (px, py)
+	"""
+	best_dist_sq = float('inf')
+	best_cx, best_cy = px, py
+
+	for poly in polylines:
+		n = len(poly)
+		for i in range(n):
+			ax, ay = poly[i]
+			bx, by = poly[(i + 1) % n]
+
+			dx, dy = bx - ax, by - ay
+			len_sq = dx * dx + dy * dy
+
+			if len_sq < 1e-12:
+				cx, cy = ax, ay
+			else:
+				t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / len_sq))
+				cx = ax + t * dx
+				cy = ay + t * dy
+
+			d_sq = (px - cx) ** 2 + (py - cy) ** 2
+			if d_sq < best_dist_sq:
+				best_dist_sq = d_sq
+				best_cx, best_cy = cx, cy
+
+	return best_cx, best_cy
+
+
+# - Step 10: Exterior MAT Entry Point ----------
+
+def compute_exterior_mat(contours, bbox_margin=100, sample_step=5.0, beta_min=1.5):
+	"""Compute the exterior Medial Axis Transform (M*) of a glyph.
+
+	Operates on the complement space: outside the glyph outline but inside
+	a padded bounding box. Terminals whose inscribed circle touches the
+	glyph outline are concavity candidates — smooth concavities such as
+	bowl-to-stem junctions (B, P, R, D) that the interior MAT misses because
+	they have no sharp on-curve vertex.
+
+	The bounding box boundary generates many spurious terminals; these are
+	discarded. Only terminals within `radius + tolerance` of the glyph
+	outline are returned as concave_terminals.
+
+	Args:
+		contours: list of TypeRig Contour objects (glyph outline)
+		bbox_margin: padding around glyph bounding box in font units (default 100)
+		sample_step: outline sampling density in font units (default 5.0;
+			use 8-10 for speed, 3 for highest fidelity)
+		beta_min: branch pruning threshold — same semantics as compute_mat (default 1.5)
+
+	Returns:
+		graph: MATGraph for the exterior space
+		concave_terminals: list of (x, y, radius, cx, cy) tuples where
+			(x, y) is the terminal position, radius is its inscribed circle,
+			and (cx, cy) is the closest contact point on the glyph outline.
+			These are M* concavity candidates (bowl-to-stem junctions etc.)
+	"""
+	# 0. Ensure cubic-only contours
+	cubic_contours = []
+	for c in contours:
+		if c.has_quadratic:
+			cubic_contours.append(c.to_cubic_contour())
+		else:
+			cubic_contours.append(c)
+
+	if not cubic_contours:
+		return MATGraph(), []
+
+	# 1. Compute glyph bounding box + margin
+	#    Use coarser sampling just for bbox computation (2x step)
+	bbox_pts = []
+	for contour in cubic_contours:
+		bbox_pts.extend(sample_contour(contour, step=sample_step * 2.0))
+
+	if len(bbox_pts) < 3:
+		return MATGraph(), []
+
+	xs = [p[0] for p in bbox_pts]
+	ys = [p[1] for p in bbox_pts]
+	x0 = min(xs) - bbox_margin
+	y0 = min(ys) - bbox_margin
+	x1 = max(xs) + bbox_margin
+	y1 = max(ys) + bbox_margin
+	bbox = (x0, y0, x1, y1)
+
+	# 2. Sample glyph contours for Delaunay input + spatial grid
+	glyph_polylines = []
+	glyph_sample_pts = []
+	for contour in cubic_contours:
+		pts = sample_contour(contour, step=sample_step)
+		if pts:
+			glyph_polylines.append(pts)
+			glyph_sample_pts.extend(pts)
+
+	if not glyph_sample_pts:
+		return MATGraph(), []
+
+	# 3. Sample bbox boundary for Delaunay input
+	bbox_sample_pts = _sample_bbox_contour(bbox, step=sample_step)
+	bbox_polyline = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+
+	# 4. Combine all sample points for triangulation, deduplicate
+	all_points = []
+	seen = set()
+	for pt in glyph_sample_pts + bbox_sample_pts:
+		key = (round(pt[0], 4), round(pt[1], 4))
+		if key not in seen:
+			seen.add(key)
+			all_points.append(pt)
+
+	if len(all_points) < 3:
+		return MATGraph(), []
+
+	# 5. Delaunay triangulation + Voronoi dualization
+	voronoi = BowyerWatson()
+	triangles = voronoi.triangulate(all_points)
+	vertices, edges = voronoi.voronoi_from_delaunay(all_points, triangles)
+
+	if not vertices:
+		return MATGraph(), []
+
+	# 6. Build glyph-only spatial grid for inside/outside test and glyph distances
+	cell_size = max(sample_step * 10.0, 20.0)
+	glyph_grid = _SpatialGrid(glyph_polylines, cell_size=cell_size)
+
+	# 7. Filter Voronoi vertices: keep those OUTSIDE glyph and INSIDE bbox
+	exterior_indices = set()
+	for idx, (vx, vy) in enumerate(vertices):
+		# Strict bbox containment (Voronoi vertices can escape the convex hull)
+		if not (x0 <= vx <= x1 and y0 <= vy <= y1):
+			continue
+		# Outside the glyph (odd-even ray casting covers holes correctly)
+		if glyph_grid.is_inside(vx, vy):
+			continue
+		exterior_indices.add(idx)
+
+	if not exterior_indices:
+		return MATGraph(), []
+
+	# 8. Build combined spatial grid (glyph + bbox) for radius computation.
+	#    The exterior MAT radius = min dist to nearest boundary of either set.
+	combined_polylines = glyph_polylines + [bbox_polyline]
+	combined_grid = _SpatialGrid(combined_polylines, cell_size=cell_size)
+
+	# 9. Build MATGraph for the exterior
+	ext_nodes = {}
+	for idx in exterior_indices:
+		vx, vy = vertices[idx]
+		r = combined_grid.min_distance(vx, vy)
+		node = MATNode(vx, vy, r)
+		ext_nodes[idx] = node
+
+	graph = MATGraph()
+	for a_idx, b_idx in edges:
+		if a_idx in ext_nodes and b_idx in ext_nodes:
+			ext_nodes[a_idx].connect(ext_nodes[b_idx])
+
+	for node in ext_nodes.values():
+		graph.add_node(node)
+
+	# 10. Clean up, prune, classify (same pipeline as interior MAT)
+	merge_duplicate_nodes(graph, epsilon=0.5)
+	graph = prune_mat(graph, beta_min=beta_min)
+	classify_nodes(graph)
+
+	# 11. Identify glyph-touching terminals (concavity candidates from M*).
+	#
+	#     A terminal "touches the glyph outline" if its inscribed circle
+	#     reaches the glyph boundary — i.e. dist_to_glyph ≈ terminal.radius.
+	#     Terminals at the bbox boundary have dist_to_glyph >> their radius.
+	#
+	#     Tolerance: allow up to 2x sample_step slop from the discrete sampling.
+	touch_tolerance = sample_step * 2.0
+	concave_terminals = []
+
+	for terminal in graph.terminals():
+		dist_glyph = glyph_grid.min_distance(terminal.x, terminal.y)
+
+		if dist_glyph <= terminal.radius + touch_tolerance:
+			# Find the actual contact point on the glyph outline
+			cx, cy = _find_closest_point_on_polylines(
+				terminal.x, terminal.y, glyph_polylines)
+			concave_terminals.append(
+				(terminal.x, terminal.y, terminal.radius, cx, cy))
+
+	return graph, concave_terminals
