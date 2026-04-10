@@ -734,6 +734,549 @@ def fork_concavity_map(sector_assignments):
 	return result
 
 
+# - Link Pipeline (§5) ----------
+
+class Link(object):
+	"""A candidate stroke-crossing line segment between two concave CSFs.
+
+	Attributes:
+		csf1, csf2:        the two concave CSFs whose extrema are the endpoints
+		p1, p2:            (x, y) endpoint positions (= csf1.extremum, csf2.extremum)
+		flow:              (fx, fy) unit flow vector = -(n1 + n2) / |...|
+		link_type:         'normal' | 'compound' | None (unvalidated)
+		fork:              MATNode — the fork that owns this link (normal links only)
+		protruding_branch: MATNode — fork neighbor that is the protruding branch
+		salience:          float — S(ℓ) = exp(...) + Φ
+		good_continuation: float — Φ(ε1, ε2) alone
+		valid:             bool — passed flow-vs-protruding-direction test
+	"""
+
+	__slots__ = (
+		'csf1', 'csf2', 'p1', 'p2', 'flow',
+		'link_type', 'fork', 'protruding_branch',
+		'salience', 'good_continuation', 'valid',
+	)
+
+	def __init__(self, csf1, csf2):
+		self.csf1 = csf1
+		self.csf2 = csf2
+		self.p1   = csf1.extremum
+		self.p2   = csf2.extremum
+
+		n1 = csf1.inward_normal or (0.0, 0.0)
+		n2 = csf2.inward_normal or (0.0, 0.0)
+		fx = -(n1[0] + n2[0])
+		fy = -(n1[1] + n2[1])
+		mag = math.hypot(fx, fy)
+		self.flow = (fx / mag, fy / mag) if mag > _EPS else (1.0, 0.0)
+
+		self.link_type         = None
+		self.fork              = None
+		self.protruding_branch = None
+		self.salience          = 0.0
+		self.good_continuation = 0.0
+		self.valid             = False
+
+	@property
+	def length(self):
+		return math.hypot(self.p2[0] - self.p1[0], self.p2[1] - self.p1[1])
+
+	def __repr__(self):
+		return '<Link: {} {} {} ({:.0f},{:.0f})<->({:.0f},{:.0f}) S={:.3f}>'.format(
+			'VALID' if self.valid else 'invalid',
+			self.link_type or '?',
+			'n/a' if self.fork is None else 'f({:.0f},{:.0f})'.format(
+				self.fork.x, self.fork.y),
+			self.p1[0], self.p1[1], self.p2[0], self.p2[1],
+			self.salience)
+
+
+# ── A: inside-glyph segment test ──────────────────────────────────────────────
+
+def _seg_intersects_seg(ax, ay, bx, by, cx, cy, dx, dy):
+	"""Return True if open segment AB strictly intersects open segment CD."""
+	def _cross2(ux, uy, vx, vy):
+		return ux * vy - uy * vx
+
+	rx = bx - ax;  ry = by - ay
+	sx = dx - cx;  sy = dy - cy
+	denom = _cross2(rx, ry, sx, sy)
+
+	if abs(denom) < _EPS:
+		return False  # parallel / collinear
+
+	qax = cx - ax;  qay = cy - ay
+	t = _cross2(qax, qay, sx, sy) / denom
+	u = _cross2(qax, qay, rx, ry) / denom
+
+	return 1e-6 < t < 1.0 - 1e-6 and 1e-6 < u < 1.0 - 1e-6
+
+
+def _link_inside_glyph(p1, p2, contours, n_interior_checks=4):
+	"""Return True if segment p1→p2 lies entirely inside the glyph outline.
+
+	Strategy:
+	  1. Reject if the segment crosses any contour edge.
+	  2. Check n_interior_checks evenly-spaced interior samples with ray casting.
+	     All must be inside the glyph.  This catches links that fit between
+	     two contour boundary crossings (e.g. inside a letter counter).
+	"""
+	from typerig.core.algo.mat import _SpatialGrid, sample_contour as _sc
+
+	x1, y1 = p1
+	x2, y2 = p2
+
+	# Build a quick polyline representation of each contour for intersection tests
+	for contour in contours:
+		pts = _sc(contour, step=4.0)
+		n = len(pts)
+		for i in range(n):
+			ax, ay = pts[i]
+			bx, by = pts[(i + 1) % n]
+			if _seg_intersects_seg(x1, y1, x2, y2, ax, ay, bx, by):
+				return False
+
+	# Interior sampling via _SpatialGrid.is_inside (ray casting)
+	polylines = []
+	for contour in contours:
+		pts = _sc(contour, step=4.0)
+		if pts:
+			polylines.append(pts)
+
+	if not polylines:
+		return True
+
+	cell = max(20.0, math.hypot(x2 - x1, y2 - y1) / 5.0)
+	grid = _SpatialGrid(polylines, cell_size=cell)
+
+	for k in range(1, n_interior_checks + 1):
+		t = k / float(n_interior_checks + 1)
+		mx = x1 + t * (x2 - x1)
+		my = y1 + t * (y2 - y1)
+		if not grid.is_inside(mx, my):
+			return False
+
+	return True
+
+
+# ── B: good-continuation / association fields (§5.3, Appendix B) ──────────────
+
+# Paper constants (Appendix B)
+_KAPPA1 = 0.27   # cocircularity concentration
+_KAPPA2 = 0.47   # curvature-deviation concentration
+
+
+def good_continuation(csf1, csf2, sigma):
+	"""Compute association-field good-continuation Φ(ε₁, ε₂) (§5.3 / App B).
+
+	Φ = Φ_a · Φ_r
+
+	Φ_r = exp(-d² / (2σ²))  — Gaussian distance decay
+
+	Φ_a = cosh(A·cos(β/2) + B·cos(α - β/2)) / cosh(A + B)
+
+	  The cosh-ratio normalization maps Φ_a ∈ (0, 1]:
+	  - Value 1.0 when β = 0 and α = 0 (perfect cocircularity / collinearity)
+	  - Decreases as the two tangents deviate from a smooth circular arc
+
+	  where:
+	    d    = Euclidean distance between the two extrema
+	    β    = signed angle from τ₁ to the connecting line direction
+	           (measures deviation from collinearity on the ε₁ side)
+	    α    = signed angle between the two tangent orientations τ₁ and τ₂
+	           (measures total orientation difference)
+	    A    = 4·κ₁·κ₂   — cocircularity concentration scale
+	    B    = κ₁·κ₂    — curvature-deviation concentration scale
+
+	  Paper constants: κ₁ = 0.27 (cocircularity), κ₂ = 0.47 (curvature deviation).
+	  With these values A ≈ 0.508, B ≈ 0.127, so max_arg = A+B ≈ 0.635 and
+	  cosh-ratio normalization keeps Φ_a ∈ (0, 1].
+
+	For each concavity we pick the tangent from its tangent_pair that is most
+	orthogonal to the link direction (most "edge-like" as seen from the link).
+
+	Args:
+		csf1, csf2: CSF objects (must have tangent_pair and inward_normal set)
+		sigma:      Gaussian spread in font units (= 2 × max M non-ligature radius)
+
+	Returns:
+		float in [0, 1] — higher = better continuation
+	"""
+	x1, y1 = csf1.extremum
+	x2, y2 = csf2.extremum
+	d = math.hypot(x2 - x1, y2 - y1)
+
+	if d < _EPS or sigma < _EPS:
+		return 0.0
+
+	# Φ_r — Gaussian distance decay
+	phi_r = math.exp(-(d * d) / (2.0 * sigma * sigma))
+
+	# Select representative tangent at each endpoint: most orthogonal to link
+	lx = (x2 - x1) / d
+	ly = (y2 - y1) / d
+
+	def _best_tangent(csf):
+		if csf.tangent_pair is None:
+			n = csf.inward_normal or (0.0, 1.0)
+			return (-n[1], n[0])
+		t0, t1 = csf.tangent_pair
+		d0 = abs(t0[0] * lx + t0[1] * ly)
+		d1 = abs(t1[0] * lx + t1[1] * ly)
+		return t0 if d0 <= d1 else t1
+
+	tx1, ty1 = _best_tangent(csf1)
+	tx2, ty2 = _best_tangent(csf2)
+
+	# β: signed angle from τ₁ to the link direction
+	beta  = math.atan2(lx * ty1 - ly * tx1, lx * tx1 + ly * ty1)
+
+	# α: signed angle between τ₁ and τ₂
+	alpha = math.atan2(tx1 * ty2 - ty1 * tx2, tx1 * tx2 + ty1 * ty2)
+
+	# A = 4·κ₁·κ₂, B = κ₁·κ₂ — concentrations as direct multipliers.
+	# With κ₁ = 0.27, κ₂ = 0.47: A ≈ 0.508, B ≈ 0.127, max_arg ≈ 0.635.
+	# cosh(max_arg) ≈ 1.20 — normalization stays in [1, 1.20], so the ratio
+	# Φ_a ∈ (0, 1] with value 1 for perfect cocircularity/collinearity.
+	A = 4.0 * _KAPPA1 * _KAPPA2
+	B = _KAPPA1 * _KAPPA2
+
+	arg     = A * math.cos(beta / 2.0) + B * math.cos(alpha - beta / 2.0)
+	max_arg = A + B
+
+	phi_a = math.cosh(arg) / math.cosh(max_arg)
+
+	return phi_a * phi_r
+
+
+# ── C: branch salience σ(b, f) §4.1.2 ────────────────────────────────────────
+
+def branch_salience(fork, branch_neighbor):
+	"""Compute σ(b, f) = ℓ / (ℓ - ρ) (Berio et al. §4.1.2).
+
+	ℓ = arc length of the branch (walk to next terminal/fork)
+	ρ = radius of the fork disk
+
+	A branch is salient (protruding) if σ > τ_σ = 2.3 (paper default).
+	Non-salient branches are short tapers / caps at stroke ends.
+	"""
+	rho = fork.radius
+	prev, cur = fork, branch_neighbor
+	arc_len = 0.0
+	while True:
+		arc_len += math.hypot(cur.x - prev.x, cur.y - prev.y)
+		if cur.is_terminal or cur.is_fork:
+			break
+		nxt = [n for n in cur.neighbors if n is not prev]
+		if not nxt:
+			break
+		prev, cur = cur, nxt[0]
+
+	denom = arc_len - rho
+	if denom < _EPS:
+		return float('inf')  # very short branch → salient
+	return arc_len / denom
+
+
+_TAU_SIGMA = 2.3  # salience threshold (paper default)
+
+
+# ── D: link generation and validation ─────────────────────────────────────────
+
+def _flow_projection(link, fork, branch_nb, all_lig_ids):
+	"""Compute F(ℓ) · P(b, f, C) — used for normal-link validation (Eq. 2)."""
+	p = protruding_direction(fork, branch_nb, all_lig_ids)
+	return link.flow[0] * p[0] + link.flow[1] * p[1]
+
+
+def _sector_idx_for_csf(sa, csf):
+	"""Return the sector index that csf is assigned to in sa, or None."""
+	for i, c in enumerate(sa.assignments):
+		if c is csf:
+			return i
+	return None
+
+
+def _protruding_branch_for_normal_link(link, fork, sa, all_lig_ids):
+	"""For a normal link at fork, find the branch delimiting BOTH sectors.
+
+	Both concavity sectors share exactly one branch boundary (the one between
+	their two sectors). That shared branch is the protruding branch.
+
+	Returns (branch_neighbor, flow_projection) or (None, -inf).
+	"""
+	si1 = _sector_idx_for_csf(sa, link.csf1)
+	si2 = _sector_idx_for_csf(sa, link.csf2)
+	if si1 is None or si2 is None:
+		return None, float('-inf')
+
+	n_sectors = len(sa.sectors)
+
+	# The shared boundary branch between sector si1 and si2.
+	# Sector i spans branches[i] → branches[i+1].
+	# Boundary i separates sector (i-1) from sector i → branch index = i.
+	# We want the boundary that is shared by both sectors si1 and si2.
+	# Sectors are CCW: sector i borders branch i (left) and branch i+1 (right).
+	# The boundary branch index between sector A and sector B is:
+	#   B if B = (A + 1) % n   →  branch index = B
+	#   A if A = (B + 1) % n   →  branch index = A
+
+	# Collect all shared boundary indices
+	shared = []
+	for bi in range(n_sectors):
+		# Branch bi borders sector (bi-1)%n on left and sector bi on right
+		left_sector  = (bi - 1) % n_sectors
+		right_sector = bi
+		if {left_sector, right_sector} == {si1, si2}:
+			shared.append(bi)
+
+	best_nb   = None
+	best_proj = float('-inf')
+
+	for bi in shared:
+		_, nb = sa.branches[bi % len(sa.branches)]
+		proj = _flow_projection(link, fork, nb, all_lig_ids)
+		if proj > best_proj:
+			best_proj = proj
+			best_nb   = nb
+
+	return best_nb, best_proj
+
+
+def generate_links(sector_assignments, contours, graph, ligatures,
+				   min_length=5.0):
+	"""Generate, validate, and score all candidate links (§5.1–5.3).
+
+	Pass 1 — generation:
+	  All pairs of concave CSFs that are both assigned to forks.
+	  Segment must be entirely inside the glyph (no contour crossings,
+	  all interior samples inside via ray casting).
+
+	Pass 2 — validation (normal links):
+	  A link is a normal link if ≥1 fork owns BOTH concavities.
+	  The protruding branch is the one on the shared sector boundary.
+	  Validate via F · P > 0.
+
+	Pass 3 — validation (compound links):
+	  If no normal link: check whether the link crosses ≥2 branches
+	  from different forks, all non-salient, with overlapping disks.
+
+	Pass 4 — salience:
+	  S = exp(-(r1+r2)/(2·r_max)) + Φ
+	  σ for Φ = 2 × max non-ligature fork radius.
+
+	Args:
+		sector_assignments: dict {id(fork) -> SectorAssignment}
+		contours:           glyph contours (for inside-glyph test)
+		graph:              MATGraph (for branch salience + protruding direction)
+		ligatures:          list of Ligature (for ligature node set)
+		min_length:         minimum link length in font units (default 5.0)
+
+	Returns:
+		list of Link objects with valid=True, sorted by descending salience
+	"""
+	# ── collect all assigned concavities ──────────────────────────────
+	assigned_csfs = set()
+	for sa in sector_assignments.values():
+		for csf in sa.assignments:
+			if csf is not None:
+				assigned_csfs.add(id(csf))
+
+	# Keep the actual CSF objects for pairing
+	csf_by_id = {}
+	for sa in sector_assignments.values():
+		for csf in sa.assignments:
+			if csf is not None:
+				csf_by_id[id(csf)] = csf
+	unique_csfs = list(csf_by_id.values())
+
+	if len(unique_csfs) < 2:
+		return []
+
+	# ── build per-fork lookup: which two CSFs are co-assigned ─────────
+	# fork_id → set of id(csf) assigned to that fork
+	fork_csf_ids = {}
+	for fork_id, sa in sector_assignments.items():
+		ids = frozenset(id(c) for c in sa.assignments if c is not None)
+		if ids:
+			fork_csf_ids[fork_id] = ids
+
+	# ── ligature node set for protruding direction ─────────────────────
+	all_lig_ids = ligature_node_set(ligatures)
+
+	# ── σ for good-continuation: 2 × max non-ligature fork radius ─────
+	lig_fork_ids = {id(n) for lig in ligatures for n in lig.forks}
+	non_lig_radii = [f.radius for f in graph.forks() if id(f) not in lig_fork_ids]
+	sigma_phi = 2.0 * max(non_lig_radii) if non_lig_radii else 50.0
+
+	# ── r_max for salience denominator ────────────────────────────────
+	all_radii = [csf.disk_radius for csf in unique_csfs]
+	r_max = max(all_radii) if all_radii else 1.0
+
+	# ── generate + test all pairs ──────────────────────────────────────
+	valid_links = []
+	n = len(unique_csfs)
+
+	for i in range(n):
+		for j in range(i + 1, n):
+			c1 = unique_csfs[i]
+			c2 = unique_csfs[j]
+
+			# Skip pairs on the same contour at nearly the same position
+			if (c1.contour_idx == c2.contour_idx and
+					math.hypot(c1.extremum[0] - c2.extremum[0],
+							   c1.extremum[1] - c2.extremum[1]) < min_length):
+				continue
+
+			# Inside-glyph test
+			if not _link_inside_glyph(c1.extremum, c2.extremum, contours):
+				continue
+
+			link = Link(c1, c2)
+			if link.length < min_length:
+				continue
+
+			# ── normal link validation ─────────────────────────────────
+			validated = False
+			for fork_id, csf_ids in fork_csf_ids.items():
+				if id(c1) in csf_ids and id(c2) in csf_ids:
+					sa   = sector_assignments[fork_id]
+					fork = sa.fork
+					nb, proj = _protruding_branch_for_normal_link(
+						link, fork, sa, all_lig_ids)
+					if nb is not None and proj > 0.0:
+						link.link_type         = 'normal'
+						link.fork              = fork
+						link.protruding_branch = nb
+						link.valid             = True
+						validated              = True
+						break  # first valid assignment suffices
+
+			# ── compound link validation ───────────────────────────────
+			if not validated:
+				validated = _try_compound_link(link, graph, sector_assignments,
+											   all_lig_ids)
+
+			if not link.valid:
+				continue
+
+			# ── good continuation ──────────────────────────────────────
+			phi = good_continuation(c1, c2, sigma_phi)
+			link.good_continuation = phi
+
+			# ── salience ──────────────────────────────────────────────
+			r1, r2 = c1.disk_radius, c2.disk_radius
+			link.salience = math.exp(-(r1 + r2) / (2.0 * r_max)) + phi
+
+			valid_links.append(link)
+
+	valid_links.sort(key=lambda l: l.salience, reverse=True)
+	return valid_links
+
+
+def _try_compound_link(link, graph, sector_assignments, all_lig_ids):
+	"""Test compound-link condition: ≥2 non-salient branches from different forks
+	with overlapping disks crossed by the link segment (§5.1.2).
+
+	Marks link.link_type='compound' and link.valid=True if condition met.
+	Returns True on success.
+	"""
+	p1x, p1y = link.p1
+	p2x, p2y = link.p2
+
+	# Walk every branch in the graph; check if the link segment crosses it
+	crossed_forks = {}  # fork_id → (fork, branch_nb, salience_value)
+
+	for fork in graph.forks():
+		for nb in fork.neighbors:
+			# Branch segment: from fork toward nb (a few hops for direction)
+			prev, cur = fork, nb
+			branch_pts = [(fork.x, fork.y)]
+			for _ in range(8):
+				branch_pts.append((cur.x, cur.y))
+				if cur.is_terminal or cur.is_fork:
+					break
+				nxt = [n for n in cur.neighbors if n is not prev]
+				if not nxt:
+					break
+				prev, cur = cur, nxt[0]
+
+			# Check if link crosses any edge of this branch poly
+			crossed = False
+			for k in range(len(branch_pts) - 1):
+				ax, ay = branch_pts[k]
+				bx, by = branch_pts[k + 1]
+				if _seg_intersects_seg(p1x, p1y, p2x, p2y, ax, ay, bx, by):
+					crossed = True
+					break
+
+			if not crossed:
+				continue
+
+			sal = branch_salience(fork, nb)
+			if sal >= _TAU_SIGMA:
+				# Salient branch → not a compound link
+				return False
+
+			fid = id(fork)
+			if fid not in crossed_forks:
+				crossed_forks[fid] = (fork, nb, sal)
+
+	if len(crossed_forks) < 2:
+		return False
+
+	# Check overlapping disks between crossed forks
+	fork_list = [v[0] for v in crossed_forks.values()]
+	overlapping = False
+	for a in range(len(fork_list)):
+		for b in range(a + 1, len(fork_list)):
+			fa, fb = fork_list[a], fork_list[b]
+			d = math.hypot(fa.x - fb.x, fa.y - fb.y)
+			if d < fa.radius + fb.radius:
+				overlapping = True
+				break
+		if overlapping:
+			break
+
+	if not overlapping:
+		return False
+
+	link.link_type = 'compound'
+	link.valid     = True
+	return True
+
+
+# ── E: incompatibility filtering ──────────────────────────────────────────────
+
+def filter_incompatible_links(links):
+	"""Remove geometrically incompatible links, keeping the highest-salience set.
+
+	Two links are incompatible if their segments strictly cross (intersect in
+	their interiors).  We greedily keep the highest-salience link and discard
+	any that intersect it, then repeat.
+
+	Args:
+		links: list of Link, sorted by descending salience
+
+	Returns:
+		list of Link — mutually compatible subset
+	"""
+	kept = []
+	for link in links:
+		x1, y1 = link.p1
+		x2, y2 = link.p2
+		conflict = False
+		for existing in kept:
+			ex1, ey1 = existing.p1
+			ex2, ey2 = existing.p2
+			if _seg_intersects_seg(x1, y1, x2, y2, ex1, ey1, ex2, ey2):
+				conflict = True
+				break
+		if not conflict:
+			kept.append(link)
+	return kept
+
+
 def _branch_direction(from_node, to_node, steps=3):
 	"""Walk steps nodes along a branch, return unit direction vector."""
 	prev, cur = from_node, to_node
