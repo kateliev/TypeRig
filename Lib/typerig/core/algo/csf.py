@@ -20,7 +20,7 @@ from collections import defaultdict
 from typerig.core.algo.mat import sample_contour, MATNode, MATGraph
 
 # - Init --------------------------------
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 _EPS = 1e-9
 
 # τ_c: concave CSF disk radius limit = τ_c × glyph_height (paper default 0.15)
@@ -185,26 +185,97 @@ def _extract_arc(params, s_from, s_to, total_s):
 	return right + left
 
 
-def _local_tangent(params, px, py):
-	"""Estimate the unit tangent at the outline point closest to (px, py)."""
+def _find_idx_by_s(params, s_target):
+	"""Binary search: index of the sample in params nearest to arc-length s_target.
+
+	params must be sorted by s (third element). Handles boundary clamping.
+	"""
+	n = len(params)
+	if n == 0:
+		return 0
+	if s_target <= params[0][2]:
+		return 0
+	if s_target >= params[-1][2]:
+		return n - 1
+
+	lo, hi = 0, n - 1
+	while lo < hi - 1:
+		mid = (lo + hi) >> 1
+		if params[mid][2] < s_target:
+			lo = mid
+		else:
+			hi = mid
+
+	# Return whichever of lo/hi is closer to s_target
+	if abs(params[hi][2] - s_target) < abs(params[lo][2] - s_target):
+		return hi
+	return lo
+
+
+def _estimate_tangent(params, px, py, look_arc=20.0, one_sided=None):
+	"""Robust outline tangent using a windowed chord (sleeve approximation).
+
+	Rather than a single-step finite difference (which gives a diagonal at
+	sharp corners), this draws a chord of arc-length `look_arc` centred on,
+	or starting/ending at, the sample nearest to (px, py).  The chord
+	direction is a stable estimate of the local tangent even at corners.
+
+	Args:
+		params:     list of (x, y, s) — parameterized contour, sorted by s.
+		px, py:     query position; the nearest sample is used as the anchor.
+		look_arc:   arc-length window size in font units.
+		one_sided:  None     → symmetric: chord from (s0 - look_arc) to (s0 + look_arc).
+		            'back'   → backward:  chord from (s0 - look_arc) to s0.
+		                        Gives the incoming direction at the anchor.
+		            'fwd'    → forward:   chord from s0 to (s0 + look_arc).
+		                        Gives the outgoing direction at the anchor.
+
+	Returns:
+		(tx, ty) — unit tangent oriented in the outline traversal direction.
+	"""
 	n = len(params)
 	if n < 2:
 		return (1.0, 0.0)
 
+	# Locate nearest sample
 	best_idx, best_d = 0, float('inf')
 	for idx, (x, y, _s) in enumerate(params):
 		d = math.hypot(x - px, y - py)
 		if d < best_d:
 			best_d, best_idx = d, idx
 
-	if best_idx == 0:
-		p0, p1 = params[0], params[1]
-	elif best_idx == n - 1:
-		p0, p1 = params[n-2], params[n-1]
-	else:
-		p0, p1 = params[best_idx - 1], params[best_idx + 1]
+	s0 = params[best_idx][2]
+	total_s = params[-1][2]
 
-	return _unit_vec(p1[0] - p0[0], p1[1] - p0[1])
+	if one_sided == 'back':
+		# Backward one-sided: chord from (s0 - look_arc) → s0
+		# Gives the approach direction at px, py (from the left support side).
+		s_from = max(0.0, s0 - look_arc)
+		s_to   = s0
+	elif one_sided == 'fwd':
+		# Forward one-sided: chord from s0 → (s0 + look_arc)
+		# Gives the departure direction at px, py (into the right support side).
+		s_from = s0
+		s_to   = min(total_s, s0 + look_arc)
+	else:
+		# Symmetric: chord centred on s0
+		s_from = max(0.0,       s0 - look_arc)
+		s_to   = min(total_s,   s0 + look_arc)
+
+	idx_from = _find_idx_by_s(params, s_from)
+	idx_to   = _find_idx_by_s(params, s_to)
+
+	# Degenerate: both sides collapsed to the same index (very short contour)
+	if idx_from == idx_to:
+		if idx_from > 0:
+			p0, p1 = params[idx_from - 1], params[idx_from]
+		else:
+			p0, p1 = params[0], params[1]
+		return _unit_vec(p1[0] - p0[0], p1[1] - p0[1])
+
+	p_from = params[idx_from]
+	p_to   = params[idx_to]
+	return _unit_vec(p_to[0] - p_from[0], p_to[1] - p_from[1])
 
 
 # ============================================================
@@ -676,14 +747,32 @@ def _search_support_segments(csfs, all_params, concave_r_limit, sample_step):
 # ============================================================
 
 def _compute_concavity_features(csf, all_params):
-	"""Set tangent_pair and inward_normal for a concave CSF.
+	"""Set tangent_pair and inward_normal for a concave CSF (§4.2.2).
 
 	tangent_pair (τ, τ'): unit tangents at the two endpoints of the contact
-	                       region, measured along the outline direction.
-	inward_normal n:       -(τ + τ') normalized.  Points from the extremum
-	                       toward the interior of the glyph (where the notch
-	                       opens up).  If τ + τ' ≈ 0 (contact region too short
-	                       or tangents cancel), falls back to the chord-perpendicular.
+	   region, oriented in the outline traversal direction.
+
+	   τ  (at arc_start): approach tangent — one-sided backward look from the
+	      start of the contact region into the LEFT support segment.  This
+	      captures the direction the outline is coming FROM as it enters the
+	      concavity, avoiding the corner bisector that a symmetric difference
+	      would give at a sharp junction.
+
+	   τ' (at arc_end): departure tangent — one-sided forward look from the
+	      end of the contact region into the RIGHT support segment.  This
+	      captures the direction the outline departs TOWARD after the concavity.
+
+	inward_normal n = -(τ + τ') / |τ + τ'|.  Because τ and τ' both follow
+	   the outline traversal direction, their sum points roughly along the
+	   outline; negating it yields a vector that points into the shape (toward
+	   the junction interior).
+
+	   Fallback when τ + τ' ≈ 0 (symmetric concavity, tangents cancel):
+	   use the chord-perpendicular of the contact region, oriented toward the
+	   exterior disk center.
+
+	Look-arc window: max(15, disk_radius × 0.5) font units.  Large enough to
+	   clear the contact boundary noise; small enough not to span another CSF.
 	"""
 	params  = all_params[csf.contour_idx]
 	contact = csf.contact_region
@@ -693,17 +782,27 @@ def _compute_concavity_features(csf, all_params):
 		csf.inward_normal = (0.0, 0.0)
 		return
 
+	# Scale look distance to the feature size but keep it at least 15 units
+	look_arc = max(15.0, csf.disk_radius * 0.5)
+
 	if len(contact) == 1:
-		tau = _local_tangent(params, contact[0][0], contact[0][1])
+		# Degenerate contact (single point, e.g. sharp corner): symmetric estimate
+		tau = _estimate_tangent(params, contact[0][0], contact[0][1], look_arc)
 		csf.tangent_pair  = (tau, tau)
 		csf.inward_normal = (0.0, 0.0)
 		return
 
-	tau_start = _local_tangent(params, contact[0][0],  contact[0][1])
-	tau_end   = _local_tangent(params, contact[-1][0], contact[-1][1])
+	# τ : approach tangent at the START of the contact region (into left support)
+	tau_start = _estimate_tangent(
+		params, contact[0][0], contact[0][1], look_arc, one_sided='back')
+
+	# τ': departure tangent at the END of the contact region (into right support)
+	tau_end = _estimate_tangent(
+		params, contact[-1][0], contact[-1][1], look_arc, one_sided='fwd')
+
 	csf.tangent_pair = (tau_start, tau_end)
 
-	# Inward normal = -(τ + τ') normalised
+	# n = -(τ + τ') normalised
 	nx = -(tau_start[0] + tau_end[0])
 	ny = -(tau_start[1] + tau_end[1])
 	mag = math.hypot(nx, ny)
@@ -711,14 +810,16 @@ def _compute_concavity_features(csf, all_params):
 	if mag > _EPS:
 		csf.inward_normal = (nx / mag, ny / mag)
 	else:
-		# Tangents cancel (symmetric contact): use chord perpendicular
-		# oriented toward the exterior disk center
+		# Tangents cancel (symmetric concavity).
+		# Fallback: chord-perpendicular of the contact region endpoints, oriented
+		# toward the exterior disk center (which is outside the glyph).
 		dx = contact[-1][0] - contact[0][0]
 		dy = contact[-1][1] - contact[0][1]
 		mag2 = math.hypot(dx, dy)
 		if mag2 > _EPS:
+			# Left normal of the contact chord
 			perp = (-dy / mag2, dx / mag2)
-			# Orient toward disk center (which is in the exterior)
+			# Flip if it points away from the disk (disk is in exterior space)
 			dc = csf.disk_center
 			ex = csf.extremum
 			if (dc[0] - ex[0]) * perp[0] + (dc[1] - ex[1]) * perp[1] < 0:

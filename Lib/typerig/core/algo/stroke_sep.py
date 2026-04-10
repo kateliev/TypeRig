@@ -26,7 +26,7 @@ from typerig.core.objects.node import Node
 from typerig.core.func.geometry import line_intersect
 
 # - Init -------------------------------
-__version__ = '0.3.0'
+__version__ = '0.3.1'
 
 # - Constants --------------------------
 _EPS = 1e-9
@@ -197,6 +197,541 @@ def compute_ligatures(graph, concavities, rib_distance_threshold=5.0):
 				node_to_concavities[id(node)].append(conc)
 
 	return node_to_concavities
+
+
+# - Path-based Ligatures (v2) ----------
+
+class Ligature(object):
+	"""A connected subgraph of M whose ribs terminate in a CSF's contact region.
+
+	A ligature is the "glue" between the outline boundary of a concavity and
+	the interior medial axis. Its nodes are exactly those M vertices whose
+	inscribed circles intersect the CSF's contact arc (within tolerance).
+
+	Attributes:
+		csf:      the concave CSF this ligature connects to
+		nodes:    list of MATNode ordered along M from contact-side toward forks
+		forks:    list of MATNode that are forks and lie within this ligature
+		node_ids: frozenset of id(node) for fast membership tests
+	"""
+
+	def __init__(self, csf, nodes):
+		self.csf      = csf
+		self.nodes    = nodes
+		self.forks    = [n for n in nodes if n.is_fork]
+		self.node_ids = frozenset(id(n) for n in nodes)
+
+	@property
+	def start(self):
+		return self.nodes[0] if self.nodes else None
+
+	@property
+	def end(self):
+		return self.nodes[-1] if self.nodes else None
+
+	def __contains__(self, node):
+		return id(node) in self.node_ids
+
+	def __repr__(self):
+		return '<Ligature: csf={} nodes={} forks={}>'.format(
+			self.csf, len(self.nodes), len(self.forks))
+
+
+def _rib_touches_contact(node, contact_region, tol):
+	"""Return True if node's inscribed circle reaches any point in contact_region.
+
+	The "rib" from an M vertex is the shortest line from the vertex to the
+	outline (magnitude = node.radius).  If any outline sample in the contact
+	region lies within node.radius + tol of the vertex, the rib terminates
+	inside the contact region.
+
+	Args:
+		node:           MATNode
+		contact_region: list of (x, y) from CSF.contact_region
+		tol:            tolerance in font units
+
+	Returns:
+		bool
+	"""
+	limit_sq = (node.radius + tol) ** 2
+	nx, ny   = node.x, node.y
+	for cx, cy in contact_region:
+		if (nx - cx) ** 2 + (ny - cy) ** 2 <= limit_sq:
+			return True
+	return False
+
+
+def _bfs_connected(seed_ids, graph):
+	"""BFS over graph.nodes restricted to a seed id-set, return connected component.
+
+	Builds a subgraph adjacency from the full MAT graph, then BFS from the
+	node in seed_ids whose id is smallest (deterministic starting point).
+
+	Args:
+		seed_ids: set of id(node) that are candidate ligature members
+		graph:    MATGraph
+
+	Returns:
+		list of MATNode — the largest connected component within seed_ids
+	"""
+	# Build id → node map and restricted adjacency within seed
+	id_to_node = {id(n): n for n in graph.nodes if id(n) in seed_ids}
+	if not id_to_node:
+		return []
+
+	adjacency = defaultdict(list)
+	for node in id_to_node.values():
+		for nb in node.neighbors:
+			if id(nb) in seed_ids:
+				adjacency[id(node)].append(id(nb))
+
+	# BFS from each unvisited seed; keep largest component
+	visited   = set()
+	best      = []
+	for start_id in id_to_node:
+		if start_id in visited:
+			continue
+		comp = []
+		queue = [start_id]
+		visited.add(start_id)
+		while queue:
+			cur_id  = queue.pop(0)
+			comp.append(id_to_node[cur_id])
+			for nb_id in adjacency[cur_id]:
+				if nb_id not in visited:
+					visited.add(nb_id)
+					queue.append(nb_id)
+		if len(comp) > len(best):
+			best = comp
+
+	return best
+
+
+def _order_ligature_nodes(nodes, csf):
+	"""Order ligature nodes along M, starting nearest the CSF extremum.
+
+	Uses BFS over the restricted subgraph, starting from the node whose
+	center is closest to csf.extremum. This gives a natural order from
+	"contact side" outward toward internal forks.
+
+	Args:
+		nodes: list of MATNode (unordered)
+		csf:   CSF whose extremum anchors the ordering
+
+	Returns:
+		list of MATNode in BFS order from the extremum-nearest node
+	"""
+	if not nodes:
+		return []
+
+	ex_x, ex_y = csf.extremum
+	seed = min(nodes, key=lambda n: math.hypot(n.x - ex_x, n.y - ex_y))
+
+	node_ids = {id(n) for n in nodes}
+	id_to_node = {id(n): n for n in nodes}
+
+	ordered  = []
+	visited  = {id(seed)}
+	queue    = [seed]
+	while queue:
+		cur = queue.pop(0)
+		ordered.append(cur)
+		for nb in cur.neighbors:
+			if id(nb) in node_ids and id(nb) not in visited:
+				visited.add(id(nb))
+				queue.append(nb)
+
+	return ordered
+
+
+def compute_ligatures_v2(graph, csfs, tol=5.0):
+	"""Compute path-based ligatures from concave CSFs (Berio et al. §4.3).
+
+	For each concave CSF, finds every M vertex whose inscribed circle's rib
+	terminates within the CSF's contact region (within tolerance `tol`).
+	Those vertices form a connected subgraph of M — the ligature for that CSF.
+
+	This replaces the older point-distance `compute_ligatures()` with a
+	richer structure that:
+	  - Stores the ordered list of M nodes in the ligature
+	  - Identifies which forks lie within the ligature
+	  - Supports fast node membership tests via frozenset of ids
+	  - Enables protruding direction computation (see `protruding_direction`)
+
+	Args:
+		graph: MATGraph from compute_mat()
+		csfs:  list of CSF objects from compute_csfs() — only concave ones used
+		tol:   rib-contact tolerance in font units (default 5.0)
+
+	Returns:
+		list of Ligature objects, one per concave CSF that has at least one node
+	"""
+	ligatures = []
+	concave_csfs = [c for c in csfs if c.csf_type == 'concave']
+
+	for csf in concave_csfs:
+		if not csf.contact_region:
+			continue
+
+		# 1. Collect all M nodes whose disk reaches the contact region
+		seed_ids = set()
+		for node in graph.nodes:
+			if _rib_touches_contact(node, csf.contact_region, tol):
+				seed_ids.add(id(node))
+
+		if not seed_ids:
+			continue
+
+		# 2. Largest connected component within the MAT graph
+		connected = _bfs_connected(seed_ids, graph)
+		if not connected:
+			continue
+
+		# 3. Order nodes from contact side outward
+		ordered = _order_ligature_nodes(connected, csf)
+
+		ligatures.append(Ligature(csf, ordered))
+
+	return ligatures
+
+
+def ligature_node_set(ligatures):
+	"""Return a set of id(node) for all nodes across all ligatures.
+
+	Used for fast membership test: is a given M node inside ANY ligature?
+
+	Args:
+		ligatures: list of Ligature objects
+
+	Returns:
+		set of int (id values)
+	"""
+	result = set()
+	for lig in ligatures:
+		result.update(lig.node_ids)
+	return result
+
+
+def protruding_direction(fork, branch_neighbor, all_ligature_node_ids):
+	"""Compute protruding direction P(b, f, C) for branch b at fork f.
+
+	Walk along branch b (starting at fork f toward branch_neighbor).
+	Skip over nodes that belong to any ligature (they are "shared" outline
+	territory, not the stroke body). The FIRST non-ligature node's position
+	relative to the last ligature node gives the protruding direction.
+
+	If the entire branch is covered by ligatures, fall back to the tangent
+	at the fork itself (direction toward branch_neighbor).
+
+	Args:
+		fork:                  MATNode — the fork to start from
+		branch_neighbor:       MATNode — first step into branch b
+		all_ligature_node_ids: set of int — union of all ligature node ids
+		                       (from ligature_node_set())
+
+	Returns:
+		(dx, dy) — unit vector in the protruding direction
+	"""
+	prev, cur = fork, branch_neighbor
+	last_lig  = fork   # last node still inside a ligature
+
+	while cur is not None:
+		if id(cur) not in all_ligature_node_ids:
+			# First non-ligature node — tangent from last_lig to cur
+			dx = cur.x - last_lig.x
+			dy = cur.y - last_lig.y
+			mag = math.hypot(dx, dy)
+			if mag > _EPS:
+				return (dx / mag, dy / mag)
+			break
+
+		last_lig = cur
+
+		if cur.is_terminal:
+			break
+
+		nxt = [n for n in cur.neighbors if n is not prev]
+		if not nxt:
+			break
+		if cur.is_fork and cur is not fork:
+			# At an inner fork: continue toward the neighbor not coming from prev
+			# that has the smallest disk (deepest into the junction)
+			nxt.sort(key=lambda n: n.radius)
+
+		prev, cur = cur, nxt[0]
+
+	# Fallback: tangent at fork toward branch_neighbor
+	dx = branch_neighbor.x - fork.x
+	dy = branch_neighbor.y - fork.y
+	mag = math.hypot(dx, dy)
+	if mag > _EPS:
+		return (dx / mag, dy / mag)
+	return (1.0, 0.0)
+
+
+# - Sector-based concavity-to-fork assignment (§4.4) ----------
+
+class SectorAssignment(object):
+	"""Concavity assignments for a single fork, organised by sector.
+
+	A degree-3 fork has 3 sectors — one between each pair of branches.
+	Sector i lies between branch[i] and branch[(i+1) % 3] (CCW order).
+
+	Attributes:
+		fork:         MATNode — the fork
+		branches:     list of (angle_deg, neighbor_node) sorted CCW
+		sectors:      list of 3 (angle_lo, angle_hi, midpoint_angle) triples
+		assignments:  list of 3 entries, each None or CSF — best CSF per sector
+		scores:       list of 3 float — radius-standardized distances (lower = closer)
+	"""
+
+	def __init__(self, fork, branches):
+		self.fork        = fork
+		self.branches    = branches      # [(angle, node), ...] sorted CCW, len >= 3
+		self.sectors     = _compute_sectors(fork, branches)
+		self.assignments = [None, None, None]
+		self.scores      = [float('inf'), float('inf'), float('inf')]
+
+	def assign(self, sector_idx, csf, score):
+		"""Assign csf to sector if it scores better than the current occupant."""
+		if score < self.scores[sector_idx]:
+			self.assignments[sector_idx] = csf
+			self.scores[sector_idx]      = score
+
+	@property
+	def assigned_csfs(self):
+		"""List of (sector_idx, CSF) for all occupied sectors."""
+		return [(i, c) for i, c in enumerate(self.assignments) if c is not None]
+
+	def __repr__(self):
+		n_assigned = sum(1 for c in self.assignments if c is not None)
+		return '<SectorAssignment fork=({:.0f},{:.0f}) sectors={} assigned={}>'.format(
+			self.fork.x, self.fork.y, len(self.sectors), n_assigned)
+
+
+def _compute_sectors(fork, branches):
+	"""Return 3 (angle_lo, angle_hi, angle_mid) tuples (degrees, CCW order).
+
+	branches is a list of (angle_deg, node) pairs sorted CCW.  Each sector
+	spans the angular gap between two consecutive branches, measured from
+	the fork center.
+	"""
+	n = len(branches)
+	sectors = []
+	for i in range(n):
+		a0 = branches[i][0]
+		a1 = branches[(i + 1) % n][0]
+		# Angular gap CCW from a0 to a1
+		gap = (a1 - a0) % 360.0
+		a_mid = (a0 + gap / 2.0) % 360.0
+		sectors.append((a0, (a0 + gap) % 360.0, a_mid))
+	return sectors
+
+
+def _angle_in_sector(angle_deg, sector):
+	"""Return True if angle_deg falls inside the sector (CCW arc from lo to hi)."""
+	lo, hi, _mid = sector
+	a = angle_deg % 360.0
+	if lo <= hi:
+		return lo <= a <= hi
+	# Wraps through 0
+	return a >= lo or a <= hi
+
+
+def _geodesic_path(fork, csf, graph, max_hops=200):
+	"""Walk M from fork toward csf.extremum via shortest BFS path.
+
+	Returns (path_length, path_nodes) where path_length is the total
+	Euclidean length of the walked edges.  Returns (inf, []) if no path
+	is found within max_hops.
+
+	Stops early if another fork with overlapping disk is encountered.
+	"""
+	ex_x, ex_y = csf.extremum
+
+	# BFS with cumulative path length
+	# State: (total_dist, node, path_nodes)
+	import heapq
+	heap  = [(0.0, id(fork), fork, [fork])]
+	visited = {id(fork)}
+
+	while heap:
+		dist, _nid, node, path = heapq.heappop(heap)
+
+		if len(path) > max_hops:
+			break
+
+		# Check if we've reached the concavity's vicinity
+		d_to_ex = math.hypot(node.x - ex_x, node.y - ex_y)
+		if d_to_ex <= node.radius + 10.0:
+			return dist, path
+
+		# Disambiguation rule 2: reached another fork with overlapping disk → stop
+		if node is not fork and node.is_fork:
+			d_ff = math.hypot(node.x - fork.x, node.y - fork.y)
+			if d_ff < fork.radius + node.radius:
+				return dist, path
+
+		for nb in node.neighbors:
+			if id(nb) in visited:
+				continue
+			visited.add(id(nb))
+			edge_len = math.hypot(nb.x - node.x, nb.y - node.y)
+			heapq.heappush(heap, (dist + edge_len, id(nb), nb, path + [nb]))
+
+	return float('inf'), []
+
+
+def _path_crosses_convex_rib(path, convex_csfs, tol=8.0):
+	"""Return True if any path node is inside a convex CSF's inscribed disk.
+
+	Disambiguation rule 1 (§4.4.1): if the geodesic from the fork to the
+	concavity passes through a convex CSF's terminal disk, the concavity is
+	part of a smooth bend, not a junction.  We approximate this by checking
+	whether any path node's position is within the convex disk (radius +tol).
+	"""
+	for node in path[1:]:  # skip the fork itself
+		for ccsf in convex_csfs:
+			cx, cy, cr = ccsf.disk_center[0], ccsf.disk_center[1], ccsf.disk_radius
+			if math.hypot(node.x - cx, node.y - cy) < cr + tol:
+				return True
+	return False
+
+
+def assign_concavities_to_forks(graph, csfs, ligatures=None, max_hops=200):
+	"""Assign each concave CSF to at most one sector per eligible fork (§4.4).
+
+	Algorithm:
+	  For every degree-3+ fork f:
+	    1. Compute branch directions and angular sectors.
+	    2. For each concave CSF c:
+	       a. Compute the angle from f to c.extremum.
+	       b. Find which sector it falls into (if any).
+	       c. Walk the geodesic path through M from f toward c.extremum.
+	       d. Apply disambiguation rules (convex rib, fork overlap).
+	       e. Compute radius-standardized distance d_f = 2p / r².
+	       f. Assign c to the sector if it beats the current occupant.
+
+	Forks with degree > 3 are handled by treating every consecutive triple
+	of branches as a potential sector set (same formula, more sectors).
+
+	Args:
+		graph:     MATGraph from compute_mat()
+		csfs:      list of CSF from compute_csfs()
+		ligatures: list of Ligature (optional, unused here but kept for API compat)
+		max_hops:  BFS hop limit for geodesic search (default 200)
+
+	Returns:
+		dict: {id(fork) -> SectorAssignment}
+	"""
+	concave_csfs = [c for c in csfs if c.csf_type == 'concave']
+	convex_csfs  = [c for c in csfs if c.csf_type == 'convex']
+
+	if not concave_csfs:
+		return {}
+
+	result = {}
+
+	for fork in graph.forks():
+		# Branch directions sorted CCW (atan2, standard math convention)
+		branches = []
+		for nb in fork.neighbors:
+			dx = nb.x - fork.x
+			dy = nb.y - fork.y
+			# Walk a few hops for a more stable direction estimate
+			prev, cur = fork, nb
+			for _ in range(3):
+				nxt = [n for n in cur.neighbors if n is not prev]
+				if not nxt or cur.is_fork or cur.is_terminal:
+					break
+				prev, cur = cur, nxt[0]
+			dx = cur.x - fork.x
+			dy = cur.y - fork.y
+			angle = math.degrees(math.atan2(dy, dx)) % 360.0
+			branches.append((angle, nb))
+
+		branches.sort(key=lambda x: x[0])
+
+		if len(branches) < 3:
+			continue
+
+		# For degree > 3: use only the 3 most-separated branches (largest gaps)
+		if len(branches) > 3:
+			gaps = []
+			n = len(branches)
+			for i in range(n):
+				gap = (branches[(i+1) % n][0] - branches[i][0]) % 360.0
+				gaps.append((gap, i))
+			# Drop the branch that makes the smallest gap until we have 3
+			while len(branches) > 3:
+				gaps.sort()
+				drop_idx = gaps[0][1]
+				branches.pop(drop_idx)
+				gaps = []
+				n = len(branches)
+				for i in range(n):
+					gap = (branches[(i+1) % n][0] - branches[i][0]) % 360.0
+					gaps.append((gap, i))
+
+		sa = SectorAssignment(fork, branches)
+
+		for csf in concave_csfs:
+			ex_x, ex_y = csf.extremum
+
+			# Angle from fork to concavity extremum
+			angle_to_c = math.degrees(math.atan2(ex_y - fork.y, ex_x - fork.x)) % 360.0
+
+			# Find which sector contains this angle
+			sector_idx = None
+			for si, sector in enumerate(sa.sectors):
+				if _angle_in_sector(angle_to_c, sector):
+					sector_idx = si
+					break
+
+			if sector_idx is None:
+				continue
+
+			# Geodesic path from fork to concavity
+			path_len, path = _geodesic_path(fork, csf, graph, max_hops=max_hops)
+			if path_len == float('inf'):
+				continue
+
+			# Disambiguation rule 1: convex rib on path → smooth bend, skip
+			if _path_crosses_convex_rib(path, convex_csfs):
+				continue
+
+			# Radius-standardized distance d_f = 2p / r²
+			r = csf.disk_radius
+			if r < _EPS:
+				continue
+			score = 2.0 * path_len / (r * r)
+
+			sa.assign(sector_idx, csf, score)
+
+		if any(c is not None for c in sa.assignments):
+			result[id(fork)] = sa
+
+	return result
+
+
+def fork_concavity_map(sector_assignments):
+	"""Flatten sector assignments into a simple fork_id → [CSF] dict.
+
+	Convenience wrapper for code that needs a flat concavity list per fork
+	(e.g. junction classification, cut solving).
+
+	Args:
+		sector_assignments: dict from assign_concavities_to_forks()
+
+	Returns:
+		dict: {id(fork) -> list of CSF}
+	"""
+	result = {}
+	for fork_id, sa in sector_assignments.items():
+		csfs_for_fork = [c for c in sa.assignments if c is not None]
+		if csfs_for_fork:
+			result[fork_id] = csfs_for_fork
+	return result
 
 
 def _branch_direction(from_node, to_node, steps=3):
