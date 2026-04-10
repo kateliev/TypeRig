@@ -115,6 +115,62 @@ class StrokeSepResult(object):
 
 # - Stage 2: Junction Classification --
 
+def merge_nearby_forks(forks, concavity_map, merge_radius=30.0):
+	"""Merge nearby fork nodes into logical junctions.
+
+	At oblique crossings (X, N, Z), the MAT produces multiple fork nodes
+	within a few units of each other. These should be treated as a single
+	junction with combined concavities.
+
+	Args:
+		forks: list of MATNode fork nodes
+		concavity_map: dict {id(node) -> [concavities]} from compute_ligatures
+		merge_radius: maximum distance to merge forks
+
+	Returns:
+		list of (representative_fork, combined_concavities) tuples
+	"""
+	if not forks:
+		return []
+
+	used = set()
+	merged = []
+
+	for i, f in enumerate(forks):
+		if i in used:
+			continue
+
+		# Find all forks within merge_radius
+		cluster = [f]
+		cluster_indices = {i}
+		for j, g in enumerate(forks):
+			if j in used or j == i:
+				continue
+			dist = math.hypot(f.x - g.x, f.y - g.y)
+			if dist < merge_radius:
+				cluster.append(g)
+				cluster_indices.add(j)
+
+		used.update(cluster_indices)
+
+		# Pick the fork with the largest radius as representative
+		rep = max(cluster, key=lambda n: n.radius)
+
+		# Combine concavities from all forks in cluster, deduplicate
+		combined = []
+		seen_positions = set()
+		for node in cluster:
+			for conc in concavity_map.get(id(node), []):
+				pos = (round(conc[2], 1), round(conc[3], 1))
+				if pos not in seen_positions:
+					seen_positions.add(pos)
+					combined.append(conc)
+
+		merged.append((rep, combined))
+
+	return merged
+
+
 def compute_ligatures(graph, concavities, rib_distance_threshold=5.0):
 	"""For each MAT node, find concavities within its inscribed circle reach.
 
@@ -261,9 +317,14 @@ def solve_cut_points(fork_node, junction_type, concavities,
 					 node_to_concavities, contours):
 	"""Compute cut point pairs for a classified fork.
 
-	For T-junction: 1 cut across the crossing stroke.
-	For L-junction: 1 cut across the corner.
-	For Y-junction: up to 3 cuts.
+	Concavity-first approach (per Adobe StrokeStyles paper):
+	- Concavities ARE the cut endpoints. They sit at the inner corners
+	  of junctions where strokes meet.
+	- 2 concavities → 1 cut connecting them
+	- 3 concavities → pair best 2 for 1 cut (Y-junction)
+	- 4 concavities → pair into 2 parallel cuts (X-junction)
+	- 1 concavity → project from concavity across stroke to opposite edge
+	- 0 concavities → no cut (taper/stroke end)
 
 	Args:
 		fork_node: MATNode
@@ -277,13 +338,128 @@ def solve_cut_points(fork_node, junction_type, concavities,
 	"""
 	fork_concavities = node_to_concavities.get(id(fork_node), [])
 
-	if fork_concavities:
-		cuts = _solve_cuts_by_concavity_pairing(fork_node, junction_type, fork_concavities, contours)
-		if cuts:
-			return cuts
+	if not fork_concavities:
+		return []  # No concavities = no cut (taper/stroke end)
 
-	# Fallback: projection method
-	return _solve_cuts_by_projection(fork_node, junction_type, contours)
+	return _solve_cuts_from_concavities(fork_node, fork_concavities, contours)
+
+
+def _solve_cuts_from_concavities(fork_node, fork_concavities, contours):
+	"""Solve cuts purely from concavity positions.
+
+	The number of concavities determines the junction type and cut strategy.
+	"""
+	n = len(fork_concavities)
+
+	if n >= 4:
+		# X-junction: pair into 2 parallel cuts
+		return _pair_concavities_parallel(fork_node, fork_concavities)
+
+	elif n == 3:
+		# Y-junction: find best pair for 1 cut, optionally 2
+		return _pair_concavities_y_junction(fork_node, fork_concavities)
+
+	elif n == 2:
+		# T/L-junction: 1 cut connecting the 2 concavities
+		ca, cb = fork_concavities[0], fork_concavities[1]
+		dist = math.hypot(ca[2] - cb[2], ca[3] - cb[3])
+		if dist > 5.0:
+			return [((ca[2], ca[3]), (cb[2], cb[3]))]
+		return []
+
+	elif n == 1:
+		# Single concavity: project from it across the stroke
+		return _project_from_concavity(fork_node, fork_concavities[0], contours)
+
+	return []
+
+
+def _pair_concavities_y_junction(fork_node, concavities):
+	"""For Y-junctions with 3 concavities, produce 1 or 2 cuts.
+
+	Strategy: find the pair of concavities that are closest together
+	(on the same side of the diverging stroke), they define 1 cut.
+	The remaining concavity can optionally pair with the fork center
+	for a second cut.
+	"""
+	if len(concavities) < 3:
+		return []
+
+	# Find the pair with shortest distance — they're on the same
+	# side of one stroke, forming the cut across the diverging branch
+	best_pair = None
+	best_dist = float('inf')
+	for i in range(len(concavities)):
+		for j in range(i + 1, len(concavities)):
+			ci, cj = concavities[i], concavities[j]
+			d = math.hypot(ci[2] - cj[2], ci[3] - cj[3])
+			if d < best_dist:
+				best_dist = d
+				best_pair = (i, j)
+
+	cuts = []
+	if best_pair and best_dist > 5.0:
+		ci = concavities[best_pair[0]]
+		cj = concavities[best_pair[1]]
+		cuts.append(((ci[2], ci[3]), (cj[2], cj[3])))
+
+	# The remaining concavity defines a second cut with its nearest
+	# partner from the pair
+	remaining = [k for k in range(3) if k not in best_pair]
+	if remaining:
+		cr = concavities[remaining[0]]
+		# Pair with the closer of the two already-used concavities
+		d0 = math.hypot(cr[2] - concavities[best_pair[0]][2],
+						cr[3] - concavities[best_pair[0]][3])
+		d1 = math.hypot(cr[2] - concavities[best_pair[1]][2],
+						cr[3] - concavities[best_pair[1]][3])
+		partner = concavities[best_pair[0]] if d0 > d1 else concavities[best_pair[1]]
+		# Use the farther one (it's across the stroke from the remaining)
+		partner = concavities[best_pair[1]] if d0 > d1 else concavities[best_pair[0]]
+		pdist = math.hypot(cr[2] - partner[2], cr[3] - partner[3])
+		if pdist > 5.0:
+			cuts.append(((cr[2], cr[3]), (partner[2], partner[3])))
+
+	return cuts
+
+
+def _project_from_concavity(fork_node, concavity, contours):
+	"""Project from a single concavity point across the stroke.
+
+	The concavity is on the outline. We project a ray from it through
+	the fork center to find the opposite outline edge.
+	"""
+	cx, cy = concavity[2], concavity[3]
+
+	# Direction: from concavity through fork center
+	dx = fork_node.x - cx
+	dy = fork_node.y - cy
+	mag = math.hypot(dx, dy)
+	if mag < _EPS:
+		return []
+
+	# Normalize and extend past the fork
+	dx /= mag
+	dy /= mag
+	ray_len = fork_node.radius * 4.0
+
+	# Cast ray from concavity in the direction of the fork
+	ray_end = (cx + dx * ray_len, cy + dy * ray_len)
+
+	from typerig.core.objects.point import Point
+	from typerig.core.objects.line import Line
+
+	ray_line = Line(Point(cx, cy), Point(*ray_end))
+	origin = (cx, cy)
+
+	pt = _intersect_ray_with_contours(ray_line, origin, contours,
+									  max_dist=fork_node.radius * 4.0)
+	if pt:
+		dist = math.hypot(pt[0] - cx, pt[1] - cy)
+		if dist > 5.0:
+			return [((cx, cy), pt)]
+
+	return []
 
 
 def _solve_cuts_by_concavity_pairing(fork_node, junction_type,
@@ -415,6 +591,59 @@ def _find_best_collinear_pair(angles):
 	return best_pair
 
 
+def _snap_to_axis(angle, threshold=50):
+	"""Snap angle to nearest axis (0, 90, 180, 270) if within threshold degrees."""
+	axes = [0, 90, 180, 270, 360]
+	a = angle % 360
+	for ax in axes:
+		if abs(a - ax) <= threshold:
+			return ax % 360
+	return angle
+
+
+def _try_snapped_then_original(fork_node, perp_angle, contours, threshold=50):
+	"""Try axis-snapped cut angle first; fall back to original if snapped misses.
+
+	Only falls back to diagonal if the fork is NOT at a stroke-end corner
+	(i.e., has no short terminal branches). Corner forks should only cut
+	axis-aligned; a diagonal fallback at a corner produces wrong sliver cuts.
+	"""
+	snapped = _snap_to_axis(perp_angle, threshold)
+	if snapped != perp_angle % 360:
+		# Try snapped first (prefer axis-aligned cuts for Gothic)
+		cut = _cast_cut_ray(fork_node, math.radians(snapped), contours)
+		if cut:
+			return cut
+
+		# Check if fork has short terminal branches (corner fork)
+		has_short_terminal = False
+		for nb in fork_node.neighbors:
+			prev, cur = fork_node, nb
+			steps, path_len = 0, 0.0
+			while cur is not None and steps < 500:
+				steps += 1
+				path_len += math.hypot(cur.x - prev.x, cur.y - prev.y)
+				if cur.is_terminal:
+					if path_len < fork_node.radius * 3.0:
+						has_short_terminal = True
+					break
+				if cur.is_fork:
+					break
+				nxt = [n for n in cur.neighbors if n is not prev]
+				if not nxt:
+					break
+				prev, cur = cur, nxt[0]
+			if has_short_terminal:
+				break
+
+		# Don't fall back to diagonal at corner forks
+		if has_short_terminal:
+			return None
+
+	# Fall back to original angle (non-corner fork)
+	return _cast_cut_ray(fork_node, math.radians(perp_angle), contours)
+
+
 def _solve_cuts_by_projection(fork_node, junction_type, contours):
 	"""Compute cuts by projecting perpendicular rays from the fork.
 
@@ -431,8 +660,8 @@ def _solve_cuts_by_projection(fork_node, junction_type, contours):
 	if junction_type == JunctionType.T_JUNCTION:
 		perp_branch = _find_perpendicular_branch(angles_and_neighbors)
 		if perp_branch:
-			perp_angle_rad = math.radians(perp_branch[0] + 90)
-			cut = _cast_cut_ray(fork_node, perp_angle_rad, contours)
+			perp_angle = (perp_branch[0] + 90) % 360
+			cut = _try_snapped_then_original(fork_node, perp_angle, contours)
 			if cut:
 				cuts.append(cut)
 
@@ -458,15 +687,16 @@ def _solve_cuts_by_projection(fork_node, junction_type, contours):
 			remaining = [k for k in range(len(angles)) if k not in best_pair]
 			if remaining:
 				remaining_angle = angles[remaining[0]]
-				perp_rad = math.radians(remaining_angle + 90)
-				cut = _cast_cut_ray(fork_node, perp_rad, contours)
+				perp_angle = (remaining_angle + 90) % 360
+				# Try axis-snapped angle first (Gothic preference), fall back to original
+				cut = _try_snapped_then_original(fork_node, perp_angle, contours)
 				if cut:
 					cuts.append(cut)
 		elif len(angles) >= 2:
 			# Only 2 branches (L-junction): cut perpendicular to the bisector
 			bisector = (angles[0] + angles[1]) / 2.0
-			perp_rad = math.radians(bisector + 90)
-			cut = _cast_cut_ray(fork_node, perp_rad, contours)
+			perp_angle = (bisector + 90) % 360
+			cut = _try_snapped_then_original(fork_node, perp_angle, contours)
 			if cut:
 				cuts.append(cut)
 
@@ -499,8 +729,8 @@ def _cast_cut_ray(fork_node, angle_rad, contours):
 
 	Returns: ((x1,y1), (x2,y2)) or None
 	"""
-	ray_len = fork_node.radius * 3
-	max_dist = fork_node.radius * 2.5  # cut should span ~stroke width
+	ray_len = fork_node.radius * 4
+	max_dist = fork_node.radius * 4.0  # allow wider reach for corner forks
 	dx = math.cos(angle_rad) * ray_len
 	dy = math.sin(angle_rad) * ray_len
 
@@ -711,43 +941,18 @@ def _compute_path_direction(path_nodes):
 
 # - Stage 2.6: Cut Coordination -----------------------------------------
 
-def _is_real_junction(fork, stroke_paths=None):
-	"""Check if a fork is a real junction (stroke crossing) vs taper artifact.
+def _is_real_junction(fork, stroke_paths=None, concavity_count=0):
+	"""Check if a fork is a real junction vs taper artifact.
 
-	A **taper fork** sits at the end of a rectangular stroke where the MAT
-	splits into two short branches reaching the stroke-end corners.
-	Pattern: exactly 2 branches lead to terminals, 1 to another fork.
-
-	A **junction fork** connects different stroke bodies.
-	Pattern: 2+ branches lead to other forks, 0 lead to terminals.
+	Concavity-first approach: a fork with concavities IS a real junction.
+	Concavities appear at the inner corners of stroke meetings.
+	Tapers (stroke ends) have no concavities.
 	"""
-	n_fork_branches = 0
-	n_term_branches = 0
+	# If this fork has associated concavities, it's a real junction
+	if concavity_count > 0:
+		return True
 
-	for nb in fork.neighbors:
-		prev, cur = fork, nb
-		steps = 0
-		target = '?'
-		while cur is not None and steps < 500:
-			steps += 1
-			if cur.is_terminal:
-				target = 'T'
-				break
-			if cur.is_fork:
-				target = 'F'
-				break
-			nxt = [n for n in cur.neighbors if n is not prev]
-			if not nxt:
-				break
-			prev, cur = cur, nxt[0]
-
-		if target == 'F':
-			n_fork_branches += 1
-		elif target == 'T':
-			n_term_branches += 1
-
-	# Junction: 2+ branches connect to other forks (stroke bodies)
-	return n_fork_branches >= 2
+	return False
 
 
 def coordinate_cuts(junctions, stroke_paths, min_stroke_width=20.0):
@@ -770,13 +975,32 @@ def coordinate_cuts(junctions, stroke_paths, min_stroke_width=20.0):
 	for jdata in junctions:
 		fork = jdata.fork_node
 
-		if not _is_real_junction(fork):
-			continue
-
+		# No need for _is_real_junction check: solve_cut_points already
+		# returns [] for 0-concavity forks (tapers/stroke ends)
 		for cut in jdata.cuts:
 			if not _is_valid_cut(cut, min_stroke_width):
 				continue
-			all_cuts.append(cut)
+			# Deduplicate: skip cuts that are essentially identical to existing ones
+			is_dup = False
+			cut_mid = ((cut[0][0] + cut[1][0]) / 2, (cut[0][1] + cut[1][1]) / 2)
+			for existing in all_cuts:
+				# Check endpoint proximity (either orientation)
+				d1 = math.hypot(cut[0][0] - existing[0][0], cut[0][1] - existing[0][1])
+				d2 = math.hypot(cut[1][0] - existing[1][0], cut[1][1] - existing[1][1])
+				d3 = math.hypot(cut[0][0] - existing[1][0], cut[0][1] - existing[1][1])
+				d4 = math.hypot(cut[1][0] - existing[0][0], cut[1][1] - existing[0][1])
+				if (d1 + d2) < 10.0 or (d3 + d4) < 10.0:
+					is_dup = True
+					break
+				# Check midpoint proximity (parallel nearby cuts)
+				ex_mid = ((existing[0][0] + existing[1][0]) / 2,
+						  (existing[0][1] + existing[1][1]) / 2)
+				mid_dist = math.hypot(cut_mid[0] - ex_mid[0], cut_mid[1] - ex_mid[1])
+				if mid_dist < 15.0:
+					is_dup = True
+					break
+			if not is_dup:
+				all_cuts.append(cut)
 
 	return all_cuts
 
@@ -793,16 +1017,16 @@ def _is_valid_cut(cut, min_stroke_width):
 	dx = p2[0] - p1[0]
 	dy = p2[1] - p1[1]
 	length = math.hypot(dx, dy)
-	
+
 	if length < 1.0:
 		return False
-	
+
 	if length < min_stroke_width * 0.3:
 		return False
-	
+
 	if abs(p1[0] - p2[0]) < 1.0 and abs(p1[1] - p2[1]) < 1.0:
 		return False
-	
+
 	return True
 
 
@@ -1136,11 +1360,18 @@ class StrokeSeparator(object):
 		ligatures = compute_ligatures(graph, concavities)
 		stroke_paths = extract_stroke_paths(graph)
 
+		# Merge nearby forks into logical junctions (handles oblique crossings)
+		merged = merge_nearby_forks(graph.forks(), ligatures, merge_radius=30.0)
+
+		# Update ligatures map so merged concavities are accessible via representative fork
+		for rep_fork, combined_concavities in merged:
+			ligatures[id(rep_fork)] = combined_concavities
+
 		junctions = []
-		for fork in graph.forks():
-			jtype = classify_junction(fork, ligatures)
-			cuts = solve_cut_points(fork, jtype, concavities, ligatures, contours)
-			junctions.append(JunctionData(fork, jtype, cuts))
+		for rep_fork, combined_concavities in merged:
+			jtype = classify_junction(rep_fork, ligatures)
+			cuts = solve_cut_points(rep_fork, jtype, concavities, ligatures, contours)
+			junctions.append(JunctionData(rep_fork, jtype, cuts))
 
 		return StrokeSepResult(graph, concavities, junctions, stroke_paths)
 
