@@ -228,6 +228,17 @@ def apply_cuts_to_layer(result, source_contours, target_contours):
 					new_remaining.append(c)
 			remaining = new_remaining
 
+		# X-junction overlap: 2 parallel cuts producing 3 pieces
+		# need the 2 smallest fragments joined into one overlapping stroke
+		if len(applicable) == 2 and len(remaining) == 3:
+			has_x = False
+			for j in result.junctions:
+				if hasattr(j, 'junction_type') and j.junction_type == 'X':
+					has_x = True
+					break
+			if has_x:
+				remaining = _join_fragments(remaining, applicable)
+
 		output.extend(remaining)
 
 	return output
