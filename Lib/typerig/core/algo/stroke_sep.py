@@ -15,6 +15,7 @@
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
 import math
+import heapq
 from collections import defaultdict, namedtuple
 
 from typerig.core.algo.mat import compute_mat, compute_exterior_mat, MATGraph, MATNode
@@ -30,6 +31,33 @@ __version__ = '0.4.0'
 
 # - Constants --------------------------
 _EPS = 1e-9
+
+
+# - Fast node cloning (avoids deepcopy overhead) ------
+def _fast_clone_node(node):
+	"""Clone a Node without copy.deepcopy. ~100x faster for contour splitting."""
+	from typerig.core.objects.transform import Transform
+	n = Node.__new__(Node)
+	n.x = node.x
+	n.y = node.y
+	n.type = node.type
+	n.name = getattr(node, 'name', '')
+	n.smooth = getattr(node, 'smooth', False)
+	n.g2 = getattr(node, 'g2', False)
+	n.selected = False
+	n.angle = getattr(node, 'angle', 0)
+	n.transform = Transform()
+	n.identifier = getattr(node, 'identifier', False)
+	n.complex_math = getattr(node, 'complex_math', True)
+	n.weight = Point(0., 0.)
+	n.parent = None
+	n.lib = getattr(node, 'lib', None)
+	return n
+
+
+def _fast_clone_contour(contour):
+	"""Clone a Contour using fast node cloning."""
+	return Contour([_fast_clone_node(n) for n in contour.data], closed=contour.closed)
 
 
 # - Junction Types ---------------------
@@ -549,51 +577,84 @@ def _geodesic_path(fork, csf, graph, max_hops=200):
 	"""
 	ex_x, ex_y = csf.extremum
 
-	# BFS with cumulative path length
-	# State: (total_dist, node, path_nodes)
-	import heapq
-	heap  = [(0.0, id(fork), fork, [fork])]
-	visited = {id(fork)}
+	# Dijkstra with predecessor map (avoids copying path lists in heap)
+	fork_id = id(fork)
+	heap = [(0.0, fork_id, fork)]
+	visited = {fork_id}
+	dist_map = {fork_id: 0.0}
+	pred = {fork_id: None}       # id(node) → id(predecessor)
+	node_map = {fork_id: fork}   # id(node) → node object
+	hops = {fork_id: 0}
+
+	def _reconstruct(end_id):
+		"""Walk predecessor chain back to fork, return node list."""
+		path = []
+		cur_id = end_id
+		while cur_id is not None:
+			path.append(node_map[cur_id])
+			cur_id = pred[cur_id]
+		path.reverse()
+		return path
 
 	while heap:
-		dist, _nid, node, path = heapq.heappop(heap)
+		dist, _nid, node = heapq.heappop(heap)
 
-		if len(path) > max_hops:
+		# Skip stale entries
+		if dist > dist_map.get(_nid, float('inf')):
+			continue
+
+		if hops[_nid] > max_hops:
 			break
 
 		# Check if we've reached the concavity's vicinity
 		d_to_ex = math.hypot(node.x - ex_x, node.y - ex_y)
 		if d_to_ex <= node.radius + 10.0:
-			return dist, path
+			return dist, _reconstruct(_nid)
 
 		# Disambiguation rule 2: reached another fork with overlapping disk → stop
 		if node is not fork and node.is_fork:
 			d_ff = math.hypot(node.x - fork.x, node.y - fork.y)
 			if d_ff < fork.radius + node.radius:
-				return dist, path
+				return dist, _reconstruct(_nid)
 
 		for nb in node.neighbors:
-			if id(nb) in visited:
+			nb_id = id(nb)
+			if nb_id in visited:
 				continue
-			visited.add(id(nb))
+			visited.add(nb_id)
 			edge_len = math.hypot(nb.x - node.x, nb.y - node.y)
-			heapq.heappush(heap, (dist + edge_len, id(nb), nb, path + [nb]))
+			new_dist = dist + edge_len
+			if new_dist < dist_map.get(nb_id, float('inf')):
+				dist_map[nb_id] = new_dist
+				pred[nb_id] = _nid
+				node_map[nb_id] = nb
+				hops[nb_id] = hops[_nid] + 1
+				heapq.heappush(heap, (new_dist, nb_id, nb))
 
 	return float('inf'), []
 
 
-def _path_crosses_convex_rib(path, convex_csfs, tol=8.0):
+def _path_crosses_convex_rib(path, convex_csfs, tol=8.0, _convex_disks=None):
 	"""Return True if any path node is inside a convex CSF's inscribed disk.
 
 	Disambiguation rule 1 (§4.4.1): if the geodesic from the fork to the
 	concavity passes through a convex CSF's terminal disk, the concavity is
 	part of a smooth bend, not a junction.  We approximate this by checking
 	whether any path node's position is within the convex disk (radius +tol).
+
+	Pass _convex_disks = [(cx, cy, cr_plus_tol_sq), ...] to avoid repeated
+	attribute lookups when called in a loop.
 	"""
+	if _convex_disks is None:
+		_convex_disks = [(c.disk_center[0], c.disk_center[1],
+						  (c.disk_radius + tol) ** 2) for c in convex_csfs]
+
 	for node in path[1:]:  # skip the fork itself
-		for ccsf in convex_csfs:
-			cx, cy, cr = ccsf.disk_center[0], ccsf.disk_center[1], ccsf.disk_radius
-			if math.hypot(node.x - cx, node.y - cy) < cr + tol:
+		nx, ny = node.x, node.y
+		for cx, cy, cr_sq in _convex_disks:
+			dx = nx - cx
+			dy = ny - cy
+			if dx * dx + dy * dy < cr_sq:
 				return True
 	return False
 
@@ -630,7 +691,17 @@ def assign_concavities_to_forks(graph, csfs, ligatures=None, max_hops=200):
 	if not concave_csfs:
 		return {}
 
+	# Precompute convex disk data for fast path-crossing checks
+	_convex_disks = [(c.disk_center[0], c.disk_center[1],
+					  (c.disk_radius + 8.0) ** 2) for c in convex_csfs]
+
 	result = {}
+
+	# Pre-index: build a spatial lookup for concave CSFs by position
+	# so we can quickly check which concavities are reachable from a fork
+	csf_positions = {}
+	for csf in concave_csfs:
+		csf_positions[id(csf)] = csf
 
 	for fork in graph.forks():
 		# Branch directions sorted CCW (atan2, standard math convention)
@@ -675,7 +746,64 @@ def assign_concavities_to_forks(graph, csfs, ligatures=None, max_hops=200):
 
 		sa = SectorAssignment(fork, branches)
 
+		# ── Single-source Dijkstra from this fork ────────────────────
+		# Find all reachable concavities at once instead of per-CSF BFS
+		fork_id = id(fork)
+		heap = [(0.0, fork_id, fork)]
+		visited = {fork_id}
+		dist_to = {fork_id: 0.0}
+		pred = {fork_id: None}
+		node_map = {fork_id: fork}
+
+		# Concavities we're looking for (by proximity to MAT nodes)
+		csf_found = {}  # id(csf) → (path_length, end_node_id)
+
+		while heap:
+			dist, _nid, node = heapq.heappop(heap)
+
+			if dist > dist_to.get(_nid, float('inf')):
+				continue
+
+			# Check all concavities: is this node close enough?
+			for csf in concave_csfs:
+				cid = id(csf)
+				if cid in csf_found:
+					continue
+				ex_x, ex_y = csf.extremum
+				d_to_ex = math.hypot(node.x - ex_x, node.y - ex_y)
+				if d_to_ex <= node.radius + 10.0:
+					csf_found[cid] = (dist, _nid)
+					# If all concavities found, stop early
+					if len(csf_found) == len(concave_csfs):
+						heap = []  # drain
+						break
+
+			# Disambiguation rule 2: stop at another overlapping fork
+			if node is not fork and node.is_fork:
+				d_ff = math.hypot(node.x - fork.x, node.y - fork.y)
+				if d_ff < fork.radius + node.radius:
+					continue  # don't expand past overlapping forks
+
+			for nb in node.neighbors:
+				nb_id = id(nb)
+				if nb_id in visited:
+					continue
+				visited.add(nb_id)
+				edge_len = math.hypot(nb.x - node.x, nb.y - node.y)
+				new_dist = dist + edge_len
+				if new_dist < dist_to.get(nb_id, float('inf')):
+					dist_to[nb_id] = new_dist
+					pred[nb_id] = _nid
+					node_map[nb_id] = nb
+					heapq.heappush(heap, (new_dist, nb_id, nb))
+
+		# ── Assign found concavities to sectors ──────────────────────
 		for csf in concave_csfs:
+			cid = id(csf)
+			if cid not in csf_found:
+				continue
+
+			path_len, end_nid = csf_found[cid]
 			ex_x, ex_y = csf.extremum
 
 			# Angle from fork to concavity extremum
@@ -691,13 +819,16 @@ def assign_concavities_to_forks(graph, csfs, ligatures=None, max_hops=200):
 			if sector_idx is None:
 				continue
 
-			# Geodesic path from fork to concavity
-			path_len, path = _geodesic_path(fork, csf, graph, max_hops=max_hops)
-			if path_len == float('inf'):
-				continue
+			# Reconstruct path for convex-rib disambiguation
+			path = []
+			cur_id = end_nid
+			while cur_id is not None:
+				path.append(node_map[cur_id])
+				cur_id = pred[cur_id]
+			path.reverse()
 
 			# Disambiguation rule 1: convex rib on path → smooth bend, skip
-			if _path_crosses_convex_rib(path, convex_csfs):
+			if _path_crosses_convex_rib(path, convex_csfs, _convex_disks=_convex_disks):
 				continue
 
 			# Radius-standardized distance d_f = 2p / r²
@@ -795,24 +926,57 @@ class Link(object):
 
 def _seg_intersects_seg(ax, ay, bx, by, cx, cy, dx, dy):
 	"""Return True if open segment AB strictly intersects open segment CD."""
-	def _cross2(ux, uy, vx, vy):
-		return ux * vy - uy * vx
-
 	rx = bx - ax;  ry = by - ay
 	sx = dx - cx;  sy = dy - cy
-	denom = _cross2(rx, ry, sx, sy)
+	denom = rx * sy - ry * sx
 
 	if abs(denom) < _EPS:
 		return False  # parallel / collinear
 
 	qax = cx - ax;  qay = cy - ay
-	t = _cross2(qax, qay, sx, sy) / denom
-	u = _cross2(qax, qay, rx, ry) / denom
+	t = (qax * sy - qay * sx) / denom
+	u = (qax * ry - qay * rx) / denom
 
 	return 1e-6 < t < 1.0 - 1e-6 and 1e-6 < u < 1.0 - 1e-6
 
 
-def _link_inside_glyph(p1, p2, contours, n_interior_checks=4):
+def _precompute_glyph_edges(contours, sample_step=20.0):
+	"""Precompute polyline edges and spatial grid for fast link-inside-glyph tests.
+
+	Call once before generate_links(); pass the result to _link_inside_glyph().
+
+	Args:
+		contours:    list of TypeRig Contour objects
+		sample_step: sampling density (font units); coarser = faster
+
+	Returns:
+		(all_edges, grid) where all_edges is a flat list of (ax,ay,bx,by) tuples
+		and grid is a _SpatialGrid for ray-cast inside tests.
+	"""
+	from typerig.core.algo.mat import _SpatialGrid, sample_contour as _sc
+
+	polylines = []
+	all_edges = []
+	for contour in contours:
+		pts = _sc(contour, step=sample_step)
+		if not pts:
+			continue
+		polylines.append(pts)
+		n = len(pts)
+		for i in range(n):
+			all_edges.append((pts[i][0], pts[i][1],
+							  pts[(i + 1) % n][0], pts[(i + 1) % n][1]))
+
+	if not polylines:
+		return all_edges, None
+
+	cell = max(sample_step * 5.0, 30.0)
+	grid = _SpatialGrid(polylines, cell_size=cell)
+	return all_edges, grid
+
+
+def _link_inside_glyph(p1, p2, contours, n_interior_checks=4,
+					   _cached_edges=None, _cached_grid=None):
 	"""Return True if segment p1→p2 lies entirely inside the glyph outline.
 
 	Strategy:
@@ -820,34 +984,42 @@ def _link_inside_glyph(p1, p2, contours, n_interior_checks=4):
 	  2. Check n_interior_checks evenly-spaced interior samples with ray casting.
 	     All must be inside the glyph.  This catches links that fit between
 	     two contour boundary crossings (e.g. inside a letter counter).
-	"""
-	from typerig.core.algo.mat import _SpatialGrid, sample_contour as _sc
 
+	When _cached_edges and _cached_grid are provided (from _precompute_glyph_edges),
+	avoids resampling contours on every call — critical for O(n²) link generation.
+	"""
 	x1, y1 = p1
 	x2, y2 = p2
 
-	# Build a quick polyline representation of each contour for intersection tests
-	for contour in contours:
-		pts = _sc(contour, step=4.0)
-		n = len(pts)
-		for i in range(n):
-			ax, ay = pts[i]
-			bx, by = pts[(i + 1) % n]
+	# Use precomputed edges if available, otherwise fall back to on-the-fly
+	if _cached_edges is not None:
+		for ax, ay, bx, by in _cached_edges:
 			if _seg_intersects_seg(x1, y1, x2, y2, ax, ay, bx, by):
 				return False
+	else:
+		from typerig.core.algo.mat import sample_contour as _sc
+		for contour in contours:
+			pts = _sc(contour, step=20.0)
+			n = len(pts)
+			for i in range(n):
+				ax, ay = pts[i]
+				bx, by = pts[(i + 1) % n]
+				if _seg_intersects_seg(x1, y1, x2, y2, ax, ay, bx, by):
+					return False
 
-	# Interior sampling via _SpatialGrid.is_inside (ray casting)
-	polylines = []
-	for contour in contours:
-		pts = _sc(contour, step=4.0)
-		if pts:
-			polylines.append(pts)
-
-	if not polylines:
-		return True
-
-	cell = max(20.0, math.hypot(x2 - x1, y2 - y1) / 5.0)
-	grid = _SpatialGrid(polylines, cell_size=cell)
+	# Interior sampling via ray casting
+	grid = _cached_grid
+	if grid is None:
+		from typerig.core.algo.mat import _SpatialGrid, sample_contour as _sc
+		polylines = []
+		for contour in contours:
+			pts = _sc(contour, step=20.0)
+			if pts:
+				polylines.append(pts)
+		if not polylines:
+			return True
+		cell = max(30.0, math.hypot(x2 - x1, y2 - y1) / 5.0)
+		grid = _SpatialGrid(polylines, cell_size=cell)
 
 	for k in range(1, n_interior_checks + 1):
 		t = k / float(n_interior_checks + 1)
@@ -864,6 +1036,9 @@ def _link_inside_glyph(p1, p2, contours, n_interior_checks=4):
 # Paper constants (Appendix B)
 _KAPPA1 = 0.27   # cocircularity concentration
 _KAPPA2 = 0.47   # curvature-deviation concentration
+_GC_A = 4.0 * _KAPPA1 * _KAPPA2         # ≈ 0.508
+_GC_B = _KAPPA1 * _KAPPA2               # ≈ 0.127
+_GC_COSH_MAX = math.cosh(_GC_A + _GC_B) # ≈ 1.20
 
 
 def good_continuation(csf1, csf2, sigma):
@@ -934,17 +1109,8 @@ def good_continuation(csf1, csf2, sigma):
 	# α: signed angle between τ₁ and τ₂
 	alpha = math.atan2(tx1 * ty2 - ty1 * tx2, tx1 * tx2 + ty1 * ty2)
 
-	# A = 4·κ₁·κ₂, B = κ₁·κ₂ — concentrations as direct multipliers.
-	# With κ₁ = 0.27, κ₂ = 0.47: A ≈ 0.508, B ≈ 0.127, max_arg ≈ 0.635.
-	# cosh(max_arg) ≈ 1.20 — normalization stays in [1, 1.20], so the ratio
-	# Φ_a ∈ (0, 1] with value 1 for perfect cocircularity/collinearity.
-	A = 4.0 * _KAPPA1 * _KAPPA2
-	B = _KAPPA1 * _KAPPA2
-
-	arg     = A * math.cos(beta / 2.0) + B * math.cos(alpha - beta / 2.0)
-	max_arg = A + B
-
-	phi_a = math.cosh(arg) / math.cosh(max_arg)
+	arg   = _GC_A * math.cos(beta / 2.0) + _GC_B * math.cos(alpha - beta / 2.0)
+	phi_a = math.cosh(arg) / _GC_COSH_MAX
 
 	return phi_a * phi_r
 
@@ -1044,7 +1210,7 @@ def _protruding_branch_for_normal_link(link, fork, sa, all_lig_ids):
 
 
 def generate_links(sector_assignments, contours, graph, ligatures,
-				   min_length=5.0):
+				   min_length=5.0, sample_step=20.0):
 	"""Generate, validate, and score all candidate links (§5.1–5.3).
 
 	Pass 1 — generation:
@@ -1071,6 +1237,7 @@ def generate_links(sector_assignments, contours, graph, ligatures,
 		graph:              MATGraph (for branch salience + protruding direction)
 		ligatures:          list of Ligature (for ligature node set)
 		min_length:         minimum link length in font units (default 5.0)
+		sample_step:        outline sampling density for inside-glyph tests
 
 	Returns:
 		list of Link objects with valid=True, sorted by descending salience
@@ -1113,6 +1280,10 @@ def generate_links(sector_assignments, contours, graph, ligatures,
 	all_radii = [csf.disk_radius for csf in unique_csfs]
 	r_max = max(all_radii) if all_radii else 1.0
 
+	# ── precompute contour geometry for inside-glyph tests ────────────
+	_cached_edges, _cached_grid = _precompute_glyph_edges(contours,
+														  sample_step=sample_step)
+
 	# ── generate + test all pairs ──────────────────────────────────────
 	valid_links = []
 	n = len(unique_csfs)
@@ -1128,8 +1299,10 @@ def generate_links(sector_assignments, contours, graph, ligatures,
 							   c1.extremum[1] - c2.extremum[1]) < min_length):
 				continue
 
-			# Inside-glyph test
-			if not _link_inside_glyph(c1.extremum, c2.extremum, contours):
+			# Inside-glyph test (uses precomputed edges + grid)
+			if not _link_inside_glyph(c1.extremum, c2.extremum, contours,
+									  _cached_edges=_cached_edges,
+									  _cached_grid=_cached_grid):
 				continue
 
 			link = Link(c1, c2)
@@ -1816,6 +1989,14 @@ def identify_half_junctions(valid_links, ligatures, sector_assignments,
 	committed = set()
 	results   = []
 
+	# Cache branch node sets to avoid redundant walks
+	_bns_cache = {}
+	def _cached_branch_node_set(link):
+		lid = id(link)
+		if lid not in _bns_cache:
+			_bns_cache[lid] = _branch_node_set(link)
+		return _bns_cache[lid]
+
 	for phi, la, lb in pairs:
 		if id(la) in committed or id(lb) in committed:
 			continue
@@ -1823,8 +2004,8 @@ def identify_half_junctions(valid_links, ligatures, sector_assignments,
 			continue
 
 		# Nesting check: protruding branches must not share nodes
-		nodes_a = _branch_node_set(la)
-		nodes_b = _branch_node_set(lb)
+		nodes_a = _cached_branch_node_set(la)
+		nodes_b = _cached_branch_node_set(lb)
 		if nodes_a & nodes_b:
 			continue
 
@@ -1852,7 +2033,7 @@ def identify_half_junctions(valid_links, ligatures, sector_assignments,
 		# Remove links whose protruding branch overlaps the crossing path
 		crossing_nodes = nodes_a | nodes_b
 		for other in list(aux_graph.links):
-			if _branch_node_set(other) & crossing_nodes:
+			if _cached_branch_node_set(other) & crossing_nodes:
 				aux_graph.remove_link(other)
 
 	return results
@@ -3024,7 +3205,7 @@ def find_parameter_on_contour(contour, target_x, target_y):
 			pt = segment.solve_point(t)
 			d = math.hypot(pt.x - target_x, pt.y - target_y)
 		else:
-			t, d = segment.project_point(query_pt, steps=30)
+			t, d = segment.project_point(query_pt, steps=15)
 
 		if d < best_dist:
 			best_dist = d
@@ -3061,7 +3242,7 @@ def split_contour_at_points(contour, pt_a, pt_b):
 		(contour_1, contour_2) or None if cut fails
 	"""
 	# Work on a clone
-	work = Contour([n.clone() for n in contour.data], closed=True)
+	work = _fast_clone_contour(contour)
 
 	SNAP_THRESHOLD = 2.0
 
@@ -3116,8 +3297,8 @@ def split_contour_at_points(contour, pt_a, pt_b):
 	# Extract two node subsequences
 	all_nodes = list(work.data)
 
-	nodes_1 = [n.clone() for n in all_nodes[idx_a:idx_b + 1]]
-	nodes_2 = [n.clone() for n in all_nodes[idx_b:] + all_nodes[:idx_a + 1]]
+	nodes_1 = [_fast_clone_node(n) for n in all_nodes[idx_a:idx_b + 1]]
+	nodes_2 = [_fast_clone_node(n) for n in all_nodes[idx_b:] + all_nodes[:idx_a + 1]]
 
 	if len(nodes_1) < 3 or len(nodes_2) < 3:
 		return None
@@ -3219,21 +3400,25 @@ class StrokeSeparator(object):
 		self.sample_step = sample_step
 		self.quality = quality
 
-	def analyze(self, contours):
+	def analyze(self, contours, precomputed_graph=None):
 		"""Run full analysis: MAT, junction classification, cut solving.
 
 		Args:
 			contours: list of TypeRig Contour objects
+			precomputed_graph: optional (MATGraph, concavities) tuple to skip MAT
 
 		Returns:
 			StrokeSepResult
 		"""
-		graph, concavities = compute_mat(
-			contours,
-			sample_step=self.sample_step,
-			beta_min=self.beta_min,
-			quality=self.quality
-		)
+		if precomputed_graph is not None:
+			graph, concavities = precomputed_graph
+		else:
+			graph, concavities = compute_mat(
+				contours,
+				sample_step=self.sample_step,
+				beta_min=self.beta_min,
+				quality=self.quality
+			)
 
 		ligatures = compute_ligatures(graph, concavities)
 		stroke_paths = extract_stroke_paths(graph)
@@ -3266,7 +3451,7 @@ class StrokeSeparator(object):
 		Returns:
 			list of Contour objects
 		"""
-		working = [Contour([n.clone() for n in c.data], closed=c.closed) for c in contours]
+		working = [_fast_clone_contour(c) for c in contours]
 
 		cuts_to_apply = result.coordinated_cuts if coordinated else result.cuts
 
@@ -3731,7 +3916,7 @@ class StrokeGraphResult(object):
 
 	def __init__(self, graph, ext_graph, csfs, ligatures, links,
 				 protuberances, half_junctions, step3_junctions,
-				 stroke_graph, cuts):
+				 stroke_graph, cuts, concavities=None):
 		self.graph            = graph
 		self.ext_graph        = ext_graph
 		self.csfs             = csfs
@@ -3742,6 +3927,7 @@ class StrokeGraphResult(object):
 		self.step3_junctions  = step3_junctions
 		self.stroke_graph     = stroke_graph
 		self.cuts             = cuts
+		self.concavities      = concavities or []  # old-style tuples for fallback
 
 	@property
 	def all_junctions(self):
@@ -3820,7 +4006,8 @@ class StrokeSepV2(object):
 		sector_assignments = assign_concavities_to_forks(graph, csfs, ligatures)
 
 		# ── Step 7: Links ─────────────────────────────────────────────────
-		links = generate_links(sector_assignments, contours, graph, ligatures)
+		links = generate_links(sector_assignments, contours, graph, ligatures,
+							   sample_step=self.sample_step)
 		links = filter_incompatible_links(links)
 
 		# σ for good-continuation: 2 × max non-ligature fork radius
@@ -3847,6 +4034,7 @@ class StrokeSepV2(object):
 			step3_junctions=step3,
 			stroke_graph=stroke_graph,
 			cuts=cuts,
+			concavities=_concavities,
 		)
 
 	def execute(self, result, contours):
@@ -3862,15 +4050,18 @@ class StrokeSepV2(object):
 		Returns:
 			list of Contour — original contours with junction cuts applied
 		"""
+		
 		if not result.cuts:
 			fallback = StrokeSeparator(
 				beta_min=self.beta_min, sample_step=self.sample_step)
-			fb_result = fallback.analyze(contours)
+			# Reuse already-computed interior MAT to avoid duplicate work
+			fb_result = fallback.analyze(
+				contours, precomputed_graph=(result.graph, result.concavities))
 			return fallback.execute(fb_result, contours)
 
 		_SNAP = 15.0   # maximum distance (font units) for a cut to snap to a contour
 
-		working = [Contour([n.clone() for n in c.data], closed=c.closed)
+		working = [_fast_clone_contour(c)
 				   for c in contours]
 		output = []
 

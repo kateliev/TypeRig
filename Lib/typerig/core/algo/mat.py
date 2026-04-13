@@ -471,11 +471,13 @@ def sample_contour(contour, step=3.0):
 			if seg_len < _EPS:
 				continue
 			n_samples = max(1, int(seg_len / step))
+			# Adaptive time step: coarser sampling allows less precise arc-length solve
+			_ts = min(0.01, 1.0 / max(n_samples * 5, 50))
 			for i in range(n_samples):
 				dist = i * step
 				if dist > seg_len:
 					dist = seg_len
-				t = segment.solve_distance_start(dist, timeStep=0.001)
+				t = segment.solve_distance_start(dist, timeStep=_ts)
 				pt = segment.solve_point(t)
 				points.append((pt.x, pt.y))
 
@@ -756,11 +758,50 @@ class _SpatialGrid(object):
 
 			ring += 1
 
-			# Safety: if we've searched far enough with no edges found, fall back
-			if ring > 100 and not found_any:
+			# Safety: stop expanding after 30 rings (covers 30×cell_size radius)
+			if ring > 30:
 				break
 
 		return min_d
+
+	def closest_point(self, px, py):
+		"""Find the closest point on any polyline edge to (px, py).
+
+		Uses the same ring-expansion as min_distance but returns (cx, cy, dist).
+		"""
+		gx0, gy0 = self._cell_key(px, py)
+		min_d = float('inf')
+		best_cx, best_cy = px, py
+		ring = 0
+
+		while True:
+			for gx in range(gx0 - ring, gx0 + ring + 1):
+				for gy in range(gy0 - ring, gy0 + ring + 1):
+					if ring > 0 and (gx0 - ring < gx < gx0 + ring) and (gy0 - ring < gy < gy0 + ring):
+						continue
+					edges = self._grid.get((gx, gy))
+					if edges:
+						for ax, ay, bx, by in edges:
+							dx, dy = bx - ax, by - ay
+							len_sq = dx * dx + dy * dy
+							if len_sq < 1e-12:
+								cx, cy = ax, ay
+							else:
+								t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / len_sq))
+								cx = ax + t * dx
+								cy = ay + t * dy
+							d = math.hypot(px - cx, py - cy)
+							if d < min_d:
+								min_d = d
+								best_cx, best_cy = cx, cy
+
+			if min_d <= ring * self._cell:
+				break
+			ring += 1
+			if ring > 30:
+				break
+
+		return best_cx, best_cy, min_d
 
 	def is_inside(self, px, py):
 		"""Ray casting odd-crossing test using y-bucketed edges for speed."""
@@ -965,9 +1006,9 @@ def merge_duplicate_nodes(graph, epsilon=1.0):
 	"""
 	epsilon_sq = epsilon * epsilon
 
-	changed = True
-	while changed:
-		changed = False
+	max_iterations = 20
+	for _iteration in range(max_iterations):
+		merged_any = False
 
 		for i, node_a in enumerate(graph.nodes):
 			if node_a not in graph.nodes:
@@ -988,8 +1029,11 @@ def merge_duplicate_nodes(graph, epsilon=1.0):
 					# DO NOT merge terminals (degree 1) - they are stroke endpoints
 					if node_a.degree >= 3 and node_b.degree >= 3:
 						_merge_nodes(graph, node_a, node_b)
-						changed = True
+						merged_any = True
 						break
+
+		if not merged_any:
+			break
 
 	return graph
 
@@ -1035,30 +1079,33 @@ def merge_nodes_at_same_position(graph, epsilon=0.1):
 	"""
 	epsilon_sq = epsilon * epsilon
 	
-	changed = True
-	while changed:
-		changed = False
-		
+	max_iterations = 20
+	for _iteration in range(max_iterations):
+		merged_any = False
+
 		forks = [n for n in graph.nodes if n.degree >= 3]
-		
+
 		for fork in forks:
 			if fork not in graph.nodes:
 				continue
-			
+
 			for node in list(graph.nodes):
 				if node is fork or node not in graph.nodes:
 					continue
 				if node.degree <= 1:
 					continue
-					
+
 				dx = node.x - fork.x
 				dy = node.y - fork.y
 				dist_sq = dx * dx + dy * dy
-				
+
 				if dist_sq < epsilon_sq:
 					_merge_nodes(graph, fork, node)
-					changed = True
+					merged_any = True
 					break
+
+		if not merged_any:
+			break
 
 
 # - Step 8: Concavity Detection ----------
@@ -1153,7 +1200,11 @@ def compute_mat(contours, sample_step=None, beta_min=1.5, quality='normal'):
 	preset = _QUALITY_PRESETS.get(quality, _QUALITY_PRESETS['normal'])
 	if sample_step is None:
 		sample_step = preset['sample_step']
-	sdf_steps = preset['sdf_steps']
+	# Auto-downgrade SDF resolution when using coarse sampling for speed
+	if sample_step >= 15.0:
+		sdf_steps = _QUALITY_PRESETS['draft']['sdf_steps']
+	else:
+		sdf_steps = preset['sdf_steps']
 
 	# 0. Ensure cubic-only contours
 	cubic_contours = []
@@ -1453,12 +1504,10 @@ def compute_exterior_mat(contours, bbox_margin=100, sample_step=5.0, beta_min=1.
 	concave_terminals = []
 
 	for terminal in graph.terminals():
-		dist_glyph = glyph_grid.min_distance(terminal.x, terminal.y)
+		# Use grid-accelerated closest_point: returns (cx, cy, dist) in one pass
+		cx, cy, dist_glyph = glyph_grid.closest_point(terminal.x, terminal.y)
 
 		if dist_glyph <= terminal.radius + touch_tolerance:
-			# Find the actual contact point on the glyph outline
-			cx, cy = _find_closest_point_on_polylines(
-				terminal.x, terminal.y, glyph_polylines)
 			concave_terminals.append(
 				(terminal.x, terminal.y, terminal.radius, cx, cy))
 
