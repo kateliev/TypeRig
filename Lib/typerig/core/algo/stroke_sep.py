@@ -17,7 +17,7 @@ from __future__ import absolute_import, print_function, division
 import math
 from collections import defaultdict, namedtuple
 
-from typerig.core.algo.mat import compute_mat, MATGraph, MATNode
+from typerig.core.algo.mat import compute_mat, compute_exterior_mat, MATGraph, MATNode
 from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 from typerig.core.objects.cubicbezier import CubicBezier
@@ -26,7 +26,7 @@ from typerig.core.objects.node import Node
 from typerig.core.func.geometry import line_intersect
 
 # - Init -------------------------------
-__version__ = '0.3.1'
+__version__ = '0.4.0'
 
 # - Constants --------------------------
 _EPS = 1e-9
@@ -1277,6 +1277,806 @@ def filter_incompatible_links(links):
 	return kept
 
 
+# ── §7: Iterative Junction Identification ─────────────────────────────────────
+#
+# Four-step procedure using auxiliary graph H (vertices = concavities assigned
+# to forks, edges = valid links).  Junctions are identified iteratively so that
+# each decision accounts for previously committed junctions.
+#
+# Steps:
+#   8a. Protuberances  — compound links → protuberance junctions (H unchanged)
+#   8b. Half-junctions — link pairs with Φ_c > 0.25, remove consumed items from H
+#   8c. T/Y/L/Stroke-end/Null — per-fork pairwise-softmax selection, update H
+#   8d. Convert close T-junction pairs to half-junctions
+
+
+# ── 7.0: Data structures ──────────────────────────────────────────────────────
+
+class JType(object):
+	"""Junction type constants for the iterative pipeline (§6.1)."""
+	PROTUBERANCE = 'protuberance'
+	HALF         = 'half'
+	T            = 'T'
+	Y            = 'Y'
+	L            = 'L'
+	STROKE_END   = 'stroke_end'
+	NULL         = 'null'
+
+
+# Type-specific log weights ω (§7, Eq. 14)
+_W_T           = math.log(1.10)   # favours T over Y
+_W_NULL        = math.log(0.95)   # slightly disfavours null vs L
+_W_DEFAULT     = 0.0              # log(1.0)
+
+# Thresholds
+_TAU_L         = 0.5    # L-junction: concavity radius must be < τ_L·r_fork·cos(θ/2)
+_SIGMA_MIN     = 1.5    # minimum branch salience for non-root branches (T/Y/L)
+_HALF_PHI_C_TH = 0.25  # Φ_c threshold for half-junction detection
+_T_TO_HALF_PHI = 0.40  # good-continuation threshold for step-8d T→half conversion
+
+
+class JunctionResult(object):
+	"""Identified junction for a single fork after the iterative procedure.
+
+	Attributes:
+		fork:        MATNode — the MAT fork where the junction was identified
+		jtype:       JType constant
+		link:        primary Link (T, half, protuberance) or None
+		links:       [Link, Link] for half-junctions (both links)
+		rep_csf:     representative concave CSF for Y/L junctions, or None
+		cut_points:  list of ((x1,y1),(x2,y2)) pairs — the actual cut lines
+		score:       float — aggregated π score (for diagnostics)
+	"""
+
+	__slots__ = ('fork', 'jtype', 'link', 'links', 'rep_csf', 'cut_points', 'score')
+
+	def __init__(self, fork, jtype):
+		self.fork       = fork
+		self.jtype      = jtype
+		self.link       = None
+		self.links      = []
+		self.rep_csf    = None
+		self.cut_points = []
+		self.score      = 0.0
+
+	def __repr__(self):
+		if self.fork is not None:
+			loc = '({:.0f},{:.0f})'.format(self.fork.x, self.fork.y)
+		else:
+			loc = '(?)'
+		return '<JunctionResult: {} at {} cuts={}>'.format(
+			self.jtype, loc, len(self.cut_points))
+
+
+class AuxGraph(object):
+	"""Auxiliary graph H: vertices = concavities, edges = valid links (§7).
+
+	Supports O(1) removal of individual vertices (concavities) and edges (links).
+	"""
+
+	def __init__(self, links, sector_assignments):
+		# Vertices: id(csf) → csf
+		self._csfs = {}
+		for sa in sector_assignments.values():
+			for csf in sa.assignments:
+				if csf is not None:
+					self._csfs[id(csf)] = csf
+
+		# Edges: id(link) → link; adjacency id(csf) → set[id(link)]
+		self._links = {}
+		self._adj   = defaultdict(set)
+		for link in links:
+			self._add_link(link)
+
+	def _add_link(self, link):
+		lid = id(link)
+		self._links[lid] = link
+		self._adj[id(link.csf1)].add(lid)
+		self._adj[id(link.csf2)].add(lid)
+
+	@property
+	def links(self):
+		return list(self._links.values())
+
+	def links_for_fork(self, fork, sector_assignments):
+		"""All H-links whose BOTH CSFs are assigned to this fork."""
+		sa = sector_assignments.get(id(fork))
+		if sa is None:
+			return []
+		fork_csf_ids = {id(c) for c in sa.assignments if c is not None and id(c) in self._csfs}
+		return [l for l in self._links.values()
+				if id(l.csf1) in fork_csf_ids and id(l.csf2) in fork_csf_ids]
+
+	def csfs_for_fork(self, fork, sector_assignments):
+		"""All CSFs in H that are currently assigned to this fork."""
+		sa = sector_assignments.get(id(fork))
+		if sa is None:
+			return []
+		return [c for c in sa.assignments if c is not None and id(c) in self._csfs]
+
+	def remove_link(self, link):
+		lid = id(link)
+		if lid not in self._links:
+			return
+		del self._links[lid]
+		self._adj[id(link.csf1)].discard(lid)
+		self._adj[id(link.csf2)].discard(lid)
+
+	def remove_csf(self, csf):
+		cid = id(csf)
+		if cid not in self._csfs:
+			return
+		del self._csfs[cid]
+		for lid in list(self._adj.get(cid, set())):
+			if lid in self._links:
+				link = self._links.pop(lid)
+				other = id(link.csf2) if id(link.csf1) == cid else id(link.csf1)
+				self._adj[other].discard(lid)
+		self._adj.pop(cid, None)
+
+	def has_csf(self, csf):
+		return id(csf) in self._csfs
+
+	def has_link(self, link):
+		return id(link) in self._links
+
+
+# ── 7.1: Quality measures ─────────────────────────────────────────────────────
+
+def _flamant_significance(csf, fork):
+	"""Concavity significance via Flamant elastic half-plane model (§7, Eq. 6-9).
+
+	Treats the concavity as a concentrated normal load at its extremum acting on
+	the half-plane boundary at the fork.  The radial stress decays as 1/r:
+
+	    σ_F(ε, f) = 2·r_ε / (π·d)
+
+	where r_ε = concavity disk radius, d = distance from fork centre to extremum.
+
+	Returns a non-negative float — larger means geometrically more prominent.
+	"""
+	d = math.hypot(csf.extremum[0] - fork.x, csf.extremum[1] - fork.y)
+	d = max(d, fork.radius, _EPS)
+	return 2.0 * csf.disk_radius / (math.pi * d)
+
+
+def _estimate_branch_area(fork, branch_neighbor):
+	"""Approximate swept area of a branch = ∫ 2r ds (rectangular cross-section)."""
+	prev, cur = fork, branch_neighbor
+	area = 0.0
+	while True:
+		step = math.hypot(cur.x - prev.x, cur.y - prev.y)
+		r    = (prev.radius + cur.radius) * 0.5
+		area += 2.0 * r * step
+		if cur.is_terminal or cur.is_fork:
+			break
+		nxt = [n for n in cur.neighbors if n is not prev]
+		if not nxt:
+			break
+		prev, cur = cur, nxt[0]
+	return area
+
+
+def _fork_branches(fork):
+	"""Return [(angle_deg, neighbor_node), ...] sorted CCW around fork."""
+	result = []
+	for nb in fork.neighbors:
+		dx = nb.x - fork.x
+		dy = nb.y - fork.y
+		mag = math.hypot(dx, dy)
+		if mag < _EPS:
+			continue
+		ang = math.degrees(math.atan2(dy / mag, dx / mag)) % 360.0
+		result.append((ang, nb))
+	return sorted(result, key=lambda x: x[0])
+
+
+def _coverage_I(fork, jtype, branches=None):
+	"""Approximate coverage I = ln(A_after / A_before) (§7, Eq. 4).
+
+	Estimates how well the junction type covers the glyph area.  Positive I
+	means strokes overlap (acceptable for crossings); negative I means area
+	is lost (discarded branches).
+	"""
+	if branches is None:
+		branches = _fork_branches(fork)
+	if not branches:
+		return 0.0
+
+	areas = [_estimate_branch_area(fork, nb) for _, nb in branches]
+	A_before = max(sum(areas), _EPS)
+
+	if jtype in (JType.T, JType.HALF, JType.PROTUBERANCE):
+		A_after = A_before            # all branches accounted for
+	elif jtype == JType.Y:
+		A_after = A_before * 1.05    # slight overlap at ligature region
+	elif jtype in (JType.L, JType.NULL):
+		A_after = A_before - min(areas)   # discard one (least salient) branch
+	elif jtype == JType.STROKE_END:
+		sorted_areas = sorted(areas, reverse=True)
+		# Keep only the most salient branch; discard the rest
+		A_after = sorted_areas[0] if sorted_areas else A_before * 0.4
+	else:
+		A_after = A_before
+
+	return math.log(max(A_after, _EPS) / A_before)
+
+
+def _smoothness_G(link):
+	"""Smoothness G = ln Φ of the link's good-continuation (§7, Eq. 5).
+
+	For T-junctions the link already stores good_continuation; for Y/L we
+	return 0 (no direct spine estimate available without full reconstruction).
+	"""
+	if link is not None:
+		return math.log(max(link.good_continuation, _EPS))
+	return 0.0
+
+
+def _significance_C(fork, jtype, h_csfs, link=None):
+	"""Concavity significance C via Flamant model (§7, Eq. 6-9).
+
+	T-junction: harmonic mean of the two link CSF significances (favours balance).
+	Y/L-junction: dominance ratio max(sig) / sum(sig) (favours one strong CSF).
+	"""
+	if not h_csfs:
+		return 0.0
+
+	if jtype == JType.T and link is not None:
+		s1 = _flamant_significance(link.csf1, fork)
+		s2 = _flamant_significance(link.csf2, fork)
+		total = s1 + s2
+		return 2.0 * s1 * s2 / total if total > _EPS else 0.0  # harmonic mean
+
+	sigs  = [_flamant_significance(c, fork) for c in h_csfs]
+	total = sum(sigs)
+	return max(sigs) / total if total > _EPS else 0.0  # dominance ratio
+
+
+def _omega(jtype):
+	"""Type-specific log weight ω (§7, Eq. 14)."""
+	if jtype == JType.T:
+		return _W_T
+	if jtype == JType.NULL:
+		return _W_NULL
+	return _W_DEFAULT
+
+
+def _pi_score(I, G, C, S, omega, jtype_a, jtype_b):
+	"""Compute π(J_a) for the pairwise comparison against J_b (§7, Eq. 14).
+
+	π = I + δ_TYL·G + δ_TYL·C + δ_T·S + ω
+
+	δ_TYL = 1 when both compared types are in {T, Y, L}
+	δ_T   = 1 when both compared types are T
+	"""
+	TYL   = {JType.T, JType.Y, JType.L}
+	d_TYL = 1.0 if (jtype_a in TYL and jtype_b in TYL) else 0.0
+	d_T   = 1.0 if (jtype_a == JType.T and jtype_b == JType.T) else 0.0
+	return I + d_TYL * G + d_TYL * C + d_T * S + omega
+
+
+# ── 7.2: Candidate building and selection ────────────────────────────────────
+
+class _Candidate(object):
+	"""A candidate junction configuration for pairwise evaluation."""
+	__slots__ = ('jtype', 'link', 'rep_csf', 'I', 'G', 'C', 'S', 'omega')
+
+	def __init__(self, jtype, link=None, rep_csf=None, I=0.0, G=0.0, C=0.0, S=0.0):
+		self.jtype   = jtype
+		self.link    = link
+		self.rep_csf = rep_csf
+		self.I       = I
+		self.G       = G
+		self.C       = C
+		self.S       = S
+		self.omega   = _omega(jtype)
+
+
+def _build_candidates(fork, aux_graph, sector_assignments, sigma_phi):
+	"""Build the candidate set J_f for a fork (§7, Step 8c).
+
+	Always includes null-junction and stroke-end.
+	Adds T-junctions for each remaining link in H assigned to fork.
+	Adds Y-junctions (2 configs per salient root branch) and L-junction
+	from the most significant concavity when conditions are met.
+
+	Returns list of _Candidate.
+	"""
+	branches = _fork_branches(fork)
+	if not branches:
+		return []
+
+	h_links = aux_graph.links_for_fork(fork, sector_assignments)
+	h_csfs  = aux_graph.csfs_for_fork(fork, sector_assignments)
+	sals    = [branch_salience(fork, nb) for _, nb in branches]
+
+	candidates = []
+
+	# ── Null-junction (always) ────────────────────────────────────────
+	candidates.append(_Candidate(JType.NULL, I=_coverage_I(fork, JType.NULL, branches)))
+
+	# ── Stroke-end (when ≤1 salient branch) ──────────────────────────
+	if sum(1 for s in sals if s > _TAU_SIGMA) <= 1:
+		candidates.append(_Candidate(JType.STROKE_END,
+									 I=_coverage_I(fork, JType.STROKE_END, branches)))
+
+	# ── T-junction (one per valid link in H) ─────────────────────────
+	for link in h_links:
+		root_nb = link.protruding_branch
+		non_root_ok = all(branch_salience(fork, nb) >= _SIGMA_MIN
+						  for _, nb in branches if nb is not root_nb)
+		if not non_root_ok:
+			continue
+		I = _coverage_I(fork, JType.T, branches)
+		G = _smoothness_G(link)
+		C = _significance_C(fork, JType.T, h_csfs, link=link)
+		S = math.log(max(link.salience, _EPS))
+		candidates.append(_Candidate(JType.T, link=link, I=I, G=G, C=C, S=S))
+
+	# ── Y-junction (one config per salient root branch, requires H CSFs) ─
+	if h_csfs:
+		for (root_ang, root_nb), sal in zip(branches, sals):
+			if sal <= _TAU_SIGMA:
+				continue
+			non_root_ok = all(branch_salience(fork, nb) >= _SIGMA_MIN
+							  for _, nb in branches if nb is not root_nb)
+			if not non_root_ok:
+				continue
+			# Representative = CSF most opposite the root branch
+			opp_ang = (root_ang + 180.0) % 360.0
+			def _ang_dist_to_opp(c, _opp=opp_ang):
+				cx = c.extremum[0] - fork.x
+				cy = c.extremum[1] - fork.y
+				a  = math.degrees(math.atan2(cy, cx)) % 360.0
+				d  = abs(a - _opp)
+				return min(d, 360.0 - d)
+			rep = min(h_csfs, key=_ang_dist_to_opp)
+			I = _coverage_I(fork, JType.Y, branches)
+			G = _smoothness_G(None)
+			C = _significance_C(fork, JType.Y, h_csfs)
+			candidates.append(_Candidate(JType.Y, rep_csf=rep, I=I, G=G, C=C))
+
+	# ── L-junction (most significant CSF if radius constraint met) ────
+	if h_csfs:
+		sigs = [_flamant_significance(c, fork) for c in h_csfs]
+		rep  = h_csfs[sigs.index(max(sigs))]
+
+		sa = sector_assignments.get(id(fork))
+		l_ok = False
+		if sa is not None:
+			for i, c in enumerate(sa.assignments):
+				if c is rep and i < len(sa.sectors):
+					lo, hi, _mid = sa.sectors[i]
+					gap = (hi - lo) % 360.0
+					cos_half = math.cos(math.radians(gap * 0.5))
+					if rep.disk_radius < _TAU_L * fork.radius * max(cos_half, 0.1):
+						l_ok = True
+					break
+
+		if l_ok and all(s >= _SIGMA_MIN for s in sals):
+			I = _coverage_I(fork, JType.L, branches)
+			G = _smoothness_G(None)
+			C = _significance_C(fork, JType.L, h_csfs)
+			candidates.append(_Candidate(JType.L, rep_csf=rep, I=I, G=G, C=C))
+
+	return candidates
+
+
+def _select_junction(candidates):
+	"""Select the winning candidate via pairwise softmax aggregation (§7).
+
+	For each pair (a, b) computes π(a|b) context-dependently (δ terms depend
+	on both types).  Winner maximises the product of pairwise win-probabilities,
+	accumulated as a sum of log-probabilities for numerical stability.
+
+	Returns the winning _Candidate, or None if the list is empty.
+	"""
+	if not candidates:
+		return None
+	if len(candidates) == 1:
+		return candidates[0]
+
+	n = len(candidates)
+	log_prods = [0.0] * n
+
+	for a in range(n):
+		ca = candidates[a]
+		for b in range(n):
+			if a == b:
+				continue
+			cb = candidates[b]
+			pi_a = _pi_score(ca.I, ca.G, ca.C, ca.S, ca.omega, ca.jtype, cb.jtype)
+			pi_b = _pi_score(cb.I, cb.G, cb.C, cb.S, cb.omega, cb.jtype, ca.jtype)
+			# log p(a|b) = pi_a − logsumexp(pi_a, pi_b)  (numerically stable)
+			m = max(pi_a, pi_b)
+			log_p = pi_a - m - math.log(math.exp(pi_a - m) + math.exp(pi_b - m))
+			log_prods[a] += log_p
+
+	best = max(range(n), key=lambda i: log_prods[i])
+	return candidates[best]
+
+
+# ── 7.3: Step 8a — Protuberances ────────────────────────────────────────────
+
+def identify_protuberances(valid_links):
+	"""Step 8a: create a JunctionResult for each compound link (§7, Step 1).
+
+	A compound link crosses ≥2 non-salient branches from different forks with
+	overlapping disks — the hallmark of a small protuberance.
+
+	Does NOT modify the auxiliary graph H.
+
+	Args:
+		valid_links: list of Link from filter_incompatible_links()
+
+	Returns:
+		list of JunctionResult with jtype=JType.PROTUBERANCE
+	"""
+	results = []
+	for link in valid_links:
+		if link.link_type != 'compound' or link.fork is None:
+			continue
+		jr = JunctionResult(link.fork, JType.PROTUBERANCE)
+		jr.link       = link
+		jr.cut_points = [(link.p1, link.p2)]
+		results.append(jr)
+	return results
+
+
+# ── 7.4: Step 8b — Half-Junctions ───────────────────────────────────────────
+
+def _phi_c(link_a, link_b, sigma_phi):
+	"""Combined good-continuation Φ_c(ℓ, ℓ') for a link pair (§7, Step 2).
+
+	Φ_c = Φ(ε₁, ε₃) · Φ(ε₂, ε₄) using the non-crossing endpoint assignment:
+	choose the pairing with shorter total inter-link distance.
+	"""
+	c1a, c2a = link_a.csf1, link_a.csf2
+	c1b, c2b = link_b.csf1, link_b.csf2
+
+	d_straight = (math.hypot(c1a.extremum[0] - c1b.extremum[0],
+							  c1a.extremum[1] - c1b.extremum[1]) +
+				  math.hypot(c2a.extremum[0] - c2b.extremum[0],
+							  c2a.extremum[1] - c2b.extremum[1]))
+	d_crossed  = (math.hypot(c1a.extremum[0] - c2b.extremum[0],
+							  c1a.extremum[1] - c2b.extremum[1]) +
+				  math.hypot(c2a.extremum[0] - c1b.extremum[0],
+							  c2a.extremum[1] - c1b.extremum[1]))
+
+	if d_straight <= d_crossed:
+		return (good_continuation(c1a, c1b, sigma_phi) *
+				good_continuation(c2a, c2b, sigma_phi))
+	return (good_continuation(c1a, c2b, sigma_phi) *
+			good_continuation(c2a, c1b, sigma_phi))
+
+
+def _branch_node_set(link, max_hops=60):
+	"""Walk the protruding branch from a link's fork; return set of node ids."""
+	nb = link.protruding_branch
+	if nb is None:
+		return set()
+	nodes = set()
+	prev  = link.fork
+	cur   = nb
+	for _ in range(max_hops):
+		nodes.add(id(cur))
+		if cur.is_terminal or cur.is_fork:
+			break
+		nxt = [n for n in cur.neighbors if n is not prev]
+		if not nxt:
+			break
+		prev, cur = cur, nxt[0]
+	return nodes
+
+
+def identify_half_junctions(valid_links, ligatures, sector_assignments,
+							 aux_graph, sigma_phi=50.0):
+	"""Step 8b: identify half-junctions from link pairs with Φ_c > 0.25 (§7, Step 2).
+
+	For each pair of links that:
+	  - Do not share a concavity
+	  - Are not nested (protruding branches don't overlap)
+	  - Satisfy Φ_c(ℓ, ℓ') > _HALF_PHI_C_TH
+
+	Process in decreasing Φ_c order; skip pairs where either link was already
+	committed.  Update H by removing both links and any link whose protruding
+	branch overlaps the crossing path.
+
+	Args:
+		valid_links:        list of Link (compatible, sorted by salience)
+		ligatures:          list of Ligature (unused directly; for future grouping)
+		sector_assignments: dict {id(fork) → SectorAssignment}
+		aux_graph:          AuxGraph H (modified in-place)
+		sigma_phi:          spread for good_continuation (same as generate_links)
+
+	Returns:
+		list of JunctionResult with jtype=JType.HALF
+	"""
+	# Collect candidate pairs and their Φ_c scores
+	pairs = []
+	n = len(valid_links)
+	for i in range(n):
+		la = valid_links[i]
+		if not aux_graph.has_link(la):
+			continue
+		for j in range(i + 1, n):
+			lb = valid_links[j]
+			if not aux_graph.has_link(lb):
+				continue
+			# Must not share a concavity
+			if {id(la.csf1), id(la.csf2)} & {id(lb.csf1), id(lb.csf2)}:
+				continue
+			phi = _phi_c(la, lb, sigma_phi)
+			if phi > _HALF_PHI_C_TH:
+				pairs.append((phi, la, lb))
+
+	pairs.sort(key=lambda x: x[0], reverse=True)
+
+	committed = set()
+	results   = []
+
+	for phi, la, lb in pairs:
+		if id(la) in committed or id(lb) in committed:
+			continue
+		if not aux_graph.has_link(la) or not aux_graph.has_link(lb):
+			continue
+
+		# Nesting check: protruding branches must not share nodes
+		nodes_a = _branch_node_set(la)
+		nodes_b = _branch_node_set(lb)
+		if nodes_a & nodes_b:
+			continue
+
+		# Anchor half-junction at the fork of the higher-salience link
+		anchor = la if la.salience >= lb.salience else lb
+		fork   = anchor.fork
+		if fork is None:
+			fork = la.fork or lb.fork
+		if fork is None:
+			continue
+
+		jr            = JunctionResult(fork, JType.HALF)
+		jr.links      = [la, lb]
+		jr.link       = anchor
+		jr.cut_points = [(la.p1, la.p2), (lb.p1, lb.p2)]
+		results.append(jr)
+
+		committed.add(id(la))
+		committed.add(id(lb))
+
+		# Update H: remove both links
+		aux_graph.remove_link(la)
+		aux_graph.remove_link(lb)
+
+		# Remove links whose protruding branch overlaps the crossing path
+		crossing_nodes = nodes_a | nodes_b
+		for other in list(aux_graph.links):
+			if _branch_node_set(other) & crossing_nodes:
+				aux_graph.remove_link(other)
+
+	return results
+
+
+# ── 7.5: Step 8c — T/Y/L/Stroke-end/Null ───────────────────────────────────
+
+def _build_fork_order(graph, aux_graph, sector_assignments):
+	"""Return forks sorted by processing priority (§7, Eq. 14).
+
+	Priority (high → low):
+	  Group 0: forks with ≥1 link remaining in H
+	  Group 1: forks with ≥1 concavity remaining in H
+	  Group 2: all other forks
+
+	Within each group: decreasing minimum branch salience (depth-first).
+	"""
+	def _key(fork):
+		h_links = aux_graph.links_for_fork(fork, sector_assignments)
+		h_csfs  = aux_graph.csfs_for_fork(fork, sector_assignments)
+		if h_links:
+			group = 0
+		elif h_csfs:
+			group = 1
+		else:
+			group = 2
+		brs = _fork_branches(fork)
+		min_sal = min((branch_salience(fork, nb) for _, nb in brs),
+					  default=0.0)
+		return (group, -min_sal)   # lower group + higher salience first
+
+	return sorted(graph.forks(), key=_key)
+
+
+def _project_cut_from_csf(fork, csf):
+	"""Project a cut from csf.extremum through the fork to the opposing side.
+
+	Returns (p1, p2) where p1 = extremum and p2 = mirror point past the fork.
+	"""
+	ex, ey = csf.extremum
+	dx = fork.x - ex
+	dy = fork.y - ey
+	mag = math.hypot(dx, dy)
+	if mag < _EPS:
+		return ((ex, ey), (fork.x + fork.radius, fork.y))
+	t  = (mag + fork.radius) / mag
+	p2 = (ex + dx * t, ey + dy * t)
+	return ((ex, ey), p2)
+
+
+def _candidate_to_result(fork, cand):
+	"""Convert a _Candidate to a JunctionResult, filling in cut_points."""
+	jr         = JunctionResult(fork, cand.jtype)
+	jr.link    = cand.link
+	jr.rep_csf = cand.rep_csf
+	jr.score   = cand.I + cand.omega   # lightweight score proxy
+
+	if cand.jtype == JType.T and cand.link is not None:
+		jr.cut_points = [(cand.link.p1, cand.link.p2)]
+	elif cand.jtype in (JType.Y, JType.L) and cand.rep_csf is not None:
+		jr.cut_points = [_project_cut_from_csf(fork, cand.rep_csf)]
+
+	return jr
+
+
+def _update_H_after_junction(jr, aux_graph, sector_assignments):
+	"""Update H after a junction has been identified (§7.3.8)."""
+	if jr.jtype == JType.T and jr.link is not None:
+		link = jr.link
+		if link.good_continuation > _T_TO_HALF_PHI:
+			# Remove both concavities — they are fully consumed
+			aux_graph.remove_csf(link.csf1)
+			aux_graph.remove_csf(link.csf2)
+		else:
+			aux_graph.remove_link(link)
+
+	elif jr.jtype == JType.Y and jr.rep_csf is not None:
+		aux_graph.remove_csf(jr.rep_csf)
+
+	elif jr.jtype in (JType.L, JType.NULL, JType.STROKE_END):
+		for csf in aux_graph.csfs_for_fork(jr.fork, sector_assignments):
+			aux_graph.remove_csf(csf)
+
+
+def identify_junctions_step3(graph, sector_assignments, aux_graph, contours,
+							  sigma_phi=50.0):
+	"""Step 8c: identify T/Y/L/Stroke-end/Null junctions (§7, Step 3).
+
+	Processes forks in priority order (Eq. 14).  For each fork builds the
+	candidate set J_f, runs pairwise softmax selection, records the winner,
+	and updates H.
+
+	Args:
+		graph:              MATGraph (interior MAT)
+		sector_assignments: dict {id(fork) → SectorAssignment}
+		aux_graph:          AuxGraph H (modified in-place)
+		contours:           glyph contours (currently unused; reserved for area tests)
+		sigma_phi:          spread for good_continuation
+
+	Returns:
+		list of JunctionResult (all fork types, including null/stroke-end)
+	"""
+	results = []
+
+	for fork in _build_fork_order(graph, aux_graph, sector_assignments):
+		candidates = _build_candidates(fork, aux_graph, sector_assignments, sigma_phi)
+		if not candidates:
+			continue
+
+		winner = _select_junction(candidates)
+		if winner is None:
+			continue
+
+		jr = _candidate_to_result(fork, winner)
+		results.append(jr)
+
+		_update_H_after_junction(jr, aux_graph, sector_assignments)
+
+	return results
+
+
+# ── 7.6: Step 8d — Convert close T-junction pairs to half-junctions ─────────
+
+def convert_T_pairs_to_half(step3_results, sigma_phi=50.0):
+	"""Step 8d: merge nearby T-junction pairs into half-junctions (§7, Step 4).
+
+	Two T-junctions are merged when:
+	  - Their forks are closer than the sum of their radii
+	  - Good-continuation between any endpoint pair exceeds _T_TO_HALF_PHI
+
+	Args:
+		step3_results: list of JunctionResult from identify_junctions_step3()
+		sigma_phi:     spread for good_continuation
+
+	Returns:
+		Updated list (T-pairs replaced by single JType.HALF results).
+	"""
+	t_jrs = [(i, jr) for i, jr in enumerate(step3_results)
+			 if jr.jtype == JType.T and jr.link is not None]
+
+	merged = set()
+	extra  = []
+
+	for a_pos in range(len(t_jrs)):
+		i, jra = t_jrs[a_pos]
+		if i in merged:
+			continue
+		for b_pos in range(a_pos + 1, len(t_jrs)):
+			j, jrb = t_jrs[b_pos]
+			if j in merged:
+				continue
+
+			d_ff  = math.hypot(jra.fork.x - jrb.fork.x, jra.fork.y - jrb.fork.y)
+			r_sum = jra.fork.radius + jrb.fork.radius
+			if d_ff >= r_sum:
+				continue
+
+			# Check good-continuation (best of both endpoint pairings)
+			phi = max(
+				good_continuation(jra.link.csf1, jrb.link.csf1, sigma_phi),
+				good_continuation(jra.link.csf1, jrb.link.csf2, sigma_phi),
+				good_continuation(jra.link.csf2, jrb.link.csf1, sigma_phi),
+				good_continuation(jra.link.csf2, jrb.link.csf2, sigma_phi),
+			)
+			if phi < _T_TO_HALF_PHI:
+				continue
+
+			# Anchor at the fork with the more-salient branches
+			brs_a   = _fork_branches(jra.fork)
+			brs_b   = _fork_branches(jrb.fork)
+			max_a   = max((branch_salience(jra.fork, nb) for _, nb in brs_a), default=0.0)
+			max_b   = max((branch_salience(jrb.fork, nb) for _, nb in brs_b), default=0.0)
+			anchor  = jra if max_a >= max_b else jrb
+
+			half_jr            = JunctionResult(anchor.fork, JType.HALF)
+			half_jr.links      = [jra.link, jrb.link]
+			half_jr.link       = anchor.link
+			half_jr.cut_points = jra.cut_points + jrb.cut_points
+
+			merged.add(i)
+			merged.add(j)
+			extra.append(half_jr)
+			break  # each T-junction merges with at most one partner
+
+	return [r for k, r in enumerate(step3_results) if k not in merged] + extra
+
+
+# ── 7.7: Main entry point ────────────────────────────────────────────────────
+
+def identify_junctions(valid_links, ligatures, sector_assignments, graph,
+					   contours, sigma_phi=50.0):
+	"""Run the full 4-step iterative junction identification procedure (§7).
+
+	Steps 8a-8d as specified in Berio et al. 2022:
+	  8a. Protuberances  — compound links (H not modified)
+	  8b. Half-junctions — link pairs with Φ_c > 0.25 (H updated)
+	  8c. T/Y/L/Stroke-end/Null — per-fork pairwise softmax (H updated)
+	  8d. Close T-junction pairs → half-junctions
+
+	Args:
+		valid_links:        list of Link from filter_incompatible_links()
+		ligatures:          list of Ligature from compute_ligatures_v2()
+		sector_assignments: dict {id(fork) → SectorAssignment}
+		graph:              MATGraph (interior MAT)
+		contours:           glyph contours
+		sigma_phi:          spread for good_continuation (default 50.0 font units)
+
+	Returns:
+		(protuberances, half_junctions, step3_junctions) — three lists of
+		JunctionResult.  step3_junctions includes null and stroke-end results
+		(with empty cut_points) as well as actual T/Y/L cuts.
+	"""
+	aux = AuxGraph(valid_links, sector_assignments)
+
+	protuberances  = identify_protuberances(valid_links)
+	half_junctions = identify_half_junctions(
+		valid_links, ligatures, sector_assignments, aux, sigma_phi)
+	step3          = identify_junctions_step3(
+		graph, sector_assignments, aux, contours, sigma_phi)
+	step3          = convert_T_pairs_to_half(step3, sigma_phi)
+
+	return protuberances, half_junctions, step3
+
+
 def _branch_direction(from_node, to_node, steps=3):
 	"""Walk steps nodes along a branch, return unit direction vector."""
 	prev, cur = from_node, to_node
@@ -2511,6 +3311,597 @@ class StrokeSeparator(object):
 				)
 				if has_x_junction:
 					remaining = _join_fragments(remaining, applicable_cuts)
+
+			output.extend(remaining)
+
+		return output
+
+
+# ── §9: Stroke Graph S and Structural Operations ──────────────────────────────
+#
+# Stroke graph S: one vertex per MAT branch, edges = "same stroke" connections.
+# Initially disconnected; junction operations build connectivity.
+# For CJK separation we need cut positions and stroke identity, not full spines.
+
+
+# ── 9.1: Branch extraction ───────────────────────────────────────────────────
+
+class BranchVertex(object):
+	"""One vertex in stroke graph S: a maximal path in M between topology nodes.
+
+	A topology node is any fork or terminal. Degree-2 intermediate nodes sit
+	inside the branch and are included in path[] but are not branch endpoints.
+
+	Attributes:
+		bid:         int — unique id
+		start:       MATNode (fork or terminal)
+		end:         MATNode (fork or terminal)
+		path:        [MATNode] ordered from start to end
+		length:      total Euclidean arc length of branch
+		discarded:   bool — marked for removal by junction ops
+		stroke_id:   int or None — assigned by StrokeGraph.finalize_strokes()
+		multitraced: bool — True when shared between 2 strokes (overlap zone)
+	"""
+
+	__slots__ = ('bid', 'start', 'end', 'path', 'length',
+				 'discarded', 'stroke_id', 'multitraced')
+
+	def __init__(self, bid, start, end, path):
+		self.bid         = bid
+		self.start       = start
+		self.end         = end
+		self.path        = path
+		self.discarded   = False
+		self.stroke_id   = None
+		self.multitraced = False
+
+		total = 0.0
+		for k in range(len(path) - 1):
+			total += math.hypot(path[k+1].x - path[k].x, path[k+1].y - path[k].y)
+		self.length = total
+
+	def neighbor_from(self, node):
+		"""Return the first path node immediately after *node* along this branch."""
+		if self.start is node and len(self.path) > 1:
+			return self.path[1]
+		if self.end is node and len(self.path) > 1:
+			return self.path[-2]
+		return None
+
+	def salience_at(self, fork):
+		"""σ(branch, fork) using the existing branch_salience() helper."""
+		nb = self.neighbor_from(fork)
+		if nb is None:
+			return 0.0
+		return branch_salience(fork, nb)
+
+	def __repr__(self):
+		state = 'discarded' if self.discarded else (
+			'multitrace' if self.multitraced else 'active')
+		return '<Branch #{} ({:.0f},{:.0f})→({:.0f},{:.0f}) L={:.0f} {}>'.format(
+			self.bid,
+			self.start.x, self.start.y,
+			self.end.x,   self.end.y,
+			self.length, state)
+
+
+def extract_branches(graph):
+	"""Extract all MAT branches as BranchVertex objects (§4.1).
+
+	Walks the graph from every topology node (fork + terminal), enumerating
+	maximal degree-2 paths.  Each undirected path is visited exactly once.
+
+	Returns:
+		list of BranchVertex
+	"""
+	topology   = frozenset(id(n) for n in list(graph.forks()) + list(graph.terminals()))
+	vis_edges  = set()   # frozenset({id(a), id(b)}) of directed edge a→b
+	branches   = []
+	bid_counter = [0]
+
+	def walk(start, first_nb):
+		edge_key = frozenset([id(start), id(first_nb)])
+		if edge_key in vis_edges:
+			return
+		vis_edges.add(edge_key)
+
+		path = [start, first_nb]
+		prev, cur = start, first_nb
+		while id(cur) not in topology:
+			nxt = [n for n in cur.neighbors if n is not prev]
+			if not nxt:
+				break
+			prev, cur = cur, nxt[0]
+			path.append(cur)
+			# Also mark the reverse edge so we don't re-walk
+			vis_edges.add(frozenset([id(prev), id(cur)]))
+
+		b = BranchVertex(bid_counter[0], start, cur, path)
+		bid_counter[0] += 1
+		branches.append(b)
+
+	for node in list(graph.forks()) + list(graph.terminals()):
+		for nb in node.neighbors:
+			walk(node, nb)
+
+	return branches
+
+
+# ── 9.2: Stroke graph ─────────────────────────────────────────────────────────
+
+class StrokeGraph(object):
+	"""Graph S: vertices = branches, edges = same-stroke connections (§6.2).
+
+	Connectivity is managed with a union-find so that connect() runs in near O(1).
+	discarded branches are excluded from strokes().
+
+	Operations (§6.2.3):
+	  connect(b1, b2)      — same stroke
+	  multitrace(b)         — branch shared by 2 strokes (overlap zone)
+	  discard(b, recursive) — remove branch (+ optionally hanging subtree)
+	"""
+
+	def __init__(self, branches):
+		self._branches = {b.bid: b for b in branches}
+		self._parent   = {b.bid: b.bid for b in branches}   # union-find
+
+		# Lookup: id(MATNode) → [BranchVertex] touching that node
+		self._node_to_b = defaultdict(list)
+		for b in branches:
+			self._node_to_b[id(b.start)].append(b)
+			if b.end is not b.start:
+				self._node_to_b[id(b.end)].append(b)
+
+	# ── union-find ─────────────────────────────────────────────────────────
+	def _find(self, bid):
+		while self._parent[bid] != bid:
+			self._parent[bid] = self._parent[self._parent[bid]]   # path compression
+			bid = self._parent[bid]
+		return bid
+
+	def _union(self, bid1, bid2):
+		r1, r2 = self._find(bid1), self._find(bid2)
+		if r1 != r2:
+			self._parent[r2] = r1
+
+	# ── public operations ──────────────────────────────────────────────────
+	def connect(self, b1, b2):
+		"""Mark b1 and b2 as belonging to the same stroke."""
+		if b1 is None or b2 is None or b1.discarded or b2.discarded:
+			return
+		self._union(b1.bid, b2.bid)
+
+	def multitrace(self, branch):
+		"""Mark branch as the overlap zone between two strokes."""
+		if branch is not None:
+			branch.multitraced = True
+
+	def discard(self, branch, recursive=False):
+		"""Remove branch from the graph; optionally prune its hanging subtree."""
+		if branch is None or branch.discarded:
+			return
+		branch.discarded = True
+		if not recursive:
+			return
+		# Walk the far end: if it terminates (not a fork), prune further branches
+		far_end = branch.end if branch.start.is_fork else branch.start
+		if far_end.is_terminal:
+			return
+		for nb_branch in self._node_to_b.get(id(far_end), []):
+			if nb_branch is branch or nb_branch.discarded:
+				continue
+			# Only recurse into branches that lead to a terminal (hanging tree)
+			other = nb_branch.end if nb_branch.start is far_end else nb_branch.start
+			if other.is_terminal or _all_paths_terminal(nb_branch, far_end, depth=5):
+				self.discard(nb_branch, recursive=True)
+
+	def branches_at(self, mat_node):
+		"""Return active (non-discarded) branches touching mat_node."""
+		return [b for b in self._node_to_b.get(id(mat_node), [])
+				if not b.discarded]
+
+	@property
+	def active_branches(self):
+		return [b for b in self._branches.values() if not b.discarded]
+
+	def strokes(self):
+		"""Return list of stroke groups (connected components, excluding discarded).
+
+		Each group is a list of BranchVertex in the same connected component of S.
+		"""
+		groups = defaultdict(list)
+		for b in self._branches.values():
+			if b.discarded:
+				continue
+			root = self._find(b.bid)
+			groups[root].append(b)
+		return list(groups.values())
+
+	def finalize_strokes(self):
+		"""Assign integer stroke_id to each active branch based on connectivity."""
+		for sid, group in enumerate(self.strokes()):
+			for b in group:
+				b.stroke_id = sid
+
+
+def _all_paths_terminal(branch, entry_node, depth):
+	"""Return True if all reachable branches from branch (away from entry_node)
+	eventually lead to terminals within *depth* hops.  Used for subtree pruning.
+	"""
+	if depth <= 0:
+		return False
+	far = branch.end if branch.start is entry_node else branch.start
+	if far.is_terminal:
+		return True
+	if far.is_fork:
+		return False   # another fork = not a hanging leaf
+	# degree-2 intermediate — shouldn't reach here in practice
+	return True
+
+
+# ── 9.3: Per-junction structural operations ───────────────────────────────────
+
+def _branch_toward(branches_at_fork, fork, target_nb):
+	"""Among branches at fork, find the one whose first step from fork is target_nb."""
+	for b in branches_at_fork:
+		if b.neighbor_from(fork) is target_nb:
+			return b
+	return None
+
+
+def _apply_T_to_graph(jr, sg):
+	"""T-junction: connect 2 non-protruding branches; multitrace the protruding one."""
+	fork = jr.fork
+	link = jr.link
+	if link is None or fork is None:
+		return
+	at_fork  = sg.branches_at(fork)
+	prot_nb  = link.protruding_branch
+	prot_b   = _branch_toward(at_fork, fork, prot_nb)
+	non_prot = [b for b in at_fork if b is not prot_b]
+	if len(non_prot) >= 2:
+		sg.connect(non_prot[0], non_prot[1])
+	if prot_b is not None:
+		sg.multitrace(prot_b)   # protruding stroke overlaps continuing stroke
+
+
+def _apply_Y_to_graph(jr, sg):
+	"""Y-junction: connect the 2 most salient branches (the through-stroke)."""
+	fork = jr.fork
+	if fork is None:
+		return
+	at_fork = sg.branches_at(fork)
+	if len(at_fork) < 2:
+		return
+	sals = sorted(at_fork, key=lambda b: b.salience_at(fork), reverse=True)
+	sg.connect(sals[0], sals[1])
+
+
+def _apply_L_to_graph(jr, sg):
+	"""L-junction: discard root (least salient), connect remaining 2."""
+	fork = jr.fork
+	if fork is None:
+		return
+	at_fork = sg.branches_at(fork)
+	if not at_fork:
+		return
+	root = min(at_fork, key=lambda b: b.salience_at(fork))
+	sg.discard(root, recursive=True)
+	remaining = [b for b in at_fork if b is not root and not b.discarded]
+	if len(remaining) >= 2:
+		sg.connect(remaining[0], remaining[1])
+
+
+def _apply_half_to_graph(jr, sg):
+	"""Half-junction: for each link, multitrace its protruding branch and
+	connect the two non-protruding branches (the crossing strokes).
+	"""
+	for link in jr.links:
+		if link is None or link.fork is None:
+			continue
+		fork    = link.fork
+		at_fork = sg.branches_at(fork)
+		prot_nb = link.protruding_branch
+		prot_b  = _branch_toward(at_fork, fork, prot_nb)
+		if prot_b is not None:
+			sg.multitrace(prot_b)
+		non_prot = [b for b in at_fork if b is not prot_b]
+		if len(non_prot) >= 2:
+			sg.connect(non_prot[0], non_prot[1])
+
+
+def _apply_stroke_end_to_graph(jr, sg):
+	"""Stroke-end: discard all but the most salient branch at the fork."""
+	fork = jr.fork
+	if fork is None:
+		return
+	at_fork = sg.branches_at(fork)
+	if not at_fork:
+		return
+	sals = sorted(at_fork, key=lambda b: b.salience_at(fork), reverse=True)
+	for b in sals[1:]:
+		sg.discard(b, recursive=True)
+
+
+def _apply_protuberance_to_graph(jr, sg):
+	"""Protuberance: discard non-salient branches; connect remaining salient ones."""
+	fork = jr.fork
+	if fork is None:
+		return
+	at_fork    = sg.branches_at(fork)
+	salient    = [b for b in at_fork if b.salience_at(fork) >= _TAU_SIGMA]
+	non_sal    = [b for b in at_fork if b.salience_at(fork) < _TAU_SIGMA]
+	for b in non_sal:
+		sg.discard(b)
+	if len(salient) >= 2:
+		sg.connect(salient[0], salient[1])
+
+
+def _apply_null_to_graph(jr, sg):
+	"""Null-junction: discard least salient branch; connect remaining 2."""
+	fork = jr.fork
+	if fork is None:
+		return
+	at_fork = sg.branches_at(fork)
+	if not at_fork:
+		return
+	sals = sorted(at_fork, key=lambda b: b.salience_at(fork))
+	sg.discard(sals[0])
+	remaining = [b for b in sals[1:] if not b.discarded]
+	if len(remaining) >= 2:
+		sg.connect(remaining[0], remaining[1])
+
+
+_JUNCTION_OPS = {
+	JType.T:           _apply_T_to_graph,
+	JType.Y:           _apply_Y_to_graph,
+	JType.L:           _apply_L_to_graph,
+	JType.HALF:        _apply_half_to_graph,
+	JType.STROKE_END:  _apply_stroke_end_to_graph,
+	JType.PROTUBERANCE: _apply_protuberance_to_graph,
+	JType.NULL:        _apply_null_to_graph,
+}
+
+
+# ── 9.4: Build stroke graph ───────────────────────────────────────────────────
+
+def build_stroke_graph(mat_graph, protuberances, half_junctions, step3_junctions):
+	"""Build stroke graph S and apply all junction structural operations (§6.2).
+
+	Args:
+		mat_graph:         MATGraph (interior)
+		protuberances:     list[JunctionResult] from identify_junctions step 8a
+		half_junctions:    list[JunctionResult] from step 8b
+		step3_junctions:   list[JunctionResult] from steps 8c+8d
+
+	Returns:
+		StrokeGraph with all operations applied and stroke IDs assigned
+	"""
+	branches = extract_branches(mat_graph)
+	sg       = StrokeGraph(branches)
+
+	for jr in protuberances + half_junctions + step3_junctions:
+		op = _JUNCTION_OPS.get(jr.jtype)
+		if op is not None:
+			op(jr, sg)
+
+	sg.finalize_strokes()
+	return sg
+
+
+# ── 9.5: Cut extraction ───────────────────────────────────────────────────────
+
+def cuts_from_junction_results(protuberances, half_junctions, step3_junctions):
+	"""Collect all outline cut pairs from identified junctions.
+
+	Only T, Y, Half, and Protuberance junctions produce geometric cuts.
+	L, Stroke-end, and Null produce no cuts (the glyph outline is continuous).
+
+	Args:
+		protuberances, half_junctions, step3_junctions: lists of JunctionResult
+
+	Returns:
+		list of ((x1,y1), (x2,y2)) — ready to pass to split_contour_at_points()
+	"""
+	CUT_TYPES = {JType.T, JType.Y, JType.HALF, JType.PROTUBERANCE}
+	cuts = []
+	for jr in protuberances + half_junctions + step3_junctions:
+		if jr.jtype in CUT_TYPES:
+			cuts.extend(jr.cut_points)
+	return cuts
+
+
+# ── 9.6: Result and main class ────────────────────────────────────────────────
+
+class StrokeGraphResult(object):
+	"""Full analysis result for the StrokeSepV2 pipeline.
+
+	Attributes:
+		graph:           MATGraph — interior medial axis
+		ext_graph:       MATGraph — exterior medial axis M*
+		csfs:            list[CSF] — all curvilinear shape features
+		ligatures:       list[Ligature]
+		links:           list[Link] — compatible links after filtering
+		protuberances:   list[JunctionResult] — step 8a
+		half_junctions:  list[JunctionResult] — step 8b
+		step3_junctions: list[JunctionResult] — steps 8c+8d (T/Y/L/null/end)
+		stroke_graph:    StrokeGraph — final S with connectivity + stroke IDs
+		cuts:            list[((x1,y1),(x2,y2))] — outline cut positions
+	"""
+
+	def __init__(self, graph, ext_graph, csfs, ligatures, links,
+				 protuberances, half_junctions, step3_junctions,
+				 stroke_graph, cuts):
+		self.graph            = graph
+		self.ext_graph        = ext_graph
+		self.csfs             = csfs
+		self.ligatures        = ligatures
+		self.links            = links
+		self.protuberances    = protuberances
+		self.half_junctions   = half_junctions
+		self.step3_junctions  = step3_junctions
+		self.stroke_graph     = stroke_graph
+		self.cuts             = cuts
+
+	@property
+	def all_junctions(self):
+		return self.protuberances + self.half_junctions + self.step3_junctions
+
+	@property
+	def strokes(self):
+		return self.stroke_graph.strokes()
+
+	def __repr__(self):
+		t = sum(1 for j in self.step3_junctions if j.jtype == JType.T)
+		y = sum(1 for j in self.step3_junctions if j.jtype == JType.Y)
+		h = len(self.half_junctions)
+		return ('<StrokeGraphResult: {} cuts | {} strokes | '
+				'T={} Y={} half={} links={}>'.format(
+					len(self.cuts), len(self.strokes), t, y, h, len(self.links)))
+
+
+class StrokeSepV2(object):
+	"""Full StrokeStyles (Berio et al. 2022) pipeline for CJK stroke separation.
+
+	Runs Steps 1-9 of the paper to produce cut positions from the junction graph,
+	then splits the outline contours at those positions.  Falls back to the
+	simple geometry-based StrokeSeparator when no links/junctions are found.
+
+	Usage:
+		sep    = StrokeSepV2(beta_min=1.5, sample_step=5.0)
+		result = sep.analyze(contours)        # StrokeGraphResult
+		new_contours = sep.execute(result, contours)
+
+	Inspectable intermediate results on StrokeGraphResult:
+		.graph, .ext_graph, .csfs, .ligatures, .links
+		.protuberances, .half_junctions, .step3_junctions
+		.stroke_graph, .cuts, .strokes
+	"""
+
+	def __init__(self, beta_min=1.5, sample_step=5.0):
+		self.beta_min    = beta_min
+		self.sample_step = sample_step
+
+	def analyze(self, contours):
+		"""Run the complete pipeline and return a StrokeGraphResult.
+
+		Args:
+			contours: list of TypeRig Contour objects (closed)
+
+		Returns:
+			StrokeGraphResult
+		"""
+		from typerig.core.algo.csf import compute_csfs
+
+		# ── Step 1: Interior MAT ──────────────────────────────────────────
+		graph, _concavities = compute_mat(
+			contours,
+			sample_step=self.sample_step,
+			beta_min=self.beta_min,
+		)
+
+		# ── Step 2: Exterior MAT M* ───────────────────────────────────────
+		_ext_graph, exterior_terminals = compute_exterior_mat(
+			contours,
+			beta_min=self.beta_min,
+			sample_step=self.sample_step,
+		)
+
+		# ── Steps 3+4: CSFs ───────────────────────────────────────────────
+		csfs = compute_csfs(
+			contours, graph, exterior_terminals,
+			sample_step=self.sample_step,
+		)
+
+		# ── Step 5: Ligatures v2 ──────────────────────────────────────────
+		ligatures = compute_ligatures_v2(graph, csfs)
+
+		# ── Step 6: Sector assignment ─────────────────────────────────────
+		sector_assignments = assign_concavities_to_forks(graph, csfs, ligatures)
+
+		# ── Step 7: Links ─────────────────────────────────────────────────
+		links = generate_links(sector_assignments, contours, graph, ligatures)
+		links = filter_incompatible_links(links)
+
+		# σ for good-continuation: 2 × max non-ligature fork radius
+		lig_fork_ids  = {id(n) for lig in ligatures for n in lig.forks}
+		non_lig_radii = [f.radius for f in graph.forks() if id(f) not in lig_fork_ids]
+		sigma_phi     = 2.0 * max(non_lig_radii) if non_lig_radii else 50.0
+
+		# ── Step 8: Junction identification ───────────────────────────────
+		proturbs, halfs, step3 = identify_junctions(
+			links, ligatures, sector_assignments, graph, contours, sigma_phi)
+
+		# ── Step 9: Stroke graph + cut positions ──────────────────────────
+		stroke_graph = build_stroke_graph(graph, proturbs, halfs, step3)
+		cuts         = cuts_from_junction_results(proturbs, halfs, step3)
+
+		return StrokeGraphResult(
+			graph=graph,
+			ext_graph=_ext_graph,
+			csfs=csfs,
+			ligatures=ligatures,
+			links=links,
+			protuberances=proturbs,
+			half_junctions=halfs,
+			step3_junctions=step3,
+			stroke_graph=stroke_graph,
+			cuts=cuts,
+		)
+
+	def execute(self, result, contours):
+		"""Apply cuts and return a list of separated Contour objects.
+
+		When the new pipeline produces no cuts (e.g. single-stroke glyph),
+		falls back to the geometry-based StrokeSeparator.
+
+		Args:
+			result:   StrokeGraphResult from analyze()
+			contours: original list of TypeRig Contour objects
+
+		Returns:
+			list of Contour — original contours with junction cuts applied
+		"""
+		if not result.cuts:
+			fallback = StrokeSeparator(
+				beta_min=self.beta_min, sample_step=self.sample_step)
+			fb_result = fallback.analyze(contours)
+			return fallback.execute(fb_result, contours)
+
+		_SNAP = 15.0   # maximum distance (font units) for a cut to snap to a contour
+
+		working = [Contour([n.clone() for n in c.data], closed=c.closed)
+				   for c in contours]
+		output = []
+
+		for contour in working:
+			# Find cuts whose both endpoints lie near this contour
+			applicable = []
+			for cut in result.cuts:
+				_, _, da = find_parameter_on_contour(contour, cut[0][0], cut[0][1])
+				_, _, db = find_parameter_on_contour(contour, cut[1][0], cut[1][1])
+				if da < _SNAP and db < _SNAP:
+					applicable.append(cut)
+
+			if not applicable:
+				output.append(contour)
+				continue
+
+			remaining = [contour]
+			for cut in applicable:
+				new_remaining = []
+				for c in remaining:
+					_, _, da = find_parameter_on_contour(c, cut[0][0], cut[0][1])
+					_, _, db = find_parameter_on_contour(c, cut[1][0], cut[1][1])
+					if da > _SNAP or db > _SNAP:
+						new_remaining.append(c)
+						continue
+					split = split_contour_at_points(c, cut[0], cut[1])
+					if split is not None:
+						new_remaining.extend(split)
+					else:
+						new_remaining.append(c)
+				remaining = new_remaining
 
 			output.extend(remaining)
 
