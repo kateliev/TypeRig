@@ -27,6 +27,7 @@ from typerig.core.algo.stroke_sep_common import (
 	find_parameter_on_contour,
 	split_contour_at_points,
 	_join_fragments,
+	_extend_pieces_at_cuts,
 	resolve_cut_parameters,
 	StrokeSepResult,
 )
@@ -810,7 +811,7 @@ class StrokeSeparator(object):
 			stroke_width=stroke_width,
 		)
 
-	def execute(self, result, contours, coordinated=True):
+	def execute(self, result, contours, coordinated=True, overlap=0):
 		"""Apply all cuts. Returns new list of Contour objects.
 
 		Does NOT modify input contours.
@@ -819,6 +820,7 @@ class StrokeSeparator(object):
 			result: StrokeSepResult from analyze()
 			contours: original contour list
 			coordinated: if True, use coordinated_cuts; else use raw cuts
+			overlap: float -- extension past cut boundaries (font units, default 0)
 
 		Returns:
 			list of Contour objects
@@ -866,6 +868,10 @@ class StrokeSeparator(object):
 				)
 				if has_x_junction:
 					remaining = _join_fragments(remaining, applicable_cuts)
+
+			# Extend pieces past cut boundaries for stroke overlap
+			if overlap > 0:
+				_extend_pieces_at_cuts(remaining, applicable_cuts, overlap)
 
 			output.extend(remaining)
 

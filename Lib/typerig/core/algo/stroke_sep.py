@@ -32,6 +32,7 @@ from typerig.core.algo.stroke_sep_common import (
 	_find_nearest_on_node,
 	split_contour_at_points,
 	_join_fragments,
+	_extend_pieces_at_cuts,
 	CutEndpoint,
 	CutPair,
 	resolve_cut_parameters,

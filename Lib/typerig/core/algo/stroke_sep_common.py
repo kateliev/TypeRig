@@ -161,9 +161,142 @@ def check_contour_compatibility(source_contours, target_contours):
 	return True
 
 
+# - Overlap Extension ------------------
+
+def _extend_pieces_at_cuts(pieces, cuts, overlap):
+	"""Extend each piece past its cut boundaries using segment-direction extrapolation.
+
+	After splitting a contour, each piece has nodes at the cut endpoints.
+	For each cut-boundary node, this function finds the incoming segment
+	direction (tangent) and moves the node along that tangent by *overlap*
+	units.  This naturally extends bars into stems and contracts the stem
+	notches, producing correct overlap geometry without distortion.
+
+	Args:
+		pieces:   list of Contour -- the split results (modified in place)
+		cuts:     list of ((x1,y1),(x2,y2)) -- the cuts that produced these pieces
+		overlap:  float -- extension distance in font units
+	"""
+	if overlap <= 0:
+		return
+
+	_CUT_SNAP = 5.0  # max distance to consider a node "at" a cut endpoint
+
+	for piece in pieces:
+		all_nodes = list(piece.data)
+		if len(all_nodes) < 3:
+			continue
+
+		# Collect indices of on-curve nodes that sit on a cut endpoint
+		cut_node_indices = set()
+		for cut in cuts:
+			for target in (cut[0], cut[1]):
+				tx, ty = target[0], target[1]
+				for i, n in enumerate(all_nodes):
+					if n.is_on and math.hypot(n.x - tx, n.y - ty) < _CUT_SNAP:
+						cut_node_indices.add(i)
+
+		if not cut_node_indices:
+			continue
+
+		# For each cut-boundary on-curve node, extrapolate along its
+		# incoming segment tangent (the segment arriving from the piece
+		# interior toward the cut boundary).
+		for ci in cut_node_indices:
+			node = all_nodes[ci]
+
+			# Walk backward to find the previous on-curve node (interior)
+			prev_on_idx = None
+			prev_off = []  # off-curve nodes between interior and cut node
+			j = (ci - 1) % len(all_nodes)
+			steps = 0
+			while steps < len(all_nodes):
+				candidate = all_nodes[j]
+				if candidate.is_on:
+					prev_on_idx = j
+					break
+				prev_off.append(j)
+				j = (j - 1) % len(all_nodes)
+				steps += 1
+
+			# Walk forward to find the next on-curve node (interior)
+			next_on_idx = None
+			next_off = []
+			j = (ci + 1) % len(all_nodes)
+			steps = 0
+			while steps < len(all_nodes):
+				candidate = all_nodes[j]
+				if candidate.is_on:
+					next_on_idx = j
+					break
+				next_off.append(j)
+				j = (j + 1) % len(all_nodes)
+				steps += 1
+
+			# Choose the neighbor that is NOT itself on a cut boundary
+			# (i.e. the interior neighbor).  If both are interior, pick
+			# whichever gives a longer tangent vector (more reliable).
+			def _tangent_from(neighbor_idx, off_indices, reverse):
+				"""Compute tangent at cut node from the segment with *neighbor_idx*.
+				For curves, tangent = direction from last control point to cut node.
+				For lines, tangent = direction from neighbor on-curve to cut node.
+				*reverse* means the off-curves are listed in reverse walk order.
+				"""
+				if off_indices:
+					# Curve segment: tangent from closest off-curve to cut node
+					closest_off = off_indices[0]  # nearest off-curve to cut node
+					ox, oy = all_nodes[closest_off].x, all_nodes[closest_off].y
+				else:
+					# Line segment: tangent from neighbor on-curve to cut node
+					ox, oy = all_nodes[neighbor_idx].x, all_nodes[neighbor_idx].y
+
+				dx = node.x - ox
+				dy = node.y - oy
+				return dx, dy, off_indices
+
+			candidates = []
+
+			if prev_on_idx is not None:
+				prev_is_cut = prev_on_idx in cut_node_indices
+				dx, dy, offs = _tangent_from(prev_on_idx, prev_off, True)
+				mag = math.hypot(dx, dy)
+				candidates.append((not prev_is_cut, mag, dx, dy, offs, prev_on_idx))
+
+			if next_on_idx is not None:
+				next_is_cut = next_on_idx in cut_node_indices
+				dx, dy, offs = _tangent_from(next_on_idx, next_off, False)
+				mag = math.hypot(dx, dy)
+				candidates.append((not next_is_cut, mag, dx, dy, offs, next_on_idx))
+
+			if not candidates:
+				continue
+
+			# Prefer interior neighbor (is_interior=True sorts higher),
+			# then longer tangent vector
+			candidates.sort(key=lambda c: (c[0], c[1]), reverse=True)
+			_, mag, dx, dy, off_indices, _ = candidates[0]
+
+			if mag < _EPS:
+				continue
+
+			# Normalize and scale by overlap
+			ext_x = (dx / mag) * overlap
+			ext_y = (dy / mag) * overlap
+
+			# Move the cut node along the tangent
+			node.x += ext_x
+			node.y += ext_y
+
+			# Also shift any off-curve nodes between this cut node and
+			# its interior neighbor by the same vector, preserving curve shape.
+			for oi in off_indices:
+				all_nodes[oi].x += ext_x
+				all_nodes[oi].y += ext_y
+
+
 # - Cross-Master Cut Application ------
 
-def apply_cuts_to_layer(result, source_contours, target_contours):
+def apply_cuts_to_layer(result, source_contours, target_contours, overlap=0):
 	"""Apply cuts from an analyzed layer to a compatible target layer.
 
 	Uses the parametric locations (contour_idx, node_idx, t) stored in each
@@ -174,6 +307,7 @@ def apply_cuts_to_layer(result, source_contours, target_contours):
 		result:           StrokeSepResult from analyzing source_contours
 		source_contours:  list[Contour] -- the contours that were analyzed
 		target_contours:  list[Contour] -- compatible contours from another master
+		overlap:          float -- extension past cut boundaries (font units, default 0)
 
 	Returns:
 		list[Contour] -- target contours with cuts applied (new objects,
@@ -238,6 +372,10 @@ def apply_cuts_to_layer(result, source_contours, target_contours):
 					break
 			if has_x:
 				remaining = _join_fragments(remaining, applicable)
+
+		# Extend pieces past cut boundaries for stroke overlap
+		if overlap > 0:
+			_extend_pieces_at_cuts(remaining, applicable, overlap)
 
 		output.extend(remaining)
 
