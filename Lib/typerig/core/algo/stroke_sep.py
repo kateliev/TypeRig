@@ -499,11 +499,21 @@ def protruding_direction(fork, branch_neighbor, all_ligature_node_ids):
 
 # - Sector-based concavity-to-fork assignment (§4.4) ----------
 
+_MAX_CANDIDATES_PER_SECTOR = 3   # keep top-N candidates per sector
+
 class SectorAssignment(object):
 	"""Concavity assignments for a single fork, organised by sector.
 
 	A degree-3 fork has 3 sectors — one between each pair of branches.
 	Sector i lies between branch[i] and branch[(i+1) % 3] (CCW order).
+
+	Each sector tracks up to _MAX_CANDIDATES_PER_SECTOR candidates ranked
+	by score.  The primary winner (``assignments[i]``) is the best-scoring
+	candidate and is used for junction classification.  Runner-up candidates
+	are available via ``candidates(i)`` and are used during link generation
+	so that a concavity pair that fails the inside-glyph test (common for
+	large-radius bowl-curve concavities in multi-contour glyphs) can fall
+	back to a tighter nearby concavity.
 
 	Attributes:
 		fork:         MATNode — the fork
@@ -519,12 +529,45 @@ class SectorAssignment(object):
 		self.sectors     = _compute_sectors(fork, branches)
 		self.assignments = [None, None, None]
 		self.scores      = [float('inf'), float('inf'), float('inf')]
+		# _candidates[i] = sorted list of (score, csf) for sector i
+		self._candidates = [[] for _ in range(3)]
 
 	def assign(self, sector_idx, csf, score):
 		"""Assign csf to sector if it scores better than the current occupant."""
-		if score < self.scores[sector_idx]:
-			self.assignments[sector_idx] = csf
-			self.scores[sector_idx]      = score
+		cands = self._candidates[sector_idx]
+		# Insert in sorted order (ascending score)
+		inserted = False
+		for k, (s, _) in enumerate(cands):
+			if score < s:
+				cands.insert(k, (score, csf))
+				inserted = True
+				break
+		if not inserted:
+			cands.append((score, csf))
+		# Trim to max
+		if len(cands) > _MAX_CANDIDATES_PER_SECTOR:
+			cands[:] = cands[:_MAX_CANDIDATES_PER_SECTOR]
+		# Update primary assignment
+		if cands:
+			self.scores[sector_idx]      = cands[0][0]
+			self.assignments[sector_idx] = cands[0][1]
+
+	def candidates(self, sector_idx):
+		"""Return list of CSFs for this sector, ordered by score (best first)."""
+		return [csf for _, csf in self._candidates[sector_idx]]
+
+	@property
+	def all_csfs(self):
+		"""All unique candidate CSFs across all sectors (not just winners)."""
+		seen = set()
+		result = []
+		for cands in self._candidates:
+			for _, csf in cands:
+				cid = id(csf)
+				if cid not in seen:
+					seen.add(cid)
+					result.append(csf)
+		return result
 
 	@property
 	def assigned_csfs(self):
@@ -1179,10 +1222,16 @@ def _flow_projection(link, fork, branch_nb, all_lig_ids):
 
 
 def _sector_idx_for_csf(sa, csf):
-	"""Return the sector index that csf is assigned to in sa, or None."""
+	"""Return the sector index that csf is assigned to (or is a candidate for) in sa, or None."""
+	# Check primary assignments first
 	for i, c in enumerate(sa.assignments):
 		if c is csf:
 			return i
+	# Check runner-up candidates
+	for i in range(len(sa.sectors)):
+		for cand in sa.candidates(i):
+			if cand is csf:
+				return i
 	return None
 
 
@@ -1265,31 +1314,39 @@ def generate_links(sector_assignments, contours, graph, ligatures,
 	Returns:
 		list of Link objects with valid=True, sorted by descending salience
 	"""
-	# ── collect all assigned concavities ──────────────────────────────
-	assigned_csfs = set()
-	for sa in sector_assignments.values():
-		for csf in sa.assignments:
-			if csf is not None:
-				assigned_csfs.add(id(csf))
-
-	# Keep the actual CSF objects for pairing
+	# ── collect concavities: primary winners + multi-contour runners-up ─
+	# Primary winners are always included.  Runner-up candidates are only
+	# included at forks where primary winners span 2+ contours — this
+	# enables cross-contour links for multi-contour glyphs (R, B, P)
+	# without creating spurious same-side pairs in single-contour glyphs.
 	csf_by_id = {}
 	for sa in sector_assignments.values():
 		for csf in sa.assignments:
 			if csf is not None:
 				csf_by_id[id(csf)] = csf
+
+	fork_csf_ids = {}
+	for fork_id, sa in sector_assignments.items():
+		ids = set()
+		for csf in sa.assignments:
+			if csf is not None:
+				ids.add(id(csf))
+
+		# Check if primary winners span multiple contours
+		winner_contours = {c.contour_idx for c in sa.assignments if c is not None}
+		if len(winner_contours) > 1:
+			# Multi-contour fork: include all runner-up candidates
+			for csf in sa.all_csfs:
+				ids.add(id(csf))
+				csf_by_id[id(csf)] = csf
+
+		if ids:
+			fork_csf_ids[fork_id] = frozenset(ids)
+
 	unique_csfs = list(csf_by_id.values())
 
 	if len(unique_csfs) < 2:
 		return []
-
-	# ── build per-fork lookup: which two CSFs are co-assigned ─────────
-	# fork_id → set of id(csf) assigned to that fork
-	fork_csf_ids = {}
-	for fork_id, sa in sector_assignments.items():
-		ids = frozenset(id(c) for c in sa.assignments if c is not None)
-		if ids:
-			fork_csf_ids[fork_id] = ids
 
 	# ── ligature node set for protruding direction ─────────────────────
 	all_lig_ids = ligature_node_set(ligatures)
@@ -1510,7 +1567,10 @@ _W_DEFAULT     = 0.0              # log(1.0)
 
 # Thresholds
 _TAU_L         = 0.5    # L-junction: concavity radius must be < τ_L·r_fork·cos(θ/2)
-_SIGMA_MIN     = 1.5    # minimum branch salience for non-root branches (T/Y/L)
+_SIGMA_MIN     = 1.5    # minimum branch salience for non-root branches (Y/L)
+_SIGMA_MIN_T   = 1.001  # relaxed threshold for T-junction non-root branches:
+                         # T-links are already validated by F·P, so we only need
+                         # to check branches extend at all beyond the fork disk.
 _HALF_PHI_C_TH = 0.25  # Φ_c threshold for half-junction detection
 _T_TO_HALF_PHI = 0.40  # good-continuation threshold for step-8d T→half conversion
 
@@ -1555,12 +1615,11 @@ class AuxGraph(object):
 	"""
 
 	def __init__(self, links, sector_assignments):
-		# Vertices: id(csf) → csf
+		# Vertices: id(csf) → csf — from link endpoints
 		self._csfs = {}
-		for sa in sector_assignments.values():
-			for csf in sa.assignments:
-				if csf is not None:
-					self._csfs[id(csf)] = csf
+		for link in links:
+			self._csfs[id(link.csf1)] = link.csf1
+			self._csfs[id(link.csf2)] = link.csf2
 
 		# Edges: id(link) → link; adjacency id(csf) → set[id(link)]
 		self._links = {}
@@ -1578,21 +1637,33 @@ class AuxGraph(object):
 	def links(self):
 		return list(self._links.values())
 
+	def _fork_csf_ids(self, sa):
+		"""CSF ids for this fork: primaries + link-participating candidates."""
+		ids = set()
+		for csf in sa.assignments:
+			if csf is not None and id(csf) in self._csfs:
+				ids.add(id(csf))
+		# Include runner-up candidates that actually participate in links
+		for csf in sa.all_csfs:
+			if id(csf) in self._csfs:
+				ids.add(id(csf))
+		return ids
+
 	def links_for_fork(self, fork, sector_assignments):
-		"""All H-links whose BOTH CSFs are assigned to this fork."""
+		"""All H-links whose BOTH CSFs are candidates at this fork."""
 		sa = sector_assignments.get(id(fork))
 		if sa is None:
 			return []
-		fork_csf_ids = {id(c) for c in sa.assignments if c is not None and id(c) in self._csfs}
+		fids = self._fork_csf_ids(sa)
 		return [l for l in self._links.values()
-				if id(l.csf1) in fork_csf_ids and id(l.csf2) in fork_csf_ids]
+				if id(l.csf1) in fids and id(l.csf2) in fids]
 
 	def csfs_for_fork(self, fork, sector_assignments):
-		"""All CSFs in H that are currently assigned to this fork."""
+		"""All CSFs in H that are candidates at this fork and in the graph."""
 		sa = sector_assignments.get(id(fork))
 		if sa is None:
 			return []
-		return [c for c in sa.assignments if c is not None and id(c) in self._csfs]
+		return [csf for csf in sa.all_csfs if id(csf) in self._csfs]
 
 	def remove_link(self, link):
 		lid = id(link)
@@ -1804,7 +1875,10 @@ def _build_candidates(fork, aux_graph, sector_assignments, sigma_phi):
 	# ── T-junction (one per valid link in H) ─────────────────────────
 	for link in h_links:
 		root_nb = link.protruding_branch
-		non_root_ok = all(branch_salience(fork, nb) >= _SIGMA_MIN
+		# T-links are already validated by F·P projection, so use the
+		# relaxed _SIGMA_MIN_T: non-root branches just need to extend
+		# beyond the fork disk (not be degenerate).
+		non_root_ok = all(branch_salience(fork, nb) >= _SIGMA_MIN_T
 						  for _, nb in branches if nb is not root_nb)
 		if not non_root_ok:
 			continue
@@ -3976,6 +4050,94 @@ class StrokeGraphResult(object):
 					len(self.cuts), len(self.strokes), t, y, h, len(self.links)))
 
 
+# ── Cross-contour cut helpers ─────────────────────────────────────────────────
+
+def _find_contour_for_point(contours, pt, snap):
+	"""Return index of the contour closest to pt, or None if > snap."""
+	best_idx = None
+	best_dist = float('inf')
+	for i, c in enumerate(contours):
+		_, _, d = find_parameter_on_contour(c, pt[0], pt[1])
+		if d < best_dist:
+			best_dist = d
+			best_idx = i
+	if best_dist < snap:
+		return best_idx
+	return None
+
+
+def _merge_contours_at_cut(contour_a, contour_b, pt_a, pt_b, snap):
+	"""Merge two contours by connecting them at two cut points.
+
+	pt_a should be near contour_a, pt_b near contour_b.  The merge creates
+	a single closed contour that goes:
+	  ... contour_a nodes up to pt_a → straight to pt_b →
+	  contour_b nodes from pt_b all the way around back to pt_b →
+	  straight back to pt_a → remaining contour_a nodes ...
+
+	Returns a single merged Contour or None on failure.
+	"""
+	work_a = _fast_clone_contour(contour_a)
+	work_b = _fast_clone_contour(contour_b)
+
+	# Find and insert cut points on each contour
+	node_a, t_a, da = find_parameter_on_contour(work_a, pt_a[0], pt_a[1])
+	node_b, t_b, db = find_parameter_on_contour(work_b, pt_b[0], pt_b[1])
+	if node_a is None or node_b is None or da > snap or db > snap:
+		return None
+
+	# Snap or insert on contour A
+	nearest_a = _find_nearest_on_node(work_a, pt_a[0], pt_a[1])
+	if nearest_a and math.hypot(nearest_a.x - pt_a[0], nearest_a.y - pt_a[1]) < 2.0:
+		cut_a = nearest_a
+	else:
+		result_a = node_a.insert_after(t_a)
+		cut_a = node_a.next_on if isinstance(result_a, tuple) else result_a
+
+	# Snap or insert on contour B
+	nearest_b = _find_nearest_on_node(work_b, pt_b[0], pt_b[1])
+	if nearest_b and math.hypot(nearest_b.x - pt_b[0], nearest_b.y - pt_b[1]) < 2.0:
+		cut_b = nearest_b
+	else:
+		result_b = node_b.insert_after(t_b)
+		cut_b = node_b.next_on if isinstance(result_b, tuple) else result_b
+
+	if cut_a is None or cut_b is None:
+		return None
+
+	# Build merged node list:
+	# contour_a from cut_a onwards (wrapping) + contour_b from cut_b onwards (wrapping)
+	nodes_a = list(work_a.data)
+	nodes_b = list(work_b.data)
+
+	idx_a = cut_a.idx
+	idx_b = cut_b.idx
+
+	# Rotate A so cut_a is first
+	rotated_a = nodes_a[idx_a:] + nodes_a[:idx_a]
+	# Rotate B so cut_b is first
+	rotated_b = nodes_b[idx_b:] + nodes_b[:idx_b]
+
+	# Merge: all of A (starting at cut_a) + bridge node + all of B + bridge back
+	merged_nodes = []
+	for n in rotated_a:
+		merged_nodes.append(_fast_clone_node(n))
+	# Bridge to B's cut point (already at same position as pt_b)
+	for n in rotated_b:
+		merged_nodes.append(_fast_clone_node(n))
+
+	if len(merged_nodes) < 3:
+		return None
+
+	merged = Contour(merged_nodes, closed=True)
+
+	# Match winding to the outer contour (contour_a assumed outer)
+	if contour_a.is_ccw != merged.is_ccw:
+		merged.reverse()
+
+	return merged
+
+
 class StrokeSepV2(object):
 	"""Full StrokeStyles (Berio et al. 2022) pipeline for CJK stroke separation.
 
@@ -4097,12 +4259,50 @@ class StrokeSepV2(object):
 
 		working = [_fast_clone_contour(c)
 				   for c in contours]
-		output = []
 
+		# ── Pre-pass: merge contours connected by cross-contour cuts ──────
+		# A cross-contour cut has endpoint A on contour i and endpoint B on
+		# contour j (i != j).  To split, we first merge the two contours at
+		# the cut points, creating a single contour that can be split.
+		cross_cuts = []
+		same_cuts  = []
+		for cut in result.cuts:
+			ci_a = _find_contour_for_point(working, cut[0], _SNAP)
+			ci_b = _find_contour_for_point(working, cut[1], _SNAP)
+			if ci_a is not None and ci_b is not None and ci_a != ci_b:
+				cross_cuts.append((cut, ci_a, ci_b))
+			else:
+				same_cuts.append(cut)
+
+		# Apply cross-contour merges
+		for cut, ci_a, ci_b in cross_cuts:
+			# Indices may shift after merges — re-find
+			ci_a = _find_contour_for_point(working, cut[0], _SNAP)
+			ci_b = _find_contour_for_point(working, cut[1], _SNAP)
+			if ci_a is None or ci_b is None or ci_a == ci_b:
+				# Already merged or lost — treat as same-contour cut
+				same_cuts.append(cut)
+				continue
+			merged = _merge_contours_at_cut(working[ci_a], working[ci_b],
+											cut[0], cut[1], _SNAP)
+			if merged is not None:
+				# Replace the two contours with the merged one
+				new_working = []
+				for k, c in enumerate(working):
+					if k != ci_a and k != ci_b:
+						new_working.append(c)
+				new_working.append(merged)
+				working = new_working
+				# Now this cut becomes a same-contour cut on the merged contour
+				same_cuts.append(cut)
+			else:
+				same_cuts.append(cut)
+
+		# ── Main pass: apply same-contour cuts ────────────────────────────
+		output = []
 		for contour in working:
-			# Find cuts whose both endpoints lie near this contour
 			applicable = []
-			for cut in result.cuts:
+			for cut in same_cuts:
 				_, _, da = find_parameter_on_contour(contour, cut[0][0], cut[0][1])
 				_, _, db = find_parameter_on_contour(contour, cut[1][0], cut[1][1])
 				if da < _SNAP and db < _SNAP:
@@ -4129,5 +4329,10 @@ class StrokeSepV2(object):
 				remaining = new_remaining
 
 			output.extend(remaining)
+
+		# Remove degenerate (zero-area) contours from splitting artifacts
+		_MIN_AREA = 100.0
+		output = [c for c in output
+				  if not hasattr(c, 'signed_area') or abs(c.signed_area) > _MIN_AREA]
 
 		return output
