@@ -980,10 +980,13 @@ def _link_inside_glyph(p1, p2, contours, n_interior_checks=4,
 	"""Return True if segment p1→p2 lies entirely inside the glyph outline.
 
 	Strategy:
-	  1. Reject if the segment crosses any contour edge.
+	  1. Reject if the segment crosses any contour edge (strict open-interval test).
 	  2. Check n_interior_checks evenly-spaced interior samples with ray casting.
-	     All must be inside the glyph.  This catches links that fit between
-	     two contour boundary crossings (e.g. inside a letter counter).
+	     Because link endpoints lie ON the contour boundary (concave CSF extrema),
+	     the segment may run very close to or along edges.  For robustness we test
+	     each sample at perpendicular offsets on BOTH sides of the link: if either
+	     side is inside the glyph, the link is acceptable.  Only reject when both
+	     sides are outside (segment crosses a counter / exterior gap).
 
 	When _cached_edges and _cached_grid are provided (from _precompute_glyph_edges),
 	avoids resampling contours on every call — critical for O(n²) link generation.
@@ -1021,12 +1024,32 @@ def _link_inside_glyph(p1, p2, contours, n_interior_checks=4,
 		cell = max(30.0, math.hypot(x2 - x1, y2 - y1) / 5.0)
 		grid = _SpatialGrid(polylines, cell_size=cell)
 
+	# Perpendicular offset for boundary-robust inside tests.
+	# When links run along or near contour edges, the exact on-line point
+	# may be ON the boundary where ray-casting is ambiguous.  Testing at
+	# a small perpendicular offset on both sides resolves this.
+	dx = x2 - x1
+	dy = y2 - y1
+	link_len = math.hypot(dx, dy)
+	_PERP_EPS = 4.0  # units perpendicular offset
+	if link_len > _EPS:
+		px = -dy / link_len * _PERP_EPS
+		py =  dx / link_len * _PERP_EPS
+	else:
+		px, py = _PERP_EPS, 0.0
+
 	for k in range(1, n_interior_checks + 1):
 		t = k / float(n_interior_checks + 1)
-		mx = x1 + t * (x2 - x1)
-		my = y1 + t * (y2 - y1)
-		if not grid.is_inside(mx, my):
-			return False
+		mx = x1 + t * dx
+		my = y1 + t * dy
+		# Accept if the point itself OR either perpendicular offset is inside
+		if grid.is_inside(mx, my):
+			continue
+		if grid.is_inside(mx + px, my + py):
+			continue
+		if grid.is_inside(mx - px, my - py):
+			continue
+		return False
 
 	return True
 
@@ -1317,7 +1340,11 @@ def generate_links(sector_assignments, contours, graph, ligatures,
 					fork = sa.fork
 					nb, proj = _protruding_branch_for_normal_link(
 						link, fork, sa, all_lig_ids)
-					if nb is not None and proj > 0.0:
+					# Paper uses F·P > 0 but for blocky glyphs with same-side
+					# concavities (90° corners), flow is naturally perpendicular
+					# to the protruding branch → proj ≈ 0.  Accept near-
+					# perpendicular flows; only reject clearly opposing.
+					if nb is not None and proj > -0.5:
 						link.link_type         = 'normal'
 						link.fork              = fork
 						link.protruding_branch = nb
@@ -2113,9 +2140,12 @@ def _update_H_after_junction(jr, aux_graph, sector_assignments):
 	elif jr.jtype == JType.Y and jr.rep_csf is not None:
 		aux_graph.remove_csf(jr.rep_csf)
 
-	elif jr.jtype in (JType.L, JType.NULL, JType.STROKE_END):
+	elif jr.jtype == JType.L:
 		for csf in aux_graph.csfs_for_fork(jr.fork, sector_assignments):
 			aux_graph.remove_csf(csf)
+
+	# NULL and STROKE_END do NOT consume CSFs — the CSFs may be shared
+	# with neighbouring forks that can still form actual junctions.
 
 
 def identify_junctions_step3(graph, sector_assignments, aux_graph, contours,
@@ -4037,27 +4067,31 @@ class StrokeSepV2(object):
 			concavities=_concavities,
 		)
 
-	def execute(self, result, contours):
+	def execute(self, result, contours, use_fallback=True):
 		"""Apply cuts and return a list of separated Contour objects.
 
-		When the new pipeline produces no cuts (e.g. single-stroke glyph),
-		falls back to the geometry-based StrokeSeparator.
-
 		Args:
-			result:   StrokeGraphResult from analyze()
-			contours: original list of TypeRig Contour objects
+			result:       StrokeGraphResult from analyze()
+			contours:     original list of TypeRig Contour objects
+			use_fallback: if True and the v2 pipeline produces no cuts, fall back
+			              to the geometry-based v1 StrokeSeparator.  Set False to
+			              diagnose link/cut generation issues.
 
 		Returns:
 			list of Contour — original contours with junction cuts applied
 		"""
-		
+
 		if not result.cuts:
-			fallback = StrokeSeparator(
-				beta_min=self.beta_min, sample_step=self.sample_step)
-			# Reuse already-computed interior MAT to avoid duplicate work
-			fb_result = fallback.analyze(
-				contours, precomputed_graph=(result.graph, result.concavities))
-			return fallback.execute(fb_result, contours)
+			if use_fallback:
+				fallback = StrokeSeparator(
+					beta_min=self.beta_min, sample_step=self.sample_step)
+				# Reuse already-computed interior MAT to avoid duplicate work
+				fb_result = fallback.analyze(
+					contours, precomputed_graph=(result.graph, result.concavities))
+				return fallback.execute(fb_result, contours)
+			else:
+				# No cuts and no fallback — return contours unchanged
+				return list(contours)
 
 		_SNAP = 15.0   # maximum distance (font units) for a cut to snap to a contour
 
