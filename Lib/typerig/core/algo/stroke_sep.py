@@ -36,6 +36,7 @@ from typerig.core.algo.stroke_sep_common import (
 	CutPair,
 	resolve_cut_parameters,
 	check_contour_compatibility,
+	apply_cuts_to_layer,
 	StrokeSepResult,
 )
 

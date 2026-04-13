@@ -161,6 +161,78 @@ def check_contour_compatibility(source_contours, target_contours):
 	return True
 
 
+# - Cross-Master Cut Application ------
+
+def apply_cuts_to_layer(result, source_contours, target_contours):
+	"""Apply cuts from an analyzed layer to a compatible target layer.
+
+	Uses the parametric locations (contour_idx, node_idx, t) stored in each
+	CutPair to evaluate new coordinates on the target contours, then splits
+	at those coordinates.  No MAT recomputation is needed.
+
+	Args:
+		result:           StrokeSepResult from analyzing source_contours
+		source_contours:  list[Contour] -- the contours that were analyzed
+		target_contours:  list[Contour] -- compatible contours from another master
+
+	Returns:
+		list[Contour] -- target contours with cuts applied (new objects,
+		                 target_contours are not modified)
+
+	Raises:
+		ValueError: if target_contours are not structurally compatible
+	"""
+	check_contour_compatibility(source_contours, target_contours)
+
+	# Resolve target coordinates from parametric locations
+	target_cuts = []
+	for cut_pair in result.cuts:
+		pts = []
+		for ep in (cut_pair.a, cut_pair.b):
+			target_contour = target_contours[ep.contour_idx]
+			target_node = target_contour.data[ep.node_idx]
+			segment = target_node.segment
+			pt = segment.solve_point(ep.t)
+			pts.append((pt.x, pt.y))
+		target_cuts.append((pts[0], pts[1]))
+
+	# Split target contours at the resolved coordinates
+	working = [_fast_clone_contour(c) for c in target_contours]
+
+	output = []
+	for contour in working:
+		applicable = []
+		for cut in target_cuts:
+			_, _, da = find_parameter_on_contour(contour, cut[0][0], cut[0][1])
+			_, _, db = find_parameter_on_contour(contour, cut[1][0], cut[1][1])
+			if da < 15.0 and db < 15.0:
+				applicable.append(cut)
+
+		if not applicable:
+			output.append(contour)
+			continue
+
+		remaining = [contour]
+		for cut in applicable:
+			new_remaining = []
+			for c in remaining:
+				_, _, da = find_parameter_on_contour(c, cut[0][0], cut[0][1])
+				_, _, db = find_parameter_on_contour(c, cut[1][0], cut[1][1])
+				if da > 15.0 or db > 15.0:
+					new_remaining.append(c)
+					continue
+				split = split_contour_at_points(c, cut[0], cut[1])
+				if split is not None:
+					new_remaining.extend(split)
+				else:
+					new_remaining.append(c)
+			remaining = new_remaining
+
+		output.extend(remaining)
+
+	return output
+
+
 # - Unified Result ---------------------
 
 class StrokeSepResult(object):
