@@ -16,7 +16,7 @@
 from __future__ import absolute_import, print_function, division
 
 # - Init --------------------------------
-__version__ = '0.5.0'
+__version__ = '0.6.0'
 
 # ── Common utilities ─────────────────────────────────────────────────────────
 from typerig.core.algo.stroke_sep_common import (
@@ -32,6 +32,11 @@ from typerig.core.algo.stroke_sep_common import (
 	_find_nearest_on_node,
 	split_contour_at_points,
 	_join_fragments,
+	CutEndpoint,
+	CutPair,
+	resolve_cut_parameters,
+	check_contour_compatibility,
+	StrokeSepResult,
 )
 
 # ── MAT structures ───────────────────────────────────────────────────────────
@@ -92,7 +97,6 @@ from typerig.core.algo.stroke_sep_graph import (
 from typerig.core.algo.stroke_sep_v1 import (
 	JunctionType,
 	JunctionData,
-	StrokeSepResult,
 	classify_junction,
 	solve_cut_points,
 	coordinate_cuts,

@@ -345,49 +345,5 @@ def cuts_from_junction_results(protuberances, half_junctions, step3_junctions):
 
 # ── 9.6: Result class ────────────────────────────────────────────────────────
 
-class StrokeGraphResult(object):
-	"""Full analysis result for the StrokeSepV2 pipeline.
-
-	Attributes:
-		graph:           MATGraph — interior medial axis
-		ext_graph:       MATGraph — exterior medial axis M*
-		csfs:            list[CSF] — all curvilinear shape features
-		ligatures:       list[Ligature]
-		links:           list[Link] — compatible links after filtering
-		protuberances:   list[JunctionResult] — step 8a
-		half_junctions:  list[JunctionResult] — step 8b
-		step3_junctions: list[JunctionResult] — steps 8c+8d
-		stroke_graph:    StrokeGraph — final S with connectivity + stroke IDs
-		cuts:            list[((x1,y1),(x2,y2))]
-	"""
-
-	def __init__(self, graph, ext_graph, csfs, ligatures, links,
-				 protuberances, half_junctions, step3_junctions,
-				 stroke_graph, cuts, concavities=None):
-		self.graph            = graph
-		self.ext_graph        = ext_graph
-		self.csfs             = csfs
-		self.ligatures        = ligatures
-		self.links            = links
-		self.protuberances    = protuberances
-		self.half_junctions   = half_junctions
-		self.step3_junctions  = step3_junctions
-		self.stroke_graph     = stroke_graph
-		self.cuts             = cuts
-		self.concavities      = concavities or []
-
-	@property
-	def all_junctions(self):
-		return self.protuberances + self.half_junctions + self.step3_junctions
-
-	@property
-	def strokes(self):
-		return self.stroke_graph.strokes()
-
-	def __repr__(self):
-		t = sum(1 for j in self.step3_junctions if j.jtype == JType.T)
-		y = sum(1 for j in self.step3_junctions if j.jtype == JType.Y)
-		h = len(self.half_junctions)
-		return ('<StrokeGraphResult: {} cuts | {} strokes | '
-				'T={} Y={} half={} links={}>'.format(
-					len(self.cuts), len(self.strokes), t, y, h, len(self.links)))
+# StrokeGraphResult is now a backward-compat alias for the unified StrokeSepResult
+from typerig.core.algo.stroke_sep_common import StrokeSepResult as StrokeGraphResult

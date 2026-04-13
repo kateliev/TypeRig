@@ -27,6 +27,8 @@ from typerig.core.algo.stroke_sep_common import (
 	find_parameter_on_contour,
 	split_contour_at_points,
 	_join_fragments,
+	resolve_cut_parameters,
+	StrokeSepResult,
 )
 from typerig.core.algo.stroke_sep_mat import (
 	StrokePath,
@@ -60,58 +62,7 @@ class JunctionData(object):
 			self.junction_type, self.fork_node.x, self.fork_node.y, len(self.cuts))
 
 
-class StrokeSepResult(object):
-	"""Full analysis result for a glyph."""
-	def __init__(self, graph, concavities, junctions, stroke_paths=None, stroke_width=None):
-		self.graph = graph
-		self.concavities = concavities
-		self.junctions = junctions
-		self.stroke_paths = stroke_paths or []
-		self.stroke_width = stroke_width or self._estimate_stroke_width()
-		self._junction_is_real = self._compute_real_junctions()
-
-	@property
-	def cuts(self):
-		return [cut for j in self.junctions for cut in j.cuts]
-
-	@property
-	def coordinated_cuts(self):
-		return coordinate_cuts(self.junctions, self.stroke_paths, self.stroke_width)
-
-	def _estimate_stroke_width(self):
-		"""Estimate stroke width from all node radii (not just terminals).
-
-		Uses median of all radii for robustness against outliers.
-		"""
-		if not self.graph.nodes:
-			return 50.0
-
-		radii = sorted([n.radius for n in self.graph.nodes])
-		median_radius = radii[len(radii) // 2]
-		return 2.0 * median_radius
-
-	def _compute_real_junctions(self):
-		"""Compute which forks are real junctions vs corner effects.
-
-		A real junction: a stroke path passes through the fork
-		A corner effect: strokes stop and turn at the fork
-		"""
-		is_real = {}
-
-		for jdata in self.junctions:
-			fork = jdata.fork_node
-			is_real[id(fork)] = _is_real_junction(fork, self.stroke_paths)
-
-		return is_real
-
-	def is_real_junction(self, fork):
-		"""Check if a fork is a real junction (not just a corner effect)."""
-		return self._junction_is_real.get(id(fork), False)
-
-	def __repr__(self):
-		return '<StrokeSepResult: {} junctions ({} real), {} cuts, {} strokes>'.format(
-			len(self.junctions), sum(self._junction_is_real.values()),
-			len(self.cuts), len(self.stroke_paths))
+# StrokeSepResult is now imported from stroke_sep_common
 
 
 # - Junction Classification -----------
@@ -839,7 +790,25 @@ class StrokeSeparator(object):
 			cuts = solve_cut_points(rep_fork, jtype, concavities, ligatures, contours)
 			junctions.append(JunctionData(rep_fork, jtype, cuts))
 
-		return StrokeSepResult(graph, concavities, junctions, stroke_paths)
+		# Collect raw cuts and resolve parametric locations
+		raw_cuts = [cut for j in junctions for cut in j.cuts]
+		cut_pairs = resolve_cut_parameters(raw_cuts, contours)
+
+		# Estimate stroke width
+		stroke_width = 50.0
+		if graph.nodes:
+			radii = sorted([n.radius for n in graph.nodes])
+			stroke_width = 2.0 * radii[len(radii) // 2]
+
+		return StrokeSepResult(
+			pipeline='v1',
+			graph=graph,
+			concavities=concavities,
+			cuts=cut_pairs,
+			junctions=junctions,
+			stroke_paths=stroke_paths,
+			stroke_width=stroke_width,
+		)
 
 	def execute(self, result, contours, coordinated=True):
 		"""Apply all cuts. Returns new list of Contour objects.

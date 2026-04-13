@@ -23,6 +23,8 @@ from typerig.core.algo.stroke_sep_common import (
 	split_contour_at_points,
 	_find_nearest_on_node,
 	_fast_clone_node,
+	resolve_cut_parameters,
+	StrokeSepResult,
 )
 from typerig.core.algo.stroke_sep_mat import compute_ligatures_v2
 from typerig.core.algo.stroke_sep_csf import assign_concavities_to_forks
@@ -31,7 +33,6 @@ from typerig.core.algo.stroke_sep_junctions import identify_junctions
 from typerig.core.algo.stroke_sep_graph import (
 	build_stroke_graph,
 	cuts_from_junction_results,
-	StrokeGraphResult,
 )
 from typerig.core.algo.stroke_sep_v1 import StrokeSeparator
 
@@ -149,13 +150,13 @@ class StrokeSepV2(object):
 		self.sample_step = sample_step
 
 	def analyze(self, contours):
-		"""Run the complete pipeline and return a StrokeGraphResult.
+		"""Run the complete pipeline and return a StrokeSepResult.
 
 		Args:
 			contours: list of TypeRig Contour objects (closed)
 
 		Returns:
-			StrokeGraphResult
+			StrokeSepResult (pipeline='v2')
 		"""
 		from typerig.core.algo.csf import compute_csfs
 
@@ -201,10 +202,14 @@ class StrokeSepV2(object):
 
 		# -- Step 9: Stroke graph + cut positions --
 		stroke_graph = build_stroke_graph(graph, proturbs, halfs, step3)
-		cuts         = cuts_from_junction_results(proturbs, halfs, step3)
+		raw_cuts     = cuts_from_junction_results(proturbs, halfs, step3)
+		cut_pairs    = resolve_cut_parameters(raw_cuts, contours)
 
-		return StrokeGraphResult(
+		return StrokeSepResult(
+			pipeline='v2',
 			graph=graph,
+			concavities=_concavities,
+			cuts=cut_pairs,
 			ext_graph=_ext_graph,
 			csfs=csfs,
 			ligatures=ligatures,
@@ -213,8 +218,6 @@ class StrokeSepV2(object):
 			half_junctions=halfs,
 			step3_junctions=step3,
 			stroke_graph=stroke_graph,
-			cuts=cuts,
-			concavities=_concavities,
 		)
 
 	def execute(self, result, contours, use_fallback=True):
