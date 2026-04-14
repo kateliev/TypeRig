@@ -446,14 +446,15 @@ class StrokeSepV3(object):
 						new_remaining.append(c)
 				remaining = new_remaining
 			
-			# Step 4: X-junction fragment joining (from V1)
-			if len(applicable_cuts) == 2 and len(remaining) == 3:
-				has_x_junction = any(
-					j.junction_type == JunctionType.X_JUNCTION
-					for j in result.junctions
-				)
-				if has_x_junction:
-					remaining = _join_fragments(remaining, applicable_cuts)
+			# Step 4: X-junction fragment joining (DISABLED)
+			# The _join_fragments feature was designed for the "+" shape but causes
+			# false merging on other glyphs (M, A, etc.). Disabled per user request.
+			# Original code kept for reference:
+			# if len(applicable_cuts) == 2 and len(remaining) == 3:
+			#     has_x_junction = any(...)
+			#     if has_x_junction:
+			#         remaining = _join_fragments(remaining, applicable_cuts)
+			pass
 			
 			# Step 5: Overlap extension (from V1)
 			if overlap > 0:
