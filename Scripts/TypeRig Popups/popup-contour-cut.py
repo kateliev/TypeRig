@@ -19,6 +19,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.objects.node import eNode
 from typerig.proxy.fl.actions.contour import TRContourActionCollector
 from typerig.proxy.fl.actions.node import TRNodeActionCollector
+from typerig.proxy.fl.actions.cut import TRCutActionCollector
 from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomPushButton, TRFlowLayout
 from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 from typerig.core.base.message import *
@@ -150,6 +151,12 @@ class TRPopupContourCut(QtGui.QWidget):
 		self.btn_corner_loop = CustomPushButton('corner_loop', tooltip=tooltip_button, obj_name='btn_panel')
 		self.lay_main.addWidget(self.btn_corner_loop)
 		self.btn_corner_loop.clicked.connect(self.do_corner_loop)
+
+		# -- Stroke separator (V3)
+		tooltip_button = 'Stroke Separate (V3)\nSplit stroke glyph into components via MAT analysis.\nApplies to active layer; propagates cuts to all masters.'
+		self.btn_stroke_sep = CustomPushButton('spark', tooltip=tooltip_button, obj_name='btn_panel')
+		self.lay_main.addWidget(self.btn_stroke_sep)
+		self.btn_stroke_sep.clicked.connect(self.do_stroke_sep)
 
 		# -- Safe distance spin box
 		self.spn_safe_distance = QtGui.QSpinBox()
@@ -343,6 +350,11 @@ class TRPopupContourCut(QtGui.QWidget):
 	def do_corner_mitre(self):
 		'''Standard corner mitre via radius dialog'''
 		TRNodeActionCollector.corner_mitre_dlg(pMode, pLayers)
+		self.close()
+
+	def do_stroke_sep(self):
+		'''Stroke Separate (V3): split stroke glyph via MAT analysis.'''
+		TRCutActionCollector.stroke_separate_v3(pMode, pLayers)
 		self.close()
 
 # - RUN ------------------------------
