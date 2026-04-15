@@ -24,7 +24,7 @@ from typerig.core.algo.stroke_sep_v3 import StrokeSepV3
 from typerig.core.algo.stroke_sep_common import apply_cuts_to_layer, check_contour_compatibility
 
 # - Init ------------------------------------------------------------------------
-__version__ = '1.0'
+__version__ = '1.1'
 active_workspace = pWorkspace()
 
 # - Actions ---------------------------------------------------------------------
@@ -36,7 +36,7 @@ class TRCutActionCollector(object):
 	'''
 
 	@staticmethod
-	def stroke_separate_v3(pMode, pLayers, sample_step=20.0, beta_min=1.5, overlap=20, debug=False):
+	def stroke_separate_v3(pMode, pLayers, sample_step=20.0, beta_min=1.5, overlap=10, debug=False):
 		'''Separate a stroke glyph into its component strokes using the V3 hybrid pipeline.
 
 		Analyzes the active layer with the MAT-based stroke separator, then propagates
@@ -61,7 +61,7 @@ class TRCutActionCollector(object):
 
 		for glyph in process_glyphs:
 			# - Active layer is the analysis reference
-			analysis_layer = glyph.activeLayer.name
+			analysis_layer = glyph.layer().name
 			work_layers = glyph._prepareLayers(pLayers)
 
 			# - Bridge to TR proxy for Core API access

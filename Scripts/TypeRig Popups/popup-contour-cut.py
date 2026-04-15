@@ -25,7 +25,7 @@ from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 from typerig.core.base.message import *
 
 # - Init --------------------------
-tool_version = '1.1'
+tool_version = '1.2'
 tool_name = 'TR Popup Contour Cut'
 
 TRToolFont_path = getTRIconFontPath()
@@ -152,12 +152,6 @@ class TRPopupContourCut(QtGui.QWidget):
 		self.lay_main.addWidget(self.btn_corner_loop)
 		self.btn_corner_loop.clicked.connect(self.do_corner_loop)
 
-		# -- Stroke separator (V3)
-		tooltip_button = 'Stroke Separate (V3)\nSplit stroke glyph into components via MAT analysis.\nApplies to active layer; propagates cuts to all masters.'
-		self.btn_stroke_sep = CustomPushButton('spark', tooltip=tooltip_button, obj_name='btn_panel')
-		self.lay_main.addWidget(self.btn_stroke_sep)
-		self.btn_stroke_sep.clicked.connect(self.do_stroke_sep)
-
 		# -- Safe distance spin box
 		self.spn_safe_distance = QtGui.QSpinBox()
 		self.spn_safe_distance.setMinimum(0)
@@ -168,6 +162,12 @@ class TRPopupContourCut(QtGui.QWidget):
 		self.spn_safe_distance.setToolTip('Safe distance: pull back from target by this amount on each axis.')
 
 		self.lay_main.addWidget(self.spn_safe_distance)
+
+		# -- Stroke separator (V3)
+		tooltip_button = 'Stroke Separate (V3)\nSplit stroke glyph into components via MAT analysis.\nApplies to active layer; propagates cuts to all masters.'
+		self.btn_stroke_sep = CustomPushButton('shape', tooltip=tooltip_button, obj_name='btn_panel')
+		self.lay_main.addWidget(self.btn_stroke_sep)
+		self.btn_stroke_sep.clicked.connect(self.do_stroke_sep)
 
 		# - Set container layout
 		self.container.setLayout(self.lay_main)
@@ -184,7 +184,7 @@ class TRPopupContourCut(QtGui.QWidget):
 		self._apply_style()
 
 		# - Position at cursor and show
-		self.setGeometry(100, 100, 20, 160)
+		self.setGeometry(100, 100, 20, 230)
 		self._position_at_cursor()
 		self.show()
 
