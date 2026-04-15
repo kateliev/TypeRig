@@ -27,7 +27,7 @@ Usage:
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
 import os
-import math
+import colorsys
 from xml.etree import ElementTree as ET
 
 # - Init --------------------------------
@@ -39,37 +39,30 @@ EXPORT_FLAT = 'flat'
 EXPORT_NESTED = 'nested'
 
 # - Color Table -------------------------
-# 128 predefined colors for contour visualization
-# Colors are evenly distributed around the color wheel for maximum contrast
-SVG_COLORS = [
-    # Row 1 - Reds/Oranges
-    '#FF0000', '#FF1400', '#FF2800', '#FF3C00', '#FF5000', '#FF6400', '#FF7800', '#FF8C00',
-    '#FFA000', '#FFB400', '#FFC800', '#FFDC00', '#FFF000', '#DBFF00', '#B7FF00', '#93FF00',
-    # Row 2 - Yellows/Limes
-    '#6FFF00', '#4BFF00', '#27FF00', '#03FF00', '#00FF27', '#00FF4B', '#00FF6F', '#00FF93',
-    '#00FFB7', '#00FFDB', '#00FFFF', '#00DBFF', '#00B7FF', '#0093FF', '#006FFF', '#004BFF',
-    # Row 3 - Blues
-    '#0000FF', '#1400FF', '#2800FF', '#3C00FF', '#5000FF', '#6400FF', '#7800FF', '#8C00FF',
-    '#A000FF', '#B400FF', '#C800FF', '#DC00FF', '#F000FF', '#FF00DB', '#FF00B7', '#FF0093',
-    # Row 4 - Pinks/Magentas
-    '#FF006F', '#FF004B', '#FF0027', '#FF0300', '#FF1400', '#FF2800', '#FF3C00', '#FF5000',
-    '#FF6400', '#FF7800', '#FF8C00', '#FFA000', '#FFB400', '#E68A00', '#CC7400', '#B25E00',
-    # Row 5 - Browns/Golds
-    '#984800', '#7E3200', '#641C00', '#4A0600', '#FF6B6B', '#FF8C8C', '#FFADAD', '#FFCECE',
-    '#FFEFEF', '#FFD6D6', '#FFBDBD', '#FFA4A4', '#FF8B8B', '#FF7272', '#FF5959', '#FF4040',
-    # Row 6 - More variation
-    '#FF2727', '#FF0E0E', '#E60000', '#CC0000', '#B30000', '#990000', '#800000', '#670000',
-    '#4D0000', '#330000', '#1A0000', '#FF9999', '#FFAAAA', '#FFBBBB', '#FFCCCC', '#FFDDDD',
-    # Row 7 - Additional
-    '#FFEEEE', '#FFFFFF', '#000000', '#1A1A1A', '#333333', '#4D4D4D', '#666666', '#808080',
-    '#999999', '#B3B3B3', '#CCCCCC', '#E6E6E6', '#F2F2F2', '#0D0D0D', '#1A1A33', '#33331A',
-    # Row 8 - More variation
-    '#1A3333', '#331A1A', '#331A33', '#33331A', '#2D4A8C', '#4A2D8C', '#8C2D4A', '#8C4A2D',
-    '#2D8C4A', '#4A8C2D', '#8C2D2D', '#2D2D8C', '#8C4A8C', '#4A8C4A', '#8C8C4A', '#4A4A8C',
-]
+# 128 colors generated via golden-ratio hue rotation (golden angle ≈ 137.508°).
+#
+# Why golden ratio: the golden angle places each new hue as far as possible from
+# all previous ones on the color wheel. This means:
+#   - Any subset of the first N colors is maximally spread (no two close hues)
+#   - Index i always maps to the same color regardless of how many contours exist
+#   - Cross-layer comparison works: same contour index == same color in all layers
+#
+# Parameters: S=0.85 (vivid), L=0.52 (bright enough on white, not washed out)
 
-# Ensure we have exactly 128 colors
-assert len(SVG_COLORS) == 128, f"SVG_COLORS must have 128 colors, got {len(SVG_COLORS)}"
+def _build_golden_colors(n=128, saturation=0.85, lightness=0.52):
+    golden_angle = 137.508  # degrees — 360° × (2 − φ), φ = golden ratio
+    colors = []
+    for i in range(n):
+        hue = (i * golden_angle % 360) / 360.0
+        r, g, b = colorsys.hls_to_rgb(hue, lightness, saturation)
+        colors.append('#{:02X}{:02X}{:02X}'.format(
+            int(round(r * 255)),
+            int(round(g * 255)),
+            int(round(b * 255)),
+        ))
+    return colors
+
+SVG_COLORS = _build_golden_colors()
 
 
 # - Helpers -----------------------------
@@ -80,18 +73,28 @@ def _format_float(v):
     return '{:.4f}'.format(v).rstrip('0').rstrip('.')
 
 
-def _flip_y(y, height, scale=1.0):
-    '''Flip Y coordinate for SVG (origin at top-left)'''
-    return height - (y * scale)
-
-
 def _get_contour_style(contour_index, mode):
-    '''Get fill and stroke colors for a contour based on mode and index'''
+    '''Get fill and stroke style for a contour based on mode and index.
+
+    BW mode: solid black fill, 1px stroke.
+    Color mode (optimised for human + LLM visual debugging):
+      - Stroke: fully opaque, 2px — survives thumbnail downscaling
+      - Fill:   same color at 35% opacity — light tint that makes region visible
+                while letting overlapping contours show through
+    '''
     if mode == 'bw':
-        return {'fill': '#000000', 'stroke': '#000000', 'fill-opacity': '1.0', 'stroke-opacity': '1.0'}
-    else:  # mode == 'color'
+        return {
+            'fill': '#000000', 'stroke': '#000000',
+            'fill-opacity': '1', 'stroke-opacity': '1',
+            'stroke-width': '1',
+        }
+    else:  # color
         color = SVG_COLORS[contour_index % 128]
-        return {'fill': color, 'stroke': color, 'fill-opacity': '0.4', 'stroke-opacity': '1.0'}
+        return {
+            'fill': color, 'stroke': color,
+            'fill-opacity': '0.5', 'stroke-opacity': '1',
+            'stroke-width': '2',
+        }
 
 
 # - SVG Serializable Mixin -------------
@@ -123,220 +126,248 @@ class SVGSerializable:
 
 
 # - Node SVG Conversion -----------------
-def node_to_SVG(node, scale=1.0, flip_y=True, height=1000):
-    '''Convert Node to SVG element'''
+def node_to_SVG(node, scale=1.0, **kwargs):
+    '''Convert Node to SVG circle element (uses raw font coordinates; caller must apply Y-flip transform)'''
     x = node.x * scale
     y = node.y * scale
-    if flip_y:
-        y = _flip_y(y, height, scale)
-    
-    # Node as small circle
     elem = ET.Element('circle', {
         'cx': _format_float(x),
         'cy': _format_float(y),
-        'r': str(2.0 * scale),
+        'r': _format_float(2.0 * scale),
         'fill': '#000000'
     })
     return elem
 
 
 # - Contour SVG Conversion -------------
-def contour_to_SVG(contour, mode='color', scale=1.0, flip_y=True, height=1000, index=0):
-    '''Convert Contour to SVG path element'''
+def _contour_to_d(contour, scale=1.0):
+    '''Build an SVG path data string from a contour using node_segments.
+
+    Writes raw font coordinates (no Y-flip); the caller's <g transform> handles it.
+    Returns a 'd' string, or None if the contour is empty.
+    '''
     if len(contour.nodes) == 0:
         return None
-    
-    nodes = list(contour.nodes)
-    if not contour.closed and len(nodes) > 0:
-        nodes = nodes[:-1]  # Skip closing node for open contours
-    
+
+    try:
+        segments = contour.node_segments  # list of [on_node, ...off_nodes..., on_node]
+    except (AssertionError, Exception):
+        return None
+
+    if not segments:
+        return None
+
     d_parts = []
-    height_scaled = height * scale
-    
-    for i, node in enumerate(nodes):
-        x = node.x * scale
-        y = node.y * scale
-        if flip_y:
-            y = _flip_y(y, height, scale)
-        
-        # Handle in point
-        if hasattr(node, 'handle_in') and node.handle_in:
-            hx_in = (node.x + node.handle_in.x) * scale
-            hy_in = (node.y + node.handle_in.y) * scale
-            if flip_y:
-                hy_in = _flip_y(hy_in, height, scale)
-        
-        # Handle out point
-        if hasattr(node, 'handle_out') and node.handle_out:
-            hx_out = (node.x + node.handle_out.x) * scale
-            hy_out = (node.y + node.handle_out.y) * scale
-            if flip_y:
-                hy_out = _flip_y(hy_out, height, scale)
-        
-        if i == 0:
-            d_parts.append('M {} {}'.format(_format_float(x), _format_float(y)))
+
+    # Move to start of first segment (the first on-curve node)
+    first = segments[0][0]
+    d_parts.append('M {} {}'.format(
+        _format_float(first.x * scale),
+        _format_float(first.y * scale)
+    ))
+
+    for seg in segments:
+        n = len(seg)
+        end = seg[-1]
+        ex = _format_float(end.x * scale)
+        ey = _format_float(end.y * scale)
+
+        if n == 2:
+            # Line segment: [on, on]
+            d_parts.append('L {} {}'.format(ex, ey))
+
+        elif n == 4 and seg[1].type == 'curve':
+            # Cubic bezier (PostScript/CFF): [on, curve, curve, on]
+            cp1 = seg[1]
+            cp2 = seg[2]
+            d_parts.append('C {} {} {} {} {} {}'.format(
+                _format_float(cp1.x * scale), _format_float(cp1.y * scale),
+                _format_float(cp2.x * scale), _format_float(cp2.y * scale),
+                ex, ey
+            ))
+
+        elif n >= 3 and seg[1].type == 'off':
+            # TT quadratic: [on, off, ..., on] — expand complex runs with implicit on-curves
+            off_nodes = seg[1:-1]
+            for i, off in enumerate(off_nodes):
+                qx = _format_float(off.x * scale)
+                qy = _format_float(off.y * scale)
+                if i < len(off_nodes) - 1:
+                    # Implicit on-curve at midpoint between this and next off-curve
+                    nxt = off_nodes[i + 1]
+                    px = _format_float((off.x + nxt.x) * 0.5 * scale)
+                    py = _format_float((off.y + nxt.y) * 0.5 * scale)
+                else:
+                    px, py = ex, ey
+                d_parts.append('Q {} {} {} {}'.format(qx, qy, px, py))
+
         else:
-            prev_node = nodes[i - 1]
-            
-            # Check if there's a curve
-            has_handle_out = hasattr(prev_node, 'handle_out') and prev_node.handle_out
-            has_handle_in = hasattr(node, 'handle_in') and node.handle_in
-            
-            if has_handle_out and has_handle_in:
-                # Cubic bezier
-                hx_out = (prev_node.x + prev_node.handle_out.x) * scale
-                hy_out = (prev_node.y + prev_node.handle_out.y) * scale
-                if flip_y:
-                    hy_out = _flip_y(hy_out, height, scale)
-                
-                hx_in = (node.x + node.handle_in.x) * scale
-                hy_in = (node.y + node.handle_in.y) * scale
-                if flip_y:
-                    hy_in = _flip_y(hy_in, height, scale)
-                
-                d_parts.append('C {} {} {} {} {} {}'.format(
-                    _format_float(hx_out), _format_float(hy_out),
-                    _format_float(hx_in), _format_float(hy_in),
-                    _format_float(x), _format_float(y)
-                ))
-            elif has_handle_out:
-                # Quadratic (one handle)
-                hx_out = (prev_node.x + prev_node.handle_out.x) * scale
-                hy_out = (prev_node.y + prev_node.handle_out.y) * scale
-                if flip_y:
-                    hy_out = _flip_y(hy_out, height, scale)
-                
-                d_parts.append('Q {} {} {} {}'.format(
-                    _format_float(hx_out), _format_float(hy_out),
-                    _format_float(x), _format_float(y)
-                ))
-            else:
-                # Line
-                d_parts.append('L {} {}'.format(_format_float(x), _format_float(y)))
-    
-    # Close path
+            # Fallback: straight line
+            d_parts.append('L {} {}'.format(ex, ey))
+
     if contour.closed:
         d_parts.append('Z')
-    
-    # Get style
+
+    return ' '.join(d_parts)
+
+
+def contour_to_SVG(contour, mode='color', scale=1.0, index=0, **kwargs):
+    '''Convert Contour to an SVG path element.
+
+    Coordinates are in raw font space; place inside a Y-flip <g transform> to render correctly.
+    '''
+    d = _contour_to_d(contour, scale=scale)
+    if d is None:
+        return None
+
     style = _get_contour_style(index, mode)
-    
-    path_elem = ET.Element('path', {
-        'd': ' '.join(d_parts),
+    stroke_w = _format_float(float(style['stroke-width']) * scale)
+    return ET.Element('path', {
+        'd': d,
         'fill': style['fill'],
-        'stroke': style['stroke'],
         'fill-opacity': style['fill-opacity'],
+        'fill-rule': 'evenodd',
+        'stroke': style['stroke'],
         'stroke-opacity': style['stroke-opacity'],
-        'stroke-width': str(1.0 * scale)
+        'stroke-width': stroke_w,
     })
-    
-    return path_elem
 
 
 def _bounds_to_tuple(bounds):
-    '''Convert Bounds object or tuple to (x, y, w, h) tuple'''
+    '''Convert Bounds object to (x_min, y_min, x_max, y_max) tuple'''
     if bounds is None:
         return None
-    if hasattr(bounds, 'x'):  # Bounds object
-        return (bounds.x, bounds.y, bounds.width, bounds.height)
-    if hasattr(bounds, 'width') and bounds.width == 0 and bounds.height == 0:
-        # Empty bounds
-        return None
-    return bounds  # Already a tuple
+    if hasattr(bounds, 'xmax'):  # Bounds object
+        if bounds.width == 0 and bounds.height == 0:
+            return None
+        return (bounds.x, bounds.y, bounds.xmax, bounds.ymax)
+    return bounds  # Already a (x_min, y_min, x_max, y_max) tuple
 
 
 # - Layer SVG Conversion ----------------
-def layer_to_SVG(layer, mode='color', scale=1.0, flip_y=True, bounds=None):
-    '''Convert Layer to SVG group element'''
-    group = ET.Element('g', {'id': str(layer.name)})
-    
-    # Get bounding box
-    if bounds is None:
-        layer_bounds = layer.bounds
-        bounds = _bounds_to_tuple(layer_bounds)
-    
-    height = bounds[3] - bounds[1] if bounds else 1000
-    
-    # Add all contours
-    for idx, contour in enumerate(layer.contours):
-        path_elem = contour_to_SVG(contour, mode=mode, scale=scale, flip_y=flip_y, height=height, index=idx)
-        if path_elem is not None:
+def layer_to_SVG(layer, mode='color', scale=1.0, x_min=0, y_min=0, y_max=1000, **kwargs):
+    '''Convert Layer to an SVG group element.
+
+    The group carries a transform that maps raw font coordinates (y-up) to SVG
+    coordinates (y-down):  translate(-x_min, y_max) scale(1, -1)
+
+    BW mode: all contours are merged into one compound <path> with fill-rule=evenodd
+    so counter-wound inner contours become transparent holes.
+
+    Color mode: one <path> per contour, colorized by index.
+    '''
+    transform = 'translate({}, {}) scale(1, -1)'.format(
+        _format_float(-x_min * scale),
+        _format_float(y_max * scale)
+    )
+    group = ET.Element('g', {'id': str(layer.name), 'transform': transform})
+
+    if mode == 'bw':
+        # Single compound path — all contours joined as subpaths
+        d_parts = []
+        for contour in layer.contours:
+            d = _contour_to_d(contour, scale=scale)
+            if d:
+                d_parts.append(d)
+
+        if d_parts:
+            path_elem = ET.Element('path', {
+                'd': ' '.join(d_parts),
+                'fill': '#000000',
+                'fill-rule': 'evenodd',
+                'stroke': '#000000',
+                'stroke-width': _format_float(scale),
+            })
             group.append(path_elem)
-    
+
+    else:  # color mode
+        for idx, contour in enumerate(layer.contours):
+            path_elem = contour_to_SVG(contour, mode=mode, scale=scale, index=idx)
+            if path_elem is not None:
+                group.append(path_elem)
+
     return group
 
 
 # - Glyph SVG Conversion ----------------
-def glyph_to_SVG(glyph, mode='color', scale=1.0, flip_y=True):
-    '''Convert Glyph to full SVG document'''
-    # Get bounding box - calculate from layers
+def _merge_bounds(accumulated, new_bounds):
+    '''Expand (x_min, y_min, x_max, y_max) accumulated bounds to include new_bounds.'''
+    if accumulated is None:
+        return new_bounds
+    return (
+        min(accumulated[0], new_bounds[0]),
+        min(accumulated[1], new_bounds[1]),
+        max(accumulated[2], new_bounds[2]),
+        max(accumulated[3], new_bounds[3]),
+    )
+
+
+def glyph_to_SVG(glyph, mode='color', scale=1.0, **kwargs):
+    '''Convert Glyph to full SVG document string.
+
+    viewBox spans the union of all layer bounding boxes in SVG space (0 0 width height).
+    A per-layer transform handles the font→SVG coordinate flip.
+    '''
+    # Compute union bounds across all layers (x_min, y_min, x_max, y_max in font coords)
     bounds = None
     for layer in glyph.layers:
-        layer_bounds = _bounds_to_tuple(layer.bounds)
-        if layer_bounds:
-            if bounds is None:
-                bounds = layer_bounds
-            else:
-                # Expand bounds
-                bounds = (
-                    min(bounds[0], layer_bounds[0]),
-                    min(bounds[1], layer_bounds[1]),
-                    max(bounds[2], layer_bounds[2]),
-                    max(bounds[3], layer_bounds[3])
-                )
-    
+        try:
+            lb = _bounds_to_tuple(layer.bounds)
+            if lb:
+                bounds = _merge_bounds(bounds, lb)
+        except (AssertionError, AttributeError):
+            pass
+
     if not bounds:
         bounds = (0, 0, 1000, 1000)
-    
-    x, y, w, h = bounds
-    width = max(w, 1)
-    height = max(h, 1)
-    
-    # Create SVG root
+
+    x_min, y_min, x_max, y_max = bounds
+    width = max(x_max - x_min, 1)
+    height = max(y_max - y_min, 1)
+
+    # SVG root — viewBox in SVG space: 0,0 → width,height
     svg_elem = ET.Element('svg', {
         'xmlns': 'http://www.w3.org/2000/svg',
         'width': _format_float(width * scale),
         'height': _format_float(height * scale),
-        'viewBox': '{} {} {} {}'.format(
-            _format_float(x), _format_float(y),
-            _format_float(width), _format_float(height)
+        'viewBox': '0 0 {} {}'.format(
+            _format_float(width * scale),
+            _format_float(height * scale)
         )
     })
-    
-    # Add metadata
+
+    # Metadata
     metadata = ET.SubElement(svg_elem, 'metadata')
-    
-    fontname_elem = ET.SubElement(metadata, 'fontname')
-    fontname_elem.text = str(getattr(glyph, 'parent', None) or 'Unknown')
-    
-    glyphname_elem = ET.SubElement(metadata, 'glyphname')
-    glyphname_elem.text = str(glyph.name)
-    
+    ET.SubElement(metadata, 'fontname').text = str(getattr(glyph, 'parent', None) or 'Unknown')
+    ET.SubElement(metadata, 'glyphname').text = str(glyph.name)
     if hasattr(glyph, 'unicodes') and glyph.unicodes:
-        unicode_elem = ET.SubElement(metadata, 'unicode')
-        unicode_elem.text = hex(glyph.unicodes[0])[2:].upper().zfill(4)
-    
-    # Add white background
-    bg = ET.SubElement(svg_elem, 'rect', {
-        'x': _format_float(x),
-        'y': _format_float(y),
-        'width': _format_float(width),
-        'height': _format_float(height),
+        ET.SubElement(metadata, 'unicode').text = hex(glyph.unicodes[0])[2:].upper().zfill(4)
+
+    # White background
+    ET.SubElement(svg_elem, 'rect', {
+        'x': '0', 'y': '0',
+        'width': _format_float(width * scale),
+        'height': _format_float(height * scale),
         'fill': '#FFFFFF'
     })
-    
-    # Add layers
-    for layer_idx, layer in enumerate(glyph.layers):
-        layer_group = layer_to_SVG(layer, mode=mode, scale=scale, flip_y=flip_y, bounds=bounds)
-        
-        # Add layer metadata
-        layer_meta = ET.SubElement(layer_group, 'metadata')
-        layername_elem = ET.SubElement(layer_meta, 'layername')
-        layername_elem.text = str(layer.name)
-        
+
+    # Layers (each gets a Y-flip transform)
+    for layer in glyph.layers:
+        layer_group = layer_to_SVG(layer, mode=mode, scale=scale,
+                                   x_min=x_min, y_min=y_min, y_max=y_max)
+        ET.SubElement(layer_group, 'metadata').append(
+            _make_elem('layername', str(layer.name))
+        )
         svg_elem.append(layer_group)
-    
+
     return ET.tostring(svg_elem, encoding='unicode')
+
+
+def _make_elem(tag, text):
+    '''Helper: create an XML element with text content.'''
+    e = ET.Element(tag)
+    e.text = text
+    return e
 
 
 # - Font SVG Export ---------------------
@@ -373,102 +404,84 @@ def font_to_SVG(font, output_dir='./SVG', mode='color', scale=1.0, structure=EXP
 
 
 def glyph_to_SVG_file(glyph, output_dir, mode='color', scale=1.0, structure=EXPORT_FLAT, path_pattern=None):
-    '''Export single glyph layers to SVG files'''
+    '''Export each layer of a glyph to its own SVG file.
+
+    All files for one glyph share the same bounding box (union of all layers) so
+    layers are directly comparable when viewed side-by-side.
+    '''
     os.makedirs(output_dir, exist_ok=True)
-    
+
     glyph_name = glyph.name.replace(' ', '_').replace('/', '_')
-    
+
     if structure == EXPORT_NESTED:
         glyph_output_dir = os.path.join(output_dir, glyph_name)
         os.makedirs(glyph_output_dir, exist_ok=True)
     else:
         glyph_output_dir = output_dir
-    
+
+    # Union bounds across all layers (x_min, y_min, x_max, y_max in font coords)
+    bounds = None
+    for lyr in glyph.layers:
+        try:
+            lb = _bounds_to_tuple(lyr.bounds)
+            if lb:
+                bounds = _merge_bounds(bounds, lb)
+        except (AssertionError, AttributeError):
+            pass
+
+    if not bounds:
+        bounds = (0, 0, 1000, 1000)
+
+    x_min, y_min, x_max, y_max = bounds
+    width = max(x_max - x_min, 1)
+    height = max(y_max - y_min, 1)
+
     for layer_idx, layer in enumerate(glyph.layers):
         layer_name = layer.name.replace(' ', '_').replace('/', '_')
-        
-        # Generate filename
+
         if path_pattern:
             filename = path_pattern.format(glyph=glyph_name, layer=layer_name, index=layer_idx)
         else:
             filename = '{}_{}.svg'.format(glyph_name, layer_name)
-        
+
         filepath = os.path.join(glyph_output_dir, filename)
-        
-        # Generate SVG content
-        # Calculate bounds from layers
-        bounds = None
-        for layer in glyph.layers:
-            try:
-                layer_bounds = _bounds_to_tuple(layer.bounds)
-                if layer_bounds:
-                    if bounds is None:
-                        bounds = layer_bounds
-                    else:
-                        bounds = (
-                            min(bounds[0], layer_bounds[0]),
-                            min(bounds[1], layer_bounds[1]),
-                            max(bounds[2], layer_bounds[2]),
-                            max(bounds[3], layer_bounds[3])
-                        )
-            except (AssertionError, AttributeError):
-                # Skip empty layers
-                pass
-        
-        if not bounds:
-            bounds = (0, 0, 1000, 1000)
-        
-        x, y, w, h = bounds
-        width = max(w, 1)
-        height = max(h, 1)
-        
+
+        # SVG root
         svg_elem = ET.Element('svg', {
             'xmlns': 'http://www.w3.org/2000/svg',
             'width': _format_float(width * scale),
             'height': _format_float(height * scale),
-            'viewBox': '{} {} {} {}'.format(
-                _format_float(x), _format_float(y),
-                _format_float(width), _format_float(height)
+            'viewBox': '0 0 {} {}'.format(
+                _format_float(width * scale),
+                _format_float(height * scale)
             )
         })
-        
-        # Add metadata
+
+        # Metadata
         metadata = ET.SubElement(svg_elem, 'metadata')
-        
-        fontname_elem = ET.SubElement(metadata, 'fontname')
-        fontname_elem.text = str(getattr(glyph, 'parent', None) or 'Unknown')
-        
-        glyphname_elem = ET.SubElement(metadata, 'glyphname')
-        glyphname_elem.text = str(glyph.name)
-        
+        ET.SubElement(metadata, 'fontname').text = str(getattr(glyph, 'parent', None) or 'Unknown')
+        ET.SubElement(metadata, 'glyphname').text = str(glyph.name)
         if hasattr(glyph, 'unicodes') and glyph.unicodes:
-            unicode_elem = ET.SubElement(metadata, 'unicode')
-            unicode_elem.text = hex(glyph.unicodes[0])[2:].upper().zfill(4)
-        
-        layername_elem = ET.SubElement(metadata, 'layername')
-        layername_elem.text = str(layer.name)
-        
-        # Add white background
-        bg = ET.SubElement(svg_elem, 'rect', {
-            'x': _format_float(x),
-            'y': _format_float(y),
-            'width': _format_float(width),
-            'height': _format_float(height),
+            ET.SubElement(metadata, 'unicode').text = hex(glyph.unicodes[0])[2:].upper().zfill(4)
+        ET.SubElement(metadata, 'layername').text = str(layer.name)
+
+        # White background
+        ET.SubElement(svg_elem, 'rect', {
+            'x': '0', 'y': '0',
+            'width': _format_float(width * scale),
+            'height': _format_float(height * scale),
             'fill': '#FFFFFF'
         })
-        
-        # Add layer contours
-        height_val = height
-        for idx, contour in enumerate(layer.contours):
-            path_elem = contour_to_SVG(contour, mode=mode, scale=scale, flip_y=True, height=height_val, index=idx)
-            if path_elem is not None:
-                svg_elem.append(path_elem)
-        
-        # Write file
+
+        # Layer group (carries Y-flip transform)
+        layer_group = layer_to_SVG(layer, mode=mode, scale=scale,
+                                   x_min=x_min, y_min=y_min, y_max=y_max)
+        svg_elem.append(layer_group)
+
         svg_string = ET.tostring(svg_elem, encoding='unicode')
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(svg_string)
-    
+
     return glyph_output_dir
 
 
@@ -483,37 +496,43 @@ def add_svg_methods():
     from typerig.core.objects.font import Font
     
     # Node.to_SVG()
-    def node_to_SVG_method(self, mode='color', scale=1.0, flip_y=True, height=1000, **kwargs):
-        return node_to_SVG(self, scale=scale, flip_y=flip_y, height=height)
-    
+    def node_to_SVG_method(self, scale=1.0, **kwargs):
+        return ET.tostring(node_to_SVG(self, scale=scale), encoding='unicode')
+
     Node.to_SVG = node_to_SVG_method
-    
+
     # Contour.to_SVG()
-    def contour_to_SVG_method(self, mode='color', scale=1.0, flip_y=True, height=1000, index=0, **kwargs):
-        path_elem = contour_to_SVG(self, mode=mode, scale=scale, flip_y=flip_y, height=height, index=index)
+    def contour_to_SVG_method(self, mode='color', scale=1.0, index=0, **kwargs):
+        path_elem = contour_to_SVG(self, mode=mode, scale=scale, index=index)
         return ET.tostring(path_elem, encoding='unicode') if path_elem else ''
-    
+
     Contour.to_SVG = contour_to_SVG_method
-    
+
     # Layer.to_SVG()
-    def layer_to_SVG_method(self, mode='color', scale=1.0, flip_y=True, **kwargs):
-        bounds = kwargs.get('bounds') or self.bounds
-        bounds = _bounds_to_tuple(bounds)
-        group = layer_to_SVG(self, mode=mode, scale=scale, flip_y=flip_y, bounds=bounds)
+    def layer_to_SVG_method(self, mode='color', scale=1.0, **kwargs):
+        try:
+            b = _bounds_to_tuple(self.bounds)
+        except (AssertionError, AttributeError):
+            b = (0, 0, 1000, 1000)
+        x_min, y_min, x_max, y_max = b or (0, 0, 1000, 1000)
+        group = layer_to_SVG(self, mode=mode, scale=scale,
+                              x_min=x_min, y_min=y_min, y_max=y_max)
         return ET.tostring(group, encoding='unicode')
-    
+
     Layer.to_SVG = layer_to_SVG_method
-    
+
     # Glyph.to_SVG()
-    def glyph_to_SVG_method(self, mode='color', scale=1.0, flip_y=True, **kwargs):
-        return glyph_to_SVG(self, mode=mode, scale=scale, flip_y=flip_y)
-    
+    def glyph_to_SVG_method(self, mode='color', scale=1.0, **kwargs):
+        return glyph_to_SVG(self, mode=mode, scale=scale)
+
     Glyph.to_SVG = glyph_to_SVG_method
-    
+
     # Font.to_SVG()
-    def font_to_SVG_method(self, output_dir='./SVG', mode='color', scale=1.0, structure=EXPORT_FLAT, path_pattern=None):
-        return font_to_SVG(self, output_dir=output_dir, mode=mode, scale=scale, structure=structure, path_pattern=path_pattern)
-    
+    def font_to_SVG_method(self, output_dir='./SVG', mode='color', scale=1.0,
+                            structure=EXPORT_FLAT, path_pattern=None):
+        return font_to_SVG(self, output_dir=output_dir, mode=mode, scale=scale,
+                            structure=structure, path_pattern=path_pattern)
+
     Font.to_SVG = font_to_SVG_method
 
 
