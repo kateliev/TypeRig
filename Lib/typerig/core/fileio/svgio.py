@@ -97,32 +97,196 @@ def _get_contour_style(contour_index, mode):
         }
 
 
+# - Registry ----------------------------
+_SVG_REGISTRY = {}
+
+def register_svg_class(cls):
+    '''Decorator to register a class for SVG serialization by role.
+
+    Parallel to register_xml_class in xmlio.py.  Apply to any class that
+    inherits SVGSerializable and sets SVG_ROLE, so the registry can resolve
+    roles back to classes if needed.
+
+    Usage:
+        @register_svg_class
+        class Contour(Container, XMLSerializable, SVGSerializable):
+            SVG_TAG  = 'path'
+            SVG_ROLE = 'contour'
+            SVG_CHILDREN = []
+    '''
+    if hasattr(cls, 'SVG_ROLE') and cls.SVG_ROLE:
+        _SVG_REGISTRY[cls.SVG_ROLE] = cls
+    return cls
+
+
+def _find_svg_class(role):
+    '''Return the class registered for a given SVG_ROLE, or None.'''
+    return _SVG_REGISTRY.get(role)
+
+
+def _safe_bounds(obj):
+    '''Return (x_min, y_min, x_max, y_max) for obj.bounds, or a 1000-unit fallback.'''
+    try:
+        b = _bounds_to_tuple(obj.bounds)
+        return b if b else (0, 0, 1000, 1000)
+    except (AssertionError, AttributeError):
+        return (0, 0, 1000, 1000)
+
+
 # - SVG Serializable Mixin -------------
 class SVGSerializable:
-    '''Mixin class for SVG serialization'''
-    
-    # Override in subclasses
-    SVG_TAG = None
-    
-    def __init__(self, path_pattern=None):
-        self._path_pattern = path_pattern or DEFAULT_PATH_PATTERN
-    
-    def to_SVG(self, mode='color', scale=1.0, flip_y=True, bounds=None, **kwargs):
-        '''Convert object to SVG string
-        mode: 'bw' for black/white or 'color' for color-separated
-        scale: coordinate scaling factor
-        flip_y: flip Y-axis for font tool compatibility
-        bounds: (x, y, w, h) optional bounding box override
+    '''Mixin for SVG serialization — parallel to XMLSerializable in xmlio.py.
+
+    Declare the SVG schema on the inheriting class using class attributes:
+
+        SVG_TAG     — SVG element tag this object serializes to:
+                        'circle' (node) | 'path' (contour) | 'g' (layer) | 'svg' (glyph)
+                        None for font (produces a directory of files, not one element).
+
+        SVG_ROLE    — Position in the object hierarchy. Controls dispatch in
+                      _to_svg_element() and to_SVG_file():
+                        'node' | 'contour' | 'layer' | 'glyph' | 'font'
+
+        SVG_CHILDREN — List of attribute names whose items contribute SVG child
+                       elements. Parallel to XML_CHILDREN but a plain list because
+                       SVG is write-only (no deserialization needed).
+                       e.g.  ['contours']  on Layer,  ['layers']  on Glyph.
+
+        SVG_EXPORT_PATTERN — Filename pattern used by to_SVG_file(). Supports
+                       {glyph}, {layer}, {index} placeholders.
+                       Default: '{glyph}_{layer}.svg'
+
+    Example — what the declaration looks like on a core class (not applied yet):
+
+        @register_svg_class
+        class Node(Member, XMLSerializable, SVGSerializable):
+            SVG_TAG      = 'circle'
+            SVG_ROLE     = 'node'
+            SVG_CHILDREN = []
+
+        @register_svg_class
+        class Contour(Container, XMLSerializable, SVGSerializable):
+            SVG_TAG      = 'path'
+            SVG_ROLE     = 'contour'
+            SVG_CHILDREN = []          # nodes are encoded into 'd', not separate elements
+
+        @register_svg_class
+        class Layer(Container, XMLSerializable, SVGSerializable):
+            SVG_TAG      = 'g'
+            SVG_ROLE     = 'layer'
+            SVG_CHILDREN = ['contours']
+
+        @register_svg_class
+        class Glyph(Container, XMLSerializable, SVGSerializable):
+            SVG_TAG      = 'svg'
+            SVG_ROLE     = 'glyph'
+            SVG_CHILDREN = ['layers']
+
+        @register_svg_class
+        class Font(Container, XMLSerializable, SVGSerializable):
+            SVG_TAG      = None         # font → directory of SVG files, not one element
+            SVG_ROLE     = 'font'
+            SVG_CHILDREN = ['glyphs']
+
+    API once a class inherits SVGSerializable:
+
+        node.to_SVG()                        # → '<circle .../>'
+        contour.to_SVG(mode='color')         # → '<path .../>'
+        layer.to_SVG(mode='bw')              # → '<g transform="...">...</g>'
+        glyph.to_SVG()                       # → full SVG document string
+        glyph.to_SVG_file('./out')           # → writes per-layer SVG files, returns dir
+        font.to_SVG_file('./out', mode='bw') # → writes all glyphs × layers, returns dir
+
+    Context propagation:
+        Higher-level objects compute bounding boxes and pass coordinate context
+        (x_min, y_min, y_max) down via **kwargs to _to_svg_element().
+        Lower-level objects (node, contour) write raw font coordinates; the
+        enclosing layer <g transform> handles the Y-flip to SVG space.
+    '''
+
+    SVG_TAG             = None
+    SVG_ROLE            = None
+    SVG_CHILDREN        = []
+    SVG_EXPORT_PATTERN  = DEFAULT_PATH_PATTERN
+
+    # -- Public API -----------------------------------------
+
+    def to_SVG(self, mode='color', scale=1.0, **kwargs):
+        '''Serialize this object to an SVG string.
+
+        node / contour / layer  →  SVG fragment string (element only)
+        glyph                   →  complete SVG document string
+        font                    →  raises TypeError — use to_SVG_file() instead
         '''
-        raise NotImplementedError("Subclasses must implement to_SVG()")
-    
-    def _get_path_pattern(self, glyph_name=None, layer_name=None, index=0):
-        '''Get output filename from pattern'''
-        result = self._path_pattern
-        result = result.replace('{glyph}', str(glyph_name or 'glyph'))
-        result = result.replace('{layer}', str(layer_name or 'layer'))
-        result = result.replace('{index}', str(index))
-        return result
+        if self.SVG_ROLE == 'font':
+            raise TypeError(
+                'Font objects produce many SVG files, not a single string. '
+                'Use to_SVG_file(output_dir) instead.')
+        elem = self._to_svg_element(mode=mode, scale=scale, **kwargs)
+        return ET.tostring(elem, encoding='unicode') if elem is not None else ''
+
+    def _to_svg_element(self, mode='color', scale=1.0, **kwargs):
+        '''Return an ET.Element for this object.
+
+        Dispatches to the appropriate module-level function based on SVG_ROLE.
+
+        Recognized context kwargs (passed top-down by parent objects):
+            index  (int)   — contour index within its layer (drives color palette)
+            x_min  (float) — left edge of the enclosing glyph bbox in font coords
+            y_min  (float) — bottom edge of the enclosing glyph bbox in font coords
+            y_max  (float) — top edge of the enclosing glyph bbox in font coords
+
+        When called directly (not from a parent), safe defaults are inferred
+        from self.bounds where available.
+        '''
+        role = self.SVG_ROLE
+
+        if role == 'node':
+            return node_to_SVG(self, scale=scale)
+
+        elif role == 'contour':
+            return contour_to_SVG(self, mode=mode, scale=scale,
+                                  index=kwargs.get('index', 0))
+
+        elif role == 'layer':
+            b = _safe_bounds(self)
+            return layer_to_SVG(self, mode=mode, scale=scale,
+                                x_min=kwargs.get('x_min', b[0]),
+                                y_min=kwargs.get('y_min', b[1]),
+                                y_max=kwargs.get('y_max', b[3]))
+
+        elif role == 'glyph':
+            return _glyph_to_svg_element(self, mode=mode, scale=scale)
+
+        else:
+            raise NotImplementedError(
+                '{} has no SVG dispatch for SVG_ROLE={!r}. '
+                'Set SVG_ROLE to one of: node, contour, layer, glyph, font.'.format(
+                    self.__class__.__name__, role))
+
+    def to_SVG_file(self, output_dir='.', mode='color', scale=1.0,
+                    structure=EXPORT_FLAT, path_pattern=None):
+        '''Export to SVG file(s).
+
+        glyph  →  one file per layer written into output_dir; returns output dir
+        font   →  one file per glyph × layer; returns output dir
+        Other levels raise TypeError.
+
+        path_pattern overrides SVG_EXPORT_PATTERN for this call only.
+        '''
+        role = self.SVG_ROLE
+        pattern = path_pattern or self.SVG_EXPORT_PATTERN
+
+        if role == 'glyph':
+            return glyph_to_SVG_file(self, output_dir, mode=mode, scale=scale,
+                                     structure=structure, path_pattern=pattern)
+        elif role == 'font':
+            return font_to_SVG(self, output_dir, mode=mode, scale=scale,
+                               structure=structure, path_pattern=pattern)
+        else:
+            raise TypeError(
+                'to_SVG_file() is only meaningful for glyph and font objects '
+                '(got SVG_ROLE={!r} on {}).'.format(role, self.__class__.__name__))
 
 
 # - Node SVG Conversion -----------------
@@ -302,13 +466,13 @@ def _merge_bounds(accumulated, new_bounds):
     )
 
 
-def glyph_to_SVG(glyph, mode='color', scale=1.0, **kwargs):
-    '''Convert Glyph to full SVG document string.
+def _glyph_to_svg_element(glyph, mode='color', scale=1.0):
+    '''Internal: build and return the <svg> ET.Element for a glyph.
 
-    viewBox spans the union of all layer bounding boxes in SVG space (0 0 width height).
-    A per-layer transform handles the font→SVG coordinate flip.
+    Shared by glyph_to_SVG() (string output) and SVGSerializable._to_svg_element()
+    (element output), keeping both in sync with a single implementation.
     '''
-    # Compute union bounds across all layers (x_min, y_min, x_max, y_max in font coords)
+    # Union bounds across all layers (x_min, y_min, x_max, y_max in font coords)
     bounds = None
     for layer in glyph.layers:
         try:
@@ -322,23 +486,23 @@ def glyph_to_SVG(glyph, mode='color', scale=1.0, **kwargs):
         bounds = (0, 0, 1000, 1000)
 
     x_min, y_min, x_max, y_max = bounds
-    width = max(x_max - x_min, 1)
+    width  = max(x_max - x_min, 1)
     height = max(y_max - y_min, 1)
 
     # SVG root — viewBox in SVG space: 0,0 → width,height
     svg_elem = ET.Element('svg', {
         'xmlns': 'http://www.w3.org/2000/svg',
-        'width': _format_float(width * scale),
-        'height': _format_float(height * scale),
+        'width':   _format_float(width  * scale),
+        'height':  _format_float(height * scale),
         'viewBox': '0 0 {} {}'.format(
-            _format_float(width * scale),
+            _format_float(width  * scale),
             _format_float(height * scale)
         )
     })
 
     # Metadata
     metadata = ET.SubElement(svg_elem, 'metadata')
-    ET.SubElement(metadata, 'fontname').text = str(getattr(glyph, 'parent', None) or 'Unknown')
+    ET.SubElement(metadata, 'fontname').text  = str(getattr(glyph, 'parent', None) or 'Unknown')
     ET.SubElement(metadata, 'glyphname').text = str(glyph.name)
     if hasattr(glyph, 'unicodes') and glyph.unicodes:
         ET.SubElement(metadata, 'unicode').text = hex(glyph.unicodes[0])[2:].upper().zfill(4)
@@ -346,12 +510,12 @@ def glyph_to_SVG(glyph, mode='color', scale=1.0, **kwargs):
     # White background
     ET.SubElement(svg_elem, 'rect', {
         'x': '0', 'y': '0',
-        'width': _format_float(width * scale),
+        'width':  _format_float(width  * scale),
         'height': _format_float(height * scale),
         'fill': '#FFFFFF'
     })
 
-    # Layers (each gets a Y-flip transform)
+    # Layers — each gets a Y-flip transform
     for layer in glyph.layers:
         layer_group = layer_to_SVG(layer, mode=mode, scale=scale,
                                    x_min=x_min, y_min=y_min, y_max=y_max)
@@ -360,7 +524,17 @@ def glyph_to_SVG(glyph, mode='color', scale=1.0, **kwargs):
         )
         svg_elem.append(layer_group)
 
-    return ET.tostring(svg_elem, encoding='unicode')
+    return svg_elem
+
+
+def glyph_to_SVG(glyph, mode='color', scale=1.0, **kwargs):
+    '''Convert Glyph to a complete SVG document string.
+
+    viewBox spans the union of all layer bounding boxes in SVG space (0 0 width height).
+    Per-layer <g transform> handles the font-coordinate → SVG-coordinate Y-flip.
+    '''
+    return ET.tostring(_glyph_to_svg_element(glyph, mode=mode, scale=scale),
+                       encoding='unicode')
 
 
 def _make_elem(tag, text):
