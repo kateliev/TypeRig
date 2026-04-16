@@ -33,7 +33,7 @@ from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 from typerig.proxy.fl.gui.drawing import TRDrawIcon
 
 # - Init --------------------------------------------
-app_name, app_version = 'TypeRig | Symbol Explorer', '1.1'
+app_name, app_version = 'TypeRig | Symbol Explorer', '1.5'
 
 pLayers = (True, True, False, False)
 pMode = 0
@@ -146,19 +146,22 @@ class ContourPartsDelegate(QtGui.QStyledItemDelegate):
 		painter.setTransform(t)
 		
 		pen_w = max(0.5, 1.0 / scale)
-		gray = QtGui.QColor(150, 150, 150)
+		gray = QtGui.QColor(225, 225, 225)
 		gray_brush = QtGui.QBrush(gray)
 		gray_pen = QtGui.QPen(gray, pen_w)
-		
+
 		for i, path in enumerate(all_paths):
 			if i == highlight_path_idx:
-				color = _CONTOUR_COLORS[i % len(_CONTOUR_COLORS)]
-				painter.setBrush(QtGui.QBrush(color))
-				painter.setPen(QtGui.QPen(color, pen_w))
-			else:
-				painter.setBrush(gray_brush)
-				painter.setPen(gray_pen)
+				continue
+			painter.setBrush(gray_brush)
+			painter.setPen(gray_pen)
 			painter.drawPath(path)
+
+		if highlight_path_idx < len(all_paths):
+			color = _CONTOUR_COLORS[highlight_path_idx % len(_CONTOUR_COLORS)]
+			painter.setBrush(QtGui.QBrush(color))
+			painter.setPen(QtGui.QPen(color, pen_w))
+			painter.drawPath(all_paths[highlight_path_idx])
 		
 		painter.restore()
 
@@ -331,6 +334,7 @@ class TRSymbolExplorer(QtGui.QWidget):
 		self.source_layer_names = []
 
 		self._cached_font_idx = -1
+		self._glyph_name_cache = None
 
 		self.icon_sizes = [48, 64, 96, 128]
 		self.current_icon_size_index = 0
@@ -574,31 +578,49 @@ class TRSymbolExplorer(QtGui.QWidget):
 
 	def _perform_search(self):
 		query = self.txt_search.text.strip()
-		
-		if not self.symbol_core.is_ready():
-			output(2, app_name, 'No symbol data loaded. Please load tags and category files.')
-			return
-		
+
 		if not query:
 			self._show_all_icons()
 			return
-		
-		tag_results = self.symbol_core.search_by_tag(query)
-		category_results = self.symbol_core.search_by_category(query)
-		
-		icon_names = set()
-		
-		if category_results:
+
+		query_lower = query.lower()
+		icon_names = []
+		seen = set()
+
+		# Search glyph names in the selected font
+		font_glyph_names = self._get_font_glyph_names()
+		for name in font_glyph_names:
+			if query_lower in name.lower() and name not in seen:
+				icon_names.append(name)
+				seen.add(name)
+
+		# Also search symbol_core tags/categories if loaded
+		if self.symbol_core.is_ready():
+			tag_results = self.symbol_core.search_by_tag(query)
+			category_results = self.symbol_core.search_by_category(query)
+
 			for cat in category_results:
-				icons = self.symbol_core.get_icons_for_category(cat)
-				icon_names.update(icons)
-		
-		icon_names.update(tag_results)
-		
-		self._display_icon_results(list(icon_names))
+				for name in self.symbol_core.get_icons_for_category(cat):
+					if name not in seen:
+						icon_names.append(name)
+						seen.add(name)
+
+			for name in tag_results:
+				if name not in seen:
+					icon_names.append(name)
+					seen.add(name)
+
+		if not icon_names:
+			output(1, app_name, 'No glyphs or icons found matching: %s' % query)
+			return
+
+		self._display_icon_results(icon_names)
 
 	def _show_all_icons(self):
-		all_icons = self.symbol_core.get_all_icons()
+		if self.symbol_core.is_ready():
+			all_icons = self.symbol_core.get_all_icons()
+		else:
+			all_icons = self._get_font_glyph_names()
 		self._display_icon_results(all_icons)
 
 	def _display_icon_results(self, icon_names):
@@ -669,12 +691,26 @@ class TRSymbolExplorer(QtGui.QWidget):
 		if self.all_fonts is None or font_idx < 0 or font_idx >= len(self.all_fonts):
 			self.source_font = None
 			self._cached_font_idx = -1
+			self._glyph_name_cache = None
 			return
 
 		self._cached_font_idx = font_idx
 		self.source_font = pFont(self.all_fonts[font_idx])
+		self._glyph_name_cache = None
 
 		output(0, app_name, 'Font changed: %s' % (self.font_files[font_idx]))
+
+	def _get_font_glyph_names(self):
+		if self._glyph_name_cache is not None:
+			return self._glyph_name_cache
+
+		if self.source_font is None:
+			return []
+
+		self._glyph_name_cache = [g.name for g in self.source_font.fg.glyphs if g.name]
+		
+		output(0, app_name, 'Glyph name cache built: %d glyphs.' % len(self._glyph_name_cache))
+		return self._glyph_name_cache
 
 	def get_source_font(self):
 		if self.all_fonts is None or len(self.all_fonts) == 0:
