@@ -356,6 +356,137 @@ def _branch_direction(from_node, to_node, steps=3):
 	return (dx / mag, dy / mag)
 
 
+def estimate_direction_from_path(path_nodes, lookback=8, curvature_bias=0.5):
+	"""Curvature-aware direction estimate from accumulated MAT path history.
+
+	Splits the lookback window into an older half and a recent half, then
+	extrapolates the angular trend — so a curved stroke predicts where it is
+	heading rather than just reporting its instantaneous tangent.
+
+	Ported from Tegaki trace.ts ``estimateDirection``.
+
+	Args:
+		path_nodes:     list of MATNode — the path accumulated so far
+		lookback:       number of historical nodes to consider (window size)
+		curvature_bias: extrapolation weight
+		                  0.0 = pure tangent from the recent half
+		                  0.5 = moderate curvature extrapolation (default)
+		                  1.0 = full extrapolation (continues turning at same rate)
+
+	Returns:
+		(dx, dy) — unnormalized direction vector
+	"""
+	n = len(path_nodes)
+	window_size = min(n - 1, lookback)
+
+	if window_size < 4 or curvature_bias == 0.0:
+		# Not enough history or curvature disabled — simple endpoint vector
+		old = path_nodes[n - 1 - window_size]
+		cur = path_nodes[-1]
+		return (cur.x - old.x, cur.y - old.y)
+
+	half = window_size // 2
+	cur = path_nodes[-1]
+	mid = path_nodes[n - 1 - half]
+	old = path_nodes[n - 1 - window_size]
+
+	old_dx = mid.x - old.x
+	old_dy = mid.y - old.y
+	rec_dx = cur.x - mid.x
+	rec_dy = cur.y - mid.y
+
+	# Extrapolate: recent + bias * (recent - older)
+	return (
+		rec_dx + curvature_bias * (rec_dx - old_dx),
+		rec_dy + curvature_bias * (rec_dy - old_dy),
+	)
+
+
+def peek_ahead_direction(from_node, start_nb, steps=6):
+	"""Walk ahead along a MAT branch and return the direction to the endpoint.
+
+	Follows the branch from ``from_node`` through ``start_nb`` for up to
+	``steps`` nodes without modifying any graph state.  Stops early at forks
+	or terminals (genuine structural endpoints).
+
+	Ported from Tegaki trace.ts ``peekAhead``, adapted for the vector MAT graph
+	(no visited-array needed — we just avoid backtracking).
+
+	Args:
+		from_node:  MATNode — origin of the direction vector
+		start_nb:   MATNode — first step of the branch to probe
+		steps:      how many nodes to walk ahead
+
+	Returns:
+		(dx, dy) — unnormalized vector from from_node to the reached point
+	"""
+	prev, cur = from_node, start_nb
+	for _ in range(steps - 1):
+		if cur.is_fork or cur.is_terminal:
+			break
+		nexts = [n for n in cur.neighbors if n is not prev]
+		if not nexts:
+			break
+		prev, cur = cur, nexts[0]
+
+	return (cur.x - from_node.x, cur.y - from_node.y)
+
+
+def pick_best_branch(fork, path_nodes, candidates,
+					 lookback=8, curvature_bias=0.5, peek_steps=6,
+					 stop_cos=-2.0):
+	"""Pick the best continuation branch at a fork using curvature-aware lookahead.
+
+	Combines two ideas from Tegaki trace.ts:
+
+	1. **Curvature-aware direction** (``estimateDirection``): uses the full path
+	   history — not just the immediate 1-step tangent — and extrapolates the
+	   ongoing curve trend via ``estimate_direction_from_path``.
+
+	2. **Peek-ahead per candidate** (``pickStraightest`` + ``peekAhead``):
+	   instead of comparing only the raw 1-step angle to the candidate node,
+	   follows each candidate branch several steps ahead so the comparison uses
+	   the actual branch direction rather than a noisy single-pixel vector.
+
+	Args:
+		fork:           MATNode — the fork node we just arrived at
+		path_nodes:     list of MATNode — full path so far (fork is last entry)
+		candidates:     list of MATNode — unvisited neighbors to evaluate
+		lookback:       history window for direction estimation
+		curvature_bias: extrapolation weight (see estimate_direction_from_path)
+		peek_steps:     how many nodes to walk ahead per candidate branch
+		stop_cos:       minimum cosine to accept a continuation; if the best
+		                candidate scores below this, returns (None, best_cos).
+		                Default -2.0 accepts any branch.
+
+	Returns:
+		(best_node, best_cos) — best MATNode and its cosine alignment score,
+		or (None, best_cos) if no candidate clears stop_cos.
+	"""
+	dir_dx, dir_dy = estimate_direction_from_path(path_nodes, lookback, curvature_bias)
+	dir_len = math.hypot(dir_dx, dir_dy)
+
+	best_node = None
+	best_cos  = -2.0
+
+	for nb in candidates:
+		peek_dx, peek_dy = peek_ahead_direction(fork, nb, peek_steps)
+		peek_len = math.hypot(peek_dx, peek_dy)
+
+		if dir_len < _EPS or peek_len < _EPS:
+			continue
+
+		cos_val = (dir_dx * peek_dx + dir_dy * peek_dy) / (dir_len * peek_len)
+		if cos_val > best_cos:
+			best_cos  = cos_val
+			best_node = nb
+
+	if best_node is None or best_cos < stop_cos:
+		return None, best_cos
+
+	return best_node, best_cos
+
+
 def branch_angles_at_fork(fork_node):
 	"""Compute the angle of each branch departing from a fork node.
 
@@ -371,13 +502,22 @@ def branch_angles_at_fork(fork_node):
 
 
 # - Stroke Path Extraction ----------
-def extract_stroke_paths(graph):
+def extract_stroke_paths(graph, lookback=8, curvature_bias=0.5, peek_steps=6):
 	"""Extract complete stroke paths from terminal to terminal through forks.
+
+	Fork disambiguation uses curvature-aware lookahead (pick_best_branch).
+	The three optional parameters control that logic:
+
+	Args:
+		graph:          MATGraph from compute_mat()
+		lookback:       history window for direction estimation (default 8)
+		curvature_bias: curvature extrapolation weight, 0–1 (default 0.5)
+		peek_steps:     nodes to walk ahead per candidate at forks (default 6)
 
 	Returns:
 		list of StrokePath namedtuples
 	"""
-	paths = []
+	paths         = []
 	visited_edges = set()
 
 	for start_node in graph.terminals():
@@ -386,30 +526,40 @@ def extract_stroke_paths(graph):
 			if edge_key in visited_edges:
 				continue
 
-			path_nodes, end_terminal = _trace_full_path(start_node, neighbor, visited_edges)
+			path_nodes, end_terminal = _trace_full_path(
+				start_node, neighbor, visited_edges,
+				lookback=lookback, curvature_bias=curvature_bias,
+				peek_steps=peek_steps,
+			)
 
 			if len(path_nodes) >= 2:
-				forks_in_path = [n for n in path_nodes if n.is_fork]
+				forks_in_path    = [n for n in path_nodes if n.is_fork]
 				terminals_in_path = [n for n in path_nodes if n.is_terminal]
-
-				direction_angle = _compute_path_direction(path_nodes)
+				direction_angle  = _compute_path_direction(path_nodes)
 				paths.append(StrokePath(
 					nodes=path_nodes,
 					terminals=terminals_in_path,
 					forks=forks_in_path,
-					direction_angle=direction_angle
+					direction_angle=direction_angle,
 				))
 
 	return paths
 
 
-def _trace_full_path(start_node, first_neighbor, visited_edges):
-	"""Trace a complete path from start through first_neighbor to next terminal."""
-	COLLINEAR_THRESHOLD = 45.0
+def _trace_full_path(start_node, first_neighbor, visited_edges,
+					 lookback=8, curvature_bias=0.5, peek_steps=6):
+	"""Trace a complete path from start through first_neighbor to next terminal.
+
+	At fork nodes, uses curvature-aware lookahead (pick_best_branch) to choose
+	the branch that best continues the stroke's ongoing trajectory.  Stops when
+	no candidate scores above the cosine equivalent of a 45° deviation.
+	"""
+	# cos(45°) — stop if the best branch deviates more than 45° from estimated dir
+	STOP_COS = math.cos(math.radians(45.0))
 
 	path_nodes = [start_node]
-	current = first_neighbor
-	prev = start_node
+	current    = first_neighbor
+	prev       = start_node
 
 	edge_key = (id(start_node), id(first_neighbor))
 	visited_edges.add(edge_key)
@@ -425,29 +575,13 @@ def _trace_full_path(start_node, first_neighbor, visited_edges):
 			break
 
 		if current.is_fork:
-			in_dx = current.x - prev.x
-			in_dy = current.y - prev.y
-			in_angle = math.degrees(math.atan2(in_dy, in_dx)) % 360
-
-			best_nb = None
-			best_deviation = float('inf')
-
-			for nb in next_nodes:
-				out_dx = nb.x - current.x
-				out_dy = nb.y - current.y
-				out_angle = math.degrees(math.atan2(out_dy, out_dx)) % 360
-
-				diff = abs(out_angle - in_angle)
-				diff = min(diff, 360 - diff)
-				deviation = abs(diff - 180)
-
-				if deviation < best_deviation:
-					best_deviation = deviation
-					best_nb = nb
-
-			if best_deviation > COLLINEAR_THRESHOLD:
+			best_nb, _ = pick_best_branch(
+				current, path_nodes, next_nodes,
+				lookback=lookback, curvature_bias=curvature_bias,
+				peek_steps=peek_steps, stop_cos=STOP_COS,
+			)
+			if best_nb is None:
 				break
-
 			next_node = best_nb
 		else:
 			next_node = next_nodes[0]

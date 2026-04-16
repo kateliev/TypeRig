@@ -52,6 +52,9 @@ from typerig.core.algo.stroke_sep_mat import (
 	protruding_direction,
 	branch_salience,
 	_TAU_SIGMA,
+	estimate_direction_from_path,
+	peek_ahead_direction,
+	pick_best_branch,
 	branch_angles_at_fork,
 	extract_stroke_paths,
 )
