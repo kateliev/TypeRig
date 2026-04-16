@@ -169,6 +169,12 @@ class TRPopupContourCut(QtGui.QWidget):
 		self.lay_main.addWidget(self.btn_stroke_sep)
 		self.btn_stroke_sep.clicked.connect(self.do_stroke_sep)
 
+		# -- Auto overlap align
+		tooltip_button = 'Auto overlap align\nSelect 4 nodes (2 neighbor pairs) at a cut junction.'
+		self.btn_align_auto = CustomPushButton('align_contour_to_contour', tooltip=tooltip_button, obj_name='btn_panel')
+		self.lay_main.addWidget(self.btn_align_auto)
+		self.btn_align_auto.clicked.connect(self.do_align_auto)
+
 		# - Set container layout
 		self.container.setLayout(self.lay_main)
 
@@ -270,6 +276,93 @@ class TRPopupContourCut(QtGui.QWidget):
 			target_x = (n1.x + n2.x) / 2.0
 			n1.x = target_x
 			n2.x = target_x
+
+	def _auto_align_mode(self, pair):
+		'''Detect the correct alignment mode for a node pair at a cut junction.
+
+		Uses the direction of the segment leaving each junction node into the
+		contour interior (away from the other pair node) as the signal:
+
+		  - Interior segments predominantly horizontal -> arm side -> 'C'
+		  - Interior segments predominantly vertical   -> stem side:
+		      Both interior neighbours above the pair  -> bottom L-junction -> 'B'
+		      Both interior neighbours below the pair  -> top L-junction    -> 'T'
+		      Interior neighbours on opposite sides    -> T-junction        -> 'C'
+
+		Arguments:
+			pair (list): Two FL on-curve node objects that are neighbors.
+
+		Returns:
+			str: 'C', 'T', or 'B'.
+		'''
+		n1, n2 = pair
+		total_dx    = 0.0
+		total_dy    = 0.0
+		interior_ys = []
+
+		for node, other in ((n1, n2), (n2, n1)):
+			en      = eNode(node)
+			next_on = en.getNextOn(False)
+			prev_on = en.getPrevOn(False)
+
+			# Pick the neighbour that is NOT the other pair node
+			interior = None
+			if next_on is not None and next_on.fl != other:
+				interior = next_on.fl
+			elif prev_on is not None and prev_on.fl != other:
+				interior = prev_on.fl
+
+			if interior is None:
+				continue
+
+			total_dx += abs(interior.x - node.x)
+			total_dy += abs(interior.y - node.y)
+			interior_ys.append(interior.y)
+
+		# Horizontal interior segments -> arm side -> center X
+		if not interior_ys or total_dx >= total_dy:
+			return 'C'
+
+		# Vertical interior segments -> stem side
+		# L-junction: both interior neighbours on the same side of the pair
+		# T-junction: interior neighbours on opposite sides -> no vertical snap
+		avg_y_pair = (n1.y + n2.y) / 2.0
+
+		if all(y > avg_y_pair for y in interior_ys):
+			return 'B'   # all interior above -> junction is at the bottom
+		elif all(y < avg_y_pair for y in interior_ys):
+			return 'T'   # all interior below -> junction is at the top
+		else:
+			return 'C'   # T-junction: interior nodes on both sides, no snap
+
+	def do_align_auto(self):
+		'''Auto overlap align: classify and align two neighbor-pairs at a cut junction.
+
+		Select 4 on-curve nodes (2 pairs) across two contours at a cut boundary,
+		then run this tool.  Each pair is aligned independently based on its
+		parent contour's aspect ratio — no cut is performed.
+		'''
+		glyph   = eGlyph()
+		wLayers = glyph._prepareLayers(pLayers)
+
+		for layer in wLayers:
+			selection = glyph.selectedNodes(layer)
+
+			if len(selection) < 4:
+				continue
+
+			pair_first, pair_second = group_nodes_by_neighbors(selection)
+
+			if len(pair_first) == 2:
+				self._align_pair(pair_first,  self._auto_align_mode(pair_first))
+
+			if len(pair_second) == 2:
+				self._align_pair(pair_second, self._auto_align_mode(pair_second))
+
+		glyph.update()
+		glyph.updateObject(glyph.fl, 'Glyph: {}; Auto Overlap Align; Layers: {}'.format(
+			glyph.name, '; '.join(wLayers)))
+		self.close()
 
 	def do_cut_align(self, align_first, align_second):
 		'''Execute cut, then align node pairs and close popup'''
