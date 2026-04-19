@@ -191,11 +191,11 @@ def _solve_cuts_from_concavities(fork_node, fork_concavities, contours):
 
 	if n >= 4:
 		# X-junction: pair into 2 parallel cuts
-		return _pair_concavities_parallel(fork_node, fork_concavities)
+		return _pair_concavities_parallel(fork_node, fork_concavities, contours)
 
 	elif n == 3:
 		# Y-junction: find best pair for 1 cut, optionally 2
-		return _pair_concavities_y_junction(fork_node, fork_concavities)
+		return _pair_concavities_y_junction(fork_node, fork_concavities, contours)
 
 	elif n == 2:
 		# T/L-junction: 1 cut connecting the 2 concavities
@@ -212,47 +212,68 @@ def _solve_cuts_from_concavities(fork_node, fork_concavities, contours):
 	return []
 
 
-def _pair_concavities_y_junction(fork_node, concavities):
+def _outline_walk(ca, cb, contours):
+	"""Outline-walk distance between two concavities, in on-curve-node steps.
+
+	Concavities from find_concavities() are tuples (c_idx, node_idx, x, y, ext).
+	node_idx indexes the on-curve nodes of contour c_idx. The walk is the
+	shortest arc around the closed contour between the two nodes.
+
+	Returns float('inf') when the two concavities live on different contours
+	or when contours is None (caller wants Euclidean only).
+	"""
+	if contours is None or ca[0] != cb[0]:
+		return float('inf')
+	contour = contours[ca[0]]
+	n_on = sum(1 for n in contour.nodes if n.is_on)
+	if n_on == 0:
+		return float('inf')
+	diff = abs(ca[1] - cb[1])
+	return min(diff, n_on - diff)
+
+
+def _pair_concavities_y_junction(fork_node, concavities, contours=None):
 	"""For Y-junctions with 3 concavities, produce 1 or 2 cuts.
 
-	Strategy: find the pair of concavities that are closest together
-	(on the same side of the diverging stroke), they define 1 cut.
-	The remaining concavity can optionally pair with the fork center
-	for a second cut.
+	Pair selection uses outline-walk distance between concavities on the same
+	contour (a purely topological measure: concavities that are outline-adjacent
+	across the junction interior are same-side). Euclidean distance is the
+	tiebreaker for ties or for cross-contour pairs.
 	"""
 	if len(concavities) < 3:
 		return []
 
-	# Find the pair with shortest distance -- they're on the same
-	# side of one stroke, forming the cut across the diverging branch
+	def _score(i, j):
+		ci, cj = concavities[i], concavities[j]
+		walk = _outline_walk(ci, cj, contours)
+		dist = math.hypot(ci[2] - cj[2], ci[3] - cj[3])
+		return (walk, dist)
+
+	# Primary cut: the two concavities with the shortest outline walk
+	# (falling back to Euclidean via the score tuple).
 	best_pair = None
-	best_dist = float('inf')
+	best_score = (float('inf'), float('inf'))
 	for i in range(len(concavities)):
 		for j in range(i + 1, len(concavities)):
-			ci, cj = concavities[i], concavities[j]
-			d = math.hypot(ci[2] - cj[2], ci[3] - cj[3])
-			if d < best_dist:
-				best_dist = d
+			s = _score(i, j)
+			if s < best_score:
+				best_score = s
 				best_pair = (i, j)
 
 	cuts = []
-	if best_pair and best_dist > 5.0:
+	if best_pair and best_score[1] > 5.0:
 		ci = concavities[best_pair[0]]
 		cj = concavities[best_pair[1]]
 		cuts.append(((ci[2], ci[3]), (cj[2], cj[3])))
 
-	# The remaining concavity defines a second cut with its nearest
-	# partner from the pair
+	# Optional second cut: remaining concavity + whichever of the primary
+	# pair gives the shorter outline walk (same-side neighbour).
 	remaining = [k for k in range(3) if k not in best_pair]
 	if remaining:
 		cr = concavities[remaining[0]]
-		# Pair with the closer of the two already-used concavities
-		d0 = math.hypot(cr[2] - concavities[best_pair[0]][2],
-						cr[3] - concavities[best_pair[0]][3])
-		d1 = math.hypot(cr[2] - concavities[best_pair[1]][2],
-						cr[3] - concavities[best_pair[1]][3])
-		# Use the farther one (it's across the stroke from the remaining)
-		partner = concavities[best_pair[1]] if d0 > d1 else concavities[best_pair[0]]
+		sa = _score(remaining[0], best_pair[0])
+		sb = _score(remaining[0], best_pair[1])
+		partner = concavities[best_pair[0]] if sa <= sb else concavities[best_pair[1]]
 		pdist = math.hypot(cr[2] - partner[2], cr[3] - partner[3])
 		if pdist > 5.0:
 			cuts.append(((cr[2], cr[3]), (partner[2], partner[3])))
@@ -311,7 +332,7 @@ def _solve_cuts_by_concavity_pairing(fork_node, junction_type,
 	# For X-junctions with 4 concavities: pair same-side concavities
 	# to produce parallel cuts (not diagonal)
 	if junction_type == JunctionType.X_JUNCTION and len(fork_concavities) == 4:
-		return _pair_concavities_parallel(fork_node, fork_concavities)
+		return _pair_concavities_parallel(fork_node, fork_concavities, contours)
 
 	# For other junction types: pair closest concavities across the stroke
 	cuts = []
@@ -350,52 +371,56 @@ def _solve_cuts_by_concavity_pairing(fork_node, junction_type,
 	return cuts
 
 
-def _pair_concavities_parallel(fork_node, concavities):
+def _pair_concavities_parallel(fork_node, concavities, contours=None):
 	"""Pair 4 concavities into 2 parallel cuts for X-junctions.
 
-	Groups concavities by their angle from the fork center,
-	then pairs adjacent concavities (same side) rather than
-	opposite concavities (which would create diagonal cuts).
+	Concavities are sorted by angle from the fork centre to form a cyclic
+	sequence. The two ways of pairing adjacent entries are then scored by
+	total outline walk distance (shorter walk = same-side neighbours along
+	the contour). Euclidean distance breaks ties and handles the 3-concavity
+	overflow / degenerate cases.
 	"""
-	# Compute angle of each concavity from fork center
+	if len(concavities) < 4:
+		return []
+
+	# Sort concavities by angle around the fork.
 	angled = []
 	for c in concavities:
 		dx = c[2] - fork_node.x
 		dy = c[3] - fork_node.y
 		angle = math.degrees(math.atan2(dy, dx)) % 360
 		angled.append((angle, c))
-
 	angled.sort(key=lambda x: x[0])
 
-	# 4 concavities at roughly 4 quadrant positions.
-	# Adjacent concavities (by angle) are on the same "side" of one stroke.
-	# Pair: (0,1) and (2,3) -- or (1,2) and (3,0) -- pick the grouping
-	# where pairs have smaller internal distance (same-side pairs).
+	cs = [a[1] for a in angled]
+
+	def _pair_cost(i, j):
+		ci, cj = cs[i], cs[j]
+		walk = _outline_walk(ci, cj, contours)
+		dist = math.hypot(ci[2] - cj[2], ci[3] - cj[3])
+		return walk, dist
 
 	# Option A: pair (0,1) + (2,3)
-	d_01 = math.hypot(angled[0][1][2] - angled[1][1][2],
-					  angled[0][1][3] - angled[1][1][3])
-	d_23 = math.hypot(angled[2][1][2] - angled[3][1][2],
-					  angled[2][1][3] - angled[3][1][3])
+	walk_a0, dist_a0 = _pair_cost(0, 1)
+	walk_a1, dist_a1 = _pair_cost(2, 3)
+	score_a = (walk_a0 + walk_a1, dist_a0 + dist_a1)
 
 	# Option B: pair (1,2) + (3,0)
-	d_12 = math.hypot(angled[1][1][2] - angled[2][1][2],
-					  angled[1][1][3] - angled[2][1][3])
-	d_30 = math.hypot(angled[3][1][2] - angled[0][1][2],
-					  angled[3][1][3] - angled[0][1][3])
+	walk_b0, dist_b0 = _pair_cost(1, 2)
+	walk_b1, dist_b1 = _pair_cost(3, 0)
+	score_b = (walk_b0 + walk_b1, dist_b0 + dist_b1)
 
-	if (d_01 + d_23) < (d_12 + d_30):
-		# Option A: shorter total distance -> pairs are on same side
-		c0, c1 = angled[0][1], angled[1][1]
-		c2, c3 = angled[2][1], angled[3][1]
+	if score_a <= score_b:
+		pair_a, pair_b = (cs[0], cs[1]), (cs[2], cs[3])
+		min_dist = min(dist_a0, dist_a1)
 	else:
-		c0, c1 = angled[1][1], angled[2][1]
-		c2, c3 = angled[3][1], angled[0][1]
+		pair_a, pair_b = (cs[1], cs[2]), (cs[3], cs[0])
+		min_dist = min(dist_b0, dist_b1)
 
 	cuts = []
-	if d_01 > 5.0 or d_12 > 5.0:  # at least some distance
-		cuts.append(((c0[2], c0[3]), (c1[2], c1[3])))
-		cuts.append(((c2[2], c2[3]), (c3[2], c3[3])))
+	if min_dist > 5.0:
+		cuts.append(((pair_a[0][2], pair_a[0][3]), (pair_a[1][2], pair_a[1][3])))
+		cuts.append(((pair_b[0][2], pair_b[0][3]), (pair_b[1][2], pair_b[1][3])))
 
 	return cuts
 

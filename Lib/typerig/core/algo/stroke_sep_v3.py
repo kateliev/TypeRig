@@ -271,10 +271,17 @@ class StrokeSepV3(object):
 		
 		# Step 3: Merge nearby forks
 		merged = merge_nearby_forks(graph.forks(), ligatures, merge_radius=30.0)
-		
+
+		# Update ligatures: each rep_fork now owns the combined concavity list
+		# from all forks merged into it. Without this, solve_cut_points looks up
+		# id(rep_fork) and sees only the rep's pre-merge concavities, causing
+		# a 4-concavity X-junction to be misdispatched as a 3-concavity Y.
+		for rep_fork, combined_concavities in merged:
+			ligatures[id(rep_fork)] = combined_concavities
+
 		if self.debug:
 			print("  Merged forks: {}".format(len(merged)))
-		
+
 		# Step 4: Classify junctions and solve cuts
 		junctions = []
 		raw_cuts = []
