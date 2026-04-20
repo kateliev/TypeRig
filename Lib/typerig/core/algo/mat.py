@@ -1162,9 +1162,13 @@ def find_concavities(contours, angle_threshold=150.0):
 			cos_angle = max(-1.0, min(1.0, dot / (mag_in * mag_out)))
 			exterior_angle = math.degrees(math.acos(cos_angle))
 
-			# For outer (CCW) contour: concave = CW turn (cross < 0)
-			# For inner (CW) contour: concave = CCW turn (cross > 0)
-			is_concave = (cross < 0) if is_outer else (cross > 0)
+			# Concave-from-ink = reflex angle on the ink side. For an outer CCW
+			# contour the ink is to the LEFT of the walk, so concave = right turn
+			# (cross < 0). For an inner CW contour the ink is also to the LEFT of
+			# the walk, so the same rule applies: concave = right turn (cross < 0).
+			# (Previously the CW branch used cross > 0, which silently dropped
+			# every hole-corner concavity — see probe_B_concavities.)
+			is_concave = cross < 0
 
 			if is_concave and exterior_angle < angle_threshold:
 				concavities.append((c_idx, i, curr_node.x, curr_node.y, exterior_angle))

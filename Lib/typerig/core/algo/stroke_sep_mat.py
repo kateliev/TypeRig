@@ -22,6 +22,76 @@ from typerig.core.algo.stroke_sep_common import _EPS
 StrokePath = namedtuple('StrokePath', ['nodes', 'terminals', 'forks', 'direction_angle'])
 
 
+# - Branch-scope ligature expansion ----------
+def expand_fork_ligatures(graph, concavity_map):
+	"""Aggregate branch-node concavities up to each fork.
+
+	`compute_ligatures` stores concavities per-node: each MAT node owns the
+	concavities its inscribed disk reaches. But the downstream cut solver
+	consumes *fork* ligatures. Non-fork MAT nodes along a branch can see
+	concavities that the fork itself can't (their inscribed disk is larger
+	further down the branch), so those concavities are invisible without
+	this expansion.
+
+	For each fork F, walk every branch outward: follow neighbours that are
+	neither F nor another fork, collecting every node's concavities until
+	a fork or terminal is hit. The resulting dict {id(F) -> concavities}
+	OVERRIDES the fork's entry in `concavity_map` (other nodes unchanged).
+
+	This makes counter-hole corner concavities reachable from the waist
+	forks in B/P/D/R/etc., where the corner is 2-3 nodes deep along the
+	branch that plunges into the counter interior.
+
+	Dedup is positional (rounded to 0.1 font units).
+	"""
+	forks = [n for n in graph.nodes if n.is_fork]
+	if not forks:
+		return concavity_map
+
+	# Multi-source BFS: each non-fork node is owned by the fork that reaches
+	# it first. Forks own themselves. BFS does not cross forks (other forks
+	# are boundaries). Ties broken by BFS arrival order — acceptable because
+	# the concavities of interest sit deep inside a counter, far from any
+	# fork boundary where ties actually matter.
+	owner = {}  # id(node) -> id(fork)
+	queue = []
+	for f in forks:
+		owner[id(f)] = id(f)
+		queue.append(f)
+
+	while queue:
+		cur = queue.pop(0)
+		cur_owner = owner[id(cur)]
+		for nb in cur.neighbors:
+			nb_id = id(nb)
+			if nb_id in owner:
+				continue
+			if nb.is_fork:
+				# Forks own themselves; don't propagate across them.
+				continue
+			owner[nb_id] = cur_owner
+			queue.append(nb)
+
+	# Aggregate concavities per fork based on ownership
+	by_fork = {id(f): [] for f in forks}
+	seen_by_fork = {id(f): set() for f in forks}
+	for node in graph.nodes:
+		owner_id = owner.get(id(node))
+		if owner_id is None:
+			continue
+		for conc in concavity_map.get(id(node), []):
+			pos = (round(conc[2], 1), round(conc[3], 1))
+			if pos in seen_by_fork[owner_id]:
+				continue
+			seen_by_fork[owner_id].add(pos)
+			by_fork[owner_id].append(conc)
+
+	for f in forks:
+		concavity_map[id(f)] = by_fork[id(f)]
+
+	return concavity_map
+
+
 # - Fork Merging ----------
 def merge_nearby_forks(forks, concavity_map, merge_radius=30.0):
 	"""Merge nearby fork nodes into logical junctions.

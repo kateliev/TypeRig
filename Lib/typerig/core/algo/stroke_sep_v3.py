@@ -36,6 +36,8 @@ from typerig.core.algo.stroke_sep_common import (
 
 from typerig.core.algo.stroke_sep_slicer import slice_contours
 
+from typerig.core.algo.stroke_sep_mat import expand_fork_ligatures
+
 from typerig.core.algo.stroke_sep_v1 import (
 	compute_ligatures,
 	merge_nearby_forks,
@@ -525,7 +527,7 @@ class StrokeSepV3(object):
 
 		# Step 2: Compute ligatures
 		ligatures = compute_ligatures(graph, concavities)
-		
+
 		# Step 3: Merge nearby forks
 		merged = merge_nearby_forks(graph.forks(), ligatures, merge_radius=30.0)
 
@@ -547,9 +549,10 @@ class StrokeSepV3(object):
 			jtype = classify_junction(rep_fork, ligatures)
 			cuts = solve_cut_points(rep_fork, jtype, concavities, ligatures, contours)
 			
-			if self.debug and cuts:
-				print("  Fork ({:.0f},{:.0f}): {} -> {} cuts".format(
-					rep_fork.x, rep_fork.y, jtype, len(cuts)))
+			if self.debug:
+				print("  Fork ({:.0f},{:.0f}): {} -> {} cuts (lig_concavities={})".format(
+					rep_fork.x, rep_fork.y, jtype, len(cuts),
+					len(ligatures.get(id(rep_fork), []))))
 			
 			junctions.append(JunctionData(rep_fork, jtype, cuts))
 			raw_cuts.extend(cuts)
