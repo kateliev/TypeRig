@@ -20,7 +20,7 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 from typerig.proxy.tr.objects.glyph import trGlyph
 
-from typerig.core.algo.stroke_sep_v3 import StrokeSepV3
+from typerig.core.algo.stroke_sep import StrokeSep
 from typerig.core.algo.stroke_sep_common import apply_cuts_to_layer, check_contour_compatibility
 
 # - Init ------------------------------------------------------------------------
@@ -93,8 +93,8 @@ class TRCutActionCollector(object):
 				sel_cids = None
 				source_contours = all_core_contours
 
-			# - Run V3 analysis on the reference layer
-			sep = StrokeSepV3(beta_min=beta_min, sample_step=sample_step, debug=debug)
+			# - Run analysis on the reference layer
+			sep = StrokeSep(beta_min=beta_min, sample_step=sample_step, debug=debug)
 			result = sep.analyze(source_contours)
 
 			if not result.cuts:

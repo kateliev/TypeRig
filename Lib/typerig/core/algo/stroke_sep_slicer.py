@@ -8,7 +8,7 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-"""General N-contour planar slicer for StrokeSepV3.
+"""General N-contour planar slicer for the StrokeSep pipeline.
 
 Given a scene of contours and a list of cross-contour cuts, this module
 constructs the planar graph formed by contour arcs (the on-curve segments

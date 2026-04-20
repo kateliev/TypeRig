@@ -451,7 +451,7 @@ class StrokeSepResult(object):
 		"""Deduplicated cuts (V1). For V2, returns cuts as-is."""
 		if self.pipeline == 'v1' and self.junctions:
 			# Lazy import to avoid circular dependency
-			from typerig.core.algo.stroke_sep_v1 import coordinate_cuts
+			from typerig.core.algo.stroke_sep_solver import coordinate_cuts
 			return coordinate_cuts(self.junctions, self.stroke_paths, self.stroke_width)
 		return self.cuts
 
@@ -459,7 +459,7 @@ class StrokeSepResult(object):
 		if self._junction_is_real is None:
 			self._junction_is_real = {}
 			if self.junctions:
-				from typerig.core.algo.stroke_sep_v1 import _is_real_junction
+				from typerig.core.algo.stroke_sep_solver import _is_real_junction
 				for jdata in self.junctions:
 					fork = jdata.fork_node
 					self._junction_is_real[id(fork)] = _is_real_junction(fork, self.stroke_paths)

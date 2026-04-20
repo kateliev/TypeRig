@@ -1,4 +1,4 @@
-# MODULE: TypeRig / Core / Algo / Stroke Separator — V1 Pipeline
+# MODULE: TypeRig / Core / Algo / Stroke Separator — Solver
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2017-2026 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
@@ -8,8 +8,9 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-# V1 geometry-based stroke separation pipeline:
-# junction classification, cut solving, cut coordination, StrokeSeparator.
+# Geometry-based stroke separation solver: junction classification,
+# cut solving, cut coordination, StrokeSeparator. Consumed by the
+# `StrokeSep` pipeline in stroke_sep.py. Previously named stroke_sep_v1.
 
 # - Dependencies ------------------------
 from __future__ import absolute_import, print_function, division
