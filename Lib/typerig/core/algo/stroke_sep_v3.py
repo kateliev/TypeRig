@@ -34,6 +34,8 @@ from typerig.core.algo.stroke_sep_common import (
 	StrokeSepResult,
 )
 
+from typerig.core.algo.stroke_sep_slicer import slice_contours
+
 from typerig.core.algo.stroke_sep_v1 import (
 	compute_ligatures,
 	merge_nearby_forks,
@@ -624,52 +626,47 @@ class StrokeSepV3(object):
 			print("  Total: {} cross-contour, {} same-contour".format(
 				len(cross_cuts), len(same_cuts)))
 		
-		# Step 2a: Group cross-contour cuts by (contour_A, contour_B) pair.
-		# If a single pair of contours has >=2 cross-cuts linking them (e.g.
-		# a hollow frame with N mitre cuts, shape_quad), dispatch to the
-		# dedicated frame-slice algorithm which slices the pair into N pieces
-		# in one shot. This avoids the merge-then-split-piecemeal failure
-		# mode where the second cut's endpoints end up on different pieces
-		# after the first cut has already split the merged contour.
-		pair_groups = {}
+		# Step 2a: General planar-face slicer.
+		#
+		# Dispatches ALL cross-contour cuts at once to a unified N-contour
+		# planar face walker (stroke_sep_slicer.slice_contours). The walker
+		# treats every involved contour exactly once — critical for glyphs
+		# where three or more contours share cross-cuts (B: outer + 2 bowl
+		# counters; uni5C4A: outer + many inner counters; CJK frames).
+		#
+		# The prior approach grouped cross-cuts by contour-pair and called
+		# a pair-specific `_slice_frame` per group. When a single outer
+		# contour participated in multiple pair groups, each call operated
+		# on the *original* outer (state between iterations wasn't updated)
+		# — producing duplicate, overlapping geometry.
+		#
+		# Falls back to the per-cut single-bridge path only if the planar
+		# walker reports a precondition failure (unsnappable endpoints,
+		# 1-endpoint contour, twin-resolve anomaly).
+		cross_only_cuts = [c for c, _, _ in cross_cuts]
 		remaining_cross = []
-		for cut, ci_a, ci_b in cross_cuts:
-			key = tuple(sorted((ci_a, ci_b)))
-			pair_groups.setdefault(key, []).append((cut, ci_a, ci_b))
-
 		consumed_contours = set()
 		sliced_pieces = []
-		for key, group in pair_groups.items():
-			if len(group) < 2:
-				remaining_cross.extend(group)
-				continue
-			ci_a = group[0][1]
-			ci_b = group[0][2]
-			# Orient cuts so cut[0] is on ci_a and cut[1] is on ci_b.
-			oriented = []
-			for cut, g_a, g_b in group:
-				if g_a == ci_a and g_b == ci_b:
-					oriented.append(cut)
-				else:
-					oriented.append((cut[1], cut[0]))
 
-			pieces = _slice_frame(
-				working[ci_a], working[ci_b], oriented, snap=_SNAP)
-			if pieces is None:
-				# Frame-slice failed (e.g. cuts share nodes) — fall back to
-				# the single-bridge path for each cut.
-				remaining_cross.extend(group)
-				continue
+		if cross_only_cuts:
+			sliced_pieces, involved = slice_contours(
+				working, cross_only_cuts, snap=_SNAP, debug=self.debug)
 
-			if self.debug:
-				print("  Frame-slice: contours {}+{} with {} cuts -> {} pieces".format(
-					ci_a, ci_b, len(group), len(pieces)))
+			if sliced_pieces is None:
+				# Planar walker failed — route every cross-cut to the
+				# bridge/split fallback below.
+				if self.debug:
+					print("  Planar slicer failed, falling back to bridge-merge")
+				remaining_cross = list(cross_cuts)
+				sliced_pieces = []
+				consumed_contours = set()
+			else:
+				consumed_contours = involved
+				if self.debug:
+					print("  Planar slicer: {} involved contours -> {} pieces".format(
+						len(involved), len(sliced_pieces)))
 
-			consumed_contours.add(ci_a)
-			consumed_contours.add(ci_b)
-			sliced_pieces.extend(pieces)
-
-		# Remove contours consumed by frame slicing and add the new pieces.
+		# Remove contours consumed by the planar slicer and add new pieces.
 		if consumed_contours:
 			working = [c for k, c in enumerate(working)
 					   if k not in consumed_contours]
