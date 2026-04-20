@@ -284,8 +284,12 @@ def _pair_concavities_y_junction(fork_node, concavities, contours=None):
 def _project_from_concavity(fork_node, concavity, contours):
 	"""Project from a single concavity point across the stroke.
 
-	The concavity is on the outline. We project a ray from it through
-	the fork center to find the opposite outline edge.
+	The concavity is on the outline. We project a ray from it through the
+	fork center to find the opposite outline edge, then SNAP the landing
+	point to the nearest on-curve node when one is close enough — so a
+	corner cut (shape_quad) lands exactly on an existing outline node and
+	no new node is inserted. When no node is within tolerance, the raw
+	ray-outline intersection is used (smooth join case, e.g. P/B/D bowls).
 	"""
 	cx, cy = concavity[2], concavity[3]
 
@@ -310,6 +314,23 @@ def _project_from_concavity(fork_node, concavity, contours):
 	pt = _intersect_ray_with_contours(ray_line, origin, contours,
 									  max_dist=fork_node.radius * 4.0)
 	if pt:
+		# Snap to nearest on-curve node if within tolerance — prefers existing
+		# outline vertices (convex corners on frames, corner miters) over
+		# freshly-inserted points.
+		snap_tol = max(fork_node.radius * 0.5, 5.0)
+		best_node = None
+		best_d = snap_tol
+		for contour in contours:
+			for node in contour.data:
+				if not node.is_on:
+					continue
+				d = math.hypot(node.x - pt[0], node.y - pt[1])
+				if d < best_d:
+					best_d = d
+					best_node = node
+		if best_node is not None:
+			pt = (best_node.x, best_node.y)
+
 		dist = math.hypot(pt[0] - cx, pt[1] - cy)
 		if dist > 5.0:
 			return [((cx, cy), pt)]

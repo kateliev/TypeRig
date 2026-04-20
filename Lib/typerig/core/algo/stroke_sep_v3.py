@@ -15,7 +15,7 @@
 from __future__ import absolute_import, print_function, division
 import math
 
-from typerig.core.algo.mat import compute_mat
+from typerig.core.algo.mat import compute_mat, compute_exterior_mat
 from typerig.core.objects.contour import Contour
 from typerig.core.objects.node import Node
 
@@ -47,6 +47,104 @@ from typerig.core.algo.stroke_sep_v1 import (
 
 # - Init --------------------------------
 __version__ = '0.1.0'
+
+
+# ============================================================
+# Exterior-concavity augmentation
+# ============================================================
+
+def _snap_point_to_node(contours, x, y):
+	"""Snap an arbitrary point (x, y) to the nearest on-curve node across
+	all contours.
+
+	Returns (c_idx, node_idx, nx, ny, dist) where node_idx is the index
+	within the on-curve node list of contours[c_idx] — matching the node-idx
+	convention used by find_concavities(). Returns (None, None, x, y, inf)
+	if the contour list is empty.
+	"""
+	best = (None, None, x, y, float('inf'))
+	for ci, contour in enumerate(contours):
+		on_nodes = [n for n in contour.nodes if n.is_on]
+		for ni, node in enumerate(on_nodes):
+			d = math.hypot(node.x - x, node.y - y)
+			if d < best[4]:
+				best = (ci, ni, node.x, node.y, d)
+	return best
+
+
+def _augment_exterior_concavities(contours, interior_concavities,
+								  sample_step=5.0, beta_min=1.5,
+								  snap_tol_mult=1.5, dedup_tol=2.0):
+	"""Return pseudo-concavity tuples derived from the exterior MAT.
+
+	The exterior MAT detects two kinds of outline features that the interior
+	`find_concavities` misses:
+	  1. Inner-corner vertices of a hole contour (frame topology — shape_quad).
+	     Contact is at or near an on-curve vertex; we snap it.
+	  2. Smooth bowl-to-stem joins on P, B, D, R — contact is mid-edge on a
+	     curve, no vertex exists. We still snap to the nearest node; if the
+	     snap distance exceeds tolerance we fall back to the raw contact
+	     coordinate and leave node_idx = -1. Downstream code treats tuples
+	     with node_idx >= 0 as outline-walk candidates and the rest as
+	     free-point concavities.
+
+	Pseudo-concavities overlapping existing interior concavities (within
+	dedup_tol font units) are discarded to avoid double-counting sharp
+	corners that both MATs happen to see.
+
+	Args:
+		contours: list of TypeRig Contour
+		interior_concavities: list from find_concavities() — used for dedup
+		sample_step, beta_min: passed to compute_exterior_mat
+		snap_tol_mult: multiplier on the exterior terminal's radius to decide
+			whether the contact belongs to an existing on-curve node
+		dedup_tol: Euclidean tolerance for deduplication against interior
+
+	Returns:
+		list of (c_idx, node_idx, x, y, ext_angle_sentinel) tuples. node_idx
+		is -1 when the contact is not close enough to any on-curve node.
+	"""
+	_, ext_terms = compute_exterior_mat(
+		contours, sample_step=sample_step, beta_min=beta_min)
+	if not ext_terms:
+		return []
+
+	# Build a set of interior-concavity positions for dedup
+	interior_keys = [(c[2], c[3]) for c in interior_concavities]
+
+	out = []
+	seen = set()
+	for tx, ty, tr, cx, cy in ext_terms:
+		ci, ni, nx, ny, d = _snap_point_to_node(contours, cx, cy)
+		if ci is None:
+			continue
+		# Decide: snap to node, or keep free contact point
+		snap_tol = max(tr * snap_tol_mult, 3.0)
+		if d <= snap_tol:
+			px, py, p_ni = nx, ny, ni
+		else:
+			px, py, p_ni = cx, cy, -1
+
+		# Dedup against interior concavities (sharp corners both MATs see)
+		skip = False
+		for ix, iy in interior_keys:
+			if math.hypot(px - ix, py - iy) < dedup_tol:
+				skip = True
+				break
+		if skip:
+			continue
+
+		# Dedup against previously-added exterior pseudo-concavities
+		key = (round(px, 1), round(py, 1))
+		if key in seen:
+			continue
+		seen.add(key)
+
+		# Sentinel exterior-angle value — not used for anything downstream,
+		# but chosen outside the find_concavities threshold so it's unambiguous.
+		out.append((ci, p_ni, px, py, 180.0))
+
+	return out
 
 
 # ============================================================
@@ -209,6 +307,148 @@ def _find_nearest_on_node(contour, x, y):
 
 
 # ============================================================
+# Multi-cut frame slicing
+# ============================================================
+
+def _nearest_on_node_idx(contour, pt, snap=5.0):
+	"""Return (on-curve index, Node) of nearest on-curve node within snap.
+	Returns (None, None) if no node is close enough.
+	"""
+	best_i = None
+	best_node = None
+	best_d = snap
+	for i, node in enumerate([n for n in contour.data if n.is_on]):
+		d = math.hypot(node.x - pt[0], node.y - pt[1])
+		if d < best_d:
+			best_d = d
+			best_i = i
+			best_node = node
+	return best_i, best_node
+
+
+def _slice_frame(contour_A, contour_B, cuts, snap=5.0):
+	"""Slice two cross-linked contours into N closed pieces using N cuts.
+
+	Each cut in `cuts` is ((ax, ay), (bx, by)) with (ax, ay) snapping to an
+	on-curve node of contour_A and (bx, by) snapping to one of contour_B.
+
+	This is the correct operation for frame-like topologies (hollow
+	rectangles, ring-in-box) and any shape where multiple cross-contour
+	cuts link the same pair of contours. Each consecutive pair of cuts
+	(sorted by position on A) plus the corresponding arcs on A and B
+	bounds one output piece.
+
+	The walk preserves off-curve handle nodes — a cubic segment A -> H1 ->
+	H2 -> B stays intact (or is traversed in reverse as B -> H2 -> H1 -> A
+	when the arc runs against the contour direction).
+
+	Returns a list of N new Contour objects, or None if the preconditions
+	fail (any cut endpoint not snappable, fewer than 2 cuts, or a node
+	appears in more than one cut).
+	"""
+	if len(cuts) < 2:
+		return None
+
+	# Build the full-node arrays and on-curve->all-nodes index maps.
+	# We need on-curve indices for cut endpoints (so the cut lands on a
+	# corner/vertex, not a handle) but all-nodes indices for walking so
+	# the output preserves bezier handle geometry.
+	all_A = list(contour_A.data)
+	all_B = list(contour_B.data)
+	nA_all = len(all_A)
+	nB_all = len(all_B)
+	on_to_all_A = [i for i, n in enumerate(all_A) if n.is_on]
+	on_to_all_B = [i for i, n in enumerate(all_B) if n.is_on]
+	nA = len(on_to_all_A)
+	nB = len(on_to_all_B)
+	if nA < len(cuts) or nB < len(cuts):
+		return None
+
+	cut_pairs = []
+	used_A = set()
+	used_B = set()
+	for cut in cuts:
+		ia, _ = _nearest_on_node_idx(contour_A, cut[0], snap)
+		ib, _ = _nearest_on_node_idx(contour_B, cut[1], snap)
+		if ia is None or ib is None:
+			return None
+		if ia in used_A or ib in used_B:
+			# Two cuts land on the same node — not a clean frame.
+			return None
+		used_A.add(ia)
+		used_B.add(ib)
+		cut_pairs.append((ia, ib))
+
+	# Sort cuts by position on A.
+	cut_pairs.sort(key=lambda p: p[0])
+	N = len(cut_pairs)
+
+	# Walking direction on B for the "return" arc (b_end -> b_start):
+	# If A and B have opposite windings (typical frame: outer CCW + inner
+	# CW), walking B forward already reverses the angular direction, so the
+	# return arc walks B forward. If they share a winding, the return arc
+	# must walk B backward against its winding.
+	b_walk_forward = (contour_A.is_ccw != contour_B.is_ccw)
+
+	def _walk_all(all_nodes, on_to_all, start_on_idx, end_on_idx, n_all, forward):
+		"""Walk all nodes (on + off-curve) in index-space between two
+		on-curve endpoints, around the closed cycle. Inclusive of both ends.
+
+		start_on_idx / end_on_idx are indices into the on-curve-only view
+		(matching `cut_pairs`). We convert to the full data-array index and
+		step through every node in between, preserving handle nodes.
+
+		A reversed walk (forward=False) traverses the node sequence in
+		reverse, which is exactly the correct geometric reverse for cubic
+		segments: A -> H1 -> H2 -> B becomes B -> H2 -> H1 -> A with the
+		two handles swapping roles automatically.
+		"""
+		i_start = on_to_all[start_on_idx]
+		i_end = on_to_all[end_on_idx]
+		out = [all_nodes[i_start]]
+		idx = i_start
+		step = 1 if forward else -1
+		# Safety bound — can never take more than n_all steps on a cycle
+		for _ in range(n_all):
+			if idx == i_end:
+				break
+			idx = (idx + step) % n_all
+			out.append(all_nodes[idx])
+		return out
+
+	pieces = []
+	for i in range(N):
+		a_start, b_start = cut_pairs[i]
+		a_end, b_end = cut_pairs[(i + 1) % N]
+
+		arc_A = _walk_all(all_A, on_to_all_A, a_start, a_end, nA_all,
+						  forward=True)
+		# B's arc runs from b_end back to b_start (the "return" arm of the
+		# quad). Direction is opposite of A's forward walk: if B winds the
+		# same way as A the return arm walks forward; if B winds opposite
+		# (CW inner for CCW outer), it also walks forward because "opposite
+		# winding + reversed endpoints" = forward.
+		arc_B_rev = _walk_all(all_B, on_to_all_B, b_end, b_start, nB_all,
+							  forward=b_walk_forward)
+
+		piece_nodes = [_fast_clone_node(n) for n in arc_A]
+		piece_nodes.extend(_fast_clone_node(n) for n in arc_B_rev)
+
+		# Require at least 3 on-curve nodes to form a valid closed region.
+		on_count = sum(1 for n in piece_nodes if n.is_on)
+		if on_count < 3:
+			return None
+
+		piece = Contour(piece_nodes, closed=True)
+		# Normalize winding to CCW so downstream tools see consistent output
+		if not piece.is_ccw:
+			piece.reverse()
+		pieces.append(piece)
+
+	return pieces
+
+
+# ============================================================
 # V3 Main Class
 # ============================================================
 
@@ -249,23 +489,38 @@ class StrokeSepV3(object):
 			print("=== V3 Analyze ===")
 			print("  Contours: {}".format(len(contours)))
 		
-		# Step 1: Compute MAT
+		# Step 1: Compute MAT (interior)
 		graph, concavities = compute_mat(
 			contours,
 			sample_step=self.sample_step,
 			beta_min=self.beta_min,
 		)
-		
+
+		# Step 1b: Augment with exterior-MAT "hidden" concavities.
+		# For a closed frame (e.g. rectangular ring) or a smooth bowl-to-stem
+		# join (P, B, D, R), the interior outline has no sharp concave vertex,
+		# so find_concavities() returns nothing near the junction. The exterior
+		# MAT detects these as terminals whose inscribed disk grazes the outline.
+		# Each such terminal contributes a pseudo-concavity snapped to the
+		# nearest on-curve node of the contour it contacts.
+		ext_concavities = _augment_exterior_concavities(
+			contours, concavities,
+			sample_step=self.sample_step,
+			beta_min=self.beta_min)
+		concavities.extend(ext_concavities)
+
 		if self.debug:
 			print("  Nodes: {} | Forks: {} | Terminals: {}".format(
 				len(graph.nodes), len(graph.forks()), len(graph.terminals())))
-			print("  Concavities: {}".format(len(concavities)))
+			print("  Concavities: {} ({} interior + {} exterior)".format(
+				len(concavities), len(concavities) - len(ext_concavities),
+				len(ext_concavities)))
 			for i, c in enumerate(concavities[:10]):  # Show first 10
 				print("    {}: contour={} pos=({},{})".format(
 					i, c[0], c[2], c[3]))
 			if len(concavities) > 10:
 				print("    ... and {} more".format(len(concavities) - 10))
-		
+
 		# Step 2: Compute ligatures
 		ligatures = compute_ligatures(graph, concavities)
 		
@@ -369,59 +624,105 @@ class StrokeSepV3(object):
 			print("  Total: {} cross-contour, {} same-contour".format(
 				len(cross_cuts), len(same_cuts)))
 		
-		# Step 2: Process cross-contour cuts FIRST
-		# Each cross-contour cut merges two contours, then we split
+		# Step 2a: Group cross-contour cuts by (contour_A, contour_B) pair.
+		# If a single pair of contours has >=2 cross-cuts linking them (e.g.
+		# a hollow frame with N mitre cuts, shape_quad), dispatch to the
+		# dedicated frame-slice algorithm which slices the pair into N pieces
+		# in one shot. This avoids the merge-then-split-piecemeal failure
+		# mode where the second cut's endpoints end up on different pieces
+		# after the first cut has already split the merged contour.
+		pair_groups = {}
+		remaining_cross = []
 		for cut, ci_a, ci_b in cross_cuts:
+			key = tuple(sorted((ci_a, ci_b)))
+			pair_groups.setdefault(key, []).append((cut, ci_a, ci_b))
+
+		consumed_contours = set()
+		sliced_pieces = []
+		for key, group in pair_groups.items():
+			if len(group) < 2:
+				remaining_cross.extend(group)
+				continue
+			ci_a = group[0][1]
+			ci_b = group[0][2]
+			# Orient cuts so cut[0] is on ci_a and cut[1] is on ci_b.
+			oriented = []
+			for cut, g_a, g_b in group:
+				if g_a == ci_a and g_b == ci_b:
+					oriented.append(cut)
+				else:
+					oriented.append((cut[1], cut[0]))
+
+			pieces = _slice_frame(
+				working[ci_a], working[ci_b], oriented, snap=_SNAP)
+			if pieces is None:
+				# Frame-slice failed (e.g. cuts share nodes) — fall back to
+				# the single-bridge path for each cut.
+				remaining_cross.extend(group)
+				continue
+
 			if self.debug:
-				print("  Merging contour {} + {} at cut points...".format(ci_a, ci_b))
-			
-			# Re-find indices in case previous merge shifted them
+				print("  Frame-slice: contours {}+{} with {} cuts -> {} pieces".format(
+					ci_a, ci_b, len(group), len(pieces)))
+
+			consumed_contours.add(ci_a)
+			consumed_contours.add(ci_b)
+			sliced_pieces.extend(pieces)
+
+		# Remove contours consumed by frame slicing and add the new pieces.
+		if consumed_contours:
+			working = [c for k, c in enumerate(working)
+					   if k not in consumed_contours]
+			working.extend(sliced_pieces)
+
+		# Step 2b: Process remaining cross-contour cuts via single-bridge merge.
+		# A single cross-contour cut (e.g. P-bowl) works fine with merge+split;
+		# any remaining multi-cut pairs that the frame-slice path rejected
+		# fall through to this code too.
+		for cut, _ci_a, _ci_b in remaining_cross:
+			# Re-find indices: previous merges may have reindexed `working`.
 			ci_a = _find_contour_for_point(working, cut[0], _SNAP)
 			ci_b = _find_contour_for_point(working, cut[1], _SNAP)
-			
-			if ci_a is None or ci_b is None or ci_a == ci_b:
+
+			if ci_a is None or ci_b is None:
+				# Endpoint no longer on any contour — give up on this cut.
 				if self.debug:
-					print("    -> Failed to find contours, treating as same-contour")
+					print("  Cross cut lost endpoint; dropping")
+				continue
+
+			if ci_a == ci_b:
+				# A previous bridge already unified these two contours;
+				# the cut is now same-contour and will be handled below.
 				same_cuts.append(cut)
 				continue
-			
+
+			if self.debug:
+				print("  Bridging contour {} + {} ...".format(ci_a, ci_b))
+
 			merged = _bridge_contours(
 				working[ci_a], working[ci_b],
 				cut[0], cut[1], _SNAP
 			)
-			
+
 			if merged is None:
 				if self.debug:
-					print("    -> Bridge failed, treating as same-contour")
+					print("    -> Bridge failed, leaving as cross-cut fallback")
 				same_cuts.append(cut)
 				continue
-			
+
 			if self.debug:
-				print("    -> Success: merged into {} nodes".format(len(merged.data)))
-			
-			# Replace the two contours with the merged one
-			new_working = []
-			for k, c in enumerate(working):
-				if k != ci_a and k != ci_b:
-					new_working.append(c)
+				print("    -> merged into {} nodes".format(len(merged.data)))
+
+			# Replace the two original contours with the single merged one.
+			new_working = [c for k, c in enumerate(working)
+						   if k != ci_a and k != ci_b]
 			new_working.append(merged)
 			working = new_working
-			
-			# The cross-contour cut now becomes a same-contour cut on merged
-			# We need to find its new position in the merged contour
-			new_idx = len(working) - 1  # merged is at end
-			merged = working[new_idx]
-			
-			# Split the merged contour at the cut points
-			split_result = split_contour_at_points(merged, cut[0], cut[1])
-			if split_result is not None:
-				if self.debug:
-					print("    -> Split into {} pieces".format(len(split_result)))
-				# Replace merged with split pieces
-				working[new_idx:new_idx+1] = split_result
-			else:
-				if self.debug:
-					print("    -> Split failed")
+
+			# The bridge already inserted the cut endpoints as duplicate nodes
+			# on the merged contour; the subsequent same-contour split pass
+			# will cut there.
+			same_cuts.append(cut)
 		
 		# Step 3: Process same-contour cuts (V1 logic)
 		output = []
