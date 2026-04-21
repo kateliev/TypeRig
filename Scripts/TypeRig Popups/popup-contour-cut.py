@@ -20,6 +20,7 @@ from typerig.proxy.fl.objects.node import eNode
 from typerig.proxy.fl.actions.contour import TRContourActionCollector
 from typerig.proxy.fl.actions.node import TRNodeActionCollector
 from typerig.proxy.fl.actions.cut import TRCutActionCollector
+from typerig.proxy.fl.actions.mat_extract import TRMatExtractActionCollector
 from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomPushButton, TRFlowLayout
 from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 from typerig.core.base.message import *
@@ -120,26 +121,17 @@ class TRPopupContourCut(QtGui.QWidget):
 		self.lay_main.addWidget(self.btn_contour_cut)
 		self.btn_contour_cut.clicked.connect(self.do_cut)
 
-		# -- Cut + align buttons
-		tooltip_button = 'Cut contour, align first pair Top, second pair Center'
-		self.btn_cut_top_left = CustomPushButton('node_top_left', tooltip=tooltip_button, obj_name='btn_panel')
-		self.lay_main.addWidget(self.btn_cut_top_left)
-		self.btn_cut_top_left.clicked.connect(lambda: self.do_cut_align('C', 'T'))
+		# -- Cut + auto-align (replaces the four directional cut+align buttons)
+		tooltip_button = 'Cut contour, then auto overlap align both neighbor pairs\nat the cut junction.'
+		self.btn_cut_align_auto = CustomPushButton('node_align_outline_x', tooltip=tooltip_button, obj_name='btn_panel')
+		self.lay_main.addWidget(self.btn_cut_align_auto)
+		self.btn_cut_align_auto.clicked.connect(self.do_cut_align_auto)
 
-		tooltip_button = 'Cut contour, align first pair Center, second pair Top'
-		self.btn_cut_top_right = CustomPushButton('node_top_right', tooltip=tooltip_button, obj_name='btn_panel')
-		self.lay_main.addWidget(self.btn_cut_top_right)
-		self.btn_cut_top_right.clicked.connect(lambda: self.do_cut_align('T', 'C'))
-
-		tooltip_button = 'Cut contour, align first pair Bottom, second pair Center'
-		self.btn_cut_bottom_left = CustomPushButton('node_bottom_left', tooltip=tooltip_button, obj_name='btn_panel')
-		self.lay_main.addWidget(self.btn_cut_bottom_left)
-		self.btn_cut_bottom_left.clicked.connect(lambda: self.do_cut_align('B', 'C'))
-
-		tooltip_button = 'Cut contour, align first pair Center, second pair Bottom'
-		self.btn_cut_bottom_right = CustomPushButton('node_bottom_right', tooltip=tooltip_button, obj_name='btn_panel')
-		self.lay_main.addWidget(self.btn_cut_bottom_right)
-		self.btn_cut_bottom_right.clicked.connect(lambda: self.do_cut_align('C', 'B'))
+		# -- Auto overlap align (standalone, no cut)
+		tooltip_button = 'Auto overlap align\nSelect 4 nodes (2 neighbor pairs) at a cut junction.'
+		self.btn_align_auto = CustomPushButton('align_contour_to_contour', tooltip=tooltip_button, obj_name='btn_panel')
+		self.lay_main.addWidget(self.btn_align_auto)
+		self.btn_align_auto.clicked.connect(self.do_align_auto)
 
 		# -- Corner tools
 		tooltip_button = 'Pick target node for loop extension.\nSelect 1 on-curve node, then toggle on.\nToggle off to clear target.'
@@ -169,11 +161,11 @@ class TRPopupContourCut(QtGui.QWidget):
 		self.lay_main.addWidget(self.btn_stroke_sep)
 		self.btn_stroke_sep.clicked.connect(self.do_stroke_sep)
 
-		# -- Auto overlap align
-		tooltip_button = 'Auto overlap align\nSelect 4 nodes (2 neighbor pairs) at a cut junction.'
-		self.btn_align_auto = CustomPushButton('align_contour_to_contour', tooltip=tooltip_button, obj_name='btn_panel')
-		self.lay_main.addWidget(self.btn_align_auto)
-		self.btn_align_auto.clicked.connect(self.do_align_auto)
+		# -- Medial axis extract
+		tooltip_button = 'Medial Axis Extract\nEmit a clean medial-axis skeleton as a new shape\non the active layer. Active layer only (single master).'
+		self.btn_mat_extract = CustomPushButton('curve_collinear', tooltip=tooltip_button, obj_name='btn_panel')
+		self.lay_main.addWidget(self.btn_mat_extract)
+		self.btn_mat_extract.clicked.connect(self.do_mat_extract)
 
 		# - Set container layout
 		self.container.setLayout(self.lay_main)
@@ -364,32 +356,38 @@ class TRPopupContourCut(QtGui.QWidget):
 			glyph.name, '; '.join(wLayers)))
 		self.close()
 
-	def do_cut_align(self, align_first, align_second):
-		'''Execute cut, then align node pairs and close popup'''
-		glyph = eGlyph()
-		wLayers = glyph._prepareLayers(pLayers)
-		
+	def do_cut_align_auto(self):
+		'''Execute cut, then auto-align the resulting neighbor pairs.
+
+		Combines ``do_cut`` and ``do_align_auto`` into one step: slice the
+		contour at the selected nodes, then classify and align the two
+		neighbor pairs at the resulting cut junction via the same
+		orientation-aware logic used by the standalone auto-align tool.
+		'''
 		# - Perform the cut
 		TRContourActionCollector.contour_slice(pMode, pLayers, get_modifier())
-		
-		# - Get selected nodes after cut and align pairs
+
+		# - Re-acquire the glyph after the cut and auto-align the pairs
+		glyph   = eGlyph()
+		wLayers = glyph._prepareLayers(pLayers)
+
 		for layer in wLayers:
 			selection = glyph.selectedNodes(layer)
-			
-			if len(selection) >= 4:
-				# Group into neighbor pairs
-				pair_first, pair_second = group_nodes_by_neighbors(selection)
-				
-				# Align first pair
-				if len(pair_first) == 2:
-					self._align_pair(pair_first, align_first)
-				
-				# Align second pair
-				if len(pair_second) == 2:
-					self._align_pair(pair_second, align_second)
-		
+
+			if len(selection) < 4:
+				continue
+
+			pair_first, pair_second = group_nodes_by_neighbors(selection)
+
+			if len(pair_first) == 2:
+				self._align_pair(pair_first,  self._auto_align_mode(pair_first))
+
+			if len(pair_second) == 2:
+				self._align_pair(pair_second, self._auto_align_mode(pair_second))
+
 		glyph.update()
-		glyph.updateObject(glyph.fl, 'Glyph: {}; Cut + Align; Layers: {}'.format(glyph.name, '; '.join(wLayers)))
+		glyph.updateObject(glyph.fl, 'Glyph: {}; Cut + Auto Align; Layers: {}'.format(
+			glyph.name, '; '.join(wLayers)))
 		self.close()
 
 	# - Corner procedures ----------------------------
@@ -448,6 +446,16 @@ class TRPopupContourCut(QtGui.QWidget):
 	def do_stroke_sep(self):
 		'''Stroke Separate (V3): split stroke glyph via MAT analysis.'''
 		TRCutActionCollector.stroke_separate_v3(pMode, pLayers)
+		self.close()
+
+	def do_mat_extract(self):
+		'''Medial Axis Extract: emit a clean skeleton as a new shape.
+
+		Active layer only — MAT is a geometric derivative of the outline,
+		so it makes no sense to propagate across masters. The skeleton is
+		appended as a new shape; the original outline is not modified.
+		'''
+		TRMatExtractActionCollector.extract_medial_axis(pMode)
 		self.close()
 
 # - RUN ------------------------------
