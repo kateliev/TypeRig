@@ -46,7 +46,7 @@ class TRMatExtractActionCollector(object):
 							smooth=True,
 							drop_corner_legs=True,
 							corner_leg_ratio=0.35,
-							
+							simplify_tolerance=None,
 							prune_short=None):
 		'''Extract the medial axis of each target glyph on its active layer.
 
@@ -71,8 +71,9 @@ class TRMatExtractActionCollector(object):
 				convex outline corners (terminal radius → 0).
 			corner_leg_ratio (float): terminal-radius / branch-max-radius
 				cutoff used by the corner-leg filter.
-			dedupe_eps (float): Source-node projections closer than this
-				(font units) collapse to a single output node.
+			simplify_tolerance (float | None): Douglas-Peucker tolerance
+				(font units) applied to each walked branch before Bezier
+				fitting. None → defaults to ``sample_step``.
 			prune_short (float | None): Drop terminal branches shorter
 				than this arc length. None disables.
 		'''
@@ -120,7 +121,7 @@ class TRMatExtractActionCollector(object):
 				smooth=smooth,
 				drop_corner_legs=drop_corner_legs,
 				corner_leg_ratio=corner_leg_ratio,
-				
+				simplify_tolerance=simplify_tolerance,
 				prune_short=prune_short,
 			)
 
