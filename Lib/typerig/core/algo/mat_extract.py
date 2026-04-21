@@ -8,26 +8,32 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-"""Source-node-driven medial-axis skeleton extraction.
+"""MAT-graph-based skeleton extraction.
 
-Produces a clean cubic Bezier skeleton where each on-curve output node
-corresponds 1:1 to an actual source on-curve node (projected onto the
-medial axis). Spurious "corner legs" (MAT branches that dead-end at
-sharp outline corners) are dropped by default, leaving only the
-stroke spines.
+Traces each topological stroke of a glyph as a single Bezier contour
+running along the medial axis.  Strokes that meet at L-corners
+(e.g. the frame of 'E') are walked as one continuous path; strokes
+that meet at T-junctions (e.g. the middle arm of 'E', the stem-into-
+bar of 'T') are split into separate contours.  Pure closed loops
+(O, D, rounded frames) emit one closed contour.
 
-Output contours carry ``node.lib['radius']`` = local inscribed-circle
-radius = half the local stroke width, enabling variable-width pen
-re-expansion.
+Node positions are MAT-graph positions (fork/terminal nodes + DP-
+retained knots at curvature bends), **not** source-node projections.
+Short corner-bisector "leg" branches at convex outline corners are
+dropped at the graph level so L-corners collapse into pass-throughs.
 
-Uses ``compute_mat`` as a black box for graph construction + radii.
-All stroke-separation machinery (concavities, CutPair, slicer) is
-bypassed.
+Reuses:
+  - ``compute_mat``           — graph + radii
+  - ``extract_stroke_paths``  — tangent-continuing path walker
+    (from ``stroke_sep_mat``)
+  - ``_simplify_branch``      — Douglas-Peucker
+
+Each output on-curve node carries ``node.lib['radius']`` = half the
+local stroke width at that point.
 """
 
 from __future__ import absolute_import, print_function, division
 import math
-from collections import defaultdict
 
 from typerig.core.objects.point import Point
 from typerig.core.objects.node import Node
@@ -35,10 +41,12 @@ from typerig.core.objects.contour import Contour
 
 from typerig.core.algo.mat import (
 	compute_mat,
+	_simplify_branch,
 	_catmull_rom_tangent,
 )
+from typerig.core.algo.stroke_sep_mat import extract_stroke_paths
 
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 
 _EPS = 1e-9
 _COLINEAR_EPS_RAD = 1e-4
@@ -50,18 +58,14 @@ def _edge_key(a, b):
 	return (min(id(a), id(b)), max(id(a), id(b)))
 
 
-def _extract_branches_and_loops(graph):
-	"""Walk the MAT graph, yielding fork/terminal-bounded branches
-	and pure degree-2 cycles.
+def _walk_raw_branches(graph):
+	"""Enumerate terminal/fork-bounded branches of the raw graph.
 
-	Returns:
-		branches: list[list[MATNode]] -- open polylines.
-		loops:    list[list[MATNode]] -- closed polylines; first node
-			repeated at end to signal closure.
+	Used ONLY for leg identification. Post-leg-drop traversal is done
+	by ``extract_stroke_paths`` and the closed-loop post-pass below.
 	"""
 	visited = set()
 	branches = []
-	loops = []
 
 	start_nodes = [n for n in graph.nodes if n.degree != 2]
 	for start in start_nodes:
@@ -74,9 +78,87 @@ def _extract_branches_and_loops(graph):
 				visited.add(_edge_key(branch[i], branch[i + 1]))
 			branches.append(branch)
 
-	for start in graph.nodes:
-		if start.degree != 2:
+	return branches
+
+
+def _identify_leg_branches(branches, ratio):
+	"""Return the subset of ``branches`` classified as corner legs.
+
+	A branch is a corner leg when:
+	  - exactly one endpoint is degree-1 (a terminal),
+	  - the terminal radius divided by the branch's maximum radius is
+	    below ``ratio``.
+
+	Bilateral-terminal branches (both endpoints degree-1, e.g. ellipse
+	MAT) and fork-to-fork branches are never legs. Safety: if *every*
+	classifiable branch would be a leg, nothing is dropped — so simple
+	shapes with no structural fallback are preserved.
+	"""
+	if ratio <= 0:
+		return []
+
+	candidates = []  # (branch, is_leg)
+
+	for b in branches:
+		if len(b) < 2:
+			candidates.append((b, False))
 			continue
+
+		start_term = b[0].degree == 1
+		end_term = b[-1].degree == 1
+
+		if start_term and end_term:
+			candidates.append((b, False))
+			continue
+		if not (start_term or end_term):
+			candidates.append((b, False))
+			continue
+
+		terminal = b[0] if start_term else b[-1]
+		max_r = max(n.radius for n in b)
+		if max_r < _EPS:
+			candidates.append((b, False))
+			continue
+
+		candidates.append((b, (terminal.radius / max_r) < ratio))
+
+	has_structure = any(not is_leg for _b, is_leg in candidates)
+	if not has_structure:
+		return []
+
+	return [b for b, is_leg in candidates if is_leg]
+
+
+def _disconnect_branch_edges(branch):
+	"""Disconnect every consecutive-node edge in ``branch``.
+
+	After disconnection, degree-1 terminals along the leg become
+	orphans (degree 0) and the fork at the join drops in degree.
+	A former 3-way fork whose only non-leg edges are two collinear
+	continuations becomes a degree-2 pass-through, which
+	``extract_stroke_paths`` then traces through transparently.
+	"""
+	for i in range(len(branch) - 1):
+		a, b = branch[i], branch[i + 1]
+		if b in a.neighbors:
+			a.disconnect(b)
+
+
+# - Closed-loop post-pass --------------------------------------------
+
+def _walk_remaining_loops(graph, visited):
+	"""Walk closed loops from edges left unvisited by stroke-path tracing.
+
+	``visited`` is an undirected edge-key set populated from the stroke
+	paths. Any remaining edge must be part of a closed cycle with no
+	terminals (e.g. the MAT ring of 'O', 'frame', 'maps'), or a
+	degenerate fragment. Only genuine cycles (endpoint revisits start)
+	are emitted as closed loops.
+	"""
+	loops = []
+
+	for start in graph.nodes:
+		# Find an unvisited incident edge on this node.
 		seed = None
 		for nb in start.neighbors:
 			if _edge_key(start, nb) not in visited:
@@ -90,34 +172,40 @@ def _extract_branches_and_loops(graph):
 		curr = seed
 		visited.add(_edge_key(start, seed))
 		guard = len(graph.nodes) + 4
+
 		while curr is not start and guard > 0:
 			loop.append(curr)
 			nxt = None
 			for n2 in curr.neighbors:
-				if n2 is not prev:
-					nxt = n2
-					break
+				if n2 is prev:
+					continue
+				if _edge_key(curr, n2) in visited:
+					continue
+				nxt = n2
+				break
+			# Fallback: accept any non-prev neighbor, even if we'd revisit
+			# an edge. This closes the loop when degree-2 cycles share an
+			# edge-key pattern with already-visited paths at a junction.
+			if nxt is None:
+				for n2 in curr.neighbors:
+					if n2 is not prev:
+						nxt = n2
+						break
 			if nxt is None:
 				break
 			visited.add(_edge_key(curr, nxt))
 			prev = curr
 			curr = nxt
 			guard -= 1
-		loop.append(start)
-		loops.append(loop)
 
-	return branches, loops
+		if curr is start and len(loop) >= 3:
+			loop.append(start)  # close marker
+			loops.append(loop)
+
+	return loops
 
 
-# - Branch geometry helpers -----------------------------------------
-
-def _branch_arc_length(branch):
-	total = 0.0
-	for i in range(len(branch) - 1):
-		total += math.hypot(branch[i + 1].x - branch[i].x,
-							branch[i + 1].y - branch[i].y)
-	return total
-
+# - Polyline geometry helpers ---------------------------------------
 
 def _collapse_colinear(branch, eps_rad=_COLINEAR_EPS_RAD):
 	"""Drop interior nodes whose incoming/outgoing chords are colinear."""
@@ -152,121 +240,18 @@ def _collapse_colinear(branch, eps_rad=_COLINEAR_EPS_RAD):
 	return out
 
 
-# - Corner-leg filtering --------------------------------------------
-
-def _filter_corner_legs(branches, loops, ratio):
-	"""Drop terminal branches that are corner bisectors ("legs").
-
-	At a convex outline corner (≤ 90°), the MAT emits a short branch
-	that bisects the corner and runs out from the main spine to a
-	degree-1 terminal with radius → 0. These appear as odd triangular
-	stubs in the extracted skeleton.
-
-	A terminal branch is classified as a corner leg and dropped when:
-	  - one end is degree-1 (a terminal),
-	  - the terminal radius divided by the branch's maximum radius is
-	    below ``ratio``,
-	  - the graph has other structure to fall back on (any fork-to-fork
-	    branch, any closed loop, or any non-corner-leg terminal branch).
-
-	The last condition protects simple shapes whose MAT is a single
-	terminal-to-terminal segment (ellipse-like): those retain their
-	branch even when the radius dips at the endpoints.
-	"""
-	if ratio <= 0:
-		return list(branches)
-
-	classified = []  # list of (branch, is_corner_leg)
-
-	for b in branches:
-		if len(b) < 2:
-			classified.append((b, False))
-			continue
-
-		# Only single-terminal branches can be corner legs. A branch
-		# with two terminals is a bilateral spine — never a leg.
-		start_term = b[0].degree == 1
-		end_term = b[-1].degree == 1
-
-		if start_term and end_term:
-			classified.append((b, False))
-			continue
-		if not (start_term or end_term):
-			classified.append((b, False))
-			continue
-
-		terminal = b[0] if start_term else b[-1]
-		max_r = max(n.radius for n in b)
-		if max_r < _EPS:
-			classified.append((b, False))
-			continue
-
-		is_leg = (terminal.radius / max_r) < ratio
-		classified.append((b, is_leg))
-
-	# Are there any non-leg structural branches / loops to fall back on?
-	has_structure = bool(loops) or any(
-		not is_leg for _b, is_leg in classified
-	)
-
-	if not has_structure:
-		# Graph is entirely made of "legs" by the ratio test — rare; keep
-		# everything so the user at least sees the skeleton.
-		return [b for b, _ in classified]
-
-	return [b for b, is_leg in classified if not is_leg]
-
-
-# - Projection onto a polyline --------------------------------------
-
-def _project_onto_polyline(px, py, polyline):
-	"""Project (px, py) onto the polyline and return the closest foot.
-
-	Returns (dist, arc_s, fx, fy, radius_at_foot) or None for empty
-	polyline. The radius is linearly interpolated between the two
-	endpoints of the nearest segment.
-	"""
-	if len(polyline) < 2:
-		return None
-
-	best = None
-	cumulative = 0.0
-	for i in range(len(polyline) - 1):
-		a = polyline[i]
-		b = polyline[i + 1]
-		dx = b.x - a.x
-		dy = b.y - a.y
-		len_sq = dx * dx + dy * dy
-		seg_len = math.sqrt(len_sq) if len_sq > _EPS else 0.0
-
-		if len_sq < _EPS:
-			# Degenerate segment — project onto the start point.
-			d = math.hypot(px - a.x, py - a.y)
-			if best is None or d < best[0]:
-				best = (d, cumulative, a.x, a.y, a.radius)
-		else:
-			t = ((px - a.x) * dx + (py - a.y) * dy) / len_sq
-			if t < 0.0:
-				t = 0.0
-			elif t > 1.0:
-				t = 1.0
-			fx = a.x + t * dx
-			fy = a.y + t * dy
-			d = math.hypot(px - fx, py - fy)
-			r = a.radius + t * (b.radius - a.radius)
-			s = cumulative + t * seg_len
-			if best is None or d < best[0]:
-				best = (d, s, fx, fy, r)
-
-		cumulative += seg_len
-
-	return best
+def _branch_arc_length(branch):
+	total = 0.0
+	for i in range(len(branch) - 1):
+		total += math.hypot(branch[i + 1].x - branch[i].x,
+							branch[i + 1].y - branch[i].y)
+	return total
 
 
 # - Output contour builders -----------------------------------------
 
 def _points_to_line_contour(points, closed):
-	"""Build a straight-segment Contour from (x, y, r) triples."""
+	"""Straight-segment Contour from (x, y, r) triples."""
 	min_n = 3 if closed else 2
 	if len(points) < min_n:
 		return None
@@ -280,12 +265,11 @@ def _points_to_line_contour(points, closed):
 
 
 def _points_to_cubic_contour(points, closed):
-	"""Build a smooth cubic-Bezier Contour from (x, y, r) triples.
+	"""Cubic-Bezier Contour (Catmull-Rom tangents) from (x, y, r) triples.
 
-	Uses Catmull-Rom tangents to place handles. For closed contours
-	the tangent at every knot wraps to its cyclic neighbours (smooth
-	all the way around). For open contours the endpoint tangents fall
-	back to chord direction.
+	For closed contours tangents wrap cyclically; every knot is marked
+	smooth. For open contours endpoint tangents fall back to chord
+	direction and endpoint knots are left non-smooth.
 	"""
 	min_n = 3 if closed else 2
 	if len(points) < min_n:
@@ -306,7 +290,6 @@ def _points_to_cubic_contour(points, closed):
 		on1 = Node((p3.x, p3.y), type='on'); on1.lib = {'radius': rb}
 		return Contour([on0, bcp0, bcp1, on1], closed=False)
 
-	# Compute Catmull-Rom tangents at every knot.
 	tangents = []
 	for i in range(n):
 		if closed:
@@ -318,11 +301,9 @@ def _points_to_cubic_contour(points, closed):
 		tangents.append(_catmull_rom_tangent(
 			prev_pt, (points[i][0], points[i][1]), next_pt))
 
-	# Number of cubic segments: one per consecutive knot pair. For
-	# closed loops, wrap from last back to first.
 	segments = n if closed else (n - 1)
-
 	contour_nodes = []
+
 	for seg_i in range(segments):
 		a_i = seg_i
 		b_i = (seg_i + 1) % n if closed else (seg_i + 1)
@@ -347,8 +328,6 @@ def _points_to_cubic_contour(points, closed):
 		contour_nodes.append(Node((p1x, p1y), type='curve'))
 		contour_nodes.append(Node((p2x, p2y), type='curve'))
 
-		# Last on-node: for closed contour, don't emit — the first is
-		# the same point. For open, mark interior knots as smooth.
 		if closed and seg_i == segments - 1:
 			pass  # starting knot already in list
 		else:
@@ -362,6 +341,42 @@ def _points_to_cubic_contour(points, closed):
 	return Contour(contour_nodes, closed=closed)
 
 
+# - Simplification --------------------------------------------------
+
+def _simplify_polyline(poly_nodes, tolerance, closed, min_count):
+	"""Colinear-collapse + DP-simplify a polyline of MATNodes.
+
+	For closed loops ``poly_nodes`` is expected in open form with the
+	first node repeated at the end; the duplicate is stripped before
+	returning.
+	"""
+	if closed and len(poly_nodes) >= 2 and poly_nodes[0] is poly_nodes[-1]:
+		working = _collapse_colinear(poly_nodes[:-1] + [poly_nodes[0]])
+		# Drop the trailing duplicate before DP so interior simplification
+		# doesn't artificially pin it.
+		if len(working) >= 2 and working[0] is working[-1]:
+			working = working[:-1]
+	else:
+		working = _collapse_colinear(poly_nodes)
+
+	if len(working) <= min_count:
+		return list(working)
+
+	if tolerance is None or tolerance <= 0:
+		return list(working)
+
+	# For closed loops, _simplify_branch's endpoint-pinning behavior is
+	# not ideal (arbitrary start-point bias), but for typeface MATs the
+	# effect is negligible — the simplified knots usually coincide with
+	# curvature extrema regardless of where the cycle is unrolled.
+	idx = _simplify_branch(working, tolerance)
+	reduced = [working[i] for i in idx]
+
+	if len(reduced) < min_count:
+		return list(working)
+	return reduced
+
+
 # - Public API -------------------------------------------------------
 
 def extract_medial_axis(
@@ -372,21 +387,18 @@ def extract_medial_axis(
 		smooth=True,
 		drop_corner_legs=True,
 		corner_leg_ratio=0.35,
-		dedupe_eps=1.0,
-		prune_short=None):
+		simplify_tolerance=None,
+		prune_short=None,
+		lookback=8,
+		curvature_bias=0.5,
+		peek_steps=6):
 	"""Extract a clean medial-axis skeleton as cubic Bezier contours.
 
-	Each output on-curve node corresponds 1:1 to a source on-curve node
-	projected onto the (pruned) medial axis — so the skeleton's node
-	positions track the outline's actual node positions, not sampling
-	artifacts. Coincident projections (two source nodes that collapse
-	to the same medial point, e.g. opposing sides of a stroke) are
-	deduped within ``dedupe_eps``.
-
-	"Corner legs" — the short MAT branches that bisect convex outline
-	corners out to degree-1 terminals with radius → 0 — are dropped by
-	default; source nodes at those corners re-project to the retained
-	spine instead.
+	Each topological stroke becomes one open Bezier contour running
+	from terminal to terminal through the medial axis; tangent-
+	continuous forks are walked transparently (L-corners become a
+	single contour passing through the bend). T-junctions split into
+	separate contours. Pure closed loops emit one closed contour.
 
 	Args:
 		contours:           list[Contour] -- glyph outline.
@@ -394,13 +406,22 @@ def extract_medial_axis(
 		beta_min:           MAT β-pruning threshold.
 		quality:            'draft' | 'normal' | 'fine'.
 		smooth:             True → cubic Beziers; False → polylines.
-		drop_corner_legs:   True → drop corner-bisector stubs.
+		drop_corner_legs:   True → disconnect short corner-bisector
+			branches at convex outline corners so L-corners become
+			pass-throughs in stroke-path tracing.
 		corner_leg_ratio:   terminal-radius / branch-max-radius cutoff.
-		dedupe_eps:         projections closer than this collapse to one.
-		prune_short:        optional arc-length cut for terminal branches.
+		simplify_tolerance: DP tolerance (font units). ``None`` defaults
+			to ``sample_step`` — enough to collapse sampling noise on
+			straight runs while preserving curvature knots.
+		prune_short:        optional arc-length cut for terminal legs
+			(applied *before* leg-ratio filtering).
+		lookback,
+		curvature_bias,
+		peek_steps:         forwarded to ``extract_stroke_paths`` /
+			``pick_best_branch`` for fork-disambiguation tuning.
 
 	Returns:
-		list[Contour] -- skeleton contours (one per topological segment).
+		list[Contour] -- skeleton contours.
 	"""
 	if not contours:
 		return []
@@ -414,86 +435,74 @@ def extract_medial_axis(
 	if not graph.nodes:
 		return []
 
-	branches, loops = _extract_branches_and_loops(graph)
-
-	if drop_corner_legs:
-		branches = _filter_corner_legs(branches, loops, corner_leg_ratio)
-
+	# Optional arc-length pruning of very short terminal branches
+	# before leg-ratio filtering.
 	if prune_short is not None and prune_short > 0:
-		kept = []
-		for b in branches:
-			is_terminal = (b[0].degree == 1 or b[-1].degree == 1)
-			if is_terminal and _branch_arc_length(b) < prune_short:
+		for b in _walk_raw_branches(graph):
+			if len(b) < 2:
 				continue
-			kept.append(b)
-		branches = kept
+			has_terminal = (b[0].degree == 1 or b[-1].degree == 1)
+			if has_terminal and _branch_arc_length(b) < prune_short:
+				_disconnect_branch_edges(b)
 
-	# Colinear-collapse the retained polylines once so projection and
-	# arc-length are computed on the cleaned geometry.
-	polylines = []
-	for i, b in enumerate(branches):
-		if len(b) < 2:
-			continue
-		polylines.append(('b%d' % i, False, _collapse_colinear(b)))
-	for i, l in enumerate(loops):
-		if len(l) < 3:
-			continue
-		polylines.append(('l%d' % i, True, _collapse_colinear(l)))
+	# Corner-leg drop at graph level — mutates the graph so that
+	# former 3-way forks with one leg become degree-2 pass-throughs.
+	if drop_corner_legs and corner_leg_ratio > 0:
+		raw_branches = _walk_raw_branches(graph)
+		for leg in _identify_leg_branches(raw_branches, corner_leg_ratio):
+			_disconnect_branch_edges(leg)
 
-	if not polylines:
-		return []
+	# Stroke-path tracing with tangent-continuity at forks.
+	stroke_paths = extract_stroke_paths(
+		graph,
+		lookback=lookback,
+		curvature_bias=curvature_bias,
+		peek_steps=peek_steps,
+	)
 
-	# Project each source on-curve node to the nearest polyline.
-	projs_by_id = defaultdict(list)
-	for contour in contours:
-		for node in contour.nodes:
-			if getattr(node, 'type', 'on') != 'on':
-				continue
-			best = None  # (dist, pid, s, fx, fy, r)
-			for pid, _is_loop, poly in polylines:
-				res = _project_onto_polyline(node.x, node.y, poly)
-				if res is None:
-					continue
-				d, s, fx, fy, r = res
-				if best is None or d < best[0]:
-					best = (d, pid, s, fx, fy, r)
-			if best is not None:
-				_d, pid, s, fx, fy, r = best
-				projs_by_id[pid].append((s, fx, fy, r))
+	# Undirected visited-edge set from the stroke paths, for the
+	# closed-loop post-pass.
+	visited = set()
+	for sp in stroke_paths:
+		nodes = sp.nodes
+		for i in range(len(nodes) - 1):
+			visited.add(_edge_key(nodes[i], nodes[i + 1]))
 
-	# Build output contours.
+	loops = _walk_remaining_loops(graph, visited)
+
+	if simplify_tolerance is None:
+		simplify_tolerance = sample_step
+
 	out = []
-	for pid, is_loop, _poly in polylines:
-		projs = projs_by_id.get(pid, [])
-		if not projs:
+
+	for sp in stroke_paths:
+		nodes = sp.nodes
+		if len(nodes) < 2:
 			continue
-
-		projs.sort(key=lambda p: p[0])
-
-		# Dedupe sequential coincident projections.
-		deduped = []
-		for p in projs:
-			if deduped:
-				dx = p[1] - deduped[-1][1]
-				dy = p[2] - deduped[-1][2]
-				if math.hypot(dx, dy) < dedupe_eps:
-					continue
-			deduped.append(p)
-
-		# Closed loops: check wrap-around coincidence.
-		if is_loop and len(deduped) >= 2:
-			dx = deduped[0][1] - deduped[-1][1]
-			dy = deduped[0][2] - deduped[-1][2]
-			if math.hypot(dx, dy) < dedupe_eps:
-				deduped.pop()
-
-		points = [(x, y, r) for _s, x, y, r in deduped]
-
+		simplified = _simplify_polyline(
+			nodes, simplify_tolerance, closed=False, min_count=2)
+		if len(simplified) < 2:
+			continue
+		points = [(m.x, m.y, m.radius) for m in simplified]
 		if smooth:
-			contour = _points_to_cubic_contour(points, closed=is_loop)
+			contour = _points_to_cubic_contour(points, closed=False)
 		else:
-			contour = _points_to_line_contour(points, closed=is_loop)
+			contour = _points_to_line_contour(points, closed=False)
+		if contour is not None:
+			out.append(contour)
 
+	for loop in loops:
+		if len(loop) < 3:
+			continue
+		simplified = _simplify_polyline(
+			loop, simplify_tolerance, closed=True, min_count=3)
+		if len(simplified) < 3:
+			continue
+		points = [(m.x, m.y, m.radius) for m in simplified]
+		if smooth:
+			contour = _points_to_cubic_contour(points, closed=True)
+		else:
+			contour = _points_to_line_contour(points, closed=True)
 		if contour is not None:
 			out.append(contour)
 

@@ -46,7 +46,7 @@ class TRMatExtractActionCollector(object):
 							smooth=True,
 							drop_corner_legs=True,
 							corner_leg_ratio=0.35,
-							dedupe_eps=1.0,
+							
 							prune_short=None):
 		'''Extract the medial axis of each target glyph on its active layer.
 
@@ -120,7 +120,7 @@ class TRMatExtractActionCollector(object):
 				smooth=smooth,
 				drop_corner_legs=drop_corner_legs,
 				corner_leg_ratio=corner_leg_ratio,
-				dedupe_eps=dedupe_eps,
+				
 				prune_short=prune_short,
 			)
 
