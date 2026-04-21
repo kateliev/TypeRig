@@ -659,24 +659,42 @@ class StrokeSep(object):
 	
 	def execute(self, result, contours, coordinated=True, overlap=0):
 		"""Apply all cuts with proper cross-contour handling.
-		
+
 		Does NOT modify input contours.
-		
+
 		Args:
 			result: StrokeSepResult from analyze()
 			contours: original contour list
 			coordinated: if True, use coordinated_cuts; else use raw cuts
 			overlap: float -- extension past cut boundaries (font units)
-			
+
 		Returns:
 			list of Contour objects
 		"""
+		cuts_to_apply = result.coordinated_cuts if coordinated else result.cuts
+		return self.apply_cuts(cuts_to_apply, contours, overlap=overlap)
+
+	def apply_cuts(self, cuts_to_apply, contours, overlap=0):
+		"""Apply an already-resolved list of cut point-pairs to contours.
+
+		Shared engine used by ``execute`` (active layer) and by
+		``apply_cuts_to_layer`` (compatible masters). Keeping both paths on
+		this single implementation guarantees that every master receives the
+		same topological cuts via the same planar slicer / bridge / split
+		dispatch — which is the whole point of cross-master coordination.
+
+		Args:
+			cuts_to_apply: list of ((x_a, y_a), (x_b, y_b)) point pairs.
+			contours: list[Contour] -- contours to cut (not mutated).
+			overlap: float -- extension past cut boundaries (font units).
+
+		Returns:
+			list[Contour] -- new contours produced by the cuts.
+		"""
 		if self.debug:
 			print("\n=== V3 Execute ===")
-		
+
 		working = [_fast_clone_contour(c) for c in contours]
-		
-		cuts_to_apply = result.coordinated_cuts if coordinated else result.cuts
 		
 		# Step 1: Classify cuts into same-contour and cross-contour
 		cross_cuts = []  # (cut, ci_a, ci_b)

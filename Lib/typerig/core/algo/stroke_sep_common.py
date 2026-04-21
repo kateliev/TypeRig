@@ -318,7 +318,11 @@ def apply_cuts_to_layer(result, source_contours, target_contours, overlap=0):
 	"""
 	check_contour_compatibility(source_contours, target_contours)
 
-	# Resolve target coordinates from parametric locations
+	# Resolve target coordinates from parametric locations stored on each
+	# CutPair. The parametric form is master-invariant: (contour_idx,
+	# node_idx, t) evaluates to the equivalent geometric point on any
+	# compatible master, so cross-contour cuts land on the correct target
+	# nodes regardless of how the master has been displaced.
 	target_cuts = []
 	for cut_pair in result.cuts:
 		pts = []
@@ -330,56 +334,19 @@ def apply_cuts_to_layer(result, source_contours, target_contours, overlap=0):
 			pts.append((pt.x, pt.y))
 		target_cuts.append((pts[0], pts[1]))
 
-	# Split target contours at the resolved coordinates
-	working = [_fast_clone_contour(c) for c in target_contours]
-
-	output = []
-	for contour in working:
-		applicable = []
-		for cut in target_cuts:
-			_, _, da = find_parameter_on_contour(contour, cut[0][0], cut[0][1])
-			_, _, db = find_parameter_on_contour(contour, cut[1][0], cut[1][1])
-			if da < 15.0 and db < 15.0:
-				applicable.append(cut)
-
-		if not applicable:
-			output.append(contour)
-			continue
-
-		remaining = [contour]
-		for cut in applicable:
-			new_remaining = []
-			for c in remaining:
-				_, _, da = find_parameter_on_contour(c, cut[0][0], cut[0][1])
-				_, _, db = find_parameter_on_contour(c, cut[1][0], cut[1][1])
-				if da > 15.0 or db > 15.0:
-					new_remaining.append(c)
-					continue
-				split = split_contour_at_points(c, cut[0], cut[1])
-				if split is not None:
-					new_remaining.extend(split)
-				else:
-					new_remaining.append(c)
-			remaining = new_remaining
-
-		# X-junction overlap: 2 parallel cuts producing 3 pieces
-		# need the 2 smallest fragments joined into one overlapping stroke
-		if len(applicable) == 2 and len(remaining) == 3:
-			has_x = False
-			for j in result.junctions:
-				if hasattr(j, 'junction_type') and j.junction_type == 'X':
-					has_x = True
-					break
-			if has_x:
-				remaining = _join_fragments(remaining, applicable)
-
-		# Extend pieces past cut boundaries for stroke overlap
-		if overlap > 0:
-			_extend_pieces_at_cuts(remaining, applicable, overlap)
-
-		output.extend(remaining)
-
-	return output
+	# Delegate to the same engine the active layer uses. This routes
+	# cross-contour cuts through the planar slicer / bridge fallback and
+	# same-contour cuts through the split path — guaranteeing every master
+	# receives topologically identical cuts. Previously this function used
+	# a stale per-contour split path that silently dropped cross-contour
+	# cuts on compatible masters (they require both endpoints on a single
+	# contour), so the active layer and its masters would diverge.
+	#
+	# Local import to avoid a circular dependency: stroke_sep imports from
+	# stroke_sep_common at module load time.
+	from typerig.core.algo.stroke_sep import StrokeSep
+	sep = StrokeSep()
+	return sep.apply_cuts(target_cuts, target_contours, overlap=overlap)
 
 
 # - Unified Result ---------------------
