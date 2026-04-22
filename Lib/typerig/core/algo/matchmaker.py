@@ -23,7 +23,32 @@ from typerig.core.objects.node import Node
 from typerig.core.objects.contour import Contour
 
 # - Init --------------------------------
-__version__ = '0.1.0'
+__version__ = '0.2.0'
+
+
+# - Ordering enum -----------------------
+class Corner(object):
+	'''Which bbox corner is used as the reference for canonical ordering.
+
+	Shared between canonicalize_start (picks that corner's extremal on-curve
+	as the new start) and canonicalize_contour_order (sorts contours by the
+	same corner's key). Plain-class enum for Py2/PythonQt compatibility —
+	values are (y_sign, x_sign) where +1 means "smaller is first".
+	'''
+	BOTTOM_LEFT  = ( 1,  1)   # y ascending (bottom first), x ascending (left first)
+	TOP_LEFT     = (-1,  1)   # y descending (top first),   x ascending (left first)
+	BOTTOM_RIGHT = ( 1, -1)
+	TOP_RIGHT    = (-1, -1)
+
+	_ALL = (BOTTOM_LEFT, TOP_LEFT, BOTTOM_RIGHT, TOP_RIGHT)
+
+
+def _corner_key(corner):
+	'''Resolve a Corner value to a (y_sign, x_sign) tuple, tolerating raw
+	tuples for callers that prefer them.'''
+	if isinstance(corner, tuple) and len(corner) == 2:
+		return corner
+	raise ValueError('unknown corner value: {!r}'.format(corner))
 
 # - Stage 1: Intrinsic representation ---
 def intrinsic(contour):
@@ -53,10 +78,24 @@ def intrinsic(contour):
 		b = on_nodes[(i + 1) % m].point
 		L.append(math.hypot(b.x - a.x, b.y - a.y))
 
-	# angle_poly_turn uses prev_on / next_on on the live contour, which
-	# already handle wraparound and skip off-curves. That matches what we
-	# want: the turning angle at each on-curve vertex of the polygon.
-	theta = [n.angle_poly_turn for n in on_nodes]
+	# Turning angle at each on-curve vertex. angle_poly_turn does a
+	# complex division (next-cur)/(cur-prev), so stacked on-curves (zero-
+	# length adjacent edges) blow up with ZeroDivisionError. That pattern
+	# is intentional in type design — designers stack nodes as interpolation
+	# placeholders — so we defend against it: if either incident edge has
+	# zero length the turn is undefined; treat it as 0 and let the stretch
+	# term carry the signal.
+	theta = []
+	for i in range(m):
+		L_in  = L[(i - 1) % m]
+		L_out = L[i]
+		if L_in == 0.0 or L_out == 0.0:
+			theta.append(0.0)
+			continue
+		try:
+			theta.append(on_nodes[i].angle_poly_turn)
+		except ZeroDivisionError:
+			theta.append(0.0)
 
 	return L, theta
 
@@ -309,29 +348,202 @@ def _apply_insertion_plan(contour, plan):
 			upper = t
 
 
-def apply_match(contour_a, contour_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0):
+# - Segment-type reconciliation ---------
+def _segment_span(contour, on_idx_start, on_idx_next):
+	'''Count nodes strictly between two on-curve indices (the off-curves
+	of that segment). Handles wrap-around when on_idx_next < on_idx_start.
+	'''
+	n = len(contour.nodes)
+	if on_idx_next > on_idx_start:
+		return on_idx_next - on_idx_start - 1
+	# Wrap: segment spans end → 0.
+	return (n - on_idx_start - 1) + on_idx_next
+
+
+def _promote_line_to_cubic(contour, on_idx_start, on_idx_next):
+	'''Insert two curve-type off-curves between the two on-curves so the
+	segment becomes a cubic bezier. Handles wrap. Mutates in place. Returns
+	the number of nodes inserted (always 2).
+	'''
+	nodes = contour.nodes
+	a = nodes[on_idx_start]
+	b = nodes[on_idx_next]
+	dx = b.point.x - a.point.x
+	dy = b.point.y - a.point.y
+	p1 = Node(a.point.x + dx / 3.0,       a.point.y + dy / 3.0,       type='curve')
+	p2 = Node(a.point.x + 2.0 * dx / 3.0, a.point.y + 2.0 * dy / 3.0, type='curve')
+	# Insert in reverse so the earlier position isn't shifted by the later insert.
+	insert_pos = on_idx_start + 1
+	if on_idx_next > on_idx_start:
+		contour.insert(insert_pos, p2)
+		contour.insert(insert_pos, p1)
+	else:
+		# Wrap: segment runs from on_idx_start to end, then 0 → on_idx_next.
+		# Safest: append the two controls right after on_idx_start.
+		contour.insert(insert_pos, p2)
+		contour.insert(insert_pos, p1)
+	return 2
+
+
+def _reconcile_segment_types(contour_a, contour_b):
+	'''After pairing, promote line→cubic wherever the paired segments
+	have different types. Mutates both contours in place.
+
+	Preconditions:
+		- Both contours have equal on-curve counts (apply_match invariant).
+
+	Returns:
+		(n_promoted_a, n_promoted_b): number of segments promoted on each side.
+	'''
+	promoted_a = 0
+	promoted_b = 0
+
+	# Walk paired segments in REVERSE so inserts don't shift earlier indices
+	# we haven't processed yet.
+	def _pair_iter():
+		on_a = _on_curve_indices(contour_a)
+		on_b = _on_curve_indices(contour_b)
+		assert len(on_a) == len(on_b)
+		m = len(on_a)
+		out = []
+		for k in range(m):
+			k_next = (k + 1) % m
+			span_a = _segment_span(contour_a, on_a[k], on_a[k_next])
+			span_b = _segment_span(contour_b, on_b[k], on_b[k_next])
+			out.append((k, on_a[k], on_a[k_next], span_a,
+			               on_b[k], on_b[k_next], span_b))
+		return out
+
+	for k, ia, ja, span_a, ib, jb, span_b in reversed(_pair_iter()):
+		# Line = 0 off-curves, Cubic = 2 curve-type off-curves.
+		# Only handle the Line ↔ Cubic case; other mixes (quadratic,
+		# multi-off-curve TT) are out of scope and left untouched.
+		if span_a == 0 and span_b == 2:
+			_promote_line_to_cubic(contour_a, ia, ja)
+			promoted_a += 1
+		elif span_b == 0 and span_a == 2:
+			_promote_line_to_cubic(contour_b, ib, jb)
+			promoted_b += 1
+
+	return promoted_a, promoted_b
+
+
+# - Canonicalization helpers ------------
+def canonicalize_start(contour, corner=Corner.BOTTOM_LEFT):
+	'''Return a clone of contour with its start rotated to the on-curve
+	node nearest the chosen bbox corner.
+
+	Ties (two nodes with equal sort key — common for circles and
+	rectangles) are broken by cyclic position: the earliest tied node in
+	contour order wins. For geometric symmetry where even that depends
+	on upstream construction order, fall back to the node whose vector
+	from the bbox centre points closest to the corner direction — this
+	gives a deterministic choice across masters built differently.
+
+	Args:
+		contour (Contour): closed contour to normalise (NOT mutated).
+		corner (Corner|tuple): which bbox corner to anchor the start to.
+
+	Returns:
+		Contour: new contour with start rotated; if the contour is
+			already starting at the canonical node, returns a plain clone.
+	'''
+	y_sign, x_sign = _corner_key(corner)
+
+	work = contour.clone()
+	on_idx = _on_curve_indices(work)
+	if not on_idx:
+		return work
+
+	nodes = work.nodes
+	# Primary key: (y_sign * y, x_sign * x) — smaller-is-first sort.
+	# Secondary tiebreak: angle from bbox centre toward the target corner.
+	bnds = work.bounds
+	cx = bnds.x + bnds.width  * 0.5
+	cy = bnds.y + bnds.height * 0.5
+	target_dx = -x_sign   # +1 means "left first" → target points left (-x)
+	target_dy = -y_sign
+
+	def _key(idx):
+		n = nodes[idx]
+		nx = n.point.x
+		ny = n.point.y
+		primary = (y_sign * ny, x_sign * nx)
+		# Tiebreaker: angular distance from node vector (centre→node) to
+		# the desired corner direction. Closer ≈ smaller angular diff.
+		dx = nx - cx
+		dy = ny - cy
+		# Dot product with target direction, negated so larger dot = smaller key.
+		align = -(dx * target_dx + dy * target_dy)
+		return (primary, align)
+
+	best_idx = min(on_idx, key=_key)
+	if best_idx != on_idx[0]:
+		work.set_start(best_idx)
+	return work
+
+
+def canonicalize_contour_order(contours, corner=Corner.TOP_LEFT):
+	'''Return contours sorted by the same Corner convention used for
+	start-point canonicalization. Default TOP_LEFT = reading order.
+
+	Does NOT mutate input contours. Returns a new list.
+	'''
+	y_sign, x_sign = _corner_key(corner)
+
+	def _key(c):
+		bnds = c.bounds
+		# Use bbox centre so a contour that barely crosses a neighbour's
+		# bounds doesn't outrank it because one corner point did.
+		cx = bnds.x + bnds.width  * 0.5
+		cy = bnds.y + bnds.height * 0.5
+		return (y_sign * cy, x_sign * cx)
+
+	return sorted(contours, key=_key)
+
+
+def apply_match(contour_a, contour_b,
+                k_s=1.0, k_b=1.0, c_ins_scale=1.0,
+                align_start='respect'):
 	'''Mutate *copies* of contour_a / contour_b so they become point-
 	compatible under the Sederberg-Greenwood energy.
 
 	Steps:
-		1. Intrinsic encoding of both contours (on-curve polygon).
-		2. Cyclic DP to find the best start-point alignment.
-		3. Deep-copy both contours; rotate the B-copy's start so the
-		   pairing indices line up.
-		4. Apply insertions on both copies per the back-trace plan.
+		1. Clone both contours; optionally canonicalize start nodes.
+		2. Winding pre-check: reverse B's clone if winding differs.
+		3. Intrinsic encoding of both contours (on-curve polygon).
+		4. DP match (fixed or cyclic per `align_start`).
+		5. Rotate B's start if cyclic picked a non-zero shift.
+		6. Apply insertions on both copies per the back-trace plan.
+
+	Args:
+		align_start: how to align start points between A and B.
+			'respect'   — trust designer: shift_b = 0, fixed DP (default).
+			'canonical' — run canonicalize_start(BOTTOM_LEFT) on clones of
+			              both A and B before DP, then shift_b = 0.
+			'auto'      — cyclic DP picks the cheapest shift (legacy).
 
 	Returns:
-		(new_a, new_b, cost, meta) where meta is a dict with diagnostic
-		fields: 'shift_b', 'n_pairs', 'n_insert_a', 'n_insert_b',
-		'len_on_before', 'len_on_after'.
+		(new_a, new_b, cost, meta) where meta contains 'shift_b',
+		'reversed_b', 'align_start', 'n_pairs', 'n_insert_a',
+		'n_insert_b', 'len_on_before', 'len_on_after'.
 
 	Post-conditions (enforced by assertions):
 		- len(new_a on-curves) == len(new_b on-curves)
 		- sum(theta) on each resulting contour remains +/- 2*pi
 	'''
-	# Clone up-front so we can normalise winding before computing intrinsics.
-	new_a = contour_a.clone()
-	new_b = contour_b.clone()
+	if align_start not in ('respect', 'canonical', 'auto'):
+		raise ValueError(
+			"align_start must be one of 'respect','canonical','auto'; got {!r}".format(
+				align_start))
+
+	# Canonicalize THEN clone by using canonicalize_start (which clones).
+	if align_start == 'canonical':
+		new_a = canonicalize_start(contour_a, corner=Corner.BOTTOM_LEFT)
+		new_b = canonicalize_start(contour_b, corner=Corner.BOTTOM_LEFT)
+	else:
+		new_a = contour_a.clone()
+		new_b = contour_b.clone()
 
 	# Winding pre-check: theta signs are inverted under a reversal, so a
 	# CW vs CCW pair would otherwise force the DP into costly bilateral
@@ -346,13 +558,18 @@ def apply_match(contour_a, contour_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0):
 	Lb, Tb = intrinsic(new_b)
 	m, n = len(La), len(Lb)
 
-	shift_b, C, B_tbl, cost = dp_match_cyclic(
-		La, Ta, Lb, Tb, k_s=k_s, k_b=k_b, c_ins_scale=c_ins_scale)
+	if align_start == 'auto':
+		shift_b, _C, B_tbl, cost = dp_match_cyclic(
+			La, Ta, Lb, Tb, k_s=k_s, k_b=k_b, c_ins_scale=c_ins_scale)
+	else:
+		# 'respect' and 'canonical' both pin shift=0.
+		_C, B_tbl, cost = dp_match(
+			La, Ta, Lb, Tb, k_s=k_s, k_b=k_b, c_ins_scale=c_ins_scale)
+		shift_b = 0
 
 	path = backtrace(B_tbl, m, n)
 
-	# Rotate new_b by shift_b ON-CURVE positions. set_start takes a node
-	# index; find the node index of the shift_b-th on-curve.
+	# Rotate new_b by shift_b ON-CURVE positions if cyclic moved it.
 	if shift_b > 0:
 		on_idx_b = _on_curve_indices(new_b)
 		new_b.set_start(on_idx_b[shift_b])
@@ -367,6 +584,9 @@ def apply_match(contour_a, contour_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0):
 	assert oc_a == oc_b, \
 		'post-apply on-curve mismatch: A={} B={}'.format(oc_a, oc_b)
 
+	# Rule 4: reconcile segment types (line ↔ cubic) between paired segments.
+	promoted_a, promoted_b = _reconcile_segment_types(new_a, new_b)
+
 	n_pairs      = sum(1 for _, _, op in path if op == BT_PAIR)
 	n_insert_a   = sum(1 for _, _, op in path if op == BT_INSERT_A)
 	n_insert_b   = sum(1 for _, _, op in path if op == BT_INSERT_B)
@@ -374,9 +594,12 @@ def apply_match(contour_a, contour_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0):
 	meta = {
 		'shift_b': shift_b,
 		'reversed_b': reversed_b,
+		'align_start': align_start,
 		'n_pairs': n_pairs,
 		'n_insert_a': n_insert_a,
 		'n_insert_b': n_insert_b,
+		'n_promoted_a': promoted_a,
+		'n_promoted_b': promoted_b,
 		'len_on_before': (m, n),
 		'len_on_after':  (oc_a, oc_b),
 	}
@@ -399,29 +622,52 @@ def _contour_signature(contour):
 def _pair_cost(sig_a, sig_b, diag):
 	'''Dimensionless dissimilarity between two contour signatures.
 
-	Winding mismatch gets a large additive penalty so same-winding pairs
-	win whenever possible; ties fall through to geometry.
+	Uses |signed_area| (shape size) + bbox-centre distance only.
+	Winding direction is NOT used here: apply_match's per-contour
+	pre-check reverses B as needed, so if a whole glyph comes in with
+	reversed winding we still want outer-to-outer and inner-to-inner
+	pairing. A winding penalty actively pairs outer-to-inner in that
+	case and poisons the DP.
 	'''
-	cw_a, area_a, ax, ay = sig_a
-	cw_b, area_b, bx, by = sig_b
-	penalty = 0.0 if cw_a == cw_b else 10.0
-	d_area  = abs(abs(area_a) - abs(area_b)) / max(abs(area_a), abs(area_b), 1.0)
-	d_pos   = math.hypot(ax - bx, ay - by) / max(diag, 1.0)
-	return penalty + d_area + d_pos
+	_cw_a, area_a, ax, ay = sig_a
+	_cw_b, area_b, bx, by = sig_b
+	d_area = abs(abs(area_a) - abs(area_b)) / max(abs(area_a), abs(area_b), 1.0)
+	d_pos  = math.hypot(ax - bx, ay - by) / max(diag, 1.0)
+	return d_area + d_pos
 
 
-def pair_contours(contours_a, contours_b):
-	'''Greedy pairing of two equal-length contour lists by (winding, area,
-	centre). Returns a list of (i, j) index pairs.
+def pair_contours(contours_a, contours_b, pair_mode='respect'):
+	'''Pair two equal-length contour lists.
 
-	Raises ValueError if the lists differ in length — glyph-level point
-	compatibility is only defined when both masters have the same contour
-	count. Callers that want to handle count mismatches must do so upstream.
+	Args:
+		contours_a, contours_b: parallel lists of contours.
+		pair_mode:
+			'respect' — identity pairing (i, i). Trust the designer's
+			            contour order; the companion canonicalize_contour_order
+			            can be used beforehand to normalise both sides
+			            (default).
+			'auto'    — greedy geometric pairing by |signed_area| + bbox
+			            centre distance. Useful when masters came from
+			            independent sources and ordering isn't consistent.
+
+	Returns:
+		list of (i, j) index pairs.
+
+	Raises:
+		ValueError on length mismatch — glyph-level compatibility is only
+		defined when both masters have the same contour count.
 	'''
 	if len(contours_a) != len(contours_b):
 		raise ValueError(
 			'pair_contours: contour count mismatch A={} B={}'.format(
 				len(contours_a), len(contours_b)))
+
+	if pair_mode == 'respect':
+		return [(i, i) for i in range(len(contours_a))]
+
+	if pair_mode != 'auto':
+		raise ValueError(
+			"pair_mode must be 'respect' or 'auto'; got {!r}".format(pair_mode))
 
 	sigs_a = [_contour_signature(c) for c in contours_a]
 	sigs_b = [_contour_signature(c) for c in contours_b]
@@ -456,12 +702,15 @@ def pair_contours(contours_a, contours_b):
 
 
 def apply_match_glyph(contours_a, contours_b,
-                      k_s=1.0, k_b=1.0, c_ins_scale=1.0):
+                      k_s=1.0, k_b=1.0, c_ins_scale=1.0,
+                      align_start='respect', pair_mode='respect'):
 	'''Stage 5: run apply_match per paired contour.
 
 	Args:
 		contours_a, contours_b: parallel lists of closed contours from two
 			masters of the same glyph. Must have equal length.
+		align_start: see apply_match (default 'respect').
+		pair_mode:   see pair_contours (default 'respect').
 
 	Returns:
 		(new_a_list, new_b_list, total_cost, meta)
@@ -469,13 +718,12 @@ def apply_match_glyph(contours_a, contours_b,
 			  pairs with new_b[k] (A's original order preserved, B reordered
 			  to match).
 			- total_cost: sum of per-contour Sederberg-Greenwood costs.
-			- meta: dict with 'pairs' (list of (i, j)), 'per_contour' (list
-			  of per-apply_match meta dicts), 'total_insert_a',
-			  'total_insert_b'.
+			- meta: dict with 'pairs', 'per_contour', 'total_insert_a',
+			  'total_insert_b', 'align_start', 'pair_mode'.
 
 	Raises ValueError on contour-count mismatch.
 	'''
-	pairs = pair_contours(contours_a, contours_b)
+	pairs = pair_contours(contours_a, contours_b, pair_mode=pair_mode)
 
 	new_a_list = [None] * len(pairs)
 	new_b_list = [None] * len(pairs)
@@ -483,23 +731,32 @@ def apply_match_glyph(contours_a, contours_b,
 	total_cost = 0.0
 	total_ins_a = 0
 	total_ins_b = 0
+	total_prom_a = 0
+	total_prom_b = 0
 
 	for k, (i, j) in enumerate(pairs):
 		na, nb, cost, m = apply_match(
 			contours_a[i], contours_b[j],
-			k_s=k_s, k_b=k_b, c_ins_scale=c_ins_scale)
+			k_s=k_s, k_b=k_b, c_ins_scale=c_ins_scale,
+			align_start=align_start)
 		new_a_list[k] = na
 		new_b_list[k] = nb
 		per_contour.append(m)
 		total_cost += cost
 		total_ins_a += m['n_insert_a']
 		total_ins_b += m['n_insert_b']
+		total_prom_a += m.get('n_promoted_a', 0)
+		total_prom_b += m.get('n_promoted_b', 0)
 
 	meta = {
 		'pairs': pairs,
 		'per_contour': per_contour,
 		'total_insert_a': total_ins_a,
 		'total_insert_b': total_ins_b,
+		'total_promoted_a': total_prom_a,
+		'total_promoted_b': total_prom_b,
+		'align_start': align_start,
+		'pair_mode': pair_mode,
 	}
 	return new_a_list, new_b_list, total_cost, meta
 
@@ -896,7 +1153,9 @@ def _test_apply_rotated_self():
 	b = a.clone()
 	b.set_start(1)
 
-	na, nb, cost, meta = apply_match(a, b, k_s=1.0 / 40000.0, k_b=1.0)
+	# align_start='auto' — we explicitly test the cyclic recovery.
+	na, nb, cost, meta = apply_match(a, b, k_s=1.0 / 40000.0, k_b=1.0,
+	                                 align_start='auto')
 
 	# Rotating B forward by 1 means the matcher must shift B by (n - 1) = 3
 	# to re-align; because this quad has no rotational symmetry that s=3 is
@@ -1034,11 +1293,12 @@ def _test_pair_contours_by_geometry():
 	     _rect_contour(40, 40, 20, 20, ccw=False)]
 	b = [_rect_contour(42, 42, 20, 20, ccw=False),
 	     _rect_contour(2, 2, 100, 100)]
-	pairs = pair_contours(a, b)
+	# pair_mode='auto' — geometric greedy pairing.
+	pairs = pair_contours(a, b, pair_mode='auto')
 	# Expect (0, 1) and (1, 0).
 	assert (0, 1) in pairs and (1, 0) in pairs, \
 		'unexpected pairing: {}'.format(pairs)
-	print('  pair_contours reorders by geometry [OK]')
+	print('  pair_contours(auto) reorders by geometry [OK]')
 
 
 def _test_apply_match_glyph_two_rects():
@@ -1047,8 +1307,9 @@ def _test_apply_match_glyph_two_rects():
 	     _rect_contour(300, 0, 100, 100)]
 	b = [_rect_contour(302, 1, 100, 100),
 	     _rect_contour(1, 1, 200, 100)]
+	# Use pair_mode='auto' because B is given in swapped order.
 	new_a, new_b, cost, meta = apply_match_glyph(
-		a, b, k_s=1.0 / (1000.0 * 1000.0), k_b=1.0)
+		a, b, k_s=1.0 / (1000.0 * 1000.0), k_b=1.0, pair_mode='auto')
 	assert len(new_a) == len(new_b) == 2
 	# Per-contour post-condition: equal on-curve counts.
 	for na, nb in zip(new_a, new_b):
@@ -1060,12 +1321,190 @@ def _test_apply_match_glyph_two_rects():
 	print('  apply_match_glyph on 2-contour glyph [OK]')
 
 
+def _test_pair_contours_globally_reversed():
+	# A = ['b'-like glyph]: CCW outer + CW inner.
+	# B = same geometry but winding globally reversed: CW outer + CCW inner.
+	# With the old winding-penalty cost, outer-A (CCW) would pair with
+	# inner-B (CCW after reversal) because that's the only winding match
+	# — catastrophic for interpolation. Verify we pair outer↔outer.
+	outer_ccw = _rect_contour(0, 0, 400, 400, ccw=True)
+	inner_cw  = _rect_contour(100, 100, 200, 200, ccw=False)
+	outer_cw  = _rect_contour(0, 0, 400, 400, ccw=False)
+	inner_ccw = _rect_contour(100, 100, 200, 200, ccw=True)
+
+	a = [outer_ccw, inner_cw]
+	b = [outer_cw,  inner_ccw]
+
+	# This is the regression that motivated dropping winding from pair_cost:
+	# test the auto mode which uses _pair_cost.
+	pairs = pair_contours(a, b, pair_mode='auto')
+	# Expect outer (idx 0) ↔ outer (idx 0), inner (idx 1) ↔ inner (idx 1).
+	assert (0, 0) in pairs and (1, 1) in pairs, \
+		'globally-reversed winding paired wrong: {}'.format(pairs)
+	print('  globally-reversed winding still pairs by area/centre [OK]')
+
+
+def _test_intrinsic_stacked_nodes():
+	# Triangle with an extra on-curve stacked on top of node 0. Zero-length
+	# adjacent edges must not raise ZeroDivisionError from angle_poly_turn.
+	nodes = [Node(0.0, 0.0), Node(0.0, 0.0),    # stacked
+	         Node(200.0, 0.0), Node(100.0, 150.0)]
+	c = Contour(nodes, closed=True)
+	L, theta = intrinsic(c)
+	assert len(L) == 4 and len(theta) == 4
+	# Two zero-length edges around the stacked pair.
+	zero_edges = sum(1 for x in L if x == 0.0)
+	assert zero_edges >= 1, 'expected at least one zero edge, got L={}'.format(L)
+	# θ at the degenerate vertex must be finite (we set it to 0).
+	for t in theta:
+		assert math.isfinite(t), 'theta has non-finite: {}'.format(theta)
+	print('  intrinsic handles stacked (zero-length) nodes [OK]')
+
+
+def _test_apply_match_stacked_nodes():
+	# A: a quad. B: same quad but with a stacked node added. Matcher
+	# should not raise and should yield equal on-curve counts.
+	a_nodes = [Node(0.0, 0.0), Node(200.0, 0.0),
+	           Node(200.0, 100.0), Node(0.0, 100.0)]
+	b_nodes = [Node(0.0, 0.0), Node(0.0, 0.0),    # stacked
+	           Node(200.0, 0.0),
+	           Node(200.0, 100.0), Node(0.0, 100.0)]
+	a = Contour(a_nodes, closed=True)
+	b = Contour(b_nodes, closed=True)
+	new_a, new_b, cost, meta = apply_match(a, b, k_s=1.0 / (1000.0 * 1000.0), k_b=1.0)
+	oa = sum(1 for n in new_a.nodes if n.is_on)
+	ob = sum(1 for n in new_b.nodes if n.is_on)
+	assert oa == ob, 'stacked-node match produced {} vs {}'.format(oa, ob)
+	print('  apply_match survives stacked node on B [OK]')
+
+
 def _run_stage5_tests():
 	print('Stage 5 - multi-contour:')
 	_test_pair_contours_count_mismatch()
 	_test_pair_contours_by_geometry()
+	_test_pair_contours_globally_reversed()
 	_test_apply_match_glyph_two_rects()
+	_test_intrinsic_stacked_nodes()
+	_test_apply_match_stacked_nodes()
 	print('Stage 5: all tests passed.')
+
+
+# - Stage 6: Respect-by-default modes + segment-type reconciliation
+def _test_respect_starts_no_rotation():
+	'''A rectangle with B rotated one on-curve. align_start='respect'
+	must NOT rotate B back — shift_b stays 0 even though auto would
+	recover a rotation at cost 0.'''
+	a = _rect_contour(0, 0, 200, 100)
+	# B: same rectangle but start rotated 1 on-curve (equiv to set_start)
+	b = _rect_contour(0, 0, 200, 100)
+	on_idx = _on_curve_indices(b)
+	b.set_start(on_idx[1])
+	_, _, _cost, meta = apply_match(a, b, k_s=1.0 / (1000.0 * 1000.0), k_b=1.0,
+	                                align_start='respect')
+	assert meta['shift_b'] == 0, 'respect mode must not rotate B, got shift={}'.format(meta['shift_b'])
+	print('  respect: no rotation even when auto would find one [OK]')
+
+
+def _test_auto_recovers_rotation():
+	'''Same setup, align_start='auto' finds shift=3 (or equivalent) at zero cost.'''
+	a = _rect_contour(0, 0, 200, 100)
+	b = _rect_contour(0, 0, 200, 100)
+	on_idx = _on_curve_indices(b)
+	b.set_start(on_idx[1])
+	_, _, cost, meta = apply_match(a, b, k_s=1.0 / (1000.0 * 1000.0), k_b=1.0,
+	                               align_start='auto')
+	assert cost < 1e-6, 'auto should find zero-cost alignment, got {}'.format(cost)
+	print('  auto: recovers rotation at zero cost (shift={}) [OK]'.format(meta['shift_b']))
+
+
+def _test_canonical_start_bottom_left():
+	'''canonicalize_start picks the node nearest BL. For a rectangle
+	(0,0)→(200,0)→(200,100)→(0,100), that's (0,0).'''
+	# Start from the top-right corner to make it non-trivial.
+	nodes = [Node(200.0, 100.0), Node(0.0, 100.0),
+	         Node(0.0, 0.0), Node(200.0, 0.0)]
+	c = Contour(nodes, closed=True)
+	canon = canonicalize_start(c, corner=Corner.BOTTOM_LEFT)
+	# After canonicalization, nodes[0] should be (0,0).
+	first = canon.nodes[0]
+	assert (first.point.x, first.point.y) == (0.0, 0.0), \
+		'expected (0,0) as start, got ({},{})'.format(first.point.x, first.point.y)
+	# Original untouched.
+	assert (c.nodes[0].point.x, c.nodes[0].point.y) == (200.0, 100.0), \
+		'input contour was mutated'
+	print('  canonicalize_start(BL) rotates to bottom-left extremum [OK]')
+
+
+def _test_canonicalize_contour_order_reading():
+	'''Three contours: bottom-right, top-left, bottom-left. Default
+	TOP_LEFT sort gives reading order: top-left first, then two bottom
+	contours left-to-right.'''
+	c_br = _rect_contour(200, 0, 50, 50)
+	c_tl = _rect_contour(0, 200, 50, 50)
+	c_bl = _rect_contour(0, 0, 50, 50)
+	ordered = canonicalize_contour_order([c_br, c_tl, c_bl])
+	# Expect TL (y-centre=225), then BL (y-centre=25, x-centre=25), then BR.
+	centres = [(c.bounds.x + c.bounds.width/2, c.bounds.y + c.bounds.height/2)
+	           for c in ordered]
+	assert centres[0][1] > centres[1][1], \
+		'top contour should come first: {}'.format(centres)
+	assert centres[1][0] < centres[2][0], \
+		'then left-of-two-bottom: {}'.format(centres)
+	print('  canonicalize_contour_order(TL) gives reading order [OK]')
+
+
+def _test_pair_respect_identity():
+	a = [_rect_contour(0, 0, 100, 100), _rect_contour(40, 40, 20, 20, ccw=False)]
+	b = [_rect_contour(42, 42, 20, 20, ccw=False), _rect_contour(2, 2, 100, 100)]
+	# pair_mode='respect' trusts given order.
+	pairs = pair_contours(a, b, pair_mode='respect')
+	assert pairs == [(0, 0), (1, 1)], 'respect must be identity: {}'.format(pairs)
+	# pair_mode='auto' reorders geometrically.
+	pairs_auto = pair_contours(a, b, pair_mode='auto')
+	assert (0, 1) in pairs_auto and (1, 0) in pairs_auto, \
+		'auto must reorder: {}'.format(pairs_auto)
+	print('  pair_contours: respect=identity, auto=greedy [OK]')
+
+
+def _test_segment_type_line_to_cubic():
+	'''A is a rectangle (all-line). B is a rectangle with one cubic segment.
+	After apply_match, both sides should have the same segment structure
+	on that segment — A's line should be promoted.'''
+	# A: plain 200x100 rect.
+	a = _rect_contour(0, 0, 200, 100)
+	# B: same corners but first segment is a cubic. Build manually.
+	b_nodes = [
+		Node(0.0, 0.0, type='on'),
+		Node(67.0, 0.0, type='curve'),
+		Node(133.0, 0.0, type='curve'),
+		Node(200.0, 0.0, type='on'),
+		Node(200.0, 100.0, type='on'),
+		Node(0.0, 100.0, type='on'),
+	]
+	b = Contour(b_nodes, closed=True)
+	new_a, new_b, _cost, meta = apply_match(
+		a, b, k_s=1.0 / (1000.0 * 1000.0), k_b=1.0, align_start='respect')
+	# After reconciliation, new_a's first segment (on[0]→on[1]) should
+	# contain 2 curve nodes.
+	on_a = _on_curve_indices(new_a)
+	span_a_seg0 = _segment_span(new_a, on_a[0], on_a[1])
+	assert span_a_seg0 == 2, \
+		'expected line→cubic promotion on A seg 0, got span={}'.format(span_a_seg0)
+	assert meta['n_promoted_a'] == 1, \
+		'expected 1 promotion on A, got {}'.format(meta['n_promoted_a'])
+	assert meta['n_promoted_b'] == 0
+	print('  segment-type: line promoted to cubic on A [OK]')
+
+
+def _run_stage6_tests():
+	print('Stage 6 - respect modes + segment types:')
+	_test_respect_starts_no_rotation()
+	_test_auto_recovers_rotation()
+	_test_canonical_start_bottom_left()
+	_test_canonicalize_contour_order_reading()
+	_test_pair_respect_identity()
+	_test_segment_type_line_to_cubic()
+	print('Stage 6: all tests passed.')
 
 
 if __name__ == '__main__':
@@ -1078,3 +1517,5 @@ if __name__ == '__main__':
 	_run_stage4_tests()
 	print('')
 	_run_stage5_tests()
+	print('')
+	_run_stage6_tests()
