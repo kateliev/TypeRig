@@ -329,17 +329,27 @@ def apply_match(contour_a, contour_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0):
 		- len(new_a on-curves) == len(new_b on-curves)
 		- sum(theta) on each resulting contour remains +/- 2*pi
 	'''
-	La, Ta = intrinsic(contour_a)
-	Lb, Tb = intrinsic(contour_b)
+	# Clone up-front so we can normalise winding before computing intrinsics.
+	new_a = contour_a.clone()
+	new_b = contour_b.clone()
+
+	# Winding pre-check: theta signs are inverted under a reversal, so a
+	# CW vs CCW pair would otherwise force the DP into costly bilateral
+	# insertions. Reverse new_b's copy to match A's orientation. The
+	# original contour_b is untouched (we already cloned).
+	reversed_b = False
+	if bool(new_a.clockwise) != bool(new_b.clockwise):
+		new_b.reverse()
+		reversed_b = True
+
+	La, Ta = intrinsic(new_a)
+	Lb, Tb = intrinsic(new_b)
 	m, n = len(La), len(Lb)
 
 	shift_b, C, B_tbl, cost = dp_match_cyclic(
 		La, Ta, Lb, Tb, k_s=k_s, k_b=k_b, c_ins_scale=c_ins_scale)
 
 	path = backtrace(B_tbl, m, n)
-
-	new_a = contour_a.clone()
-	new_b = contour_b.clone()
 
 	# Rotate new_b by shift_b ON-CURVE positions. set_start takes a node
 	# index; find the node index of the shift_b-th on-curve.
@@ -363,6 +373,7 @@ def apply_match(contour_a, contour_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0):
 
 	meta = {
 		'shift_b': shift_b,
+		'reversed_b': reversed_b,
 		'n_pairs': n_pairs,
 		'n_insert_a': n_insert_a,
 		'n_insert_b': n_insert_b,
@@ -371,6 +382,126 @@ def apply_match(contour_a, contour_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0):
 	}
 
 	return new_a, new_b, cost, meta
+
+
+# - Stage 5: Multi-contour glyph pairing ---
+def _contour_signature(contour):
+	'''Return (clockwise_bool, signed_area, cx, cy) for pairing.
+	cx, cy are the bounding-box centre; cheaper and more stable for
+	pairing than the on-curve polygon centroid, and sufficient for the
+	small contour counts (1-4) typical in glyphs.
+	'''
+	bx = contour.bounds.x + contour.bounds.width * 0.5
+	by = contour.bounds.y + contour.bounds.height * 0.5
+	return (bool(contour.clockwise), contour.signed_area, bx, by)
+
+
+def _pair_cost(sig_a, sig_b, diag):
+	'''Dimensionless dissimilarity between two contour signatures.
+
+	Winding mismatch gets a large additive penalty so same-winding pairs
+	win whenever possible; ties fall through to geometry.
+	'''
+	cw_a, area_a, ax, ay = sig_a
+	cw_b, area_b, bx, by = sig_b
+	penalty = 0.0 if cw_a == cw_b else 10.0
+	d_area  = abs(abs(area_a) - abs(area_b)) / max(abs(area_a), abs(area_b), 1.0)
+	d_pos   = math.hypot(ax - bx, ay - by) / max(diag, 1.0)
+	return penalty + d_area + d_pos
+
+
+def pair_contours(contours_a, contours_b):
+	'''Greedy pairing of two equal-length contour lists by (winding, area,
+	centre). Returns a list of (i, j) index pairs.
+
+	Raises ValueError if the lists differ in length — glyph-level point
+	compatibility is only defined when both masters have the same contour
+	count. Callers that want to handle count mismatches must do so upstream.
+	'''
+	if len(contours_a) != len(contours_b):
+		raise ValueError(
+			'pair_contours: contour count mismatch A={} B={}'.format(
+				len(contours_a), len(contours_b)))
+
+	sigs_a = [_contour_signature(c) for c in contours_a]
+	sigs_b = [_contour_signature(c) for c in contours_b]
+
+	# Diagonal across both glyphs, used to normalise centre distance.
+	xs, ys = [], []
+	for c in list(contours_a) + list(contours_b):
+		b = c.bounds
+		xs += [b.x, b.x + b.width]
+		ys += [b.y, b.y + b.height]
+	diag = math.hypot(max(xs) - min(xs), max(ys) - min(ys)) if xs else 1.0
+
+	# Greedy: at each step pick the globally cheapest unused (i, j).
+	remaining_a = set(range(len(sigs_a)))
+	remaining_b = set(range(len(sigs_b)))
+	pairs = []
+
+	while remaining_a:
+		best = None
+		for i in remaining_a:
+			for j in remaining_b:
+				c = _pair_cost(sigs_a[i], sigs_b[j], diag)
+				if best is None or c < best[0]:
+					best = (c, i, j)
+		_, i, j = best
+		pairs.append((i, j))
+		remaining_a.remove(i)
+		remaining_b.remove(j)
+
+	pairs.sort(key=lambda ij: ij[0])
+	return pairs
+
+
+def apply_match_glyph(contours_a, contours_b,
+                      k_s=1.0, k_b=1.0, c_ins_scale=1.0):
+	'''Stage 5: run apply_match per paired contour.
+
+	Args:
+		contours_a, contours_b: parallel lists of closed contours from two
+			masters of the same glyph. Must have equal length.
+
+	Returns:
+		(new_a_list, new_b_list, total_cost, meta)
+			- new_a_list / new_b_list: output contours reordered so new_a[k]
+			  pairs with new_b[k] (A's original order preserved, B reordered
+			  to match).
+			- total_cost: sum of per-contour Sederberg-Greenwood costs.
+			- meta: dict with 'pairs' (list of (i, j)), 'per_contour' (list
+			  of per-apply_match meta dicts), 'total_insert_a',
+			  'total_insert_b'.
+
+	Raises ValueError on contour-count mismatch.
+	'''
+	pairs = pair_contours(contours_a, contours_b)
+
+	new_a_list = [None] * len(pairs)
+	new_b_list = [None] * len(pairs)
+	per_contour = []
+	total_cost = 0.0
+	total_ins_a = 0
+	total_ins_b = 0
+
+	for k, (i, j) in enumerate(pairs):
+		na, nb, cost, m = apply_match(
+			contours_a[i], contours_b[j],
+			k_s=k_s, k_b=k_b, c_ins_scale=c_ins_scale)
+		new_a_list[k] = na
+		new_b_list[k] = nb
+		per_contour.append(m)
+		total_cost += cost
+		total_ins_a += m['n_insert_a']
+		total_ins_b += m['n_insert_b']
+
+	meta = {
+		'pairs': pairs,
+		'per_contour': per_contour,
+		'total_insert_a': total_ins_a,
+		'total_insert_b': total_ins_b,
+	}
+	return new_a_list, new_b_list, total_cost, meta
 
 
 # - Self-tests --------------------------
@@ -810,6 +941,35 @@ def _test_apply_two_insertions_same_segment():
 		meta['n_insert_a'], _on_count(na)))
 
 
+def _test_apply_winding_normalised():
+	'''CCW A vs CW-traversed clone of A: winding pre-check must reverse B's
+	copy so theta signs align; result is cost 0, no insertions, meta
+	flags reversed_b=True.'''
+	# CCW irregular quad.
+	coords = [(0.0, 0.0), (300.0, 20.0), (260.0, 180.0), (40.0, 140.0)]
+	a = Contour([Node(x, y) for x, y in coords], closed=True)
+
+	# Same shape traversed backwards (CW). Build from fresh Node objects
+	# so the two contours don't share node parents.
+	b = Contour([Node(x, y) for x, y in reversed(coords)], closed=True)
+
+	assert bool(a.clockwise) != bool(b.clockwise), \
+		'test setup: winding should differ (a.cw={} b.cw={})'.format(a.clockwise, b.clockwise)
+
+	na, nb, cost, meta = apply_match(a, b, k_s=1.0 / 40000.0, k_b=1.0)
+
+	assert meta['reversed_b'] is True, 'winding pre-check did not trigger'
+	assert _on_count(na) == 4 and _on_count(nb) == 4
+	assert meta['n_insert_a'] == 0 and meta['n_insert_b'] == 0, \
+		'winding normalised: expected 0 insertions, got a={} b={}'.format(
+			meta['n_insert_a'], meta['n_insert_b'])
+	assert _approx(cost, 0.0, tol=1e-9), 'cost = {}'.format(cost)
+	_assert_closure(na, 'wind-norm A')
+	_assert_closure(nb, 'wind-norm B')
+
+	print('  winding normalise: reversed_b=True, cost=0, no inserts [OK]')
+
+
 def _test_apply_does_not_mutate_inputs():
 	'''The library-level API returns copies; originals must be untouched.'''
 	nodes_a = [Node(0.0, 0.0), Node(200.0, 0.0), Node(200.0, 100.0), Node(0.0, 100.0)]
@@ -840,8 +1000,72 @@ def _run_stage4_tests():
 	_test_apply_rectangle_vs_pentagon()
 	_test_apply_rotated_self()
 	_test_apply_two_insertions_same_segment()
+	_test_apply_winding_normalised()
 	_test_apply_does_not_mutate_inputs()
 	print('Stage 4: all tests passed.')
+
+
+# - Stage 5 helpers & tests --------------
+def _rect_contour(x, y, w, h, ccw=True):
+	'''Simple axis-aligned rectangle for multi-contour tests.'''
+	if ccw:
+		pts = [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]
+	else:
+		pts = [(x, y), (x, y + h), (x + w, y + h), (x + w, y)]
+	return Contour([Node(px, py) for (px, py) in pts], closed=True)
+
+
+def _test_pair_contours_count_mismatch():
+	a = [_rect_contour(0, 0, 10, 10)]
+	b = [_rect_contour(0, 0, 10, 10), _rect_contour(20, 20, 5, 5)]
+	try:
+		pair_contours(a, b)
+	except ValueError:
+		print('  count mismatch raises ValueError [OK]')
+		return
+	raise AssertionError('expected ValueError')
+
+
+def _test_pair_contours_by_geometry():
+	# A: [big outer at origin, small inner at (40,40)]
+	# B: order reversed: [small inner, big outer]
+	# Greedy by area+centre should pair them correctly.
+	a = [_rect_contour(0, 0, 100, 100),
+	     _rect_contour(40, 40, 20, 20, ccw=False)]
+	b = [_rect_contour(42, 42, 20, 20, ccw=False),
+	     _rect_contour(2, 2, 100, 100)]
+	pairs = pair_contours(a, b)
+	# Expect (0, 1) and (1, 0).
+	assert (0, 1) in pairs and (1, 0) in pairs, \
+		'unexpected pairing: {}'.format(pairs)
+	print('  pair_contours reorders by geometry [OK]')
+
+
+def _test_apply_match_glyph_two_rects():
+	# Two offset rectangles per master; B lists them in swapped order.
+	a = [_rect_contour(0, 0, 200, 100),
+	     _rect_contour(300, 0, 100, 100)]
+	b = [_rect_contour(302, 1, 100, 100),
+	     _rect_contour(1, 1, 200, 100)]
+	new_a, new_b, cost, meta = apply_match_glyph(
+		a, b, k_s=1.0 / (1000.0 * 1000.0), k_b=1.0)
+	assert len(new_a) == len(new_b) == 2
+	# Per-contour post-condition: equal on-curve counts.
+	for na, nb in zip(new_a, new_b):
+		oa = sum(1 for n in na.nodes if n.is_on)
+		ob = sum(1 for n in nb.nodes if n.is_on)
+		assert oa == ob, 'on-curve mismatch per contour'
+	# Tiny offsets only — cost should be small.
+	assert cost < 1.0, 'unexpectedly high cost: {}'.format(cost)
+	print('  apply_match_glyph on 2-contour glyph [OK]')
+
+
+def _run_stage5_tests():
+	print('Stage 5 - multi-contour:')
+	_test_pair_contours_count_mismatch()
+	_test_pair_contours_by_geometry()
+	_test_apply_match_glyph_two_rects()
+	print('Stage 5: all tests passed.')
 
 
 if __name__ == '__main__':
@@ -852,3 +1076,5 @@ if __name__ == '__main__':
 	_run_stage3_tests()
 	print('')
 	_run_stage4_tests()
+	print('')
+	_run_stage5_tests()
