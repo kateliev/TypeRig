@@ -21,12 +21,12 @@ from typerig.proxy.fl.actions.contour import TRContourActionCollector
 from typerig.proxy.fl.actions.node import TRNodeActionCollector
 from typerig.proxy.fl.actions.cut import TRCutActionCollector
 from typerig.proxy.fl.actions.mat_extract import TRMatExtractActionCollector
-from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomPushButton, TRFlowLayout
+from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomPushButton, CustomSpinLabel, TRFlowLayout
 from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 from typerig.core.base.message import *
 
 # - Init --------------------------
-tool_version = '1.2'
+tool_version = '1.5'
 tool_name = 'TR Popup Contour Cut'
 
 TRToolFont_path = getTRIconFontPath()
@@ -102,11 +102,10 @@ class TRPopupContourCut(QtGui.QWidget):
 		# - Main container with background
 		self.container = QtGui.QFrame(self)
 		self.container.setObjectName('popup_container')
-		self.container.setSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
 
 		# - Flow layout for buttons
 		self.lay_main = TRFlowLayout(spacing=6)
-		self.lay_main.setContentsMargins(12, 12, 12, 12)
+		self.lay_main.setContentsMargins(0, 0, 0, 0)
 
 		# - Build buttons
 		# -- Close button
@@ -123,13 +122,13 @@ class TRPopupContourCut(QtGui.QWidget):
 
 		# -- Cut + auto-align (replaces the four directional cut+align buttons)
 		tooltip_button = 'Cut contour, then auto overlap align both neighbor pairs\nat the cut junction.'
-		self.btn_cut_align_auto = CustomPushButton('node_align_outline_x', tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_cut_align_auto = CustomPushButton('cut_stem_overlap', tooltip=tooltip_button, obj_name='btn_panel')
 		self.lay_main.addWidget(self.btn_cut_align_auto)
 		self.btn_cut_align_auto.clicked.connect(self.do_cut_align_auto)
 
 		# -- Auto overlap align (standalone, no cut)
 		tooltip_button = 'Auto overlap align\nSelect 4 nodes (2 neighbor pairs) at a cut junction.'
-		self.btn_align_auto = CustomPushButton('align_contour_to_contour', tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_align_auto = CustomPushButton('auto_stem_overlap', tooltip=tooltip_button, obj_name='btn_panel')
 		self.lay_main.addWidget(self.btn_align_auto)
 		self.btn_align_auto.clicked.connect(self.do_align_auto)
 
@@ -144,26 +143,19 @@ class TRPopupContourCut(QtGui.QWidget):
 		self.lay_main.addWidget(self.btn_corner_loop)
 		self.btn_corner_loop.clicked.connect(self.do_corner_loop)
 
-		# -- Safe distance spin box
-		self.spn_safe_distance = QtGui.QSpinBox()
-		self.spn_safe_distance.setMinimum(0)
-		self.spn_safe_distance.setMaximum(100)
-		self.spn_safe_distance.setValue(5)
-		self.spn_safe_distance.setSingleStep(1)
-		self.spn_safe_distance.setSuffix('u')
-		self.spn_safe_distance.setToolTip('Safe distance: pull back from target by this amount on each axis.')
-
+		tooltip_button = 'Safe distance: pull back from target by this amount on each axis.'
+		self.spn_safe_distance = CustomSpinLabel('distance', (0, 100, 5, 5), tooltip=tooltip_button, obj_name=('spn_panel', 'lbl_icon'))
 		self.lay_main.addWidget(self.spn_safe_distance)
 
 		# -- Stroke separator (V3)
 		tooltip_button = 'Stroke Separate (V3)\nSplit stroke glyph into components via MAT analysis.\nApplies to active layer; propagates cuts to all masters.'
-		self.btn_stroke_sep = CustomPushButton('shape', tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_stroke_sep = CustomPushButton('cutter_auto', tooltip=tooltip_button, obj_name='btn_panel')
 		self.lay_main.addWidget(self.btn_stroke_sep)
 		self.btn_stroke_sep.clicked.connect(self.do_stroke_sep)
 
 		# -- Medial axis extract
 		tooltip_button = 'Medial Axis Extract\nEmit a clean medial-axis skeleton as a new shape\non the active layer. Active layer only (single master).'
-		self.btn_mat_extract = CustomPushButton('curve_collinear', tooltip=tooltip_button, obj_name='btn_panel')
+		self.btn_mat_extract = CustomPushButton('centerline', tooltip=tooltip_button, obj_name='btn_panel')
 		self.lay_main.addWidget(self.btn_mat_extract)
 		self.btn_mat_extract.clicked.connect(self.do_mat_extract)
 
@@ -176,13 +168,13 @@ class TRPopupContourCut(QtGui.QWidget):
 		self.setLayout(main_layout)
 		
 		# - Size policy to fit content tightly
-		self.setSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
+		#self.setSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
 
 		# - Apply styling
 		self._apply_style()
 
 		# - Position at cursor and show
-		self.setGeometry(100, 100, 20, 230)
+		self.setGeometry(100, 100, 420, 20)
 		self._position_at_cursor()
 		self.show()
 
