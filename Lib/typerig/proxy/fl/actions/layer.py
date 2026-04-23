@@ -22,6 +22,10 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
 from typerig.core.func.math import linInterp as lerp
 from typerig.core.base.message import *
+from typerig.core.algo.matchmaker import apply_match_glyph, pair_contours
+from typerig.proxy.tr.objects.glyph import trGlyph
+from typerig.core.objects.shape import Shape
+from typerig.core.objects.layer import Layer
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
@@ -30,7 +34,7 @@ from typerig.proxy.fl.gui.dialogs import TRMsgSimple, TR2FieldDLG
 from typerig.proxy.fl.application.app import pItems
 
 # - Init ---------------------------------
-__version__ = '2.6'
+__version__ = '3.0'
 
 # - Keep compatibility for basestring checks
 try:
@@ -468,39 +472,128 @@ class TRLayerActionCollector(object):
 						add_new_shape(wLayer, contours)
 		
 			parent.glyph.updateObject(parent.glyph.fl, 'Paste outline; Glyph: %s; Layers: %s' %(parent.glyph.fl.name, '; '.join([layer_name for layer_name in parent.lst_layers.getTable()])))
-	
+
+	# - Layer: Matchmaker tools ---------------------------------------------------
 	@staticmethod
-	def layer_paste_outline_selection(parent):
-		# - Init
-		wGlyph = parent.glyph
-		modifiers = QtGui.QApplication.keyboardModifiers()
-		selected_layers = parent.lst_layers.getTable()
+	def layer_matchmaker(parent, dry_run=False):
+		def _on_count(contour):
+			return sum(1 for n in contour.nodes if n.is_on)
 
-		# - Helper
-		def add_new_shape(layer, contours):
-			newShape = fl6.flShape()
-			newShape.addContours(contours, True)
-			layer.addShape(newShape)
+		def _layer_contours(core_layer):
+			out = []
+			for shape in core_layer.shapes:
+				for c in shape.contours:
+					out.append(c)
+			return out
 
-		# - Process
-		if len(parent.contourClipboard.keys()) == len(selected_layers):
-			for i in range(len(selected_layers)):
-				layerName = selected_layers[i]
-				contours = list(parent.contourClipboard.values())[i]
-				wLayer = wGlyph.layer(layerName)
+		def _replace_layer_contours(core_layer, new_contours):
+			new_shape = Shape(list(new_contours))
+			return Layer(
+				[new_shape],
+				name=core_layer.name,
+				width=core_layer.advance_width,
+				height=core_layer.advance_height,
+				mark=core_layer.mark,
+				anchors=core_layer.anchors,
+			)
 
-				if wLayer is not None:
-					if modifiers == QtCore.Qt.ShiftModifier:
-						# - Insert contours into currently selected shape
-						selected_shapes_list = wGlyph.selectedAtShapes(index=False, layer=layerName, deep=False)
+		def _resolve_modes(parent):
+			respect_order = parent.chk_respect_order.isChecked()
+			respect_start = parent.chk_respect_start.isChecked()
+			canonicalize = parent.chk_canonicalize.isChecked()
 
-						if len(selected_shapes_list):
-							selected_shape = selected_shapes_list[0][0]
-							selected_shape.addContours(contours, True)
-						else:
-							add_new_shape(wLayer, contours)	# Fallback
-					else:
-						# - Create new shape
-						add_new_shape(wLayer, contours)
-		
-			parent.glyph.updateObject(parent.glyph.fl, 'Paste outline; Glyph: %s; Layers: %s' %(parent.glyph.fl.name, '; '.join([layer_name for layer_name in parent.lst_layers.getTable()])))
+			pair_mode = 'respect' if respect_order else 'auto'
+			if respect_start:
+				align_start = 'respect'
+			elif canonicalize:
+				align_start = 'canonical'
+			else:
+				align_start = 'auto'
+			return align_start, pair_mode
+
+		if parent.doCheck():
+			selected_layers = parent.lst_layers.getTable()
+			if not selected_layers:
+				warnings.warn('No layer selected in list.', TRPanelWarning)
+				return
+
+			src_layer = parent.glyph.activeLayer()
+			target_layer_name = selected_layers[0]
+			target_layer = parent.glyph.layer(target_layer_name)
+
+			if src_layer.name == target_layer_name:
+				warnings.warn('Source and target are the same layer.', TRPanelWarning)
+				return
+
+			align_start, pair_mode = _resolve_modes(parent)
+
+			try:
+				g = trGlyph()
+			except Exception as e:
+				warnings.warn('No current glyph: %s.' %e, TRPanelWarning)
+				return
+
+			tr_src = g.find_layer(src_layer.name)
+			tr_tgt = g.find_layer(target_layer_name)
+			if tr_src is None or tr_tgt is None:
+				warnings.warn('Glyph missing source or target layer.', TRPanelWarning)
+				return
+
+			core_src = tr_src.eject()
+			core_tgt = tr_tgt.eject()
+
+			ca = _layer_contours(core_src)
+			cb = _layer_contours(core_tgt)
+
+			try:
+				font = fl6.CurrentFont()
+				em = float(font.upm) if font else 1000.0
+			except Exception:
+				em = 1000.0
+
+			if len(ca) != len(cb):
+				warnings.warn('Contour count mismatch: A=%d B=%d.' %(len(ca), len(cb)), TRPanelWarning)
+				return
+
+			if any(_on_count(c) < 3 for c in ca + cb):
+				warnings.warn('Degenerate contours (<3 on-curves) found.', TRPanelWarning)
+				return
+
+			k_s = 1.0 / (em * em)
+			k_b = 1.0
+
+			try:
+				new_a, new_b, total_cost, meta = apply_match_glyph(
+					ca, cb, k_s=k_s, k_b=k_b,
+					align_start=align_start, pair_mode=pair_mode)
+			except Exception as e:
+				warnings.warn('apply_match_glyph failed: %s.' %e, TRPanelWarning)
+				return
+
+			if dry_run:
+				print('')
+				print('=' * 60)
+				print('TR | Matchmaker: glyph "%s"  source=%s  target=%s  em=%s' %(g.name, src_layer.name, target_layer_name, em))
+				print('  modes: align_start=%r  pair_mode=%r' %(align_start, pair_mode))
+				print('  contour counts: source=%d target=%d' %(len(ca), len(cb)))
+				print('  total cost = %.4f' %total_cost)
+				print('  inserts: source=%d target=%d' %(meta['total_insert_a'], meta['total_insert_b']))
+				print('  promotions: source=%d target=%d' %(meta['total_promoted_a'], meta['total_promoted_b']))
+				print('  pairs: %s' %meta['pairs'])
+				print('(no changes written - click without Alt to apply)')
+			else:
+				try:
+					out_src = _replace_layer_contours(core_src, new_a)
+					out_tgt = _replace_layer_contours(core_tgt, new_b)
+
+					tr_src.mount(out_src)
+					tr_tgt.mount(out_tgt)
+					g.update()
+
+					output(0, 'TR | Matchmaker', 'glyph "%s" matched [%r/%r]. cost=%.4f inserts=%d/%d promotions=%d/%d pairs=%s' %(
+						g.name, align_start, pair_mode, total_cost,
+						meta['total_insert_a'], meta['total_insert_b'],
+						meta['total_promoted_a'], meta['total_promoted_b'],
+						meta['pairs']))
+				except Exception as e:
+					warnings.warn('Mount failed: %s.' %e, TRPanelWarning)

@@ -23,6 +23,9 @@ from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
 from typerig.proxy.fl.actions.layer import TRLayerActionCollector
 from typerig.core.func.math import linInterp as lerp
 from typerig.core.base.message import *
+from typerig.core.algo.matchmaker import apply_match_glyph, pair_contours
+from typerig.core.objects.shape import Shape
+from typerig.proxy.tr.objects.glyph import trGlyph
 
 from PythonQt import QtCore, QtGui
 from typerig.proxy.fl.application.app import pWorkspace
@@ -34,7 +37,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Layers', '2.7'
+app_name, app_version = 'TypeRig | Layers', '3.0'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -159,42 +162,54 @@ class TRLayerActions(QtGui.QWidget):
 
 		lay_options = TRFlowLayout(spacing=10)
 		
-		tooltip_button = 'Outline'
+		tooltip_button = 'Copy Options: Outline'
 		self.chk_outline = CustomPushButton("bbox", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_outline)
 
-		tooltip_button = 'Guidelines'
+		tooltip_button = 'Copy Options: Guidelines'
 		self.chk_guides = CustomPushButton("guide_horizontal", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_guides)
 
-		tooltip_button = 'Anchors'
+		tooltip_button = 'Copy Options: Anchors'
 		self.chk_anchors = CustomPushButton("icon_anchor", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_anchors)
 
-		tooltip_button = 'Metrics LSB'
+		tooltip_button = 'Copy Options: Metrics LSB'
 		self.chk_lsb = CustomPushButton("metrics_lsb", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_lsb)
 
-		tooltip_button = 'Advance width'
+		tooltip_button = 'Copy Options: Advance width'
 		self.chk_adv = CustomPushButton("metrics_advance", checkable=True, checked=True, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_adv)
 
-		tooltip_button = 'Metrics RSB'
+		tooltip_button = 'Copy Options: Metrics RSB'
 		self.chk_rsb = CustomPushButton("metrics_rsb", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_rsb)
-		
-		tooltip_button = 'Show layer actions'
-		self.chk_actions = CustomPushButton("layer_actions", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
-		lay_options.addWidget(self.chk_actions)
-		
-		tooltip_button = 'Show interpolation controls'
-		self.chk_interpolate = CustomPushButton("interpolate", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
-		lay_options.addWidget(self.chk_interpolate)
-		
+
+		tooltip_node_start_auto = 'Matchmaker Options: Canonicalize start (bottom-left)'
+		self.chk_canonicalize = CustomPushButton("node_start_auto", checkable=True, checked=False, tooltip=tooltip_node_start_auto, obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_canonicalize)
+
+		tooltip_contour_sort_auto = 'Matchmaker Options: Respect contour order'
+		self.chk_respect_order = CustomPushButton("contour_sort_auto", checkable=True, checked=False, tooltip=tooltip_contour_sort_auto, obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_respect_order)
+
+		tooltip_node_start = 'Matchmaker Options: Respect start points'
+		self.chk_respect_start = CustomPushButton("node_start", checkable=True, checked=False, tooltip=tooltip_node_start, obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_respect_start)
+
 		tooltip_button = 'Show transformation controls'
 		self.chk_transform = CustomPushButton("diagonal_bottom_up", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_options.addWidget(self.chk_transform)
-
+		
+		tooltip_button = 'Panel: Show layer actions'
+		self.chk_actions = CustomPushButton("layer_actions", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_actions)
+		
+		tooltip_button = 'Panel: Show interpolation controls'
+		self.chk_interpolate = CustomPushButton("interpolate", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_options.addWidget(self.chk_interpolate)
+		
 		box_options.setLayout(lay_options)
 		lay_main.addWidget(box_options)
 
@@ -261,8 +276,12 @@ class TRLayerActions(QtGui.QWidget):
 		btn_layer_contour_paste = CustomPushButton("clipboard_paste_nodes", tooltip='Paste selected nodes from clipboard', obj_name='btn_panel')  
 		lay_actions.addWidget(btn_layer_contour_paste)
 
-		btn_layer_contour_paste_byName = CustomPushButton("clipboard_paste_exact", tooltip='Paste selected nodes from clipboard by layer name', obj_name='btn_panel') 
+		btn_layer_contour_paste_byName = CustomPushButton("clipboard_paste_exact", tooltip='Paste selected nodes from clipboard by layer name', obj_name='btn_panel')
 		lay_actions.addWidget(btn_layer_contour_paste_byName)
+
+		btn_matchmaker = CustomPushButton("heart", tooltip='Matchmaker: Match active to selected layer (Alt for test)', obj_name='btn_panel')
+		btn_matchmaker.clicked.connect(self.action_match)
+		lay_actions.addWidget(btn_matchmaker)
 
 		self.box_actions.setLayout(lay_actions)
 		lay_main.addWidget(self.box_actions)
@@ -527,16 +546,21 @@ class TRLayerActions(QtGui.QWidget):
 			except ZeroDivisionError:
 				tx = 0.
 				ty = 0
-			
+
 			try:
 				dst_array = [self.__lerp_function(item[0], item[1], tx, ty) for item in self.lerp_array]
 				self.glyph._setPointArray(dst_array)
-				
+
 				self.glyph.update()
 				self.active_canvas.refreshAll()
 
 			except IndexError:
 				warnings.warn('Current layer is not compatible to axis masers: %s.' %app_name, TRPanelWarning)
+
+	def action_match(self):
+		modifiers = QtGui.QApplication.keyboardModifiers()
+		dry_run = modifiers == QtCore.Qt.AltModifier
+		TRLayerActionCollector.layer_matchmaker(self, dry_run=dry_run)
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
