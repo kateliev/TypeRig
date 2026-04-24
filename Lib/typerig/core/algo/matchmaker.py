@@ -783,17 +783,91 @@ def _bbox_strictly_contains(outer_bounds, inner_bounds, tol=1e-6):
 	             or outer_bounds.height > inner_bounds.height))
 
 
-def _containment_depth(idx, contours):
-	'''Number of contours that strictly contain contours[idx]. Uses bbox
-	containment — fast and reliable for well-formed glyphs where contours
-	either nest cleanly or are disjoint.
+# Tunables for geometric containment. Area ratio above this threshold means
+# the 'inner' bbox is too close in size to the 'outer' — almost certainly
+# two overlapping siblings rather than true nesting.
+_CONTAIN_BBOX_AREA_RATIO_MAX = 0.8
+
+
+def _point_in_polygon(px, py, poly_pts):
+	'''Even-odd ray-crossing test. poly_pts is a list of (x, y).
+	Points exactly on an edge may return either result — good enough for
+	classification since we only care about interior-ness in aggregate.
 	'''
-	me = contours[idx].bounds
+	n = len(poly_pts)
+	if n < 3:
+		return False
+	inside = False
+	j = n - 1
+	for i in range(n):
+		xi, yi = poly_pts[i]
+		xj, yj = poly_pts[j]
+		if ((yi > py) != (yj > py)):
+			# Horizontal ray from (px, py) crosses edge i-j?
+			x_cross = (xj - xi) * (py - yi) / (yj - yi + 1e-30) + xi
+			if px < x_cross:
+				inside = not inside
+		j = i
+	return inside
+
+
+def _on_curve_points(contour):
+	'''Polyline approximation using on-curve nodes only.
+	NOTE: For cubic contours this ignores off-curve bulge. For containment
+	classification this is accurate enough on typical glyphs. Future work:
+	optional flattening (sample cubics at a few t values) for pathological
+	cases where a curve bulges well outside its on-curve polygon.
+	'''
+	return [(nd.x, nd.y) for nd in contour.nodes if nd.is_on]
+
+
+def _contour_strictly_contains(outer, inner):
+	'''Layered geometric containment. Three tests, cheap to expensive:
+
+	  1. Bbox must strictly enclose inner's bbox (fast reject).
+	  2. Inner-vs-outer bbox area ratio must be below threshold (rejects
+	     the CJK case where a curved stroke has a huge sweeping bbox that
+	     happens to enclose a nearby sibling stroke's bbox).
+	  3. ALL of inner's on-curve points must lie inside outer's polygon
+	     (point-in-polygon via even-odd rule).
+	'''
+	ob = outer.bounds
+	ib = inner.bounds
+
+	# 1. Bbox gate.
+	if not _bbox_strictly_contains(ob, ib):
+		return False
+
+	# 2. Area-ratio gate — only meaningful when outer's bbox has area.
+	outer_area = max(ob.width * ob.height, 1e-9)
+	inner_area = ib.width * ib.height
+	if inner_area / outer_area > _CONTAIN_BBOX_AREA_RATIO_MAX:
+		return False
+
+	# 3. Point-in-polygon gate on on-curves.
+	outer_poly = _on_curve_points(outer)
+	if len(outer_poly) < 3:
+		# Degenerate outer — can't do PIP. Fall back to bbox result (already
+		# true from step 1). Rare; don't overthink.
+		return True
+	for (px, py) in _on_curve_points(inner):
+		if not _point_in_polygon(px, py, outer_poly):
+			return False
+	return True
+
+
+def _containment_depth(idx, contours):
+	'''Number of contours that strictly contain contours[idx]. Uses layered
+	geometric containment: bbox → area-ratio → point-in-polygon. Handles
+	the CJK case where separate strokes have overlapping bboxes but no
+	actual nesting.
+	'''
+	me = contours[idx]
 	depth = 0
 	for j, other in enumerate(contours):
 		if j == idx:
 			continue
-		if _bbox_strictly_contains(other.bounds, me):
+		if _contour_strictly_contains(other, me):
 			depth += 1
 	return depth
 
@@ -1877,6 +1951,66 @@ def _test_match_contour_order_shape_in_shape_out():
 	print('  Shape in → Shape out [OK]')
 
 
+def _test_containment_cjk_sibling_strokes():
+	'''CJK-like case: a tall thin 'curved stroke' whose bbox happens to
+	enclose a small sibling stroke. Bbox containment would say yes; the
+	PIP gate must say no.
+
+	Outer: an L-shaped polyline approximated by its on-curve points —
+	we fake it with a concave quadrilateral that has a big bbox but a
+	small interior.
+	'''
+	# Outer: thin L-shape. On-curve points outline a narrow polygon that
+	# hugs the left + bottom edges of its bbox, leaving the top-right
+	# corner empty (but still inside the bbox).
+	outer_nodes = [
+		Node(0.0,   0.0),
+		Node(400.0, 0.0),
+		Node(400.0, 50.0),
+		Node(50.0,  50.0),
+		Node(50.0,  400.0),
+		Node(0.0,   400.0),
+	]
+	outer = Contour(outer_nodes, closed=True)
+	# Sibling stroke sitting in the top-right empty area. Its bbox
+	# (200..300, 200..300) is inside outer's bbox (0..400, 0..400) →
+	# bbox-only check would falsely flag it as nested.
+	sibling = _rect_contour(200, 200, 100, 100)
+
+	contours = [outer, sibling]
+	d_outer = _containment_depth(0, contours)
+	d_sib   = _containment_depth(1, contours)
+	assert d_outer == 0, 'outer depth should be 0, got {}'.format(d_outer)
+	assert d_sib == 0, \
+		'sibling should NOT be nested (PIP says outside), got depth={}'.format(d_sib)
+	print('  CJK sibling strokes: bbox-encloses but PIP rejects [OK]')
+
+
+def _test_containment_real_nesting_still_works():
+	'''Regression: a real O-glyph (outer + hole) must still report
+	depth 0 and depth 1 after the refinement.'''
+	outer = _rect_contour(0, 0, 400, 400)
+	hole  = _rect_contour(100, 100, 200, 200, ccw=False)
+	contours = [outer, hole]
+	assert _containment_depth(0, contours) == 0
+	assert _containment_depth(1, contours) == 1
+	print('  real O-glyph nesting preserved [OK]')
+
+
+def _test_containment_area_ratio_rejects_overlap():
+	'''Two rectangles of similar size: the larger one's bbox encloses the
+	smaller by a hair, but they're clearly overlapping siblings. The area
+	ratio gate should reject this.'''
+	big   = _rect_contour(0, 0, 100, 100)
+	small = _rect_contour(2, 2, 96, 96)    # 92% of big's area
+	contours = [big, small]
+	# Without area-ratio gate: small would be "nested" in big.
+	# With it: rejected (ratio > 0.8).
+	assert _containment_depth(1, contours) == 0, \
+		'area-ratio gate failed to reject sibling overlap'
+	print('  area-ratio gate rejects near-same-size overlap [OK]')
+
+
 def _run_stage7_tests():
 	print('Stage 7 - match_contour_order:')
 	_test_match_contour_order_shuffled_identity()
@@ -1887,6 +2021,9 @@ def _run_stage7_tests():
 	_test_match_contour_order_empty()
 	_test_match_contour_order_layer_in_layer_out()
 	_test_match_contour_order_shape_in_shape_out()
+	_test_containment_cjk_sibling_strokes()
+	_test_containment_real_nesting_still_works()
+	_test_containment_area_ratio_rejects_overlap()
 	print('Stage 7: all tests passed.')
 
 
