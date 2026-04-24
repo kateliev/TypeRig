@@ -480,7 +480,7 @@ class pFont(object):
 		return self.fl.hasMaster(layerName)
 
 	def addEmptyMaster(self, master_name, location_dict=None):
-		new_location = fl6.flLocation(new_location_dict)
+		new_location = fl6.flLocation(location_dict)
 		self.fl.addMaster(master_name, False, self.fl, master_name, False, False, new_location)
 
 	def addSynthMaster(self, source_location_dict, new_location_dict, new_master_name=None, deactivate_master=True):

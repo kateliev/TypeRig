@@ -21,6 +21,8 @@ import math
 from typerig.core.objects.point import Point
 from typerig.core.objects.node import Node
 from typerig.core.objects.contour import Contour
+from typerig.core.objects.shape import Shape
+from typerig.core.objects.layer import Layer
 
 # - Init --------------------------------
 __version__ = '0.2.0'
@@ -761,7 +763,255 @@ def apply_match_glyph(contours_a, contours_b,
 	return new_a_list, new_b_list, total_cost, meta
 
 
-# - Self-tests --------------------------
+# - Standalone: match_contour_order ----
+# Independent of the Sederberg-Greenwood pipeline. Reorders one layer's
+# contours to match another's order using a multi-signal cost:
+#   1. Containment depth (hard gate — topology is dispositive).
+#   2. Relative centroid position within glyph bbox.
+#   3. Relative |signed area| vs total glyph area.
+#   4. Log aspect ratio.
+#   5. On-curve count mismatch (topological tiebreaker).
+
+
+def _bbox_strictly_contains(outer_bounds, inner_bounds, tol=1e-6):
+	'''True iff outer's bbox strictly encloses inner's bbox.'''
+	return (outer_bounds.x - tol <= inner_bounds.x
+	        and outer_bounds.y - tol <= inner_bounds.y
+	        and outer_bounds.x + outer_bounds.width  + tol >= inner_bounds.x + inner_bounds.width
+	        and outer_bounds.y + outer_bounds.height + tol >= inner_bounds.y + inner_bounds.height
+	        and (outer_bounds.width  > inner_bounds.width
+	             or outer_bounds.height > inner_bounds.height))
+
+
+def _containment_depth(idx, contours):
+	'''Number of contours that strictly contain contours[idx]. Uses bbox
+	containment — fast and reliable for well-formed glyphs where contours
+	either nest cleanly or are disjoint.
+	'''
+	me = contours[idx].bounds
+	depth = 0
+	for j, other in enumerate(contours):
+		if j == idx:
+			continue
+		if _bbox_strictly_contains(other.bounds, me):
+			depth += 1
+	return depth
+
+
+def _order_signature(contour, glyph_bbox, glyph_area, depth):
+	'''Dimensionless signature for reorder pairing.'''
+	b = contour.bounds
+	cx = b.x + b.width  * 0.5
+	cy = b.y + b.height * 0.5
+
+	# Normalise centroid against the glyph bbox so two masters of
+	# different absolute size still see the same relative positions.
+	gw = max(glyph_bbox.width,  1.0)
+	gh = max(glyph_bbox.height, 1.0)
+	rel_cx = (cx - glyph_bbox.x) / gw
+	rel_cy = (cy - glyph_bbox.y) / gh
+
+	area = abs(contour.signed_area)
+	rel_area = area / max(glyph_area, 1.0)
+
+	# Log aspect ratio: symmetric in w/h and h/w. Zero when square.
+	w = max(b.width,  1e-6)
+	h = max(b.height, 1e-6)
+	log_aspect = math.log(w / h)
+
+	on_count = sum(1 for n in contour.nodes if n.is_on)
+
+	return {
+		'depth':      depth,
+		'rel_cx':     rel_cx,
+		'rel_cy':     rel_cy,
+		'rel_area':   rel_area,
+		'log_aspect': log_aspect,
+		'on_count':   on_count,
+	}
+
+
+def _order_pair_cost(sig_a, sig_b):
+	'''Weighted dissimilarity. Depth mismatch is a hard gate via the
+	large constant — within-depth pairings always beat cross-depth.'''
+	depth_gate = 0.0 if sig_a['depth'] == sig_b['depth'] else 100.0
+
+	d_pos    = math.hypot(sig_a['rel_cx']   - sig_b['rel_cx'],
+	                       sig_a['rel_cy']   - sig_b['rel_cy'])
+	d_area   = abs(sig_a['rel_area']   - sig_b['rel_area'])
+	d_aspect = abs(sig_a['log_aspect'] - sig_b['log_aspect'])
+
+	max_oc = max(sig_a['on_count'], sig_b['on_count'], 1)
+	d_topol = abs(sig_a['on_count'] - sig_b['on_count']) / float(max_oc)
+
+	return (depth_gate
+	        + 2.0 * d_pos
+	        + 1.5 * d_area
+	        + 1.0 * d_aspect
+	        + 0.5 * d_topol)
+
+
+def _glyph_bbox(contours):
+	'''Union bbox over all contours. Returns an object with .x, .y,
+	.width, .height — matching the shape of Contour.bounds so downstream
+	code can use the same accessors.'''
+	assert contours, 'glyph has no contours'
+	xs, ys, xs_max, ys_max = [], [], [], []
+	for c in contours:
+		b = c.bounds
+		xs.append(b.x);                 ys.append(b.y)
+		xs_max.append(b.x + b.width);   ys_max.append(b.y + b.height)
+	x_min, y_min = min(xs), min(ys)
+	x_max, y_max = max(xs_max), max(ys_max)
+
+	class _BBox(object):
+		pass
+	bb = _BBox()
+	bb.x = x_min
+	bb.y = y_min
+	bb.width  = x_max - x_min
+	bb.height = y_max - y_min
+	return bb
+
+
+def _glyph_area(contours):
+	return sum(abs(c.signed_area) for c in contours)
+
+
+def _as_contour_list(obj):
+	'''Accept a core Layer (or any object exposing .contours), a single
+	Shape (.contours), or a plain list of Contours. Returns a list.'''
+	if obj is None:
+		return []
+	if isinstance(obj, (list, tuple)):
+		return list(obj)
+	contours = getattr(obj, 'contours', None)
+	if contours is not None:
+		return list(contours)
+	# Last resort: treat as iterable of contours.
+	return list(obj)
+
+
+def match_contour_order(ref, tgt):
+	'''Reorder tgt contours so that result[i] corresponds to ref[i].
+
+	Uses multi-signal cost pairing (containment depth as a hard gate, plus
+	relative position, relative area, log aspect ratio, on-curve count).
+	Within each depth level, a greedy assignment picks the lowest-cost
+	unused pair until all contours are placed.
+
+	Inputs are NOT mutated. The returned list references the original
+	target contours (no clones) in the new order.
+
+	Args:
+		ref: reference — a core Layer, Shape, or list of Contours.
+		     Defines the target order.
+		tgt: target — same forms accepted. This is what gets reordered.
+
+	Returns:
+		(new_tgt, pairs, confidence)
+			- new_tgt: reordered target. Output type mirrors the tgt input:
+			    * Layer in → Layer out (metadata copied; reordered contours
+			      are wrapped in a single Shape, flattening any original
+			      shape grouping).
+			    * Shape in → Shape out.
+			    * list in  → list of contours out.
+			- pairs: list of (ref_idx, tgt_idx) sorted by ref_idx.
+			- confidence: list of per-pair costs (same order as pairs).
+			  Lower is better; use it to flag suspicious assignments.
+
+	Raises:
+		ValueError on contour-count mismatch or on depth-level population
+		mismatch (e.g. ref has 2 depth-0 contours but tgt has 1 — meaning
+		the containment topologies don't match, an unsolvable case here).
+	'''
+	contours_ref = _as_contour_list(ref)
+	contours_tgt = _as_contour_list(tgt)
+
+	if len(contours_ref) != len(contours_tgt):
+		raise ValueError(
+			'match_contour_order: contour count mismatch ref={} tgt={}'.format(
+				len(contours_ref), len(contours_tgt)))
+
+	n = len(contours_ref)
+	if n == 0:
+		return [], [], []
+
+	# Signatures for both sides.
+	gbb_ref = _glyph_bbox(contours_ref)
+	gbb_tgt = _glyph_bbox(contours_tgt)
+	ga_ref  = _glyph_area(contours_ref)
+	ga_tgt  = _glyph_area(contours_tgt)
+
+	sigs_ref = []
+	sigs_tgt = []
+	for i, c in enumerate(contours_ref):
+		d = _containment_depth(i, contours_ref)
+		sigs_ref.append(_order_signature(c, gbb_ref, ga_ref, d))
+	for j, c in enumerate(contours_tgt):
+		d = _containment_depth(j, contours_tgt)
+		sigs_tgt.append(_order_signature(c, gbb_tgt, ga_tgt, d))
+
+	# Depth-level check: populations must match level-for-level.
+	from collections import Counter
+	depths_ref = Counter(s['depth'] for s in sigs_ref)
+	depths_tgt = Counter(s['depth'] for s in sigs_tgt)
+	if depths_ref != depths_tgt:
+		raise ValueError(
+			'match_contour_order: containment topology differs '
+			'ref={} tgt={} — the layers are not structurally paired.'.format(
+				dict(depths_ref), dict(depths_tgt)))
+
+	# Per-depth greedy assignment.
+	remaining_tgt = set(range(n))
+	pairs = []
+	confidence = []
+
+	# Iterate ref in depth order (outers first), then original index. This
+	# stabilises output when multiple ties exist across depth levels.
+	ref_order = sorted(range(n), key=lambda i: (sigs_ref[i]['depth'], i))
+
+	for ri in ref_order:
+		best = None
+		for tj in remaining_tgt:
+			c = _order_pair_cost(sigs_ref[ri], sigs_tgt[tj])
+			if best is None or c < best[0]:
+				best = (c, tj)
+		cost, tj = best
+		pairs.append((ri, tj))
+		confidence.append(cost)
+		remaining_tgt.remove(tj)
+
+	# Build reordered target list indexed by ref position.
+	new_tgt_list = [None] * n
+	for (ri, tj), c in zip(pairs, confidence):
+		new_tgt_list[ri] = contours_tgt[tj]
+
+	# Sort pairs + confidence by ref_idx for caller convenience.
+	combined = sorted(zip(pairs, confidence), key=lambda pc: pc[0][0])
+	pairs = [p for p, _ in combined]
+	confidence = [c for _, c in combined]
+
+	# Mirror output type to input type.
+	if isinstance(tgt, Layer):
+		new_shape = Shape(new_tgt_list)
+		new_layer = Layer(
+			[new_shape],
+			name=getattr(tgt, 'name', None),
+			width=getattr(tgt, 'advance_width', 0.),
+			height=getattr(tgt, 'advance_height', 1000.),
+			mark=getattr(tgt, 'mark', 0),
+			anchors=list(getattr(tgt, 'anchors', []) or []),
+		)
+		return new_layer, pairs, confidence
+
+	if isinstance(tgt, Shape):
+		return Shape(new_tgt_list), pairs, confidence
+
+	return new_tgt_list, pairs, confidence
+
+
+
 def _approx(a, b, tol=1e-9):
 	return abs(a - b) <= tol
 
@@ -1507,6 +1757,139 @@ def _run_stage6_tests():
 	print('Stage 6: all tests passed.')
 
 
+# - Stage 7: match_contour_order -------------------------------------------
+
+def _test_match_contour_order_shuffled_identity():
+	'''Ref and tgt are the same contours, just shuffled. Must recover ref order.'''
+	c0 = _rect_contour(0, 0, 100, 100)
+	c1 = _rect_contour(200, 0, 50, 50)
+	c2 = _rect_contour(400, 0, 80, 80)
+	ref = [c0, c1, c2]
+	tgt = [c2, c0, c1]  # shuffled
+	new_tgt, pairs, conf = match_contour_order(ref, tgt)
+	assert new_tgt[0] is c0 and new_tgt[1] is c1 and new_tgt[2] is c2, \
+		'shuffled identity not recovered: {}'.format(pairs)
+	# Every pair cost should be (near) zero — positions/areas are identical.
+	assert all(c < 1e-6 for c in conf), 'nonzero cost on identity: {}'.format(conf)
+	print('  shuffled identity recovered [OK]')
+
+
+def _test_match_contour_order_similar_not_equal():
+	'''Slightly different tgt (simulating Bold vs Regular): still recoverable.'''
+	ref = [_rect_contour(0, 0, 100, 100),      # big outer
+	       _rect_contour(300, 10, 50, 50),     # small right
+	       _rect_contour(600, 0, 80, 90)]      # medium far-right
+	# Bold-ish: slightly bigger and nudged, shuffled order.
+	tgt = [_rect_contour(595, -5, 90, 100),    # ~matches ref[2]
+	       _rect_contour(-5, -5, 110, 110),    # ~matches ref[0]
+	       _rect_contour(295, 8, 60, 55)]      # ~matches ref[1]
+	new_tgt, pairs, _conf = match_contour_order(ref, tgt)
+	# new_tgt[0] should be tgt[1] (big outer), etc.
+	assert new_tgt[0] is tgt[1], 'ref[0] mispaired: pairs={}'.format(pairs)
+	assert new_tgt[1] is tgt[2], 'ref[1] mispaired: pairs={}'.format(pairs)
+	assert new_tgt[2] is tgt[0], 'ref[2] mispaired: pairs={}'.format(pairs)
+	print('  Regular-vs-Bold-style reorder [OK]')
+
+
+def _test_match_contour_order_containment_gate():
+	'''Depth-0 and depth-1 contours must not swap even if geometry would
+	otherwise suggest it.'''
+	outer_ref = _rect_contour(0, 0, 400, 400)
+	inner_ref = _rect_contour(100, 100, 200, 200, ccw=False)
+	# tgt: inner and outer listed in reverse order.
+	inner_tgt = _rect_contour(100, 100, 200, 200, ccw=False)
+	outer_tgt = _rect_contour(0, 0, 400, 400)
+	ref = [outer_ref, inner_ref]
+	tgt = [inner_tgt, outer_tgt]  # reversed
+	new_tgt, pairs, _conf = match_contour_order(ref, tgt)
+	assert new_tgt[0] is outer_tgt, 'outer↔inner swapped: {}'.format(pairs)
+	assert new_tgt[1] is inner_tgt, 'inner↔outer swapped: {}'.format(pairs)
+	print('  containment depth gates pairing [OK]')
+
+
+def _test_match_contour_order_count_mismatch():
+	ref = [_rect_contour(0, 0, 10, 10)]
+	tgt = [_rect_contour(0, 0, 10, 10), _rect_contour(20, 20, 5, 5)]
+	try:
+		match_contour_order(ref, tgt)
+	except ValueError:
+		print('  count mismatch raises ValueError [OK]')
+		return
+	raise AssertionError('expected ValueError on count mismatch')
+
+
+def _test_match_contour_order_topology_mismatch():
+	'''Same count, different containment topologies → unsolvable.'''
+	# ref: two depth-0 contours (side by side).
+	ref = [_rect_contour(0, 0, 100, 100),
+	       _rect_contour(200, 0, 100, 100)]
+	# tgt: one depth-0 + one depth-1 (nested).
+	tgt = [_rect_contour(0, 0, 400, 400),
+	       _rect_contour(100, 100, 200, 200, ccw=False)]
+	try:
+		match_contour_order(ref, tgt)
+	except ValueError:
+		print('  containment topology mismatch raises ValueError [OK]')
+		return
+	raise AssertionError('expected ValueError on topology mismatch')
+
+
+def _test_match_contour_order_empty():
+	new_tgt, pairs, conf = match_contour_order([], [])
+	assert new_tgt == [] and pairs == [] and conf == []
+	print('  empty input returns empty [OK]')
+
+
+def _test_match_contour_order_layer_in_layer_out():
+	'''Passing a Layer for tgt returns a Layer with reordered contours.'''
+	c0 = _rect_contour(0, 0, 100, 100)
+	c1 = _rect_contour(200, 0, 50, 50)
+	ref_layer = Layer([Shape([c0, c1])], name='Regular', width=300)
+	# tgt layer with contours in reverse order, different metadata.
+	t0 = _rect_contour(200, 0, 50, 50)
+	t1 = _rect_contour(0, 0, 100, 100)
+	tgt_layer = Layer([Shape([t0, t1])], name='Bold', width=320, mark=42)
+	new_layer, pairs, _conf = match_contour_order(ref_layer, tgt_layer)
+	assert isinstance(new_layer, Layer), 'expected Layer, got {}'.format(type(new_layer))
+	assert new_layer.name == 'Bold', 'layer name not preserved: {}'.format(new_layer.name)
+	assert new_layer.advance_width == 320
+	assert new_layer.mark == 42
+	out_contours = list(new_layer.contours)
+	assert len(out_contours) == 2
+	# Ref[0] is c0 (big, at 0,0) → should get t1 (big, at 0,0).
+	assert out_contours[0] is t1
+	assert out_contours[1] is t0
+	print('  Layer in → Layer out (metadata preserved) [OK]')
+
+
+def _test_match_contour_order_shape_in_shape_out():
+	c0 = _rect_contour(0, 0, 100, 100)
+	c1 = _rect_contour(200, 0, 50, 50)
+	ref_shape = Shape([c0, c1])
+	tgt_shape = Shape([_rect_contour(200, 0, 50, 50),
+	                    _rect_contour(0, 0, 100, 100)])
+	new_shape, _pairs, _conf = match_contour_order(ref_shape, tgt_shape)
+	assert isinstance(new_shape, Shape), 'expected Shape, got {}'.format(type(new_shape))
+	out = list(new_shape.contours)
+	assert len(out) == 2
+	# Big outer first.
+	assert abs(out[0].signed_area) > abs(out[1].signed_area)
+	print('  Shape in → Shape out [OK]')
+
+
+def _run_stage7_tests():
+	print('Stage 7 - match_contour_order:')
+	_test_match_contour_order_shuffled_identity()
+	_test_match_contour_order_similar_not_equal()
+	_test_match_contour_order_containment_gate()
+	_test_match_contour_order_count_mismatch()
+	_test_match_contour_order_topology_mismatch()
+	_test_match_contour_order_empty()
+	_test_match_contour_order_layer_in_layer_out()
+	_test_match_contour_order_shape_in_shape_out()
+	print('Stage 7: all tests passed.')
+
+
 if __name__ == '__main__':
 	_run_stage1_tests()
 	print('')
@@ -1519,3 +1902,5 @@ if __name__ == '__main__':
 	_run_stage5_tests()
 	print('')
 	_run_stage6_tests()
+	print('')
+	_run_stage7_tests()
