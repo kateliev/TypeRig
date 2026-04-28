@@ -134,9 +134,15 @@ class trLayer(Layer):
 			>>> tr_g[0].mount(core_layer)
 			>>> tr_g.update()
 		'''
-		# Separate outline shapes from component shapes
-		outline_shapes   = [s for s in core_layer.shapes if not s.lib.get('component_name')]
-		component_shapes = [s for s in core_layer.shapes if s.lib.get('component_name')]
+		# Separate outline shapes from component shapes.
+		# Use getattr: plain Core Shape objects (created outside the proxy) have
+		# lib in __slots__ but it is never assigned, so direct access raises AttributeError.
+		def _comp_name(s):
+			lib = getattr(s, 'lib', None)
+			return lib.get('component_name') if lib else None
+
+		outline_shapes   = [s for s in core_layer.shapes if not _comp_name(s)]
+		component_shapes = [s for s in core_layer.shapes if _comp_name(s)]
 
 		# Rebuild paths from all outline shape contours
 		new_paths = []
@@ -148,7 +154,7 @@ class trLayer(Layer):
 		# Rebuild components
 		new_components = []
 		for comp_shape in component_shapes:
-			comp = GlyphsApp.GSComponent(comp_shape.lib['component_name'])
+			comp = GlyphsApp.GSComponent(_comp_name(comp_shape))
 			t    = comp_shape.lib.get('component_transform')
 			if t is not None:
 				from Foundation import NSAffineTransform, NSAffineTransformStruct

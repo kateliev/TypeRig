@@ -197,10 +197,11 @@ class trShape(Shape):
 			    the 'component_name' key in core_shape.lib.
 		'''
 		if self.is_component:
-			comp_name = core_shape.lib.get('component_name')
+			lib        = getattr(core_shape, 'lib', None) or {}
+			comp_name  = lib.get('component_name')
 			if comp_name:
 				self.host.componentName = comp_name
-			comp_transform = core_shape.lib.get('component_transform')
+			comp_transform = lib.get('component_transform')
 			if comp_transform:
 				self.component_transform = comp_transform
 			return
