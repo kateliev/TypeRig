@@ -121,7 +121,7 @@ class trContour(Contour):
 		if len(core_contour.nodes) == len(host_nodes):
 			for gs_node, core_node in zip(host_nodes, core_contour.nodes):
 				gs_node.position = (float(core_node.x), float(core_node.y))
-				gs_node.type     = _CORE_TO_GS3.get(core_node.type, 'LINE')
+				gs_node.type     = _CORE_TO_GS3.get(core_node.type, 'line')
 				gs_node.smooth   = bool(core_node.smooth)
 
 				if hasattr(core_node, 'name') and core_node.name:

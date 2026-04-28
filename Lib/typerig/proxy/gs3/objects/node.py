@@ -20,19 +20,24 @@ from typerig.core.func.utils import isMultiInstance
 __version__ = '0.1.0'
 
 # GS3 node type string <-> Core node type
-# LINE  = straight on-curve;  CURVE = bezier on-curve;
-# OFFCURVE = bezier handle;   QCURVE = quadratic on-curve
+# GlyphsApp 3 GSNode.type returns lowercase strings: 'line', 'curve', 'offcurve', 'qcurve'.
+# Both cases are kept for safety (GS2 / scripted contexts may use uppercase).
 _GS3_TO_CORE = {
+	'line':     'on',
+	'curve':    'curve',
+	'offcurve': 'off',
+	'qcurve':   'on',
+	# legacy / GS2 uppercase variants
 	'LINE':     'on',
 	'CURVE':    'curve',
 	'OFFCURVE': 'off',
 	'QCURVE':   'on',
 }
 _CORE_TO_GS3 = {
-	'on':    'LINE',
-	'curve': 'CURVE',
-	'off':   'OFFCURVE',
-	'move':  'LINE',
+	'on':    'line',
+	'curve': 'curve',
+	'off':   'offcurve',
+	'move':  'line',
 }
 
 # - Helpers ------------------------------
@@ -40,8 +45,8 @@ def _build_gs_node(core_node):
 	'''Build a GSNode from a core Node.'''
 	node = GlyphsApp.GSNode()
 	node.position = (float(core_node.x), float(core_node.y))
-	node.type = _CORE_TO_GS3.get(core_node.type, 'LINE')
-	node.smooth = bool(core_node.smooth)
+	node.type     = _CORE_TO_GS3.get(core_node.type, 'line')
+	node.smooth   = bool(core_node.smooth)
 
 	if hasattr(core_node, 'name') and core_node.name:
 		node.name = core_node.name
@@ -84,7 +89,7 @@ class trNode(Node):
 
 			elif isinstance(args[0], (tuple, list)):
 				x, y      = float(args[0][0]), float(args[0][1])
-				gs_type   = _CORE_TO_GS3.get(kwargs.get('type', 'on'), 'LINE')
+				gs_type   = _CORE_TO_GS3.get(kwargs.get('type', 'on'), 'line')
 				node      = GlyphsApp.GSNode()
 				node.position = (x, y)
 				node.type     = gs_type
@@ -92,7 +97,7 @@ class trNode(Node):
 
 		elif len(args) == 2 and isMultiInstance(args, (float, int)):
 			x, y    = float(args[0]), float(args[1])
-			gs_type = _CORE_TO_GS3.get(kwargs.get('type', 'on'), 'LINE')
+			gs_type = _CORE_TO_GS3.get(kwargs.get('type', 'on'), 'line')
 			node    = GlyphsApp.GSNode()
 			node.position = (x, y)
 			node.type     = gs_type
@@ -142,7 +147,7 @@ class trNode(Node):
 
 	@type.setter
 	def type(self, value):
-		self.host.type = _CORE_TO_GS3.get(value, 'LINE')
+		self.host.type = _CORE_TO_GS3.get(value, 'line')
 
 	# - Basics --------------------------------
 	def clone(self):
@@ -165,7 +170,7 @@ class trNode(Node):
 			core_node (Node): Pure core Node with values to apply.
 		'''
 		self.host.position = (float(core_node.x), float(core_node.y))
-		self.host.type     = _CORE_TO_GS3.get(core_node.type, 'LINE')
+		self.host.type     = _CORE_TO_GS3.get(core_node.type, 'line')
 		self.host.smooth   = bool(core_node.smooth)
 
 		if hasattr(core_node, 'name') and core_node.name:
