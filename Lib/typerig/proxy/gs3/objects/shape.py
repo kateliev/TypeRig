@@ -15,6 +15,7 @@ import GlyphsApp
 
 from typerig.proxy.gs3.objects.contour import trContour, _build_gs_path
 from typerig.core.objects.shape import Shape
+from typerig.core.objects.transform import Transform
 
 # - Init ---------------------------------
 __version__ = '0.1.0'
@@ -22,8 +23,10 @@ __version__ = '0.1.0'
 # - Helpers ------------------------------
 def _build_gs_shape(core_shape):
 	'''Build a list of GSPaths from a core Shape.
-	Component shapes (identified by lib key) return None — caller must handle.
+	Component shapes (shape.is_component is True) return an empty list — caller must handle.
 	'''
+	if core_shape.is_component:
+		return []
 	return [_build_gs_path(c) for c in core_shape.contours]
 
 # - Classes ------------------------------
@@ -157,30 +160,43 @@ class trShape(Shape):
 
 	# - Host sync ----------------------------
 	def _sync_host(self):
-		'''Rebuild GSLayer.paths from current proxy contour list (outline only).'''
+		'''Rebuild the GSLayer shapes list (paths only) from the current proxy contour list.
+
+		GSLayer.paths has no setter in GS3 — layer.shapes is the writable master list.
+		Existing GSComponent objects are preserved at the tail of the list.
+		'''
 		if not self.is_component:
-			self.host.paths = [c.host for c in self.data]
+			existing_comps = [s for s in self.host.shapes
+			                  if isinstance(s, GlyphsApp.GSComponent)]
+			self.host.shapes = [c.host for c in self.data] + existing_comps
 
 	# - Basics --------------------------------
 	def reverse(self):
 		if not self.is_component:
 			self.data = list(reversed(self.data))
-			self.host.paths = [c.host for c in self.data]
+			existing_comps = [s for s in self.host.shapes
+			                  if isinstance(s, GlyphsApp.GSComponent)]
+			self.host.shapes = [c.host for c in self.data] + existing_comps
 
 	# - Eject / mount -------------------------
 	def eject(self):
 		'''Detach from host: return a pure core Shape.
 
-		For component shapes the component metadata is preserved in shape.lib
-		so it can be round-tripped via mount().
+		Component shapes produce a Shape with:
+		  .component  = base glyph name (str)
+		  .transform  = placement transform (Transform)
+		  .contours   = [] (empty)
+
+		Outline shapes produce a Shape with their contours ejected.
 		'''
 		if self.is_component:
-			core_shape = Shape([], name=self.component_name or '')
-			core_shape.lib = {
-				'component_name':      self.component_name,
-				'component_transform': self.component_transform,
-			}
-			return core_shape
+			t = self.component_transform or (1, 0, 0, 1, 0, 0)
+			return Shape(
+				[],
+				name=self.component_name or '',
+				component=self.component_name or '',
+				transform=Transform(t[0], t[1], t[2], t[3], t[4], t[5]),
+			)
 
 		# Outline: eject each contour from the live layer paths
 		core_contours = [trContour(p).eject() for p in self.host.paths]
@@ -193,22 +209,23 @@ class trShape(Shape):
 		For component shapes, componentName and transform are updated.
 
 		Args:
-			core_shape (Shape): Pure core Shape.  Component shapes must carry
-			    the 'component_name' key in core_shape.lib.
+			core_shape (Shape): Pure core Shape.
+			    Component shapes must have core_shape.component set to the base glyph name.
 		'''
 		if self.is_component:
-			lib        = getattr(core_shape, 'lib', None) or {}
-			comp_name  = lib.get('component_name')
-			if comp_name:
-				self.host.componentName = comp_name
-			comp_transform = lib.get('component_transform')
-			if comp_transform:
-				self.component_transform = comp_transform
+			if core_shape.is_component:
+				self.host.componentName = core_shape.component
+				t = list(core_shape.transform)  # Transform supports iteration → [xx,xy,yx,yy,dx,dy]
+				if t:
+					self.component_transform = tuple(t)
 			return
 
-		# Outline: rebuild paths from core contours
-		new_paths = [_build_gs_path(c) for c in core_shape.contours]
-		self.host.paths = new_paths
+		# Outline: rebuild paths from core contours.
+		# GSLayer.paths has no setter — write through layer.shapes instead.
+		new_paths      = [_build_gs_path(c) for c in core_shape.contours]
+		existing_comps = [s for s in self.host.shapes
+		                  if isinstance(s, GlyphsApp.GSComponent)]
+		self.host.shapes = new_paths + existing_comps
 		self.data = [trContour(p, parent=self) for p in self.host.paths]
 
 		if self.parent is not None and hasattr(self.parent, '_sync_host'):

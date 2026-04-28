@@ -26,34 +26,40 @@ from typerig.core.func.math import slerp_angle, interpolate_directional
 from typerig.core.objects.sdf import SignedDistanceField
 
 # - Init -------------------------------
-__version__ = '0.4.1'
+__version__ = '0.4.2'
 
 # - Classes -----------------------------
 @register_xml_class
 class Shape(Container, XMLSerializable):
-	__slots__ = ('name', 'transform', 'identifier', 'parent', 'lib', '_sdf')
+	__slots__ = ('name', 'component', 'transform', 'identifier', 'parent', 'lib', '_sdf')
 
 	XML_TAG = 'shape'
-	XML_ATTRS = ['name', 'identifier', 'transform']
+	XML_ATTRS = ['name', 'identifier', 'transform', 'component']
 	XML_CHILDREN = {'contour': 'contours'}
 	XML_LIB_ATTRS = []
 	XML_ATTR_DEFAULTS = {
+		# Skip serialization of identity transform
 		'transform': lambda v: (
 			hasattr(v, '__len__') and len(v) == 6 and
 			[v[i] for i in range(6)] == [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
-		)
+		),
+		# Skip serialization when component is empty / None
+		'component': lambda v: not v,
 	}
 
 	def __init__(self, contours=None, **kwargs):
 		factory = kwargs.pop('default_factory', Contour)
 		super(Shape, self).__init__(contours, default_factory=factory, **kwargs)
-		
+
 		self.transform = kwargs.pop('transform', Transform())
 
 		# - Metadata
 		if not kwargs.pop('proxy', False): # Initialize in proxy mode
-			self.name = kwargs.pop('name', '')
+			self.name      = kwargs.pop('name', '')
 			self.identifier = kwargs.pop('identifier', None)
+			# component: non-empty string = reference to base glyph name (UFO model).
+			# Empty string / None = plain outline shape.
+			self.component = kwargs.pop('component', '')
 
 		# - SDF cache (not serialized)
 		self._sdf = None
@@ -63,6 +69,17 @@ class Shape(Container, XMLSerializable):
 		return '<{}: Name={}, Contours={}>'.format(self.__class__.__name__, self.name, len(self.data))
 
 	# -- Properties -----------------------------
+	@property
+	def is_component(self):
+		'''True when this shape is a component reference (shape.component is non-empty).
+
+		A component shape carries a base-glyph name in self.component and an optional
+		placement transform in self.transform.  self.contours is empty.
+
+		Follows the UFO model: <component base="A" xOffset="10" yOffset="0"/>
+		'''
+		return bool(getattr(self, 'component', None))
+
 	@property
 	def contours(self):
 		return self.data

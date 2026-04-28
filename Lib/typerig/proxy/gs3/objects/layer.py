@@ -134,29 +134,24 @@ class trLayer(Layer):
 			>>> tr_g[0].mount(core_layer)
 			>>> tr_g.update()
 		'''
-		# Separate outline shapes from component shapes.
-		# Use getattr: plain Core Shape objects (created outside the proxy) have
-		# lib in __slots__ but it is never assigned, so direct access raises AttributeError.
-		def _comp_name(s):
-			lib = getattr(s, 'lib', None)
-			return lib.get('component_name') if lib else None
-
-		outline_shapes   = [s for s in core_layer.shapes if not _comp_name(s)]
-		component_shapes = [s for s in core_layer.shapes if _comp_name(s)]
+		# Separate outline shapes from component shapes using the new Core API.
+		# shape.is_component is True when shape.component is a non-empty string.
+		# Plain Shape() objects created by the snap tools have component='' → outline.
+		outline_shapes   = [s for s in core_layer.shapes if not s.is_component]
+		component_shapes = [s for s in core_layer.shapes if s.is_component]
 
 		# Rebuild paths from all outline shape contours
 		new_paths = []
 		for core_shape in outline_shapes:
 			for core_contour in core_shape.contours:
 				new_paths.append(_build_gs_path(core_contour))
-		self.host.paths = new_paths
 
 		# Rebuild components
 		new_components = []
 		for comp_shape in component_shapes:
-			comp = GlyphsApp.GSComponent(_comp_name(comp_shape))
-			t    = comp_shape.lib.get('component_transform')
-			if t is not None:
+			comp = GlyphsApp.GSComponent(comp_shape.component)
+			t    = list(comp_shape.transform)   # Transform → [xx, xy, yx, yy, dx, dy]
+			if t and t != [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]:
 				from Foundation import NSAffineTransform, NSAffineTransformStruct
 				struct = NSAffineTransformStruct(
 					m11=float(t[0]), m12=float(t[1]),
@@ -167,7 +162,10 @@ class trLayer(Layer):
 				transform.transformStruct = struct
 				comp.transform = transform
 			new_components.append(comp)
-		self.host.components = new_components
+
+		# GSLayer.paths and .components have no setters in GS3 —
+		# layer.shapes is the single writable master list.
+		self.host.shapes = new_paths + new_components
 
 		# Rebuild anchors
 		self.host.anchors = [_build_gs_anchor(a) for a in core_layer.anchors]
