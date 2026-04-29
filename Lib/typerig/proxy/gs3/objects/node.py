@@ -67,9 +67,9 @@ class trNode(Node):
 		.host (GSNode): wrapped GlyphsApp node
 		.parent (trContour): parent contour
 	'''
-	# smooth, name, selected map directly; x, y, type need conversion so they
-	# are explicit properties below rather than in __meta__
-	__meta__ = {'smooth': 'smooth', 'name': 'name', 'selected': 'selected'}
+	# smooth and name forward directly; x, y, type, selected need conversion or
+	# fallback handling so they are explicit properties below rather than in __meta__
+	__meta__ = {'smooth': 'smooth', 'name': 'name'}
 	__meta_keys = frozenset(__meta__.keys())
 
 	# - Initialize ---------------------------
@@ -148,6 +148,44 @@ class trNode(Node):
 	@type.setter
 	def type(self, value):
 		self.host.type = _CORE_TO_GS3.get(value, 'line')
+
+	# Selection state in GS3 lives at GSLayer.selection (a list), not on GSNode.
+	# Modern GlyphsApp Python adds a GSNode.selected property that bridges to
+	# the parent layer; we use it when present and fall back to direct layer
+	# selection membership otherwise. Walks GSNode.parent (GSPath) → .parent (GSLayer).
+	def _host_layer(self):
+		try:
+			return self.host.parent.parent
+		except AttributeError:
+			return None
+
+	@property
+	def selected(self):
+		try:
+			return bool(self.host.selected)
+		except AttributeError:
+			layer = self._host_layer()
+			if layer is None:
+				return False
+			return self.host in layer.selection
+
+	@selected.setter
+	def selected(self, value):
+		flag = bool(value)
+		try:
+			self.host.selected = flag
+			return
+		except AttributeError:
+			pass
+		layer = self._host_layer()
+		if layer is None:
+			return
+		current = list(layer.selection)
+		present = self.host in current
+		if flag and not present:
+			layer.selection = current + [self.host]
+		elif not flag and present:
+			layer.selection = [n for n in current if n is not self.host]
 
 	# - Basics --------------------------------
 	def clone(self):
