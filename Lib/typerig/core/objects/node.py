@@ -554,10 +554,28 @@ class Node(Member, XMLSerializable):
 		return func
 
 	# - Special ---------------------------------
+	def _get_corner_tangents(self):
+		'''Return (prev_unit, next_unit) at this corner node using actual bezier tangents.
+		For a cubic segment the handle (BCP) direction is used; for a line the neighbor on-curve.
+		Both vectors point AWAY from self toward the adjacent geometry.
+		'''
+		next_node = self.next
+		if next_node is not None and not next_node.is_on:
+			next_unit = (next_node.point - self.point).unit
+		else:
+			next_unit = (self.next_on.point - self.point).unit
+
+		prev_node = self.prev
+		if prev_node is not None and not prev_node.is_on:
+			prev_unit = (prev_node.point - self.point).unit
+		else:
+			prev_unit = (self.prev_on.point - self.point).unit
+
+		return prev_unit, next_unit
+
 	def corner_mitre(self, mitre_size=5, is_radius=False):
 		# - Calculate unit vectors and shifts
-		next_unit = (self.next_on.point - self.point).unit
-		prev_unit = (self.prev_on.point - self.point).unit
+		prev_unit, next_unit = self._get_corner_tangents()
 		
 		if not is_radius:
 			angle = math.atan2(next_unit | prev_unit, next_unit & prev_unit)
@@ -575,30 +593,39 @@ class Node(Member, XMLSerializable):
 
 		return (self, next_node)
 
-	def corner_round(self, rounding_size=5, proportion=None, curvature=None, is_radius=False):
-		curr_node, next_node = self.corner_mitre(rounding_size, is_radius)
-		
-		# -- Make round corner
-		bcp_out = curr_node.insert_after(0.)
-		bcp_in = next_node.insert_before(0.)
-		bcp_out.type = node_types['curve']
-		bcp_in.type = node_types['curve']
+	def corner_round(self, rounding_size=5, is_radius=False):
+		# Cubic bezier arc approximation constant: 4*(sqrt(2)-1)/3
+		k = (4.0 * (math.sqrt(2.0) - 1.0)) / 3.0
 
-		# -- Curvature and handle length 
-		segment = (curr_node, bcp_out, bcp_in, next_node)
-		curve = CubicBezier(*[node.point for node in segment])
+		# Actual tangent directions at the corner (BCP-aware)
+		prev_unit, next_unit = self._get_corner_tangents()
 
-		if proportion is not None: 
-			new_curve = curve.solve_proportional_handles(proportion)
-			bcp_out.point = new_curve.p1
-			bcp_in.point = new_curve.p2
-								
-		if curvature is not None: 
-			new_curve = curve.solve_hobby(curvature)
-			bcp_out.point = new_curve.p1
-			bcp_in.point = new_curve.p2
-			
-		return segment
+		# Interior angle between the two tangents
+		angle = math.atan2(next_unit | prev_unit, next_unit & prev_unit)
+		half_tan = math.tan(abs(angle) / 2.0)
+
+		if abs(half_tan) < 1e-10:
+			return None
+
+		# rounding_size is always the inscribed-circle radius r
+		r = abs(rounding_size)
+		d = r / half_tan  # walk distance from corner to each mitre point
+
+		# Mitre the corner at distance d (is_radius=True: treat arg as walk distance)
+		curr_node, next_node = self.corner_mitre(d, is_radius=True)
+
+		# BCP positions: tangent-line continuation from each mitre point toward original corner
+		bcp_out_pt = curr_node.point + (-prev_unit) * r * k
+		bcp_in_pt  = next_node.point + (-next_unit) * r * k
+
+		bcp_out = self.__class__(bcp_out_pt.tuple, type=node_types['curve'])
+		bcp_in  = self.__class__(bcp_in_pt.tuple,  type=node_types['curve'])
+
+		i = curr_node.idx
+		curr_node.parent.insert(i + 1, bcp_out)
+		curr_node.parent.insert(i + 2, bcp_in)
+
+		return (curr_node, bcp_out, bcp_in, next_node)
 
 	def corner_trap(self, parameter=10, depth=50, trap=2, smooth=True, incision=True):
 		'''Trap a corner by given incision into the glyph flesh.

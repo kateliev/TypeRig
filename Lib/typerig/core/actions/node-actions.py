@@ -230,15 +230,13 @@ class NodeActions(object):
 		return node.corner_mitre(mitre_size, is_radius)
 
 	@staticmethod
-	def corner_round(node, rounding_size=5, proportion=None, curvature=None, is_radius=False):
-		'''Round a corner at the given on-curve node.
+	def corner_round(node, rounding_size=5, is_radius=False):
+		'''Round a corner at the given on-curve node using an inscribed circle of radius rounding_size.
 
 		Arguments:
 			node (Node): The on-curve corner node.
-			rounding_size (float): Size of the rounding.
-			proportion (tuple or None): Proportional handle placement.
-			curvature (tuple or None): Hobby curvature parameters (e.g. (1., 1.)).
-			is_radius (bool): Interpret rounding_size as radius.
+			rounding_size (float): Inscribed circle radius.
+			is_radius (bool): Unused, kept for call-site compatibility.
 
 		Returns:
 			tuple(Node, Node, Node, Node) or None: The corner segment
@@ -247,7 +245,7 @@ class NodeActions(object):
 		if not node.is_on:
 			return None
 
-		return node.corner_round(rounding_size, proportion, curvature, is_radius)
+		return node.corner_round(rounding_size, is_radius)
 
 	@staticmethod
 	def corner_loop(node, overlap=20, is_radius=True):

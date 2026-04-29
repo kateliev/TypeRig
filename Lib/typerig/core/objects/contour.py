@@ -1916,7 +1916,7 @@ if __name__ == '__main__':
 
 	print(section('Corner Round'))
 	pprint(square.nodes)
-	ss = square.selected_nodes[0].corner_round(10, proportion=.5)
+	ss = square.selected_nodes[0].corner_round(10)
 	pprint(square.nodes)
 	'''
 	'''
