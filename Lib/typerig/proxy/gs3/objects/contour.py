@@ -22,11 +22,38 @@ __version__ = '0.1.0'
 
 # - Helpers ------------------------------
 def _build_gs_path(core_contour):
-	'''Build a GSPath from a core Contour.'''
-	path = GlyphsApp.GSPath()
+	'''Build a GSPath from a core Contour.
 
-	for core_node in core_contour.nodes:
-		path.nodes.append(_build_gs_node(core_node))
+	On-curve type is inferred from context: if the node immediately before an
+	on-curve is a BCP (core type 'curve'), the on-curve marks the end of a
+	cubic segment and gets GS3 type 'curve'; otherwise it gets 'line'.
+	This matches GlyphsApp's convention where the on-curve type describes the
+	segment that *ends* at that node.
+	'''
+	path = GlyphsApp.GSPath()
+	nodes = list(core_contour.nodes)
+	n = len(nodes)
+
+	for i, core_node in enumerate(nodes):
+		gs_node = GlyphsApp.GSNode()
+		gs_node.position = (float(core_node.x), float(core_node.y))
+		gs_node.smooth   = bool(core_node.smooth)
+
+		if core_node.type == 'curve':
+			# Cubic BCP handle
+			gs_node.type = 'offcurve'
+		elif core_node.type == 'off':
+			# Quadratic handle
+			gs_node.type = 'offcurve'
+		else:
+			# On-curve: type depends on what precedes it in the path
+			prev_node = nodes[(i - 1) % n]
+			gs_node.type = 'curve' if prev_node.type == 'curve' else 'line'
+
+		if hasattr(core_node, 'name') and core_node.name:
+			gs_node.name = core_node.name
+
+		path.nodes.append(gs_node)
 
 	path.closed = bool(core_contour.closed)
 	return path
@@ -81,6 +108,15 @@ class trContour(Contour):
 			nodes.insert(i, item.host)
 			self.host.nodes = nodes
 
+			# When a BCP (offcurve) is inserted, the immediately following on-curve
+			# must carry GS3 type 'curve' — Glyphs reads that as "cubic segment ends here".
+			# Without this, Glyphs draws a straight line to the on-curve and ignores the BCPs.
+			if item.host.type == 'offcurve':
+				next_i = (i + 1) % len(nodes)
+				following = nodes[next_i]
+				if following.type in ('line', 'LINE'):
+					following.type = 'curve'
+
 			self.data.insert(i, item)
 
 	def reverse(self):
@@ -119,10 +155,17 @@ class trContour(Contour):
 		host_nodes = list(self.host.nodes)
 
 		if len(core_contour.nodes) == len(host_nodes):
+			# Structure unchanged — update geometry and smooth only.
+			# GS3 on-curve type ('line' vs 'curve') reflects segment structure that
+			# did not change, so we must not overwrite it with a flat _CORE_TO_GS3
+			# lookup (which would collapse 'curve' on-curves back to 'line').
+			# BCPs (core 'curve' → GS3 'offcurve') are safe to update via the map.
 			for gs_node, core_node in zip(host_nodes, core_contour.nodes):
 				gs_node.position = (float(core_node.x), float(core_node.y))
-				gs_node.type     = _CORE_TO_GS3.get(core_node.type, 'line')
 				gs_node.smooth   = bool(core_node.smooth)
+
+				if core_node.type in ('curve', 'off'):
+					gs_node.type = _CORE_TO_GS3.get(core_node.type, 'offcurve')
 
 				if hasattr(core_node, 'name') and core_node.name:
 					gs_node.name = core_node.name

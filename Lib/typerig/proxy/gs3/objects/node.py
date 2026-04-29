@@ -22,20 +22,23 @@ __version__ = '0.1.0'
 # GS3 node type string <-> Core node type
 # GlyphsApp 3 GSNode.type returns lowercase strings: 'line', 'curve', 'offcurve', 'qcurve'.
 # Both cases are kept for safety (GS2 / scripted contexts may use uppercase).
+# GS3 'curve' and 'line' are both on-curve points in the core type system.
+# The core uses BCP presence (type='curve') to infer cubic vs straight segments,
+# so we don't need a separate type for cubic on-curves.
 _GS3_TO_CORE = {
 	'line':     'on',
-	'curve':    'curve',
-	'offcurve': 'off',
+	'curve':    'on',      # cubic on-curve → plain on-curve; segment type inferred from BCPs
+	'offcurve': 'curve',   # cubic BCP handle → core 'curve' (used for cubic segment detection)
 	'qcurve':   'on',
 	# legacy / GS2 uppercase variants
 	'LINE':     'on',
-	'CURVE':    'curve',
-	'OFFCURVE': 'off',
+	'CURVE':    'on',
+	'OFFCURVE': 'curve',
 	'QCURVE':   'on',
 }
 _CORE_TO_GS3 = {
 	'on':    'line',
-	'curve': 'curve',
+	'curve': 'offcurve',  # cubic BCP handle → GS3 off-curve handle
 	'off':   'offcurve',
 	'move':  'line',
 }

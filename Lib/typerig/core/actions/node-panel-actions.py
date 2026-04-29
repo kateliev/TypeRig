@@ -102,9 +102,9 @@ def npa_corner_mitre(glyph, scope_layers, NodeActions, value):
     for lyr in _iter_scope(glyph, scope_layers):
         for s in lyr.shapes:
             for c in s.contours:
-                for n in c.data:
-                    if n.selected and n.is_on:
-                        NodeActions.corner_mitre(n, value)
+                targets = [n for n in c.data if n.selected and n.is_on]
+                for n in targets:
+                    NodeActions.corner_mitre(n, value)
 
 
 def npa_corner_round(glyph, scope_layers, NodeActions, value):
@@ -112,9 +112,9 @@ def npa_corner_round(glyph, scope_layers, NodeActions, value):
     for lyr in _iter_scope(glyph, scope_layers):
         for s in lyr.shapes:
             for c in s.contours:
-                for n in c.data:
-                    if n.selected and n.is_on:
-                        NodeActions.corner_round(n, value)
+                targets = [n for n in c.data if n.selected and n.is_on]
+                for n in targets:
+                    NodeActions.corner_round(n, value)
 
 
 def npa_corner_loop(glyph, scope_layers, NodeActions, value):
@@ -122,9 +122,9 @@ def npa_corner_loop(glyph, scope_layers, NodeActions, value):
     for lyr in _iter_scope(glyph, scope_layers):
         for s in lyr.shapes:
             for c in s.contours:
-                for n in c.data:
-                    if n.selected and n.is_on:
-                        NodeActions.corner_loop(n, value)
+                targets = [n for n in c.data if n.selected and n.is_on]
+                for n in targets:
+                    NodeActions.corner_loop(n, value)
 
 
 def npa_corner_trap(glyph, scope_layers, NodeActions):
@@ -132,9 +132,9 @@ def npa_corner_trap(glyph, scope_layers, NodeActions):
     for lyr in _iter_scope(glyph, scope_layers):
         for s in lyr.shapes:
             for c in s.contours:
-                for n in c.data:
-                    if n.selected and n.is_on:
-                        NodeActions.corner_trap(n)
+                targets = [n for n in c.data if n.selected and n.is_on]
+                for n in targets:
+                    NodeActions.corner_trap(n)
 
 
 def npa_corner_rebuild(glyph, scope_layers, NodeActions):
