@@ -96,6 +96,25 @@ class trContour(Contour):
 		self.data = [trNode(n, parent=self) for n in self.host.nodes]
 		return self.data
 
+	# - Internal helpers ---------------------
+	def _fix_gs3_types(self):
+		'''Recalculate every GS3 on-curve type in-place after a structural change.
+
+		In GlyphsApp a node with type 'curve' signals "a cubic arc ends here";
+		'line' signals "a straight segment ends here".  The TypeRig core has no
+		such distinction (all on-curves are 'on') so the GS3 type must be inferred
+		from context: an on-curve is 'curve' iff the node immediately before it in
+		the closed path is a BCP ('offcurve'), otherwise 'line'.
+		'''
+		nodes = list(self.host.nodes)
+		n = len(nodes)
+		if n == 0:
+			return
+		for i, gs_node in enumerate(nodes):
+			if gs_node.type not in ('offcurve', 'OFFCURVE'):
+				prev = nodes[(i - 1) % n]
+				gs_node.type = 'curve' if prev.type in ('offcurve', 'OFFCURVE') else 'line'
+
 	# - Functions ----------------------------
 	def insert(self, i, item):
 		if not self._lock:
@@ -108,16 +127,39 @@ class trContour(Contour):
 			nodes.insert(i, item.host)
 			self.host.nodes = nodes
 
-			# When a BCP (offcurve) is inserted, the immediately following on-curve
-			# must carry GS3 type 'curve' — Glyphs reads that as "cubic segment ends here".
-			# Without this, Glyphs draws a straight line to the on-curve and ignores the BCPs.
-			if item.host.type == 'offcurve':
-				next_i = (i + 1) % len(nodes)
-				following = nodes[next_i]
-				if following.type in ('line', 'LINE'):
-					following.type = 'curve'
-
 			self.data.insert(i, item)
+
+			# Recalculate GS3 on-curve types after every BCP insertion.
+			# A single promotion check is not enough for multi-step operations
+			# (e.g. curve split inserts two BCPs and a new on-curve in sequence);
+			# recalculating the whole path is O(n) and always correct.
+			if item.host.type in ('offcurve', 'OFFCURVE'):
+				self._fix_gs3_types()
+
+	def pop(self, i=-1):
+		if not self._lock:
+			n = len(self.data)
+			if n == 0:
+				return None
+
+			actual_i = i % n
+
+			item = self.data[actual_i]
+			if isinstance(item, self._subclass):
+				item.parent = None
+
+			self.data.pop(actual_i)
+
+			nodes = list(self.host.nodes)
+			nodes.pop(actual_i)
+			self.host.nodes = nodes
+
+			# Recalculate on-curve types: removing a BCP may demote a neighbouring
+			# 'curve' on-curve to 'line' (it no longer has a preceding handle).
+			self._fix_gs3_types()
+
+			return item
+		return None
 
 	def reverse(self):
 		self.host.reverse()

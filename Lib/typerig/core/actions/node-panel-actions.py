@@ -12,9 +12,10 @@
 
 from __future__ import absolute_import
 
-# -- Module-level state (slope bank, align target) -------------------
+# -- Module-level state (slope bank, align target, hobby bank) -------
 _slope_bank = 0
 _align_target = None
+_hobby_bank = {}    # layer_name -> (alpha, beta) Hobby curvature tuple
 
 
 # ===================================================================
@@ -233,3 +234,103 @@ def npa_move(glyph, scope_layers, NodeActions, dx, dy, method, angle=0., slope=N
         nodes = _selected_nodes(lyr)
         if nodes:
             NodeActions.nodes_move(nodes, dx, dy, method, angle, slope)
+
+
+# ===================================================================
+# 6. CURVE TOOLS
+# ===================================================================
+# All npa_curve_* functions receive CurveActions as the 4th positional
+# argument (injected by the caller, same pattern as NodeActions).
+# CurveActions lives in typerig/core/actions/curve-actions.py.
+# ===================================================================
+
+def npa_segment_convert(glyph, scope_layers, NodeActions, CurveActions, to_curve=True):
+    """Convert selected segments between line and curve.
+
+    Args:
+        to_curve (bool): True converts line→curve; False converts curve→line.
+    """
+    for lyr in _iter_scope(glyph, scope_layers):
+        for s in lyr.shapes:
+            for c in s.contours:
+                idx = _selected_indices(c)
+                if idx:
+                    if to_curve:
+                        CurveActions.segment_convert_to_curve(c, idx)
+                    else:
+                        CurveActions.segment_convert_to_line(c, idx)
+
+
+def npa_curve_optimize(glyph, scope_layers, NodeActions, CurveActions,
+                       method='tunni', curvature=(1., 1.), proportion=(0.3, 0.3)):
+    """Optimize selected curve segments.
+
+    Args:
+        method (str): 'tunni', 'hobby', or 'proportional'.
+        curvature (tuple): (alpha, beta) for Hobby method.
+        proportion (tuple): (p0_ratio, p1_ratio) for proportional method.
+
+    Note:
+        Both endpoints of a segment must be selected for that segment to be
+        processed (CurveActions.curve_optimize enforces this internally).
+    """
+    for lyr in _iter_scope(glyph, scope_layers):
+        for s in lyr.shapes:
+            for c in s.contours:
+                idx = _selected_indices(c)
+                if idx:
+                    CurveActions.curve_optimize(c, idx, method=method,
+                                                curvature=curvature,
+                                                proportion=proportion)
+
+
+def npa_hobby_copy(glyph, scope_layers, NodeActions, CurveActions):
+    """Copy Hobby curvature from the first selected curve segment on each scope layer.
+
+    Stores the result in the module-level _hobby_bank dict keyed by layer name.
+    Returns the bank so the caller can inspect it (e.g. to toggle a button state).
+    """
+    global _hobby_bank
+    _hobby_bank = {}
+    for name in scope_layers:
+        lyr = glyph.layer(name)
+        if lyr is None:
+            continue
+        found = False
+        for s in lyr.shapes:
+            if found:
+                break
+            for c in s.contours:
+                if found:
+                    break
+                for i in _selected_indices(c):
+                    cv = CurveActions.hobby_curvature_get(c, i)
+                    if cv is not None:
+                        _hobby_bank[name] = cv
+                        found = True
+                        break
+    return _hobby_bank
+
+
+def npa_hobby_paste(glyph, scope_layers, NodeActions, CurveActions, swap=False):
+    """Apply stored Hobby curvature to all selected curve segments across scope layers.
+
+    Uses the curvature stored per layer by the most recent npa_hobby_copy call.
+    If a layer has no stored value, it is skipped.
+
+    Args:
+        swap (bool): If True, swaps alpha and beta before applying (mirrors the curve).
+    """
+    for name in scope_layers:
+        cv = _hobby_bank.get(name)
+        if cv is None:
+            continue
+        if swap:
+            cv = (cv[1], cv[0])
+        lyr = glyph.layer(name)
+        if lyr is None:
+            continue
+        for s in lyr.shapes:
+            for c in s.contours:
+                for i in _selected_indices(c):
+                    CurveActions.hobby_curvature_apply(c, i, cv)

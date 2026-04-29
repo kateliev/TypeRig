@@ -111,17 +111,20 @@ class CurveActions(object):
 			if not is_line:
 				continue
 
-			# - Insert two off-curve handles at 1/3 and 2/3 of the line
+			# - Insert two off-curve handles at 1/3 and 2/3 of the line.
+			# insert_before / insert_after on Node take a float 't' parameter, NOT a
+			# node — so we capture the insertion index and call contour.insert directly.
 			bcp1_x = prev_on.x + (node.x - prev_on.x) / 3.
 			bcp1_y = prev_on.y + (node.y - prev_on.y) / 3.
 			bcp2_x = prev_on.x + 2. * (node.x - prev_on.x) / 3.
 			bcp2_y = prev_on.y + 2. * (node.y - prev_on.y) / 3.
 
-			bcp2 = Node(bcp2_x, bcp2_y, type='curve')
 			bcp1 = Node(bcp1_x, bcp1_y, type='curve')
+			bcp2 = Node(bcp2_x, bcp2_y, type='curve')
 
-			node.insert_before(bcp2)
-			prev_on.insert_after(bcp1)
+			insert_at = prev_on.idx + 1
+			contour.insert(insert_at,     bcp1)   # → prev_on, bcp1, node
+			contour.insert(insert_at + 1, bcp2)   # → prev_on, bcp1, bcp2, node
 
 			converted = True
 
@@ -169,7 +172,11 @@ class CurveActions(object):
 			if next_on is None:
 				continue
 
-			next_on_index = contour.nodes.index(next_on)
+			# Use next_on.idx (atom index via self.parent.data) instead of
+			# contour.nodes.index(next_on): calling contour.nodes again rebuilds
+			# the proxy list as a fresh set of wrapper objects, making the old
+			# next_on reference unfindable (ValueError for proxy contours).
+			next_on_index = next_on.idx
 
 			if next_on_index not in selected_set:
 				continue
