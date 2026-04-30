@@ -15,6 +15,21 @@ from typerig.core.objects.contour import Contour
 from typerig.core.objects.shape import Shape
 from typerig.core.objects.point import Point
 from typerig.core.objects.utils import Bounds
+from typerig.core.objects.transform import TransformOrigin
+
+# Map (align_x, align_y) → TransformOrigin matching Bounds.align_matrix keys.
+# align_x ∈ {'L','R','C'}; align_y ∈ {'B','T','E'} (after K/X keep-flag handling).
+_ALIGN_ORIGIN = {
+	('L', 'B'): TransformOrigin.BOTTOM_LEFT,
+	('C', 'B'): TransformOrigin.BOTTOM_MIDDLE,
+	('R', 'B'): TransformOrigin.BOTTOM_RIGHT,
+	('L', 'T'): TransformOrigin.TOP_LEFT,
+	('C', 'T'): TransformOrigin.TOP_MIDDLE,
+	('R', 'T'): TransformOrigin.TOP_RIGHT,
+	('L', 'E'): TransformOrigin.CENTER_LEFT,
+	('C', 'E'): TransformOrigin.CENTER,
+	('R', 'E'): TransformOrigin.CENTER_RIGHT,
+}
 
 # - Init ------------------------------------------------------------------------
 __version__ = '1.0'
@@ -225,25 +240,32 @@ class ContourActions(object):
 
 	# -- Contour alignment tools ------------------------------------------------
 	@staticmethod
-	def contour_align(contours, mode='CC', align_x='C', align_y='E'):
+	def contour_align(contours, mode='CC', align_x='C', align_y='E',
+	                  layer_bounds=None, target_node=None,
+	                  contours_A=None, contours_B=None):
 		'''Align contours to each other or to a computed target.
 
 		Arguments:
-			contours (list[Contour]): Contours to align.
+			contours (list[Contour]): Contours to align (CC/CL/CN modes).
 			mode (str): Alignment mode. One of:
-				'CC' - Align contours to contours (pairwise or to
-					selection bounds).
-			align_x (str): Horizontal alignment. One of:
-				'L' - Left, 'R' - Right, 'C' - Center, 'K' - Keep
-			align_y (str): Vertical alignment. One of:
-				'B' - Bottom, 'T' - Top, 'E' - Center, 'X' - Keep
+				'CC' - Contour to contour (pairwise or to selection bounds).
+				'CL' - Contour to layer bounding box (pass `layer_bounds`).
+				'CN' - Contour to a target node (pass `target_node`); the
+					first contour in `contours` is assumed to host the
+					target and is excluded from the move.
+				'AB' - Group A to group B (pass `contours_A`, `contours_B`);
+					group A is shifted as a whole so that its origin lands
+					on group B's origin.
+			align_x (str): 'L' / 'R' / 'C' / 'K' (keep).
+			align_y (str): 'B' / 'T' / 'E' / 'X' (keep).
+			layer_bounds (Bounds|None): required for mode='CL'.
+			target_node (Node|Point|tuple|None): required for mode='CN'.
+			contours_A (list[Contour]|None): required for mode='AB'.
+			contours_B (list[Contour]|None): required for mode='AB'.
 
 		Returns:
 			bool: True if any contours were moved.
 		'''
-		if not contours or len(contours) < 2:
-			return False
-
 		# - Determine keep flags
 		keep_x = align_x != 'K'
 		keep_y = align_y != 'X'
@@ -253,32 +275,119 @@ class ContourActions(object):
 		if not keep_y:
 			align_y = 'B'
 
-		align_mode = align_x + align_y
+		origin = _ALIGN_ORIGIN[(align_x, align_y)]
+		align_mode = (origin, origin)
+
+		def _bounds_target(bounds):
+			x, y = bounds.align_matrix[origin.code]
+			return Point(x, y)
 
 		if mode == 'CC':
+			if not contours or len(contours) < 2:
+				return False
+
 			if len(contours) == 2:
 				contours[0].align_to(contours[1], align_mode, (keep_x, keep_y))
 			else:
-				# - Align all contours to selection bounds center
 				all_points = []
 				for contour in contours:
 					all_points.extend([n.tuple for n in contour.nodes])
 
-				bounds = Bounds(all_points)
-
-				align_map = {
-					'L': bounds.x,
-					'R': bounds.x + bounds.width,
-					'C': bounds.x + bounds.width / 2.,
-					'B': bounds.y,
-					'T': bounds.y + bounds.height,
-					'E': bounds.y + bounds.height / 2.
-				}
-
-				target = Point(align_map.get(align_x, 0.), align_map.get(align_y, 0.))
+				target = _bounds_target(Bounds(all_points))
 
 				for contour in contours:
 					contour.align_to(target, align_mode, (keep_x, keep_y))
+
+			return True
+
+		if mode == 'CL':
+			if not contours or layer_bounds is None:
+				return False
+			target = _bounds_target(layer_bounds)
+			for contour in contours:
+				contour.align_to(target, align_mode, (keep_x, keep_y))
+			return True
+
+		if mode == 'CN':
+			if not contours or target_node is None or len(contours) < 2:
+				return False
+			# First contour hosts the target node; align the rest.
+			target_x = float(target_node.x)
+			target_y = float(target_node.y)
+			target = Point(target_x, target_y)
+			for contour in contours[1:]:
+				contour.align_to(target, align_mode, (keep_x, keep_y))
+			return True
+
+		if mode == 'AB':
+			if not contours_A or not contours_B:
+				return False
+			a_pts = [n.tuple for c in contours_A for n in c.nodes]
+			b_pts = [n.tuple for c in contours_B for n in c.nodes]
+			a_origin = _bounds_target(Bounds(a_pts))
+			b_origin = _bounds_target(Bounds(b_pts))
+			delta_x = (b_origin.x - a_origin.x) if keep_x else 0.
+			delta_y = (b_origin.y - a_origin.y) if keep_y else 0.
+			for contour in contours_A:
+				contour.shift(delta_x, delta_y)
+			return True
+
+		return False
+
+	# -- Contour transform tools ------------------------------------------------
+	@staticmethod
+	def contour_transform(contours, scale_x=100., scale_y=100.,
+	                      translate_x=0., translate_y=0.,
+	                      rotate=0., skew_x=0., skew_y=0.,
+	                      origin='C'):
+		'''Apply an affine transform to a group of contours around a shared origin.
+
+		Arguments:
+			contours (list[Contour]): Contours to transform.
+			scale_x, scale_y (float): Percent scale (100 = identity).
+			translate_x, translate_y (float): Translation in font units.
+			rotate (float): Rotation in degrees (positive = counter-clockwise).
+			skew_x, skew_y (float): Skew angles in degrees.
+			origin (str): Origin code from Bounds.align_matrix:
+				'BL', 'BM', 'BR', 'TL', 'TM', 'TR', 'LM', 'C', 'RM',
+				or 'O' for absolute origin (0, 0).
+
+		Returns:
+			bool: True on success.
+		'''
+		from typerig.core.objects.transform import Transform
+
+		if not contours:
+			return False
+
+		# - Compute group origin
+		if origin == 'O':
+			ox, oy = 0., 0.
+		else:
+			all_points = []
+			for c in contours:
+				all_points.extend([n.tuple for n in c.nodes])
+			bounds = Bounds(all_points)
+			ox, oy = bounds.align_matrix.get(origin, bounds.align_matrix['C'])
+
+		sx = float(scale_x) / 100.
+		sy = float(scale_y) / 100.
+
+		# Transform composition note: `self.transform(other)` returns `self ∘ other`,
+		# so when the matrix is applied to a point the LATEST chained method runs
+		# FIRST against the point. The chain below is therefore written in reverse
+		# of the intended application order (translate-to-origin, scale, rotate,
+		# skew, translate-back-plus-offset).
+		t = (Transform()
+			.translate(ox + float(translate_x), oy + float(translate_y))
+			.skew(skew_x, skew_y)
+			.rotate(rotate)
+			.scale(sx, sy)
+			.translate(-ox, -oy))
+
+		for contour in contours:
+			contour.transform = t
+			contour.apply_transform()
 
 		return True
 

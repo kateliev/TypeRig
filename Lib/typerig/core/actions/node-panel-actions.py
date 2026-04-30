@@ -354,6 +354,18 @@ def _selected_contours(layer):
     return result
 
 
+def _selected_or_all_contours(layer):
+    """Selected contours, or all contours if nothing is selected.
+
+    Mirrors FL contour_set_winding fallback: a click with no selection
+    operates on every contour in the layer.
+    """
+    result = _selected_contours(layer)
+    if result:
+        return result
+    return [c for s in layer.shapes for c in s.contours]
+
+
 def npa_contour_close(glyph, scope_layers, NodeActions, ContourActions):
     """Close all selected contours."""
     for lyr in _iter_scope(glyph, scope_layers):
@@ -362,20 +374,20 @@ def npa_contour_close(glyph, scope_layers, NodeActions, ContourActions):
 
 
 def npa_contour_winding(glyph, scope_layers, NodeActions, ContourActions, ccw=True):
-    """Set winding direction of selected contours.
+    """Set winding direction of selected contours (or all if none selected).
 
     Args:
         ccw (bool): True = counter-clockwise (default); False = clockwise.
     """
     for lyr in _iter_scope(glyph, scope_layers):
-        for c in _selected_contours(lyr):
+        for c in _selected_or_all_contours(lyr):
             ContourActions.contour_set_winding(c, ccw=ccw)
 
 
 def npa_contour_reverse(glyph, scope_layers, NodeActions, ContourActions):
-    """Reverse direction of selected contours."""
+    """Reverse direction of selected contours (or all if none selected)."""
     for lyr in _iter_scope(glyph, scope_layers):
-        for c in _selected_contours(lyr):
+        for c in _selected_or_all_contours(lyr):
             ContourActions.contour_reverse(c)
 
 
@@ -386,7 +398,7 @@ def npa_contour_start_next(glyph, scope_layers, NodeActions, ContourActions, for
         forward (bool): True = next node; False = previous node.
     """
     for lyr in _iter_scope(glyph, scope_layers):
-        for c in _selected_contours(lyr):
+        for c in _selected_or_all_contours(lyr):
             ContourActions.contour_set_start_next(c, forward=forward)
 
 
@@ -411,20 +423,23 @@ def npa_contour_smart_start(glyph, scope_layers, NodeActions, ContourActions, co
             (1, 0) = Bottom-Right, (1, 1) = Top-Right.
     """
     for lyr in _iter_scope(glyph, scope_layers):
-        for c in _selected_contours(lyr):
+        for c in _selected_or_all_contours(lyr):
             ContourActions.contour_smart_start(c, control)
 
 
-def npa_contour_order(glyph, scope_layers, NodeActions, ContourActions, direction=0, mode='BL'):
+def npa_contour_order(glyph, scope_layers, NodeActions, ContourActions, direction=0, mode='BL', reverse=False):
     """Sort contour order within each shape.
 
     Args:
-        direction (int): 0 = ascending (L→R or B→T); 1 = descending.
+        direction (int): Axis selector — 0 = sort by X, 1 = sort by Y.
         mode (str): Reference corner: 'BL', 'TL', 'BR', 'TR'.
+        reverse (bool): Reverse the resulting order (descending instead of ascending).
     """
     for lyr in _iter_scope(glyph, scope_layers):
         for s in lyr.shapes:
             ContourActions.contour_set_order(s, direction, mode)
+            if reverse:
+                ContourActions.contour_reverse_order(s)
 
 
 def npa_contour_order_reverse(glyph, scope_layers, NodeActions, ContourActions):
@@ -435,18 +450,93 @@ def npa_contour_order_reverse(glyph, scope_layers, NodeActions, ContourActions):
 
 
 def npa_contour_align(glyph, scope_layers, NodeActions, ContourActions,
-                      align_x='C', align_y='E'):
-    """Align selected contours to each other (CC mode).
+                      align_x='C', align_y='E', mode='CC',
+                      contours_A_by_layer=None, contours_B_by_layer=None):
+    """Align selected contours to each other or to a target.
 
     Args:
         align_x (str): Horizontal alignment: 'L', 'R', 'C', 'K' (keep).
         align_y (str): Vertical alignment: 'B', 'T', 'E', 'X' (keep).
+        mode (str): One of:
+            'CC' - selected contours to each other.
+            'CL' - selected contours to the layer bounding box.
+            'CN' - selected contours to a selected on-curve node;
+                   the first selected contour hosts the target node.
+            'AB' - group A to group B; pass `contours_A_by_layer`
+                   and `contours_B_by_layer` as {layer_name: [contour, ...]}.
+        contours_A_by_layer (dict|None): per-layer group A snapshots.
+        contours_B_by_layer (dict|None): per-layer group B snapshots.
+
+    When contours_A/B are None, uses module-level _contour_group_A/B.
     """
     for lyr in _iter_scope(glyph, scope_layers):
         contours = _selected_contours(lyr)
-        if len(contours) >= 2:
-            ContourActions.contour_align(contours, mode='CC',
-                                         align_x=align_x, align_y=align_y)
+
+        if mode == 'CC':
+            if len(contours) >= 2:
+                ContourActions.contour_align(contours, mode='CC',
+                                             align_x=align_x, align_y=align_y)
+
+        elif mode == 'CL':
+            if not contours:
+                contours = [c for s in lyr.shapes for c in s.contours]
+            try:
+                layer_bounds = lyr.bounds
+            except Exception:
+                continue
+            if contours:
+                ContourActions.contour_align(contours, mode='CL',
+                                             align_x=align_x, align_y=align_y,
+                                             layer_bounds=layer_bounds)
+
+        elif mode == 'CN':
+            if len(contours) < 2:
+                continue
+            # Find the first selected on-curve in the first selected contour.
+            target_node = None
+            for n in contours[0].data:
+                if n.selected and n.is_on:
+                    target_node = n
+                    break
+            if target_node is None:
+                continue
+            ContourActions.contour_align(contours, mode='CN',
+                                         align_x=align_x, align_y=align_y,
+                                         target_node=target_node)
+
+        elif mode == 'AB':
+            # Use passed groups or fall back to module-level banks
+            a = (contours_A_by_layer or _contour_group_A).get(getattr(lyr, 'name', None), [])
+            b = (contours_B_by_layer or _contour_group_B).get(getattr(lyr, 'name', None), [])
+            if a and b:
+                ContourActions.contour_align(None, mode='AB',
+                                     align_x=align_x, align_y=align_y,
+                                     contours_A=a, contours_B=b)
+
+
+def npa_contour_transform(glyph, scope_layers, NodeActions, ContourActions,
+                          scale_x=100., scale_y=100.,
+                          translate_x=0., translate_y=0.,
+                          rotate=0., skew_x=0., skew_y=0.,
+                          origin='C'):
+    """Apply an affine transform to selected contours (or all if none selected).
+
+    Args:
+        scale_x, scale_y (float): Percent scale.
+        translate_x, translate_y (float): Translation in units.
+        rotate (float): Rotation in degrees.
+        skew_x, skew_y (float): Skew in degrees.
+        origin (str): Origin code: 'O' (absolute origin) or one of
+            'BL','BM','BR','TL','TM','TR','LM','C','RM'.
+    """
+    for lyr in _iter_scope(glyph, scope_layers):
+        contours = _selected_or_all_contours(lyr)
+        if contours:
+            ContourActions.contour_transform(contours,
+                scale_x=scale_x, scale_y=scale_y,
+                translate_x=translate_x, translate_y=translate_y,
+                rotate=rotate, skew_x=skew_x, skew_y=skew_y,
+                origin=origin)
 
 
 def npa_contour_distribute_h(glyph, scope_layers, NodeActions, ContourActions):
@@ -475,3 +565,106 @@ def npa_contour_flip(glyph, scope_layers, NodeActions, ContourActions, horizonta
         contours = _selected_contours(lyr)
         if contours:
             ContourActions.contour_flip(contours, horizontal=horizontal)
+
+
+# ===================================================================
+# 8. DRAWING TOOLS
+# ===================================================================
+# Drawing tools receive DrawActions as the 4th argument.
+# They create new contours from selected on-curve nodes and append
+# them to the active layer.
+
+def npa_draw_square(glyph, scope_layers, NodeActions, DrawActions, mode=0):
+    """Draw a square using selected on-curve nodes as reference points.
+
+    Args:
+        mode (int): 0 = two-point diagonal; 1 = two-midpoint square.
+
+    The result is appended to the active layer via glyph.shapes.
+    """
+    active = glyph.layer(scope_layers[0] if scope_layers else None)
+    if active is None:
+        return
+    selected_on = [n for s in active.shapes for c in s.contours
+                  for n in c.data if n.selected and n.is_on]
+    if len(selected_on) < 2:
+        return
+    result = DrawActions.draw_square(selected_on, mode=mode)
+    if result is not None:
+        active.shapes.append(result)
+
+
+def npa_draw_circle(glyph, scope_layers, NodeActions, DrawActions, mode=0):
+    """Draw a circle using selected on-curve nodes as reference points.
+
+    Args:
+        mode (int): 0 = two-point diameter; 1 = three-point circle.
+
+    The result is appended to the active layer via glyph.shapes.
+    """
+    active = glyph.layer(scope_layers[0] if scope_layers else None)
+    if active is None:
+        return
+    selected_on = [n for s in active.shapes for c in s.contours
+                  for n in c.data if n.selected and n.is_on]
+    if len(selected_on) < 2:
+        return
+    result = DrawActions.draw_circle(selected_on, mode=mode)
+    if result is not None:
+        active.shapes.append(result)
+
+
+def npa_trace_nodes(glyph, scope_layers, NodeActions, DrawActions, mode=1, closed=True):
+    """Draw/trace selected on-curve nodes as line segments or Hobby splines.
+
+    Args:
+        mode (int): 1 = lines; 2 = Hobby splines.
+        closed (bool): Whether to close the resulting contour.
+
+    The result is appended to the active layer via glyph.shapes.
+    """
+    active = glyph.layer(scope_layers[0] if scope_layers else None)
+    if active is None:
+        return
+    selected_on = [n for s in active.shapes for c in s.contours
+                  for n in c.data if n.selected and n.is_on]
+    if len(selected_on) < 2:
+        return
+    result = DrawActions.trace_nodes(selected_on, mode=mode, closed=closed)
+    if result is not None:
+        active.shapes.append(result)
+
+
+# ===================================================================
+# 9. CONTOUR ALIGNMENT GROUP CAPTURE
+# ===================================================================
+# Module-level banks for contour groups A and B (per layer name).
+
+_contour_group_A = {}
+_contour_group_B = {}
+
+
+def npa_capture_group_A(glyph, scope_layers, NodeActions):
+    """Capture currently selected contours as group A, keyed by layer name."""
+    global _contour_group_A
+    _contour_group_A = {}
+    for name in scope_layers:
+        lyr = glyph.layer(name)
+        if lyr is None:
+            continue
+        selected = _selected_contours(lyr)
+        if selected:
+            _contour_group_A[name] = list(selected)
+
+
+def npa_capture_group_B(glyph, scope_layers, NodeActions):
+    """Capture currently selected contours as group B, keyed by layer name."""
+    global _contour_group_B
+    _contour_group_B = {}
+    for name in scope_layers:
+        lyr = glyph.layer(name)
+        if lyr is None:
+            continue
+        selected = _selected_contours(lyr)
+        if selected:
+            _contour_group_B[name] = list(selected)
