@@ -327,6 +327,43 @@ class ContourActions(object):
 		return True
 
 	@staticmethod
+	def contour_flip(contours, horizontal=True):
+		'''Flip (mirror) contours around their collective bounding box centre.
+
+		Arguments:
+			contours (list[Contour]): Contours to flip.
+			horizontal (bool): If True, flip horizontally (mirror left/right);
+				if False, flip vertically (mirror top/bottom).
+
+		Returns:
+			bool: True if any contours were flipped.
+		'''
+		if not contours:
+			return False
+
+		all_points = []
+		for contour in contours:
+			all_points.extend([n.tuple for n in contour.nodes])
+
+		if not all_points:
+			return False
+
+		bounds = Bounds(all_points)
+
+		if horizontal:
+			cx = bounds.x + bounds.width / 2.
+			for contour in contours:
+				for node in contour.nodes:
+					node.x = 2. * cx - node.x
+		else:
+			cy = bounds.y + bounds.height / 2.
+			for contour in contours:
+				for node in contour.nodes:
+					node.y = 2. * cy - node.y
+
+		return True
+
+	@staticmethod
 	def contour_distribute_vertical(contours):
 		'''Distribute contours evenly along the vertical axis.
 

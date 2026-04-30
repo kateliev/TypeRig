@@ -334,3 +334,144 @@ def npa_hobby_paste(glyph, scope_layers, NodeActions, CurveActions, swap=False):
             for c in s.contours:
                 for i in _selected_indices(c):
                     CurveActions.hobby_curvature_apply(c, i, cv)
+
+
+# ===================================================================
+# 7. CONTOUR TOOLS
+# ===================================================================
+# All npa_contour_* functions receive ContourActions as the 4th
+# positional argument, injected by the bridge dispatcher (same pattern
+# as CurveActions — the dispatcher inspects params[3] by name).
+# ===================================================================
+
+def _selected_contours(layer):
+    """Return list of contours (proxy or core) that have at least one selected node."""
+    result = []
+    for s in layer.shapes:
+        for c in s.contours:
+            if any(n.selected for n in c.data):
+                result.append(c)
+    return result
+
+
+def npa_contour_close(glyph, scope_layers, NodeActions, ContourActions):
+    """Close all selected contours."""
+    for lyr in _iter_scope(glyph, scope_layers):
+        for c in _selected_contours(lyr):
+            ContourActions.contour_close(c)
+
+
+def npa_contour_winding(glyph, scope_layers, NodeActions, ContourActions, ccw=True):
+    """Set winding direction of selected contours.
+
+    Args:
+        ccw (bool): True = counter-clockwise (default); False = clockwise.
+    """
+    for lyr in _iter_scope(glyph, scope_layers):
+        for c in _selected_contours(lyr):
+            ContourActions.contour_set_winding(c, ccw=ccw)
+
+
+def npa_contour_reverse(glyph, scope_layers, NodeActions, ContourActions):
+    """Reverse direction of selected contours."""
+    for lyr in _iter_scope(glyph, scope_layers):
+        for c in _selected_contours(lyr):
+            ContourActions.contour_reverse(c)
+
+
+def npa_contour_start_next(glyph, scope_layers, NodeActions, ContourActions, forward=True):
+    """Move the start point one on-curve node forward (or backward).
+
+    Args:
+        forward (bool): True = next node; False = previous node.
+    """
+    for lyr in _iter_scope(glyph, scope_layers):
+        for c in _selected_contours(lyr):
+            ContourActions.contour_set_start_next(c, forward=forward)
+
+
+def npa_contour_start_at_selection(glyph, scope_layers, NodeActions, ContourActions):
+    """Set the start point to the first selected on-curve node on each contour."""
+    for lyr in _iter_scope(glyph, scope_layers):
+        for s in lyr.shapes:
+            for c in s.contours:
+                idx = _selected_indices(c)
+                for i in idx:
+                    if c.data[i].is_on:
+                        ContourActions.contour_set_start(c, i)
+                        break
+
+
+def npa_contour_smart_start(glyph, scope_layers, NodeActions, ContourActions, control=(0, 0)):
+    """Set the start point to the on-curve node closest to a bounding-box corner.
+
+    Args:
+        control (tuple): Corner selector:
+            (0, 0) = Bottom-Left, (0, 1) = Top-Left,
+            (1, 0) = Bottom-Right, (1, 1) = Top-Right.
+    """
+    for lyr in _iter_scope(glyph, scope_layers):
+        for c in _selected_contours(lyr):
+            ContourActions.contour_smart_start(c, control)
+
+
+def npa_contour_order(glyph, scope_layers, NodeActions, ContourActions, direction=0, mode='BL'):
+    """Sort contour order within each shape.
+
+    Args:
+        direction (int): 0 = ascending (L→R or B→T); 1 = descending.
+        mode (str): Reference corner: 'BL', 'TL', 'BR', 'TR'.
+    """
+    for lyr in _iter_scope(glyph, scope_layers):
+        for s in lyr.shapes:
+            ContourActions.contour_set_order(s, direction, mode)
+
+
+def npa_contour_order_reverse(glyph, scope_layers, NodeActions, ContourActions):
+    """Reverse contour order within each shape."""
+    for lyr in _iter_scope(glyph, scope_layers):
+        for s in lyr.shapes:
+            ContourActions.contour_reverse_order(s)
+
+
+def npa_contour_align(glyph, scope_layers, NodeActions, ContourActions,
+                      align_x='C', align_y='E'):
+    """Align selected contours to each other (CC mode).
+
+    Args:
+        align_x (str): Horizontal alignment: 'L', 'R', 'C', 'K' (keep).
+        align_y (str): Vertical alignment: 'B', 'T', 'E', 'X' (keep).
+    """
+    for lyr in _iter_scope(glyph, scope_layers):
+        contours = _selected_contours(lyr)
+        if len(contours) >= 2:
+            ContourActions.contour_align(contours, mode='CC',
+                                         align_x=align_x, align_y=align_y)
+
+
+def npa_contour_distribute_h(glyph, scope_layers, NodeActions, ContourActions):
+    """Distribute selected contours evenly along the horizontal axis."""
+    for lyr in _iter_scope(glyph, scope_layers):
+        contours = _selected_contours(lyr)
+        if len(contours) >= 3:
+            ContourActions.contour_distribute_horizontal(contours)
+
+
+def npa_contour_distribute_v(glyph, scope_layers, NodeActions, ContourActions):
+    """Distribute selected contours evenly along the vertical axis."""
+    for lyr in _iter_scope(glyph, scope_layers):
+        contours = _selected_contours(lyr)
+        if len(contours) >= 3:
+            ContourActions.contour_distribute_vertical(contours)
+
+
+def npa_contour_flip(glyph, scope_layers, NodeActions, ContourActions, horizontal=True):
+    """Flip selected contours around their collective bounding-box centre.
+
+    Args:
+        horizontal (bool): True = flip left/right; False = flip top/bottom.
+    """
+    for lyr in _iter_scope(glyph, scope_layers):
+        contours = _selected_contours(lyr)
+        if contours:
+            ContourActions.contour_flip(contours, horizontal=horizontal)
