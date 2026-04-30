@@ -34,7 +34,7 @@ from typerig.proxy.fl.gui.dialogs import TRMsgSimple, TR2FieldDLG
 from typerig.proxy.fl.application.app import pItems
 
 # - Init ---------------------------------
-__version__ = '3.0'
+__version__ = '3.1'
 
 # - Keep compatibility for basestring checks
 try:
@@ -455,6 +455,43 @@ class TRLayerActionCollector(object):
 		# - Process
 		if len(parent.contourClipboard.keys()):
 			for layerName, contours in parent.contourClipboard.items():
+				wLayer = wGlyph.layer(layerName)
+
+				if wLayer is not None:
+					if modifiers == QtCore.Qt.ShiftModifier:
+						# - Insert contours into currently selected shape
+						selected_shapes_list = wGlyph.selectedAtShapes(index=False, layer=layerName, deep=False)
+
+						if len(selected_shapes_list):
+							selected_shape = selected_shapes_list[0][0]
+							selected_shape.addContours(contours, True)
+						else:
+							add_new_shape(wLayer, contours)	# Fallback
+					else:
+						# - Create new shape
+						add_new_shape(wLayer, contours)
+		
+			parent.glyph.updateObject(parent.glyph.fl, 'Paste outline; Glyph: %s; Layers: %s' %(parent.glyph.fl.name, '; '.join([layer_name for layer_name in parent.lst_layers.getTable()])))
+
+
+	@staticmethod
+	def layer_paste_outline_selection(parent):
+		# - Init
+		wGlyph = parent.glyph
+		modifiers = QtGui.QApplication.keyboardModifiers()
+		selected_layers = parent.lst_layers.getTable()
+
+		# - Helper
+		def add_new_shape(layer, contours):
+			newShape = fl6.flShape()
+			newShape.addContours(contours, True)
+			layer.addShape(newShape)
+
+		# - Process
+		if len(parent.contourClipboard.keys()) == len(selected_layers):
+			for i in range(len(selected_layers)):
+				layerName = selected_layers[i]
+				contours = list(parent.contourClipboard.values())[i]
 				wLayer = wGlyph.layer(layerName)
 
 				if wLayer is not None:
