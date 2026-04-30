@@ -121,9 +121,35 @@ class trGlyph(Glyph):
 
 	@property
 	def active_layer(self):
-		'''Name of the layer currently shown in the edit tab, or first layer.'''
+		'''Name of the layer currently active in the editor, with sane fallbacks.
+
+		Resolution order:
+		  1. font.selectedLayers[0] if its parent is this glyph — the editor's
+		     truly-active layer (works in font window AND edit tab).
+		  2. font.currentTab.activeLayer if its parent is this glyph — covers
+		     edit-tab focus when selectedLayers is somehow stale.
+		  3. First layer whose layerId belongs to a font master — avoids
+		     returning a stray brace/bracket/colour layer that happens to be
+		     stored first.
+		  4. host.layers[0] — last resort.
+		'''
+		font = None
 		try:
 			font = self.host.parent
+		except Exception:
+			pass
+
+		# 1. Editor-active layer for this glyph.
+		try:
+			if font and font.selectedLayers:
+				active = font.selectedLayers[0]
+				if active is not None and active.parent == self.host:
+					return active.name
+		except Exception:
+			pass
+
+		# 2. Edit-tab activeLayer for this glyph.
+		try:
 			if font and font.currentTab:
 				active = font.currentTab.activeLayer
 				if active is not None and active.parent == self.host:
@@ -131,6 +157,17 @@ class trGlyph(Glyph):
 		except Exception:
 			pass
 
+		# 3. First master layer.
+		try:
+			if font and self.host.layers:
+				master_ids = {m.id for m in font.masters}
+				for layer in self.host.layers:
+					if layer.layerId in master_ids:
+						return layer.name
+		except Exception:
+			pass
+
+		# 4. First layer in storage order.
 		if self.host.layers:
 			return self.host.layers[0].name
 		return None

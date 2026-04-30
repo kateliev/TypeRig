@@ -12,6 +12,8 @@
 
 from __future__ import absolute_import
 
+from typerig.core.objects.shape import Shape
+
 # -- Module-level state (slope bank, align target, hobby bank) -------
 _slope_bank = 0
 _align_target = None
@@ -591,7 +593,7 @@ def npa_draw_square(glyph, scope_layers, NodeActions, DrawActions, mode=0):
         return
     result = DrawActions.draw_square(selected_on, mode=mode)
     if result is not None:
-        active.shapes.append(result)
+        active.shapes.append(Shape([result]))
 
 
 def npa_draw_circle(glyph, scope_layers, NodeActions, DrawActions, mode=0):
@@ -611,7 +613,7 @@ def npa_draw_circle(glyph, scope_layers, NodeActions, DrawActions, mode=0):
         return
     result = DrawActions.draw_circle(selected_on, mode=mode)
     if result is not None:
-        active.shapes.append(result)
+        active.shapes.append(Shape([result]))
 
 
 def npa_trace_nodes(glyph, scope_layers, NodeActions, DrawActions, mode=1, closed=True):
@@ -632,7 +634,7 @@ def npa_trace_nodes(glyph, scope_layers, NodeActions, DrawActions, mode=1, close
         return
     result = DrawActions.trace_nodes(selected_on, mode=mode, closed=closed)
     if result is not None:
-        active.shapes.append(result)
+        active.shapes.append(Shape([result]))
 
 
 # ===================================================================
