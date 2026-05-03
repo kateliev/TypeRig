@@ -243,7 +243,7 @@ def npa_move(glyph, scope_layers, NodeActions, dx, dy, method, angle=0., slope=N
 # ===================================================================
 # All npa_curve_* functions receive CurveActions as the 4th positional
 # argument (injected by the caller, same pattern as NodeActions).
-# CurveActions lives in typerig/core/actions/curve-actions.py.
+# CurveActions lives in typerig/core/actions/curve_actions.py.
 # ===================================================================
 
 def npa_segment_convert(glyph, scope_layers, NodeActions, CurveActions, to_curve=True):
