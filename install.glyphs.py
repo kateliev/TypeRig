@@ -84,6 +84,11 @@ def _validate_lib_folder(path):
 	return bool(path) and os.path.isdir(os.path.join(path, module_name))
 
 
+def _validate_plugin_folder(path):
+	'''True when path is a directory ending with .plugin extension.'''
+	return bool(path) and os.path.isdir(path) and path.endswith('.plugin')
+
+
 def copy_tree(path_source, path_destination):
 	if os.path.exists(path_destination) and os.path.isdir(path_destination):
 		print('Destination already exists — removing: {}'.format(path_destination))
@@ -92,7 +97,7 @@ def copy_tree(path_source, path_destination):
 
 
 # - Interface ---------------------------
-W, H = 480, 470
+W, H = 480, 526
 
 # First install-option row starts below the lib-picker block.
 _ROW_TOP  = 148
@@ -160,8 +165,27 @@ class dlg_install(object):
 		self.w.lbl_manual    = vanilla.TextBox(
 			(178, _desc_y(2), -10, 50), str_manual)
 
+		# Row 3: Install Plugin via Symlink
+		self.w.lbl_plugin = vanilla.TextBox(
+			(10, _btn_y(3), -10, 20), 'Install plugin:')
+
+		self.w.fld_plugin = vanilla.EditText(
+			(10, _btn_y(3) + 24, -84, 22), '',
+			callback=self._on_plugin_changed)
+
+		self.w.btn_browse_plugin = vanilla.Button(
+			(-80, _btn_y(3) + 24, 70, 22), 'Browse…',
+			callback=self._browse_plugin)
+
+		self.w.btn_install_plugin = vanilla.Button(
+			(10, _btn_y(4), 162, 24), 'Install Plugin via Symlink',
+			callback=self._install_plugin)
+		self.w.lbl_plugin_desc = vanilla.TextBox(
+			(178, _btn_y(3) + 2, -10, 30), 
+			'Creates symlink to plugin in Glyphs Plugins folder.')
+
 		# - Info block --------------------------------------------
-		info_y = _btn_y(3) + 4
+		info_y = _btn_y(5) + 4
 
 		self.w.lbl_path_title = vanilla.TextBox(
 			(10, info_y, -10, 20), 'Glyphs Python installation path:')
@@ -202,12 +226,30 @@ class dlg_install(object):
 	def _on_lib_changed(self, sender):
 		self._refresh_buttons()
 
+	def _browse_plugin(self, sender):
+		panel = NSOpenPanel.openPanel()
+		panel.setTitle_('Select the TypeRig Glyphs plugin folder (.plugin)')
+		panel.setCanChooseDirectories_(True)
+		panel.setCanChooseFiles_(False)
+		panel.setAllowsMultipleSelection_(False)
+
+		if panel.runModal():
+			chosen = panel.URL().path()
+			self.w.fld_plugin.set(chosen)
+			self._refresh_buttons()
+
+	def _on_plugin_changed(self, sender):
+		self._refresh_buttons()
+
 	def _refresh_buttons(self):
-		'''Enable/disable install buttons based on whether the Lib path is valid.'''
-		valid = _validate_lib_folder(self.w.fld_lib.get().strip())
-		self.w.btn_auto_pth.enable(valid)
-		self.w.btn_auto_copy.enable(valid)
-		self.w.btn_manual.enable(valid)
+		'''Enable/disable install buttons based on whether paths are valid.'''
+		valid_lib = _validate_lib_folder(self.w.fld_lib.get().strip())
+		valid_plugin = _validate_plugin_folder(self.w.fld_plugin.get().strip())
+		
+		self.w.btn_auto_pth.enable(valid_lib)
+		self.w.btn_auto_copy.enable(valid_lib)
+		self.w.btn_manual.enable(valid_lib)
+		self.w.btn_install_plugin.enable(valid_plugin)
 
 	# - Resolved path --------------------------------------------
 	def _lib_folder(self):
@@ -272,6 +314,37 @@ class dlg_install(object):
 				      '\nNOTE:\tCopy this file to: {}'.format(pth_path, python_folder))
 			except Exception as e:
 				print('FAILED:\t{}'.format(e))
+
+	def _install_plugin(self, sender):
+		plugin_path = self.w.fld_plugin.get().strip()
+		
+		if not _validate_plugin_folder(plugin_path):
+			print('Plugin folder invalid or missing .plugin extension.')
+			return
+		
+		scripts_dir = os.path.dirname(os.path.abspath(__file__))
+		plugins_target = os.path.join(scripts_dir, '..', 'Plugins')
+		plugin_name = os.path.basename(plugin_path)
+		symlink_path = os.path.join(plugins_target, plugin_name)
+		
+		if os.path.lexists(symlink_path):
+			print(f'Warning: Item already exists at {symlink_path}')
+			return
+		
+		try:
+			os.makedirs(plugins_target, exist_ok=True)
+			
+			if os.path.lexists(symlink_path):
+				os.remove(symlink_path)
+			
+			rel_target = os.path.relpath(plugin_path, plugins_target)
+			os.symlink(rel_target, symlink_path)
+			
+			print(f'DONE:\tPlugin symlink created!'
+			      f'\n\ttarget -> {symlink_path}'
+			      f'\n\tsymlink  -> {rel_target}')
+		except Exception as e:
+			print('FAILED:\t{}'.format(e))
 
 
 # - RUN ------------------------------
