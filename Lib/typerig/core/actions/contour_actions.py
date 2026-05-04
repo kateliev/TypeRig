@@ -515,3 +515,203 @@ class ContourActions(object):
 					node.y += dy
 
 		return True
+
+	# -- Cut / slice / weld -----------------------------------------------------
+	@staticmethod
+	def contour_slice(shape, selection_triples, expanded=False):
+		'''Slice contours at selected on-curve nodes. Mirrors
+		``TRContourActionCollector.contour_slice`` (FL) on core objects.
+
+		The first and last triples in `selection_triples` define the cut.
+		If they are on the **same contour**, that contour is sliced into two
+		closed pieces. If they are on **different contours** of the same shape,
+		the two contours are welded into one closed contour at the cut points.
+
+		Arguments:
+			shape (Shape): shape whose contours are mutated in place.
+			selection_triples (list[tuple]): list of ``(sid, cid, nid)`` —
+				same shape that ``eGlyph.selectedAtShapes()`` returns. Only
+				the first and last entries are consumed; intermediate entries
+				are ignored. All entries must share the same `sid`.
+			expanded (bool): if True, offset the cut endpoints visually.
+
+		Returns:
+			bool: True if a slice/weld was performed.
+		'''
+		if not selection_triples or len(selection_triples) < 2:
+			return False
+
+		first_sid, first_cid, first_nid = selection_triples[0]
+		last_sid, last_cid, last_nid = selection_triples[-1]
+
+		if first_sid != last_sid:
+			return False
+
+		contours = list(shape.contours)
+		if first_cid >= len(contours) or last_cid >= len(contours):
+			return False
+
+		if first_cid != last_cid:
+			# Cross-contour: weld two contours into one at the cut points.
+			first_contour = contours[first_cid]
+			last_contour = contours[last_cid]
+
+			first_parts = first_contour.split(first_nid, expanded=expanded)
+			last_parts = last_contour.split(last_nid, expanded=expanded)
+
+			if first_parts is not None and last_parts is not None:
+				# Both inputs were already open: weld the returned pieces too.
+				first_parts.glue(last_parts)
+				shape.contours.append(first_parts)
+
+			first_contour.glue(last_contour)
+			shape.contours.remove(last_contour)
+			return True
+
+		# Same contour: slice into two closed pieces.
+		first_contour = contours[first_cid]
+		# Snapshot the last node reference before mutating; its idx is live.
+		last_node = first_contour.data[last_nid]
+
+		first_contour.split(first_nid, expanded=expanded)
+		cutout = first_contour.split(last_node.idx, expanded=expanded)
+		first_contour.closed = True
+
+		if cutout is not None:
+			cutout.closed = True
+			shape.contours.append(cutout)
+
+		return True
+
+	@staticmethod
+	def node_neighbor_pairs(contour, nodes):
+		'''Group a list of on-curve nodes into pairs of neighbors via the
+		contour's segment traversal. Replaces ``eNode.getNextOn/getPrevOn``
+		usage in ``popup-contour-cut.py`` for the auto-align tool.
+
+		Arguments:
+			contour (Contour): parent contour the nodes live on.
+			nodes (list[Node]): selected on-curve nodes (typically 4 — two
+				pairs at a cut junction).
+
+		Returns:
+			tuple(list, list): ``(pair_first, pair_second)`` — at most two
+			2-element lists of neighbouring nodes. Empty lists when no pair
+			can be formed.
+		'''
+		if len(nodes) < 4:
+			return [], []
+
+		pairs = []
+		used = set()
+
+		for i, node in enumerate(nodes):
+			if i in used:
+				continue
+			try:
+				next_on = node.next_on
+				prev_on = node.prev_on
+			except (AttributeError, IndexError):
+				continue
+
+			for j, other in enumerate(nodes):
+				if j in used or i == j:
+					continue
+				if next_on is other or prev_on is other:
+					pairs.append((node, other))
+					used.add(i)
+					used.add(j)
+					break
+
+		if len(pairs) >= 2:
+			return list(pairs[0]), list(pairs[1])
+		if len(pairs) == 1:
+			return list(pairs[0]), []
+		return [], []
+
+	@staticmethod
+	def junction_align_mode(pair):
+		'''Classify a 2-node pair at a cut junction into ``'C'``, ``'T'``,
+		or ``'B'`` by inspecting the direction of each node's interior
+		segment. 1:1 port of ``popup-contour-cut.py:_auto_align_mode``.
+
+		Arguments:
+			pair (list[Node]): two on-curve nodes that are contour neighbors.
+
+		Returns:
+			str: ``'C'`` (centre x), ``'T'`` (top y), or ``'B'`` (bottom y).
+		'''
+		if len(pair) != 2:
+			return 'C'
+
+		n1, n2 = pair
+		total_dx = 0.0
+		total_dy = 0.0
+		interior_ys = []
+
+		for node, other in ((n1, n2), (n2, n1)):
+			try:
+				next_on = node.next_on
+				prev_on = node.prev_on
+			except (AttributeError, IndexError):
+				continue
+
+			interior = None
+			if next_on is not None and next_on is not other:
+				interior = next_on
+			elif prev_on is not None and prev_on is not other:
+				interior = prev_on
+
+			if interior is None:
+				continue
+
+			total_dx += abs(interior.x - node.x)
+			total_dy += abs(interior.y - node.y)
+			interior_ys.append(interior.y)
+
+		# Horizontal interior segments → arm side → centre x
+		if not interior_ys or total_dx >= total_dy:
+			return 'C'
+
+		# Vertical interior segments → stem side
+		avg_y_pair = (n1.y + n2.y) / 2.0
+
+		if all(y > avg_y_pair for y in interior_ys):
+			return 'B'   # all interior above → junction at bottom
+		if all(y < avg_y_pair for y in interior_ys):
+			return 'T'   # all interior below → junction at top
+		return 'C'       # T-junction: interior on both sides
+
+	@staticmethod
+	def contour_pair_align(pair, mode):
+		'''Align a 2-node pair at a cut junction.
+
+		Arguments:
+			pair (list[Node]): two on-curve nodes.
+			mode (str): ``'T'`` (both to max y), ``'B'`` (both to min y),
+				``'C'`` (both to mean x).
+
+		Returns:
+			bool: True on align, False on no-op.
+		'''
+		if len(pair) != 2:
+			return False
+
+		n1, n2 = pair
+
+		if mode == 'T':
+			target_y = max(n1.y, n2.y)
+			n1.y = target_y
+			n2.y = target_y
+		elif mode == 'B':
+			target_y = min(n1.y, n2.y)
+			n1.y = target_y
+			n2.y = target_y
+		elif mode == 'C':
+			target_x = (n1.x + n2.x) / 2.0
+			n1.x = target_x
+			n2.x = target_x
+		else:
+			return False
+
+		return True

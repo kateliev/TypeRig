@@ -242,7 +242,108 @@ class Contour(Container, XMLSerializable):
 		# - An offcurve could never be first node
 		on_index = next(i for i, node in enumerate(reversed_data) if node.type == 'on')
 		self.data = reversed_data[on_index:] + reversed_data[:on_index]
-		
+
+	def split(self, index, expanded=False):
+		'''Split contour at on-curve node `index`.
+
+		Closed contour: rotate to start at `index`, duplicate the cut node at end,
+		set ``closed = False``. Returns ``None``.
+
+		Open contour: split into two open pieces at `index`. Self becomes the
+		first piece (nodes[0..index]); returns a new ``Contour`` with the second
+		piece (copy of node[index] + nodes[index+1..end]). Both pieces share a
+		copy of the cut node at the boundary.
+
+		Mirrors ``flContour.breakContour(int)`` semantics:
+		``flContour/Nothing`` — single contour or None.
+
+		Arguments:
+			index (int): on-curve node index to cut at.
+			expanded (bool): if True, offset the duplicated cut-endpoint nodes
+				by 1 unit apart along the segment tangent so the cut is
+				visually visible. Mirrors
+				``flContour.breakContourExpanded(idx, 1.0)``.
+
+		Returns:
+			Contour | None
+		'''
+		if index < 0 or index >= len(self.data):
+			return None
+
+		cut_node = self.data[index]
+		if not cut_node.is_on:
+			return None
+
+		if self.closed:
+			# Open the contour: rotate to start at index, duplicate cut node at end
+			rotated = self.data[index:] + self.data[:index]
+			end_copy = cut_node.clone()
+			self.data = rotated + [end_copy]
+			self.closed = False
+			if expanded:
+				self._expand_cut(self.data[0], self.data[-1])
+			return None
+
+		# Open contour: split into two pieces
+		first_data = self.data[:index + 1]
+		start_copy = cut_node.clone()
+		second_data = [start_copy] + self.data[index + 1:]
+		new_contour = self.__class__(second_data, closed=False,
+		                             default_factory=self._subclass)
+		self.data = first_data
+		if expanded:
+			self._expand_cut(self.data[-1], new_contour.data[0])
+		return new_contour
+
+	def glue(self, other):
+		'''Append `other`'s nodes to self and close. Mutates self, returns self.
+
+		Both contours should be open. The glued contour is set ``closed = True``.
+		Mirrors the welding step in
+		``TRContourActionCollector.contour_slice``.
+
+		Arguments:
+			other (Contour): contour whose nodes are appended.
+
+		Returns:
+			Contour: self.
+		'''
+		if other is None or not len(other.data):
+			self.closed = True
+			return self
+
+		self.data = list(self.data) + list(other.data)
+		self.closed = True
+		return self
+
+	def _expand_cut(self, node_a, node_b):
+		'''Offset two coincident cut-endpoint nodes apart by 1 unit along the
+		tangent direction at the cut.
+
+		`node_a` is the last node of the first piece (its tangent points
+		backward toward the previous node). `node_b` is the first node of the
+		second piece (its tangent points forward toward the next node).
+		Mirrors ``flContour.breakContourExpanded(idx, 1.0)``.
+		'''
+		try:
+			prev_a = node_a.prev_on
+			next_b = node_b.next_on
+		except (AttributeError, IndexError):
+			return
+
+		if prev_a is None or next_b is None:
+			return
+
+		# Move node_a 1 unit toward prev_a, node_b 1 unit toward next_b
+		for node, target in ((node_a, prev_a), (node_b, next_b)):
+			dx = target.x - node.x
+			dy = target.y - node.y
+			length = math.hypot(dx, dy)
+			if length < 1e-9:
+				continue
+			node.x += dx / length
+			node.y += dy / length
+
 	def set_weight(self, wx, wy):
 		'''Set x and y weights (a.k.a. stems) for all nodes'''
 		for node in self.nodes:
