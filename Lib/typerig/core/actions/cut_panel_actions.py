@@ -32,9 +32,36 @@ def _iter_scope(glyph, scope_layers):
             yield lyr
 
 
+def _eject(layer):
+    """Eject `layer` to a pure-core ``Layer`` if it's a host proxy.
+
+    On pure-core hosts (FontRig) the layer IS already a core ``Layer``;
+    there is no ``eject`` method, so we return the layer directly.
+    Mutations to the result update the live layer in place.
+    """
+    eject = getattr(layer, 'eject', None)
+    if callable(eject):
+        return eject()
+    return layer
+
+
+def _mount(layer, core_layer):
+    """Write `core_layer` state back to a host-proxy `layer`.
+
+    On pure-core hosts this is a no-op (mutations already landed on the
+    live layer because ``eject`` returned identity).
+    """
+    mount = getattr(layer, 'mount', None)
+    if callable(mount):
+        mount(core_layer)
+
+
 def _selected_triples(layer):
     """Return list of (sid, cid, nid) triples for selected on-curve nodes
-    on `layer`. Mirrors eGlyph.selectedAtShapes() output ordering."""
+    on `layer`. Mirrors eGlyph.selectedAtShapes() output ordering.
+
+    Operates on either a host proxy or a pure-core ``Layer``.
+    """
     triples = []
     for sid, shape in enumerate(layer.shapes):
         for cid, contour in enumerate(shape.contours):
@@ -42,19 +69,6 @@ def _selected_triples(layer):
                 if node.selected and node.is_on:
                     triples.append((sid, cid, nid))
     return triples
-
-
-def _selected_contours_per_shape(layer):
-    """Return dict {sid: set(cid)} for shapes/contours that have any
-    selected on-curve node."""
-    sel = {}
-    for sid, shape in enumerate(layer.shapes):
-        for cid, contour in enumerate(shape.contours):
-            for node in contour.data:
-                if node.selected and node.is_on:
-                    sel.setdefault(sid, set()).add(cid)
-                    break
-    return sel
 
 
 def _selected_oncurve_nodes(layer):
@@ -70,32 +84,63 @@ def npa_contour_slice(glyph, scope_layers, NodeActions, ContourActions,
                       expanded=False):
     """Slice contours at selection. Same-contour selection extracts a
     closed piece between the two cut points; cross-contour selection welds
-    the two contours into one closed contour at the cut points."""
+    the two contours into one closed contour at the cut points.
+
+    Eject/mount: structural mutations (split/glue, contour add/remove)
+    are not safely reflected through host proxies, so we always work on
+    a pure-core copy and mount back. On pure-core hosts both helpers are
+    identity, so this incurs no cost.
+    """
     for lyr in _iter_scope(glyph, scope_layers):
+        # Read selection from the live layer (proxy nodes carry .selected).
         triples = _selected_triples(lyr)
         if len(triples) < 2:
             continue
 
-        # Group by shape index — orchestrator processes one shape at a time.
+        core_layer = _eject(lyr)
+        if core_layer is None:
+            continue
+
+        # Re-read selection from the ejected pure-core layer to ensure
+        # selection state survived the eject (it does for both gs3 and
+        # pure-core paths).
+        core_triples = _selected_triples(core_layer)
+        if len(core_triples) < 2:
+            # Fall back to the proxy-side triples (positions are identical).
+            core_triples = triples
+
         by_shape = {}
-        for sid, cid, nid in triples:
+        for sid, cid, nid in core_triples:
             by_shape.setdefault(sid, []).append((sid, cid, nid))
 
+        mutated = False
         for sid, sh_triples in by_shape.items():
-            if sid >= len(lyr.shapes):
+            if sid >= len(core_layer.shapes):
                 continue
-            ContourActions.contour_slice(lyr.shapes[sid], sh_triples,
-                                         expanded=expanded)
+            if ContourActions.contour_slice(core_layer.shapes[sid],
+                                            sh_triples, expanded=expanded):
+                mutated = True
+
+        if mutated:
+            _mount(lyr, core_layer)
 
 
 def npa_contour_auto_align(glyph, scope_layers, NodeActions, ContourActions):
     """Auto overlap align: classify and align two neighbor-pairs at a cut
-    junction. Operates on selection of >=4 on-curve nodes per layer."""
+    junction. Operates on selection of >=4 on-curve nodes per layer.
+
+    Uses eject/mount so coordinate writes always land on the host. The
+    pair classification reads contour traversal from the ejected core
+    layer, so node neighbours are derived consistently regardless of
+    host proxy quirks.
+    """
     for lyr in _iter_scope(glyph, scope_layers):
-        # Group selected on-curve nodes by their parent contour, then pair
-        # within each contour.
+        core_layer = _eject(lyr)
+        if core_layer is None:
+            continue
+
         by_contour = {}
-        for s in lyr.shapes:
+        for s in core_layer.shapes:
             for c in s.contours:
                 sel = [n for n in c.data if n.selected and n.is_on]
                 if sel:
@@ -105,10 +150,8 @@ def npa_contour_auto_align(glyph, scope_layers, NodeActions, ContourActions):
         if len(all_nodes) < 4:
             continue
 
-        # Pair within each contour first; if neither contour has enough
-        # selected nodes for a full pair-of-pairs, fall back to a flat pass.
         pairs = []
-        for cid_key, (contour, sel) in by_contour.items():
+        for _, (contour, sel) in by_contour.items():
             if len(sel) >= 2:
                 p_first, p_second = ContourActions.node_neighbor_pairs(
                     contour, sel)
@@ -117,29 +160,30 @@ def npa_contour_auto_align(glyph, scope_layers, NodeActions, ContourActions):
                 if p_second:
                     pairs.append(p_second)
 
-        # If contour-grouped pairing didn't yield two pairs, try flat pairing
-        # across the layer's selection (fallback for legacy single-contour
-        # selections that span an apparent junction).
         if len(pairs) < 2 and len(all_nodes) >= 4:
-            # Use the first contour's traversal as the reference for pairing
-            # — the popup behaviour: pair across 4 selected nodes.
             ref_contour = next(iter(by_contour.values()))[0]
             p_first, p_second = ContourActions.node_neighbor_pairs(
                 ref_contour, all_nodes)
             pairs = [p for p in (p_first, p_second) if p]
 
+        if not pairs:
+            continue
+
         for pair in pairs:
             mode = ContourActions.junction_align_mode(pair)
             ContourActions.contour_pair_align(pair, mode)
+
+        _mount(lyr, core_layer)
 
 
 def npa_contour_slice_align(glyph, scope_layers, NodeActions, ContourActions,
                             expanded=False):
     """Slice + auto-align in one step. Mirrors popup do_cut_align_auto.
 
-    Selection is captured BEFORE the slice (the slice mutates contour
-    membership; node references remain valid because we duplicate cut
-    nodes rather than discard them)."""
+    Two separate eject/mount round-trips: the slice changes contour
+    membership and re-reads selection on the live layer between
+    operations, matching the FL popup's two-step flow.
+    """
     npa_contour_slice(glyph, scope_layers, NodeActions, ContourActions,
                       expanded=expanded)
     npa_contour_auto_align(glyph, scope_layers, NodeActions, ContourActions)
@@ -167,8 +211,8 @@ def npa_stroke_separate(glyph, scope_layers, NodeActions, ContourActions,
     if tr_analysis is None:
         return
 
-    analysis_core = tr_analysis.eject()
-    if not analysis_core.shapes:
+    analysis_core = _eject(tr_analysis)
+    if analysis_core is None or not analysis_core.shapes:
         return
     all_core_contours = analysis_core.shapes[0].contours
     if not all_core_contours:
@@ -204,8 +248,8 @@ def npa_stroke_separate(glyph, scope_layers, NodeActions, ContourActions,
         if tr_layer is None:
             continue
 
-        layer_core = tr_layer.eject()
-        if not layer_core.shapes:
+        layer_core = _eject(tr_layer)
+        if layer_core is None or not layer_core.shapes:
             continue
         target_all = layer_core.shapes[0].contours
         if not target_all:
@@ -237,7 +281,7 @@ def npa_stroke_separate(glyph, scope_layers, NodeActions, ContourActions,
         else:
             layer_core.shapes[0].contours = separated
 
-        tr_layer.mount(layer_core)
+        _mount(tr_layer, layer_core)
 
 
 # ===================================================================
@@ -263,8 +307,8 @@ def npa_mat_extract(glyph, scope_layers, NodeActions, ContourActions,
     if tr_layer is None:
         return
 
-    layer_core = tr_layer.eject()
-    if not layer_core.shapes:
+    layer_core = _eject(tr_layer)
+    if layer_core is None or not layer_core.shapes:
         return
     all_contours = layer_core.shapes[0].contours
     if not all_contours:
@@ -303,4 +347,4 @@ def npa_mat_extract(glyph, scope_layers, NodeActions, ContourActions,
         return
 
     layer_core.shapes.append(Shape(contours=skeleton))
-    tr_layer.mount(layer_core)
+    _mount(tr_layer, layer_core)
