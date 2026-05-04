@@ -182,14 +182,19 @@ def npa_cap_butt(glyph, scope_layers, NodeActions, side='auto'):
                     NodeActions.cap_butt(c, pair[0], pair[1], side=side)
 
 
-def npa_cap_round(glyph, scope_layers, NodeActions, curvature=1.0):
-    """Build an italic-aware circular cap between two stem-corner nodes."""
+def npa_cap_round(glyph, scope_layers, NodeActions, curvature=1.0, keep_length=False):
+    """Build an italic-aware circular cap between two stem-corner nodes.
+
+    keep_length=True preserves overall path length (FL behaviour) by shortening
+    each stem by the cap radius before fitting the cap inside.
+    """
     for lyr in _iter_scope(glyph, scope_layers):
         for s in lyr.shapes:
             for c in s.contours:
                 pair = _cap_corner_indices(c)
                 if pair is not None:
-                    NodeActions.cap_round(c, pair[0], pair[1], curvature=curvature)
+                    NodeActions.cap_round(c, pair[0], pair[1],
+                                          curvature=curvature, keep_length=keep_length)
 
 
 def npa_cap_angular(glyph, scope_layers, NodeActions):

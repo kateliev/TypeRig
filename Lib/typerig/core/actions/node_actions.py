@@ -543,47 +543,49 @@ class NodeActions(object):
 			return None
 
 		if chosen == 'a':
-			# Capture next_on(B) before mutation — that's where removal stops
-			stop_node = node_b.next_on
+			# Insert foot on seg_in_a (before A). Keep B as the second cap corner.
+			# Remove A and any cap interior between A and B (exclusive of B).
 			prev_a = node_a.prev_on
 			prev_a.insert_after(time_a)
 			new_node = prev_a.next_on
-			# Snap to exact foot (insert_after's parametric position may drift on curves)
-			new_node.point = foot_a
+			new_node.point = foot_a   # snap to exact foot
 			new_node.smooth = False
-			# Remove everything from new_node.next forward through B inclusive
-			_remove_inclusive_range_forward(new_node.next, stop_node)
+			_remove_inclusive_range_forward(new_node.next, node_b)
 		else:
-			# Capture prev_on(A) before mutation
-			prev_a = node_a.prev_on
+			# Insert foot on seg_out_b (after B). Keep A as the first cap corner.
+			# Remove B and any cap interior between A and B (exclusive of A).
 			node_b.insert_after(time_b)
 			new_node = node_b.next_on
 			new_node.point = foot_b
 			new_node.smooth = False
-			# Remove everything from prev_a.next forward through new_node.prev inclusive
-			_remove_inclusive_range_forward(prev_a.next, new_node)
+			_remove_inclusive_range_forward(node_a.next, new_node)
 
 		return new_node
 
 	@staticmethod
-	def cap_round(contour, idx_a, idx_b, curvature=1.0):
+	def cap_round(contour, idx_a, idx_b, curvature=1.0, keep_length=False):
 		'''Build an italic-aware circular cap between two stem-corner nodes.
 
-		Constructs a circle of radius |AB|/2 centred at midpoint(A,B). The cap
-		tip lies on that circle in the outward stem direction (averaged from the
-		two stem tangents) — NOT on the perpendicular bisector of AB. For a
-		perpendicular cap on a straight stem this collapses to a true half-circle;
-		for an italic stem the tip stays on the stem axis and the two arcs are
-		unequal but still sum to 180°. See compute_cap_round_arc.
+		Two placement modes:
+		  * keep_length=False (default) — the cap extends OUTWARD past the chord
+		    A-B by radius r along the stem axis. The original stems are kept
+		    intact and the round cap adds length to the overall path. The tip
+		    sits on the circle of radius |AB|/2 centred at midpoint(A,B), in the
+		    outward stem direction.
+		  * keep_length=True — the cap fits INSIDE the original stems. Each
+		    stem segment is shortened by r so the new corners A', B' sit at
+		    distance r INSIDE the original A, B along the stem. Overall path
+		    length is preserved (matches original FL cap_round behavior).
 
-		The result is three on-curves (A, tip, B) and four off-curves, replacing
-		any nodes that previously lay between A and B.
+		Italic-aware in both modes: the cap tip lies along the averaged stem
+		axis, not the chord-perpendicular. See compute_cap_round_arc.
 
 		Arguments:
-			contour   : Contour
-			idx_a     : int — first stem corner
-			idx_b     : int — second stem corner
-			curvature : float — handle-length multiplier (1.0 = true circle approx).
+			contour     : Contour
+			idx_a       : int — first stem corner
+			idx_b       : int — second stem corner
+			curvature   : float — handle-length multiplier (1.0 = true circle).
+			keep_length : bool — preserve overall path length (FL behaviour).
 
 		Returns:
 			Node or None — the tip on-curve, or None on failure.
@@ -609,7 +611,93 @@ class NodeActions(object):
 		if tangent_a_pt is None or tangent_b_pt is None:
 			return None
 
-		# Convert to complex for metapen primitive
+		# Radius derived from the original chord A-B (not from the post-shortening
+		# chord, matching FL convention — keeps r self-consistent for italics).
+		import math
+		dx = node_b.point.x - node_a.point.x
+		dy = node_b.point.y - node_a.point.y
+		chord_len = math.hypot(dx, dy)
+		if chord_len < 1e-6:
+			return None
+		r = chord_len / 2.0
+
+		Cls = node_a.__class__
+
+		# keep_length=True: insert two new on-curves at distance r INSIDE the
+		# stem segments, then use those as the new cap corners. The original
+		# A, B (and any cap interior) are removed afterward.
+		if keep_length:
+			# Compute parametric times at distance r from the cap-end of each stem
+			if isinstance(seg_in_a, CubicBezier):
+				t_in_a = seg_in_a.solve_distance_end(r, 0.001)
+			else:  # Line
+				if seg_in_a.length < r:
+					return None
+				t_in_a = 1.0 - (r / seg_in_a.length)
+
+			if isinstance(seg_out_b, CubicBezier):
+				t_out_b = seg_out_b.solve_distance_start(r, 0.001)
+			else:
+				if seg_out_b.length < r:
+					return None
+				t_out_b = r / seg_out_b.length
+
+			if not (0.0 < t_in_a < 1.0) or not (0.0 < t_out_b < 1.0):
+				return None
+
+			# Insert A' on stem-into-A at t_in_a (before A). Capture the parent
+			# reference BEFORE insertion — after insertion, node_a.prev_on walks
+			# back to the newly-inserted A', so node_a.prev_on.next_on would
+			# return node_a itself. Holding the parent ref keeps the lookup
+			# pointing at the actual inserted on-curve.
+			parent_a = node_a.prev_on
+			parent_a.insert_after(t_in_a)
+			a_prime = parent_a.next_on
+			# Insert B' on stem-out-of-B at t_out_b (after B). node_b doesn't move,
+			# so node_b.next_on correctly returns the inserted on-curve.
+			node_b.insert_after(t_out_b)
+			b_prime = node_b.next_on
+
+			# New cap corners and the geometry that drives the circular arc
+			pa_pt = a_prime.point
+			pb_pt = b_prime.point
+			pa = complex(pa_pt.x, pa_pt.y)
+			pb = complex(pb_pt.x, pb_pt.y)
+
+			# Tangents at the new corners — read from the SHORTENED stem segments.
+			seg_in_a_short = a_prime.prev_on.segment
+			seg_out_b_short = b_prime.segment
+			tan_a_short = _segment_forward_tangent(seg_in_a_short, at_start=False) if seg_in_a_short else tangent_a_pt
+			tan_b_short = _segment_forward_tangent(seg_out_b_short, at_start=True) if seg_out_b_short else tangent_b_pt
+			t_a = complex((tan_a_short or tangent_a_pt).x, (tan_a_short or tangent_a_pt).y)
+			t_b = complex((tan_b_short or tangent_b_pt).x, (tan_b_short or tangent_b_pt).y)
+
+			outward = compute_cap_outward_direction(t_a, t_b, pa, pb)
+			arc = compute_cap_round_arc(pa, pb, outward, curvature=curvature)
+			if arc is None:
+				return None
+			h_a_out, h_tip_in, p_tip, h_tip_out, h_b_in = arc
+
+			# Now remove everything between a_prime and b_prime (exclusive),
+			# i.e. the original A, B, and any prior cap interior, plus the
+			# segment off-curves that were on the cap-side of A and B.
+			_remove_inclusive_range_forward(a_prime.next, b_prime)
+
+			# Insert the round cap interior between a_prime and b_prime.
+			insert_at = a_prime.idx + 1
+			contour.insert(insert_at + 0, Cls((h_a_out.real,  h_a_out.imag),  type=node_types['curve']))
+			contour.insert(insert_at + 1, Cls((h_tip_in.real, h_tip_in.imag), type=node_types['curve']))
+			new_tip = Cls((p_tip.real, p_tip.imag), type=node_types['on'], smooth=True)
+			contour.insert(insert_at + 2, new_tip)
+			contour.insert(insert_at + 3, Cls((h_tip_out.real, h_tip_out.imag), type=node_types['curve']))
+			contour.insert(insert_at + 4, Cls((h_b_in.real,    h_b_in.imag),    type=node_types['curve']))
+
+			a_prime.smooth = True
+			b_prime.smooth = True
+
+			return new_tip
+
+		# keep_length=False: original behavior — cap extends past chord A-B.
 		pa = complex(node_a.point.x, node_a.point.y)
 		pb = complex(node_b.point.x, node_b.point.y)
 		t_a = complex(tangent_a_pt.x, tangent_a_pt.y)
@@ -617,35 +705,19 @@ class NodeActions(object):
 
 		outward = compute_cap_outward_direction(t_a, t_b, pa, pb)
 		arc = compute_cap_round_arc(pa, pb, outward, curvature=curvature)
-
 		if arc is None:
 			return None
-
 		h_a_out, h_tip_in, p_tip, h_tip_out, h_b_in = arc
 
-		# Capture stop and remove any existing cap interior between A and B.
-		# After cleanup, A and B are directly adjacent in the contour.
-		stop_node = node_b
-		_remove_inclusive_range_forward(node_a.next, stop_node)
-
-		# Now A.next == B. Insert the round cap as: bcp_out, bcp_in, on_tip, bcp_out, bcp_in
-		# between A and B, in contour order.
-		Cls = node_a.__class__
+		_remove_inclusive_range_forward(node_a.next, node_b)
 		insert_at = node_a.idx + 1
-
-		new_h_a_out = Cls((h_a_out.real, h_a_out.imag), type=node_types['curve'])
-		new_h_tip_in = Cls((h_tip_in.real, h_tip_in.imag), type=node_types['curve'])
+		contour.insert(insert_at + 0, Cls((h_a_out.real,  h_a_out.imag),  type=node_types['curve']))
+		contour.insert(insert_at + 1, Cls((h_tip_in.real, h_tip_in.imag), type=node_types['curve']))
 		new_tip = Cls((p_tip.real, p_tip.imag), type=node_types['on'], smooth=True)
-		new_h_tip_out = Cls((h_tip_out.real, h_tip_out.imag), type=node_types['curve'])
-		new_h_b_in = Cls((h_b_in.real, h_b_in.imag), type=node_types['curve'])
-
-		contour.insert(insert_at + 0, new_h_a_out)
-		contour.insert(insert_at + 1, new_h_tip_in)
 		contour.insert(insert_at + 2, new_tip)
-		contour.insert(insert_at + 3, new_h_tip_out)
-		contour.insert(insert_at + 4, new_h_b_in)
+		contour.insert(insert_at + 3, Cls((h_tip_out.real, h_tip_out.imag), type=node_types['curve']))
+		contour.insert(insert_at + 4, Cls((h_b_in.real,    h_b_in.imag),    type=node_types['curve']))
 
-		# A and B should be smooth corners now (cap meets stem tangentially)
 		node_a.smooth = True
 		node_b.smooth = True
 
