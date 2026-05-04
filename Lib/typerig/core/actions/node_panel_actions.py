@@ -151,6 +151,85 @@ def npa_corner_rebuild(glyph, scope_layers, NodeActions):
 
 
 # ===================================================================
+# 2.5 CAP TOOLS
+# ===================================================================
+# Cap dispatchers operate on contours where exactly two on-curve nodes
+# are selected as the cap-end stem corners (A, B). The contour walk
+# handles cap_rebuild specially — it accepts any contiguous selection
+# inside a cap and infers A, B from the selection's first/last on-curves.
+
+def _cap_corner_indices(contour):
+    """Find the two stem-corner indices for cap_butt/round/angular.
+
+    Returns (idx_a, idx_b) — the FIRST and LAST selected on-curve indices
+    in contour order — or None if there aren't exactly two selected
+    on-curves bracketing a cap region.
+    """
+    on_indices = [i for i, n in enumerate(contour.data)
+                  if n.selected and n.is_on]
+    if len(on_indices) < 2:
+        return None
+    return on_indices[0], on_indices[-1]
+
+
+def npa_cap_butt(glyph, scope_layers, NodeActions, side='auto'):
+    """Build a perpendicular flat (butt) cap between two stem-corner nodes."""
+    for lyr in _iter_scope(glyph, scope_layers):
+        for s in lyr.shapes:
+            for c in s.contours:
+                pair = _cap_corner_indices(c)
+                if pair is not None:
+                    NodeActions.cap_butt(c, pair[0], pair[1], side=side)
+
+
+def npa_cap_round(glyph, scope_layers, NodeActions, curvature=1.0):
+    """Build an italic-aware circular cap between two stem-corner nodes."""
+    for lyr in _iter_scope(glyph, scope_layers):
+        for s in lyr.shapes:
+            for c in s.contours:
+                pair = _cap_corner_indices(c)
+                if pair is not None:
+                    NodeActions.cap_round(c, pair[0], pair[1], curvature=curvature)
+
+
+def npa_cap_angular(glyph, scope_layers, NodeActions):
+    """Build a pointed (miter) cap between two stem-corner nodes."""
+    for lyr in _iter_scope(glyph, scope_layers):
+        for s in lyr.shapes:
+            for c in s.contours:
+                pair = _cap_corner_indices(c)
+                if pair is not None:
+                    NodeActions.cap_angular(c, pair[0], pair[1])
+
+
+def npa_cap_rebuild(glyph, scope_layers, NodeActions, target='butt'):
+    """Universal cap rebuilder — flatten any existing cap to a butt cut."""
+    for lyr in _iter_scope(glyph, scope_layers):
+        for s in lyr.shapes:
+            for c in s.contours:
+                idx = _selected_indices(c)
+                if idx:
+                    NodeActions.cap_rebuild(c, idx, target=target)
+
+
+# ===================================================================
+# 2.6 CURVE ALIGNMENT TOOLS
+# ===================================================================
+def npa_make_collinear(glyph, scope_layers, NodeActions,
+                       mode=-1, equalize=False, target_width=None):
+    """Align two selected curve segments to be collinear (parallel-stem
+    handle alignment, with optional stem-width equalization)."""
+    for lyr in _iter_scope(glyph, scope_layers):
+        for s in lyr.shapes:
+            for c in s.contours:
+                idx = _selected_indices(c)
+                if idx:
+                    NodeActions.make_collinear(c, idx, mode=mode,
+                                                equalize=equalize,
+                                                target_width=target_width)
+
+
+# ===================================================================
 # 3. ALIGN TOOLS
 # ===================================================================
 def npa_align(glyph, scope_layers, NodeActions, mode):

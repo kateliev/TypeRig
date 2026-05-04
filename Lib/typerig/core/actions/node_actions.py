@@ -20,6 +20,12 @@ from typerig.core.objects.line import Line, Vector
 from typerig.core.objects.cubicbezier import CubicBezier
 from typerig.core.objects.utils import Bounds
 
+from typerig.core.objects.metapen import (
+	compute_cap_outward_direction,
+	compute_cap_round_arc,
+	compute_cap_angular_tip,
+)
+
 # - Init ------------------------------------------------------------------------
 __version__ = '1.0'
 
@@ -29,6 +35,109 @@ def _scale_offset(node, offset_x, offset_y, width, height):
 	new_x = -node.x + width * (float(node.x) / width + offset_x)
 	new_y = -node.y + height * (float(node.y) / height + offset_y)
 	return (new_x, new_y)
+
+def _segment_forward_tangent(segment, at_start):
+	'''Unit tangent of a segment in forward direction (from p0 toward p1/p3).
+
+	Args:
+		segment  : Line | CubicBezier
+		at_start : bool — True for tangent at p0 (start), False for tangent at end.
+
+	Returns:
+		Point or None — unit tangent vector, or None on degenerate segment.
+	'''
+	if isinstance(segment, CubicBezier):
+		return segment.solve_tangent_at_time(0.0 if at_start else 1.0)
+
+	if isinstance(segment, Line):
+		dx = segment.p1.x - segment.p0.x
+		dy = segment.p1.y - segment.p0.y
+		length = math.hypot(dx, dy)
+		if length < 1e-10:
+			return None
+		return Point(dx / length, dy / length)
+
+	return None
+
+
+def _intersect_perpendicular_with_segment(origin_point, perp_direction, segment):
+	'''Cast a doubly-infinite line through origin_point along perp_direction,
+	find the closest intersection with segment, and return (foot_point, time_on_segment).
+
+	"Closest" = smallest distance from origin_point to the intersection. This
+	naturally selects the side of the perpendicular pointing toward the segment.
+
+	Args:
+		origin_point   : Point
+		perp_direction : Point — unit perpendicular vector
+		segment        : Line | CubicBezier
+
+	Returns:
+		(Point, float) or (None, None)
+	'''
+	long = 100000.0
+
+	end0 = Point(origin_point.x - perp_direction.x * long,
+				 origin_point.y - perp_direction.y * long)
+	end1 = Point(origin_point.x + perp_direction.x * long,
+				 origin_point.y + perp_direction.y * long)
+	ray = Line(end0.tuple, end1.tuple)
+
+	if isinstance(segment, Line):
+		hit = segment.intersect_line(ray, projection=False)
+		# Void detection — Void.x and Void.y are None
+		if hit is None or getattr(hit, 'x', None) is None:
+			return None, None
+
+		# Compute time on segment
+		seg_dx = segment.p1.x - segment.p0.x
+		seg_dy = segment.p1.y - segment.p0.y
+		seg_len_sq = seg_dx * seg_dx + seg_dy * seg_dy
+		if seg_len_sq < 1e-10:
+			return None, None
+		t = ((hit.x - segment.p0.x) * seg_dx + (hit.y - segment.p0.y) * seg_dy) / seg_len_sq
+		if not (0.0 <= t <= 1.0):
+			return None, None
+		return hit, t
+
+	if isinstance(segment, CubicBezier):
+		(times_x, times_y), (points_x, points_y) = segment.intersect_line(ray)
+		# Aggregate all hits with their times; pick the closest to origin_point
+		candidates = []
+		for t, p in zip(times_x, points_x):
+			if 0.0 <= t <= 1.0:
+				candidates.append((t, p))
+		for t, p in zip(times_y, points_y):
+			if 0.0 <= t <= 1.0:
+				candidates.append((t, p))
+		if not candidates:
+			return None, None
+
+		def dist2(p):
+			return (p.x - origin_point.x) ** 2 + (p.y - origin_point.y) ** 2
+
+		t, p = min(candidates, key=lambda tp: dist2(tp[1]))
+		return p, t
+
+	return None, None
+
+
+def _remove_inclusive_range_forward(start_node, stop_node):
+	'''Remove start_node and every node forward of it up to (but not including)
+	stop_node. start_node itself IS removed.
+	'''
+	cursor = start_node
+	to_remove = []
+	guard = 10000
+
+	while cursor is not None and cursor is not stop_node and guard > 0:
+		to_remove.append(cursor)
+		cursor = cursor.next
+		guard -= 1
+
+	for n in reversed(to_remove):
+		n.remove()
+
 
 def _get_crossing(node_list):
 	'''Find the intersection (crossing) point of the incoming and outgoing
@@ -337,6 +446,402 @@ class NodeActions(object):
 				node.reloc(crossing.x, crossing.y)
 
 		return True
+
+	# -- Cap tools --------------------------------------------------------------
+	# Cap operations work on two stem-corner on-curve nodes A and B that bracket
+	# the cap region of an open- or closed-stem terminal. They produce a flat
+	# (butt), circular (round), or pointed (angular) cap by replacing whatever
+	# nodes lie between A and B with the appropriate geometry. cap_rebuild is
+	# the universal "flatten any existing cap" tool — works on any contiguous
+	# selection inside a cap, not a fixed node count.
+	#
+	# The math primitives live in typerig.core.objects.metapen:
+	#   compute_cap_outward_direction, compute_cap_round_arc, compute_cap_angular_tip
+	# This keeps cap construction shared with the stroke envelope expander.
+
+	@staticmethod
+	def cap_butt(contour, idx_a, idx_b, side='auto'):
+		'''Build a perpendicular flat (butt) cap between two stem-corner nodes.
+
+		Drops a perpendicular from one corner onto the opposite stem segment.
+		The new on-curve replaces both A and B and any nodes between them; the
+		surviving stem segment on the kept side is split at the perpendicular foot.
+
+		Arguments:
+			contour : Contour
+			idx_a   : int — first stem corner (cap region begins after A in contour order)
+			idx_b   : int — second stem corner (cap region ends at B in contour order)
+			side    : 'a' | 'b' | 'auto' — which stem to keep.
+				'a' projects from B onto the segment behind A (keeps prev_on(A)
+				    intact and clean-cuts seg_in_a).
+				'b' projects from A onto the segment ahead of B (keeps next_on(B)
+				    intact and clean-cuts seg_out_b).
+				'auto' picks the side whose perpendicular foot lies closer to the
+				    opposite corner — i.e. the shorter cut.
+
+		Returns:
+			Node or None — the inserted on-curve replacing the cap, or None on failure.
+		'''
+		nodes = contour.nodes
+		node_a = nodes[idx_a]
+		node_b = nodes[idx_b]
+
+		if not node_a.is_on or not node_b.is_on or node_a is node_b:
+			return None
+
+		seg_in_a = node_a.prev_on.segment    # segment ending at A
+		seg_out_b = node_b.segment           # segment starting at B
+
+		if seg_in_a is None or seg_out_b is None:
+			return None
+
+		tangent_a = _segment_forward_tangent(seg_in_a, at_start=False)
+		tangent_b = _segment_forward_tangent(seg_out_b, at_start=True)
+
+		if tangent_a is None or tangent_b is None:
+			return None
+
+		# Perpendiculars (rotate 90° CCW)
+		perp_a = Point(-tangent_a.y, tangent_a.x)
+		perp_b = Point(-tangent_b.y, tangent_b.x)
+
+		# Candidate 'a': cut on seg_in_a using B's perpendicular
+		foot_a, time_a = _intersect_perpendicular_with_segment(node_b.point, perp_b, seg_in_a)
+		# Candidate 'b': cut on seg_out_b using A's perpendicular
+		foot_b, time_b = _intersect_perpendicular_with_segment(node_a.point, perp_a, seg_out_b)
+
+		# Reject "trivial" intersections where the foot lands AT the cap corner
+		# (time near 1.0 on seg_in_a == foot at A; time near 0.0 on seg_out_b == foot at B).
+		# These mean the chord A-B is already perpendicular to the stem on that side
+		# — there's nothing to cut. Caller (e.g. cap_rebuild) handles the no-cut fallback.
+		eps = 1e-3
+		if time_a is not None and time_a > 1.0 - eps:
+			foot_a, time_a = None, None
+		if time_b is not None and time_b < eps:
+			foot_b, time_b = None, None
+
+		if side == 'auto':
+			if foot_a is None and foot_b is None:
+				return None
+			if foot_a is None:
+				chosen = 'b'
+			elif foot_b is None:
+				chosen = 'a'
+			else:
+				dist_a = math.hypot(foot_a.x - node_b.point.x, foot_a.y - node_b.point.y)
+				dist_b = math.hypot(foot_b.x - node_a.point.x, foot_b.y - node_a.point.y)
+				chosen = 'a' if dist_a <= dist_b else 'b'
+		elif side == 'a':
+			if foot_a is None:
+				return None
+			chosen = 'a'
+		elif side == 'b':
+			if foot_b is None:
+				return None
+			chosen = 'b'
+		else:
+			return None
+
+		if chosen == 'a':
+			# Capture next_on(B) before mutation — that's where removal stops
+			stop_node = node_b.next_on
+			prev_a = node_a.prev_on
+			prev_a.insert_after(time_a)
+			new_node = prev_a.next_on
+			# Snap to exact foot (insert_after's parametric position may drift on curves)
+			new_node.point = foot_a
+			new_node.smooth = False
+			# Remove everything from new_node.next forward through B inclusive
+			_remove_inclusive_range_forward(new_node.next, stop_node)
+		else:
+			# Capture prev_on(A) before mutation
+			prev_a = node_a.prev_on
+			node_b.insert_after(time_b)
+			new_node = node_b.next_on
+			new_node.point = foot_b
+			new_node.smooth = False
+			# Remove everything from prev_a.next forward through new_node.prev inclusive
+			_remove_inclusive_range_forward(prev_a.next, new_node)
+
+		return new_node
+
+	@staticmethod
+	def cap_round(contour, idx_a, idx_b, curvature=1.0):
+		'''Build an italic-aware circular cap between two stem-corner nodes.
+
+		Constructs a circle of radius |AB|/2 centred at midpoint(A,B). The cap
+		tip lies on that circle in the outward stem direction (averaged from the
+		two stem tangents) — NOT on the perpendicular bisector of AB. For a
+		perpendicular cap on a straight stem this collapses to a true half-circle;
+		for an italic stem the tip stays on the stem axis and the two arcs are
+		unequal but still sum to 180°. See compute_cap_round_arc.
+
+		The result is three on-curves (A, tip, B) and four off-curves, replacing
+		any nodes that previously lay between A and B.
+
+		Arguments:
+			contour   : Contour
+			idx_a     : int — first stem corner
+			idx_b     : int — second stem corner
+			curvature : float — handle-length multiplier (1.0 = true circle approx).
+
+		Returns:
+			Node or None — the tip on-curve, or None on failure.
+		'''
+		from typerig.core.objects.node import node_types
+
+		nodes = contour.nodes
+		node_a = nodes[idx_a]
+		node_b = nodes[idx_b]
+
+		if not node_a.is_on or not node_b.is_on or node_a is node_b:
+			return None
+
+		seg_in_a = node_a.prev_on.segment
+		seg_out_b = node_b.segment
+
+		if seg_in_a is None or seg_out_b is None:
+			return None
+
+		tangent_a_pt = _segment_forward_tangent(seg_in_a, at_start=False)
+		tangent_b_pt = _segment_forward_tangent(seg_out_b, at_start=True)
+
+		if tangent_a_pt is None or tangent_b_pt is None:
+			return None
+
+		# Convert to complex for metapen primitive
+		pa = complex(node_a.point.x, node_a.point.y)
+		pb = complex(node_b.point.x, node_b.point.y)
+		t_a = complex(tangent_a_pt.x, tangent_a_pt.y)
+		t_b = complex(tangent_b_pt.x, tangent_b_pt.y)
+
+		outward = compute_cap_outward_direction(t_a, t_b, pa, pb)
+		arc = compute_cap_round_arc(pa, pb, outward, curvature=curvature)
+
+		if arc is None:
+			return None
+
+		h_a_out, h_tip_in, p_tip, h_tip_out, h_b_in = arc
+
+		# Capture stop and remove any existing cap interior between A and B.
+		# After cleanup, A and B are directly adjacent in the contour.
+		stop_node = node_b
+		_remove_inclusive_range_forward(node_a.next, stop_node)
+
+		# Now A.next == B. Insert the round cap as: bcp_out, bcp_in, on_tip, bcp_out, bcp_in
+		# between A and B, in contour order.
+		Cls = node_a.__class__
+		insert_at = node_a.idx + 1
+
+		new_h_a_out = Cls((h_a_out.real, h_a_out.imag), type=node_types['curve'])
+		new_h_tip_in = Cls((h_tip_in.real, h_tip_in.imag), type=node_types['curve'])
+		new_tip = Cls((p_tip.real, p_tip.imag), type=node_types['on'], smooth=True)
+		new_h_tip_out = Cls((h_tip_out.real, h_tip_out.imag), type=node_types['curve'])
+		new_h_b_in = Cls((h_b_in.real, h_b_in.imag), type=node_types['curve'])
+
+		contour.insert(insert_at + 0, new_h_a_out)
+		contour.insert(insert_at + 1, new_h_tip_in)
+		contour.insert(insert_at + 2, new_tip)
+		contour.insert(insert_at + 3, new_h_tip_out)
+		contour.insert(insert_at + 4, new_h_b_in)
+
+		# A and B should be smooth corners now (cap meets stem tangentially)
+		node_a.smooth = True
+		node_b.smooth = True
+
+		return new_tip
+
+	@staticmethod
+	def cap_angular(contour, idx_a, idx_b):
+		'''Build a pointed (miter) cap between two stem-corner nodes.
+
+		Extends the two stem tangents from A and B until they intersect; the
+		intersection becomes the cap tip. Single sharp on-curve replacing any
+		existing cap interior. Returns None if the tangents are parallel (no
+		well-defined tip).
+
+		Arguments:
+			contour : Contour
+			idx_a   : int — first stem corner
+			idx_b   : int — second stem corner
+
+		Returns:
+			Node or None — the tip on-curve.
+		'''
+		from typerig.core.objects.node import node_types
+
+		nodes = contour.nodes
+		node_a = nodes[idx_a]
+		node_b = nodes[idx_b]
+
+		if not node_a.is_on or not node_b.is_on or node_a is node_b:
+			return None
+
+		seg_in_a = node_a.prev_on.segment
+		seg_out_b = node_b.segment
+
+		if seg_in_a is None or seg_out_b is None:
+			return None
+
+		tangent_a_pt = _segment_forward_tangent(seg_in_a, at_start=False)
+		tangent_b_pt = _segment_forward_tangent(seg_out_b, at_start=True)
+
+		if tangent_a_pt is None or tangent_b_pt is None:
+			return None
+
+		pa = complex(node_a.point.x, node_a.point.y)
+		pb = complex(node_b.point.x, node_b.point.y)
+		t_a = complex(tangent_a_pt.x, tangent_a_pt.y)
+		t_b = complex(tangent_b_pt.x, tangent_b_pt.y)
+
+		tip = compute_cap_angular_tip(pa, pb, t_a, t_b)
+
+		if tip is None:
+			return None
+
+		# Remove existing cap interior
+		_remove_inclusive_range_forward(node_a.next, node_b)
+
+		Cls = node_a.__class__
+		new_tip = Cls((tip.real, tip.imag), type=node_types['on'], smooth=False)
+		contour.insert(node_a.idx + 1, new_tip)
+
+		return new_tip
+
+	@staticmethod
+	def cap_rebuild(contour, node_indices, target='butt'):
+		'''Universal "flatten an existing cap" — collapses any cap region back to
+		a straight butt cut.
+
+		Detects the two boundary on-curves at the ends of the selection range
+		(these are the cap-corner stem ends), then runs cap_butt against them.
+		Works on any contiguous selection — the previous fixed-7-node restriction
+		of the FL implementation is gone.
+
+		Arguments:
+			contour       : Contour
+			node_indices  : iterable[int] — indices of selected nodes inside the cap
+			target        : str — only 'butt' is implemented currently. Reserved
+				for future 'round'/'angular' rebuild targets.
+
+		Returns:
+			Node or None — the new on-curve replacing the cap, or None on failure.
+		'''
+		if target != 'butt':
+			return None
+
+		nodes = contour.nodes
+		selected_on = [nodes[i] for i in sorted(node_indices) if nodes[i].is_on]
+
+		if len(selected_on) < 2:
+			return None
+
+		# The two boundary on-curves — first and last in contour order
+		node_a = selected_on[0]
+		node_b = selected_on[-1]
+
+		# Try the perpendicular butt cut first (handles italic caps).
+		result = NodeActions.cap_butt(contour, node_a.idx, node_b.idx, side='auto')
+		if result is not None:
+			return result
+
+		# Fallback: cap is already perpendicular to the stem (or the geometry is
+		# degenerate). Just remove the interior and keep A, B as the flat-cap corners.
+		_remove_inclusive_range_forward(node_a.next, node_b)
+		node_a.smooth = False
+		node_b.smooth = False
+		return node_a
+
+	# -- Curve alignment --------------------------------------------------------
+	@staticmethod
+	def make_collinear(contour, node_indices, mode=-1, equalize=False, target_width=None):
+		'''Align two selected curve segments to be collinear at their handle
+		directions — typically the two parallel-stem-side curves of a stem
+		so the stem starts and ends straight.
+
+		Selection model:
+		  - A "selected curve" is an on-curve A whose forward segment is a
+		    CubicBezier, and whose 4 segment nodes (A, bcp_out, bcp_in, next_on)
+		    are ALL in node_indices.
+		  - Exactly 2 selected curves are required. With 0, 1, or 3+, the
+		    operation returns 0 (no-op).
+		  - The walk uses contour.nodes order, so a selection that wraps past
+		    the contour start is handled correctly (no hash-dedup, no
+		    first-and-last heuristic — the previous bug source).
+
+		Direction swapping is delegated to CubicBezier.make_collinear, which
+		uses match_direction_to to detect and handle parallel-stem curves
+		drawn in opposite contour directions.
+
+		Arguments:
+			contour       : Contour
+			node_indices  : iterable[int] — selected node indices
+			mode          : int — 0 = lock to first selected curve,
+			                       1 = lock to second,
+			                      -1 = average (default)
+			equalize      : bool — equalize stem width to target_width
+			target_width  : float | None — width for equalize; None = current average
+
+		Returns:
+			int — number of curve pairs aligned (0 or 1).
+		'''
+		selected = set(node_indices)
+		nodes = contour.nodes
+
+		selected_curves = []   # list of (start_on_node, CubicBezier segment)
+
+		for node in nodes:
+			if not node.is_on or node.idx not in selected:
+				continue
+
+			seg = node.segment
+			if not isinstance(seg, CubicBezier):
+				continue
+
+			end_on = node.next_on
+			if end_on is None or end_on.idx not in selected:
+				continue
+
+			# Walk between node and end_on collecting off-curves
+			bcps = []
+			cursor = node.next
+			guard = 0
+			while cursor is not None and cursor is not end_on and guard < 8:
+				if not cursor.is_on:
+					bcps.append(cursor)
+				cursor = cursor.next
+				guard += 1
+
+			if len(bcps) != 2:
+				continue
+			if not all(b.idx in selected for b in bcps):
+				continue
+
+			selected_curves.append((node, seg))
+
+		if len(selected_curves) != 2:
+			return 0
+
+		(start_a, curve_a), (start_b, curve_b) = selected_curves
+
+		new_a, new_b = curve_a.make_collinear(
+			curve_b, mode=mode, equalize=equalize, target_width=target_width
+		)
+
+		# Write new control points back to the contour
+		def _apply(start_on, new_curve):
+			bcp1 = start_on.next
+			bcp2 = bcp1.next
+			end_on = bcp2.next
+			start_on.point = new_curve.p0
+			bcp1.point = new_curve.p1
+			bcp2.point = new_curve.p2
+			end_on.point = new_curve.p3
+
+		_apply(start_a, new_a)
+		_apply(start_b, new_b)
+
+		return 1
 
 	# -- Node alignment ---------------------------------------------------------
 	@staticmethod

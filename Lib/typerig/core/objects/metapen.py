@@ -1023,6 +1023,192 @@ def compute_tip(edge_pre, edge_post, pre_elongation=0.5, post_elongation=0.5):
 		return [ext_pre[3], ext_post[0]]
 
 
+# - Cap primitives ----------------------
+# Public top-level primitives for building path caps from two stem-corner
+# anchor points and their stem tangents. Used by both the stroke envelope
+# expander (PenStroke._compute_cap) and panel-level cap actions
+# (NodeActions.cap_butt / cap_round / cap_angular / cap_rebuild).
+#
+# Convention:
+#   point_a, point_b : complex — the two on-curve corners where the cap
+#                      meets the stems
+#   tangent_a        : complex — unit tangent at A of the stem segment that
+#                      TERMINATES at A, in forward direction. Points outward
+#                      (into the cap region, away from the glyph body).
+#   tangent_b        : complex — unit tangent at B of the stem segment that
+#                      ORIGINATES at B, in forward direction. Points inward
+#                      (out of the cap region, into the glyph body).
+#
+# For a perpendicular cap on a straight stem, tangent_a == -tangent_b. For
+# italic / skewed stems, both point along the stem axis but the chord A-B
+# is not perpendicular to that axis.
+
+def compute_cap_outward_direction(tangent_a, tangent_b, point_a=None, point_b=None):
+	'''Compute the unit stem axis pointing outward (away from the glyph body)
+	from the two stem-corner tangents.
+
+	The construction averages the two outward-pointing tangents:
+	tangent_a already points outward; tangent_b points inward, so we negate
+	it before averaging.
+
+	Falls back to the perpendicular of chord A-B when tangents are degenerate
+	(near-zero or near-parallel-but-opposite-sign), which guarantees a usable
+	direction for any stem geometry.
+
+	Args:
+		tangent_a : complex — see module docstring
+		tangent_b : complex — see module docstring
+		point_a   : complex or None — A, used only for fallback
+		point_b   : complex or None — B, used only for fallback
+
+	Returns:
+		complex — unit vector along the stem axis, outward
+	'''
+	# Negate B's tangent so both vectors point outward, then average
+	t_a = tangent_a
+	t_b_out = -tangent_b
+
+	la = abs(t_a)
+	lb = abs(t_b_out)
+
+	if la > 1e-10:
+		t_a = t_a / la
+	if lb > 1e-10:
+		t_b_out = t_b_out / lb
+
+	avg = t_a + t_b_out
+	mag = abs(avg)
+
+	if mag > 1e-6:
+		return avg / mag
+
+	# Degenerate (tangents cancel or are zero): use chord perpendicular
+	if point_a is not None and point_b is not None:
+		chord = point_b - point_a
+		cl = abs(chord)
+		if cl > 1e-10:
+			# Perpendicular; sign chosen toward whichever tangent we have
+			perp = chord / cl * 1j
+			ref = t_a if la > 1e-10 else (-t_b_out if lb > 1e-10 else perp)
+			# Flip if the perpendicular points opposite to the available reference
+			if (perp.real * ref.real + perp.imag * ref.imag) < 0:
+				perp = -perp
+			return perp
+
+	# Last-resort: arbitrary unit vector
+	return complex(0, 1)
+
+
+def compute_cap_round_arc(point_a, point_b, outward_direction, curvature=1.0):
+	'''Italic-aware circular cap as two cubic Bezier arcs.
+
+	Constructs a circle of radius |AB|/2 centred at midpoint(A, B). Tip of
+	the cap is the point on that circle in the outward stem direction —
+	NOT the perpendicular bisector of AB. For a perpendicular cap (outward
+	direction perpendicular to the chord), the tip lies on the perpendicular
+	bisector and the two arcs are equal 90° quarters. For italic / skewed
+	caps, the tip stays on the stem axis and the two arcs are unequal but
+	still sum to 180° (since A and B are diametrically opposed on the
+	circle).
+
+	Each half-arc is approximated by a single cubic Bezier with handle
+	length L = (4/3) * tan(theta/4) * radius * curvature, where theta is
+	the arc's subtended angle.
+
+	Args:
+		point_a           : complex — first corner
+		point_b           : complex — second corner
+		outward_direction : complex — unit vector along stem axis, outward
+		                    (typically from compute_cap_outward_direction)
+		curvature         : float — handle-length scale (1.0 = true circle)
+
+	Returns:
+		tuple of 5 complex — (h_a_out, h_tip_in, p_tip, h_tip_out, h_b_in)
+		These are the INTERIOR points of the cap. Caller emits point_a
+		first and point_b last.
+
+		Returns None if A and B coincide.
+	'''
+	chord = point_b - point_a
+	chord_len = abs(chord)
+
+	if chord_len < 1e-10:
+		return None
+
+	r = chord_len / 2.0
+	mid = (point_a + point_b) / 2.0
+
+	# Normalise outward direction
+	od_mag = abs(outward_direction)
+	if od_mag < 1e-10:
+		# Degenerate — fall back to chord perpendicular (arbitrary side)
+		d = chord / chord_len * 1j
+	else:
+		d = outward_direction / od_mag
+
+	# Tip lies on the circle in the outward direction
+	p_tip = mid + r * d
+
+	# Radii from centre to each on-curve point
+	r_a = point_a - mid       # length r
+	r_tip = p_tip - mid       # length r
+	r_b = point_b - mid       # length r, == -r_a
+
+	# Determine arc rotation sense: CCW (1j) if cross(r_a, r_tip) > 0
+	cross = r_a.real * r_tip.imag - r_a.imag * r_tip.real
+	rot = 1j if cross > 0 else -1j
+
+	# Half-arc angles. r_a and r_tip are both length r, so:
+	dot_a = (r_a.real * r_tip.real + r_a.imag * r_tip.imag) / (r * r)
+	dot_a = max(-1.0, min(1.0, dot_a))
+	theta_a = math.acos(dot_a)
+	theta_b = math.pi - theta_a   # because A and B are diametrically opposite
+
+	# Kappa per half-arc (4/3 * tan(theta/4))
+	kappa_a = 4.0 / 3.0 * math.tan(theta_a / 4.0) * curvature
+	kappa_b = 4.0 / 3.0 * math.tan(theta_b / 4.0) * curvature
+
+	# Tangent at each on-curve = radius rotated 90° in arc direction.
+	# Handles point ALONG the arc (forward at start, backward at end).
+	h_a_out  = point_a + kappa_a * (r_a   * rot)
+	h_tip_in = p_tip   - kappa_a * (r_tip * rot)
+	h_tip_out= p_tip   + kappa_b * (r_tip * rot)
+	h_b_in   = point_b - kappa_b * (r_b   * rot)
+
+	return (h_a_out, h_tip_in, p_tip, h_tip_out, h_b_in)
+
+
+def compute_cap_angular_tip(point_a, point_b, tangent_a, tangent_b):
+	'''Pointed (miter) cap tip — analytical line-line intersection.
+
+	Casts a ray from A along tangent_a (which already points outward) and
+	a ray from B along -tangent_b (negated so it points outward), and
+	returns their intersection. This is the same math as a stroke miter
+	join, exposed at the cap level.
+
+	Args:
+		point_a   : complex
+		point_b   : complex
+		tangent_a : complex — outward-pointing stem tangent at A
+		tangent_b : complex — inward-pointing stem tangent at B (will be negated)
+
+	Returns:
+		complex — intersection point, or None if tangents are parallel
+		(no well-defined tip).
+	'''
+	d1 = tangent_a
+	d2 = -tangent_b
+	dx = point_b - point_a
+
+	denom = d1.real * d2.imag - d1.imag * d2.real
+
+	if abs(denom) < 1e-10:
+		return None  # Parallel — no intersection
+
+	t = (dx.real * d2.imag - dx.imag * d2.real) / denom
+	return point_a + t * d1
+
+
 # - Main pen_stroke function ------------
 class PenStroke(object):
 	'''Pen stroke envelope expander.
