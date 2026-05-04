@@ -80,6 +80,91 @@ def _selected_oncurve_nodes(layer):
 # ===================================================================
 # 1. CONTOUR SLICE / WELD
 # ===================================================================
+def _slice_core_layer(core_layer, ContourActions, expanded=False,
+                      fallback_triples=None):
+    """Run the slice orchestrator on a pure-core layer in place. Returns
+    True if any contour was sliced/welded.
+
+    ``fallback_triples``: if no selection survived the eject, use these
+    proxy-side triples. Positions in the ejected layer are identical to
+    the proxy layer's, so the same (sid, cid, nid) coordinates apply.
+    """
+    triples = _selected_triples(core_layer)
+    if len(triples) < 2 and fallback_triples and len(fallback_triples) >= 2:
+        triples = fallback_triples
+    if len(triples) < 2:
+        return False
+
+    by_shape = {}
+    for sid, cid, nid in triples:
+        by_shape.setdefault(sid, []).append((sid, cid, nid))
+
+    mutated = False
+    for sid, sh_triples in by_shape.items():
+        if sid >= len(core_layer.shapes):
+            continue
+        if ContourActions.contour_slice(core_layer.shapes[sid],
+                                        sh_triples, expanded=expanded):
+            mutated = True
+    return mutated
+
+
+def _propagate_selection(core_layer, fallback_triples):
+    """Mark core nodes selected based on (sid, cid, nid) triples — used
+    when the eject path didn't propagate ``selected`` and we need core
+    selection for downstream traversal (e.g. auto-align)."""
+    if not fallback_triples:
+        return
+    for sid, cid, nid in fallback_triples:
+        if sid >= len(core_layer.shapes):
+            continue
+        contours = core_layer.shapes[sid].contours
+        if cid >= len(contours):
+            continue
+        if nid >= len(contours[cid].data):
+            continue
+        contours[cid].data[nid].selected = True
+
+
+def _auto_align_core_layer(core_layer, ContourActions):
+    """Run the auto-align orchestrator on a pure-core layer in place.
+    Returns True if any pair was aligned."""
+    by_contour = {}
+    for s in core_layer.shapes:
+        for c in s.contours:
+            sel = [n for n in c.data if n.selected and n.is_on]
+            if sel:
+                by_contour[id(c)] = (c, sel)
+
+    all_nodes = [n for _, (_, sel) in by_contour.items() for n in sel]
+    if len(all_nodes) < 4:
+        return False
+
+    pairs = []
+    for _, (contour, sel) in by_contour.items():
+        if len(sel) >= 2:
+            p_first, p_second = ContourActions.node_neighbor_pairs(
+                contour, sel)
+            if p_first:
+                pairs.append(p_first)
+            if p_second:
+                pairs.append(p_second)
+
+    if len(pairs) < 2 and len(all_nodes) >= 4:
+        ref_contour = next(iter(by_contour.values()))[0]
+        p_first, p_second = ContourActions.node_neighbor_pairs(
+            ref_contour, all_nodes)
+        pairs = [p for p in (p_first, p_second) if p]
+
+    if not pairs:
+        return False
+
+    for pair in pairs:
+        mode = ContourActions.junction_align_mode(pair)
+        ContourActions.contour_pair_align(pair, mode)
+    return True
+
+
 def npa_contour_slice(glyph, scope_layers, NodeActions, ContourActions,
                       expanded=False):
     """Slice contours at selection. Same-contour selection extracts a
@@ -92,101 +177,56 @@ def npa_contour_slice(glyph, scope_layers, NodeActions, ContourActions,
     identity, so this incurs no cost.
     """
     for lyr in _iter_scope(glyph, scope_layers):
-        # Read selection from the live layer (proxy nodes carry .selected).
-        triples = _selected_triples(lyr)
-        if len(triples) < 2:
-            continue
-
+        live_triples = _selected_triples(lyr)
         core_layer = _eject(lyr)
         if core_layer is None:
             continue
-
-        # Re-read selection from the ejected pure-core layer to ensure
-        # selection state survived the eject (it does for both gs3 and
-        # pure-core paths).
-        core_triples = _selected_triples(core_layer)
-        if len(core_triples) < 2:
-            # Fall back to the proxy-side triples (positions are identical).
-            core_triples = triples
-
-        by_shape = {}
-        for sid, cid, nid in core_triples:
-            by_shape.setdefault(sid, []).append((sid, cid, nid))
-
-        mutated = False
-        for sid, sh_triples in by_shape.items():
-            if sid >= len(core_layer.shapes):
-                continue
-            if ContourActions.contour_slice(core_layer.shapes[sid],
-                                            sh_triples, expanded=expanded):
-                mutated = True
-
-        if mutated:
+        if _slice_core_layer(core_layer, ContourActions,
+                             expanded=expanded,
+                             fallback_triples=live_triples):
             _mount(lyr, core_layer)
 
 
 def npa_contour_auto_align(glyph, scope_layers, NodeActions, ContourActions):
     """Auto overlap align: classify and align two neighbor-pairs at a cut
-    junction. Operates on selection of >=4 on-curve nodes per layer.
-
-    Uses eject/mount so coordinate writes always land on the host. The
-    pair classification reads contour traversal from the ejected core
-    layer, so node neighbours are derived consistently regardless of
-    host proxy quirks.
-    """
+    junction. Operates on selection of >=4 on-curve nodes per layer."""
     for lyr in _iter_scope(glyph, scope_layers):
+        live_triples = _selected_triples(lyr)
         core_layer = _eject(lyr)
         if core_layer is None:
             continue
-
-        by_contour = {}
-        for s in core_layer.shapes:
-            for c in s.contours:
-                sel = [n for n in c.data if n.selected and n.is_on]
-                if sel:
-                    by_contour[id(c)] = (c, sel)
-
-        all_nodes = [n for _, (_, sel) in by_contour.items() for n in sel]
-        if len(all_nodes) < 4:
-            continue
-
-        pairs = []
-        for _, (contour, sel) in by_contour.items():
-            if len(sel) >= 2:
-                p_first, p_second = ContourActions.node_neighbor_pairs(
-                    contour, sel)
-                if p_first:
-                    pairs.append(p_first)
-                if p_second:
-                    pairs.append(p_second)
-
-        if len(pairs) < 2 and len(all_nodes) >= 4:
-            ref_contour = next(iter(by_contour.values()))[0]
-            p_first, p_second = ContourActions.node_neighbor_pairs(
-                ref_contour, all_nodes)
-            pairs = [p for p in (p_first, p_second) if p]
-
-        if not pairs:
-            continue
-
-        for pair in pairs:
-            mode = ContourActions.junction_align_mode(pair)
-            ContourActions.contour_pair_align(pair, mode)
-
-        _mount(lyr, core_layer)
+        # If selection didn't survive the eject, restore it from the live
+        # proxy triples before running pair detection.
+        if not _selected_triples(core_layer):
+            _propagate_selection(core_layer, live_triples)
+        if _auto_align_core_layer(core_layer, ContourActions):
+            _mount(lyr, core_layer)
 
 
 def npa_contour_slice_align(glyph, scope_layers, NodeActions, ContourActions,
                             expanded=False):
     """Slice + auto-align in one step. Mirrors popup do_cut_align_auto.
 
-    Two separate eject/mount round-trips: the slice changes contour
-    membership and re-reads selection on the live layer between
-    operations, matching the FL popup's two-step flow.
+    Performs both operations within a SINGLE eject/mount round-trip so
+    selection state on the cloned cut nodes survives between the two
+    steps. (A separate mount between slice and auto-align would rebuild
+    the host paths from scratch, dropping the per-node ``selected``
+    flag and leaving auto-align with no input.)
     """
-    npa_contour_slice(glyph, scope_layers, NodeActions, ContourActions,
-                      expanded=expanded)
-    npa_contour_auto_align(glyph, scope_layers, NodeActions, ContourActions)
+    for lyr in _iter_scope(glyph, scope_layers):
+        live_triples = _selected_triples(lyr)
+        core_layer = _eject(lyr)
+        if core_layer is None:
+            continue
+        # Restore selection on core if the eject path didn't carry it.
+        if not _selected_triples(core_layer):
+            _propagate_selection(core_layer, live_triples)
+        sliced = _slice_core_layer(core_layer, ContourActions,
+                                   expanded=expanded,
+                                   fallback_triples=live_triples)
+        aligned = _auto_align_core_layer(core_layer, ContourActions)
+        if sliced or aligned:
+            _mount(lyr, core_layer)
 
 
 # ===================================================================

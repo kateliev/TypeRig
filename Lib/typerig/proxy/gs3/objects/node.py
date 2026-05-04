@@ -196,12 +196,18 @@ class trNode(Node):
 
 	# - Eject / mount -------------------------
 	def eject(self):
-		'''Detach from host: return a pure core Node.'''
+		'''Detach from host: return a pure core Node.
+
+		``selected`` is propagated so that core dispatchers reading
+		``node.selected`` on an ejected layer see the editor selection
+		(needed by cut / slice / auto-align tools).
+		'''
 		return Node(
 			float(self.x), float(self.y),
 			type=self.type,
 			smooth=self.smooth,
 			name=self.name,
+			selected=bool(self.selected),
 		)
 
 	def mount(self, core_node):
