@@ -252,17 +252,37 @@ def npa_make_monoline(glyph, scope_layers, NodeActions,
 # ===================================================================
 # 3. ALIGN TOOLS
 # ===================================================================
-def npa_align(glyph, scope_layers, NodeActions, mode):
-    """Align selected nodes using the given mode string."""
+def npa_align(glyph, scope_layers, NodeActions, mode,
+              smart_shift=True, keep_relations=False, lerp_shift=False,
+              intercept=False, extrapolate=False, use_target=False):
+    """Align selected nodes using the given mode string.
+
+    Modifier kwargs are forwarded to NodeActions.nodes_align. When
+    use_target=True, the stored align target (set via npa_target_set) is
+    passed in as the override target.
+    """
+    target = _align_target if use_target else None
     for lyr in _iter_scope(glyph, scope_layers):
         nodes = _selected_nodes(lyr)
         if nodes:
-            NodeActions.nodes_align(nodes, mode)
+            NodeActions.nodes_align(
+                nodes, mode,
+                smart_shift=smart_shift,
+                keep_relations=keep_relations,
+                lerp_shift=lerp_shift,
+                intercept=intercept,
+                extrapolate=extrapolate,
+                target=target,
+            )
 
 
-def npa_target_set(glyph, scope_layers, NodeActions):
+def npa_target_set(glyph, scope_layers, NodeActions, safe_distance=0):
     """Store the centroid of the current selection as align target.
-    Returns True if target was set, False otherwise."""
+
+    Optional safe_distance is added to both X and Y of the centroid (matches
+    the FL popup's safe-distance spinbox: pull back from target on each axis).
+    Returns True if target was set, False otherwise.
+    """
     global _align_target
     active = glyph.layer(scope_layers[0] if scope_layers else None)
     if active is None:
@@ -274,8 +294,8 @@ def npa_target_set(glyph, scope_layers, NodeActions):
         return False
     from typerig.core.objects.point import Point
     _align_target = Point(
-        sum(n.x for n in sel) / len(sel),
-        sum(n.y for n in sel) / len(sel)
+        sum(n.x for n in sel) / len(sel) + safe_distance,
+        sum(n.y for n in sel) / len(sel) + safe_distance
     )
     return True
 

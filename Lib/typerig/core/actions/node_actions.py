@@ -997,8 +997,61 @@ class NodeActions(object):
 		return 1
 
 	# -- Node alignment ---------------------------------------------------------
+	# X-axis alignment modes (only X coordinate is changed)
+	_ALIGN_MODES_X = frozenset(('L', 'R', 'C', 'BBoxCenterX', 'peerCenterX', 'Y'))
+	# Y-axis alignment modes (only Y coordinate is changed)
+	_ALIGN_MODES_Y = frozenset(('T', 'B', 'E', 'BBoxCenterY', 'peerCenterY', 'X'))
+
 	@staticmethod
-	def nodes_align(nodes, mode='L'):
+	def _bezier_align_node(node, target_val, use_y):
+		'''Slide an on-curve node along its outgoing/incoming cubic bezier
+		(or its mathematical extension) to the position where B(t) on the
+		chosen axis equals target_val. Updates the on-curve plus the two
+		BCPs of the affected segment via de Casteljau.
+		'''
+		seg = node.segment_nodes
+		prev_seg = node.prev_on.segment_nodes if node.prev_on is not None else None
+
+		seg_cubic      = seg is not None and len(seg) == 4 and seg[1].type == node_types['curve']
+		prev_seg_cubic = prev_seg is not None and len(prev_seg) == 4 and prev_seg[1].type == node_types['curve']
+
+		if not seg_cubic and not prev_seg_cubic:
+			return False
+
+		use_prev = (not seg_cubic) and prev_seg_cubic
+		source = prev_seg if use_prev else seg
+		curve = CubicBezier(*[n.point for n in source])
+
+		candidates = curve.find_t_for_y(target_val) if use_y else curve.find_t_for_x(target_val)
+		if not candidates:
+			return False
+
+		# Reject t == 0 / t == 1 (would map onto an endpoint without slide).
+		valid = [t for t in candidates if abs(t) > 1e-3 and abs(t - 1.0) > 1e-3]
+		if not valid:
+			return False
+
+		if use_prev:
+			# Node sits at t=1 of prev_seg — pick root nearest 1.0
+			best_t = min(valid, key=lambda t: abs(t - 1.0))
+			first, _ = curve.solve_slice(best_t)
+			# first.p3 = new node pos, p2 = inner BCP near node, p1 = outer BCP near prev_on
+			source[3].point = first.p3
+			source[2].point = first.p2
+			source[1].point = first.p1
+		else:
+			# Node sits at t=0 of outgoing seg — pick root nearest 0.0
+			best_t = min(valid, key=lambda t: abs(t))
+			_, second = curve.solve_slice(best_t)
+			source[0].point = second.p0
+			source[1].point = second.p1
+			source[2].point = second.p2
+
+		return True
+
+	@staticmethod
+	def nodes_align(nodes, mode='L', smart_shift=True, keep_relations=False,
+	                lerp_shift=False, intercept=False, extrapolate=False, target=None):
 		'''Align nodes to a computed target based on the alignment mode.
 
 		Arguments:
@@ -1016,6 +1069,21 @@ class NodeActions(object):
 				'peerCenterY' - Align each node to midpoint of its prev/next on-curve Y
 				'Y' - Align to imaginary line between Y-min and Y-max of selection (project X)
 				'X' - Align to imaginary line between X-min and X-max of selection (project Y)
+			smart_shift (bool): If True, dragging an on-curve also drags adjacent BCPs.
+				If False, only the on-curve coordinate moves ("dumb shift").
+			keep_relations (bool): If True, treat selection as a rigid group: compute
+				one delta from group anchor to target and shift every node uniformly,
+				preserving relative offsets between selected nodes.
+			lerp_shift (bool): If True, use Interpolated Nudge (Node.lerp_shift) instead
+				of direct relocation. Mutually exclusive with intercept and extrapolate.
+			intercept (bool): If True, for vertical modes (T/B/E) project each node's
+				X onto the line through its prev/next on-curve neighbours so it slides
+				along the local stem. Mutually exclusive with lerp_shift and extrapolate.
+			extrapolate (bool): If True, slide on-curve nodes along their cubic bezier
+				(or its mathematical extension) instead of moving by coordinate.
+				Mutually exclusive with lerp_shift and intercept.
+			target (Point|Node|None): If provided, overrides the mode-computed target.
+				Modes still control which axis (X / Y / both) is applied.
 
 		Returns:
 			bool: True if any nodes were moved.
@@ -1023,110 +1091,168 @@ class NodeActions(object):
 		if not nodes:
 			return False
 
+		# - Resolve per-mode target and axis control --------------------------------
+		# control = (modify_x, modify_y) for align_to.
+		# Returns (target_point_or_line, control, axis_value) per node.
+		# axis_value is the scalar used by intercept/extrapolate solvers.
+		ext_target = target  # caller-provided override
 		moved = False
 
-		# - Selection-relative alignment modes
-		if mode == 'L':
-			target_x = min(n.x for n in nodes)
+		# Pre-compute selection-wide values used by most modes.
+		def _resolve_axes(_mode):
+			if _mode in NodeActions._ALIGN_MODES_X:
+				return (True, False)
+			if _mode in NodeActions._ALIGN_MODES_Y:
+				return (False, True)
+			return (True, True)
+
+		def _resolve_target(_mode):
+			'''Returns a callable node -> (target_entity, axis_value_or_None).'''
+			if _mode == 'L':
+				tx = min(n.x for n in nodes)
+				return lambda n, _tx=tx: (Point(_tx, n.y), _tx)
+			if _mode == 'R':
+				tx = max(n.x for n in nodes)
+				return lambda n, _tx=tx: (Point(_tx, n.y), _tx)
+			if _mode == 'T':
+				ty = max(n.y for n in nodes)
+				return lambda n, _ty=ty: (Point(n.x, _ty), _ty)
+			if _mode == 'B':
+				ty = min(n.y for n in nodes)
+				return lambda n, _ty=ty: (Point(n.x, _ty), _ty)
+			if _mode == 'C':
+				tx = (min(n.x for n in nodes) + max(n.x for n in nodes)) / 2.
+				return lambda n, _tx=tx: (Point(_tx, n.y), _tx)
+			if _mode == 'E':
+				ty = (min(n.y for n in nodes) + max(n.y for n in nodes)) / 2.
+				return lambda n, _ty=ty: (Point(n.x, _ty), _ty)
+			if _mode == 'BBoxCenterX':
+				b = Bounds([n.tuple for n in nodes])
+				tx = b.x + b.width / 2.
+				return lambda n, _tx=tx: (Point(_tx, n.y), _tx)
+			if _mode == 'BBoxCenterY':
+				b = Bounds([n.tuple for n in nodes])
+				ty = b.y + b.height / 2.
+				return lambda n, _ty=ty: (Point(n.x, _ty), _ty)
+			if _mode == 'peerCenterX':
+				def _peer_x(n):
+					if not n.is_on: return (None, None)
+					tx = n.x + (n.prev_on.x + n.next_on.x - 2 * n.x) / 2.
+					return (Point(tx, n.y), tx)
+				return _peer_x
+			if _mode == 'peerCenterY':
+				def _peer_y(n):
+					if not n.is_on: return (None, None)
+					ty = n.y + (n.prev_on.y + n.next_on.y - 2 * n.y) / 2.
+					return (Point(n.x, ty), ty)
+				return _peer_y
+			if _mode == 'Y':
+				min_n = min(nodes, key=lambda n: n.y)
+				max_n = max(nodes, key=lambda n: n.y)
+				line = Vector(min_n.point, max_n.point)
+				return lambda n, _line=line: (_line, _line.solve_x(n.y))
+			if _mode == 'X':
+				min_n = min(nodes, key=lambda n: n.x)
+				max_n = max(nodes, key=lambda n: n.x)
+				line = Vector(min_n.point, max_n.point)
+				return lambda n, _line=line: (_line, _line.solve_y(n.x))
+			return lambda n: (None, None)
+
+		control = _resolve_axes(mode)
+		resolver = _resolve_target(mode)
+		use_y = mode in NodeActions._ALIGN_MODES_Y
+
+		# - keep_relations path: rigid group shift ---------------------------------
+		if keep_relations:
+			if ext_target is not None:
+				ax = ext_target.x if hasattr(ext_target, 'x') else ext_target[0]
+				ay = ext_target.y if hasattr(ext_target, 'y') else ext_target[1]
+			else:
+				# Use first node's mode-resolved target as group anchor.
+				probe_target, _ = resolver(nodes[0])
+				if probe_target is None or isinstance(probe_target, (Line, Vector)):
+					return False  # keep_relations not meaningful for projection modes
+				ax, ay = probe_target.x, probe_target.y
+
+			# Group anchor: mean of selection (matches container.alignTo semantics).
+			gx = sum(n.x for n in nodes) / len(nodes)
+			gy = sum(n.y for n in nodes) / len(nodes)
+			dx = (ax - gx) if control[0] else 0.
+			dy = (ay - gy) if control[1] else 0.
+
+			if dx == 0. and dy == 0.:
+				return False
+
 			for node in nodes:
-				if node.x != target_x:
-					node.smart_reloc(target_x, node.y)
+				if smart_shift:
+					node.smart_shift(dx, dy)
+				else:
+					node.shift(dx, dy)
+			return True
+
+		# - Per-node path -----------------------------------------------------------
+		for node in nodes:
+			if ext_target is not None:
+				per_target = ext_target
+				per_axis_val = ext_target.y if use_y else ext_target.x
+			else:
+				per_target, per_axis_val = resolver(node)
+				if per_target is None:
+					continue
+
+			# - Extrapolate: slide along bezier ------------------------------------
+			if extrapolate and node.is_on and per_axis_val is not None:
+				if NodeActions._bezier_align_node(node, per_axis_val, use_y):
 					moved = True
+				continue
 
-		elif mode == 'R':
-			target_x = max(n.x for n in nodes)
-			for node in nodes:
-				if node.x != target_x:
-					node.smart_reloc(target_x, node.y)
+			# - Intercept: project X onto stem line through prev/next on-curves ---
+			if intercept and use_y and node.is_on and per_axis_val is not None:
+				prev_on = node.prev_on
+				next_on = node.next_on
+				if prev_on is not None and next_on is not None:
+					stem = Vector(prev_on.point, next_on.point)
+					try:
+						new_x = stem.solve_x(per_axis_val)
+					except Exception:
+						new_x = node.x
+					new_y = per_axis_val
+					if smart_shift:
+						node.smart_reloc(new_x, new_y)
+					else:
+						node.reloc(new_x, new_y)
 					moved = True
+					continue
 
-		elif mode == 'T':
-			target_y = max(n.y for n in nodes)
-			for node in nodes:
-				if node.y != target_y:
-					node.smart_reloc(node.x, target_y)
+			# - Lerp: interpolated nudge -------------------------------------------
+			if lerp_shift and node.is_on:
+				if isinstance(per_target, (Line, Vector)):
+					new_x = per_target.solve_x(node.y) if control[0] else node.x
+					new_y = per_target.solve_y(node.x) if control[1] else node.y
+				else:
+					new_x = per_target.x if control[0] else node.x
+					new_y = per_target.y if control[1] else node.y
+				dx = new_x - node.x
+				dy = new_y - node.y
+				if dx == 0. and dy == 0.:
+					continue
+				try:
+					node.lerp_shift(dx, dy)
 					moved = True
-
-		elif mode == 'B':
-			target_y = min(n.y for n in nodes)
-			for node in nodes:
-				if node.y != target_y:
-					node.smart_reloc(node.x, target_y)
+				except NotImplementedError:
+					# Fallback for TT/quadratic segments.
+					if smart_shift:
+						node.smart_reloc(new_x, new_y)
+					else:
+						node.reloc(new_x, new_y)
 					moved = True
+				continue
 
-		elif mode == 'C':
-			min_x = min(n.x for n in nodes)
-			max_x = max(n.x for n in nodes)
-			target_x = (min_x + max_x) / 2.
-			for node in nodes:
-				if node.x != target_x:
-					node.smart_reloc(target_x, node.y)
-					moved = True
-
-		elif mode == 'E':
-			min_y = min(n.y for n in nodes)
-			max_y = max(n.y for n in nodes)
-			target_y = (min_y + max_y) / 2.
-			for node in nodes:
-				if node.y != target_y:
-					node.smart_reloc(node.x, target_y)
-					moved = True
-
-		elif mode == 'BBoxCenterX':
-			bounds = Bounds([n.tuple for n in nodes])
-			target_x = bounds.x + bounds.width / 2.
-			for node in nodes:
-				if node.x != target_x:
-					node.smart_reloc(target_x, node.y)
-					moved = True
-
-		elif mode == 'BBoxCenterY':
-			bounds = Bounds([n.tuple for n in nodes])
-			target_y = bounds.y + bounds.height / 2.
-			for node in nodes:
-				if node.y != target_y:
-					node.smart_reloc(node.x, target_y)
-					moved = True
-
-		elif mode == 'peerCenterX':
-			for node in nodes:
-				if node.is_on:
-					target_x = node.x + (node.prev_on.x + node.next_on.x - 2 * node.x) / 2.
-					if node.x != target_x:
-						node.smart_reloc(target_x, node.y)
-						moved = True
-
-		elif mode == 'peerCenterY':
-			for node in nodes:
-				if node.is_on:
-					target_y = node.y + (node.prev_on.y + node.next_on.y - 2 * node.y) / 2.
-					if node.y != target_y:
-						node.smart_reloc(node.x, target_y)
-						moved = True
-
-		elif mode == 'Y':
-			# - Align to imaginary line between Y-min and Y-max nodes (project onto X)
-			min_node = min(nodes, key=lambda n: n.y)
-			max_node = max(nodes, key=lambda n: n.y)
-			target_line = Vector(min_node.point, max_node.point)
-
-			for node in nodes:
-				new_x = target_line.solve_x(node.y)
-				if node.x != new_x:
-					node.smart_reloc(new_x, node.y)
-					moved = True
-
-		elif mode == 'X':
-			# - Align to imaginary line between X-min and X-max nodes (project onto Y)
-			min_node = min(nodes, key=lambda n: n.x)
-			max_node = max(nodes, key=lambda n: n.x)
-			target_line = Vector(min_node.point, max_node.point)
-
-			for node in nodes:
-				new_y = target_line.solve_y(node.x)
-				if node.y != new_y:
-					node.smart_reloc(node.x, new_y)
-					moved = True
+			# - Default: align_to --------------------------------------------------
+			old_x, old_y = node.x, node.y
+			node.align_to(per_target, control, smart_shift)
+			if node.x != old_x or node.y != old_y:
+				moved = True
 
 		return moved
 
