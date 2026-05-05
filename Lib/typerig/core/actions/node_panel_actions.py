@@ -234,6 +234,21 @@ def npa_make_collinear(glyph, scope_layers, NodeActions,
                                                 target_width=target_width)
 
 
+def npa_make_monoline(glyph, scope_layers, NodeActions,
+                      target_width=None, preserve_taper=False):
+    """Regularize two selected curve segments as +/- offsets of their shared
+    control-polygon median (monoline-pen model). Both sides end up with
+    matching tangents AND matching handle lengths -> truly parallel."""
+    for lyr in _iter_scope(glyph, scope_layers):
+        for s in lyr.shapes:
+            for c in s.contours:
+                idx = _selected_indices(c)
+                if idx:
+                    NodeActions.make_monoline(c, idx,
+                                              target_width=target_width,
+                                              preserve_taper=preserve_taper)
+
+
 # ===================================================================
 # 3. ALIGN TOOLS
 # ===================================================================

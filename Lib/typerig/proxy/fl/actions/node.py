@@ -1347,3 +1347,37 @@ class TRNodeActionCollector(object):
 		if do_update:
 			glyph.updateObject(glyph.fl, '{};\tMake collinear @ {}.'.format(glyph.name, '; '.join(wLayers)))
 			active_workspace.getCanvas(True).refreshAll()
+
+	@staticmethod
+	def make_monoline(glyph:eGlyph, pLayers:tuple, preserve_taper:bool=False):
+		'''Make two curves monoline (parallel offsets of a shared median skeleton).'''
+
+		# - Init
+		wLayers = glyph._prepareLayers(pLayers)
+		modifiers = QtGui.QApplication.keyboardModifiers()
+
+		selection_per_layer = {layer:glyph.selectedNodes(layer, extend=eNode) for layer in wLayers}
+		do_update = False
+
+		# - Process
+		for layer, selection in selection_per_layer.items():
+			segments_set = {}
+
+			for node in selection:
+				node_segment = node.getSegmentNodes()
+				if len(node_segment) == 4:
+					unique_key = hash(tuple([node.index for node in node_segment]))
+					segments_set[unique_key] = node_segment
+
+			if len(segments_set.keys()) >= 2:
+				data = list(segments_set.values())
+				curve_A = eCurveEx(data[0])
+				curve_B = eCurveEx(data[-1])
+				new_curve_A, new_curve_B = curve_A.make_monoline(curve_B, target_width=None, preserve_taper=preserve_taper, apply=True)
+				do_update = True
+			else:
+				output(1, 'Make monoline', 'Selection must be 2 curves = 8 Nodes! Current = {}'.format(len(selection)))
+
+		if do_update:
+			glyph.updateObject(glyph.fl, '{};\tMake monoline @ {}.'.format(glyph.name, '; '.join(wLayers)))
+			active_workspace.getCanvas(True).refreshAll()

@@ -249,6 +249,11 @@ class TRNodeBasics(QtGui.QWidget):
 		lay_cap.addWidget(self.btn_curve_collinear)
 		self.btn_curve_collinear.clicked.connect(lambda: TRNodeActionCollector.make_collinear(eGlyph(), pLayers, get_modifier(QtCore.Qt.AltModifier)))
 
+		tooltip_button = 'Make two selected curves monoline (truly parallel offsets of a shared median skeleton)\n+Alt: preserve per-end taper instead of uniform width'
+		self.btn_curve_monoline = CustomPushButton('channel_process', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_cap.addWidget(self.btn_curve_monoline)
+		self.btn_curve_monoline.clicked.connect(lambda: TRNodeActionCollector.make_monoline(eGlyph(), pLayers, get_modifier(QtCore.Qt.AltModifier)))
+
 		#lay_cap.setColumnStretch(lay_cap.columnCount(), 1)
 		box_cap.setLayout(lay_cap)
 		self.lay_main.addWidget(box_cap)

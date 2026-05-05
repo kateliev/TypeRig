@@ -127,7 +127,17 @@ class eCurveEx(object):
 	def make_collinear(self, other, mode=0, equalize=False, target_width=None, apply=True):
 		if self.isCurve and other.isCurve:
 			self.curve, other.curve = self.curve.make_collinear(other.curve, mode, equalize, target_width)
-			if apply: 
+			if apply:
+				self.updateNodes()
+				other.updateNodes()
+			return self.curve, other.curve
+		else:
+			return self.__riseCurveWaring()
+
+	def make_monoline(self, other, target_width=None, preserve_taper=False, apply=True):
+		if self.isCurve and other.isCurve:
+			self.curve, other.curve = self.curve.make_monoline(other.curve, target_width, preserve_taper)
+			if apply:
 				self.updateNodes()
 				other.updateNodes()
 			return self.curve, other.curve

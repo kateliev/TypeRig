@@ -1174,8 +1174,31 @@ class CubicBezier(object):
 			center_x - half_dist * math.cos(angle),
 			center_y - half_dist * math.sin(angle)
 		)
-		
+
 		return new_point_0, new_point_1
+
+	def _perpendicular_width(self, point_a, point_b, tangent_angle):
+		'''Signed perpendicular projection of (point_a - point_b) onto the
+		normal of a unit tangent given by tangent_angle (radians).
+
+		Returns:
+			(width, n_hat, sign):
+				width  - non-negative perpendicular distance
+				n_hat  - unit normal Point (perpendicular to the tangent)
+				sign   - +1 if point_a lies on the +n_hat side of point_b, else -1
+
+		If tangent_angle is NaN the function falls back to chord distance with
+		n_hat = unit(point_a - point_b) and sign = +1.
+		'''
+		if math.isnan(tangent_angle):
+			delta = point_a - point_b
+			n_hat = delta.unit if delta.magnitude > 0 else Point(0.0, 0.0)
+			return point_a.diff_to(point_b), n_hat, 1
+
+		n_hat = Point(-math.sin(tangent_angle), math.cos(tangent_angle))
+		delta = point_a - point_b
+		signed = delta.x * n_hat.x + delta.y * n_hat.y
+		return abs(signed), n_hat, (1 if signed >= 0 else -1)
 
 	def make_collinear(self, other, mode=0, equalize=False, target_width=None):
 		'''
@@ -1202,90 +1225,174 @@ class CubicBezier(object):
 		
 		# Match curve directions
 		other_matched, was_reversed = other.match_direction_to(self)
-		
+
 		c0 = self
 		c1 = other_matched
-		
-		# Calculate target distances if equalizing
+
+		# Original handle angles & lengths (add=0 gives raw direction angle)
+		angle_0_out = c0.p0.angle_to(c0.p1, add=0)
+		angle_1_out = c1.p0.angle_to(c1.p1, add=0)
+		angle_0_in  = c0.p3.angle_to(c0.p2, add=0)
+		angle_1_in  = c1.p3.angle_to(c1.p2, add=0)
+
+		length_0_out = c0.p0.diff_to(c0.p1)
+		length_1_out = c1.p0.diff_to(c1.p1)
+		length_0_in  = c0.p3.diff_to(c0.p2)
+		length_1_in  = c1.p3.diff_to(c1.p2)
+
+		def _blend_angle(a0, a1):
+			if math.isnan(a0) or math.isnan(a1):
+				return float('nan')
+			if mode == 0: return a0
+			if mode == 1: return a1
+			return (a0 + a1) / 2.0
+
+		target_angle_out = _blend_angle(angle_0_out, angle_1_out)
+		target_angle_in  = _blend_angle(angle_0_in,  angle_1_in)
+
+		# Endpoint placement
 		if equalize:
-			dist_start = c0.p0.diff_to(c1.p0)
-			dist_end = c0.p3.diff_to(c1.p3)
-			
+			# Stem width is measured perpendicular to the target tangent,
+			# not as the chord between endpoints. Equalized endpoints are
+			# placed on a true perpendicular cap line through their midpoint.
+			w_start, n_start, sgn_start = self._perpendicular_width(c0.p0, c1.p0, target_angle_out)
+			w_end,   n_end,   sgn_end   = self._perpendicular_width(c0.p3, c1.p3, target_angle_in)
+
 			if target_width is None:
-				# Use average of start and end distances
-				target_width = (dist_start + dist_end) / 2.0
-			
-			# Equalize on-curve points
-			new_p0_0, new_p0_1 = c0._equalize_points(c0.p0, c1.p0, target_width)
-			new_p3_0, new_p3_1 = c0._equalize_points(c0.p3, c1.p3, target_width)
+				target_width = (w_start + w_end) / 2.0
+
+			half = target_width / 2.0
+			mid_start = Point((c0.p0.x + c1.p0.x) / 2.0, (c0.p0.y + c1.p0.y) / 2.0)
+			mid_end   = Point((c0.p3.x + c1.p3.x) / 2.0, (c0.p3.y + c1.p3.y) / 2.0)
+
+			new_p0_0 = Point(mid_start.x + sgn_start * half * n_start.x,
+			                 mid_start.y + sgn_start * half * n_start.y)
+			new_p0_1 = Point(mid_start.x - sgn_start * half * n_start.x,
+			                 mid_start.y - sgn_start * half * n_start.y)
+			new_p3_0 = Point(mid_end.x + sgn_end * half * n_end.x,
+			                 mid_end.y + sgn_end * half * n_end.y)
+			new_p3_1 = Point(mid_end.x - sgn_end * half * n_end.x,
+			                 mid_end.y - sgn_end * half * n_end.y)
 		else:
 			# Keep original positions
 			new_p0_0 = Point(c0.p0.x, c0.p0.y)
 			new_p0_1 = Point(c1.p0.x, c1.p0.y)
 			new_p3_0 = Point(c0.p3.x, c0.p3.y)
 			new_p3_1 = Point(c1.p3.x, c1.p3.y)
-		
-		# Process first handle pair (p0->p1)
-		# Use add=0 to get raw angle without 90-degree offset
-		angle_0_out = c0.p0.angle_to(c0.p1, add=0)
-		angle_1_out = c1.p0.angle_to(c1.p1, add=0)
-		
-		length_0_out = c0.p0.diff_to(c0.p1)
-		length_1_out = c1.p0.diff_to(c1.p1)
-		
-		if (not math.isnan(angle_0_out) and not math.isnan(angle_1_out) and 
-			length_0_out > 0 and length_1_out > 0):
-			
-			# Calculate target angle based on mode
-			if mode == 0:
-				target_angle_out = angle_0_out
-			elif mode == 1:
-				target_angle_out = angle_1_out
-			else:  # mode == -1
-				target_angle_out = (angle_0_out + angle_1_out) / 2.0
-			
-			# Apply target angle (from new positions if equalized)
+
+		# Re-emit handles with target angles & original handle lengths
+		if (not math.isnan(target_angle_out)
+			and length_0_out > 0 and length_1_out > 0):
 			new_p1_0 = c0._set_handle_polar(new_p0_0, target_angle_out, length_0_out)
 			new_p1_1 = c0._set_handle_polar(new_p0_1, target_angle_out, length_1_out)
 		else:
-			# Keep original handles
 			new_p1_0 = Point(c0.p1.x, c0.p1.y)
 			new_p1_1 = Point(c1.p1.x, c1.p1.y)
-		
-		# Process second handle pair (p3->p2)
-		angle_0_in = c0.p3.angle_to(c0.p2, add=0)
-		angle_1_in = c1.p3.angle_to(c1.p2, add=0)
-		
-		length_0_in = c0.p3.diff_to(c0.p2)
-		length_1_in = c1.p3.diff_to(c1.p2)
-		
-		if (not math.isnan(angle_0_in) and not math.isnan(angle_1_in) and 
-			length_0_in > 0 and length_1_in > 0):
-			
-			# Calculate target angle based on mode
-			if mode == 0:
-				target_angle_in = angle_0_in
-			elif mode == 1:
-				target_angle_in = angle_1_in
-			else:  # mode == -1
-				target_angle_in = (angle_0_in + angle_1_in) / 2.0
-			
-			# Apply target angle (from new positions if equalized)
+
+		if (not math.isnan(target_angle_in)
+			and length_0_in > 0 and length_1_in > 0):
 			new_p2_0 = c0._set_handle_polar(new_p3_0, target_angle_in, length_0_in)
 			new_p2_1 = c0._set_handle_polar(new_p3_1, target_angle_in, length_1_in)
 		else:
-			# Keep original handles
 			new_p2_0 = Point(c0.p2.x, c0.p2.y)
 			new_p2_1 = Point(c1.p2.x, c1.p2.y)
-		
+
 		# Create new curves
 		result_0 = self.__class__(new_p0_0.tuple, new_p1_0.tuple, new_p2_0.tuple, new_p3_0.tuple)
 		result_1 = self.__class__(new_p0_1.tuple, new_p1_1.tuple, new_p2_1.tuple, new_p3_1.tuple)
-		
+
 		# If other was reversed, reverse result back
 		if was_reversed:
 			result_1 = result_1.doSwap()
-		
+
+		return result_0, result_1
+
+	def make_monoline(self, other, target_width=None, preserve_taper=False):
+		'''Regularize two side curves of a stem as exact +/- offsets of their
+		control-polygon median.
+
+		Treats the two curves as the envelope of an imaginary monoline pen
+		drawn along their midline. The median is the per-control-point vector
+		mean; the new sides are placed along the perpendicular stem normals
+		at the median's two endpoints. Both output curves end up with the
+		same handle angles AND the same handle lengths, so their curvatures
+		match by construction (truly parallel).
+
+		Args:
+			other          : CubicBezier - opposite side of the stem
+			target_width   : float | None - uniform width; None = average of
+			                 the two perpendicular widths at start and end
+			preserve_taper : bool - if True, keep separate widths at start
+			                 and end (use w_start at p0 side, w_end at p3 side)
+
+		Returns:
+			(new_self, new_other): two CubicBezier objects, both exact
+			offsets of the shared skeleton
+
+		Notes:
+			- No `mode` argument: the median is symmetric by definition.
+			- Drops per-side handle-length asymmetry. Use make_collinear
+			  if the designer's per-side asymmetry must be preserved.
+		'''
+		other_matched, was_reversed = other.match_direction_to(self)
+
+		c0 = self
+		c1 = other_matched
+
+		# Median control polygon (vector mean)
+		m_p0 = Point((c0.p0.x + c1.p0.x) / 2.0, (c0.p0.y + c1.p0.y) / 2.0)
+		m_p1 = Point((c0.p1.x + c1.p1.x) / 2.0, (c0.p1.y + c1.p1.y) / 2.0)
+		m_p2 = Point((c0.p2.x + c1.p2.x) / 2.0, (c0.p2.y + c1.p2.y) / 2.0)
+		m_p3 = Point((c0.p3.x + c1.p3.x) / 2.0, (c0.p3.y + c1.p3.y) / 2.0)
+
+		# Tangent at each endpoint, taken from the median's own handles.
+		# Fall back to the average of the two side tangents if the median
+		# handle is degenerate (coincident with its on-curve).
+		def _tangent(start, handle, fallback_a, fallback_b):
+			v = handle - start
+			if v.magnitude > 0:
+				return math.atan2(v.y, v.x)
+			if math.isnan(fallback_a) or math.isnan(fallback_b):
+				return float('nan')
+			return (fallback_a + fallback_b) / 2.0
+
+		a_start = _tangent(m_p0, m_p1,
+		                   c0.p0.angle_to(c0.p1, add=0),
+		                   c1.p0.angle_to(c1.p1, add=0))
+		a_end   = _tangent(m_p3, m_p2,
+		                   c0.p3.angle_to(c0.p2, add=0),
+		                   c1.p3.angle_to(c1.p2, add=0))
+
+		# Perpendicular widths along the stem normals
+		w_start, n_start, sgn_start = self._perpendicular_width(c0.p0, c1.p0, a_start)
+		w_end,   n_end,   sgn_end   = self._perpendicular_width(c0.p3, c1.p3, a_end)
+
+		if preserve_taper:
+			half_start = (target_width if target_width is not None else w_start) / 2.0
+			half_end   = (target_width if target_width is not None else w_end) / 2.0
+		else:
+			if target_width is None:
+				target_width = (w_start + w_end) / 2.0
+			half_start = half_end = target_width / 2.0
+
+		def _offset(base, n_hat, sgn, half):
+			return (Point(base.x + sgn * half * n_hat.x, base.y + sgn * half * n_hat.y),
+			        Point(base.x - sgn * half * n_hat.x, base.y - sgn * half * n_hat.y))
+
+		# On-curves use the local end's normal; handles share the normal of
+		# their adjacent on-curve (parallel control polygon, Tiller-Hanson at
+		# endpoints).
+		new_p0_0, new_p0_1 = _offset(m_p0, n_start, sgn_start, half_start)
+		new_p1_0, new_p1_1 = _offset(m_p1, n_start, sgn_start, half_start)
+		new_p2_0, new_p2_1 = _offset(m_p2, n_end,   sgn_end,   half_end)
+		new_p3_0, new_p3_1 = _offset(m_p3, n_end,   sgn_end,   half_end)
+
+		result_0 = self.__class__(new_p0_0.tuple, new_p1_0.tuple, new_p2_0.tuple, new_p3_0.tuple)
+		result_1 = self.__class__(new_p0_1.tuple, new_p1_1.tuple, new_p2_1.tuple, new_p3_1.tuple)
+
+		if was_reversed:
+			result_1 = result_1.doSwap()
+
 		return result_0, result_1
 
 

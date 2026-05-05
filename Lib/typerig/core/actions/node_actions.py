@@ -915,6 +915,87 @@ class NodeActions(object):
 
 		return 1
 
+	@staticmethod
+	def make_monoline(contour, node_indices, target_width=None, preserve_taper=False):
+		'''Regularize two selected curve segments as +/- offsets of their
+		shared control-polygon median (monoline-pen model).
+
+		Selection model is identical to make_collinear: exactly 2 selected
+		curves, each consisting of A, bcp_out, bcp_in, next_on all in
+		node_indices. Returns 0 (no-op) for any other selection count.
+
+		Direction swapping is delegated to CubicBezier.make_monoline, which
+		uses match_direction_to to handle parallel-stem curves drawn in
+		opposite contour directions.
+
+		Arguments:
+			contour        : Contour
+			node_indices   : iterable[int] - selected node indices
+			target_width   : float | None - uniform stem width;
+			                 None = average of the perpendicular widths
+			                 measured at the two endpoints
+			preserve_taper : bool - if True, keep separate widths at each end
+
+		Returns:
+			int - number of curve pairs aligned (0 or 1).
+		'''
+		selected = set(node_indices)
+		nodes = contour.nodes
+
+		selected_curves = []   # list of (start_on_node, CubicBezier segment)
+
+		for node in nodes:
+			if not node.is_on or node.idx not in selected:
+				continue
+
+			seg = node.segment
+			if not isinstance(seg, CubicBezier):
+				continue
+
+			end_on = node.next_on
+			if end_on is None or end_on.idx not in selected:
+				continue
+
+			# Walk between node and end_on collecting off-curves
+			bcps = []
+			cursor = node.next
+			guard = 0
+			while cursor is not None and cursor is not end_on and guard < 8:
+				if not cursor.is_on:
+					bcps.append(cursor)
+				cursor = cursor.next
+				guard += 1
+
+			if len(bcps) != 2:
+				continue
+			if not all(b.idx in selected for b in bcps):
+				continue
+
+			selected_curves.append((node, seg))
+
+		if len(selected_curves) != 2:
+			return 0
+
+		(start_a, curve_a), (start_b, curve_b) = selected_curves
+
+		new_a, new_b = curve_a.make_monoline(
+			curve_b, target_width=target_width, preserve_taper=preserve_taper
+		)
+
+		def _apply(start_on, new_curve):
+			bcp1 = start_on.next
+			bcp2 = bcp1.next
+			end_on = bcp2.next
+			start_on.point = new_curve.p0
+			bcp1.point = new_curve.p1
+			bcp2.point = new_curve.p2
+			end_on.point = new_curve.p3
+
+		_apply(start_a, new_a)
+		_apply(start_b, new_b)
+
+		return 1
+
 	# -- Node alignment ---------------------------------------------------------
 	@staticmethod
 	def nodes_align(nodes, mode='L'):
