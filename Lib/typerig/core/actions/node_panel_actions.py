@@ -666,18 +666,16 @@ def npa_draw_square(glyph, scope_layers, NodeActions, DrawActions, mode=0):
     Args:
         mode (int): 0 = two-point diagonal; 1 = two-midpoint square.
 
-    The result is appended to the active layer via glyph.shapes.
+    The result is appended per-layer for every layer in scope.
     """
-    active = glyph.layer(scope_layers[0] if scope_layers else None)
-    if active is None:
-        return
-    selected_on = [n for s in active.shapes for c in s.contours
-                  for n in c.data if n.selected and n.is_on]
-    if len(selected_on) < 2:
-        return
-    result = DrawActions.draw_square(selected_on, mode=mode)
-    if result is not None:
-        active.shapes.append(Shape([result]))
+    for lyr in _iter_scope(glyph, scope_layers):
+        selected_on = [n for s in lyr.shapes for c in s.contours
+                       for n in c.data if n.selected and n.is_on]
+        if len(selected_on) < 2:
+            continue
+        result = DrawActions.draw_square(selected_on, mode=mode)
+        if result is not None:
+            lyr.shapes.append(Shape([result]))
 
 
 def npa_draw_circle(glyph, scope_layers, NodeActions, DrawActions, mode=0):
@@ -686,18 +684,16 @@ def npa_draw_circle(glyph, scope_layers, NodeActions, DrawActions, mode=0):
     Args:
         mode (int): 0 = two-point diameter; 1 = three-point circle.
 
-    The result is appended to the active layer via glyph.shapes.
+    The result is appended per-layer for every layer in scope.
     """
-    active = glyph.layer(scope_layers[0] if scope_layers else None)
-    if active is None:
-        return
-    selected_on = [n for s in active.shapes for c in s.contours
-                  for n in c.data if n.selected and n.is_on]
-    if len(selected_on) < 2:
-        return
-    result = DrawActions.draw_circle(selected_on, mode=mode)
-    if result is not None:
-        active.shapes.append(Shape([result]))
+    for lyr in _iter_scope(glyph, scope_layers):
+        selected_on = [n for s in lyr.shapes for c in s.contours
+                       for n in c.data if n.selected and n.is_on]
+        if len(selected_on) < 2:
+            continue
+        result = DrawActions.draw_circle(selected_on, mode=mode)
+        if result is not None:
+            lyr.shapes.append(Shape([result]))
 
 
 def npa_trace_nodes(glyph, scope_layers, NodeActions, DrawActions, mode=1, closed=True):
@@ -707,18 +703,16 @@ def npa_trace_nodes(glyph, scope_layers, NodeActions, DrawActions, mode=1, close
         mode (int): 1 = lines; 2 = Hobby splines.
         closed (bool): Whether to close the resulting contour.
 
-    The result is appended to the active layer via glyph.shapes.
+    The result is appended per-layer for every layer in scope.
     """
-    active = glyph.layer(scope_layers[0] if scope_layers else None)
-    if active is None:
-        return
-    selected_on = [n for s in active.shapes for c in s.contours
-                  for n in c.data if n.selected and n.is_on]
-    if len(selected_on) < 2:
-        return
-    result = DrawActions.trace_nodes(selected_on, mode=mode, closed=closed)
-    if result is not None:
-        active.shapes.append(Shape([result]))
+    for lyr in _iter_scope(glyph, scope_layers):
+        selected_on = [n for s in lyr.shapes for c in s.contours
+                       for n in c.data if n.selected and n.is_on]
+        if len(selected_on) < 2:
+            continue
+        result = DrawActions.trace_nodes(selected_on, mode=mode, closed=closed)
+        if result is not None:
+            lyr.shapes.append(Shape([result]))
 
 
 # ===================================================================
