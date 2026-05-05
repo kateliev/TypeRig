@@ -591,9 +591,14 @@ def npa_contour_align(glyph, scope_layers, NodeActions, ContourActions,
                                          target_node=target_node)
 
         elif mode == 'AB':
-            # Use passed groups or fall back to module-level banks
-            a = (contours_A_by_layer or _contour_group_A).get(getattr(lyr, 'name', None), [])
-            b = (contours_B_by_layer or _contour_group_B).get(getattr(lyr, 'name', None), [])
+            # Use passed groups or fall back to module-level banks.
+            # Banks may store either live contour refs (Glyphs host) or
+            # (shape_idx, contour_idx) tuples (FontRig — see _resolve_group).
+            lname = getattr(lyr, 'name', None)
+            a_src = (contours_A_by_layer or _contour_group_A).get(lname, [])
+            b_src = (contours_B_by_layer or _contour_group_B).get(lname, [])
+            a = _resolve_group(glyph, lname, a_src)
+            b = _resolve_group(glyph, lname, b_src)
             if a and b:
                 ContourActions.contour_align(None, mode='AB',
                                      align_x=align_x, align_y=align_y,
@@ -724,27 +729,69 @@ _contour_group_A = {}
 _contour_group_B = {}
 
 
-def npa_capture_group_A(glyph, scope_layers, NodeActions):
-    """Capture currently selected contours as group A, keyed by layer name."""
-    global _contour_group_A
-    _contour_group_A = {}
+def _resolve_group(glyph, layer_name, items):
+    """Resolve a captured group to live Contour objects on the current glyph.
+
+    `items` may be either a list of Contour objects (Glyphs/FL hosts where
+    references survive across calls) or a list of (shape_idx, contour_idx)
+    tuples (FontRig, where the glyph is rebuilt from XML on every call so
+    references go stale). The two formats are auto-detected.
+    """
+    if not items:
+        return []
+    first = items[0]
+    if isinstance(first, tuple) and len(first) == 2 and \
+            isinstance(first[0], int) and isinstance(first[1], int):
+        lyr = glyph.layer(layer_name) if layer_name else None
+        if lyr is None:
+            return []
+        out = []
+        shapes = list(lyr.shapes)
+        for si, ci in items:
+            if 0 <= si < len(shapes):
+                contours = list(shapes[si].contours)
+                if 0 <= ci < len(contours):
+                    out.append(contours[ci])
+        return out
+    return list(items)
+
+
+def _capture_group_indices(glyph, scope_layers):
+    """Walk scope and return {layer_name: [(shape_idx, contour_idx), ...]}
+    for every contour with at least one selected node. Stable across
+    XML round-trips (FontRig) and cheap to resolve later."""
+    out = {}
     for name in scope_layers:
         lyr = glyph.layer(name)
         if lyr is None:
             continue
-        selected = _selected_contours(lyr)
-        if selected:
-            _contour_group_A[name] = list(selected)
+        ids = []
+        for si, s in enumerate(lyr.shapes):
+            for ci, c in enumerate(s.contours):
+                if any(n.selected for n in c.data):
+                    ids.append((si, ci))
+        if ids:
+            out[name] = ids
+    return out
+
+
+def npa_capture_group_A(glyph, scope_layers, NodeActions):
+    """Capture currently selected contours as group A.
+
+    Stores stable (shape_idx, contour_idx) tuples per layer name so the
+    bank survives FontRig's per-call Glyph.from_XML rebuild. Resolved to
+    live Contour objects at align time via _resolve_group.
+    """
+    global _contour_group_A
+    _contour_group_A = _capture_group_indices(glyph, scope_layers)
 
 
 def npa_capture_group_B(glyph, scope_layers, NodeActions):
-    """Capture currently selected contours as group B, keyed by layer name."""
+    """Capture currently selected contours as group B.
+
+    Stores stable (shape_idx, contour_idx) tuples per layer name so the
+    bank survives FontRig's per-call Glyph.from_XML rebuild. Resolved to
+    live Contour objects at align time via _resolve_group.
+    """
     global _contour_group_B
-    _contour_group_B = {}
-    for name in scope_layers:
-        lyr = glyph.layer(name)
-        if lyr is None:
-            continue
-        selected = _selected_contours(lyr)
-        if selected:
-            _contour_group_B[name] = list(selected)
+    _contour_group_B = _capture_group_indices(glyph, scope_layers)
