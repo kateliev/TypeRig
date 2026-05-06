@@ -19,10 +19,12 @@ from typerig.core.objects.utils import Bounds
 from typerig.core.objects.atom import Container, Member
 from typerig.core.objects.node import Node, node_types
 
+from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
+
 from typerig.core.func.math import (
-	zero_matrix, 
-	solve_equations, 
-	hobby_velocity, 
+	zero_matrix,
+	solve_equations,
+	hobby_velocity,
 	hobby_control_points
 )
 
@@ -309,7 +311,8 @@ def extrapolate_segment(z0, z1, z2, z3, t1, t2):
 
 
 # - Classes -----------------------------
-class HobbyKnot(Member):
+@register_xml_class
+class HobbyKnot(Member, XMLSerializable):
 	'''Extended knot for HobbySpline with mixed segment type support.
 	Carries all METAFONT solving state plus segment classification 
 	and optional direction/handle constraints.
@@ -328,6 +331,11 @@ class HobbyKnot(Member):
 		dir_out        : pinned departure direction (radians), None = free
 		dir_in         : pinned arrival direction (radians), None = free
 	'''
+
+	XML_TAG = 'knot'
+	XML_ATTRS = ['x', 'y', 'segment_type', 'alpha', 'beta', 'dir_in', 'dir_out']
+	XML_LIB_ATTRS = []
+	XML_ATTR_DEFAULTS = {'segment_type': HOBBY, 'alpha': 1., 'beta': 1.}
 
 	def __init__(self, x=0., y=0., **kwargs):
 		super(HobbyKnot, self).__init__(**kwargs)

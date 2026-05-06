@@ -35,35 +35,127 @@ from typerig.core.objects.node import Node, Knot, DirectionalNode, node_types
 __version__ = '0.6.1'
 
 # - Classes -----------------------------
+CONTOUR_KIND_BEZIER = 'bezier'
+CONTOUR_KIND_HOBBY = 'hobby'
+
 @register_xml_class
-class Contour(Container, XMLSerializable): 
-	__slots__ = ('name', 'closed', 'clockwise', 'transform', 'parent', 'lib')
+class Contour(Container, XMLSerializable):
+	__slots__ = ('name', 'closed', 'clockwise', 'transform', 'parent', 'lib', 'kind')
 
 	XML_TAG = 'contour'
-	XML_ATTRS = ['name', 'identifier', 'closed', 'clockwise']
+	XML_ATTRS = ['name', 'identifier', 'kind', 'closed', 'clockwise']
 	XML_CHILDREN = {'node': 'nodes'}
 	XML_LIB_ATTRS = []
 	XML_ATTR_DEFAULTS = {'closed': False}
 
 	def __init__(self, nodes=None, **kwargs):
-		factory = kwargs.pop('default_factory', Node)
+		# - Kind dispatch (bezier vs hobby)
+		kind = kwargs.pop('kind', None)
+
+		# Knots may arrive as `knots=[...]` (preferred for hobby) or under `nodes`.
+		knots = kwargs.pop('knots', None)
+		if knots is not None:
+			nodes = knots
+			if kind is None:
+				kind = CONTOUR_KIND_HOBBY
+
+		if kind is None:
+			kind = CONTOUR_KIND_BEZIER
+
+		# Pick the right element factory for the contour kind.
+		if 'default_factory' in kwargs:
+			factory = kwargs.pop('default_factory')
+		elif kind == CONTOUR_KIND_HOBBY:
+			from typerig.core.objects.hobbyspline import HobbyKnot
+			factory = HobbyKnot
+		else:
+			factory = Node
+
 		super(Contour, self).__init__(nodes, default_factory=factory, **kwargs)
-		
+
+		self.kind = kind
 		self.transform = kwargs.pop('transform', Transform())
-		
+
 		# - Metadata
 		if not kwargs.pop('proxy', False): # Initialize in proxy mode
 			self.name = kwargs.pop('name', '')
 			self.closed = kwargs.pop('closed', False)
 			self.clockwise = kwargs.pop('clockwise', self.get_winding())
 
+	# -- XML serialization (kind dispatch) ------
+	@classmethod
+	def from_XML(cls, element):
+		'''Parse a contour element. Dispatches on `kind` attribute:
+		hobby contours read <knot> children, bezier contours read <node>.
+		Missing `kind` defaults to bezier for backwards compatibility.
+		'''
+		from xml.etree import ElementTree as ET
+		from typerig.core.fileio.xmlio import (
+			_convert_xml_attr, _parse_plist_dict
+		)
+
+		if isinstance(element, str):
+			element = ET.fromstring(element)
+
+		attrs = {}
+		for attr_name in cls.XML_ATTRS:
+			value = element.get(attr_name)
+			if value is not None:
+				attrs[attr_name] = _convert_xml_attr(value)
+
+		kind = attrs.get('kind', CONTOUR_KIND_BEZIER)
+
+		if kind == CONTOUR_KIND_HOBBY:
+			from typerig.core.objects.hobbyspline import HobbyKnot
+			knot_elems = element.findall('knot')
+			if knot_elems:
+				attrs['knots'] = [HobbyKnot.from_XML(e) for e in knot_elems]
+		else:
+			node_elems = element.findall('node')
+			if node_elems:
+				attrs['nodes'] = [Node.from_XML(e) for e in node_elems]
+
+		# - lib section (preserve existing behaviour)
+		lib_elem = element.find('lib')
+		if lib_elem is not None:
+			dict_elem = lib_elem.find('dict')
+			if dict_elem is not None:
+				lib_data = _parse_plist_dict(dict_elem)
+				for attr_name in cls.XML_LIB_ATTRS:
+					if attr_name in lib_data:
+						attrs[attr_name] = lib_data.pop(attr_name)
+				if lib_data:
+					attrs['lib'] = lib_data
+
+		return cls(**attrs)
+
 	# -- Properties -----------------------------
+	@property
+	def is_hobby(self):
+		return getattr(self, 'kind', CONTOUR_KIND_BEZIER) == CONTOUR_KIND_HOBBY
+
+	@property
+	def is_bezier(self):
+		return getattr(self, 'kind', CONTOUR_KIND_BEZIER) == CONTOUR_KIND_BEZIER
+
 	@property
 	def nodes(self):
 		return self.data
 
 	@nodes.setter
 	def nodes(self, other):
+		if isinstance(other, self.__class__):
+			self.data = other.data
+		elif isinstance(other, (tuple, list)):
+			self.data = [self._coerce(item) for item in other]
+
+	@property
+	def knots(self):
+		'''Hobby knots (alias of self.data when kind == "hobby").'''
+		return self.data
+
+	@knots.setter
+	def knots(self, other):
 		if isinstance(other, self.__class__):
 			self.data = other.data
 		elif isinstance(other, (tuple, list)):
@@ -204,6 +296,8 @@ class Contour(Container, XMLSerializable):
 
 	def get_winding(self):
 		'''Check if contour has clockwise winding direction'''
+		if getattr(self, 'kind', CONTOUR_KIND_BEZIER) == CONTOUR_KIND_HOBBY:
+			return self._get_knot_area() > 0
 		return self.get_on_area() > 0
 
 	def get_on_area(self):
@@ -215,6 +309,18 @@ class Contour(Container, XMLSerializable):
 			polygon_area.append(edge_sum)
 
 		return sum(polygon_area)*0.5
+
+	def _get_knot_area(self):
+		'''Shoelace area on hobby knot positions (no segment expansion).'''
+		n = len(self.data)
+		if n < 3:
+			return 0.
+
+		area = 0.
+		for i in range(n):
+			j = (i + 1) % n
+			area += (self.data[j].x - self.data[i].x) * (self.data[j].y + self.data[i].y)
+		return area * 0.5
 
 	def get_segments(self, get_point=False):
 		assert len(self.data) > 1, 'Cannot return segments for contour with length {}'.format(len(self.data))
