@@ -337,6 +337,52 @@ class HobbyKnot(Member, XMLSerializable):
 	XML_LIB_ATTRS = []
 	XML_ATTR_DEFAULTS = {'segment_type': HOBBY, 'alpha': 1., 'beta': 1.}
 
+	# Complex-valued BCP fields, serialized as "x,y" strings under bcp_out/bcp_in
+	XML_BCP_FIELDS = (('bcp_out', 'fixed_bcp_out'), ('bcp_in', 'fixed_bcp_in'))
+
+	@staticmethod
+	def _format_bcp(c):
+		from typerig.core.fileio.xmlio import _format_float
+		return '{},{}'.format(_format_float(c.real), _format_float(c.imag))
+
+	@staticmethod
+	def _parse_bcp(s):
+		parts = s.split(',')
+		if len(parts) != 2:
+			return None
+		try:
+			return complex(float(parts[0]), float(parts[1]))
+		except (TypeError, ValueError):
+			return None
+
+	def _to_xml_element(self, exclude_attrs):
+		elem = super(HobbyKnot, self)._to_xml_element(exclude_attrs)
+		for xml_name, attr_name in self.XML_BCP_FIELDS:
+			if attr_name in exclude_attrs:
+				continue
+			value = getattr(self, attr_name, None)
+			if value is None:
+				continue
+			elem.set(xml_name, self._format_bcp(value))
+		return elem
+
+	@classmethod
+	def from_XML(cls, element):
+		from xml.etree import ElementTree as ET
+		if isinstance(element, str):
+			element = ET.fromstring(element)
+		# Pull out the BCP attrs before delegating, then re-inject as kwargs
+		bcp_kwargs = {}
+		for xml_name, attr_name in cls.XML_BCP_FIELDS:
+			raw = element.get(xml_name)
+			if raw is not None:
+				bcp_kwargs[attr_name] = cls._parse_bcp(raw)
+				del element.attrib[xml_name]
+		instance = super(HobbyKnot, cls).from_XML(element)
+		for k, v in bcp_kwargs.items():
+			setattr(instance, k, v)
+		return instance
+
 	def __init__(self, x=0., y=0., **kwargs):
 		super(HobbyKnot, self).__init__(**kwargs)
 
