@@ -849,12 +849,17 @@ class HobbySpline(Container):
 				# Pinned departure: theta[0] is known
 				# Set equation: theta[0] = boundary_value
 				# Implemented as: 0*theta[-1] + 1*theta[0] + 0*theta[1] = boundary_value
-				# But we need to express boundary_start as theta relative to chord
+				# But we need to express boundary_start as theta relative to chord.
+				# Normalize the chord-relative theta to (-pi, pi] so an
+				# absolute boundary near +/- pi doesn't end up two-pi
+				# away from the chord and propagate as a huge theta
+				# through the linear system.
 				chord_angle = math.atan2(
 					self[ki_1].y - self[ki_0].y,
 					self[ki_1].x - self[ki_0].x
 				)
 				theta_0 = boundary_start - chord_angle
+				theta_0 = math.atan2(math.sin(theta_0), math.cos(theta_0))
 
 				A.append(0)
 				B.append(1)  # Will be added to C[0] in the diagonal
@@ -891,11 +896,15 @@ class HobbySpline(Container):
 				# Pinned arrival: phi at end is known
 				# theta[end] + phi[end] + xi[end] = 0
 				# So theta[end] = -phi[end] - xi[end]
+				# Normalize phi_n into (-pi, pi] for the same reason as
+				# theta_0 above: an absolute boundary near +/- pi must
+				# not end up two-pi away from the chord and explode.
 				chord_angle = math.atan2(
 					self[ki_n].y - self[ki_nm1].y,
 					self[ki_n].x - self[ki_nm1].x
 				)
 				phi_n = chord_angle - boundary_end
+				phi_n = math.atan2(math.sin(phi_n), math.cos(phi_n))
 				theta_n = -phi_n - self[ki_n].xi
 
 				k = run_len - 1
