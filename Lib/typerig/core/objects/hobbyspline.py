@@ -740,26 +740,51 @@ class HobbySpline(Container):
 	def _compute_boundary_theta(self, knot_idx, direction='out'):
 		'''Boundary angle at a knot for an adjacent hobby run.
 
-		Returns whatever's stored on the knot — `dir_out` for the
-		departure side, `dir_in` for the arrival side, or `None` for
-		"free" (curl-end / cusp default).
+		Smoothness propagation: at a junction between a hobby run and a
+		line/fixed segment, the *line/fixed direction* is used as the
+		hobby's tangent at that knot — so curves flow smoothly into and
+		out of straight stems. This is METAFONT/MetaPost default and
+		matches type-design intent in almost all cases (stems joining
+		bowls, serifs, inktraps).
 
-		Pre-pass logic in `solve()` populates these from line/fixed
-		segments on the side that physically dictates the direction
-		(e.g. the start of a line gets `dir_out` pinned; the end of a
-		fixed segment gets `dir_in` pinned). The OPPOSITE side at those
-		knots is left free, producing a cusp by default — type-design
-		corners no longer get the smooth-tangent assumption baked in
-		automatically. Smoothness is opt-in via an explicit pin.
+		If you want a cusp at a particular junction, pin `dir_in` /
+		`dir_out` explicitly to break the smoothness.
 
 		Args:
 			knot_idx  : index into self.data
 			direction : 'out' (departure) or 'in' (arrival)
 
-		Returns: angle in radians, or None if free.
+		Returns: angle in radians, or None if no boundary applies.
 		'''
 		knot = self[knot_idx]
-		return knot.dir_out if direction == 'out' else knot.dir_in
+		n = len(self.data)
+
+		if direction == 'out':
+			# Explicit pin wins.
+			if knot.dir_out is not None:
+				return knot.dir_out
+			# Smoothness propagation from the previous segment.
+			prev_idx = (knot_idx - 1) % n
+			prev_knot = self[prev_idx]
+			if prev_knot.segment_type == LINE:
+				return math.atan2(knot.y - prev_knot.y, knot.x - prev_knot.x)
+			elif prev_knot.segment_type == FIXED and knot.fixed_bcp_in is not None:
+				d = knot.complex - knot.fixed_bcp_in
+				if abs(d) > 1e-10:
+					return cmath.phase(d)
+			return None
+		else:  # direction == 'in'
+			if knot.dir_in is not None:
+				return knot.dir_in
+			if knot.segment_type == LINE:
+				next_idx = (knot_idx + 1) % n
+				next_knot = self[next_idx]
+				return math.atan2(next_knot.y - knot.y, next_knot.x - knot.x)
+			elif knot.segment_type == FIXED and knot.fixed_bcp_out is not None:
+				d = knot.fixed_bcp_out - knot.complex
+				if abs(d) > 1e-10:
+					return cmath.phase(d)
+			return None
 
 	# - Per-run METAFONT solver ----------------
 	def _solve_run(self, start, end, boundary_start, boundary_end):
