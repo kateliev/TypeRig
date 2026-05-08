@@ -664,13 +664,16 @@ class HobbySpline(Container):
 	def _find_free_runs(self, seg_types):
 		'''Identify contiguous stretches of HOBBY segments.
 
-		A "free run" is a maximal sequence of consecutive knot indices 
-		where all connecting segments are HOBBY type.
+		A "free run" is a maximal sequence of consecutive knot indices
+		where all connecting segments are HOBBY *and* no interior knot
+		has an explicit direction pin. A pin breaks the run because the
+		pinned angle is a boundary condition the solver needs to honor;
+		without splitting, the pin is silently dropped on the floor.
 
-		Returns list of tuples: (start_index, end_index, is_boundary_start, is_boundary_end)
-		where start/end are knot indices and boundary flags indicate
-		whether the run endpoints have pinned angles from adjacent 
-		non-hobby segments.
+		Returns list of tuples: (start, end, has_prev_boundary, has_next_boundary)
+		where start/end are knot indices and the boundary flags say
+		whether the endpoint has any boundary at all (non-hobby segment,
+		pin, or curl on an open path).
 		'''
 		n = len(self.data)
 		count = len(seg_types)
@@ -678,44 +681,56 @@ class HobbySpline(Container):
 		if count == 0:
 			return []
 
-		# Check if ALL segments are hobby (common case, fast path)
-		all_hobby = all(s == HOBBY for s in seg_types)
+		def has_pin(k):
+			knot = self.data[k % n]
+			return knot.dir_in is not None or knot.dir_out is not None
 
-		if all_hobby:
-			# Entire path is one run — use original solver path
+		# Pure closed-loop or open-curl all-hobby case with no pins:
+		# preserve the original closed-loop METAFONT solver path.
+		all_hobby = all(s == HOBBY for s in seg_types)
+		any_pin = any(has_pin(k) for k in range(n))
+		if all_hobby and not any_pin:
 			return [(0, n - 1, False, False)]
 
-		# Find runs of consecutive hobby segments
+		# General case: walk segments, ending the current run on either
+		# a non-hobby segment or a pinned knot.
 		runs = []
 		i = 0
-
 		while i < count:
-			if seg_types[i] == HOBBY:
-				# Start of a hobby run
-				start = i
-				while i < count and seg_types[i] == HOBBY:
-					i += 1
-				end = i  # end is the index of the first non-hobby, or count
-
-				# The run involves knots [start..end] 
-				# (segment start→start+1 through segment end-1→end)
-
-				# Boundary flags: does the run border a non-hobby segment?
-				has_prev_boundary = start > 0 or (self.closed and seg_types[-1] != HOBBY)
-				has_next_boundary = end < count or (self.closed and seg_types[0] != HOBBY)
-
-				runs.append((start, end, has_prev_boundary, has_next_boundary))
-			else:
+			if seg_types[i] != HOBBY:
 				i += 1
+				continue
+			start = i
+			while i < count and seg_types[i] == HOBBY:
+				i += 1
+				# i is now the index of the segment AFTER the one we just
+				# consumed; the joining knot is i (mod n). Stop there if
+				# it carries a pin so the next run picks up the boundary.
+				if i < count and has_pin(i % n):
+					break
+			end = i
 
-		# Handle closed path wraparound: if first and last runs connect
-		if self.closed and len(runs) >= 2:
+			# With pin-aware splitting every run has explicit boundaries
+			# on both ends (non-hobby seg, pin, or open-path curl).
+			has_prev_boundary = (
+				start > 0
+				or (self.closed and seg_types[-1] != HOBBY)
+				or has_pin(start % n))
+			has_next_boundary = (
+				end < count
+				or (self.closed and seg_types[0] != HOBBY)
+				or has_pin(end % n))
+			runs.append((start, end, has_prev_boundary, has_next_boundary))
+
+		# Closed-path wraparound: merge first/last runs only if the
+		# joining knot at index 0 has neither a non-hobby boundary nor
+		# a pin — otherwise the joint IS a boundary.
+		if (self.closed and len(runs) >= 2
+			and seg_types[-1] == HOBBY and seg_types[0] == HOBBY
+			and not has_pin(0)):
 			first = runs[0]
 			last = runs[-1]
-
-			# Check if last run's end wraps to first run's start
 			if last[1] == count and first[0] == 0:
-				# Merge: the run wraps around
 				merged = (last[0], first[1] + n, last[2], first[3])
 				runs = [merged] + runs[1:-1]
 
@@ -723,65 +738,28 @@ class HobbySpline(Container):
 
 	# - Boundary angle computation -------------
 	def _compute_boundary_theta(self, knot_idx, direction='out'):
-		'''Compute pinned angle at a knot from adjacent non-hobby segment.
+		'''Boundary angle at a knot for an adjacent hobby run.
 
-		For a line segment prev→knot: arrival angle points from prev to knot.
-		For a fixed segment prev→knot: arrival angle derived from the fixed BCP.
-		For a direction-constrained knot: use the pinned direction directly.
+		Returns whatever's stored on the knot — `dir_out` for the
+		departure side, `dir_in` for the arrival side, or `None` for
+		"free" (curl-end / cusp default).
+
+		Pre-pass logic in `solve()` populates these from line/fixed
+		segments on the side that physically dictates the direction
+		(e.g. the start of a line gets `dir_out` pinned; the end of a
+		fixed segment gets `dir_in` pinned). The OPPOSITE side at those
+		knots is left free, producing a cusp by default — type-design
+		corners no longer get the smooth-tangent assumption baked in
+		automatically. Smoothness is opt-in via an explicit pin.
 
 		Args:
 			knot_idx  : index into self.data
 			direction : 'out' (departure) or 'in' (arrival)
 
-		Returns: angle in radians relative to the chord, or None if free.
+		Returns: angle in radians, or None if free.
 		'''
 		knot = self[knot_idx]
-		n = len(self.data)
-
-		if direction == 'out':
-			# Check explicit direction constraint first
-			if knot.dir_out is not None:
-				return knot.dir_out
-
-			# Check segment type of the OUTGOING segment
-			# (segment from knot_idx to knot_idx+1)
-			# Not relevant here — we want what PINS this knot's departure
-			# That comes from the INCOMING segment (prev→this)
-			prev_idx = (knot_idx - 1) % n
-			prev_knot = self[prev_idx]
-
-			if prev_knot.segment_type == LINE:
-				# Line from prev to knot pins the arrival at knot
-				# which in turn constrains departure if this is a smooth joint
-				return math.atan2(knot.y - prev_knot.y, knot.x - prev_knot.x)
-
-			elif prev_knot.segment_type == FIXED:
-				# Fixed BCP: direction determined by the incoming BCP
-				if knot.fixed_bcp_in is not None:
-					d = knot.complex - knot.fixed_bcp_in
-					if abs(d) > 1e-10:
-						return cmath.phase(d)
-
-			return None
-
-		else:  # direction == 'in'
-			# Check explicit direction constraint first
-			if knot.dir_in is not None:
-				return knot.dir_in
-
-			# Check segment type of the OUTGOING segment from this knot
-			if knot.segment_type == LINE:
-				next_idx = (knot_idx + 1) % n
-				next_knot = self[next_idx]
-				return math.atan2(next_knot.y - knot.y, next_knot.x - knot.x)
-
-			elif knot.segment_type == FIXED:
-				if knot.fixed_bcp_out is not None:
-					d = knot.fixed_bcp_out - knot.complex
-					if abs(d) > 1e-10:
-						return cmath.phase(d)
-
-			return None
+		return knot.dir_out if direction == 'out' else knot.dir_in
 
 	# - Per-run METAFONT solver ----------------
 	def _solve_run(self, start, end, boundary_start, boundary_end):
@@ -794,8 +772,12 @@ class HobbySpline(Container):
 		'''
 		n = len(self.data)
 
-		# Collect knot indices for this run
-		if end > n:
+		# Collect knot indices for this run. The wrap branch fires when
+		# end >= n: e.g. a single hobby run on a closed contour with one
+		# line segment encodes its end as `count` (= n), which under the
+		# old `> n` test silently produced an out-of-range range() and
+		# left theta/phi at zero for the entire run.
+		if end >= n:
 			# Wrapped run in closed path
 			indices = list(range(start, n)) + list(range(0, end - n + 1))
 		else:
@@ -811,8 +793,14 @@ class HobbySpline(Container):
 		# but only for knots in this run, with boundary conditions
 		A = []; B = []; C = []; D = []; R = []
 
-		# Determine if this sub-path is effectively open or closed
-		is_run_closed = self.closed and not boundary_start and not boundary_end and run_len == n
+		# Determine if this sub-path is effectively open or closed.
+		# Use `is None` rather than `not` — boundary_start=0.0 is a
+		# valid pin (zero radians) but falsy; the truthiness test let
+		# pin angles of exactly 0 silently fall back to closed-loop.
+		is_run_closed = (self.closed
+			and boundary_start is None
+			and boundary_end is None
+			and run_len == n)
 
 		if is_run_closed:
 			# Full closed path, no boundaries — original algorithm
@@ -925,11 +913,42 @@ class HobbySpline(Container):
 			# Solver failed — fall back to zero angles
 			thetas = [0.] * L
 
-		# Store solved angles on knots
+		# Store solved angles on knots.
+		#
+		# `theta_i` is the departure angle for the OUT segment of knot i;
+		# `phi_i` is the arrival angle for the IN segment of knot i.
+		# When two runs share a junction knot (a pin in the middle of an
+		# all-hobby stretch), the IN and OUT segments belong to DIFFERENT
+		# runs. Writing both fields in each run lets whichever runs second
+		# clobber the other side.
+		#
+		# Rule: at the run's first knot we own only `theta` (its OUT
+		# segment); at the run's last knot we own only `phi` (its IN
+		# segment). Interior knots own both sides because both segments
+		# live inside this run.
 		for k in range(L):
 			ki = indices[k]
-			self[ki].theta = thetas[k]
-			self[ki].phi = -self[ki].theta - self[ki].xi
+			is_first = (k == 0)
+			is_last  = (k == L - 1)
+
+			if is_run_closed:
+				# Single closed loop — every knot is interior, no shared boundaries.
+				self[ki].theta = thetas[k]
+				self[ki].phi   = -thetas[k] - self[ki].xi
+				continue
+
+			if is_first and is_last:
+				# Degenerate single-knot run; nothing to write meaningfully.
+				continue
+
+			if not is_last:
+				# This knot's OUT segment is in this run.
+				self[ki].theta = thetas[k]
+			if not is_first:
+				# This knot's IN segment is in this run.
+				# Use thetas[k] from this run's solve so phi is consistent
+				# with this run's curvature.
+				self[ki].phi = -thetas[k] - self[ki].xi
 
 	# - Control point computation ---------------
 	def _compute_hobby_controls(self, k0_idx, k1_idx):
@@ -991,19 +1010,20 @@ class HobbySpline(Container):
 		runs = self._find_free_runs(seg_types)
 
 		for start, end, has_prev_bound, has_next_bound in runs:
-			# Compute boundary angles for this run
+			# Compute boundary angles for this run.
+			# `_compute_boundary_theta` wants a knot index (0..n-1), but
+			# `_solve_run` needs `end` un-modulated so its wrap branch
+			# fires for closed contours where `end == n`.
 			bound_start = None
 			bound_end = None
 
 			if has_prev_bound:
-				run_start = start % n
-				bound_start = self._compute_boundary_theta(run_start, 'out')
+				bound_start = self._compute_boundary_theta(start % n, 'out')
 
-			end_idx = end % n if end < 2 * n else end % n
 			if has_next_bound:
-				bound_end = self._compute_boundary_theta(end_idx, 'in')
+				bound_end = self._compute_boundary_theta(end % n, 'in')
 
-			self._solve_run(start % n, end_idx, bound_start, bound_end)
+			self._solve_run(start % n, end, bound_start, bound_end)
 
 		# Compute control points for all hobby segments
 		for i in range(count):
