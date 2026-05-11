@@ -13,7 +13,7 @@ from __future__ import absolute_import, print_function, division
 
 import math
 
-from typerig.core.objects.node import Node, Knot
+from typerig.core.objects.node import Node
 from typerig.core.objects.contour import Contour
 from typerig.core.objects.hobbyspline import HobbySpline, HobbyKnot, HOBBY, LINE, FIXED
 from typerig.core.objects.shape import Shape

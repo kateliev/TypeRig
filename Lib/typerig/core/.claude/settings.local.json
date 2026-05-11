@@ -3,7 +3,11 @@
     "allow": [
       "Read(//d/Remote/GitHub/TypeRig/**)",
       "Bash(python -c \"from typerig.core.objects.hobbyspline import HobbySpline, HobbyKnot, HOBBY, LINE, FIXED; print\\(''HobbySpline imports OK''\\); hs = HobbySpline\\([\\(0,0\\),\\(100,200\\),\\(200,0\\)], closed=True\\); print\\(''Nodes:'', len\\(hs.nodes\\)\\); print\\(''Segments:'', len\\(hs.segments\\)\\)\")",
-      "Bash(python -c \":*)"
+      "Bash(python -c \":*)",
+      "Bash(awk 'NR>=1794 && NR<=2033' \"D:/Remote/GitHub/TypeRig/Lib/typerig/core/objects/contour.py\")",
+      "Bash(awk 'NR>=2028 && NR<=2035' \"D:/Remote/GitHub/TypeRig/Lib/typerig/core/objects/contour.py\")",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import typerig.core.actions.draw_actions; print\\('draw_actions OK'\\)\")"
     ]
   }
 }

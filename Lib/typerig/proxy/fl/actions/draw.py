@@ -23,8 +23,7 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 
 from typerig.core.func.math import three_point_circle, two_point_circle, two_point_square, two_mid_square
-from typerig.core.objects.contour import HobbySpline
-from typerig.core.objects.node import Knot
+from typerig.core.objects.hobbyspline import HobbySpline
 from typerig.core.base.message import *
 
 from PythonQt import QtCore, QtGui
@@ -46,7 +45,7 @@ except NameError:
 # - Functions ------------------------------------------------------------------------
 def make_contour_circle(center:tuple, radius:float):
 	x, y = center
-	new_spline = HobbySpline([Knot(x, y - radius), Knot(x + radius, y), Knot(x, y + radius), Knot(x - radius, y)], closed=True)
+	new_spline = HobbySpline([(x, y - radius), (x + radius, y), (x, y + radius), (x - radius, y)], closed=True)
 	new_contour = fl6.flContour([fl6.flNode(n.x, n.y, nodeType=n.type) for n in new_spline.nodes], closed=True)
 	new_contour.removeOne(new_contour.nodes()[-1])
 	return new_contour
@@ -193,7 +192,7 @@ class TRDrawActionCollector(object):
 				if mode == 1:
 					new_nodes_list = [fl6.flNode(node.position, nodeType=node.type) for node in layer_nodes if node.isOn()]
 				if mode == 2:
-					new_spline = HobbySpline([Knot(node.x, node.y) for node in layer_nodes if node.isOn()], closed=True)
+					new_spline = HobbySpline([(node.x, node.y) for node in layer_nodes if node.isOn()], closed=True)
 					new_nodes_list =[fl6.flNode(n.x, n.y, nodeType=n.type) for n in new_spline.nodes]
 
 				new_contour.append(new_nodes_list)
