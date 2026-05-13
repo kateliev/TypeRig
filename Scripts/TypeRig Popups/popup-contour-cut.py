@@ -21,6 +21,7 @@ from typerig.proxy.fl.actions.contour import TRContourActionCollector
 from typerig.proxy.fl.actions.node import TRNodeActionCollector
 from typerig.proxy.fl.actions.cut import TRCutActionCollector
 from typerig.proxy.fl.actions.mat_extract import TRMatExtractActionCollector
+from typerig.proxy.fl.actions.stem_center import TRStemCenterActionCollector
 from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomPushButton, CustomSpinLabel, TRFlowLayout
 from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 from typerig.core.base.message import *
@@ -132,6 +133,16 @@ class TRPopupContourCut(QtGui.QWidget):
 		self.lay_main.addWidget(self.btn_align_auto)
 		self.btn_align_auto.clicked.connect(self.do_align_auto)
 
+		# -- Stem-Center Snap
+		tooltip_button = ('Stem-Center Snap\n'
+		                  'Snap selection to the centerline of the perpendicular stem.\n'
+		                  'Axis auto from selection bbox.\n'
+		                  'Shift: force horizontal motion (V-stem).\n'
+		                  'Alt: force vertical motion (H-stem).')
+		self.btn_stem_center = CustomPushButton('node_middle_top', tooltip=tooltip_button, obj_name='btn_panel')
+		self.lay_main.addWidget(self.btn_stem_center)
+		self.btn_stem_center.clicked.connect(self.do_stem_center)
+
 		# -- Corner tools
 		tooltip_button = 'Pick target node for loop extension.\nSelect 1 on-curve node, then toggle on.\nToggle off to clear target.'
 		self.chk_node_target = CustomPushButton('node_target', checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
@@ -174,7 +185,7 @@ class TRPopupContourCut(QtGui.QWidget):
 		self._apply_style()
 
 		# - Position at cursor and show
-		self.setGeometry(100, 100, 420, 20)
+		self.setGeometry(100, 100, 440, 20)
 		self._position_at_cursor()
 		self.show()
 
@@ -380,6 +391,25 @@ class TRPopupContourCut(QtGui.QWidget):
 		glyph.update()
 		glyph.updateObject(glyph.fl, 'Glyph: {}; Cut + Auto Align; Layers: {}'.format(
 			glyph.name, '; '.join(wLayers)))
+		self.close()
+
+	def do_stem_center(self):
+		'''Stem-Center Snap: snap the selected nodes to the centerline of
+		the perpendicular stem they sit inside, across all masters.
+
+		Modifier keys force the target stem axis:
+		  Shift -> 'V' (vertical stem; horizontal motion)
+		  Alt   -> 'H' (horizontal stem; vertical motion)
+		'''
+		modifiers = QtGui.QApplication.keyboardModifiers()
+		if modifiers == QtCore.Qt.ShiftModifier:
+			force_axis = 'V'
+		elif modifiers == QtCore.Qt.AltModifier:
+			force_axis = 'H'
+		else:
+			force_axis = None
+
+		TRStemCenterActionCollector.snap_stem_center(pMode, pLayers, force_axis=force_axis)
 		self.close()
 
 	# - Corner procedures ----------------------------

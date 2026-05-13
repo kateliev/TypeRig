@@ -168,6 +168,27 @@ class StemCandidate(object):
 	def __repr__(self):
 		return 'StemCandidate(axis={}, w={:.2f})'.format(self.axis, self.measured_width)
 
+	def contains_point(self, point, strict=True):
+		'''True iff `point` lies inside the rectangle bounded by the two face
+		coords on the normal axis and by the intersection of the two faces'
+		spans on the parallel axis.
+
+		strict=True (default) excludes the boundary (open test).
+		strict=False includes the boundary (closed test).
+		'''
+		px, py = point[0], point[1]
+		c_lo = min(self.edge_a.coord, self.edge_b.coord)
+		c_hi = max(self.edge_a.coord, self.edge_b.coord)
+		span_lo = max(self.edge_a.span[0], self.edge_b.span[0])
+		span_hi = min(self.edge_a.span[1], self.edge_b.span[1])
+		if self.axis == Axis.V:
+			normal_v, parallel_v = px, py
+		else:
+			normal_v, parallel_v = py, px
+		if strict:
+			return (c_lo < normal_v < c_hi) and (span_lo < parallel_v < span_hi)
+		return (c_lo <= normal_v <= c_hi) and (span_lo <= parallel_v <= span_hi)
+
 
 # - Stem violation alias ----------------
 class StemViolation(Violation):
@@ -712,11 +733,48 @@ def _test_topology_counter_pair_allowed():
 	print('  STRICT: counter/outer pair allowed (containment OK) [OK]')
 
 
+def _test_contains_point_v_stem():
+	'''V-stem 60 wide, 600 tall at x=[0,60]. contains_point on interior,
+	boundary (strict vs non-strict), and outside on each axis.
+	'''
+	c = _make_rect_contour(0, 0, 60, 600)
+	det = StemDetector(mode=DetectMode.EXTREMA)
+	cand = next(k for k in det.detect([c]) if k.axis == Axis.V)
+	# Interior
+	assert cand.contains_point((30.0, 300.0)) is True
+	assert cand.contains_point((30.0, 300.0), strict=False) is True
+	# On the normal-axis boundary
+	assert cand.contains_point((0.0, 300.0)) is False
+	assert cand.contains_point((0.0, 300.0), strict=False) is True
+	# On the span boundary
+	assert cand.contains_point((30.0, 0.0)) is False
+	assert cand.contains_point((30.0, 0.0), strict=False) is True
+	# Outside on normal axis
+	assert cand.contains_point((-1.0, 300.0), strict=False) is False
+	# Outside in the span gap (above)
+	assert cand.contains_point((30.0, 700.0), strict=False) is False
+	print('  contains_point(V-stem): interior / boundary (strict|closed) / outside [OK]')
+
+
+def _test_contains_point_h_stem():
+	'''H-stem 600 wide, 50 tall. Same matrix on the H axis.'''
+	c = _make_rect_contour(0, 0, 600, 50)
+	det = StemDetector(mode=DetectMode.EXTREMA)
+	cand = next(k for k in det.detect([c]) if k.axis == Axis.H)
+	assert cand.contains_point((300.0, 25.0)) is True
+	assert cand.contains_point((300.0, 0.0)) is False
+	assert cand.contains_point((300.0, 0.0), strict=False) is True
+	assert cand.contains_point((-1.0, 25.0), strict=False) is False
+	print('  contains_point(H-stem): interior / boundary / outside [OK]')
+
+
 def _run_stage3_tests():
 	print('Stage 3 - topology gate:')
 	_test_topology_strict_rejects_siblings()
 	_test_topology_permissive_finds_siblings()
 	_test_topology_counter_pair_allowed()
+	_test_contains_point_v_stem()
+	_test_contains_point_h_stem()
 	print('Stage 3: all tests passed.')
 
 
