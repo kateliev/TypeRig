@@ -221,17 +221,26 @@ def npa_cap_rebuild(glyph, scope_layers, NodeActions, target='butt'):
 # 2.6 CURVE ALIGNMENT TOOLS
 # ===================================================================
 def _layer_master_name(layer):
-    """Best-effort master-name lookup that works across host glyph proxies."""
+    """Best-effort master-name lookup that works across host glyph proxies.
+
+    Probes (in order):
+      * layer.master_name / masterName             (explicit attribute)
+      * layer.master.name                          (FL pMaster, Glyphs trLayer wrapper)
+      * layer.host.master.name                     (Glyphs trLayer -> GSLayer)
+      * layer.name                                 (FL fallback: layer name == master name)
+    """
     for attr in ('master_name', 'masterName'):
         v = getattr(layer, attr, None)
         if isinstance(v, str) and v:
             return v
-    master = getattr(layer, 'master', None)
-    if master is not None:
-        v = getattr(master, 'name', None)
-        if isinstance(v, str) and v:
-            return v
-    # Fallback: layer name (FontLab masters are layers named after the master)
+    for path in (('master', 'name'), ('host', 'master', 'name')):
+        obj = layer
+        for step in path:
+            obj = getattr(obj, step, None)
+            if obj is None:
+                break
+        if isinstance(obj, str) and obj:
+            return obj
     return getattr(layer, 'name', None)
 
 

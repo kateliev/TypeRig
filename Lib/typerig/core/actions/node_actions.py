@@ -826,7 +826,8 @@ class NodeActions(object):
 
 	# -- Curve alignment --------------------------------------------------------
 	@staticmethod
-	def make_collinear(contour, node_indices, mode=-1, equalize=False, target_width=None):
+	def make_collinear(contour, node_indices, mode=-1, equalize=False, target_width=None,
+	                   snap_to=None, snap_tolerance=0.25):
 		'''Align two selected curve segments to be collinear at their handle
 		directions — typically the two parallel-stem-side curves of a stem
 		so the stem starts and ends straight.
@@ -897,7 +898,8 @@ class NodeActions(object):
 		(start_a, curve_a), (start_b, curve_b) = selected_curves
 
 		new_a, new_b = curve_a.make_collinear(
-			curve_b, mode=mode, equalize=equalize, target_width=target_width
+			curve_b, mode=mode, equalize=equalize, target_width=target_width,
+			snap_to=snap_to, snap_tolerance=snap_tolerance
 		)
 
 		# Write new control points back to the contour
@@ -916,7 +918,8 @@ class NodeActions(object):
 		return 1
 
 	@staticmethod
-	def make_monoline(contour, node_indices, target_width=None, preserve_taper=False):
+	def make_monoline(contour, node_indices, target_width=None, preserve_taper=False,
+	                  snap_to=None, snap_tolerance=0.25):
 		'''Regularize two selected curve segments as +/- offsets of their
 		shared control-polygon median (monoline-pen model).
 
@@ -979,7 +982,8 @@ class NodeActions(object):
 		(start_a, curve_a), (start_b, curve_b) = selected_curves
 
 		new_a, new_b = curve_a.make_monoline(
-			curve_b, target_width=target_width, preserve_taper=preserve_taper
+			curve_b, target_width=target_width, preserve_taper=preserve_taper,
+			snap_to=snap_to, snap_tolerance=snap_tolerance
 		)
 
 		def _apply(start_on, new_curve):
