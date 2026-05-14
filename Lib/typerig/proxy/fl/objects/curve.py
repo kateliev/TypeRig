@@ -124,9 +124,12 @@ class eCurveEx(object):
 		else:
 			return self.__riseCurveWaring()
 
-	def make_collinear(self, other, mode=0, equalize=False, target_width=None, apply=True):
+	def make_collinear(self, other, mode=0, equalize=False, target_width=None,
+	                   snap_to=None, snap_tolerance=0.25, apply=True):
 		if self.isCurve and other.isCurve:
-			self.curve, other.curve = self.curve.make_collinear(other.curve, mode, equalize, target_width)
+			self.curve, other.curve = self.curve.make_collinear(
+				other.curve, mode, equalize, target_width,
+				snap_to=snap_to, snap_tolerance=snap_tolerance)
 			if apply:
 				self.updateNodes()
 				other.updateNodes()
@@ -134,9 +137,12 @@ class eCurveEx(object):
 		else:
 			return self.__riseCurveWaring()
 
-	def make_monoline(self, other, target_width=None, preserve_taper=False, apply=True):
+	def make_monoline(self, other, target_width=None, preserve_taper=False,
+	                  snap_to=None, snap_tolerance=0.25, apply=True):
 		if self.isCurve and other.isCurve:
-			self.curve, other.curve = self.curve.make_monoline(other.curve, target_width, preserve_taper)
+			self.curve, other.curve = self.curve.make_monoline(
+				other.curve, target_width, preserve_taper,
+				snap_to=snap_to, snap_tolerance=snap_tolerance)
 			if apply:
 				self.updateNodes()
 				other.updateNodes()

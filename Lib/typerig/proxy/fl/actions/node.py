@@ -1314,43 +1314,14 @@ class TRNodeActionCollector(object):
 			active_workspace.getCanvas(True).refreshAll()
 
 	@staticmethod
-	def make_collinear(glyph:eGlyph, pLayers:tuple, equalize:bool=False):
-		'''Make two curves collinear'''
+	def make_collinear(glyph:eGlyph, pLayers:tuple, equalize:bool=False,
+	                   snap_lookup:dict=None, snap_tolerance:float=0.25):
+		'''Make two curves collinear.
 
-		# - Init
-		wLayers = glyph._prepareLayers(pLayers)
-		modifiers = QtGui.QApplication.keyboardModifiers()
-		
-		selection_per_layer = {layer:glyph.selectedNodes(layer, extend=eNode) for layer in wLayers}
-		do_update = False
-		
-		# - Process
-		for layer, selection in selection_per_layer.items():	
-			segments_set = {}
-			
-			for node in selection:
-				node_segment = node.getSegmentNodes()
-				if len(node_segment) == 4:
-					unique_key = hash(tuple([node.index for node in node_segment]))
-					segments_set[unique_key] = node_segment
-
-			if len(segments_set.keys()) >= 2:
-				data = list(segments_set.values())
-				# - Set curves 
-				curve_A = eCurveEx(data[0])
-				curve_B = eCurveEx(data[-1])
-				new_curve_A, new_curve_B = curve_A.make_collinear(curve_B, mode=-1, equalize=equalize, target_width=None, apply=True)
-				do_update = True
-			else:
-				output(1, 'Make collinear', 'Selection must be 2 curves = 8 Nodes! Current = {}'.format(len(selection)))
-
-		if do_update:
-			glyph.updateObject(glyph.fl, '{};\tMake collinear @ {}.'.format(glyph.name, '; '.join(wLayers)))
-			active_workspace.getCanvas(True).refreshAll()
-
-	@staticmethod
-	def make_monoline(glyph:eGlyph, pLayers:tuple, preserve_taper:bool=False):
-		'''Make two curves monoline (parallel offsets of a shared median skeleton).'''
+		snap_lookup: optional {master_name: preset_width} dict. When set and
+		equalize=True, the per-layer width is snapped to the master's preset
+		within snap_tolerance * measured.
+		'''
 
 		# - Init
 		wLayers = glyph._prepareLayers(pLayers)
@@ -1370,10 +1341,68 @@ class TRNodeActionCollector(object):
 					segments_set[unique_key] = node_segment
 
 			if len(segments_set.keys()) >= 2:
+				# In FL, layer == master name for masters.
+				snap_to = None
+				if snap_lookup:
+					v = snap_lookup.get(layer)
+					if v is not None:
+						snap_to = [float(v)]
+
+				data = list(segments_set.values())
+				# - Set curves
+				curve_A = eCurveEx(data[0])
+				curve_B = eCurveEx(data[-1])
+				new_curve_A, new_curve_B = curve_A.make_collinear(
+					curve_B, mode=-1, equalize=equalize, target_width=None,
+					snap_to=snap_to, snap_tolerance=snap_tolerance, apply=True)
+				do_update = True
+			else:
+				output(1, 'Make collinear', 'Selection must be 2 curves = 8 Nodes! Current = {}'.format(len(selection)))
+
+		if do_update:
+			glyph.updateObject(glyph.fl, '{};\tMake collinear @ {}.'.format(glyph.name, '; '.join(wLayers)))
+			active_workspace.getCanvas(True).refreshAll()
+
+	@staticmethod
+	def make_monoline(glyph:eGlyph, pLayers:tuple, preserve_taper:bool=False,
+	                  snap_lookup:dict=None, snap_tolerance:float=0.25):
+		'''Make two curves monoline (parallel offsets of a shared median skeleton).
+
+		snap_lookup: optional {master_name: preset_width} dict. When set, the
+		per-layer width snaps to the master's preset within
+		snap_tolerance * measured.
+		'''
+
+		# - Init
+		wLayers = glyph._prepareLayers(pLayers)
+		modifiers = QtGui.QApplication.keyboardModifiers()
+
+		selection_per_layer = {layer:glyph.selectedNodes(layer, extend=eNode) for layer in wLayers}
+		do_update = False
+
+		# - Process
+		for layer, selection in selection_per_layer.items():
+			segments_set = {}
+
+			for node in selection:
+				node_segment = node.getSegmentNodes()
+				if len(node_segment) == 4:
+					unique_key = hash(tuple([node.index for node in node_segment]))
+					segments_set[unique_key] = node_segment
+
+			if len(segments_set.keys()) >= 2:
+				snap_to = None
+				if snap_lookup:
+					v = snap_lookup.get(layer)
+					if v is not None:
+						snap_to = [float(v)]
+
 				data = list(segments_set.values())
 				curve_A = eCurveEx(data[0])
 				curve_B = eCurveEx(data[-1])
-				new_curve_A, new_curve_B = curve_A.make_monoline(curve_B, target_width=None, preserve_taper=preserve_taper, apply=True)
+				new_curve_A, new_curve_B = curve_A.make_monoline(
+					curve_B, target_width=None, preserve_taper=preserve_taper,
+					snap_to=snap_to, snap_tolerance=snap_tolerance, apply=True)
 				do_update = True
 			else:
 				output(1, 'Make monoline', 'Selection must be 2 curves = 8 Nodes! Current = {}'.format(len(selection)))

@@ -24,6 +24,11 @@ from typerig.proxy.fl.application.app import pWorkspace
 #from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getTRIconFontPath, CustomLabel, CustomPushButton, CustomSpinButton, CustomSpinBox, TRFlowLayout
 from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
+from typerig.proxy.fl.gui.dialogs import TRMasterValuesDLG
+
+# - Lib keys for per-master snap targets (com.typerig.* reverse-domain) ---
+LIB_KEY_COLLINEAR = 'com.typerig.panel.node.tool.collinear'
+LIB_KEY_MONOLINE  = 'com.typerig.panel.node.tool.monoline'
 
 # - Init -------------------------------
 global pLayers
@@ -244,15 +249,15 @@ class TRNodeBasics(QtGui.QWidget):
 		lay_cap.addWidget(self.btn_cap_normal)
 		self.btn_cap_normal.clicked.connect(lambda: TRNodeActionCollector.cap_normal(eGlyph(), pLayers))
 
-		tooltip_button = 'Force two selected curves to be collinear'
+		tooltip_button = 'Force two selected curves to be collinear\n+Alt: equalize stem width\n+Ctrl: edit per-master snap targets'
 		self.btn_curve_collinear = CustomPushButton('curve_collinear', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_cap.addWidget(self.btn_curve_collinear)
-		self.btn_curve_collinear.clicked.connect(lambda: TRNodeActionCollector.make_collinear(eGlyph(), pLayers, get_modifier(QtCore.Qt.AltModifier)))
+		self.btn_curve_collinear.clicked.connect(self._on_make_collinear)
 
-		tooltip_button = 'Make two selected curves monoline (truly parallel offsets of a shared median skeleton)\n+Alt: preserve per-end taper instead of uniform width'
+		tooltip_button = 'Make two selected curves monoline (truly parallel offsets of a shared median skeleton)\n+Alt: preserve per-end taper instead of uniform width\n+Ctrl: edit per-master snap targets'
 		self.btn_curve_monoline = CustomPushButton('channel_process', tooltip=tooltip_button, obj_name='btn_panel')
 		lay_cap.addWidget(self.btn_curve_monoline)
-		self.btn_curve_monoline.clicked.connect(lambda: TRNodeActionCollector.make_monoline(eGlyph(), pLayers, get_modifier(QtCore.Qt.AltModifier)))
+		self.btn_curve_monoline.clicked.connect(self._on_make_monoline)
 
 		#lay_cap.setColumnStretch(lay_cap.columnCount(), 1)
 		box_cap.setLayout(lay_cap)
@@ -729,6 +734,70 @@ class TRNodeBasics(QtGui.QWidget):
 			percent_of_bbox = False
 
 		TRNodeActionCollector.nodes_move(eGlyph(), pLayers, offset_x, offset_y, method, self.angle_bank, percent_of_bbox)
+
+	# -- Per-master snap-target helpers (Cap tools) ----------------------------
+	def _read_lib_dict(self, font, lib_key):
+		'''Returns dict[master_name -> value] stored in the font's packageLib
+		under lib_key, or {} if absent or malformed.'''
+		
+		data = font.fl.packageLib[lib_key]
+		if isinstance(data, dict):
+			return {k: float(v) for k, v in data.items()}
+		
+		return {}
+
+	def _resolve_snap_lookup(self, font, lib_key, dlg_title, dlg_message):
+		'''Return (snap_lookup, proceed). If Ctrl is held, opens the
+		master-values dialog and uses its result; the dialog's own
+		"Save to Font" button is the persist path. If Shift is held,
+		returns ({}, True) to force no-snap. Otherwise reads the lib.'''
+		mods = QtGui.QApplication.keyboardModifiers()
+		if mods & QtCore.Qt.ShiftModifier:
+			return None, True   # explicit no-snap
+		if mods & QtCore.Qt.ControlModifier:
+			dlg = TRMasterValuesDLG(
+				font=font,
+				lib_key=lib_key,
+				title=dlg_title,
+				message=dlg_message,
+				value_label='Width',
+				value_type=float,
+				value_default=100.0,
+				value_range=(1.0, 10000.0, 1.0),
+				autoload=True,
+			)
+			dlg.exec_()
+			if dlg.values is None:
+				return None, False   # cancelled -> abort the action
+			return dlg.values, True
+		return self._read_lib_dict(font, lib_key), True
+
+	def _on_make_collinear(self):
+		mods = QtGui.QApplication.keyboardModifiers()
+		equalize = bool(mods & QtCore.Qt.AltModifier)
+		font = pFont()
+		snap_lookup, proceed = self._resolve_snap_lookup(
+			font, LIB_KEY_COLLINEAR,
+			'Collinear - per-master target widths',
+			'Per-master target stem width for the equalize step.\nSnap kicks in within +/-25% of the measured width.')
+		if not proceed:
+			return
+		TRNodeActionCollector.make_collinear(eGlyph(), pLayers, equalize=equalize,
+		                                     snap_lookup=snap_lookup)
+
+	def _on_make_monoline(self):
+		mods = QtGui.QApplication.keyboardModifiers()
+		preserve_taper = bool(mods & QtCore.Qt.AltModifier)
+		font = pFont()
+		snap_lookup, proceed = self._resolve_snap_lookup(
+			font, LIB_KEY_MONOLINE,
+			'Monoline - per-master target widths',
+			'Per-master target stem width for the monoline regularization.\nSnap kicks in within +/-25% of the measured width.')
+		if not proceed:
+			return
+		TRNodeActionCollector.make_monoline(eGlyph(), pLayers,
+		                                    preserve_taper=preserve_taper,
+		                                    snap_lookup=snap_lookup)
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):

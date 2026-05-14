@@ -220,33 +220,78 @@ def npa_cap_rebuild(glyph, scope_layers, NodeActions, target='butt'):
 # ===================================================================
 # 2.6 CURVE ALIGNMENT TOOLS
 # ===================================================================
+def _layer_master_name(layer):
+    """Best-effort master-name lookup that works across host glyph proxies."""
+    for attr in ('master_name', 'masterName'):
+        v = getattr(layer, attr, None)
+        if isinstance(v, str) and v:
+            return v
+    master = getattr(layer, 'master', None)
+    if master is not None:
+        v = getattr(master, 'name', None)
+        if isinstance(v, str) and v:
+            return v
+    # Fallback: layer name (FontLab masters are layers named after the master)
+    return getattr(layer, 'name', None)
+
+
+def _snap_to_for_layer(layer, snap_lookup):
+    """Resolve the snap_to list for a given layer from a master-name -> value
+    dict. Returns None when no preset is configured for this master."""
+    if not snap_lookup:
+        return None
+    name = _layer_master_name(layer)
+    if name is None:
+        return None
+    v = snap_lookup.get(name)
+    if v is None:
+        return None
+    return [float(v)]
+
+
 def npa_make_collinear(glyph, scope_layers, NodeActions,
-                       mode=-1, equalize=False, target_width=None):
+                       mode=-1, equalize=False, target_width=None,
+                       snap_lookup=None, snap_tolerance=0.25):
     """Align two selected curve segments to be collinear (parallel-stem
-    handle alignment, with optional stem-width equalization)."""
+    handle alignment, with optional stem-width equalization).
+
+    snap_lookup: optional dict {master_name: preset_width}. When set and
+    equalize=True, the equalized width is snapped to the master's preset
+    within snap_tolerance * measured."""
     for lyr in _iter_scope(glyph, scope_layers):
+        snap_to = _snap_to_for_layer(lyr, snap_lookup)
         for s in lyr.shapes:
             for c in s.contours:
                 idx = _selected_indices(c)
                 if idx:
                     NodeActions.make_collinear(c, idx, mode=mode,
                                                 equalize=equalize,
-                                                target_width=target_width)
+                                                target_width=target_width,
+                                                snap_to=snap_to,
+                                                snap_tolerance=snap_tolerance)
 
 
 def npa_make_monoline(glyph, scope_layers, NodeActions,
-                      target_width=None, preserve_taper=False):
+                      target_width=None, preserve_taper=False,
+                      snap_lookup=None, snap_tolerance=0.25):
     """Regularize two selected curve segments as +/- offsets of their shared
     control-polygon median (monoline-pen model). Both sides end up with
-    matching tangents AND matching handle lengths -> truly parallel."""
+    matching tangents AND matching handle lengths -> truly parallel.
+
+    snap_lookup: optional dict {master_name: preset_width}. When set and
+    target_width is None, the resulting width snaps to the master's preset
+    within snap_tolerance * measured."""
     for lyr in _iter_scope(glyph, scope_layers):
+        snap_to = _snap_to_for_layer(lyr, snap_lookup)
         for s in lyr.shapes:
             for c in s.contours:
                 idx = _selected_indices(c)
                 if idx:
                     NodeActions.make_monoline(c, idx,
                                               target_width=target_width,
-                                              preserve_taper=preserve_taper)
+                                              preserve_taper=preserve_taper,
+                                              snap_to=snap_to,
+                                              snap_tolerance=snap_tolerance)
 
 
 # ===================================================================

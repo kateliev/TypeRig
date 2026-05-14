@@ -1200,7 +1200,28 @@ class CubicBezier(object):
 		signed = delta.x * n_hat.x + delta.y * n_hat.y
 		return abs(signed), n_hat, (1 if signed >= 0 else -1)
 
-	def make_collinear(self, other, mode=0, equalize=False, target_width=None):
+	def _snap_width(self, measured, target_width, snap_to, snap_tolerance):
+		'''Decide the final width to use given a measured value, an optional
+		explicit override, an optional list of preset widths to snap to, and
+		a tolerance.
+
+		Precedence:
+			1. target_width (explicit override) wins if not None.
+			2. snap_to: nearest preset within snap_tolerance * measured wins.
+			3. measured value (no change).
+
+		snap_tolerance is a fraction of measured (e.g. 0.25 = +/-25 percent).
+		'''
+		if target_width is not None:
+			return target_width
+		if snap_to and measured > 0:
+			candidate = min(snap_to, key=lambda v: abs(v - measured))
+			if abs(candidate - measured) <= snap_tolerance * measured:
+				return candidate
+		return measured
+
+	def make_collinear(self, other, mode=0, equalize=False, target_width=None,
+	                   snap_to=None, snap_tolerance=0.25):
 		'''
 		Make this curve collinear with another curve by aligning control point handles.
 		Optionally equalize the distance between curves for uniform stems.
@@ -1209,8 +1230,15 @@ class CubicBezier(object):
 			other: CubicBezier object to align with
 			mode: 0 = use self angles, 1 = use other angles, -1 = average
 			equalize: If True, make curves equidistant (uniform stem width)
-			target_width: If set, use this specific distance. If None, use average
-		
+			target_width: If set, use this specific distance. If None, use the
+				measured perpendicular average (or snap_to, see below).
+			snap_to: Optional iterable of preset widths. When equalize=True and
+				target_width is None, the measured average is snapped to the
+				nearest preset within snap_tolerance * measured. If outside the
+				tolerance band, the measured average is used unchanged.
+			snap_tolerance: Fraction of measured width that defines the snap
+				band (default 0.25 = +/-25 percent).
+
 		Returns:
 			(modified_self, modified_other): Tuple of two aligned CubicBezier objects
 		
@@ -1258,10 +1286,10 @@ class CubicBezier(object):
 			w_start, n_start, sgn_start = self._perpendicular_width(c0.p0, c1.p0, target_angle_out)
 			w_end,   n_end,   sgn_end   = self._perpendicular_width(c0.p3, c1.p3, target_angle_in)
 
-			if target_width is None:
-				target_width = (w_start + w_end) / 2.0
+			measured = (w_start + w_end) / 2.0
+			chosen_width = self._snap_width(measured, target_width, snap_to, snap_tolerance)
 
-			half = target_width / 2.0
+			half = chosen_width / 2.0
 			mid_start = Point((c0.p0.x + c1.p0.x) / 2.0, (c0.p0.y + c1.p0.y) / 2.0)
 			mid_end   = Point((c0.p3.x + c1.p3.x) / 2.0, (c0.p3.y + c1.p3.y) / 2.0)
 
@@ -1307,7 +1335,8 @@ class CubicBezier(object):
 
 		return result_0, result_1
 
-	def make_monoline(self, other, target_width=None, preserve_taper=False):
+	def make_monoline(self, other, target_width=None, preserve_taper=False,
+	                  snap_to=None, snap_tolerance=0.25):
 		'''Regularize two side curves of a stem as exact +/- offsets of their
 		control-polygon median.
 
@@ -1320,10 +1349,18 @@ class CubicBezier(object):
 
 		Args:
 			other          : CubicBezier - opposite side of the stem
-			target_width   : float | None - uniform width; None = average of
-			                 the two perpendicular widths at start and end
+			target_width   : float | None - explicit width override; wins over
+			                 snap_to. If None, the measured perpendicular
+			                 width is used (optionally snapped, see snap_to).
 			preserve_taper : bool - if True, keep separate widths at start
 			                 and end (use w_start at p0 side, w_end at p3 side)
+			snap_to        : iterable[float] | None - preset widths to snap
+			                 to. When target_width is None, the measured
+			                 width is snapped to the nearest preset within
+			                 snap_tolerance * measured. With preserve_taper
+			                 the start and end snap independently.
+			snap_tolerance : float - fraction of measured width that defines
+			                 the snap band (default 0.25 = +/-25 percent).
 
 		Returns:
 			(new_self, new_other): two CubicBezier objects, both exact
@@ -1368,12 +1405,15 @@ class CubicBezier(object):
 		w_end,   n_end,   sgn_end   = self._perpendicular_width(c0.p3, c1.p3, a_end)
 
 		if preserve_taper:
-			half_start = (target_width if target_width is not None else w_start) / 2.0
-			half_end   = (target_width if target_width is not None else w_end) / 2.0
+			# Snap each end independently (or honor explicit target_width on both).
+			chosen_start = self._snap_width(w_start, target_width, snap_to, snap_tolerance)
+			chosen_end   = self._snap_width(w_end,   target_width, snap_to, snap_tolerance)
+			half_start = chosen_start / 2.0
+			half_end   = chosen_end   / 2.0
 		else:
-			if target_width is None:
-				target_width = (w_start + w_end) / 2.0
-			half_start = half_end = target_width / 2.0
+			measured = (w_start + w_end) / 2.0
+			chosen_width = self._snap_width(measured, target_width, snap_to, snap_tolerance)
+			half_start = half_end = chosen_width / 2.0
 
 		def _offset(base, n_hat, sgn, half):
 			return (Point(base.x + sgn * half * n_hat.x, base.y + sgn * half * n_hat.y),

@@ -12,6 +12,7 @@ from __future__ import absolute_import, print_function
 from collections import OrderedDict
 
 import os
+import json
 import fontlab as fl6
 
 from typerig.proxy.fl.application.app import pWorkspace
@@ -599,6 +600,326 @@ class TRLayerSelectNEW(QtGui.QDialog):
 			table_dict = {n:OrderedDict(zip(self.column_names, data)) for n, data in enumerate(init_data)}
 			self.tab_masters.clear()
 			self.tab_masters.setTable(table_dict, color_dict=self.color_dict, enable_check=True)
+
+# -- Universal per-master numeric value editor ----------------------------------
+TR_LIB_KEY_PREFIX = 'com.typerig.'
+TR_MASTER_VALUES_FORMAT = 'typerig.master_values/1'
+
+class TRMasterValuesDLG(QtGui.QDialog):
+	'''Universal dialog: one numeric value per font master, persisted in
+	the font lib under a caller-supplied reverse-domain key, with JSON
+	export/import.
+
+	The dialog is intentionally generic so any panel/tool can reuse it for
+	per-master snap targets, italic offsets, ink-trap depths, etc.
+
+	Args:
+		font          : pFont - required; provides masters list and packageLib I/O
+		lib_key       : str   - required; full reverse-domain key (must start
+		                with 'com.typerig.'), e.g.
+		                'com.typerig.panel.node.tool.monoline'
+		title         : str   - window title (default derived from lib_key)
+		message       : str   - instruction text shown above the table
+		value_label   : str   - header for the value column (default 'Value')
+		value_type    : type  - float (default) or int
+		value_default : float - shown for masters that have no entry yet
+		value_range   : tuple - (min, max, step) for the spin editor
+		autoload      : bool  - if True, load values from font lib on open
+		size          : tuple - (x, y, w, h) initial geometry
+
+	After exec_():
+		self.values   : dict[str, float] | None - final values, None if cancelled
+		self.changed  : bool - whether the user edited anything
+	'''
+
+	# Column indices for the 2-column table
+	_COL_NAME  = 0
+	_COL_VALUE = 1
+
+	def __init__(self, font, lib_key,
+	             title=None, message=None,
+	             value_label='Value', value_type=float,
+	             value_default=0.0, value_range=(-10000.0, 10000.0, 1.0),
+	             autoload=True, size=(300, 300, 420, 360), parent=None):
+		super(TRMasterValuesDLG, self).__init__(parent)
+
+		# - Validate the key contract up front
+		if not isinstance(lib_key, basestring) or not lib_key.startswith(TR_LIB_KEY_PREFIX):
+			raise ValueError("TRMasterValuesDLG: lib_key must start with %r (got %r)"
+			                 % (TR_LIB_KEY_PREFIX, lib_key))
+
+		# - Init state
+		self.tr_font          = font
+		self.lib_key       = lib_key
+		self.value_label   = value_label
+		self.value_type    = value_type
+		self.value_default = float(value_default)
+		self.value_min, self.value_max, self.value_step = value_range
+		self.values        = None     # final dict or None on cancel
+		self.changed       = False
+		self._initial_data = {}       # snapshot taken after first populate
+
+		# Master ordering frozen at open-time; orphans appended below
+		self.master_names = list(self.tr_font.masters())
+
+		# - Widgets
+		self.lbl_main = QtGui.QLabel(message or 'Set a value for each master:')
+		self.lbl_main.setWordWrap(True)
+
+		self.tbl = QtGui.QTableWidget(0, 2)
+		self.tbl.setHorizontalHeaderLabels(['Master', self.value_label])
+		self.tbl.horizontalHeader().setStretchLastSection(True)
+		self.tbl.verticalHeader().setVisible(False)
+		self.tbl.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
+		self.tbl.setEditTriggers(QtGui.QAbstractItemView.AllEditTriggers)
+		self.tbl.itemChanged.connect(self._on_item_changed)
+
+		self.btn_font_load = QtGui.QPushButton('Load from Font')
+		self.btn_font_save = QtGui.QPushButton('Save to Font')
+		self.btn_file_load = QtGui.QPushButton('Load from JSON')
+		self.btn_file_save = QtGui.QPushButton('Save to JSON')
+		self.btn_ok        = QtGui.QPushButton('OK')
+		self.btn_cancel    = QtGui.QPushButton('Cancel')
+
+		self.btn_font_load.clicked.connect(self._font_load)
+		self.btn_font_save.clicked.connect(self._font_save)
+		self.btn_file_load.clicked.connect(self._file_load)
+		self.btn_file_save.clicked.connect(self._file_save)
+		self.btn_ok.clicked.connect(self._on_ok)
+		self.btn_cancel.clicked.connect(self.reject)
+
+		# - Layout
+		main = QtGui.QGridLayout()
+		main.addWidget(self.lbl_main,      0, 0, 1, 4)
+		main.addWidget(self.tbl,           1, 0, 1, 4)
+		main.addWidget(self.btn_font_load, 2, 0, 1, 2)
+		main.addWidget(self.btn_font_save, 2, 2, 1, 2)
+		main.addWidget(self.btn_file_load, 3, 0, 1, 2)
+		main.addWidget(self.btn_file_save, 3, 2, 1, 2)
+		main.addWidget(self.btn_cancel,    4, 0, 1, 2)
+		main.addWidget(self.btn_ok,        4, 2, 1, 2)
+		self.setLayout(main)
+
+		# - Populate. Always start with defaults; optionally overlay font lib.
+		self._dict_to_table({})
+		if autoload:
+			loaded, present = self._read_font_lib()
+			if present and loaded:
+				self._dict_to_table(loaded)
+		# Snapshot for the "changed" flag
+		self._initial_data = self._table_to_dict()
+
+		# - Window
+		self.setWindowTitle(title or 'Master values - %s' % lib_key)
+		self.setGeometry(*size)
+		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
+
+	# -- Public helpers -----------------------------------------------------
+
+	def get_values(self):
+		'''Return current table contents as dict[master_name -> value].'''
+		return self._table_to_dict()
+
+	# -- Table <-> dict marshalling ----------------------------------------
+
+	def _table_to_dict(self):
+		out = {}
+		for row in range(self.tbl.rowCount):
+			name_item  = self.tbl.item(row, self._COL_NAME)
+			value_item = self.tbl.item(row, self._COL_VALUE)
+			if name_item is None or value_item is None:
+				continue
+			name = name_item.text
+			try:
+				v = float(value_item.text)
+			except (TypeError, ValueError):
+				continue
+			if self.value_type is int:
+				v = int(round(v))
+			out[name] = v
+		return out
+
+	def _dict_to_table(self, data):
+		'''Populate the table from a dict. Known masters first (in font order),
+		orphan keys (in dict but not in font) appended in red.
+
+		Uses pre-allocated row count + explicit indices so we don't rely on
+		PythonQt's possibly-stale rowCount attribute mid-update.
+		'''
+		self.tbl.blockSignals(True)
+
+		known = set(self.master_names)
+		known_rows = [(name, data.get(name, self.value_default), False)
+		              for name in self.master_names]
+		orphan_rows = [(k, data[k], True)
+		               for k in sorted(data.keys()) if k not in known]
+		all_rows = known_rows + orphan_rows
+
+		# Wipe existing rows first, then resize to the exact target.
+		self.tbl.clearContents()
+		self.tbl.setRowCount(0)
+		self.tbl.setRowCount(len(all_rows))
+
+		for row, (name, value, orphan) in enumerate(all_rows):
+			self._set_row(row, name, value, orphan)
+
+		self.tbl.blockSignals(False)
+
+	def _set_row(self, row, master_name, value, orphan=False):
+		name_item = QtGui.QTableWidgetItem(master_name)
+		# Read-only name cell: enabled + selectable, but not editable.
+		name_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+
+		if self.value_type is int:
+			value_text = str(int(round(float(value))))
+		else:
+			value_text = '{:g}'.format(float(value))
+		value_item = QtGui.QTableWidgetItem(value_text)
+
+		if orphan:
+			red = QtGui.QColor(255, 80, 80, 60)
+			name_item.setBackground(red)
+			value_item.setBackground(red)
+			name_item.setToolTip('Orphan: master "%s" not present in current font.' % master_name)
+
+		self.tbl.setItem(row, self._COL_NAME,  name_item)
+		self.tbl.setItem(row, self._COL_VALUE, value_item)
+
+	def _on_item_changed(self, item):
+		# Validate numeric input; revert on bad value.
+		if item.column != self._COL_VALUE:
+			return
+		try:
+			float(item.text)
+		except (TypeError, ValueError):
+			self.tbl.blockSignals(True)
+			item.setText('{:g}'.format(self.value_default))
+			self.tbl.blockSignals(False)
+
+	# -- Font lib I/O ------------------------------------------------------
+
+	def _read_font_lib(self):
+		'''Returns (data_dict, present_flag). data_dict is empty when the key
+		is missing or malformed; present_flag distinguishes "no data yet"
+		from "data exists but is empty".'''
+		try:
+			pkg_lib = self.tr_font.fl.packageLib
+		except Exception as ex:
+			QtGui.QMessageBox.warning(self, 'Font lib unavailable', str(ex))
+			return {}, False
+
+		# packageLib is a Qt-flavoured dict; key membership via try/except.
+		try:
+			data = pkg_lib[self.lib_key]
+		except Exception:
+			return {}, False
+
+		if not isinstance(data, dict):
+			return {}, False
+
+		clean = {}
+		for k, v in data.items():
+			try:
+				clean[str(k)] = float(v)
+			except (TypeError, ValueError):
+				continue
+		return clean, True
+
+	def _font_load(self):
+		data, present = self._read_font_lib()
+		if not present:
+			QtGui.QMessageBox.information(
+				self, 'Load from Font',
+				'No data found in font lib under key:\n%s' % self.lib_key)
+			return
+		self._dict_to_table(data)
+
+	def _font_save(self):
+		# Mirror Delta: read-modify-write the whole packageLib dict.
+		data = self._table_to_dict()
+		
+		pkg_lib = self.tr_font.fl.packageLib
+		# packageLib values must be plain Python types. Force-cast.
+		pkg_lib[self.lib_key] = {str(k): float(v) for k, v in data.items()}
+		self.tr_font.fl.packageLib = pkg_lib
+	
+			
+		QtGui.QMessageBox.information(
+			self, 'Save to Font',
+			'%d value(s) saved to font lib under key:\n%s'
+			% (len(data), self.lib_key))
+
+	# -- JSON file I/O -----------------------------------------------------
+
+	def _default_dir(self):
+		try:
+			return os.path.split(self.tr_font.fg.path)[0]
+		except Exception:
+			return ''
+
+	def _suggested_filename(self):
+		# Strip the mandatory prefix for a friendlier default.
+		stem = self.lib_key[len(TR_LIB_KEY_PREFIX):] if self.lib_key.startswith(TR_LIB_KEY_PREFIX) else self.lib_key
+		return stem + '.json'
+
+	def _file_save(self):
+		default = os.path.join(self._default_dir(), self._suggested_filename())
+		fname = QtGui.QFileDialog.getSaveFileName(self, 'Save master values to JSON', default, '*.json')
+		if not fname:
+			return
+		payload = {
+			'format': TR_MASTER_VALUES_FORMAT,
+			'key':    self.lib_key,
+			'values': self._table_to_dict(),
+		}
+		try:
+			with open(fname, 'w') as f:
+				json.dump(payload, f, indent='\t', sort_keys=True)
+		except Exception as ex:
+			QtGui.QMessageBox.warning(self, 'Save to JSON failed', str(ex))
+
+	def _file_load(self):
+		fname = QtGui.QFileDialog.getOpenFileName(self, 'Load master values from JSON', self._default_dir(), '*.json')
+		if not fname:
+			return
+		try:
+			with open(fname, 'r') as f:
+				blob = json.load(f)
+		except Exception as ex:
+			QtGui.QMessageBox.warning(self, 'Load from JSON failed', str(ex))
+			return
+
+		# Accept either wrapped {format,key,values} or bare dict.
+		if isinstance(blob, dict) and 'values' in blob and isinstance(blob['values'], dict):
+			data = blob['values']
+			loaded_key = blob.get('key')
+			if loaded_key and loaded_key != self.lib_key:
+				QtGui.QMessageBox.information(
+					self, 'Key mismatch',
+					'JSON was saved under key %r; loading into %r anyway.'
+					% (loaded_key, self.lib_key))
+		elif isinstance(blob, dict):
+			data = blob
+		else:
+			QtGui.QMessageBox.warning(self, 'Load from JSON failed',
+			                          'Unrecognized file shape (expected a dict).')
+			return
+
+		# Coerce values to float; ignore non-numeric entries.
+		clean = {}
+		for k, v in data.items():
+			try:
+				clean[str(k)] = float(v)
+			except (TypeError, ValueError):
+				continue
+		self._dict_to_table(clean)
+
+	# -- Result ------------------------------------------------------------
+
+	def _on_ok(self):
+		self.values = self._table_to_dict()
+		self.changed = (self.values != self._initial_data)
+		self.accept()
 
 # - Test ----------------------
 if __name__ == '__main__':
