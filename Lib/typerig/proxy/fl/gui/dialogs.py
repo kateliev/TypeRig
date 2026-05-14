@@ -686,7 +686,7 @@ class TRMasterValuesDLG(QtGui.QDialog):
 		self.btn_file_load.clicked.connect(self._file_load)
 		self.btn_file_save.clicked.connect(self._file_save)
 		self.btn_ok.clicked.connect(self._on_ok)
-		self.btn_cancel.clicked.connect(self.reject)
+		self.btn_cancel.clicked.connect(lambda: self.reject())
 
 		# - Layout
 		main = QtGui.QGridLayout()
@@ -727,16 +727,16 @@ class TRMasterValuesDLG(QtGui.QDialog):
 		for row in range(self.tbl.rowCount):
 			name_item  = self.tbl.item(row, self._COL_NAME)
 			value_item = self.tbl.item(row, self._COL_VALUE)
-			if name_item is None or value_item is None:
-				continue
-			name = name_item.text
-			try:
-				v = float(value_item.text)
-			except (TypeError, ValueError):
-				continue
+			if name_item is None or value_item is None:	continue
+			
+			name = name_item.text()
+			v = float(value_item.text())
+			
 			if self.value_type is int:
 				v = int(round(v))
+			
 			out[name] = v
+		
 		return out
 
 	def _dict_to_table(self, data):
@@ -840,14 +840,13 @@ class TRMasterValuesDLG(QtGui.QDialog):
 		
 		pkg_lib = self.tr_font.fl.packageLib
 		# packageLib values must be plain Python types. Force-cast.
-		pkg_lib[self.lib_key] = {str(k): float(v) for k, v in data.items()}
+		get_dict = {str(k): float(v) for k, v in data.items()}
+		print(get_dict)
+		pkg_lib[self.lib_key] = get_dict
+
 		self.tr_font.fl.packageLib = pkg_lib
 	
-			
-		QtGui.QMessageBox.information(
-			self, 'Save to Font',
-			'%d value(s) saved to font lib under key:\n%s'
-			% (len(data), self.lib_key))
+		print('Save to Font','%d value(s) saved to font lib under key:\n%s'% (len(data), self.lib_key))
 
 	# -- JSON file I/O -----------------------------------------------------
 
