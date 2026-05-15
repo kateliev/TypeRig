@@ -662,13 +662,21 @@ def glyph_to_SVG_file(glyph, output_dir, mode='color', scale=1.0, structure=EXPO
 # - Add to_SVG methods to core classes --
 # These will be imported and applied to core objects
 def add_svg_methods():
-    '''Add to_SVG methods to core objects (called at import)'''
+    '''Add to_SVG methods to core objects (called at import).
+
+    Font is optional — environments that ship only the geometry subset
+    of TypeRig (e.g. FontRig's browser build) can still use the
+    glyph/layer/contour/node SVG paths.
+    '''
     from typerig.core.objects.node import Node
     from typerig.core.objects.contour import Contour
     from typerig.core.objects.layer import Layer
     from typerig.core.objects.glyph import Glyph
-    from typerig.core.objects.font import Font
-    
+    try:
+        from typerig.core.objects.font import Font
+    except ImportError:
+        Font = None
+
     # Node.to_SVG()
     def node_to_SVG_method(self, scale=1.0, **kwargs):
         return ET.tostring(node_to_SVG(self, scale=scale), encoding='unicode')
@@ -707,7 +715,8 @@ def add_svg_methods():
         return font_to_SVG(self, output_dir=output_dir, mode=mode, scale=scale,
                             structure=structure, path_pattern=path_pattern)
 
-    Font.to_SVG = font_to_SVG_method
+    if Font is not None:
+        Font.to_SVG = font_to_SVG_method
 
 
 # Auto-add methods when module is imported
