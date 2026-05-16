@@ -73,8 +73,8 @@ class TrFontTool(QtGui.QDialog):
 			('axes',         'Axes / Masters',  True,   ''),
 			('encoding',     'Encoding',        True,   ''),
 			('kerning',      'Kerning',         False,  '(not yet bridged)'),
-			('features',     'Features',        False,  '(not yet bridged)'),
-			('groups',       'Groups',          False,  '(not yet bridged)'),
+			('features',     'Features',        True,   '(export only)'),
+			('groups',       'Groups',          True,   '(export only)'),
 		]
 
 		for row, (key, label, checked, note) in enumerate(components):
@@ -235,6 +235,8 @@ class TrFontTool(QtGui.QDialog):
 				glyph_names      = glyph_names,
 				include_encoding = self._chk['encoding'].isChecked(),
 				include_axes     = self._chk['axes'].isChecked(),
+				include_features = self._chk['features'].isChecked(),
+				include_groups   = self._chk['groups'].isChecked(),
 				verbose          = False,
 			)
 

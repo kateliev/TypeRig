@@ -21,6 +21,7 @@ from typerig.core.objects.master import Master, Masters
 from typerig.core.objects.instance import Instance, Instances
 from typerig.core.objects.kern import Kerning
 from typerig.core.objects.encoding import Encoding
+from typerig.core.objects.groups import Groups
 
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 
@@ -57,6 +58,13 @@ class FontInfo(Member, XMLSerializable):
 		'designer', 'designer_url',
 		'manufacturer', 'manufacturer_url',
 		'copyright', 'trademark', 'description',
+		'license', 'license_url',
+		'year', 'note',
+		'unique_id', 'vendor_id',
+		'weight_class', 'width_class',
+		'italic_angle',
+		'underline_position', 'underline_thickness',
+		'postscript_font_name',
 		'identifier', 'parent', 'lib'
 	)
 
@@ -67,18 +75,38 @@ class FontInfo(Member, XMLSerializable):
 	XML_CHILDREN = {}
 	XML_LIB_ATTRS = []
 
-	# Mapping between XML key strings and Python attribute names
+	# Mapping between XML key strings and Python attribute names. Keys mirror
+	# UFO fontinfo.plist field names (kebab-cased) so future UFO conversion is
+	# a one-to-one transliteration.
 	_FIELDS = {
-		'family-name':		'family_name',
-		'style-name':		'style_name',
-		'version':			'version',
-		'designer':			'designer',
-		'designer-url':		'designer_url',
-		'manufacturer':		'manufacturer',
-		'manufacturer-url':	'manufacturer_url',
-		'copyright':		'copyright',
-		'trademark':		'trademark',
-		'description':		'description',
+		'family-name':              'family_name',
+		'style-name':               'style_name',
+		'version':                  'version',
+		'year':                     'year',
+		'note':                     'note',
+		'designer':                 'designer',
+		'designer-url':             'designer_url',
+		'manufacturer':             'manufacturer',
+		'manufacturer-url':         'manufacturer_url',
+		'copyright':                'copyright',
+		'trademark':                'trademark',
+		'description':              'description',
+		'license':                  'license',
+		'license-url':              'license_url',
+		'unique-id':                'unique_id',
+		'vendor-id':                'vendor_id',
+		'weight-class':             'weight_class',
+		'width-class':              'width_class',
+		'italic-angle':             'italic_angle',
+		'underline-position':       'underline_position',
+		'underline-thickness':      'underline_thickness',
+		'postscript-font-name':     'postscript_font_name',
+	}
+
+	# Fields stored as numbers; everything else is a string round-trip
+	_NUMERIC_FIELDS = {
+		'year', 'weight_class', 'width_class',
+		'italic_angle', 'underline_position', 'underline_thickness',
 	}
 
 	def __init__(self, *args, **kwargs):
@@ -87,17 +115,29 @@ class FontInfo(Member, XMLSerializable):
 		if len(args) >= 1: kwargs.setdefault('family_name', args[0])
 		if len(args) >= 2: kwargs.setdefault('style_name',  args[1])
 
-		self.family_name 		= kwargs.pop('family_name',		 'Untitled')
-		self.style_name 		= kwargs.pop('style_name',		 'Regular')
-		self.version 			= kwargs.pop('version',			 '1.0')
-		self.designer 			= kwargs.pop('designer',		 '')
-		self.designer_url 		= kwargs.pop('designer_url',	 '')
-		self.manufacturer 		= kwargs.pop('manufacturer',	 '')
-		self.manufacturer_url 	= kwargs.pop('manufacturer_url', '')
-		self.copyright 			= kwargs.pop('copyright',		 '')
-		self.trademark 			= kwargs.pop('trademark',		 '')
-		self.description 		= kwargs.pop('description',		 '')
-		self.lib 				= kwargs.pop('lib',				 {})
+		self.family_name 		 = kwargs.pop('family_name',		 'Untitled')
+		self.style_name 		 = kwargs.pop('style_name',		 'Regular')
+		self.version 			 = kwargs.pop('version',			 '1.0')
+		self.year                = kwargs.pop('year',                None)
+		self.note                = kwargs.pop('note',                '')
+		self.designer 			 = kwargs.pop('designer',		     '')
+		self.designer_url 		 = kwargs.pop('designer_url',	     '')
+		self.manufacturer 		 = kwargs.pop('manufacturer',	     '')
+		self.manufacturer_url 	 = kwargs.pop('manufacturer_url',    '')
+		self.copyright 			 = kwargs.pop('copyright',		     '')
+		self.trademark 			 = kwargs.pop('trademark',		     '')
+		self.description 		 = kwargs.pop('description',		 '')
+		self.license             = kwargs.pop('license',             '')
+		self.license_url         = kwargs.pop('license_url',         '')
+		self.unique_id           = kwargs.pop('unique_id',           '')
+		self.vendor_id           = kwargs.pop('vendor_id',           '')
+		self.weight_class        = kwargs.pop('weight_class',        None)
+		self.width_class         = kwargs.pop('width_class',         None)
+		self.italic_angle        = kwargs.pop('italic_angle',        None)
+		self.underline_position  = kwargs.pop('underline_position',  None)
+		self.underline_thickness = kwargs.pop('underline_thickness', None)
+		self.postscript_font_name = kwargs.pop('postscript_font_name', '')
+		self.lib 				 = kwargs.pop('lib',				 {})
 
 	# -- Internals ----------------------
 	def __repr__(self):
@@ -112,11 +152,13 @@ class FontInfo(Member, XMLSerializable):
 
 		rev = {v: k for k, v in self._FIELDS.items()}
 		for attr, xml_key in rev.items():
-			val = getattr(self, attr, '')
-			if val:
-				meta = ET.SubElement(elem, 'meta')
-				meta.set('key',   xml_key)
-				meta.set('value', str(val))
+			val = getattr(self, attr, None)
+			# Skip unset only — keep zero/empty distinct (italic_angle can be 0)
+			if val is None or val == '':
+				continue
+			meta = ET.SubElement(elem, 'meta')
+			meta.set('key',   xml_key)
+			meta.set('value', str(val))
 
 		# Arbitrary lib entries
 		if self.lib:
@@ -140,7 +182,15 @@ class FontInfo(Member, XMLSerializable):
 		for meta in element.findall('meta'):
 			xml_key = meta.get('key', '')
 			if xml_key in cls._FIELDS:
-				kwargs[cls._FIELDS[xml_key]] = meta.get('value', '')
+				attr = cls._FIELDS[xml_key]
+				raw = meta.get('value', '')
+				if attr in cls._NUMERIC_FIELDS and raw != '':
+					try:
+						kwargs[attr] = int(raw) if '.' not in raw else float(raw)
+					except ValueError:
+						kwargs[attr] = raw
+				else:
+					kwargs[attr] = raw
 
 		lib = {}
 		lib_elem = element.find('lib')
@@ -265,7 +315,7 @@ class Font(Container, XMLSerializable):
 	'''
 	__slots__ = (
 		'info', 'metrics', 'axes', 'masters', 'instances',
-		'encoding', 'kerning', 'identifier', 'parent', 'lib'
+		'encoding', 'kerning', 'groups', 'identifier', 'parent', 'lib', 'features'
 	)
 
 	XML_TAG = 'font'
@@ -286,7 +336,9 @@ class Font(Container, XMLSerializable):
 			self.instances 	= kwargs.pop('instances',Instances())
 			self.encoding 	= kwargs.pop('encoding', Encoding())
 			self.kerning 	= kwargs.pop('kerning',  Kerning())
+			self.groups 	= kwargs.pop('groups',   Groups())		# UFO-style flat groups (incl. public.kern1/2.* kerning classes)
 			self.lib 		= kwargs.pop('lib',      {})
+			self.features 	= kwargs.pop('features', '')			# UFO-style: raw OpenType feature code (features.fea)
 
 		# Name → index cache for fast glyph lookup
 		self._rebuild_cache()
@@ -394,7 +446,7 @@ class Font(Container, XMLSerializable):
 		if self.encoding.data:
 			root.append(self.encoding._to_xml_element())
 
-		if self.kerning.data or self.kerning.classes:
+		if self.kerning.data:
 			root.append(self.kerning._to_xml_element())
 
 		# Lib

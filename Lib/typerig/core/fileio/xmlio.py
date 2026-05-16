@@ -40,6 +40,7 @@ class XMLSerializable:
 	XML_TAG = None  # e.g., 'contour', 'node', 'glyph'
 	XML_ATTRS = []  # e.g., ['identifier', 'x', 'y']
 	XML_CHILDREN = {}  # e.g., {'point': 'nodes', 'component': 'components'}
+	XML_TEXT_CHILDREN = {}  # e.g., {'note': 'note'} - child element with text content (UFO model)
 	XML_LIB_ATTRS = []  # e.g., ['closed', 'clockwise'] - plist lib section
 	XML_ATTR_DEFAULTS = {}  # e.g., {'closed': False} - skip when value matches default
 	
@@ -50,8 +51,10 @@ class XMLSerializable:
 		element = self._to_xml_element(exclude_attrs)
 		return ET.tostring(element, encoding='unicode')
 	
-	def _to_xml_element(self, exclude_attrs):
+	def _to_xml_element(self, exclude_attrs=None):
 		'''Convert object to XML Element (internal use)'''
+		if exclude_attrs is None:
+			exclude_attrs = []
 		elem = ET.Element(self.XML_TAG)
 		
 		# Add XML attributes
@@ -82,6 +85,14 @@ class XMLSerializable:
 				for child in children:
 					if hasattr(child, '_to_xml_element'):
 						elem.append(child._to_xml_element(exclude_attrs))
+
+		# Add text-content child elements (UFO-style <note>...)
+		for child_tag, attr_name in self.XML_TEXT_CHILDREN.items():
+			if attr_name in exclude_attrs: continue
+			value = getattr(self, attr_name, None)
+			if value is None or value == '': continue
+			text_elem = ET.SubElement(elem, child_tag)
+			text_elem.text = str(value)
 		
 		# Add lib section if needed
 		lib_data = {}
@@ -128,6 +139,12 @@ class XMLSerializable:
 				if child_class:
 					children = [child_class.from_XML(elem) for elem in child_elements]
 					attrs[attr_name] = children
+
+		# Parse text-content child elements
+		for child_tag, attr_name in cls.XML_TEXT_CHILDREN.items():
+			text_elem = element.find(child_tag)
+			if text_elem is not None and text_elem.text is not None:
+				attrs[attr_name] = text_elem.text
 		
 		# Parse lib section
 		lib_elem = element.find('lib')

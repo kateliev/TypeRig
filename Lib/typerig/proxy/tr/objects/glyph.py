@@ -19,6 +19,7 @@ import PythonQt as pqt
 from typerig.core.func.string import is_hex, hue_to_hex, hex_to_hue
 
 from typerig.proxy.tr.objects.layer import trLayer
+from typerig.proxy.tr.objects.guideline import _build_fl_guideline
 from typerig.core.objects.glyph import Glyph
 
 # - Init --------------------------------
@@ -100,6 +101,19 @@ class trGlyph(Glyph):
 		if isinstance(other, list):
 			self.host.fgGlyph.unicodes = other
 
+	@property
+	def note(self):
+		'''Free-text glyph note (UFO-style). Backed by fgGlyph.note in FL.'''
+		fg = self.host.fgGlyph
+		value = getattr(fg, 'note', None)
+		return value if value else None
+
+	@note.setter
+	def note(self, value):
+		fg = self.host.fgGlyph
+		if hasattr(fg, 'note'):
+			fg.note = value if value is not None else ''
+
 	# - Functions ---------------------------
 	def update(self):
 		fl6.flItems.notifyChangesApplied(self.name, self.host, True)
@@ -156,5 +170,65 @@ class trGlyph(Glyph):
 			core_layers,
 			name=self.name,
 			mark=self.mark,
-			unicodes=list(self.unicodes)
+			unicodes=list(self.unicodes),
+			note=self.note,
+			# guidelines on Glyph stay empty — FL only has per-layer guides;
+			# anything ejected from FL ends up on Layer.guidelines.
+			guidelines=[],
 		)
+
+	def mount(self, core_glyph, layer_names=None):
+		'''Push core Glyph metadata + geometry back into the FL host.
+
+		Mounts each matching layer's shapes / anchors / guidelines via
+		trLayer.mount, and copies glyph-level metadata (note, unicodes, mark).
+
+		Glyph-level guidelines (UFO allows them on <glyph> as well as on
+		layers) have no direct FL equivalent — FL only stores guidelines
+		per layer. They are pushed into every matching FL layer so no data
+		is silently lost. A subsequent eject will return them as per-layer
+		guides; this asymmetry is FL's data model, not ours.
+
+		Args:
+			core_glyph (Glyph)         : pure core glyph to push
+			layer_names (list or None) : restrict mount to these layers;
+			                             None means all layers in core_glyph
+		'''
+		# - Per-layer mount
+		target = layer_names or [l.name for l in core_glyph.layers]
+		extra_guides = list(getattr(core_glyph, 'guidelines', None) or [])
+
+		for layer_name in target:
+			core_layer = core_glyph.layer(layer_name)
+			if core_layer is None:
+				continue
+
+			fl_layer = None
+			for fl in self.host.layers:
+				if fl.name == layer_name:
+					fl_layer = fl
+					break
+			if fl_layer is None:
+				continue
+
+			# Stash extra guides on the core_layer briefly so trLayer.mount
+			# writes them alongside the layer's own guides. Restore after.
+			original = list(getattr(core_layer, 'guidelines', None) or [])
+			if extra_guides:
+				core_layer.guidelines = original + extra_guides
+			try:
+				trLayer(fl_layer).mount(core_layer)
+			finally:
+				core_layer.guidelines = original
+
+		# - Glyph-level metadata
+		if getattr(core_glyph, 'note', None) is not None:
+			self.note = core_glyph.note
+
+		if core_glyph.unicodes:
+			# Only overwrite when source has unicodes — preserves FL state
+			# in the (rare) case the core glyph was constructed without any.
+			self.unicodes = list(core_glyph.unicodes)
+
+		if getattr(core_glyph, 'mark', None) is not None:
+			self.mark = core_glyph.mark

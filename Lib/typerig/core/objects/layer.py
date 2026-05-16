@@ -22,6 +22,7 @@ from typerig.core.objects.utils import Bounds
 from typerig.core.objects.shape import Shape
 from typerig.core.objects.contour import Contour
 from typerig.core.objects.anchor import Anchor
+from typerig.core.objects.guideline import Guideline
 from typerig.core.objects.sdf import SignedDistanceField
 
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
@@ -35,30 +36,31 @@ __version__ = '0.6.2'
 # - Classes -----------------------------
 @register_xml_class
 class Layer(Container, XMLSerializable): 
-	__slots__ = ('name', 'stx', 'sty', 'transform', 'mark', 'advance_width', 'advance_height', 'identifier', 'parent', 'lib', 'anchors', '_sdf')
+	__slots__ = ('name', 'stx', 'sty', 'transform', 'mark', 'advance_width', 'advance_height', 'identifier', 'parent', 'lib', 'anchors', 'guidelines', '_sdf')
 
 	XML_TAG = 'layer'
 	XML_ATTRS = ['name', 'identifier', 'width', 'height', 'stx', 'sty']
-	XML_CHILDREN = {'shape': 'shapes', 'anchor': 'anchors'}
+	XML_CHILDREN = {'shape': 'shapes', 'anchor': 'anchors', 'guideline': 'guidelines'}
 	XML_LIB_ATTRS = []
-	
+
 	def __init__(self, shapes=None, **kwargs):
 		factory = kwargs.pop('default_factory', Shape)
 		super(Layer, self).__init__(shapes, default_factory=factory, **kwargs)
-		
+
 		self.transform = kwargs.pop('transform', Transform())
-		
-		self.stx = kwargs.pop('stx', None) 
-		self.sty = kwargs.pop('sty', None) 
-		
+
+		self.stx = kwargs.pop('stx', None)
+		self.sty = kwargs.pop('sty', None)
+
 		# - Metadata
 		if not kwargs.pop('proxy', False): # Initialize in proxy mode
 			self.name = kwargs.pop('name', hash(self))
 			self.identifier = kwargs.pop('identifier', None)
 			self.mark = kwargs.pop('mark', 0)
-			self.advance_width = kwargs.pop('width', 0.) 
-			self.advance_height = kwargs.pop('height', 1000.) 
+			self.advance_width = kwargs.pop('width', 0.)
+			self.advance_height = kwargs.pop('height', 1000.)
 			self.anchors = kwargs.pop('anchors', [])
+			self.guidelines = kwargs.pop('guidelines', [])
 
 		# - SDF cache (not serialized)
 		self._sdf = None

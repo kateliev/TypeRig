@@ -48,6 +48,7 @@ from typerig.core.objects.master import Masters, Master
 from typerig.core.objects.instance import Instances, Instance
 from typerig.core.objects.encoding import Encoding
 from typerig.core.objects.kern import Kerning
+from typerig.core.objects.groups import Groups
 from typerig.core.objects.glyph import Glyph
 
 # - Init --------------------------------
@@ -56,8 +57,16 @@ __version__ = '0.1.0'
 TRFONT_EXT 	= '.trfont'
 TRGLYPH_EXT = '.trglyph'
 GLYPHS_DIR 	= 'glyphs'
+FILE_META 	= 'metainfo.xml'
 FILE_FONT 	= 'font.xml'
 FILE_GLYPHS = 'glyphs.xml'
+FILE_GROUPS = 'groups.xml'
+FILE_FEATURES = 'features.fea'
+
+# Format version of the .trfont package this build reads/writes
+TRFONT_FORMAT_VERSION_MAJOR = 1
+TRFONT_FORMAT_VERSION_MINOR = 0
+TRFONT_CREATOR              = 'com.kateliev.typerig'
 
 # - Helpers -----------------------------
 def _pretty_xml(element):
@@ -254,9 +263,34 @@ class TrFontIO(object):
 		glyph_paths = glyph_paths or {}
 		manifest    = GlyphManifest()
 
+		# Write metainfo.xml — format version and creator stamp
+		meta_elem = ET.Element('metainfo')
+		meta_elem.set('creator',             TRFONT_CREATOR)
+		meta_elem.set('format-version-major', str(TRFONT_FORMAT_VERSION_MAJOR))
+		meta_elem.set('format-version-minor', str(TRFONT_FORMAT_VERSION_MINOR))
+		_write_xml(os.path.join(path, FILE_META), meta_elem)
+
 		# Write font.xml — the font descriptor (no glyphs embedded)
 		font_elem = font._to_xml_element()
 		_write_xml(os.path.join(path, FILE_FONT), font_elem)
+
+		# Write features.fea sibling file (UFO-style; opaque OpenType source)
+		features = getattr(font, 'features', '') or ''
+		features_path = os.path.join(path, FILE_FEATURES)
+		if features:
+			with open(features_path, 'w', encoding='utf-8') as fh:
+				fh.write(features)
+		elif os.path.isfile(features_path):
+			# Strip stale features.fea so the folder reflects the in-memory state
+			os.remove(features_path)
+
+		# Write groups.xml sibling file (UFO-style flat groups)
+		groups = getattr(font, 'groups', None)
+		groups_path = os.path.join(path, FILE_GROUPS)
+		if groups is not None and len(groups.data):
+			_write_xml(groups_path, groups._to_xml_element())
+		elif os.path.isfile(groups_path):
+			os.remove(groups_path)
 
 		# Write glyph files + build manifest
 		glyph_dir = os.path.join(path, GLYPHS_DIR)
@@ -301,6 +335,18 @@ class TrFontIO(object):
 		if not os.path.isdir(path):
 			raise FileNotFoundError('Not a .trfont folder: {}'.format(path))
 
+		# Parse metainfo (best-effort; older packages may omit this file)
+		meta_root = _read_xml(os.path.join(path, FILE_META))
+		if meta_root is not None:
+			try:
+				major = int(meta_root.get('format-version-major', '1'))
+				if major > TRFONT_FORMAT_VERSION_MAJOR:
+					raise ValueError(
+						'.trfont format version {} is newer than this reader ({})'
+						.format(major, TRFONT_FORMAT_VERSION_MAJOR))
+			except ValueError:
+				raise
+
 		# Parse the font descriptor
 		font_root = _read_xml(os.path.join(path, FILE_FONT))
 
@@ -309,6 +355,18 @@ class TrFontIO(object):
 			font = Font.from_XML(font_root, include_glyphs=False)
 		else:
 			font = Font()
+
+		# Read features.fea sibling file if present
+		features_path = os.path.join(path, FILE_FEATURES)
+		if os.path.isfile(features_path):
+			with open(features_path, 'r', encoding='utf-8') as fh:
+				font.features = fh.read()
+
+		# Read groups.xml sibling file if present
+		groups_path = os.path.join(path, FILE_GROUPS)
+		groups_root = _read_xml(groups_path)
+		if groups_root is not None:
+			font.groups = Groups.from_XML(groups_root)
 
 		# Load manifest
 		manifest = GlyphManifest.read(os.path.join(path, FILE_GLYPHS))

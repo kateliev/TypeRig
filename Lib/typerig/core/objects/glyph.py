@@ -20,6 +20,7 @@ from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 
 from typerig.core.objects.atom import Container
 from typerig.core.objects.layer import Layer
+from typerig.core.objects.guideline import Guideline
 
 # - Init -------------------------------
 __version__ = '0.2.6'
@@ -46,18 +47,19 @@ MARK_COLORS_REV = {v: k for k, v in MARK_COLORS.items()}
 
 # - Classes -----------------------------
 @register_xml_class
-class Glyph(Container, XMLSerializable): 
-	__slots__ = ('name', 'mark', 'unicodes', 'identifier', 'parent', 'selected')
+class Glyph(Container, XMLSerializable):
+	__slots__ = ('name', 'mark', 'unicodes', 'identifier', 'parent', 'selected', 'note', 'guidelines')
 
 	XML_TAG = 'glyph'
 	XML_ATTRS = ['name', 'identifier', 'unicodes', 'selected', 'mark']
-	XML_CHILDREN = {'layer': 'layers'}
+	XML_CHILDREN = {'layer': 'layers', 'guideline': 'guidelines'}
+	XML_TEXT_CHILDREN = {'note': 'note'}
 	XML_LIB_ATTRS = []
 
 	def __init__(self, layers=None, **kwargs):
 		factory = kwargs.pop('default_factory', Layer)
 		super(Glyph, self).__init__(layers, default_factory=factory, **kwargs)
-		
+
 		# - Metadata
 		if not kwargs.pop('proxy', False): # Initialize in proxy mode
 			self.identifier = kwargs.pop('identifier', None)
@@ -65,6 +67,8 @@ class Glyph(Container, XMLSerializable):
 			self.name = kwargs.pop('name', hash(self))
 			self.unicodes = kwargs.pop('unicodes', [])
 			self.selected = kwargs.pop('selected', False)
+			self.note = kwargs.pop('note', None)  # Free-text glyph note (UFO-style)
+			self.guidelines = kwargs.pop('guidelines', [])
 
 		#self.active_layer = kwargs.pop('active_layer', None)
 		

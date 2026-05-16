@@ -136,6 +136,18 @@ class pGlyph(object):
 		self.fl.tags = tags
 
 	@property
+	def note(self):
+		return getattr(self.fg, 'note', None) or getattr(self.fl, 'note', None)
+
+	@note.setter
+	def note(self, note):
+		# FontLab glyph note lives on fgGlyph; flGlyph mirrors it
+		if hasattr(self.fg, 'note'):
+			self.fg.note = note if note is not None else ''
+		if hasattr(self.fl, 'note'):
+			self.fl.note = note if note is not None else ''
+
+	@property
 	def unicode(self):
 		return self.fg.unicode
 

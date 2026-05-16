@@ -18,6 +18,7 @@ import PythonQt as pqt
 
 from typerig.proxy.tr.objects.shape import trShape, _build_fl_shape
 from typerig.proxy.tr.objects.anchor import trAnchor, _build_fl_anchor
+from typerig.proxy.tr.objects.guideline import _build_fl_guideline, _fl_to_guideline
 from typerig.core.objects.layer import Layer
 
 # - Init --------------------------------
@@ -90,6 +91,7 @@ class trLayer(Layer):
 		'''
 		core_shapes = [trShape(s).eject() for s in self.host.shapes]
 		core_anchors = [trAnchor(a).eject() for a in self.host.anchors]
+		core_guidelines = [_fl_to_guideline(g) for g in (self.host.guidelines or [])]
 
 		return Layer(
 			core_shapes,
@@ -97,7 +99,8 @@ class trLayer(Layer):
 			width=self.advance_width,
 			height=self.advance_height,
 			mark=self.mark,
-			anchors=core_anchors
+			anchors=core_anchors,
+			guidelines=core_guidelines,
 		)
 
 	def mount(self, core_layer):
@@ -125,9 +128,26 @@ class trLayer(Layer):
 
 		while len(self.host.anchors):
 			self.host.removeAnchor(self.host.anchors[0])
-		
+
 		for core_anchor in core_layer.anchors:
 			self.host.addAnchor(_build_fl_anchor(core_anchor))
+
+		# - Replace guidelines
+		# FL's flLayer exposes guideline mutation via clearGuidelines /
+		# appendGuidelines. Fall back to removing one-by-one if the bulk
+		# clear API isn't available.
+		try:
+			self.host.clearGuidelines()
+		except AttributeError:
+			while len(self.host.guidelines):
+				try:
+					self.host.removeGuideline(self.host.guidelines[0])
+				except AttributeError:
+					break
+
+		core_guidelines = getattr(core_layer, 'guidelines', None) or []
+		if core_guidelines:
+			self.host.appendGuidelines([_build_fl_guideline(g) for g in core_guidelines])
 
 		# - Copy metrics
 		self.host.advanceWidth = core_layer.advance_width

@@ -43,6 +43,7 @@ from typerig.core.objects.master import Master, Masters
 from typerig.core.objects.instance import Instance, Instances
 from typerig.core.objects.encoding import Encoding
 from typerig.core.objects.kern import Kerning
+from typerig.core.objects.groups import Groups, Group, KERN1_PREFIX, KERN2_PREFIX
 
 # Folder-level IO
 from typerig.core.fileio.trfont import TrFontIO
@@ -52,20 +53,40 @@ __version__ = '0.3.0'
 
 # - Helpers -----------------------------
 def _fl_info(fg_font):
-	'''Extract basic font info from fgFont → FontInfo.'''
-	get = lambda attr: getattr(fg_font, attr, '') or ''
+	'''Extract font info from fgFont → FontInfo (UFO-aligned fields).'''
+	def gs(attr):
+		return getattr(fg_font, attr, '') or ''
+
+	def gn(attr):
+		'''Get numeric or None; FL often returns 0 for "unset" so we keep 0
+		unless the attribute is missing entirely.'''
+		val = getattr(fg_font, attr, None)
+		return val if val is not None else None
 
 	info = FontInfo(
-		family_name = get('familyName'),
-		style_name  = get('styleName'),
+		family_name = gs('familyName'),
+		style_name  = gs('styleName'),
 	)
-	info.version 		  = get('version')
-	info.designer 		  = get('designer')
-	info.designer_url 	  = get('designerURL')
-	info.manufacturer 	  = get('manufacturer')
-	info.manufacturer_url = get('manufacturerURL')
-	info.copyright 		  = get('copyright')
-	info.trademark 		  = get('trademark')
+	info.version              = gs('version')
+	info.year                 = gn('year')
+	info.note                 = gs('note')
+	info.designer             = gs('designer')
+	info.designer_url         = gs('designerURL')
+	info.manufacturer         = gs('manufacturer')
+	info.manufacturer_url     = gs('manufacturerURL')
+	info.copyright            = gs('copyright')
+	info.trademark            = gs('trademark')
+	info.description          = gs('description')
+	info.license              = gs('license')
+	info.license_url          = gs('licenseURL')
+	info.unique_id            = gs('uniqueID')
+	info.vendor_id            = gs('vendorID')
+	info.weight_class         = gn('weightClass')
+	info.width_class          = gn('widthClass')
+	info.italic_angle         = gn('italicAngle_value') if hasattr(fg_font, 'italicAngle_value') else gn('italicAngle')
+	info.underline_position   = gn('underlinePosition_value') if hasattr(fg_font, 'underlinePosition_value') else gn('underlinePosition')
+	info.underline_thickness  = gn('underlineThickness_value') if hasattr(fg_font, 'underlineThickness_value') else gn('underlineThickness')
+	info.postscript_font_name = gs('postscriptFontName') or gs('fontName')
 
 	return info
 
@@ -81,6 +102,242 @@ def _fl_metrics(fg_font):
 		cap_height 	= get('capHeight', 	700),
 		line_gap 	= get('lineGap', 	0),
 	)
+
+def _fl_groups(fg_font):
+	'''Extract fgGroups → UFO-style Groups.
+
+	FL groups carry a `mode` and per-side flags that indicate whether the
+	group is a kerning class (and on which side) or a free user/OT group.
+	Side information is renamed onto the UFO reserved prefixes:
+	  - first/left  → public.kern1.<name>
+	  - second/right → public.kern2.<name>
+	  - both sides  → emit two entries, one for each prefix
+	  - none        → keep as a user group with the original name
+
+	FL's mode strings and side-attribute names vary across builds, so this
+	probes a handful of likely property names and degrades gracefully.
+	'''
+	groups = Groups()
+
+	try:
+		fg_groups = fg_font.groups
+	except AttributeError:
+		return groups
+
+	# fgGroups exposes .asDict() {name: fgGroup}; fall back to iteration
+	try:
+		raw = fg_groups.asDict()
+		items = list(raw.items())
+	except Exception:
+		try:
+			items = [(g.name, g) for g in fg_groups]
+		except Exception:
+			return groups
+
+	def _side_flags(fg_group):
+		'''Return (is_first, is_second). Probes a few known attribute names.'''
+		mode = getattr(fg_group, 'mode', '') or ''
+		# Property variants observed across FL builds
+		first  = bool(getattr(fg_group, 'isKerningOnLeft',  False)
+		           or getattr(fg_group, 'kerning1',         False)
+		           or getattr(fg_group, 'firstSide',        False)
+		           or ('KernLeft' in mode))
+		second = bool(getattr(fg_group, 'isKerningOnRight', False)
+		           or getattr(fg_group, 'kerning2',         False)
+		           or getattr(fg_group, 'secondSide',       False)
+		           or ('KernRight' in mode))
+		if 'KernBothSide' in mode:
+			first = second = True
+		return first, second
+
+	def _members(fg_group):
+		for attr in ('names', 'glyphs', 'members'):
+			value = getattr(fg_group, attr, None)
+			if value is not None:
+				try:
+					return [str(g) for g in value]
+				except TypeError:
+					pass
+		return []
+
+	for name, fg_group in items:
+		members = _members(fg_group)
+		if not members:
+			continue
+		first, second = _side_flags(fg_group)
+
+		if first:
+			groups.set(KERN1_PREFIX + name, members)
+		if second:
+			groups.set(KERN2_PREFIX + name, members)
+		if not (first or second):
+			# Free user/OT group — keep original name
+			groups.set(name, members)
+
+	return groups
+
+
+def _split_fea_blocks(fea_text):
+	'''Split an opaque .fea blob into (prefix_text, [(tag, block_text), ...]).
+
+	The prefix is everything before the first `feature TAG { ... } TAG;` block.
+	Each block is matched non-greedily and kept intact (including the wrapper),
+	since FL's `fg.features.set_feature(tag, body)` accepts the full block.
+
+	Returns ('', []) on empty input.
+	'''
+	import re
+	if not fea_text:
+		return '', []
+
+	# Match: `feature <tag> { ... } <tag>;`  with `tag` = 4 chars max + alnum/underscore.
+	# Non-greedy on the body so nested braces in lookups still terminate at the
+	# matching outer `}`. FL accepts the full block as the "body" argument.
+	pattern = re.compile(
+		r'feature\s+(\w{1,4})\s*\{.*?\}\s*\1\s*;',
+		re.DOTALL,
+	)
+
+	blocks = []
+	last_end = 0
+	prefix_chunks = []
+	for m in pattern.finditer(fea_text):
+		if m.start() > last_end:
+			prefix_chunks.append(fea_text[last_end:m.start()])
+		blocks.append((m.group(1), m.group(0)))
+		last_end = m.end()
+	# Anything after the last feature block is treated as trailing prefix-like
+	# content (rare; concat onto prefix to avoid silent loss).
+	if last_end < len(fea_text):
+		prefix_chunks.append(fea_text[last_end:])
+
+	prefix = ''.join(prefix_chunks).strip()
+	return prefix, blocks
+
+
+def _features_into_fl(fg_font, fea_text):
+	'''Push opaque FEA text into fgFont.features (prefix + per-tag blocks).
+
+	FL's `fg.features.set_feature(tag, body)` accepts the full
+	`feature TAG { ... } TAG;` block as the body argument (the same shape
+	the export side produces). The prefix (top-level classes, lookups,
+	languagesystems) goes through `set_prefix(text)`.
+	'''
+	try:
+		feats = fg_font.features
+	except AttributeError:
+		return
+
+	prefix, blocks = _split_fea_blocks(fea_text or '')
+
+	# Clear stale state first so feature removal is also captured on inject.
+	try:
+		feats.clear()
+	except AttributeError:
+		pass
+
+	if prefix:
+		try:
+			feats.set_prefix(prefix)
+		except AttributeError:
+			pass
+
+	for tag, block_text in blocks:
+		try:
+			feats.set_feature(tag, block_text)
+		except AttributeError:
+			break
+
+
+def _groups_into_fl(fg_font, groups):
+	'''Push core Groups into fg_font.groups.
+
+	UFO reserved-prefix names map back to FL kerning groups with the FL-side
+	"left"/"right" tag preserved; user/OT groups go in as plain feature-class
+	groups. FL's exact mode-string contract varies by build, so we use the
+	known `fgGroup(name, members, mode, leader)` constructor and let FL pick
+	its representation; if a build refuses a mode string, we fall back to
+	the default OT-class mode.
+	'''
+	from typerig.core.objects.groups import KERN1_PREFIX, KERN2_PREFIX
+
+	try:
+		fg_groups = fg_font.groups
+	except AttributeError:
+		return
+
+	try:
+		current = fg_groups.asDict()
+	except Exception:
+		current = {}
+
+	def _make_group(name, members, mode_hint):
+		try:
+			return fgt.fgGroup(name, list(members), mode_hint, 'mainglyphname')
+		except Exception:
+			# Fallback for builds that don't accept the mode hint
+			return fgt.fgGroup(name, list(members), 'FeaClassGroupMode', 'mainglyphname')
+
+	for group in groups.data:
+		name = group.name
+		if group.is_kern1:
+			fl_name = name[len(KERN1_PREFIX):]
+			current[fl_name] = _make_group(fl_name, group.members, 'KernLeftMode')
+		elif group.is_kern2:
+			fl_name = name[len(KERN2_PREFIX):]
+			current[fl_name] = _make_group(fl_name, group.members, 'KernRightMode')
+		else:
+			current[name] = _make_group(name, group.members, 'FeaClassGroupMode')
+
+	try:
+		fg_groups.fromDict(current)
+	except AttributeError:
+		pass
+
+
+def _fl_features(fg_font):
+	'''Extract OpenType feature source from fgFont as a single opaque FEA string.
+
+	Concatenates the FEA prefix (classes, lookups, languagesystems declared at
+	top of feature file) with each named feature block. Result is suitable
+	for writing as `features.fea` in UFO style. The inject side (text → FL)
+	is not yet implemented; FL's API surface for re-ingesting a single FEA
+	blob needs review (similar to guideline API quirks — pending walkthrough).
+	'''
+	try:
+		feats = fg_font.features
+	except AttributeError:
+		return ''
+
+	parts = []
+	try:
+		prefix = feats.get_prefix() or ''
+		if prefix.strip():
+			parts.append(prefix.rstrip())
+	except Exception:
+		pass
+
+	try:
+		tags = list(feats.keys())
+	except Exception:
+		tags = []
+
+	for tag in tags:
+		try:
+			body = feats.get_feature(tag) or ''
+		except Exception:
+			continue
+		body = body.strip()
+		if not body:
+			continue
+		# If FL hands back a bare body, wrap it; if it already includes the
+		# feature header, pass through unchanged.
+		if body.startswith('feature '):
+			parts.append(body)
+		else:
+			parts.append('feature {} {{\n{}\n}} {};'.format(tag, body, tag))
+
+	return '\n\n'.join(parts)
 
 def _fl_axes(fl_package):
 	'''Build (axes_list, Masters, Instances) from an flPackage.
@@ -309,18 +566,26 @@ class trFontProxy(object):
 	def _build_encoding(self):
 		return _fl_encoding(self.fg)
 
+	def _build_features(self):
+		return _fl_features(self.fg)
+
+	def _build_groups(self):
+		return _fl_groups(self.fg)
+
 	def _eject_glyph(self, fg_glyph):
 		tr_g = trGlyph(fg_glyph, self.fg)
 		return tr_g.eject()
 
 	# -- Eject --------------------------
-	def eject(self, glyph_names=None, include_encoding=True, include_axes=True, verbose=False):
+	def eject(self, glyph_names=None, include_encoding=True, include_axes=True, include_features=True, include_groups=True, verbose=False):
 		'''Eject FL font (or subset of glyphs) to a pure core Font.
 
 		Args:
 			glyph_names (list|None) : names to export; None → all glyphs
 			include_encoding (bool) : build Encoding from glyph unicodes
 			include_axes (bool)     : extract axes / masters / instances
+			include_features (bool) : extract OpenType FEA as opaque text
+			include_groups (bool)   : extract groups + kerning classes (UFO model)
 			verbose (bool)          : print per-glyph progress
 
 		Returns:
@@ -335,6 +600,8 @@ class trFontProxy(object):
 			axes_list, masters, instances = [], Masters(), Instances()
 
 		encoding = self._build_encoding() if include_encoding else Encoding()
+		features = self._build_features() if include_features else ''
+		groups   = self._build_groups()   if include_groups   else Groups()
 
 		font = Font(
 			info 	  = info,
@@ -343,6 +610,8 @@ class trFontProxy(object):
 			masters   = masters,
 			instances = instances,
 			encoding  = encoding,
+			features  = features,
+			groups    = groups,
 		)
 
 		names = glyph_names if glyph_names is not None else self.all_glyph_names
@@ -368,7 +637,7 @@ class trFontProxy(object):
 		return font
 
 	# -- Save ---------------------------
-	def save(self, path, glyph_names=None, include_encoding=True, include_axes=True, verbose=False):
+	def save(self, path, glyph_names=None, include_encoding=True, include_axes=True, include_features=True, include_groups=True, verbose=False):
 		'''Eject + write to .trfont folder in one call.
 
 		Args:
@@ -376,6 +645,8 @@ class trFontProxy(object):
 			glyph_names (list|None)  : subset to export; None → all
 			include_encoding (bool)  : export encoding map
 			include_axes (bool)      : export axes / masters / instances
+			include_features (bool)  : export OpenType FEA as features.fea
+			include_groups (bool)    : export groups + kerning classes
 			verbose (bool)           : print progress
 
 		Returns:
@@ -388,6 +659,8 @@ class trFontProxy(object):
 			glyph_names      = glyph_names,
 			include_encoding = include_encoding,
 			include_axes     = include_axes,
+			include_features = include_features,
+			include_groups   = include_groups,
 			verbose          = verbose,
 		)
 
@@ -413,27 +686,70 @@ class trFontProxy(object):
 		'''
 		return TrFontIO.read(path)
 
-	def mount(self, font):
-	
+	# -- Mount --------------------------
+	def mount(self, font, include_features=True, include_groups=True, verbose=False):
+		'''Push a core Font back into the live FL session.
+
+		Mounts geometry + metadata for every glyph, and (optionally) features
+		and groups at the font level. Missing glyphs/layers are created;
+		matching ones are updated in place.
+
+		Args:
+			font (Font)             : source core Font
+			include_features (bool) : inject FEA text via fg.features
+			include_groups (bool)   : inject groups + kerning classes
+			verbose (bool)          : print per-glyph progress
+		'''
 		for glyph_name in font.glyph_names:
 			core_glyph = font[glyph_name]
+			if core_glyph is None:
+				continue
 
 			if self.has_glyph(glyph_name):
 				tr_glyph = self.glyph(glyph_name)
 			else:
-				layer_names = [layer.name for layer in core_glyph.layers if '#' not in layer.name]
+				layer_names = [l.name for l in core_glyph.layers]
 				tr_glyph = self.create_glyph(glyph_name, layer_names)
 
+			# Font-level encoding wins over per-glyph unicodes
 			unicodes = font.encoding.unicodes(glyph_name) if font.encoding else []
-			if len(unicodes): tr_glyph.unicodes = unicodes
+			if unicodes:
+				tr_glyph.unicodes = unicodes
 
+			# Ensure every core layer has a matching FL layer
 			for core_layer in core_glyph.layers:
-				if '#' not in layer.name: continue
+				if tr_glyph.find_layer(core_layer.name) is None:
+					tr_glyph.add_layer(core_layer.name)
 
-				fl_layer_proxy = tr_glyph.find_layer(core_layer.name)
+			try:
+				tr_glyph.mount(core_glyph)
+				if verbose:
+					print('  mounted: {}'.format(glyph_name))
+			except Exception as e:
+				if verbose:
+					print('  ERROR mounting {}: {}'.format(glyph_name, e))
 
-				if fl_layer_proxy is None:
-					fl_layer_proxy = tr_glyph.add_layer(core_layer.name)
+		if include_features and getattr(font, 'features', ''):
+			try:
+				_features_into_fl(self.fg, font.features)
+				if verbose:
+					print('  injected features ({} chars)'.format(len(font.features)))
+			except Exception as e:
+				if verbose:
+					print('  ERROR injecting features: {}'.format(e))
 
-				fl_layer_proxy.mount(core_layer)
+		if include_groups and getattr(font, 'groups', None) is not None and len(font.groups.data):
+			try:
+				_groups_into_fl(self.fg, font.groups)
+				if verbose:
+					print('  injected {} groups'.format(len(font.groups.data)))
+			except Exception as e:
+				if verbose:
+					print('  ERROR injecting groups: {}'.format(e))
+
+	def load_and_mount(self, path, **kwargs):
+		'''Read a .trfont folder and immediately mount it into the live FL session.'''
+		font = TrFontIO.read(path)
+		self.mount(font, **kwargs)
+		return font
 
