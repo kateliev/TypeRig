@@ -24,6 +24,7 @@
 from __future__ import absolute_import, print_function, division
 
 import os
+import shutil
 import sys
 from types import SimpleNamespace
 
@@ -735,6 +736,11 @@ class UfoConverter(object):
 
 	def _write_master_ufo(self, font, master, ufo_path):
 		'''Write one UFO containing a single master's glyph layer.'''
+		# UFOWriter treats an existing folder as edit-in-place and requires
+		# a valid layercontents.plist. Wipe any pre-existing target so we
+		# always start clean.
+		if os.path.isdir(ufo_path):
+			shutil.rmtree(ufo_path)
 		writer = UFOWriter(ufo_path, formatVersion=UFOFormatVersion.FORMAT_3_0)
 
 		# fontinfo: clone the font-level info, then specialize styleName per
@@ -766,10 +772,15 @@ class UfoConverter(object):
 			if tr_layer is None:
 				# Sparse master — UFO convention is to omit the glyph.
 				continue
+			name = glyph.name
+			if not isinstance(name, str):
+				_warn('glyph has non-string name {!r}; coercing to str'
+				      .format(name), self.verbose)
+				name = str(name)
 			data = _GlyphLayerData(glyph, tr_layer, font,
 			                       is_default_layer=True,
 			                       verbose=self.verbose)
-			gs.writeGlyph(glyph.name, data, data.drawPoints)
+			gs.writeGlyph(name, data, data.drawPoints)
 
 		gs.writeContents()
 		# The default UFO layer is the one we just wrote. ufoLib registers
@@ -990,6 +1001,8 @@ class UfoConverter(object):
 	# -- TR → single UFO (legacy / single-master shortcut) ---
 	def tr_to_ufo(self, font, ufo_path):
 		ufo_path = os.path.abspath(ufo_path)
+		if os.path.isdir(ufo_path):
+			shutil.rmtree(ufo_path)
 
 		# Determine layer order from masters; fallback to layer names
 		# present on the first glyph.
@@ -1046,10 +1059,15 @@ class UfoConverter(object):
 				tr_layer = glyph.layer(layer_name)
 				if tr_layer is None:
 					continue
+				name = glyph.name
+				if not isinstance(name, str):
+					_warn('glyph has non-string name {!r}; coercing to str'
+					      .format(name), self.verbose)
+					name = str(name)
 				data = _GlyphLayerData(glyph, tr_layer, font,
 				                       is_default_layer=is_default,
 				                       verbose=self.verbose)
-				gs.writeGlyph(glyph.name, data, data.drawPoints)
+				gs.writeGlyph(name, data, data.drawPoints)
 
 			gs.writeContents()
 

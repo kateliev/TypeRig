@@ -278,8 +278,13 @@ class TrFontIO(object):
 		features = getattr(font, 'features', '') or ''
 		features_path = os.path.join(path, FILE_FEATURES)
 		if features:
-			with open(features_path, 'w', encoding='utf-8') as fh:
-				fh.write(features)
+			# Normalize line endings to \n before writing. FontLab hands us
+			# strings with embedded \r\n; combined with text-mode \n→\r\n
+			# translation on Windows that would produce \r\r\n on disk.
+			# newline='' disables translation, so what we write lands verbatim.
+			normalized = features.replace('\r\n', '\n').replace('\r', '\n')
+			with open(features_path, 'w', encoding='utf-8', newline='') as fh:
+				fh.write(normalized)
 		elif os.path.isfile(features_path):
 			# Strip stale features.fea so the folder reflects the in-memory state
 			os.remove(features_path)
@@ -359,8 +364,12 @@ class TrFontIO(object):
 		# Read features.fea sibling file if present
 		features_path = os.path.join(path, FILE_FEATURES)
 		if os.path.isfile(features_path):
+			# Read with universal-newline conversion so callers see \n only,
+			# regardless of how the file was written. Also normalize any
+			# stray \r\r or bare \r that may have leaked in from older files.
 			with open(features_path, 'r', encoding='utf-8') as fh:
-				font.features = fh.read()
+				features = fh.read()
+			font.features = features.replace('\r\n', '\n').replace('\r', '\n')
 
 		# Read groups.xml sibling file if present
 		groups_path = os.path.join(path, FILE_GROUPS)
