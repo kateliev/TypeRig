@@ -293,6 +293,13 @@ def cmd_roundtrip(args):
 		sig_b = _font_signature(back)
 		diffs = _diff(sig_a, sig_b)
 
+		# Case-insensitive filesystem regression: glyph names that differ
+		# only by case (e.g. 'A' and 'a') must both survive the round-trip
+		# with distinct content. Before the filename mangler in TrFontIO,
+		# the second write clobbered the first on NTFS/APFS.
+		case_diffs = _case_collision_check(original, back)
+		diffs.extend(case_diffs)
+
 		# Filter known-lossy fields that the format intentionally does not
 		# preserve verbatim through the inverse trip (e.g. version padding).
 		filtered = [d for d in diffs if not _is_known_lossy(d)]
@@ -313,6 +320,37 @@ def cmd_roundtrip(args):
 			print('Kept temp dir: {}'.format(tmp))
 		else:
 			shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _case_collision_check(original, back):
+	'''Verify that glyph-name pairs differing only by case survive
+	the round-trip with distinct content on both sides.'''
+	diffs = []
+	by_lower = {}
+	for g in original.glyphs:
+		by_lower.setdefault(g.name.lower(), []).append(g.name)
+
+	back_by_name = {g.name: g for g in back.glyphs}
+	for lower, names in by_lower.items():
+		if len(names) < 2:
+			continue
+		sigs = {}
+		for n in names:
+			if n not in back_by_name:
+				diffs.append('case-collision: glyph {!r} lost in round-trip'.format(n))
+				continue
+			sigs[n] = _glyph_signature(back_by_name[n])
+		# Any two surviving siblings must be distinct
+		survived = list(sigs.items())
+		for i in range(len(survived)):
+			for j in range(i + 1, len(survived)):
+				ni, si = survived[i]
+				nj, sj = survived[j]
+				if si == sj:
+					diffs.append(
+						'case-collision: {!r} and {!r} have identical content after round-trip'
+						.format(ni, nj))
+	return diffs
 
 
 _LOSSY_PATTERNS = (

@@ -51,6 +51,8 @@ from typerig.core.objects.kern import Kerning
 from typerig.core.objects.groups import Groups
 from typerig.core.objects.glyph import Glyph
 
+from fontTools.ufoLib.filenames import userNameToFileName
+
 # - Init --------------------------------
 __version__ = '0.1.0'
 
@@ -262,6 +264,7 @@ class TrFontIO(object):
 
 		glyph_paths = glyph_paths or {}
 		manifest    = GlyphManifest()
+		seen_lower  = set()  # case-folded filenames already used in glyphs/
 
 		# Write metainfo.xml — format version and creator stamp
 		meta_elem = ET.Element('metainfo')
@@ -309,8 +312,15 @@ class TrFontIO(object):
 				# External shared-pool reference — just record path, no copy
 				manifest.add(name, glyph_paths[name])
 			else:
-				# Embed locally
-				filename = name + TRGLYPH_EXT
+				# Embed locally. Mangle the user-supplied glyph name into a
+				# filename that is safe on case-insensitive filesystems
+				# (NTFS, APFS default) and Windows-reserved-name aware.
+				# Without this, 'A' and 'a' both map to the same path and
+				# the second write silently clobbers the first.
+				filename = userNameToFileName(
+					name, existing=seen_lower, suffix=TRGLYPH_EXT,
+				)
+				seen_lower.add(filename.lower())
 				rel_path = os.path.join(GLYPHS_DIR, filename)
 
 				if embed_glyphs:
