@@ -66,7 +66,7 @@ FILE_FEATURES = 'features.fea'
 # Format version of the .trfont package this build reads/writes
 TRFONT_FORMAT_VERSION_MAJOR = 1
 TRFONT_FORMAT_VERSION_MINOR = 0
-TRFONT_CREATOR              = 'com.kateliev.typerig'
+TRFONT_CREATOR              = 'com.typerig'
 
 # - Helpers -----------------------------
 def _pretty_xml(element):

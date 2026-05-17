@@ -122,35 +122,95 @@ def _warn(msg, verbose=True):
 		print('[ufo] WARN: {}'.format(msg), file=sys.stderr)
 
 
-def _info_dash_to_plain(val):
-	'''Best-effort numeric coercion for fontinfo values.'''
-	if val is None or val == '':
-		return None
-	return val
+# - TR lib bindings ---------------------
+# All UFO-specific lib knowledge lives here. TR core objects are kept format-
+# agnostic: this module is the only place that knows which TR attributes map
+# to which UFO lib keys, and how. To add a new TR-only field that should
+# round-trip through UFO, add an entry to LIB_BINDINGS or wire a new helper
+# in collect_*_lib / apply_*_lib.
+
+TR_LIB_PREFIX  = 'com.typerig.'
+TR_LIB_VERSION = 1  # bump when the schema below changes
+
+# Public UFO lib keys we honour
+UFO_LIB_KEY_MARK_COLOR     = 'public.markColor'
+# TR-namespaced lib keys
+TR_LIB_KEY_VERSION         = TR_LIB_PREFIX + 'lib-version'
+TR_LIB_KEY_FAMILY_STYLE    = TR_LIB_PREFIX + 'familyStyleName'
+TR_LIB_KEY_LAYER_STEMS     = TR_LIB_PREFIX + 'layer-stems'      # glyph lib: {layer_name: [stx, sty]}
+TR_LIB_KEY_CONTOUR_KINDS   = TR_LIB_PREFIX + 'contour-kinds'    # glyph lib: ['bezier'|'hobby', ...]
+
+class LibField(object):
+	'''One declarative binding for a TR attribute ↔ UFO lib key.
+
+	Used for the simple direct-attribute cases (one attribute, one plist
+	value, same scope). For aggregate fields that collect across multiple
+	sub-objects (per-layer stems on a glyph, per-contour kinds), use a
+	hand-written entry in collect_*_lib / apply_*_lib instead.
+
+	Args:
+		attr (str)         : TR attribute name on the bound object
+		key (str)          : key suffix appended after TR_LIB_PREFIX. If None,
+		                     defaults to `attr`. Ignored when `standard_key`
+		                     is set.
+		standard_key (str) : full UFO public key (e.g. "public.markColor")
+		                     used instead of the TR-namespaced one.
+		to_plist (callable): (tr_value) → plist_value. Identity if None.
+		from_plist (callable): (plist_value) → tr_value. Identity if None.
+		skip_if (callable) : (tr_value) → bool; True = don't write this entry.
+		                     Default: skip when value is None/empty.
+	'''
+	__slots__ = ('attr', 'key', 'to_plist', 'from_plist', 'skip_if')
+
+	def __init__(self, attr, key=None, standard_key=None,
+	             to_plist=None, from_plist=None, skip_if=None):
+		self.attr = attr
+		if standard_key:
+			self.key = standard_key
+		else:
+			self.key = TR_LIB_PREFIX + (key or attr)
+		self.to_plist   = to_plist   or (lambda v: v)
+		self.from_plist = from_plist or (lambda v: v)
+		self.skip_if    = skip_if    or (lambda v: v is None or v == '' or v == [] or v == {})
 
 
-def _hex_to_mark_color(hex_str):
-	'''Convert TR mark hex string (#RRGGBB) → UFO public.markColor (r,g,b,a).'''
+# Bindings grouped by the TR class they read from / write to. The collectors
+# below walk these; adding a new direct field is a one-line entry here.
+LIB_BINDINGS = {
+	Glyph: [
+		LibField('mark',
+		         standard_key=UFO_LIB_KEY_MARK_COLOR,
+		         to_plist=lambda v: _mark_hex_to_color_str(v),
+		         from_plist=lambda v: _mark_color_str_to_hex(v),
+		         skip_if=lambda v: not v),
+	],
+	# Layer/Contour/Node aggregates handled in collect_glyph_lib /
+	# apply_glyph_lib_to_layer (they fold into the GLYPH lib because UFO has
+	# no native lib slot below the glyph level).
+}
+
+
+def _mark_hex_to_color_str(hex_str):
+	'''TR Glyph.mark hex (#RRGGBB) → UFO public.markColor (floats).
+	Returns None when the input isn't a clean hex string — collectors skip
+	those entries.'''
 	if not hex_str or not hex_str.startswith('#'):
 		return None
 
-	hex_str = hex_str.lstrip('#')
-
-	if len(hex_str) != 6:
+	body = hex_str.lstrip('#')
+	if len(body) != 6:
 		return None
-
 	try:
-		r = int(hex_str[0:2], 16) / 255.0
-		g = int(hex_str[2:4], 16) / 255.0
-		b = int(hex_str[4:6], 16) / 255.0
+		r = int(body[0:2], 16) / 255.0
+		g = int(body[2:4], 16) / 255.0
+		b = int(body[4:6], 16) / 255.0
 	except ValueError:
 		return None
-
 	return '{:g},{:g},{:g},1'.format(r, g, b)
 
 
-def _mark_color_to_hex(color_str):
-	'''Convert UFO public.markColor (r,g,b[,a]) → TR mark hex string.'''
+def _mark_color_str_to_hex(color_str):
+	'''UFO public.markColor (r,g,b[,a]) → TR mark hex.'''
 	if not color_str:
 		return None
 
@@ -172,6 +232,132 @@ def _mark_color_to_hex(color_str):
 		return int(round(v * 255))
 
 	return '#{:02X}{:02X}{:02X}'.format(_to_byte(r), _to_byte(g), _to_byte(b))
+
+
+# - Lib collectors / scatterers --------
+# Walk LIB_BINDINGS plus the hand-written aggregate cases. Only this module
+# knows the UFO lib shape; TR core objects stay format-pure.
+
+def _apply_direct_bindings_to(target_obj, source_obj, lib_dict):
+	'''Read TR attributes from `source_obj` via LIB_BINDINGS[type(source_obj)]
+	and merge their plist forms into `lib_dict`.'''
+	bindings = LIB_BINDINGS.get(type(source_obj), [])
+	for field in bindings:
+		raw = getattr(source_obj, field.attr, None)
+		if field.skip_if(raw):
+			continue
+		plist_val = field.to_plist(raw)
+		if plist_val is None:
+			continue
+		lib_dict[field.key] = plist_val
+
+
+def _scatter_direct_bindings_from(target_obj, lib_dict):
+	'''Apply LIB_BINDINGS[type(target_obj)] entries from `lib_dict` onto
+	`target_obj`.'''
+	bindings = LIB_BINDINGS.get(type(target_obj), [])
+	for field in bindings:
+		if field.key not in lib_dict:
+			continue
+		tr_val = field.from_plist(lib_dict[field.key])
+		if tr_val is None:
+			continue
+		setattr(target_obj, field.attr, tr_val)
+
+
+def collect_glyph_lib(glyph, font, is_default_master):
+	'''Build the UFO glyph-lib dict for one TR Glyph.
+
+	Direct-attribute bindings (e.g. mark) write on every UFO so the value
+	survives even if a foreign tool only opens one master. Aggregate
+	cross-layer data (stems map, contour kinds) only goes on the DEFAULT
+	master's UFO — those are TR-flavoured and only matter to TR-aware
+	consumers.
+	'''
+	lib = {}
+
+	_apply_direct_bindings_to(lib, glyph, lib)
+
+	if is_default_master:
+		# Per-layer stems → {layer_name: [stx, sty]}
+		stems_map = {}
+		for lyr in glyph.layers:
+			if getattr(lyr, 'has_stems', False):
+				stems_map[lyr.name] = [lyr.stx, lyr.sty]
+		if stems_map:
+			lib[TR_LIB_KEY_LAYER_STEMS] = stems_map
+
+		# Per-contour kinds — only emit when at least one is non-bezier;
+		# bezier is the default and not worth the noise.
+		first_layer = glyph.layers[0] if glyph.layers else None
+		if first_layer is not None:
+			kinds = []
+			has_non_bezier = False
+			for shape in first_layer.shapes:
+				if shape.is_component:
+					continue
+				for contour in shape.contours:
+					kind = getattr(contour, 'kind', 'bezier')
+					kinds.append(kind)
+					if kind != 'bezier':
+						has_non_bezier = True
+			if has_non_bezier:
+				lib[TR_LIB_KEY_CONTOUR_KINDS] = kinds
+
+	return lib
+
+
+def apply_glyph_lib(glyph, default_layer, lib_dict):
+	'''Scatter UFO glyph-lib data back onto a TR Glyph and its default layer.
+
+	Called once per glyph with the LIB read from the default-master UFO's
+	default-layer .glif. Per-layer entries are routed to the right TR layer.
+	'''
+	if not lib_dict:
+		return
+
+	# Direct attribute bindings (mark, …)
+	_scatter_direct_bindings_from(glyph, lib_dict)
+
+	# Per-layer stems
+	stems_map = lib_dict.get(TR_LIB_KEY_LAYER_STEMS)
+	if isinstance(stems_map, dict):
+		for layer_name, stems in stems_map.items():
+			lyr = glyph.layer(layer_name)
+			if lyr is None:
+				continue
+			if isinstance(stems, (list, tuple)) and len(stems) == 2:
+				lyr.stems = (stems[0], stems[1])
+
+	# Per-contour kinds (applied to every layer so structure stays consistent)
+	kinds = lib_dict.get(TR_LIB_KEY_CONTOUR_KINDS)
+	if isinstance(kinds, list):
+		for lyr in glyph.layers:
+			i = 0
+			for shape in lyr.shapes:
+				if shape.is_component:
+					continue
+				for contour in shape.contours:
+					if i < len(kinds):
+						contour.kind = kinds[i]
+					i += 1
+
+
+def collect_font_lib(font):
+	'''Build the UFO font-lib dict for the default-master UFO.
+
+	Stores the TR lib-version stamp + family-level styleName (which the
+	per-master UFOs override on their fontinfo).
+	'''
+	lib = {TR_LIB_KEY_VERSION: TR_LIB_VERSION}
+	return lib
+
+
+def read_family_style_name(lib_dict):
+	'''Pull the family-level styleName from a font lib.'''
+	if not lib_dict:
+		return None
+	return lib_dict.get(TR_LIB_KEY_FAMILY_STYLE)
 
 
 def _guideline_to_dict(g):
@@ -466,7 +652,8 @@ class _GlyphLayerData(object):
 	unicodes, note, lib, image, guidelines, anchors. We expose only
 	what TR knows about. drawPoints emits outline + component data.
 	'''
-	def __init__(self, tr_glyph, tr_layer, font, is_default_layer, verbose=True):
+	def __init__(self, tr_glyph, tr_layer, font, is_default_layer,
+	             is_default_master=False, verbose=True):
 		self.width  = float(tr_layer.advance_width)
 		self.height = float(tr_layer.advance_height)
 		self.lib    = {}
@@ -490,10 +677,11 @@ class _GlyphLayerData(object):
 			for g in (tr_glyph.guidelines or []):
 				guidelines.append(_guideline_to_dict(g))
 
-			if tr_glyph.mark:
-				color = _hex_to_mark_color(tr_glyph.mark)
-				if color:
-					self.lib['public.markColor'] = color
+			# Glyph-scope TR-namespaced + public lib entries (mark, stems,
+			# contour kinds, …). Cross-layer aggregates only land on the
+			# default master's UFO; direct attribute bindings (mark) write
+			# on every master so single-UFO consumers still see them.
+			self.lib.update(collect_glyph_lib(tr_glyph, font, is_default_master))
 
 		self.guidelines = guidelines
 		self._tr_layer = tr_layer
@@ -751,8 +939,13 @@ class UfoConverter(object):
 		ufo_info.styleName = master.name
 		writer.writeInfo(ufo_info)
 
+		# Font lib: schema version stamp + family-level styleName (only on
+		# default master, where round-trips read it from).
+		font_lib = collect_font_lib(font)
 		if master.is_default and original_style and original_style != master.name:
-			writer.writeLib({'com.kateliev.typerig.familyStyleName': original_style})
+			font_lib[TR_LIB_KEY_FAMILY_STYLE] = original_style
+		if font_lib:
+			writer.writeLib(font_lib)
 
 		if font.groups and len(font.groups.data):
 			writer.writeGroups({g.name: list(g.members) for g in font.groups.data})
@@ -779,6 +972,7 @@ class UfoConverter(object):
 				name = str(name)
 			data = _GlyphLayerData(glyph, tr_layer, font,
 			                       is_default_layer=True,
+			                       is_default_master=bool(master.is_default),
 			                       verbose=self.verbose)
 			gs.writeGlyph(name, data, data.drawPoints)
 
@@ -942,6 +1136,12 @@ class UfoConverter(object):
 
 		# Assemble Glyphs
 		master_layer_names_in_order = [m.layer_name for m in masters_list]
+		default_master_layer_name = None
+		for m in masters_list:
+			if m.is_default:
+				default_master_layer_name = m.layer_name
+				break
+
 		glyphs = []
 		for glyph_name in ordered_glyph_names:
 			layers_map = glyph_layers.get(glyph_name, {})
@@ -955,14 +1155,15 @@ class UfoConverter(object):
 					glyph.unicodes = [int(u) for u in receiver.unicodes]
 				if getattr(receiver, 'note', None):
 					glyph.note = receiver.note
-				lib = getattr(receiver, 'lib', {}) or {}
-				if 'public.markColor' in lib:
-					hex_str = _mark_color_to_hex(lib['public.markColor'])
-					if hex_str:
-						glyph.mark = hex_str
 				if hasattr(receiver, 'image') and receiver.image:
 					_warn('glyph "{}" image dropped (not modelled in TR)'
 					      .format(glyph_name), self.verbose)
+
+				# All TR-specific glyph-scope state lives in the .glif lib.
+				default_layer = glyph.layer(default_master_layer_name) \
+				                if default_master_layer_name else None
+				apply_glyph_lib(glyph, default_layer,
+				                getattr(receiver, 'lib', {}) or {})
 
 			glyphs.append(glyph)
 
@@ -971,7 +1172,7 @@ class UfoConverter(object):
 		tr_info, tr_metrics = _ufo_info_to_tr(info_ns)
 		# Restore family-level styleName from default UFO's lib if stashed there
 		default_lib = default_reader_holder.get('lib') or {}
-		family_style = default_lib.get('com.kateliev.typerig.familyStyleName')
+		family_style = read_family_style_name(default_lib)
 		if family_style:
 			tr_info.style_name = family_style
 
@@ -998,7 +1199,7 @@ class UfoConverter(object):
 
 		return font
 
-	# -- TR → single UFO (legacy / single-master shortcut) ---
+	# -- TR → single UFO (single-master shortcut) -----
 	def tr_to_ufo(self, font, ufo_path):
 		ufo_path = os.path.abspath(ufo_path)
 		if os.path.isdir(ufo_path):
@@ -1034,6 +1235,13 @@ class UfoConverter(object):
 		ufo_info = _tr_info_to_ufo(font.info, font.metrics)
 		writer.writeInfo(ufo_info)
 
+		# Font lib — schema version + passthroughs. Single-UFO layout, so
+		# this IS the default master; family-level styleName is the same
+		# as font.info.style_name and doesn't need stashing.
+		font_lib = collect_font_lib(font)
+		if font_lib:
+			writer.writeLib(font_lib)
+
 		# groups.plist
 		if font.groups and len(font.groups.data):
 			groups_dict = {g.name: list(g.members) for g in font.groups.data}
@@ -1066,6 +1274,7 @@ class UfoConverter(object):
 					name = str(name)
 				data = _GlyphLayerData(glyph, tr_layer, font,
 				                       is_default_layer=is_default,
+				                       is_default_master=is_default,
 				                       verbose=self.verbose)
 				gs.writeGlyph(name, data, data.drawPoints)
 
@@ -1239,23 +1448,18 @@ class UfoConverter(object):
 					glyph.unicodes = [int(u) for u in receiver.unicodes]
 				if getattr(receiver, 'note', None):
 					glyph.note = receiver.note
-
-				# Mark color
-				lib = getattr(receiver, 'lib', {}) or {}
-				if 'public.markColor' in lib:
-					hex_str = _mark_color_to_hex(lib['public.markColor'])
-					if hex_str:
-						glyph.mark = hex_str
-
-				# Glyph-level guidelines: the UFO spec doesn't distinguish
-				# layer-level vs glyph-level guidelines on disk — they all
-				# live in the .glif. We can't cleanly split them back, so
-				# we leave all guidelines on the layer. The default layer
-				# receiver's guidelines are already attached to that layer.
-				# Image: warn and skip
 				if hasattr(receiver, 'image') and receiver.image:
 					_warn('glyph "{}" image dropped (not modelled in TR)'
 					      .format(glyph_name), self.verbose)
+
+				# TR-namespaced + public lib entries — mark, layer-stems,
+				# contour kinds, etc. UFO doesn't separate glyph-level vs
+				# layer-level guidelines on disk, so glyph.guidelines stays
+				# empty and the per-layer guidelines we already parsed
+				# during the read pass remain in place.
+				tr_default_layer = glyph.layer(default_layer)
+				apply_glyph_lib(glyph, tr_default_layer,
+				                getattr(receiver, 'lib', {}) or {})
 
 			glyphs.append(glyph)
 
