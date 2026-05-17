@@ -354,7 +354,11 @@ def collect_font_lib(font):
 	lib = {TR_LIB_KEY_VERSION: TR_LIB_VERSION}
 
 	# UFO 3 standard: explicit glyph order lives in lib.plist.
-	glyph_order = [g.name for g in font.glyphs if g.name]
+	# Force str() — TR's XML parser auto-coerces digit-only attribute
+	# values to int/float, so a glyph named "7" can come back as 7.0,
+	# which ufoLib's writeLib rejects ("public.glyphOrder is not properly
+	# formatted: expected str, found float").
+	glyph_order = [str(g.name) for g in font.glyphs if g.name is not None and g.name != '']
 	if glyph_order:
 		lib['public.glyphOrder'] = glyph_order
 
