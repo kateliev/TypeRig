@@ -346,10 +346,18 @@ def apply_glyph_lib(glyph, default_layer, lib_dict):
 def collect_font_lib(font):
 	'''Build the UFO font-lib dict for the default-master UFO.
 
-	Stores the TR lib-version stamp + family-level styleName (which the
-	per-master UFOs override on their fontinfo).
+	Stores the TR lib-version stamp, family-level styleName (which the
+	per-master UFOs override on their fontinfo) and `public.glyphOrder`
+	so glyph order survives a UFO round-trip — UFO has no canonical
+	per-folder iteration order, so without this it resorts alphabetically.
 	'''
 	lib = {TR_LIB_KEY_VERSION: TR_LIB_VERSION}
+
+	# UFO 3 standard: explicit glyph order lives in lib.plist.
+	glyph_order = [g.name for g in font.glyphs if g.name]
+	if glyph_order:
+		lib['public.glyphOrder'] = glyph_order
+
 	return lib
 
 
@@ -358,6 +366,20 @@ def read_family_style_name(lib_dict):
 	if not lib_dict:
 		return None
 	return lib_dict.get(TR_LIB_KEY_FAMILY_STYLE)
+
+
+def read_glyph_order(lib_dict):
+	'''Pull `public.glyphOrder` (UFO 3 standard key) from a font lib.
+
+	Returns None when absent so callers can fall back to glyphset iteration.
+	'''
+	if not lib_dict:
+		return None
+	order = lib_dict.get('public.glyphOrder')
+	if not order:
+		return None
+	# Ensure it's a list of strings (ufoLib hands back the parsed plist).
+	return [str(n) for n in order]
 
 
 def _guideline_to_dict(g):
@@ -1118,18 +1140,25 @@ class UfoConverter(object):
 
 			reader.close()
 
-		# Default-layer glyph ordering: pull from the default master's UFO
-		default_reader = UFOReader(default_path, validate=False)
-		default_layer_name = default_source.layerName or default_reader.getDefaultLayerName()
-		default_gs = default_reader.getGlyphSet(layerName=default_layer_name)
-		default_glyph_names = list(default_gs.keys())
-		default_reader.close()
+		# Glyph order: prefer `public.glyphOrder` from the default UFO's lib
+		# (the UFO 3 canonical place); fall back to glyphset iteration order
+		# (which is alphabetical / contents.plist order and lossy on roundtrip).
+		default_lib_for_order = default_reader_holder.get('lib') or {}
+		explicit_order = read_glyph_order(default_lib_for_order)
+
+		if explicit_order is None:
+			default_reader = UFOReader(default_path, validate=False)
+			default_layer_name = default_source.layerName or default_reader.getDefaultLayerName()
+			default_gs = default_reader.getGlyphSet(layerName=default_layer_name)
+			explicit_order = list(default_gs.keys())
+			default_reader.close()
 
 		ordered_glyph_names = []
-		for n in default_glyph_names:
-			if n in glyph_layers:
+		for n in explicit_order:
+			if n in glyph_layers and n not in ordered_glyph_names:
 				ordered_glyph_names.append(n)
-		# Append any glyphs only found in non-default masters
+		# Append any glyphs only found in non-default masters or absent from
+		# the explicit order list.
 		for n in glyph_order:
 			if n not in ordered_glyph_names:
 				ordered_glyph_names.append(n)
@@ -1352,6 +1381,7 @@ class UfoConverter(object):
 		groups_dict  = reader.readGroups()  or {}
 		kerning_dict = reader.readKerning() or {}
 		features     = reader.readFeatures() or ''
+		font_lib     = reader.readLib()      or {}
 
 		groups = Groups()
 		for name, members in groups_dict.items():
@@ -1369,9 +1399,15 @@ class UfoConverter(object):
 		# Default layer first so name/unicode/note land on the canonical glyph.
 		ordered_layers = [default_layer] + [n for n in layer_names if n != default_layer]
 
+		# Authoritative glyph order: UFO 3 spec puts this in lib.plist as
+		# `public.glyphOrder`. Without it, glyphset iteration is alphabetical
+		# (contents.plist order) and round-trips lose the original order.
+		explicit_glyph_order = read_glyph_order(font_lib) or []
+
 		# {glyph_name: {layer_name: (layer_obj, default_layer_extras)}}
 		glyph_data = {}
-		glyph_order = []
+		glyph_order = list(explicit_glyph_order)
+		seen_in_order = set(glyph_order)
 
 		for layer_name in ordered_layers:
 			gs = reader.getGlyphSet(layerName=layer_name)
@@ -1380,8 +1416,9 @@ class UfoConverter(object):
 			for glyph_name in gs.keys():
 				if glyph_name not in glyph_data:
 					glyph_data[glyph_name] = {}
-					if is_default:
+					if is_default and glyph_name not in seen_in_order:
 						glyph_order.append(glyph_name)
+						seen_in_order.add(glyph_name)
 
 				receiver = SimpleNamespace()
 				receiver.guidelines = []
@@ -1423,8 +1460,13 @@ class UfoConverter(object):
 				continue
 			gs = reader.getGlyphSet(layerName=layer_name)
 			for glyph_name in gs.keys():
-				if glyph_name not in glyph_order:
+				if glyph_name not in seen_in_order:
 					glyph_order.append(glyph_name)
+					seen_in_order.add(glyph_name)
+
+		# Drop any explicit-order entries that have no data in any layer
+		# (stale entries in lib.plist shouldn't synthesize empty glyphs).
+		glyph_order = [n for n in glyph_order if n in glyph_data]
 
 		# Assemble Glyphs in default-layer-first order
 		glyphs = []
