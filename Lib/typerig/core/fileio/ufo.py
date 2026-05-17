@@ -456,17 +456,17 @@ class _TrContourPen(object):
 	def __init__(self):
 		self.shapes = []				# [Shape, ...]
 		self._raw = None
-		self._warned_qcurve = False
 
 	def beginPath(self, identifier=None):
 		self._raw = []
 
 	def addPoint(self, pt, segmentType=None, smooth=False, name=None,
 	             identifier=None, **kwargs):
-		if segmentType == 'qcurve' and not self._warned_qcurve:
-			print('[ufo] WARN: qcurve points found; treating as cubic curves',
-			      file=sys.stderr)
-			self._warned_qcurve = True
+		# qcurve segments round-trip as quadratic: their off-curve control
+		# points become TR Node(type='off'); see endPath() below. Geometry
+		# is preserved exactly. Note that some downstream TR actions (e.g.
+		# lerp_shift in node.py) currently bail on TT segments — that's an
+		# action-coverage gap, not a converter loss.
 
 		self._raw.append(_RawPoint(
 			float(pt[0]), float(pt[1]),
