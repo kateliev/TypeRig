@@ -447,7 +447,7 @@ class TRPopupContourCut(QtGui.QWidget):
 					continue
 
 				target_x, target_y = self.ext_target[layer]
-				safe_distance = self.spn_safe_distance.value
+				safe_distance = self.spn_safe_distance.input.value
 				selection = glyph.selectedNodes(layer, filterOn=True, extend=eNode)
 
 				for node in reversed(selection):
