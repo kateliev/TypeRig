@@ -448,6 +448,58 @@ class Contour(Container, XMLSerializable):
 			node.x += dx / length
 			node.y += dy / length
 
+	def cleanup_collinear(self, tolerance=1.0):
+		'''Remove on-curve nodes that are collinear with both straight-line
+		neighbors and therefore geometrically redundant.
+
+		Intended to be called after an expanded split + close sequence
+		to clean up leftover T-junction nodes (e.g. 3-4-5-6 becomes 3-6
+		when 4 and 5 lie on the segment).
+
+		Arguments:
+			tolerance (float): max perpendicular distance (in units) to
+				still count as collinear. Default 1.0.
+
+		Returns:
+			int: number of nodes removed.
+		'''
+		remove_indices = []
+
+		for node in list(self.nodes):
+			if not node.is_on:
+				continue
+
+			prev_n = node.prev
+			next_n = node.next
+
+			if prev_n is None or next_n is None:
+				continue
+
+			if not prev_n.is_on or not next_n.is_on:
+				continue
+
+			px, py = prev_n.x, prev_n.y
+			nx, ny = next_n.x, next_n.y
+			cx, cy = node.x, node.y
+
+			dx, dy = nx - px, ny - py
+			seg_len = math.hypot(dx, dy)
+
+			if seg_len < 1e-9:
+				remove_indices.append(node.idx)
+				continue
+
+			cross = abs((cx - px) * dy - (cy - py) * dx)
+			distance = cross / seg_len
+
+			if distance <= tolerance:
+				remove_indices.append(node.idx)
+
+		for i in sorted(remove_indices, reverse=True):
+			self.pop(i)
+
+		return len(remove_indices)
+
 	def set_weight(self, wx, wy):
 		'''Set x and y weights (a.k.a. stems) for all nodes'''
 		for node in self.nodes:

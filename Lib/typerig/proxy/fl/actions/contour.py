@@ -11,6 +11,7 @@
 from __future__ import absolute_import, print_function
 from collections import OrderedDict
 from itertools import groupby
+import math
 
 import fontlab as fl6
 import fontgate as fgt
@@ -75,7 +76,7 @@ class TRContourActionCollector(object):
 
 		active_workspace.getCanvas(True).refreshAll()
 
-	@staticmethod	
+	@staticmethod
 	def contour_slice(pMode:int, pLayers:tuple, expanded=False):
 		# - Helper
 		def cut_contour(contour, nid, extend=expanded):
@@ -85,6 +86,40 @@ class TRContourActionCollector(object):
 				return_contour = contour.breakContour(nid)
 
 			return return_contour
+
+		def cleanup_collinear(contour, tolerance=1.0):
+			'''Remove on-curve nodes that are collinear with their
+			straight-line neighbors (redundant T-junction leftovers).
+			'''
+			to_remove = []
+
+			for node in contour.nodes():
+				if not node.isOn():
+					continue
+
+				prev_n = node.prevNode()
+				next_n = node.nextNode()
+
+				if prev_n is None or next_n is None:
+					continue
+
+				if not prev_n.isOn() or not next_n.isOn():
+					continue
+
+				dx, dy = next_n.x - prev_n.x, next_n.y - prev_n.y
+				seg_len = math.hypot(dx, dy)
+
+				if seg_len < 1e-9:
+					to_remove.append(node)
+					continue
+
+				cross = abs((node.x - prev_n.x) * dy - (node.y - prev_n.y) * dx)
+
+				if cross / seg_len <= tolerance:
+					to_remove.append(node)
+
+			for node in reversed(to_remove):
+				contour.removeOne(node)
 
 		# - Get list of glyphs to be processed
 		process_glyphs = getProcessGlyphs(pMode)
@@ -98,29 +133,33 @@ class TRContourActionCollector(object):
 			for layer_name, selected_data in selection:
 				first_sid, first_cid, first_nid = selected_data[0]
 				last_sid, last_cid, last_nid = selected_data[-1]
-				
+
 				if first_sid != last_sid: break
 
 				first_shape = glyph.shapes(layer_name)[first_sid]
 
 				if first_cid != last_cid: # Different contours
 					new_contours = []
-					
+
 					first_contour = first_shape.contours[first_cid]
 					last_contour = first_shape.contours[last_cid]
-					
+
 					first_contour_parts = cut_contour(first_contour, first_nid)
 					last_contour_parts = cut_contour(last_contour, last_nid)
-					
+
 					if first_contour_parts is not None and last_contour_parts is not None:
 						first_contour_parts.append(last_contour_parts)
 						first_contour_parts.closed = True
 						first_shape.addContours([first_contour_parts])
 						first_shape.removeContours([last_contour_parts])
-					
+
 					first_contour.append(last_contour)
 					first_contour.closed = True
 					first_shape.removeContours([last_contour])
+
+					if expanded:
+						cleanup_collinear(first_contour)
+
 					do_update = True
 
 				else: # Same contour
@@ -137,11 +176,16 @@ class TRContourActionCollector(object):
 					if cutout is not None:
 						cutout.closed = True
 						first_shape.addContours([cutout], True)
-					
+
+					if expanded:
+						cleanup_collinear(first_contour)
+						if cutout is not None:
+							cleanup_collinear(cutout)
+
 					do_update = True
-					
-			if do_update:	
-				glyph.updateObject(glyph.fl, '%s: Slice contour @ {}.'.format(glyph.name, '; '.join(work_layers)))
+
+			if do_update:
+				glyph.updateObject(glyph.fl, '{}: Slice contour @ {}.'.format(glyph.name, '; '.join(work_layers)))
 
 		active_workspace.getCanvas(True).refreshAll()
 
