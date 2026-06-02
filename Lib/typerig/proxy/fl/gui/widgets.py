@@ -628,6 +628,405 @@ class TRDeltaLayerTree(QtGui.QTreeWidget):
 		
 		return returnDict
 
+# -- Multi-axis Delta tree ----------------
+class TRDeltaMultiAxisTree(QtGui.QTreeWidget):
+	'''Three-level tree for the multi-axis Delta panel.
+
+	Top level: Master Layers group + one Virtual Axis group per axis.
+	Axis groups contain Inputs and Targets sub-groups.
+
+	Each row carries a role tag at Qt.UserRole on column 0:
+	  'master', 'axis', 'inputs_group', 'targets_group', 'input',
+	  'target_stems', 'target_dims'
+
+	Data round-trips through setTree(setup_dict) / getTree() -> setup_dict
+	with the shape documented in DeltaNew.py.
+	'''
+
+	# - Column indices (same width across modes, content varies)
+	COL_NAME, COL_A, COL_B, COL_C, COL_D, COL_COLOR = range(6)
+
+	ROLE_MASTER = 'master'
+	ROLE_AXIS = 'axis'
+	ROLE_INPUTS = 'inputs_group'
+	ROLE_TARGETS = 'targets_group'
+	ROLE_INPUT = 'input'
+	ROLE_TARGET_STEMS = 'target_stems'
+	ROLE_TARGET_DIMS = 'target_dims'
+
+	GROUP_MASTERS_NAME = 'Master Layers'
+	GROUP_INPUTS_NAME = 'Inputs'
+	GROUP_TARGETS_NAME = 'Targets'
+
+	# - Origin codes used in dims-target column D (kept small + serialisable)
+	ORIGIN_CODES = ('BL', 'BR', 'TL', 'TR', 'CE', 'BS')  # BS = baseline
+
+	# Per-row extra data slot for the dimensions-mode origin code (BL/BR/...)
+	DATA_ORIGIN = QtCore.Qt.UserRole + 1
+
+	def __init__(self, data=None, headers=None):
+		super(TRDeltaMultiAxisTree, self).__init__()
+
+		# - Defaults — column names mirror legacy Delta exactly so users
+		#   get the same mental model when editing rows.
+		self._default_headers = ('Master Layers', 'V st.', 'H st.', 'Width', 'Height', 'Color')
+		self.itemChanged.connect(self._redecorateItem)
+		self.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+		self.setAlternatingRowColors(True)
+
+		# - Drag-drop (constraints enforced in dropEvent)
+		self.setDragDropMode(self.InternalMove)
+		self.setDragEnabled(True)
+		self.setDropIndicatorShown(True)
+
+		# - Context menu
+		self.menu = QtGui.QMenu(self)
+		self.menu.setTitle('Actions:')
+
+		act_addAxis = QtGui.QAction('Add Virtual Axis', self)
+		act_addInput = QtGui.QAction('Add Input to selected Axis', self)
+		act_addTargetStems = QtGui.QAction('Add Target (Stems mode)', self)
+		act_addTargetDims = QtGui.QAction('Add Target (Dimensions mode)', self)
+		act_dup = QtGui.QAction('Duplicate selected', self)
+		act_del = QtGui.QAction('Remove selected', self)
+
+		self.menu.addAction(act_addAxis)
+		self.menu.addSeparator()
+		self.menu.addAction(act_addInput)
+		self.menu.addAction(act_addTargetStems)
+		self.menu.addAction(act_addTargetDims)
+		self.menu.addSeparator()
+		self.menu.addAction(act_dup)
+		self.menu.addAction(act_del)
+
+		act_addAxis.triggered.connect(lambda: self._addAxis())
+		act_addInput.triggered.connect(lambda: self._addInput())
+		act_addTargetStems.triggered.connect(lambda: self._addTarget(mode='stems'))
+		act_addTargetDims.triggered.connect(lambda: self._addTarget(mode='dimensions'))
+		act_dup.triggered.connect(lambda: self._duplicateItems())
+		act_del.triggered.connect(lambda: self._removeItems())
+
+		# - Initial population
+		if data is not None:
+			self.setTree(data, headers)
+
+	# - Internals --------------------------
+	def contextMenuEvent(self, event):
+		self.menu.popup(QtGui.QCursor.pos())
+
+	def _rand_hex(self):
+		rand = lambda: randint(0, 255)
+		return '#%02X%02X%02X' % (rand(), rand(), rand())
+
+	def _role(self, item):
+		if item is None: return None
+		return item.data(self.COL_NAME, QtCore.Qt.UserRole)
+
+	def _set_role(self, item, role):
+		item.setData(self.COL_NAME, QtCore.Qt.UserRole, role)
+
+	def _make_row(self, parent, role, values, editable=True, droppable=False):
+		item = QtGui.QTreeWidgetItem(parent, list(values))
+		self._set_role(item, role)
+
+		flags = item.flags() | QtCore.Qt.ItemIsEditable
+		if not droppable:
+			flags &= ~QtCore.Qt.ItemIsDropEnabled
+		if not editable:
+			flags &= ~QtCore.Qt.ItemIsEditable
+		item.setFlags(flags)
+
+		color_value = values[self.COL_COLOR] if len(values) > self.COL_COLOR else ''
+		if color_value:
+			try:
+				color = color_value if isinstance(color_value, QtGui.QColor) else QtGui.QColor(color_value)
+				item.setData(self.COL_NAME, QtCore.Qt.DecorationRole, color)
+			except Exception:
+				pass
+		return item
+
+	def _redecorateItem(self, item):
+		try:
+			color = QtGui.QColor(item.text(self.COL_COLOR))
+			item.setData(self.COL_NAME, QtCore.Qt.DecorationRole, color)
+		except Exception:
+			pass
+
+	# - Tree shape helpers -----------------
+	def _find_top(self, role, name=None):
+		root = self.invisibleRootItem()
+		for i in range(root.childCount()):
+			child = root.child(i)
+			if self._role(child) != role: continue
+			if name is None or child.text(self.COL_NAME) == name:
+				return child
+		return None
+
+	def _find_subgroup(self, axis_item, role):
+		for i in range(axis_item.childCount()):
+			child = axis_item.child(i)
+			if self._role(child) == role:
+				return child
+		return None
+
+	def _selected_axis(self):
+		'''Return the Axis item under or matching the current selection.'''
+		items = self.selectedItems()
+		if not items: return None
+		node = items[0]
+		while node is not None:
+			if self._role(node) == self.ROLE_AXIS:
+				return node
+			node = node.parent()
+		return None
+
+	# - Add-row actions --------------------
+	def _addAxis(self, name=None, color=None):
+		root = self.invisibleRootItem()
+		name = name or 'axis_%s' % self._rand_hex()[1:5].lower()
+		color = color or self._rand_hex()
+
+		# Axis item itself is NOT droppable — leaves only land in the
+		# Inputs / Targets sub-groups beneath it. Matches the original
+		# TRDeltaLayerTree convention (only groups accept drops).
+		axis = self._make_row(root, self.ROLE_AXIS,
+			[name, '', '', '', '', color], droppable=False)
+		inputs = self._make_row(axis, self.ROLE_INPUTS,
+			[self.GROUP_INPUTS_NAME, '', '', '', '', ''], editable=False, droppable=True)
+		targets = self._make_row(axis, self.ROLE_TARGETS,
+			[self.GROUP_TARGETS_NAME, '', '', '', '', ''], editable=False, droppable=True)
+
+		axis.setExpanded(True)
+		inputs.setExpanded(True)
+		targets.setExpanded(True)
+		return axis
+
+	def _addInput(self, axis_item=None, data=None):
+		'''Add an input row. Default shape mirrors original Delta:
+		   ['New', '', '', '100.', '100.', color] — blank stems, scale 100.'''
+		axis_item = axis_item or self._selected_axis()
+		if axis_item is None: return None
+		inputs = self._find_subgroup(axis_item, self.ROLE_INPUTS)
+		if inputs is None: return None
+
+		values = data if data is not None else ['New', '', '', '100.', '100.', self._rand_hex()]
+		row = self._make_row(inputs, self.ROLE_INPUT, values)
+		return row
+
+	def _addTarget(self, axis_item=None, mode='stems', data=None):
+		'''Add a target row. Default shape mirrors original Delta:
+		   ['New', '', '', '100.', '100.', color] — blank stems, scale 100.
+
+		For dimensions-mode targets the same columns are reused for absolute
+		Width/Height; the origin code lives in DATA_ORIGIN on column 0.
+		'''
+		axis_item = axis_item or self._selected_axis()
+		if axis_item is None: return None
+		targets = self._find_subgroup(axis_item, self.ROLE_TARGETS)
+		if targets is None: return None
+
+		if data is not None:
+			values = data
+		elif mode == 'stems':
+			values = ['New', '', '', '100.', '100.', self._rand_hex()]
+		else:
+			# Dimensions targets default to 600 wide / 700 tall, BL origin.
+			values = ['New', '', '', '600', '700', self._rand_hex()]
+
+		role = self.ROLE_TARGET_STEMS if mode == 'stems' else self.ROLE_TARGET_DIMS
+		row = self._make_row(targets, role, values)
+		if role == self.ROLE_TARGET_DIMS:
+			row.setData(self.COL_NAME, self.DATA_ORIGIN, 'BL')
+		return row
+
+	def _addMaster(self, data):
+		group = self._find_top(self.ROLE_MASTER, self.GROUP_MASTERS_NAME)
+		if group is None:
+			group = self._make_row(self.invisibleRootItem(), self.ROLE_MASTER,
+				[self.GROUP_MASTERS_NAME, '', '', '', '', ''], editable=False, droppable=True)
+		# Each child master row reuses the same role tag as a leaf master entry
+		row = self._make_row(group, 'master_leaf', data)
+		return row
+
+	def _duplicateItems(self):
+		for item in self.selectedItems():
+			parent = item.parent() or self.invisibleRootItem()
+			values = [item.text(c) for c in range(item.columnCount())]
+			# Fresh random swatch on every duplicate so the user can tell them apart.
+			values[self.COL_COLOR] = self._rand_hex()
+			new_item = self._make_row(parent, self._role(item), values)
+
+	def _removeItems(self):
+		root = self.invisibleRootItem()
+		# Selected may include groups; remove leaves first to avoid invalid refs.
+		for item in self.selectedItems():
+			role = self._role(item)
+			if role in (self.ROLE_INPUTS, self.ROLE_TARGETS):
+				# Don't allow deleting the structural sub-groups
+				continue
+			(item.parent() or root).removeChild(item)
+
+	# - Drag-drop -------------------------
+	# Drop targeting is constrained by per-item ItemIsDropEnabled flags
+	# (set in _make_row); we don't override dropEvent. Roles get rewritten
+	# inside getTree() so any drop "just works" without an event hook —
+	# this mirrors how the original TRDeltaLayerTree relied on Qt natively.
+
+	def _normalize_roles(self):
+		'''Walk the tree and re-tag every leaf row's role to match its parent
+		group's role. Lets users freely drag rows between Master Layers,
+		Inputs and Targets — the row becomes whatever its new home means.
+
+		Target rows keep their stems/dimensions mode when they were already
+		targets; otherwise default to stems mode.
+		'''
+		root = self.invisibleRootItem()
+		for i in range(root.childCount()):
+			top = root.child(i)
+			top_role = self._role(top)
+
+			if top_role == self.ROLE_MASTER:
+				for k in range(top.childCount()):
+					self._set_role(top.child(k), 'master_leaf')
+
+			elif top_role == self.ROLE_AXIS:
+				for k in range(top.childCount()):
+					sub = top.child(k)
+					sub_role = self._role(sub)
+
+					if sub_role == self.ROLE_INPUTS:
+						for n in range(sub.childCount()):
+							self._set_role(sub.child(n), self.ROLE_INPUT)
+
+					elif sub_role == self.ROLE_TARGETS:
+						for n in range(sub.childCount()):
+							leaf = sub.child(n)
+							leaf_role = self._role(leaf)
+							if leaf_role not in (self.ROLE_TARGET_STEMS,
+							                     self.ROLE_TARGET_DIMS):
+								self._set_role(leaf, self.ROLE_TARGET_STEMS)
+
+	# - Getter / Setter --------------------
+	def setTree(self, setup, headers=None):
+		'''Populate from a setup dict matching DeltaNew.DeltaSetup serialisation.
+
+		setup = {
+		  'masters': [ [name, vstem, hstem, color], ... ],
+		  'axes': [
+			 {
+			   'name': str,
+			   'inputs':  [ [name, vstem, hstem, color], ... ],
+			   'targets': [
+				  {'mode': 'stems',      'name', 'vstem', 'hstem', 'sx', 'sy', 'color'},
+				  {'mode': 'dimensions', 'name', 'w', 'h', 'origin', 'color'},
+				  ...
+			   ]
+			 }, ...
+		  ]
+		}
+		'''
+		self.blockSignals(True)
+		self.clear()
+		self.setHeaderLabels(headers or self._default_headers)
+
+		# - Masters
+		for m in setup.get('masters', []):
+			self._addMaster(m)
+
+		# - Axes
+		for axis_dict in setup.get('axes', []):
+			axis_item = self._addAxis(name=axis_dict.get('name'))
+
+			for inp in axis_dict.get('inputs', []):
+				self._addInput(axis_item, data=inp)
+
+			for tgt in axis_dict.get('targets', []):
+				mode = tgt.get('mode', 'stems')
+				if mode == 'stems':
+					row = [tgt.get('name', ''),
+						   tgt.get('vstem', ''), tgt.get('hstem', ''),
+						   tgt.get('sx', '100.'), tgt.get('sy', '100.'),
+						   tgt.get('color', self._rand_hex())]
+					new_row = self._addTarget(axis_item, mode='stems', data=row)
+				else:
+					row = [tgt.get('name', ''),
+						   '', '',
+						   tgt.get('w', '600'), tgt.get('h', '700'),
+						   tgt.get('color', self._rand_hex())]
+					new_row = self._addTarget(axis_item, mode='dimensions', data=row)
+					if new_row is not None:
+						new_row.setData(self.COL_NAME, self.DATA_ORIGIN,
+							tgt.get('origin', 'BL'))
+
+		for c in range(self.columnCount):
+			self.resizeColumnToContents(c)
+
+		self.invisibleRootItem().setFlags(self.invisibleRootItem().flags() & ~QtCore.Qt.ItemIsDropEnabled)
+		self.expandAll()
+		self.hideColumn(self.COL_COLOR)
+		self.blockSignals(False)
+
+	def getTree(self):
+		'''Serialise current tree state into the same dict shape setTree consumes.
+
+		Calls _normalize_roles() first so that rows the user dragged between
+		groups (e.g. a master leaf moved into an Inputs group) are correctly
+		retagged before serialisation.
+		'''
+		self._normalize_roles()
+		setup = {'masters': [], 'axes': []}
+		root = self.invisibleRootItem()
+
+		# - Masters
+		masters_group = self._find_top(self.ROLE_MASTER, self.GROUP_MASTERS_NAME)
+		if masters_group is not None:
+			for i in range(masters_group.childCount()):
+				m = masters_group.child(i)
+				setup['masters'].append([m.text(c) for c in range(m.columnCount())])
+
+		# - Axes
+		for i in range(root.childCount()):
+			child = root.child(i)
+			if self._role(child) != self.ROLE_AXIS: continue
+
+			axis_dict = {'name': child.text(self.COL_NAME), 'inputs': [], 'targets': []}
+
+			inputs = self._find_subgroup(child, self.ROLE_INPUTS)
+			if inputs is not None:
+				for k in range(inputs.childCount()):
+					row = inputs.child(k)
+					axis_dict['inputs'].append([row.text(c) for c in range(row.columnCount())])
+
+			targets = self._find_subgroup(child, self.ROLE_TARGETS)
+			if targets is not None:
+				for k in range(targets.childCount()):
+					row = targets.child(k)
+					role = self._role(row)
+					if role == self.ROLE_TARGET_STEMS:
+						axis_dict['targets'].append({
+							'mode': 'stems',
+							'name': row.text(self.COL_NAME),
+							'vstem': row.text(self.COL_A),
+							'hstem': row.text(self.COL_B),
+							'sx': row.text(self.COL_C),
+							'sy': row.text(self.COL_D),
+							'color': row.text(self.COL_COLOR),
+						})
+					else:
+						origin = row.data(self.COL_NAME, self.DATA_ORIGIN) or 'BL'
+						axis_dict['targets'].append({
+							'mode': 'dimensions',
+							'name': row.text(self.COL_NAME),
+							'w': row.text(self.COL_C),
+							'h': row.text(self.COL_D),
+							'origin': origin,
+							'color': row.text(self.COL_COLOR),
+						})
+
+			setup['axes'].append(axis_dict)
+
+		return setup
+
 # -- ListViews ----------------------------
 class TRGlyphSelect(QtGui.QWidget):
 	# - Split/Break contour 
