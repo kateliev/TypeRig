@@ -54,6 +54,7 @@ import copy
 
 from typerig.core.objects.array import PointArray
 from typerig.core.objects.layer import Layer
+from typerig.core.objects.glyph import Glyph
 from typerig.core.objects.transform import TransformOrigin
 
 
