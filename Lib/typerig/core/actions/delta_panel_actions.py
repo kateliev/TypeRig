@@ -57,8 +57,15 @@ from typerig.core.objects.layer import Layer
 from typerig.core.objects.transform import TransformOrigin
 
 
-# - Module-level state (banks). Empty for now; available for v2 ----
+# - Module-level state (banks). Persists across runPython calls.
 _last_setup = None
+
+# Live-drive snapshot. Stores cloned input layers (frozen at the
+# moment the user enabled Live mode) plus the DeltaScale dict built
+# from them. Every live tick reads from this snapshot — never from the
+# host glyph — so editing the active layer doesn't feed back into the
+# deltas. Cleared on live-off or when the live axis fingerprint changes.
+_live_snapshot = None
 
 
 # - Origin code → TransformOrigin map -----------------------------
@@ -436,3 +443,157 @@ def npa_delta_master_names(glyph, scope_layers, NodeActions):
 	Used by the host to seed the master pool.
 	'''
 	return [l.name for l in glyph.layers]
+
+
+# =====================================================================
+# Live-drive dispatchers — snapshot once, drive cheap on every tick.
+# =====================================================================
+
+def npa_delta_live_set(glyph, scope_layers, NodeActions, setup_json):
+	'''Snapshot the input layers of the Live Axis and pre-build the
+	DeltaScale dict. Subsequent npa_delta_live_drive calls operate on
+	this frozen snapshot — they never re-read from the host glyph, so
+	driving the active layer doesn't feed back into the deltas.
+
+	The setup_json shape matches the bake setup but is expected to
+	contain exactly one axis (the Live Axis) and no real targets.
+	'''
+	global _live_snapshot
+	import json as _json
+
+	try:
+		setup = _json.loads(setup_json)
+	except (TypeError, ValueError) as e:
+		_live_snapshot = None
+		return {'ok': False, 'error': 'setup_json parse failed: %s' % e}
+
+	axes = setup.get('axes', [])
+	if not axes:
+		_live_snapshot = None
+		return {'ok': False, 'error': 'No live axis in setup.'}
+
+	axis = axes[0]
+	inputs = axis.get('inputs', [])
+	if len(inputs) < 2:
+		_live_snapshot = None
+		return {'ok': False, 'error': 'Live Axis needs at least 2 inputs.'}
+
+	# Take the snapshot: clone each input layer from the host glyph,
+	# set stems, and stash. clone() is deepcopy, so the snapshot is
+	# fully detached from the host glyph.
+	snap_layers = []
+	missing = []
+	empty = []
+	for inp in inputs:
+		name = inp.get('name')
+		layer = glyph.layer(name)
+		if layer is None:
+			missing.append(name); continue
+		if _attr_len(layer, 'point_array') == 0:
+			empty.append(name); continue
+		try:
+			snap = layer.clone()
+			snap.stems = (float(inp['vstem']), float(inp['hstem']))
+		except (KeyError, ValueError, TypeError):
+			continue
+		snap_layers.append(snap)
+
+	if len(snap_layers) < 2:
+		_live_snapshot = None
+		return {'ok': False, 'error': 'Fewer than 2 usable inputs.',
+		        'missing': missing, 'empty': empty}
+
+	# Decide viable attribs across the snapshot inputs (same filter as
+	# the bake path — drops anchor_array if any layer has 0 anchors,
+	# etc.).
+	requested = ['point_array']
+	opts = setup.get('options', {}) or {}
+	if opts.get('metrics', True): requested.append('metric_array')
+	if opts.get('anchors', True): requested.append('anchor_array')
+	viable, skipped = _viable_attribs(snap_layers, requested)
+
+	if 'point_array' not in viable:
+		_live_snapshot = None
+		return {'ok': False, 'error': 'No usable point_array on snapshot.',
+		        'skipped': skipped}
+
+	snap_glyph = Glyph(snap_layers, name=glyph.name)
+	try:
+		vaxis = snap_glyph.create_virtual_axis(
+			[l.name for l in snap_layers], attributes=viable)
+	except Exception as e:
+		_live_snapshot = None
+		return {'ok': False,
+		        'error': 'create_virtual_axis failed: %s' % e}
+
+	_live_snapshot = {
+		'snap_layers': snap_layers,
+		'vaxis': vaxis,
+		'viable': viable,
+		'options': opts,
+		'italic_rad': math.radians(-float(opts.get('italic_angle', 0.0))),
+		'extrapolate': bool(opts.get('extrapolate', True)),
+		'global_origin': _origin_of(opts),
+	}
+	return {'ok': True, 'inputs': len(snap_layers),
+	        'viable': viable, 'skipped': skipped}
+
+
+def npa_delta_live_drive(glyph, scope_layers, NodeActions,
+                          target_name, vstem, hstem, sx, sy):
+	'''Drive the named layer on the live glyph from the cached snapshot.
+
+	The snapshot was captured by the most recent npa_delta_live_set.
+	Reading from the snapshot — not from the live glyph — is what
+	prevents the cascade (each tick computes from the original frozen
+	inputs).
+	'''
+	global _live_snapshot
+	state = _live_snapshot
+	if state is None:
+		return {'ok': False, 'error': 'No live snapshot — call live_set first.'}
+
+	dst = glyph.layer(target_name)
+	if dst is None:
+		return {'ok': False, 'error': 'Target layer "%s" not on glyph.' % target_name}
+
+	base_layer = state['snap_layers'][0]
+	try:
+		source_bounds = base_layer.bounds
+	except Exception:
+		source_bounds = None
+
+	target = {
+		'mode': 'stems',
+		'vstem': float(vstem), 'hstem': float(hstem),
+		'sx': float(sx), 'sy': float(sy),
+	}
+	try:
+		new_layer = _bake_target_stems(
+			base_layer, state['vaxis'], target,
+			state['italic_rad'], state['extrapolate'],
+			state['global_origin'], source_bounds)
+	except Exception as e:
+		return {'ok': False, 'error': 'Bake failed: %s' % e}
+
+	# Write only the parts that the snapshot built — partial vaxis is
+	# legitimate (anchor_array can be missing if inputs lacked anchors).
+	viable = state['viable']
+	dst.point_array = new_layer.point_array
+	if 'metric_array' in viable:
+		try: dst.metric_array = new_layer.metric_array
+		except Exception: pass
+	if 'anchor_array' in viable:
+		try: dst.anchor_array = new_layer.anchor_array
+		except Exception: pass
+
+	return {'ok': True}
+
+
+def npa_delta_live_clear(glyph, scope_layers, NodeActions):
+	'''Drop the live snapshot. Called when the user toggles Live off
+	or when the host detects that the Live Axis inputs have changed.
+	'''
+	global _live_snapshot
+	_live_snapshot = None
+	return {'ok': True}
