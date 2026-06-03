@@ -362,6 +362,75 @@ def npa_delta_measure_stem(glyph, scope_layers, NodeActions, layer_name, axis):
 	return round(abs(selected[0].x - selected[-1].x), 2)
 
 
+def _selected_index_pair(layer):
+	'''Walk a layer and return the (shape, contour, node) indices of the
+	first and last selected on-curve nodes, or None if fewer than 2 are
+	selected.
+	'''
+	idx_list = []
+	for si, shape in enumerate(layer.shapes):
+		for ci, contour in enumerate(shape.contours):
+			for ni, node in enumerate(contour.data):
+				if getattr(node, 'selected', False):
+					idx_list.append((si, ci, ni))
+	if len(idx_list) < 2:
+		return None
+	return (idx_list[0], idx_list[-1])
+
+
+def _node_at(layer, idx):
+	si, ci, ni = idx
+	try:
+		return layer.shapes[si].contours[ci].data[ni]
+	except (IndexError, AttributeError):
+		return None
+
+
+def npa_delta_measure_stems_all(glyph, scope_layers, NodeActions, axis):
+	'''Compatibility-aware stem measurement across every layer of the
+	glyph. Finds the index pair from whichever layer carries the live
+	selection (host-side selection is single-layer in FontRig; in FL
+	this still works because the active layer carries the selection),
+	then looks up those same indices on every other layer and returns
+	{layer_name: float_or_None} as a JSON string.
+
+	The host (JS or FL) picks the values it cares about for the rows
+	it has and silently skips layers where the index pair doesn't exist
+	(incompatible / different topology).
+	'''
+	import json as _json
+
+	# Find the layer that carries the selection. We accept any layer —
+	# usually it's the active one, but if a future host mirrors the
+	# selection elsewhere this still works.
+	pair = None
+	for lyr in glyph.layers:
+		pair = _selected_index_pair(lyr)
+		if pair is not None:
+			break
+
+	if pair is None:
+		return _json.dumps({})
+
+	first_idx, last_idx = pair
+	result = {}
+	for lyr in glyph.layers:
+		n_first = _node_at(lyr, first_idx)
+		n_last  = _node_at(lyr, last_idx)
+		if n_first is None or n_last is None:
+			result[lyr.name] = None
+			continue
+		try:
+			if axis == 'y':
+				result[lyr.name] = round(abs(n_first.y - n_last.y), 2)
+			else:
+				result[lyr.name] = round(abs(n_first.x - n_last.x), 2)
+		except AttributeError:
+			result[lyr.name] = None
+
+	return _json.dumps(result)
+
+
 def npa_delta_master_names(glyph, scope_layers, NodeActions):
 	'''Convenience: return the list of layer names on the active glyph.
 	Used by the host to seed the master pool.
