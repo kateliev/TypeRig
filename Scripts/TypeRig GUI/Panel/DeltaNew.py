@@ -220,7 +220,15 @@ TargetEntry = namedtuple('TargetEntry', 'name mode stem scale dims origin color'
 # input_colors is parallel to inputs/stems — preserves the swatch a row
 # inherited when the user dragged it from the Master Layers pool.
 VirtualAxis = namedtuple('VirtualAxis', 'name inputs stems input_colors targets')
-DeltaSetup  = namedtuple('DeltaSetup',  'masters axes')
+# Live Axis — distinct from the bake axes. Inputs only; the implicit
+# target is whatever layer is currently active in the editor. Drives
+# the slider section. Mirrors the FontRig setup.liveAxis slot.
+LiveAxis    = namedtuple('LiveAxis',    'name inputs stems input_colors')
+DeltaSetup  = namedtuple('DeltaSetup',  'masters live_axis axes')
+
+
+def _empty_live_axis():
+	return LiveAxis('Live', [], [], [])
 
 
 # - Transform-origin code map (kept compact for serialisation) -----------
@@ -250,12 +258,19 @@ def _rand_hex():
 # Setup <-> tree dict serialisation
 # =====================================================================
 def _tree_dict_from_setup(setup):
-	d = {'masters': [], 'axes': []}
+	d = {'masters': [], 'live_axis': {'inputs': []}, 'axes': []}
 	for m in setup.masters:
 		# Row shape mirrors legacy Delta: blank stems on masters,
 		# 100/100 in Width/Height, color in col 5.
 		d['masters'].append([m.name, str(m.vstem), str(m.hstem),
 		                     default_sx, default_sy, m.color])
+
+	# Live Axis — same row shape as a regular axis's inputs, but no targets.
+	la = setup.live_axis
+	live_colors = list(la.input_colors) + [''] * max(0, len(la.inputs) - len(la.input_colors))
+	for (name, (vx, hx), col) in zip(la.inputs, la.stems, live_colors):
+		d['live_axis']['inputs'].append(
+			[name, str(vx), str(hx), default_sx, default_sy, col])
 
 	for ax in setup.axes:
 		ax_d = {'name': ax.name, 'inputs': [], 'targets': []}
@@ -369,7 +384,23 @@ def _setup_from_tree_dict(d):
 
 		axes.append(VirtualAxis(name, input_names, input_stems, input_colors, targets))
 
-	return DeltaSetup(masters, axes), errors
+	# Live Axis parse.
+	la_d = d.get('live_axis', {}) or {}
+	la_input_names, la_stems, la_colors = [], [], []
+	for row in la_d.get('inputs', []):
+		n = row[0] if len(row) > 0 else ''
+		if not n: continue
+		try:
+			vx = float(row[1]); hx = float(row[2])
+		except (ValueError, IndexError):
+			errors.append('Live Axis: input "%s" has invalid stems.' % n)
+			continue
+		la_input_names.append(n)
+		la_stems.append((vx, hx))
+		la_colors.append(row[5] if len(row) > 5 else '')
+	live_axis = LiveAxis('Live', la_input_names, la_stems, la_colors)
+
+	return DeltaSetup(masters, live_axis, axes), errors
 
 
 # =====================================================================
@@ -382,7 +413,8 @@ def _is_legacy_shape(d):
 
 
 def _migrate_legacy(d):
-	new = {'masters': [], 'axes': []}
+	# New shape includes a Live Axis slot — seeded empty for legacy saves.
+	new = {'masters': [], 'live_axis': {'inputs': []}, 'axes': []}
 	masters_rows = d.get('Master Layers', [])
 	axis_rows    = d.get('Virtual Axis', [])
 	target_rows  = d.get('Target Layers', [])
@@ -405,6 +437,18 @@ def _migrate_legacy(d):
 
 	new['axes'].append(axis_d)
 	return new
+
+
+def _migrate_new_shape(d):
+	'''Patch a DeltaNew dict missing the live_axis slot (e.g. saved
+	before this field was introduced). Mutates and returns the dict.
+	'''
+	if isinstance(d, dict):
+		if 'live_axis' not in d or not isinstance(d['live_axis'], dict):
+			d['live_axis'] = {'inputs': []}
+		if 'inputs' not in d['live_axis']:
+			d['live_axis']['inputs'] = []
+	return d
 
 
 # =====================================================================
@@ -552,7 +596,12 @@ class TRDeltaNewPanel(QtGui.QWidget):
 		super(TRDeltaNewPanel, self).__init__()
 
 		# - State
-		self.setup = DeltaSetup(masters=[], axes=[])
+		self.setup = DeltaSetup(masters=[], live_axis=_empty_live_axis(), axes=[])
+		# Per-glyph live snapshots, keyed by glyph name. Mirrors original
+		# Delta.py's `glyph_arrays`: each entry holds the frozen DeltaScale
+		# objects built from the Live Axis inputs at snapshot time.
+		# {glyph_name: {'delta_outline', 'delta_service', 'last_layer'}}
+		self._live_snapshot = {}
 		self.glyph_arrays = {}     # (glyph_name, axis_name) -> {core_glyph, vaxis, tr_glyph}
 		self.active_layer_name = None
 		self.active_canvas = None
@@ -791,7 +840,9 @@ class TRDeltaNewPanel(QtGui.QWidget):
 			color = host_layer_wireframe_color(name)
 			color_hex = color.name() if color is not None else _rand_hex()
 			masters.append(MasterEntry(name, '', '', color_hex))
-		return DeltaSetup(masters=masters, axes=[])
+		return DeltaSetup(masters=masters,
+		                  live_axis=_empty_live_axis(),
+		                  axes=[])
 
 	def __refresh_options(self):
 		# - Mirror legacy semantics
@@ -845,6 +896,9 @@ class TRDeltaNewPanel(QtGui.QWidget):
 			return False
 
 		self.setup = setup
+		# Setup changed — drop the live snapshot so the next slider tick
+		# captures the new Live Axis state.
+		self._live_snapshot = {}
 		if not setup.axes:
 			warnings.warn('No axes defined! Add at least one Virtual Axis.',
 				TRDeltaAxisWarning)
@@ -868,8 +922,11 @@ class TRDeltaNewPanel(QtGui.QWidget):
 		current_dict['axes'] = []
 		self.tree.setTree(current_dict, tree_column_names)
 
-		self.setup = DeltaSetup(masters=self.setup.masters, axes=[])
+		self.setup = DeltaSetup(masters=self.setup.masters,
+		                        live_axis=self.setup.live_axis,
+		                        axes=[])
 		self.glyph_arrays = {}
+		# Keep the Live Axis snapshot — only bake axes were cleared.
 		self.btn_execute_scale.setEnabled(False)
 
 		if verbose:
@@ -881,6 +938,7 @@ class TRDeltaNewPanel(QtGui.QWidget):
 		self.tree.setTree(_tree_dict_from_setup(self._fresh_setup()), tree_column_names)
 		self.setup = self._fresh_setup()
 		self.glyph_arrays = {}
+		self._live_snapshot = {}   # full reset includes the Live Axis
 		self.btn_execute_scale.setEnabled(False)
 
 		for cpn, default in ((self.cpn_value_width, 100),
@@ -1106,38 +1164,146 @@ class TRDeltaNewPanel(QtGui.QWidget):
 		output(0, '%s %s' % (app_name, app_version),
 			'Font: %s; Glyph(s): %s.' % (host_font_name(), '; '.join(sorted(glyphs_done))))
 
+	# - Live snapshot management ---------------------------
+	def _refresh_live_snapshot(self, silent=False):
+		'''Eject the Live Axis inputs from the active glyph into a frozen
+		core.Glyph + DeltaScale dict, and cache it per glyph in
+		self._live_snapshot. Mirrors original Delta.py's __refresh_arrays
+		but scoped to the Live Axis only. Snapshot reads happen here;
+		slider ticks read from the cache and never re-eject.
+		'''
+		live = self.setup.live_axis
+		if not live or len(live.inputs) < 2:
+			self._live_snapshot = {}
+			return False
+
+		current = host_current_glyph()
+		if current is None: return False
+
+		# Build a fake VirtualAxis for the eject helper.
+		live_as_axis = VirtualAxis(live.name, live.inputs, live.stems,
+		                           live.input_colors, [])
+		core_glyph, missing, empty = _eject_input_layers(current, live_as_axis)
+		if missing or empty:
+			if not silent:
+				warnings.warn('Live Axis: missing/empty inputs %s'
+					% ', '.join(missing + empty), LayerWarning)
+		if len(core_glyph.layers) < 2:
+			self._live_snapshot = {}
+			return False
+
+		usable_inputs = [l.name for l in core_glyph.layers]
+		attribs = ['point_array']
+		if self.opt_metrics: attribs.append('metric_array')
+		if self.opt_anchors: attribs.append('anchor_array')
+		viable, _skipped = _viable_attribs(core_glyph, usable_inputs, attribs)
+		if 'point_array' not in viable:
+			self._live_snapshot = {}
+			return False
+
+		try:
+			vaxis = core_glyph.create_virtual_axis(
+				usable_inputs, attributes=viable)
+		except Exception as e:
+			if not silent:
+				warnings.warn('Live snapshot: create_virtual_axis failed: %s'
+					% e, TRDeltaArrayWarning)
+			self._live_snapshot = {}
+			return False
+
+		self._live_snapshot[current.name] = {
+			'core_glyph': core_glyph,
+			'vaxis': vaxis,
+			'tr_glyph': current,
+			'last_layer': current.active_layer,
+		}
+		return True
+
+	def _ensure_live_snapshot_for_active_layer(self):
+		'''Watcher equivalent: if the editor's active layer has changed
+		since the last snapshot for this glyph, re-snapshot. The new
+		snapshot captures each input layer at its *current* state — so
+		prior driving is baked into the baseline used by future driving.
+		Also resets the slider section to neutral for the new active layer.
+		'''
+		current = host_current_glyph()
+		if current is None: return False
+		entry = self._live_snapshot.get(current.name)
+		if entry is None:
+			# Fresh snapshot.
+			if not self._refresh_live_snapshot(silent=True): return False
+			self.__seed_live_sliders_from_layer(current.active_layer)
+			return True
+		if entry.get('last_layer') != current.active_layer:
+			# Re-snapshot at current state of all inputs.
+			if not self._refresh_live_snapshot(silent=True): return False
+			# Reset sliders to neutral for the new active layer.
+			self.__seed_live_sliders_from_layer(current.active_layer)
+			return True
+		return True
+
+	def __seed_live_sliders_from_layer(self, layer_name):
+		'''Set the slider state to neutral for the named layer: V/H read
+		from whichever Live Axis input matches the name (or master pool
+		fallback); Wt/Ht reset to 100.
+		'''
+		vx = hx = None
+		for (n, (a, b)) in zip(self.setup.live_axis.inputs,
+		                       self.setup.live_axis.stems):
+			if n == layer_name:
+				vx, hx = a, b; break
+		if vx is None:
+			for m in self.setup.masters:
+				if m.name == layer_name:
+					try:
+						vx = float(m.vstem); hx = float(m.hstem)
+					except (ValueError, TypeError):
+						pass
+					break
+
+		for cpn, val in ((self.cpn_value_width, 100),
+		                 (self.cpn_value_height, 100),
+		                 (self.cpn_value_stem_x, vx if vx is not None else 100),
+		                 (self.cpn_value_stem_y, hx if hx is not None else 100),
+		                 (self.cpn_value_lerp_t, 0)):
+			cpn.blockSignals(True)
+			cpn.setValue(val)
+			cpn.blockSignals(False)
+
 	def execute_scale(self, use_time=False):
-		'''Live slider mode — single-axis only. Drives the active layer of
-		the current glyph based on the spin controls.
+		'''Live slider mode — driven by the Live Axis (the permanent slot,
+		not the bake axes). Each tick reads the cached snapshot and
+		writes only to the editor's currently active layer.
+
+		Cascade-proof: the inputs come from the frozen snapshot, never
+		from the live glyph. Active-layer change triggers a re-snapshot
+		and a slider reset before this method runs (see
+		_ensure_live_snapshot_for_active_layer).
 		'''
 		self.__refresh_options()
 
 		# Target mode active? Sliders shouldn't drive.
 		if self.chk_target.isChecked(): return
 
-		# Multi-axis: sliders disabled.
-		if len(self.setup.axes) != 1:
-			if len(self.setup.axes) > 1:
-				warnings.warn('Live sliders disabled in multi-axis setups. '
-					'Use the bake button instead.', TRDeltaAxisWarning)
-			return
-
-		# Need a current glyph.
+		# Need a current glyph and an initialised Live Axis.
 		current = host_current_glyph()
 		if current is None: return
 
-		axis = self.setup.axes[0]
-		entry = self.glyph_arrays.get((current.name, axis.name))
-		if entry is None:
-			# Active glyph drifted from the cache — rebuild.
-			if not self.__refresh_arrays(silent=True): return
-			entry = self.glyph_arrays.get((current.name, axis.name))
-			if entry is None: return
+		live = self.setup.live_axis
+		if not live or len(live.inputs) < 2:
+			warnings.warn('Live Axis needs at least 2 inputs. Drag '
+				'masters into the Live Axis section.',
+				TRDeltaAxisWarning)
+			return
 
-		core_glyph = entry['core_glyph']
+		# Snapshot — re-takes if layer changed, builds if missing.
+		if not self._ensure_live_snapshot_for_active_layer(): return
+		entry = self._live_snapshot.get(current.name)
+		if entry is None: return
+
 		vaxis = entry['vaxis']
-		base_input = core_glyph.layers[0].name
-		base_layer = core_glyph.layer(base_input)
+		base_input = entry['core_glyph'].layers[0].name
+		base_layer = entry['core_glyph'].layer(base_input)
 		source_bounds = base_layer.bounds
 
 		# Scale ratios.
@@ -1154,30 +1320,25 @@ class TRDeltaNewPanel(QtGui.QWidget):
 		intervals = len(vaxis['point_array'])
 
 		if use_time:
-			# Drive via time-along-axis.
+			# Time-along-axis drives the stem readouts back to the user.
 			t = float(self.cpn_value_lerp_t.getValue()) * intervals / 100.0
-			# Compute current stems for the slider readout.
 			try:
-				stem_pair = list(vaxis['point_array'].scale_by_time(
-					(t, t), (sx/100., sy/100.), (0., 0.), (0., 0.),
-					italic_rad, self.opt_extrapolate))
-			except Exception:
-				stem_pair = None
-			# We still build the target via stems for uniformity; estimate
-			# current stems from the time -> stem map.
-			try:
-				estimated_stem = list(vaxis['point_array'].scale_by_time(
+				stem_point = list(vaxis['point_array'].scale_by_time(
 					(t, t), (1., 1.), (0., 0.), (0., 0.),
 					False, self.opt_extrapolate))
-				# fallback below if anything wonky
+				# Pull a sample stem from the result if shape is right.
+				if stem_point:
+					self.cpn_value_stem_x.blockSignals(True)
+					self.cpn_value_stem_y.blockSignals(True)
+					self.cpn_value_stem_x.setValue(round(stem_point[0][0]))
+					self.cpn_value_stem_y.setValue(round(stem_point[0][1]))
+					self.cpn_value_stem_x.blockSignals(False)
+					self.cpn_value_stem_y.blockSignals(False)
 			except Exception:
-				estimated_stem = None
-			# Reuse stems mode via the slider stem values (kept in sync).
-			stem = (float(self.cpn_value_stem_x.getValue()),
-			        float(self.cpn_value_stem_y.getValue()))
-		else:
-			stem = (float(self.cpn_value_stem_x.getValue()),
-			        float(self.cpn_value_stem_y.getValue()))
+				pass
+
+		stem = (float(self.cpn_value_stem_x.getValue()),
+		        float(self.cpn_value_stem_y.getValue()))
 
 		target_name = current.active_layer
 		live_target = TargetEntry(target_name, 'stems', stem, (sx, sy),
@@ -1206,9 +1367,13 @@ class TRDeltaNewPanel(QtGui.QWidget):
 	def _load_tree_dict(self, raw):
 		if _is_legacy_shape(raw):
 			raw = _migrate_legacy(raw)
+		else:
+			raw = _migrate_new_shape(raw)
 		self.tree.setTree(raw, tree_column_names)
 		# Re-commit setup from the loaded tree (silent — load is the cue).
 		self.setup, _errs = _setup_from_tree_dict(self.tree.getTree())
+		# Loaded a fresh tree — drop any stale live snapshot.
+		self._live_snapshot = {}
 
 	def font_save_axis_data(self):
 		setup, errors = _setup_from_tree_dict(self.tree.getTree())

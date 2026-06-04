@@ -647,6 +647,8 @@ class TRDeltaMultiAxisTree(QtGui.QTreeWidget):
 	COL_NAME, COL_A, COL_B, COL_C, COL_D, COL_COLOR = range(6)
 
 	ROLE_MASTER = 'master'
+	ROLE_LIVE_AXIS = 'live_axis'      # permanent Live Axis container row
+	ROLE_LIVE_INPUT = 'live_input'    # leaf inside Live Axis
 	ROLE_AXIS = 'axis'
 	ROLE_INPUTS = 'inputs_group'
 	ROLE_TARGETS = 'targets_group'
@@ -655,6 +657,7 @@ class TRDeltaMultiAxisTree(QtGui.QTreeWidget):
 	ROLE_TARGET_DIMS = 'target_dims'
 
 	GROUP_MASTERS_NAME = 'Master Layers'
+	GROUP_LIVE_AXIS_NAME = 'Live Axis'
 	GROUP_INPUTS_NAME = 'Inputs'
 	GROUP_TARGETS_NAME = 'Targets'
 
@@ -687,10 +690,12 @@ class TRDeltaMultiAxisTree(QtGui.QTreeWidget):
 		act_addInput = QtGui.QAction('Add Input to selected Axis', self)
 		act_addTargetStems = QtGui.QAction('Add Target (Stems mode)', self)
 		act_addTargetDims = QtGui.QAction('Add Target (Dimensions mode)', self)
+		act_addLiveInput = QtGui.QAction('Add Input to Live Axis', self)
 		act_dup = QtGui.QAction('Duplicate selected', self)
 		act_del = QtGui.QAction('Remove selected', self)
 
 		self.menu.addAction(act_addAxis)
+		self.menu.addAction(act_addLiveInput)
 		self.menu.addSeparator()
 		self.menu.addAction(act_addInput)
 		self.menu.addAction(act_addTargetStems)
@@ -703,6 +708,8 @@ class TRDeltaMultiAxisTree(QtGui.QTreeWidget):
 		act_addInput.triggered.connect(lambda: self._addInput())
 		act_addTargetStems.triggered.connect(lambda: self._addTarget(mode='stems'))
 		act_addTargetDims.triggered.connect(lambda: self._addTarget(mode='dimensions'))
+		act_addLiveInput.triggered.connect(lambda: self._addLiveInput(
+			['New', '100.', '100.', '100.', '100.', self._rand_hex()]))
 		act_dup.triggered.connect(lambda: self._duplicateItems())
 		act_del.triggered.connect(lambda: self._removeItems())
 
@@ -848,6 +855,23 @@ class TRDeltaMultiAxisTree(QtGui.QTreeWidget):
 		row = self._make_row(group, 'master_leaf', data)
 		return row
 
+	def _live_axis_group(self):
+		'''Get or create the permanent Live Axis container row. Distinct
+		top-level group; same drop-target idiom as Master Layers (a leaf
+		dropped here becomes a live input via _normalize_roles).
+		'''
+		group = self._find_top(self.ROLE_LIVE_AXIS, self.GROUP_LIVE_AXIS_NAME)
+		if group is None:
+			group = self._make_row(self.invisibleRootItem(),
+				self.ROLE_LIVE_AXIS,
+				[self.GROUP_LIVE_AXIS_NAME, '', '', '', '', ''],
+				editable=False, droppable=True)
+		return group
+
+	def _addLiveInput(self, data):
+		group = self._live_axis_group()
+		return self._make_row(group, self.ROLE_LIVE_INPUT, data)
+
 	def _duplicateItems(self):
 		for item in self.selectedItems():
 			parent = item.parent() or self.invisibleRootItem()
@@ -861,8 +885,10 @@ class TRDeltaMultiAxisTree(QtGui.QTreeWidget):
 		# Selected may include groups; remove leaves first to avoid invalid refs.
 		for item in self.selectedItems():
 			role = self._role(item)
-			if role in (self.ROLE_INPUTS, self.ROLE_TARGETS):
-				# Don't allow deleting the structural sub-groups
+			if role in (self.ROLE_INPUTS, self.ROLE_TARGETS,
+			            self.ROLE_LIVE_AXIS, self.ROLE_MASTER):
+				# Don't allow deleting the structural top-level containers
+				# or sub-groups — they're permanent slots.
 				continue
 			(item.parent() or root).removeChild(item)
 
@@ -888,6 +914,11 @@ class TRDeltaMultiAxisTree(QtGui.QTreeWidget):
 			if top_role == self.ROLE_MASTER:
 				for k in range(top.childCount()):
 					self._set_role(top.child(k), 'master_leaf')
+
+			elif top_role == self.ROLE_LIVE_AXIS:
+				# Leaves dragged into Live Axis become live inputs.
+				for k in range(top.childCount()):
+					self._set_role(top.child(k), self.ROLE_LIVE_INPUT)
 
 			elif top_role == self.ROLE_AXIS:
 				for k in range(top.childCount()):
@@ -933,6 +964,12 @@ class TRDeltaMultiAxisTree(QtGui.QTreeWidget):
 		for m in setup.get('masters', []):
 			self._addMaster(m)
 
+		# - Live Axis — always present, even when empty (permanent slot)
+		self._live_axis_group()
+		live_axis_d = setup.get('live_axis', {}) or {}
+		for inp in live_axis_d.get('inputs', []):
+			self._addLiveInput(inp)
+
 		# - Axes
 		for axis_dict in setup.get('axes', []):
 			axis_item = self._addAxis(name=axis_dict.get('name'))
@@ -974,7 +1011,7 @@ class TRDeltaMultiAxisTree(QtGui.QTreeWidget):
 		retagged before serialisation.
 		'''
 		self._normalize_roles()
-		setup = {'masters': [], 'axes': []}
+		setup = {'masters': [], 'live_axis': {'inputs': []}, 'axes': []}
 		root = self.invisibleRootItem()
 
 		# - Masters
@@ -983,6 +1020,14 @@ class TRDeltaMultiAxisTree(QtGui.QTreeWidget):
 			for i in range(masters_group.childCount()):
 				m = masters_group.child(i)
 				setup['masters'].append([m.text(c) for c in range(m.columnCount())])
+
+		# - Live Axis
+		live_group = self._find_top(self.ROLE_LIVE_AXIS, self.GROUP_LIVE_AXIS_NAME)
+		if live_group is not None:
+			for i in range(live_group.childCount()):
+				row = live_group.child(i)
+				setup['live_axis']['inputs'].append(
+					[row.text(c) for c in range(row.columnCount())])
 
 		# - Axes
 		for i in range(root.childCount()):
