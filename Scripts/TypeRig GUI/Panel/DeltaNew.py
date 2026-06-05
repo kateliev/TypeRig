@@ -27,8 +27,10 @@ from typerig.core.base.message import (
 	TRDeltaAxisWarning, TRDeltaStemWarning, TRDeltaArrayWarning,
 )
 from typerig.core.objects.array import PointArray
+from typerig.core.objects.delta import DeltaScale
 from typerig.core.objects.glyph import Glyph
 from typerig.core.objects.transform import Transform, TransformOrigin
+from typerig.core.objects.utils import Bounds
 
 from typerig.proxy.tr.objects.glyph import trGlyph
 
@@ -776,6 +778,13 @@ class TRDeltaNewPanel(QtGui.QWidget):
 		self.grp_btn_transform.addButton(self.chk_tr, 5)
 		lay_transform.addWidget(self.chk_tr)
 
+		# Toggling the origin re-fires the live drive so the user sees the
+		# new alignment immediately — applies to selection mode in particular.
+		# buttonClicked fires once per user click (whereas buttonToggled
+		# fires twice — once for the old button off, once for the new on).
+		self.grp_btn_transform.buttonClicked.connect(
+			lambda *_: self.execute_scale())
+
 		box_transform.setLayout(lay_transform)
 		lay_main.addWidget(box_transform)
 
@@ -980,34 +989,44 @@ class TRDeltaNewPanel(QtGui.QWidget):
 
 	# - Stem measurement --------------------------------------
 	def get_stem(self, get_y=False):
+		'''Measure |Δ| between selected nodes and broadcast to every row in
+		the tree whose layer name matches a layer in the current glyph.
+		Covers Master Layers, Live Axis inputs, and every Virtual Axis's
+		inputs. Mirrors how the FontRig panel broadcasts measurements.
+		'''
 		current = host_current_glyph()
 		if current is None: return
 
 		axis_label = 'y' if get_y else 'x'
 		col_idx = 2 if get_y else 1
 
+		def _measure(layer_name):
+			return host_selected_nodes_stem(current, layer_name, axis_label)
+
+		def _walk_group(group):
+			if group is None: return
+			for k in range(group.childCount()):
+				row = group.child(k)
+				val = _measure(row.text(0))
+				if val is not None: row.setText(col_idx, str(val))
+
 		root = self.tree.invisibleRootItem()
 		self.tree.blockSignals(True)
 		try:
-			# Master rows
-			masters_group = self.tree._find_top(self.tree.ROLE_MASTER,
-				self.tree.GROUP_MASTERS_NAME)
-			if masters_group is not None:
-				for i in range(masters_group.childCount()):
-					row = masters_group.child(i)
-					val = host_selected_nodes_stem(current, row.text(0), axis_label)
-					if val is not None: row.setText(col_idx, str(val))
+			# Master Layers pool.
+			_walk_group(self.tree._find_top(self.tree.ROLE_MASTER,
+				self.tree.GROUP_MASTERS_NAME))
 
-			# Per-axis inputs
+			# Live Axis inputs.
+			_walk_group(self.tree._find_top(self.tree.ROLE_LIVE_AXIS,
+				self.tree.GROUP_LIVE_AXIS_NAME))
+
+			# Virtual Axes' Inputs sub-groups.
 			for i in range(root.childCount()):
 				axis_item = root.child(i)
 				if self.tree._role(axis_item) != self.tree.ROLE_AXIS: continue
-				inputs = self.tree._find_subgroup(axis_item, self.tree.ROLE_INPUTS)
-				if inputs is None: continue
-				for k in range(inputs.childCount()):
-					row = inputs.child(k)
-					val = host_selected_nodes_stem(current, row.text(0), axis_label)
-					if val is not None: row.setText(col_idx, str(val))
+				_walk_group(self.tree._find_subgroup(axis_item,
+					self.tree.ROLE_INPUTS))
 		finally:
 			self.tree.blockSignals(False)
 
@@ -1193,29 +1212,68 @@ class TRDeltaNewPanel(QtGui.QWidget):
 			return False
 
 		usable_inputs = [l.name for l in core_glyph.layers]
-		attribs = ['point_array']
-		if self.opt_metrics: attribs.append('metric_array')
-		if self.opt_anchors: attribs.append('anchor_array')
-		viable, _skipped = _viable_attribs(core_glyph, usable_inputs, attribs)
-		if 'point_array' not in viable:
-			self._live_snapshot = {}
-			return False
 
-		try:
-			vaxis = core_glyph.create_virtual_axis(
-				usable_inputs, attributes=viable)
-		except Exception as e:
-			if not silent:
-				warnings.warn('Live snapshot: create_virtual_axis failed: %s'
-					% e, TRDeltaArrayWarning)
-			self._live_snapshot = {}
-			return False
+		# Selection / per-contour mode — Delta.py pattern: when chk_selection
+		# is on, build the DeltaScale from ONLY the selected nodes' positions.
+		# We don't go through create_virtual_axis (which insists on the full
+		# point_array via Layer.point_array setter constraints); instead we
+		# slice each input layer's point_array by the indices selected on
+		# the active layer, then construct DeltaScale directly. The drive
+		# path mutates flNodes in place — no mount needed.
+		sel_indices = None
+		if self.opt_selection:
+			active_tr = current.find_layer(current.active_layer)
+			if active_tr is not None:
+				ej = active_tr.eject()
+				# trNode.eject already mirrors flNode.selected — see
+				# proxy/tr/objects/node.py __meta__.
+				sel_indices = [i for i, n in enumerate(ej.nodes)
+				               if getattr(n, 'selected', False)]
+				if not sel_indices:
+					sel_indices = None     # nothing selected → fall through
+
+		vaxis = None
+		if sel_indices:
+			try:
+				data_array = []
+				stem_array = []
+				for layer in core_glyph.layers:
+					pa = list(layer.point_array.tuple)
+					data_array.append([pa[i] for i in sel_indices if i < len(pa)])
+					stem_array.append([layer.stems])
+				# Single-attribute vaxis — selection mode is geometry-only.
+				vaxis = {'point_array': DeltaScale(data_array, stem_array)}
+			except Exception as e:
+				if not silent:
+					warnings.warn('Live snapshot (selection mode): %s' % e,
+						TRDeltaArrayWarning)
+				self._live_snapshot = {}
+				return False
+		else:
+			attribs = ['point_array']
+			if self.opt_metrics: attribs.append('metric_array')
+			if self.opt_anchors: attribs.append('anchor_array')
+			viable, _skipped = _viable_attribs(core_glyph, usable_inputs, attribs)
+			if 'point_array' not in viable:
+				self._live_snapshot = {}
+				return False
+			try:
+				vaxis = core_glyph.create_virtual_axis(
+					usable_inputs, attributes=viable)
+			except Exception as e:
+				if not silent:
+					warnings.warn('Live snapshot: create_virtual_axis failed: %s'
+						% e, TRDeltaArrayWarning)
+				self._live_snapshot = {}
+				return False
 
 		self._live_snapshot[current.name] = {
 			'core_glyph': core_glyph,
 			'vaxis': vaxis,
 			'tr_glyph': current,
 			'last_layer': current.active_layer,
+			'sel_indices': sel_indices,
+			'sel_count': len(sel_indices) if sel_indices else None,
 		}
 		return True
 
@@ -1318,6 +1376,78 @@ class TRDeltaNewPanel(QtGui.QWidget):
 
 		italic_rad = math.radians(-float(host_font_italic_angle()))
 		intervals = len(vaxis['point_array'])
+
+		# ----- Selection-mode short-circuit -----------------------
+		# Mirrors original Delta.py's _setPointArray(selection=True): the
+		# snapshot's DeltaScale was built from the selected-node positions
+		# only; the slider output has the same length; we write directly
+		# to the destination's currently-selected flNodes. No core.Layer,
+		# no mount — flNode identity is preserved, so .selected survives.
+		#
+		# Transform origin: the chosen origin point of the *current*
+		# selection bounds is held fixed — we shift the new positions so
+		# that origin lands where it started. This makes the radio buttons
+		# behave live (rebuilds happen on every slider/origin tick).
+		if entry.get('sel_indices'):
+			stem = (float(self.cpn_value_stem_x.getValue()),
+			        float(self.cpn_value_stem_y.getValue()))
+			try:
+				result = list(vaxis['point_array'].scale_by_stem(
+					stem, (sx / 100.0, sy / 100.0),
+					(0., 0.), (0., 0.),
+					italic_rad, self.opt_extrapolate))
+			except Exception as e:
+				warnings.warn('Live (selection): %s' % e, TRDeltaArrayWarning)
+				return
+
+			target_name = current.active_layer
+			fl_layer = None
+			for l in current.host.layers:
+				if l.name == target_name:
+					fl_layer = l; break
+			if fl_layer is None: return
+
+			selected_fl_nodes = []
+			for shape in fl_layer.shapes:
+				for contour in shape.contours:
+					for node in contour.nodes():
+						if node.selected:
+							selected_fl_nodes.append(node)
+
+			if len(selected_fl_nodes) != entry.get('sel_count', 0):
+				warnings.warn('Selection changed since snapshot — toggle '
+					'Selection off/on to re-snapshot.',
+					TRDeltaArrayWarning)
+				return
+
+			# Origin realignment — keep the chosen point on the selection
+			# bounds fixed. Matches original Delta.py's _setPointArray
+			# realign-shift logic.
+			ox, oy = 0.0, 0.0
+			if self.transform_origin is not None \
+			   and self.transform_origin != TransformOrigin.BASELINE:
+				try:
+					src_pts = [(n.x, n.y) for n in selected_fl_nodes]
+					src_b = Bounds(src_pts)
+					dst_b = Bounds(result)
+					sx0, sy0 = src_b.align_matrix[self.transform_origin.code]
+					dx0, dy0 = dst_b.align_matrix[self.transform_origin.code]
+					ox = sx0 - dx0
+					oy = sy0 - dy0
+				except Exception:
+					ox, oy = 0.0, 0.0
+
+			for fl_node, pos in zip(selected_fl_nodes, result):
+				try:
+					fl_node.x = pos[0] + ox
+					fl_node.y = pos[1] + oy
+				except Exception:
+					pass
+
+			current.update()
+			host_refresh_canvas()
+			return
+		# ----- end selection-mode short-circuit -------------------
 
 		if use_time:
 			# Time-along-axis drives the stem readouts back to the user.
