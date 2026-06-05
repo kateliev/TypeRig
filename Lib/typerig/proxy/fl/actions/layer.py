@@ -22,7 +22,7 @@ from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
 from typerig.core.func.math import linInterp as lerp
 from typerig.core.base.message import *
-from typerig.core.algo.matchmaker import apply_match_glyph, pair_contours
+from typerig.core.algo.matchmaker import apply_match, apply_match_glyph, pair_contours
 from typerig.proxy.tr.objects.glyph import trGlyph
 from typerig.core.objects.shape import Shape
 from typerig.core.objects.layer import Layer
@@ -512,7 +512,7 @@ class TRLayerActionCollector(object):
 
 	# - Layer: Matchmaker tools ---------------------------------------------------
 	@staticmethod
-	def layer_matchmaker(parent, dry_run=False):
+	def layer_matchmaker(parent, dry_run=False, contour_mode=False):
 		def _on_count(contour):
 			return sum(1 for n in contour.nodes if n.is_on)
 
@@ -588,6 +588,69 @@ class TRLayerActionCollector(object):
 			except Exception:
 				em = 1000.0
 
+			k_s = 1.0 / (em * em)
+			k_b = 1.0
+
+			if contour_mode:
+				sel_ids = sorted({cid for cid, _ in parent.glyph.selectedAtContours(index=True, deep=True)})
+				if not sel_ids:
+					warnings.warn('Contour mode: no contour selection on active layer.', TRPanelWarning)
+					return
+
+				bad = [i for i in sel_ids if i >= len(ca) or i >= len(cb)]
+				if bad:
+					warnings.warn('Contour mode: selected ids out of range on target: %s.' %bad, TRPanelWarning)
+					return
+
+				degenerate = [i for i in sel_ids if _on_count(ca[i]) < 3 or _on_count(cb[i]) < 3]
+				if degenerate:
+					warnings.warn('Contour mode: degenerate contours (<3 on-curves) at %s.' %degenerate, TRPanelWarning)
+					return
+
+				new_a = list(ca)
+				new_b = list(cb)
+				total_cost = 0.0
+				per_contour = []
+				try:
+					for i in sel_ids:
+						na, nb, cost_i, meta_i = apply_match(
+							ca[i], cb[i], k_s=k_s, k_b=k_b, align_start=align_start)
+						new_a[i] = na
+						new_b[i] = nb
+						total_cost += cost_i
+						per_contour.append((i, cost_i, meta_i))
+				except Exception as e:
+					warnings.warn('apply_match failed: %s.' %e, TRPanelWarning)
+					return
+
+				if dry_run:
+					print('')
+					print('=' * 60)
+					print('TR | Matchmaker [contour mode]: glyph "%s"  source=%s  target=%s  em=%s' %(g.name, src_layer.name, target_layer_name, em))
+					print('  modes: align_start=%r' %(align_start,))
+					print('  selected contour ids: %s' %sel_ids)
+					print('  total cost = %.4f' %total_cost)
+					for i, cost_i, meta_i in per_contour:
+						print('  contour %d: cost=%.4f inserts=%d/%d promotions=%d/%d shift_b=%d reversed_b=%s' %(
+							i, cost_i, meta_i['n_insert_a'], meta_i['n_insert_b'],
+							meta_i['n_promoted_a'], meta_i['n_promoted_b'],
+							meta_i['shift_b'], meta_i['reversed_b']))
+					print('(no changes written - click with Ctrl only to apply)')
+				else:
+					try:
+						out_src = _replace_layer_contours(core_src, new_a)
+						out_tgt = _replace_layer_contours(core_tgt, new_b)
+
+						tr_src.mount(out_src)
+						tr_tgt.mount(out_tgt)
+						g.update()
+
+						output(0, 'TR | Matchmaker', 'glyph "%s" contour-matched [%r] ids=%s cost=%.4f' %(
+							g.name, align_start, sel_ids, total_cost))
+					except Exception as e:
+						warnings.warn('Mount failed: %s.' %e, TRPanelWarning)
+				return
+
 			if len(ca) != len(cb):
 				warnings.warn('Contour count mismatch: A=%d B=%d.' %(len(ca), len(cb)), TRPanelWarning)
 				return
@@ -595,9 +658,6 @@ class TRLayerActionCollector(object):
 			if any(_on_count(c) < 3 for c in ca + cb):
 				warnings.warn('Degenerate contours (<3 on-curves) found.', TRPanelWarning)
 				return
-
-			k_s = 1.0 / (em * em)
-			k_b = 1.0
 
 			try:
 				new_a, new_b, total_cost, meta = apply_match_glyph(

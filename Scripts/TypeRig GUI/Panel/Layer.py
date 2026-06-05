@@ -279,7 +279,7 @@ class TRLayerActions(QtGui.QWidget):
 		btn_layer_contour_paste_byName = CustomPushButton("clipboard_paste_exact", tooltip='Paste selected nodes from clipboard by layer name', obj_name='btn_panel')
 		lay_actions.addWidget(btn_layer_contour_paste_byName)
 
-		btn_matchmaker = CustomPushButton("heart", tooltip='Matchmaker: Match active to selected layer (Alt for test)', obj_name='btn_panel')
+		btn_matchmaker = CustomPushButton("heart", tooltip='Matchmaker: Match active to selected layer (Alt for test, Ctrl for selected contours only)', obj_name='btn_panel')
 		btn_matchmaker.clicked.connect(self.action_match)
 		lay_actions.addWidget(btn_matchmaker)
 
@@ -559,8 +559,9 @@ class TRLayerActions(QtGui.QWidget):
 
 	def action_match(self):
 		modifiers = QtGui.QApplication.keyboardModifiers()
-		dry_run = modifiers == QtCore.Qt.AltModifier
-		TRLayerActionCollector.layer_matchmaker(self, dry_run=dry_run)
+		dry_run = bool(modifiers & QtCore.Qt.AltModifier)
+		contour_mode = bool(modifiers & QtCore.Qt.ControlModifier)
+		TRLayerActionCollector.layer_matchmaker(self, dry_run=dry_run, contour_mode=contour_mode)
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
