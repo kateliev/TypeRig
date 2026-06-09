@@ -21,6 +21,15 @@ from PythonQt import QtCore, QtGui
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.node import eNode, eNodesContainer
 from typerig.core.objects.transform import Transform, TransformOrigin
+
+# - Align-state → TransformOrigin mapping (shared between delta and scale-fit paste)
+_ALIGN_STATE_TO_ORIGIN = {
+	'LT': TransformOrigin.TOP_LEFT,
+	'RT': TransformOrigin.TOP_RIGHT,
+	'CE': TransformOrigin.CENTER,
+	'LB': TransformOrigin.BOTTOM_LEFT,
+	'RB': TransformOrigin.BOTTOM_RIGHT,
+}
 from typerig.proxy.fl.objects.glyph import eGlyph
 
 # - Core TypeRig objects for storage
@@ -44,7 +53,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '4.1'
+app_name, app_version = 'TypeRig | Contour', '4.2'
 
 fileFormats = 'TypeRig XML data (*.xml);;'
 delta_app_id_key = 'com.typerig.delta.machine.axissetup'
@@ -65,6 +74,44 @@ TRFont.setPixelSize(20)
 def get_modifier(keyboard_modifier=QtCore.Qt.AltModifier):
 	modifiers = QtGui.QApplication.keyboardModifiers()
 	return modifiers == keyboard_modifier
+
+def _apply_flip_inplace(tr_layer, flip_h, flip_v):
+	'''Mirror layer around its own bounds center on requested axes.'''
+	if not (flip_h or flip_v):
+		return
+	src = tr_layer.bounds
+	cx = (src.x + src.xmax) / 2.0
+	cy = (src.y + src.ymax) / 2.0
+	sx = -1.0 if flip_h else 1.0
+	sy = -1.0 if flip_v else 1.0
+	for node in tr_layer.nodes:
+		node.x = (node.x - cx) * sx + cx
+		node.y = (node.y - cy) * sy + cy
+
+def _scale_fit_layer_inplace(tr_layer, target_bounds, flip_h=False, flip_v=False):
+	'''Unconstrained affine scale of layer to fit target_bounds, around its own
+	bounds center. Optional mirror via flip_h/flip_v (sign of scale factors).'''
+	src = tr_layer.bounds
+	if src.width == 0 or src.height == 0:
+		return
+	sx = target_bounds.width / float(src.width)
+	sy = target_bounds.height / float(src.height)
+	if flip_h: sx = -sx
+	if flip_v: sy = -sy
+	cx = (src.x + src.xmax) / 2.0
+	cy = (src.y + src.ymax) / 2.0
+	for node in tr_layer.nodes:
+		node.x = (node.x - cx) * sx + cx
+		node.y = (node.y - cy) * sy + cy
+
+def _align_layer_to_bounds(tr_layer, target_bounds, align_origin):
+	'''Align layer's align_origin point onto target_bounds' same align_origin point.'''
+	code = align_origin.code
+	target_xy = target_bounds.align_matrix.get(code)
+	if target_xy is None:
+		target_xy = (target_bounds.x + target_bounds.width / 2.0,
+					 target_bounds.y + target_bounds.height / 2.0)
+	tr_layer.align_to(target_xy, mode=(align_origin, align_origin), align=(True, True))
 
 def flNodes_to_trContour(fl_nodes, is_closed):
 	'''Convert list of flNodes to trContour (core Contour object) for partial paths'''
@@ -163,7 +210,11 @@ class TRContourCopy(QtGui.QWidget):
 		self.opt_delta_machine = CustomPushButton("delta_machine", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
 		lay_contour_copy.addWidget(self.opt_delta_machine)
 
-		
+		tooltip_button =  "Scale/Fit: unconstrained affine fit of pasted contours into selected shape bounds (no delta compensation)"
+		self.opt_scale_fit = CustomPushButton("node_target_expand", checkable=True, checked=False, tooltip=tooltip_button, obj_name='btn_panel_opt')
+		lay_contour_copy.addWidget(self.opt_scale_fit)
+
+
 
 		box_contour_copy.setLayout(lay_contour_copy)
 		lay_main.addWidget(box_contour_copy)
@@ -275,11 +326,25 @@ class TRContourCopy(QtGui.QWidget):
 
 	def __prep_delta_parameters(self, tr_glyph, wGlyph, wLayers):
 		# -- Look for Delta Machine Axis data in font's lib
+		# NOTE: Build the virtual axis strictly from the 'Virtual Axis' group
+		# (the masters that define the interpolation basis) and preserve their
+		# declared order — DeltaScale is a piecewise interpolator over the stem
+		# dimension and requires monotonic ordering. A previous implementation
+		# unioned Virtual Axis + Target Layers via set(), which both collapsed
+		# the two semantically-distinct groups and randomised master order
+		# (hash-based), producing wrong per-layer paste locations.
 
 		font_lib = self.active_font.fl.packageLib
-		raw_axis_data = set(font_lib[delta_app_id_key][delta_axis_group_name] + font_lib[delta_app_id_key][delta_axis_target_name])
-		axis_data = {layer_name : (float(stx), float(sty)) for layer_name, stx, sty, sx, sy, color in list(raw_axis_data)}
-		
+		raw_axis_data = font_lib[delta_app_id_key][delta_axis_group_name]
+
+		axis_data = OrderedDict()
+		for layer_name, stx, sty, sx, sy, color in raw_axis_data:
+			axis_data[layer_name] = (float(stx), float(sty))
+
+		# -- Enforce monotonic master order by stx so DeltaScale gets a
+		# -- well-formed axis even if the user reordered rows in the tree.
+		axis_data = OrderedDict(sorted(axis_data.items(), key=lambda kv: kv[1][0]))
+
 		# -- Prepare virtual axis
 		for layer_name, stems in axis_data.items():
 			tr_glyph.layer(layer_name).stems = stems
@@ -297,6 +362,18 @@ class TRContourCopy(QtGui.QWidget):
 				target_bounds[layer_name] = None
 
 		return virtual_axis, target_bounds, axis_data
+
+	def __collect_target_bounds(self, wGlyph, wLayers):
+		'''Collect per-layer bounds of the active glyph's node selection.
+		Returns {layer_name: Bounds or None}. Used by < Scale/Fit > paste.'''
+		target_bounds = {}
+		for layer_name in wLayers:
+			layer_selection = wGlyph.selectedNodes(layer_name)
+			if len(layer_selection):
+				target_bounds[layer_name] = eNodesContainer(layer_selection).bounds
+			else:
+				target_bounds[layer_name] = None
+		return target_bounds
 
 	def __clear_selected(self):
 		gallery_selection = [qidx.row() for qidx in self.lst_contours.selectedIndexes()]
@@ -559,10 +636,14 @@ class TRContourCopy(QtGui.QWidget):
 			for tr_layer in tr_glyph.layers:
 				# - Paste with Delta Machine enabled
 				if do_delta:
-					print(f'{app_name}: Working in < Delta Machine > mode')
-					current_bounds = target_bounds[tr_layer.name]
-					tr_layer.stems = (axis_data[tr_layer.name])
-					process_layer = tr_layer.scale_with_axis(virtual_axis, current_bounds.width, current_bounds.height)
+					current_bounds = target_bounds.get(tr_layer.name)
+					if current_bounds is None:
+						output(3, app_name, '< Delta Machine > skipped for layer "{}" — no target selection.'.format(tr_layer.name))
+						process_layer = tr_layer
+					else:
+						print(f'{app_name}: Working in < Delta Machine > mode')
+						tr_layer.stems = (axis_data[tr_layer.name])
+						process_layer = tr_layer.scale_with_axis(virtual_axis, current_bounds.width, current_bounds.height)
 				else:
 					process_layer = tr_layer
 
@@ -579,13 +660,19 @@ class TRContourCopy(QtGui.QWidget):
 		# - Init
 		modifiers = QtGui.QApplication.keyboardModifiers()
 		do_delta = self.opt_delta_machine.isChecked()
-		
+		do_scale_fit = self.opt_scale_fit.isChecked() and not do_delta  # delta wins if both checked
+
 		wGlyph = eGlyph()
 		wLayers = wGlyph._prepareLayers(pLayers)
-		
+
 		gallery_selection = [self.lst_contours.model().itemFromIndex(qidx) for qidx in self.lst_contours.selectedIndexes()]
 		selection_tuples = wGlyph.selectedAtShapes()
 		selected_shape_index = selection_tuples[0][0] if len(selection_tuples) else 0
+
+		# - Resolve alignment from button group + flips
+		align_origin = _ALIGN_STATE_TO_ORIGIN.get(self.node_align_state, TransformOrigin.CENTER)
+		flip_h = self.chk_paste_flip_h.isChecked()
+		flip_v = self.chk_paste_flip_v.isChecked()
 
 		# - Process
 		if len(gallery_selection):
@@ -594,10 +681,16 @@ class TRContourCopy(QtGui.QWidget):
 				is_partial = clipboard_item.data(QtCore.Qt.UserRole + 1001)
 				tr_glyph = self.contour_clipboard[paste_uid]
 
-				# - Paste with Delta Machine enabled
+				# - Prep parameters (target_bounds + optional virtual axis)
+				virtual_axis = axis_data = None
+				target_bounds = None
+
 				if do_delta:
 					virtual_axis, target_bounds, axis_data = self.__prep_delta_parameters(tr_glyph, wGlyph, wLayers)
 					if virtual_axis is None: do_delta = False
+
+				if do_scale_fit:
+					target_bounds = self.__collect_target_bounds(wGlyph, wLayers)
 
 				if is_partial:
 					output(3, app_name, '< Partial path > not suitable for < Paste contours > operation!')
@@ -605,25 +698,41 @@ class TRContourCopy(QtGui.QWidget):
 
 				for tr_layer in tr_glyph.layers:
 					layer_name = tr_layer.name
-					
+
 					work_layer = wGlyph.layer(layer_name) # Get destination layer or mask
 
 					if modifiers == QtCore.Qt.AltModifier:
 						work_layer = wGlyph.mask(layer_name, force_create=True)
 						layer_name = work_layer.name
-					
+
 					if work_layer is not None:
 						fl_contours = []
 
 						if do_delta:
+							current_bounds = target_bounds.get(tr_layer.name)
+							if current_bounds is None:
+								output(3, app_name, '< Delta Machine > skipped for layer "{}" — no target selection.'.format(tr_layer.name))
+								continue
+
 							print(f'{app_name}: Working in < Delta Machine > mode')
-							current_bounds = target_bounds[tr_layer.name]
 							tr_layer.stems = (axis_data[tr_layer.name])
 							process_layer = tr_layer.scale_with_axis(virtual_axis, current_bounds.width, current_bounds.height, transform_origin=TransformOrigin.CENTER)
-							process_layer.align_to(current_bounds.center_point, mode=(TransformOrigin.CENTER, TransformOrigin.CENTER), align=(True, True))
+							_apply_flip_inplace(process_layer, flip_h, flip_v)
+							_align_layer_to_bounds(process_layer, current_bounds, align_origin)
+
+						elif do_scale_fit:
+							current_bounds = target_bounds.get(tr_layer.name) if target_bounds else None
+							if current_bounds is None:
+								output(3, app_name, '< Scale/Fit > skipped for layer "{}" — no target selection.'.format(tr_layer.name))
+								continue
+
+							print(f'{app_name}: Working in < Scale/Fit > mode')
+							process_layer = tr_layer.clone()
+							_scale_fit_layer_inplace(process_layer, current_bounds, flip_h, flip_v)
+							_align_layer_to_bounds(process_layer, current_bounds, align_origin)
 						else:
 							process_layer = tr_layer
-						
+
 						for tr_shape in process_layer.shapes:
 							for tr_contour in tr_shape.contours:
 								fl_contour = trNodes_to_flContour(tr_contour.nodes, is_closed=tr_contour.closed)
