@@ -26,7 +26,7 @@ from typerig.core.fileio.textproto import TEXTPROTOparser
 from typerig.core.base.message import *
 
 # - Init --------------------------------
-app_name, app_version = 'TypeRig | Encoder', '4.0'
+app_name, app_version = 'TypeRig | Encoder', '4.1'
 app_id_key = 'com.typerig.data.encoding'
 alt_suffix = '.'
 
@@ -144,13 +144,21 @@ class dlg_encode_glyphs(QtGui.QDialog):
 			QtGui.QApplication.processEvents()
 			
 			if glyph.name in enc_dict:
-				for value in enc_dict[glyph.name]:
-					uni_int = int(value, 16) if isinstance(value, str) else value
+				unicode_data = enc_dict[glyph.name]
+				
+				if isinstance(unicode_data, list) and len(unicode_data):
+					for value in enc_dict[glyph.name]:
+						uni_int = int(value, 16) if isinstance(value, str) else value
 
+						if not glyph.hasUnicode(uni_int):
+							glyph.addUnicode(uni_int)
+				else:
+					uni_int = int(unicode_data, 16) if isinstance(unicode_data, str) else unicode_data
+					
 					if not glyph.hasUnicode(uni_int):
 						glyph.addUnicode(uni_int)
-						done_glyphs.add(glyph.name)
 
+				done_glyphs.add(glyph.name)
 		# - Apply
 		if len(process_glyphs) > 0:
 			output(0, app_name, 'Encoding for {} glyphs applied from {} unicode entries.'.format(len(done_glyphs), len(enc_dict.keys())))
@@ -174,12 +182,19 @@ class dlg_encode_glyphs(QtGui.QDialog):
 			QtGui.QApplication.processEvents()
 
 			if glyph.name in enc_dict:
-				for value in enc_dict[glyph.name]:
-					uni_int = int(value, 16) if isinstance(value, str) else value
+				unicode_data = enc_dict[glyph.name]
+				
+				if isinstance(unicode_data, list) and len(unicode_data):
+					for value in enc_dict[glyph.name]:
+						uni_int = int(value, 16) if isinstance(value, str) else value
 
+						if not glyph.hasUnicode(uni_int):
+							output(1, app_name, 'Glyph: /{}; Missing Unicode int: {}, hex: {};'.format(glyph.name, uni_int, hex(uni_int)))
+				else:
+					uni_int = int(unicode_data, 16) if isinstance(unicode_data, str) else unicode_data
+					
 					if not glyph.hasUnicode(uni_int):
-						output(1, app_name, 'Glyph: /{}; Missing Unicode int: {}, hex: {};'.format(glyph.name, uni_int, hex(uni_int)))
-						
+							output(1, app_name, 'Glyph: /{}; Missing Unicode int: {}, hex: {};'.format(glyph.name, uni_int, hex(uni_int)))			
 		# - Apply
 		if len(process_glyphs) > 0:
 			output(0, app_name, 'Tested encoding for {} glyphs '.format(len(process_glyphs)))
