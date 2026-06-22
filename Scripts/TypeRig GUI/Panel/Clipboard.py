@@ -53,7 +53,7 @@ global pLayers
 global pMode
 pLayers = (True, True, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Contour', '4.2'
+app_name, app_version = 'TypeRig | Contour', '4.3'
 
 fileFormats = 'TypeRig XML data (*.xml);;'
 delta_app_id_key = 'com.typerig.delta.machine.axissetup'
@@ -332,14 +332,23 @@ class TRContourCopy(QtGui.QWidget):
 		# dimension and requires monotonic ordering. A previous implementation
 		# unioned Virtual Axis + Target Layers via set(), which both collapsed
 		# the two semantically-distinct groups and randomised master order
-		# (hash-based), producing wrong per-layer paste locations.
+		# (hash-based), producing wrong per-layer paste locations. 
+		# V 4.3 added back target layers as source of stem values for layers
+		# not present in the axis setup.
 
+		# - Process Axis
 		font_lib = self.active_font.fl.packageLib
 		raw_axis_data = font_lib[delta_app_id_key][delta_axis_group_name]
 
 		axis_data = OrderedDict()
 		for layer_name, stx, sty, sx, sy, color in raw_axis_data:
 			axis_data[layer_name] = (float(stx), float(sty))
+
+		# - Process targets: Added as bugfix for clipboard not able to find stem values for layers ouside the axis
+		raw_target_data = font_lib[delta_app_id_key][delta_axis_target_name]
+		target_data = OrderedDict()
+		for layer_name, stx, sty, sx, sy, color in raw_target_data:
+			target_data[layer_name] = (float(stx), float(sty))
 
 		# -- Enforce monotonic master order by stx so DeltaScale gets a
 		# -- well-formed axis even if the user reordered rows in the tree.
@@ -361,7 +370,7 @@ class TRContourCopy(QtGui.QWidget):
 			else:
 				target_bounds[layer_name] = None
 
-		return virtual_axis, target_bounds, axis_data
+		return virtual_axis, target_bounds, axis_data, target_data
 
 	def __collect_target_bounds(self, wGlyph, wLayers):
 		'''Collect per-layer bounds of the active glyph's node selection.
@@ -628,7 +637,7 @@ class TRContourCopy(QtGui.QWidget):
 
 			# - Paste with Delta Machine enabled
 			if do_delta:
-				virtual_axis, target_bounds, axis_data = self.__prep_delta_parameters(tr_glyph, wGlyph, wLayers)
+				virtual_axis, target_bounds, axis_data, target_data = self.__prep_delta_parameters(tr_glyph, wGlyph, wLayers)
 				if virtual_axis is None: do_delta = False
 				
 			# - Paste
@@ -642,7 +651,15 @@ class TRContourCopy(QtGui.QWidget):
 						process_layer = tr_layer
 					else:
 						print(f'{app_name}: Working in < Delta Machine > mode')
-						tr_layer.stems = (axis_data[tr_layer.name])
+						
+						if tr_layer.name in axis_data:
+							tr_layer.stems = (axis_data[tr_layer.name])
+						elif  tr_layer.name in target_data:
+							tr_layer.stems = (target_data[tr_layer.name])
+						else:
+							output(3, app_name, '< Delta Machine > skipped for layer "{}" — no stem information provided.'.format(tr_layer.name))
+							continue
+
 						process_layer = tr_layer.scale_with_axis(virtual_axis, current_bounds.width, current_bounds.height)
 				else:
 					process_layer = tr_layer
@@ -686,7 +703,10 @@ class TRContourCopy(QtGui.QWidget):
 				target_bounds = None
 
 				if do_delta:
-					virtual_axis, target_bounds, axis_data = self.__prep_delta_parameters(tr_glyph, wGlyph, wLayers)
+					virtual_axis, target_bounds, axis_data, target_data = self.__prep_delta_parameters(tr_glyph, wGlyph, wLayers)
+					print(f'Virtual Axis: {virtual_axis}')
+					print(f'Axis data: {axis_data}')
+
 					if virtual_axis is None: do_delta = False
 
 				if do_scale_fit:
@@ -710,12 +730,21 @@ class TRContourCopy(QtGui.QWidget):
 
 						if do_delta:
 							current_bounds = target_bounds.get(tr_layer.name)
+							print(f'Layer: {layer_name}; Current bounds: {current_bounds}')
 							if current_bounds is None:
 								output(3, app_name, '< Delta Machine > skipped for layer "{}" — no target selection.'.format(tr_layer.name))
 								continue
 
 							print(f'{app_name}: Working in < Delta Machine > mode')
-							tr_layer.stems = (axis_data[tr_layer.name])
+							
+							if tr_layer.name in axis_data:
+								tr_layer.stems = (axis_data[tr_layer.name])
+							elif tr_layer.name in target_data:
+								tr_layer.stems = (target_data[tr_layer.name])
+							else:
+								output(3, app_name, '< Delta Machine > skipped for layer "{}" — no stem information provided.'.format(tr_layer.name))
+								continue
+
 							process_layer = tr_layer.scale_with_axis(virtual_axis, current_bounds.width, current_bounds.height, transform_origin=TransformOrigin.CENTER)
 							_apply_flip_inplace(process_layer, flip_h, flip_v)
 							_align_layer_to_bounds(process_layer, current_bounds, align_origin)
