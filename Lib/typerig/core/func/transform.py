@@ -18,6 +18,8 @@ __version__ = '0.27.5'
 
 # - Functions ---------------------------
 def lerp(t0, t1, t):
+	# Linear interpolation: t=0 -> t0, t=1 -> t1. The single primitive the
+	# whole delta machine is built on (positions, stems, widths all lerp).
 	return (t1 - t0)*t + t0
 
 def slerp_angle(a0, a1, t):
@@ -28,10 +30,28 @@ def slerp_angle(a0, a1, t):
 	return a0 + diff * t
 
 def compensator(sf, cf, st0, st1):
-	b = float(st1)/st0
+	'''Stem-compensation weight q for the Ahrens MM scale.
+
+	Returned q blends between the stem-correct interpolated master (q=1) and
+	the heavier bracketing master (q=0) inside adaptive_scale(). It is a
+	SCALAR — the same for every point on the outline — because it depends only
+	on the scale factor and the stems, never on point position.
+
+	Called as compensator(sx, cx, cstx, stx1): sf=scale, cf=compensation flag,
+	st0=interpolated stem (cstx), st1=heavier-master stem (stx1).
+
+	The compensation flag cf controls how the stem reacts to the scale. Track a
+	stem through the transform and it comes out as  stem'(sf) = st0 * sf**cf:
+	    cf = 0  ->  stem' = st0        stems PRESERVED (this is width mode)
+	    cf = 1  ->  stem' = st0 * sf   stems scale fully with the glyph
+	So cf=0 makes q exactly cancel the scale's effect on stroke weight.
+	'''
+	b = float(st1)/st0					# stem ratio between the two masters
 	try:
+		# q = (sf^(cf-1) - b) / (1 - b). At cf=1 this is 1 (full comp);
+		# at cf=0 it is (1/sf - b)/(1-b) (stem-preserving).
 		q = float(sf**(cf - 1.) - b)/(1. - b)
-	except ZeroDivisionError:
+	except ZeroDivisionError:			# b == 1 (equal stems) or st0 == 0
 		q = 0
 	return q
 
@@ -46,8 +66,11 @@ def timer(sw_c, sw_0, sw_1, fix_boundry=False):
 	if fix_boundry and sw_c == sw_1: sw_1 += 1. # !!! Very crude boundry error fix
 
 	try:
+		# Inverse-lerp of sw_c in [sw_0, sw_1]. The (1,-1)/(0,1) selectors flip
+		# the direction when the interval is descending (sw_0 > sw_1) so t is
+		# always measured from the lighter toward the heavier stem.
 		t = (float(sw_c - sw_0)/(sw_1 - sw_0))*(1,-1)[sw_0 > sw_1] + (0,1)[sw_0 > sw_1]
-	except ZeroDivisionError:
+	except ZeroDivisionError:			# sw_0 == sw_1 : degenerate interval
 		t = 0.
 
 	return t
@@ -64,22 +87,30 @@ def adjuster(s, r, t, d, st):
 	Returns:
 		tuple(float, float): Readjusted scale factors
 	'''
+	# This is the CLOSED-FORM INVERSE of the stem-preserving (c=0) width map.
+	# With c=0 the compensation weight q is scalar, so width(sx) is affine:
+	#     width(sx) = [ (1 - b*sx)*wtx + (sx - 1)*w1 ] / (1 - b)
+	# Setting width(sx) = w and solving for sx gives spx below (spy is the
+	# same in y). No iteration — this lands the target in one shot whenever
+	# the outline's extreme points don't change identity across the blend.
 	tx, ty = t 							# Interpolate time tx, ty
 	dx, dy = d 							# Translation dx, dy
 	stx0, stx1, sty0, sty1 = st 		# Stem Values
 	w, h = r 							# Target Width and Height
 
-	w0, w1 = s[0] 						# Widths
-	h0, h1 = s[1] 						# Heights
+	w0, w1 = s[0] 						# Widths  (light master, heavy master)
+	h0, h1 = s[1] 						# Heights (light master, heavy master)
 
-	bx = float(stx1)/stx0				# Stem ratio X
-	by = float(sty1)/sty0				# Stem ratio Y
-	wtx = lerp(w0, w1, tx)				# Interpolated width
-	hty = lerp(h0, h1, ty)				# Interpolated height
-	
+	bx = float(stx1)/stx0				# Stem ratio X (heavy/light)
+	by = float(sty1)/sty0				# Stem ratio Y (heavy/light)
+	wtx = lerp(w0, w1, tx)				# Interpolated width at the stem time tx
+	hty = lerp(h0, h1, ty)				# Interpolated height at the stem time ty
+
+	# Solve width(sx)=w / height(sy)=h. The dx/dy terms fold the requested
+	# translation into the target so the bbox still lands on size after shift.
 	spx = (w*(1 - bx) - dx*(1 + bx) + w1 - wtx)/(w1 - bx*wtx)
 	spy = (h*(1 - by) - dy*(1 + by) + h1 - hty)/(h1 - by*hty)
-	
+
 	return spx, spy
 
 def adjuster_array(v, r, t, d, st):
@@ -130,23 +161,32 @@ def adaptive_scale(v, s, d, t, c, i, st):
 	'''
 	
 	# - Init
-	v0, v1 = v 						# Coordinates (x0, y0) (x1, y1)
+	v0, v1 = v 						# Coordinates (x0, y0) (x1, y1) : light, heavy master
 	sx, sy = s 						# Scale X, Y
 	dx, dy = d 						# Translate delta X, Y
 	tx, ty = t 						# Interpolate time tx, ty
-	cx, cy = c 						# Compensation x, y
-	stx0, stx1, sty0, sty1 = st 	# Stems values
+	cx, cy = c 						# Compensation x, y (0=preserve stems, 1=scale stems)
+	stx0, stx1, sty0, sty1 = st 	# Stems values (light, heavy) for X and Y
 
 	# - Calculate
+	# 1) Interpolate the point between the two masters at the stem-derived time.
 	vtx = lerp(v0[0], v1[0], tx)
 	vty = lerp(v0[1], v1[1], ty)
-	
+
+	# 2) Interpolate the stem itself at the same time — this is the TARGET
+	#    stroke weight we want to hold while the glyph scales.
 	cstx = lerp(stx0, stx1, tx)
 	csty = lerp(sty0, sty1, ty)
 
+	# 3) Compensation weight (scalar). With cx=cy=0 the stem is preserved:
+	#    the outline scales but the stroke weight stays at cstx / csty.
 	qx = compensator(sx, cx, cstx, stx1)
 	qy = compensator(sy, cy, csty, sty1)
 
+	# 4) Blend interpolated point (weight q) with heavy master (weight 1-q),
+	#    then scale and translate. Y is solved first; X folds in the italic
+	#    shear (vty*i term de-slants, ry*i re-slants) so vertical stems stay
+	#    upright under a slanted design.
 	ry = sy*(qy*vty + (1 - qy)*v1[1]) + dy
 	rx = sx*(qx*(vtx - vty*i) + (1 - qx)*(v1[0] - v1[1]*i)) + ry*i + dx
 

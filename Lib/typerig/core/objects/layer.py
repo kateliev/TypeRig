@@ -645,9 +645,15 @@ class Layer(Container, XMLSerializable):
 						transform_origin=TransformOrigin.BASELINE):
 		'''Scale layer to target dimensions using a virtual axis (non-destructive).
 		
-		IMPORTANT: This method properly handles transformation origins, meaning the 
+		IMPORTANT: This method properly handles transformation origins, meaning the
 		specified origin point stays fixed while the glyph scales around it.
-		
+
+		The scale factors are back-solved with DeltaScale.solve_scale_for_dimension()
+		(adjuster seed + affine secant on the measured bbox), replacing the old
+		fixed-step brute-force search. Stems are preserved (compensation = 0).
+		Signature is unchanged so existing callers keep working; see
+		WIDTH_MODE_SOLVER.md for the derivation.
+
 		Args:
 			virtual_axis (dict): Virtual axis dictionary from Glyph.create_virtual_axis()
 			target_width (float, optional): Target width. If None, width is not constrained.
@@ -655,8 +661,11 @@ class Layer(Container, XMLSerializable):
 			fix_scale_direction (int): -1=independent x/y, 0=use x for both, 1=use y for both
 			main_attribute (str): Main attribute to measure ('point_array' usually)
 			extrapolate (bool): Allow extrapolation beyond source layers
-			precision (tuple): Starting precision for x and y (default: (1.0, 1.0))
-			max_iterations (int): Maximum iterations to prevent infinite loops (default: 1000)
+			precision (tuple): Convergence tolerance in font units for x and y
+				(default: (1.0, 1.0)). Reused as the solver's stop tolerance.
+			max_iterations (int): Solver step cap (default: 1000). The analytic +
+				secant solver converges in a few steps; this only bounds the
+				bisection fallback. Kept for signature compatibility.
 			transform_origin (TransformOrigin): Where to anchor the transformation:
 				- TransformOrigin.BASELINE (default): Left sidebearing + baseline (0)
 				- TransformOrigin.BOTTOM_LEFT: Bottom-left corner
@@ -695,140 +704,86 @@ class Layer(Container, XMLSerializable):
 		'''
 		# Create a copy to work with (non-destructive)
 		result_layer = self.clone()
-		
+
 		# Validate inputs
 		if main_attribute not in virtual_axis:
 			raise ValueError('Attribute "{}" not in virtual_axis. Available: {}'.format(
 				main_attribute, list(virtual_axis.keys())))
-		
+
 		if target_width is None and target_height is None:
 			raise ValueError('At least one of target_width or target_height must be specified')
-		
-		# STEP 1: Get the transformation origin point BEFORE scaling
+
+		# STEP 1: Capture the transform-origin point BEFORE scaling. The delta
+		# transform always scales from (0, 0); we pin the origin back in STEP 4.
 		source_bounds = result_layer.bounds
 		source_origin_x, source_origin_y = source_bounds.align_matrix[transform_origin.code]
-		
-		# Get initial bounds
-		main_array = getattr(result_layer, main_attribute)
-		main_bounds = Bounds(main_array.tuple if hasattr(main_array, 'tuple') else main_array)
-		
-		# Set up targets and sources
-		source_width = main_bounds.width
-		source_height = main_bounds.height
-		
-		# If target not specified, use source
-		if target_width is None:
-			target_width = source_width
-		if target_height is None:
-			target_height = source_height
-		
-		# Calculate initial differences
-		diff_x = target_width - source_width
-		diff_y = target_height - source_height
-		prev_diff_x = diff_x
-		prev_diff_y = diff_y
-		
-		# Initialize scales and precisions
-		direction = [1, -1][extrapolate]
-		precision_x, precision_y = precision
-		scale_x = prev_scale_x = 1.
-		scale_y = prev_scale_y = 1.
-		
-		# Storage for processed data
-		process_axis = {}
-		
-		# Iteration counter
-		iteration = 0
-		
-		# STEP 2: Iterative scaling loop (scales from origin 0,0 initially)
-		while iteration < max_iterations:
-			# Check convergence
-			x_converged = abs(round(diff_x)) == 0
-			y_converged = abs(round(diff_y)) == 0
-			
-			if fix_scale_direction != -1:
-				# Both must converge
-				if x_converged and y_converged:
-					break
-			else:
-				# Either can converge independently
-				if x_converged or y_converged:
-					if x_converged and target_width != source_width:
-						break
-					if y_converged and target_height != source_height:
-						break
-					if x_converged and y_converged:
-						break
-			
-			# Adjust precision if we're oscillating
-			if abs(diff_x) > abs(prev_diff_x):
-				scale_x = prev_scale_x
-				precision_x /= 10
-			
-			if abs(diff_y) > abs(prev_diff_y):
-				scale_y = prev_scale_y
-				precision_y /= 10
-			
-			# Store previous values
-			prev_scale_x, prev_diff_x = scale_x, diff_x
-			prev_scale_y, prev_diff_y = scale_y, diff_y
-			
-			# Update scales
-			scale_x += [+direction, -direction][diff_x < 0] * precision_x
-			scale_y += [+direction, -direction][diff_y < 0] * precision_y
-			
-			# Apply scale direction constraint
-			if fix_scale_direction == 1:  # Use Y for both
-				scale_x = scale_y
-			elif fix_scale_direction == 0:  # Use X for both
-				scale_y = scale_x
-			
-			# Scale all attributes using the virtual axis
-			# Note: delta scale operates from origin (0, 0) by design
-			for attrib, delta_array in virtual_axis.items():
-				delta_scale = delta_array.scale_by_stem(
-					result_layer.stems, 
-					(scale_x, scale_y), 
-					(0., 0.),  # compensation - scale from origin
-					(0., 0.),  # shift - no additional shift
-					False,     # italic_angle
-					extrapolate
-				)
-				# Convert to list for storage
-				process_axis[attrib] = list(delta_scale)
-			
-			# Update bounds measurement
-			main_data = process_axis[main_attribute]
-			main_bounds = Bounds(main_data)
-			
-			# Calculate new differences
-			diff_x = target_width - main_bounds.width
-			diff_y = target_height - main_bounds.height
-			
-			iteration += 1
-		
-		# STEP 3: Apply the final scaled data to the result layer
-		for attrib, data in process_axis.items():
+
+		# The stem selects WHERE on the virtual axis we sit (the target weight);
+		# the solver then finds the scale that reaches the target size while
+		# holding that stem. compensation stays (0, 0) throughout -> stems preserved.
+		stem = result_layer.stems
+		main_delta = virtual_axis[main_attribute]
+
+		# STEP 2: Back-solve the scale factors analytically. This replaces the old
+		# fixed-step brute-force loop (nudge / measure / divide-by-10 on
+		# oscillation, capped at max_iterations). solve_scale_for_dimension seeds
+		# with adjuster() and refines with an affine secant on the *measured*
+		# bbox, converging in a handful of evaluations. `precision` is the stop
+		# tolerance; `max_iterations` bounds the bisection fallback.
+		if fix_scale_direction == 0:
+			# Uniform scale driven by X (width); sy follows sx.
+			sx, _sy = main_delta.solve_scale_for_dimension(
+				stem, (target_width, None), (0., 0.), (0., 0.), 0.,
+				extrapolate, precision, max_iterations)
+			sy = sx
+		elif fix_scale_direction == 1:
+			# Uniform scale driven by Y (height); sx follows sy.
+			_sx, sy = main_delta.solve_scale_for_dimension(
+				stem, (None, target_height), (0., 0.), (0., 0.), 0.,
+				extrapolate, precision, max_iterations)
+			sx = sy
+		else:
+			# Independent X / Y. A None target leaves that axis at scale 1.0.
+			sx, sy = main_delta.solve_scale_for_dimension(
+				stem, (target_width, target_height), (0., 0.), (0., 0.), 0.,
+				extrapolate, precision, max_iterations)
+
+		# STEP 3: Apply the SAME (sx, sy) to every attribute in the axis, each
+		# driven exactly once. point_array sets the size; metrics / anchors ride
+		# along so the whole layer scales consistently. (The old loop re-drove
+		# every attribute on every search iteration.)
+		for attrib, delta_array in virtual_axis.items():
+			data = list(delta_array.scale_by_stem(
+				stem, (sx, sy),
+				(0., 0.),		# compensation - stems preserved
+				(0., 0.),		# shift - none
+				0.,				# italic_angle
+				extrapolate, False))
 			if attrib == 'point_array':
-				# Convert back to PointArray
 				setattr(result_layer, attrib, PointArray(data))
 			else:
 				setattr(result_layer, attrib, data)
-		
-		# STEP 4: Realign to preserve transformation origin
-		# This is the key step that makes scaling happen around the chosen origin point!
+
+		# STEP 4: Realign so the chosen transform origin lands where it started.
+		# BASELINE is the transform's native reference (0, 0) -> no shift needed.
 		if transform_origin != TransformOrigin.BASELINE:
-			# Get where the transformation origin ended up after scaling
 			dest_bounds = result_layer.bounds
 			dest_origin_x, dest_origin_y = dest_bounds.align_matrix[transform_origin.code]
-			
-			# Calculate the shift needed to realign the transformation origin
-			realign_shift_x = source_origin_x - dest_origin_x
-			realign_shift_y = source_origin_y - dest_origin_y
-			
-			# Apply the realignment shift
-			result_layer.shift(realign_shift_x, realign_shift_y)
-		
+			result_layer.shift(source_origin_x - dest_origin_x,
+							    source_origin_y - dest_origin_y)
+
+		# Diagnostics for the host (additive attributes on the returned Layer, so
+		# no signature / return-type change). The panel can warn when a target
+		# could not be reached instead of silently emitting a mis-sized layer.
+		solved_array = getattr(result_layer, main_attribute)
+		final_bounds = Bounds(solved_array.tuple if hasattr(solved_array, 'tuple') else solved_array)
+		tol_x, tol_y = precision
+		res_x = 0.0 if target_width is None else abs(target_width - final_bounds.width)
+		res_y = 0.0 if target_height is None else abs(target_height - final_bounds.height)
+		result_layer._scale_factors = (sx, sy)
+		result_layer._scale_residual = (res_x, res_y)
+		result_layer._scale_converged = bool(res_x <= tol_x and res_y <= tol_y)
+
 		return result_layer
 
 	# Old destructive method kept for backward compatibility
