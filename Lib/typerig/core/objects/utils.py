@@ -129,7 +129,7 @@ class Bounds(object):
 		mx, my = self.xmax, self.ymax
 		h = lambda a, b: (a+b)/2.
 
-		return_matrix = {	'TL': (x, my), 		'TM': (h(x,y), my), 	'TR': (mx, my),
+		return_matrix = {	'TL': (x, my), 		'TM': (h(x,mx), my), 	'TR': (mx, my),
 							'LM': (x, h(y, my)),'C':(h(x,mx), h(y,my)),	'RM': (mx, h(y, my)),
 							'BL': (x, y),		'BM':(h(x,mx), y),		'BR': (mx, y), 
 							'B':(0., 0.)}
