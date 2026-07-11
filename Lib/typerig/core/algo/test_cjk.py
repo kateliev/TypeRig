@@ -368,6 +368,26 @@ def test_rasterize_valley_between_two_bars():
 	assert 14 <= split <= 33
 
 
+def test_rasterize_area_coverage():
+	# Total ink / 255 == fraction of the frame the polygon covers. Catches winding
+	# and AA-coverage bugs the shape tests don't quantify.
+	S = 64
+	frame = (0.0, 0.0, 1000.0, 1000.0)
+	def frac(conts):
+		return sum(cjk.rasterize_contours(conts, frame, S)) / 255.0 / (S * S)
+	rect = [(100, 100), (400, 100), (400, 600), (100, 600)]			# 0.3 x 0.5
+	assert _close(frac([rect]), 0.15, 0.005)
+	tri = [(0, 0), (1000, 0), (0, 1000)]							# half the frame
+	assert _close(frac([tri]), 0.50, 0.01)
+	outer = [(0, 0), (1000, 0), (1000, 1000), (0, 1000)]
+	hole  = [(300, 300), (300, 700), (700, 700), (700, 300)]		# 0.16 counter
+	assert _close(frac([outer, hole]), 0.84, 0.01)
+	clip = [(-500, 0), (500, 0), (500, 1000), (-500, 1000)]			# half outside frame
+	assert _close(frac([clip]), 0.50, 0.01)
+	cw = [(100, 100), (100, 600), (400, 600), (400, 100)]			# CW winding still fills
+	assert _close(frac([cw]), 0.15, 0.005)
+
+
 # - IDC slot model ----------------------------------------------------
 def test_idc_slots_binary_split():
 	# ⿰ at split 0.4: left slot is 0..0.4 wide, right is 0.4..1.0.

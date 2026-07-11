@@ -45,6 +45,10 @@ from typerig.core.algo import cjk
 
 __version__ = '1.0.0'
 
+# Re-export so callers that only touch the bridge can read the gauge key list
+# without also importing the pure core module.
+GAUGE_KEYS = cjk.GAUGE_KEYS
+
 
 # =====================================================================
 # - Container ---------------------------------------------------------
