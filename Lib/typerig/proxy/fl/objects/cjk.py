@@ -40,6 +40,7 @@ from PythonQt import QtCore, QtGui
 
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import pGlyph
+from typerig.proxy.fl.objects.node import eNodesContainer
 
 from typerig.core.algo import cjk
 
@@ -367,6 +368,107 @@ def measure_split(pg, layer, idc, S=64):
 	marg = cjk.marginals(ink, S)
 	face = cjk.face_frame(ink, S, marg=marg)
 	return cjk.boundary_ratio(marg, face, idc)
+
+
+# =====================================================================
+# - Region placement (face capture + per-master target bounds) --------
+# =====================================================================
+def layer_ink_bounds(pg, layer_name):
+	'''(left, bottom, right, top) of a layer's ink, or None if empty.
+
+	Reads geometry via flLayer.getContours() (resolves shapes/components across
+	masters); pGlyph.contours(name) can come back empty for non-active,
+	component-built masters — which would make those masters miss the face.'''
+	fl_contours = None
+	try:
+		fl_layer = pg.layer(layer_name)
+		if fl_layer is not None:
+			fl_contours = fl_layer.getContours()
+	except Exception:
+		fl_contours = None
+	if not fl_contours:
+		try:
+			fl_contours = pg.contours(layer_name) or []
+		except Exception:
+			fl_contours = []
+
+	xs, ys = [], []
+	for cnt in fl_contours:
+		if cnt is None:
+			continue
+		try:
+			nodes = cnt.nodes()
+		except Exception:
+			nodes = None
+		if not nodes:
+			continue
+		for n in nodes:
+			xs.append(n.x)
+			ys.append(n.y)
+	if not xs:
+		return None
+	return (min(xs), min(ys), max(xs), max(ys))
+
+
+def capture_face_frames(pg, layers):
+	'''Snapshot per-master face (ink) bounds: {layer_name: (left,bottom,right,top)}.
+	Call this BEFORE deleting parts — it is the pre-deletion latch the region paste
+	places against. Returns None if no layer had ink.'''
+	frames = {}
+	for name in layers:
+		b = layer_ink_bounds(pg, name)
+		if b is not None:
+			frames[name] = b
+	return frames or None
+
+
+def region_bounds(pg, layers, frac_for_layer, captured_faces=None, use_face=True, upm=None):
+	'''Per-master target Bounds for an IDC-region paste — one entry per layer.
+
+	frac_for_layer : callable(layer_name) -> (fx0,fy0,fx1,fy1) y-UP slot fraction,
+	                 or None to skip the layer. Lets the caller apply a per-master
+	                 measured split.
+	captured_faces : {layer_name: (l,b,r,t)} pre-deletion snapshot; a layer that is
+	                 absent (or whose face is degenerate) falls back to the master's
+	                 em band.
+	use_face       : when False, always use the em band.
+
+	The reference frame is captured-or-em (cjk.reference_frame) — NEVER a live face
+	of the glyph under construction, so sequential region pastes don't collapse onto
+	the first one. Returns {layer_name: Bounds} (eNodesContainer bounds — the same
+	type the node-selection paste path produces, so downstream fit/align/flip are
+	untouched).'''
+	try:
+		package = pg.package
+	except Exception:
+		package = None
+	if upm is None:
+		try:
+			upm = float(package.upm)
+		except Exception:
+			upm = 1000.0
+
+	out = {}
+	for name in layers:
+		frac = frac_for_layer(name)
+		if frac is None:
+			continue
+		try:
+			advance = float(pg.getAdvance(name))
+		except Exception:
+			advance = upm
+		em = frame_for(package, name, advance, upm)
+		face = captured_faces.get(name) if captured_faces else None
+		frame = cjk.reference_frame(face, em, use_face)
+		x0, y0, x1, y1 = cjk.rect_in_frame(frame, frac)
+		corners = [
+			fl6.flNode(QtCore.QPointF(x0, y0), nodeType='on'),
+			fl6.flNode(QtCore.QPointF(x1, y0), nodeType='on'),
+			fl6.flNode(QtCore.QPointF(x1, y1), nodeType='on'),
+			fl6.flNode(QtCore.QPointF(x0, y1), nodeType='on'),
+		]
+		out[name] = eNodesContainer(corners).bounds
+	return out
 
 
 # =====================================================================

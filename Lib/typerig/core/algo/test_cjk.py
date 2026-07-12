@@ -446,6 +446,38 @@ def test_boundary_ratio_none_for_solid():
 	assert cjk.boundary_ratio(marg, face, '⿴') is None		# not measurable
 
 
+# - Region frame helpers (reference-frame policy, region placement) ----
+def test_rect_in_frame():
+	# Frame offset from origin; y-UP top slot of a 50/50 ⿱ maps to the upper half.
+	frame = (100.0, -200.0, 1100.0, 800.0)		# (l,b,r,t): w=1000, h=1000
+	top = cjk.idc_slots('⿱', split=0.5)[0]		# (0, 0.5, 1, 1)
+	x0, y0, x1, y1 = cjk.rect_in_frame(frame, top)
+	assert _close(x0, 100.0) and _close(x1, 1100.0)
+	assert _close(y0, 300.0) and _close(y1, 800.0)	# upper half in font-up space
+
+
+def test_face_frame_reliable():
+	em = (0.0, -200.0, 1000.0, 800.0)			# w=1000, h=1000
+	full = (50.0, -150.0, 950.0, 750.0)			# ~90% each side -> reliable
+	stub = (0.0, 0.0, 120.0, 120.0)				# 12% side -> rejected
+	assert cjk.face_frame_reliable(full, em) is True
+	assert cjk.face_frame_reliable(stub, em) is False
+
+
+def test_reference_frame_captured_or_em_never_live():
+	em = (0.0, -200.0, 1000.0, 800.0)
+	face = (50.0, -150.0, 950.0, 750.0)
+	stub = (0.0, 0.0, 120.0, 120.0)
+	# use_face off -> em regardless of a good face
+	assert cjk.reference_frame(face, em, use_face=False) == em
+	# no captured face -> em (the fix: never fall back to a live face)
+	assert cjk.reference_frame(None, em, use_face=True) == em
+	# a reliable captured face is used
+	assert cjk.reference_frame(face, em, use_face=True) == face
+	# a degenerate/stub captured face is rejected in favour of the em band
+	assert cjk.reference_frame(stub, em, use_face=True) == em
+
+
 # - reduce_ratios -----------------------------------------------------
 def test_reduce_ratios():
 	assert cjk.reduce_ratios([]) is None

@@ -837,6 +837,49 @@ def slots_union(slots, selected):
 			max(r[2] for r in rects), max(r[3] for r in rects))
 
 
+def rect_in_frame(frame, frac):
+	'''Absolute rect (x0,y0,x1,y1) for a y-UP slot fraction inside a reference frame.
+
+	frame : (left, bottom, right, top) font units.
+	frac  : (fx0, fy0, fx1, fy1) fractions 0..1, y-UP (fy=1 is the top).
+	'''
+	left, bottom, right, top = frame
+	fx0, fy0, fx1, fy1 = frac
+	fw, fh = (right - left), (top - bottom)
+	return (left + fx0 * fw, bottom + fy0 * fh,
+			left + fx1 * fw, bottom + fy1 * fh)
+
+
+def face_frame_reliable(face, em_frame, min_side_ratio=0.20, min_area_ratio=0.15):
+	'''True if `face` (left,bottom,right,top) is a plausible letter-face against the
+	em band `em_frame`, not a tiny stub left after deleting parts.
+
+	A real CJK face fills most of the em; a leftover stroke on a glyph you are still
+	building is a small fraction of it. Used to reject a degenerate face so region
+	pastes don't silently scale parts into a tiny box.'''
+	fl_, fb, fr, ft = face
+	el, eb, er, et = em_frame
+	fw, fh = (fr - fl_), (ft - fb)
+	ew, eh = (er - el), (et - eb)
+	if fw <= 0.0 or fh <= 0.0 or ew <= 0.0 or eh <= 0.0:
+		return False
+	if fw < min_side_ratio * ew or fh < min_side_ratio * eh:
+		return False
+	return (fw * fh) >= min_area_ratio * (ew * eh)
+
+
+def reference_frame(captured_face, em_frame, use_face=True):
+	'''The frame a region should be measured against: a reliable *captured* face
+	(a snapshot taken BEFORE the old parts were deleted), else the em band.
+
+	Deliberately never a LIVE face of a glyph under construction: once the first
+	region is pasted, the live face IS that region, so a later paste would be
+	scaled onto it. Callers must pass a pre-deletion snapshot (or None).'''
+	if use_face and captured_face is not None and face_frame_reliable(captured_face, em_frame):
+		return captured_face
+	return em_frame
+
+
 def boundary_ratio(marg, face, idc):
 	'''Measured split of a ⿰ / ⿱ glyph as a fraction of the FACE, or None.
 
