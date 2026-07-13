@@ -24,7 +24,7 @@ from typerig.core.func.math import slerp_angle, interpolate_directional
 from typerig.core.objects.sdf import SignedDistanceField
 
 # - Init -------------------------------
-__version__ = '0.6.0'
+__version__ = '0.7.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -107,6 +107,14 @@ class Shape(Container, XMLSerializable):
 		return Bounds.from_bounds([contour.bounds for contour in self.data])
 
 	@property
+	def tight_bounds(self):
+		'''True (curve-accurate) bounding box — see Contour.tight_bounds.
+		`bounds` keeps control-box semantics (includes off-curve BCPs).
+		'''
+		assert len(self.data) > 0, 'Cannot return bounds for <{}> with length {}'.format(self.__class__.__name__, len(self.data))
+		return Bounds.from_bounds([contour.tight_bounds for contour in self.data])
+
+	@property
 	def signature(self):
 		return hash(tuple([node.type for node in self.nodes]))
 
@@ -147,6 +155,26 @@ class Shape(Container, XMLSerializable):
 
 	def is_compatible(self, other):
 		return self.signature == other.signature
+
+	def diff_compatibility(self, other):
+		'''Diagnose WHERE interpolation compatibility breaks against `other`.
+
+		Returns a list of dict records, empty when compatible:
+			{'kind': 'contour_count', 'self': n, 'other': m}  — and stops
+			per-contour records from Contour.diff_compatibility(),
+			each prefixed with 'contour': contour_index.
+		'''
+		if len(self.contours) != len(other.contours):
+			return [{'kind': 'contour_count', 'self': len(self.contours), 'other': len(other.contours)}]
+
+		result = []
+
+		for ci, (c0, c1) in enumerate(zip(self.contours, other.contours)):
+			for record in c0.diff_compatibility(c1):
+				record['contour'] = ci
+				result.append(record)
+
+		return result
 
 	# - Transformation --------------------------
 	def apply_transform(self):

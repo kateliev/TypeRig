@@ -19,7 +19,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.32.0'
+__version__ = '0.33.0'
 
 # - Classes -----------------------------
 class CubicBezier(PointsArithmetic):
@@ -388,6 +388,28 @@ class CubicBezier(PointsArithmetic):
 		intersect_points_y = [p for p in intersect_points_y if other_line.hasPoint(p)]
 		
 		return (intersect_times_x, intersect_times_y), (intersect_points_x, intersect_points_y)
+
+	def intersect_curve(self, other, tolerance=0.1):
+		'''Find intersections with another CubicBezier.
+
+		Bezier clipping via algo.intersect — see curve_curve_intersections()
+		for precision/coincident-curve caveats.
+
+		Args:
+			other (CubicBezier): curve to intersect with
+			tolerance (float): spatial precision of reported points
+
+		Returns:
+			(t_pairs, points): list of (t_self, t_other) and list of Point —
+			mirrors intersect_line's (times, points) shape.
+		'''
+		from typerig.core.algo.intersect import curve_curve_intersections
+
+		hits = curve_curve_intersections(self.tuple, other.tuple, tolerance)
+		t_pairs = [(t1, t2) for t1, t2, _pt in hits]
+		points = [Point(pt) for _t1, _t2, pt in hits]
+
+		return t_pairs, points
 
 	def solve_point(self, time):
 		'''Find point on cubic bezier at given time '''

@@ -29,7 +29,7 @@ from typerig.core.func.math import slerp_angle, interpolate_directional
 from typerig.core.func.transform import adaptive_scale_directional, timer
 
 # - Init -------------------------------
-__version__ = '0.8.0'
+__version__ = '0.9.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -145,6 +145,14 @@ class Layer(Container, XMLSerializable):
 	def bounds(self):
 		assert len(self.data) > 0, 'Cannot return bounds for <{}> with length {}'.format(self.__class__.__name__, len(self.data))
 		return Bounds.from_bounds([shape.bounds for shape in self.data])
+
+	@property
+	def tight_bounds(self):
+		'''True (curve-accurate) bounding box — see Contour.tight_bounds.
+		`bounds` keeps control-box semantics (includes off-curve BCPs).
+		'''
+		assert len(self.data) > 0, 'Cannot return bounds for <{}> with length {}'.format(self.__class__.__name__, len(self.data))
+		return Bounds.from_bounds([shape.tight_bounds for shape in self.data])
 
 	@property
 	def signature(self):
@@ -264,6 +272,40 @@ class Layer(Container, XMLSerializable):
 		'''
 		# Tier 1: Bounding box positions
 		matrix = dict(self.bounds.align_matrix)
+
+		# Tier 2: Metrics positions (Layer knows advance width/height)
+		matrix['LSB'] = (0., 0.)
+		matrix['RSB'] = (self.ADV, 0.)
+		matrix['ADV'] = (self.ADV, 0.)
+		matrix['ADM'] = (self.ADV / 2., 0.)
+
+		# Tier 3: Outline analysis positions (on-curve extrema centers)
+		outline = self.outline_centers()
+
+		if outline is not None:
+			matrix['OBL'] = (outline['bottom_left'], outline['min_y'])
+			matrix['OBR'] = (outline['bottom_right'], outline['min_y'])
+			matrix['OBM'] = (outline['bottom_center'], outline['min_y'])
+			matrix['OTL'] = (outline['top_left'], outline['max_y'])
+			matrix['OTR'] = (outline['top_right'], outline['max_y'])
+			matrix['OTM'] = (outline['top_center'], outline['max_y'])
+
+		# Tier 4: Statistical positions (area-weighted centroid)
+		com = self.center_of_mass
+
+		if com is not None:
+			matrix['COM'] = (com.x, com.y)
+
+		return matrix
+
+	@property
+	def tight_align_matrix(self):
+		'''Layer-level alignment matrix built from tight_bounds (curve-accurate).
+		Same structure as align_matrix — only the Tier 1 bounding-box positions
+		differ; metrics, outline and statistical tiers are identical.
+		'''
+		# Tier 1: Tight (curve-accurate) bounding box positions
+		matrix = dict(self.tight_bounds.align_matrix)
 
 		# Tier 2: Metrics positions (Layer knows advance width/height)
 		matrix['LSB'] = (0., 0.)
@@ -498,7 +540,78 @@ class Layer(Container, XMLSerializable):
 
 	def is_compatible(self, other):
 		return self.signature == other.signature
-	
+
+	def diff_compatibility(self, other):
+		'''Diagnose WHERE interpolation compatibility breaks against `other`.
+
+		Returns a list of dict records, empty when compatible:
+			{'kind': 'shape_count', 'self': n, 'other': m}   — and stops
+			{'kind': 'anchor_count', 'self': n, 'other': m}  — anchors interpolate too
+			per-shape records from Shape.diff_compatibility(),
+			each prefixed with 'shape': shape_index.
+
+		is_compatible() stays hash-based (fast path) — this is the slow,
+		explanatory path for MM workflows and panel reporting.
+		'''
+		if len(self.shapes) != len(other.shapes):
+			return [{'kind': 'shape_count', 'self': len(self.shapes), 'other': len(other.shapes)}]
+
+		result = []
+
+		for si, (s0, s1) in enumerate(zip(self.shapes, other.shapes)):
+			for record in s0.diff_compatibility(s1):
+				record['shape'] = si
+				result.append(record)
+
+		if len(self.anchors) != len(other.anchors):
+			result.append({'kind': 'anchor_count', 'self': len(self.anchors), 'other': len(other.anchors)})
+
+		return result
+
+	def report_compatibility(self, other):
+		'''Human-readable rendering of diff_compatibility() — one finding per
+		line, e.g. "shape[0] contour[2] node[14]: type 'curve' != 'on'".
+		Empty string when compatible. This is what panels show.
+		'''
+		lines = []
+
+		for record in self.diff_compatibility(other):
+			kind = record['kind']
+
+			if kind == 'shape_count':
+				lines.append('layer: shape count {} != {}'.format(record['self'], record['other']))
+			elif kind == 'anchor_count':
+				lines.append('layer: anchor count {} != {}'.format(record['self'], record['other']))
+			elif kind == 'contour_count':
+				lines.append('shape[{}]: contour count {} != {}'.format(record['shape'], record['self'], record['other']))
+			elif kind == 'node_count':
+				lines.append('shape[{}] contour[{}]: node count {} != {}'.format(record['shape'], record['contour'], record['self'], record['other']))
+			elif kind == 'node_type':
+				lines.append("shape[{}] contour[{}] node[{}]: type '{}' != '{}'".format(record['shape'], record['contour'], record['index'], record['self'], record['other']))
+			else:
+				lines.append(str(record))
+
+		return '\n'.join(lines)
+
+	# - Hit testing -----------------------------
+	def contains_point(self, point, steps_per_segment=32):
+		'''Even-odd point-in-layer test across all contours.
+
+		A point is inside when it falls within an ODD number of contours —
+		even-odd is deliberate: it needs no winding assumptions and matches
+		filled-with-counters rendering for sane outlines. Nonzero-winding
+		fill is NOT implemented. Points exactly on an outline are UNDEFINED
+		(the underlying ray-caster is half-open).
+
+		Args:
+			point: Point, Node, or (x, y) tuple/list
+			steps_per_segment (int): polygonization density per contour
+
+		Returns:
+			bool
+		'''
+		return sum(c.contains_point(point, steps_per_segment) for c in self.contours) % 2 == 1
+
 	# - Transformation --------------------------
 	def apply_transform(self):
 		for node in self.nodes:

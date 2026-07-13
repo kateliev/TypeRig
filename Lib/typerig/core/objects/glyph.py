@@ -21,7 +21,7 @@ from typerig.core.objects.layer import Layer
 from typerig.core.objects.guideline import Guideline
 
 # - Init -------------------------------
-__version__ = '0.3.0'
+__version__ = '0.4.0'
 
 # - Mark Color Palette ------------------
 # Predefined glyph flag colors stored as hex strings in XML.
@@ -99,15 +99,9 @@ class Glyph(Container, XMLSerializable):
 		return self.layer(layer_name).selected_nodes
 
 	# -- Delta related ----------------------------
-	def build_delta(self, layer_names_list, attrib):
-		'''Build a DeltaScale object for a specific attribute across multiple layers.
-		
-		Args:
-			layer_names_list (list): List of layer names to include in the delta
-			attrib (str): Attribute name to extract ('point_array', 'metric_array', etc.)
-			
-		Returns:
-			DeltaScale: Delta scale object for interpolation/extrapolation
+	def _collect_delta_data(self, layer_names_list, attrib):
+		'''Collect (data_array, stem_array) for an attribute across layers —
+		shared input builder for DeltaScale and PiecewiseAxis.
 		'''
 		data_array = []
 		stem_array = []
@@ -136,7 +130,40 @@ class Glyph(Container, XMLSerializable):
 			else:
 				raise ValueError('Layer "{}" does not have stems defined. Use layer.stems = (stx, sty)'.format(layer_name))
 
+		return data_array, stem_array
+
+	def build_delta(self, layer_names_list, attrib):
+		'''Build a DeltaScale object for a specific attribute across multiple layers.
+
+		Args:
+			layer_names_list (list): List of layer names to include in the delta
+			attrib (str): Attribute name to extract ('point_array', 'metric_array', etc.)
+
+		Returns:
+			DeltaScale: Delta scale object for interpolation/extrapolation
+		'''
+		data_array, stem_array = self._collect_delta_data(layer_names_list, attrib)
 		return DeltaScale(data_array, stem_array)
+
+	def build_piecewise_delta(self, layer_names_list, attrib):
+		'''Build a PiecewiseAxis for a specific attribute across n >= 2 layers.
+
+		Unlike build_delta (one DeltaScale over the whole list), the result
+		stores one DeltaScale per adjacent master pair and picks the correct
+		segment for any target stem. Layers must be ordered by ascending
+		x-stem.
+
+		Args:
+			layer_names_list (list): Ordered layer names (ascending x-stem)
+			attrib (str): Attribute name to extract ('point_array', etc.)
+
+		Returns:
+			PiecewiseAxis
+		'''
+		from typerig.core.objects.delta import PiecewiseAxis
+
+		data_array, stem_array = self._collect_delta_data(layer_names_list, attrib)
+		return PiecewiseAxis(data_array, stem_array)
 
 	def create_virtual_axis(self, layer_names, attributes=None):
 		'''Create a virtual axis from a list of layer names.
@@ -171,6 +198,32 @@ class Glyph(Container, XMLSerializable):
 		
 		return {attrib: self.build_delta(layer_names, attrib) for attrib in attributes}
 	
+	def create_piecewise_axis(self, layer_names, attributes=None):
+		'''Create a piecewise virtual axis from n >= 2 ordered layer names.
+
+		Mirrors create_virtual_axis() but returns PiecewiseAxis objects that
+		select the correct master SEGMENT for a target stem instead of
+		deriving interpolation time from a single stem pair. Prefer this
+		for 3+ master setups; create_virtual_axis stays untouched.
+
+		Args:
+			layer_names (list): Ordered layer names, ascending x-stem
+				(e.g. ['Light', 'Regular', 'Bold'])
+			attributes (list, optional): Attributes to process.
+				Defaults to ['point_array', 'metric_array']
+
+		Returns:
+			dict: {attribute: PiecewiseAxis} — duck-type compatible with the
+			create_virtual_axis() result for Layer.scale_with_axis().
+		'''
+		if attributes is None:
+			attributes = ['point_array', 'metric_array']
+
+		if not isinstance(layer_names, (list, tuple)) or len(layer_names) < 2:
+			raise ValueError('layer_names must be a list of at least 2 layer names')
+
+		return {attrib: self.build_piecewise_delta(layer_names, attrib) for attrib in attributes}
+
 	# Keep old name for backward compatibility
 	def virtual_axis(self, layer_names_list, process_attrib_list=('point_array','metric_array')):
 		'''Deprecated: Use create_virtual_axis() instead.'''

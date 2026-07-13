@@ -16,7 +16,7 @@ import os
 import sys
 
 # - Init -------------------------------
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 # - Path bootstrap (repo checkout without install) ---
 try:
@@ -517,6 +517,207 @@ check('Layer.bounds unchanged',
 sb = Shape([frame_pts]).bounds
 check('Shape.bounds unchanged',
 	(sb.x, sb.y, sb.xmax, sb.ymax, sb.width, sb.height) == (120.0, 280.0, 840.0, 680.0, 720.0, 400.0))
+
+
+# ===========================================================
+# - S3 feature gates ----------------------------------------
+# ===========================================================
+
+_s3_src_circle = [
+	Node(161.0, 567.0, type='on'), Node(161.0, 435.0, type='curve'),
+	Node(268.0, 328.0, type='curve'), Node(400.0, 328.0, type='on'),
+	Node(531.0, 328.0, type='curve'), Node(638.0, 435.0, type='curve'),
+	Node(638.0, 567.0, type='on'), Node(638.0, 698.0, type='curve'),
+	Node(531.0, 805.0, type='curve'), Node(400.0, 805.0, type='on'),
+	Node(268.0, 805.0, type='curve'), Node(161.0, 698.0, type='curve')]
+
+def _s3_circle():
+	return Contour([n.clone() for n in _s3_src_circle], closed=True)
+
+# -- F1: tight (curve-accurate) bounds ----------------------
+s3_circle = _s3_circle()
+tb = s3_circle.tight_bounds
+check('F1 circle tight bounds == on-curve extrema',
+	(tb.x, tb.y, tb.xmax, tb.ymax) == (161.0, 328.0, 638.0, 805.0))
+cb = s3_circle.bounds
+check('F1 circle control box unchanged',
+	(cb.x, cb.y, cb.xmax, cb.ymax) == (161.0, 328.0, 638.0, 805.0))
+
+# Contour with BCPs overshooting the on-curve box
+overshoot = Contour([
+	Node(0.0, 0.0, type='on'), Node(60.0, 110.0, type='curve'),
+	Node(40.0, -10.0, type='curve'), Node(100.0, 100.0, type='on')], closed=False)
+check('F1 overshoot: control box hits BCPs', overshoot.bounds.ymax == 110.0)
+check('F1 overshoot: tight box smaller',
+	overshoot.tight_bounds.ymax < 110.0 and overshoot.tight_bounds.y > -10.0)
+
+# Shape / Layer delegation + tight_align_matrix
+s3_layer = Layer([Shape([_s3_circle()])])
+check('F1 Layer.tight_bounds', s3_layer.tight_bounds.ymax == 805.0)
+check('F1 Layer.tight_align_matrix has tiers',
+	'TL' in s3_layer.tight_align_matrix and 'ADV' in s3_layer.tight_align_matrix)
+
+# -- F2: point-in-contour / point-in-layer ------------------
+s3_square = Contour([Node(200,280,type='on'), Node(280,280,type='on'),
+	Node(280,200,type='on'), Node(200,200,type='on')], closed=True)
+check('F2 square inside', s3_square.contains_point((240, 240)) is True)
+check('F2 square outside', s3_square.contains_point((100, 100)) is False)
+check('F2 circle center', _s3_circle().contains_point((400, 567)) is True)
+check('F2 circle bbox corner outside', _s3_circle().contains_point((165, 332)) is False)
+
+_outer = Contour([Node(0,0,type='on'), Node(100,0,type='on'), Node(100,100,type='on'), Node(0,100,type='on')], closed=True)
+_counter = Contour([Node(40,40,type='on'), Node(60,40,type='on'), Node(60,60,type='on'), Node(40,60,type='on')], closed=True)
+_hole_layer = Layer([Shape([_outer, _counter])])
+check('F2 layer: counter is empty (even-odd)', _hole_layer.contains_point((50, 50)) is False)
+check('F2 layer: between outer and counter', _hole_layer.contains_point((20, 20)) is True)
+
+# -- F3: compatibility diagnosis ----------------------------
+la = Layer([Shape([_s3_circle()])])
+lb = Layer([Shape([_s3_circle()])])
+check('F3 compatible -> []', la.diff_compatibility(lb) == [])
+check('F3 compatible -> empty report', la.report_compatibility(lb) == '')
+
+lb.shapes[0].contours[0].nodes[4].type = 'on'
+_diff = la.diff_compatibility(lb)
+check('F3 one node_type record', len(_diff) == 1 and _diff[0]['kind'] == 'node_type')
+check('F3 record has full location',
+	_diff[0]['index'] == 4 and _diff[0]['shape'] == 0 and _diff[0]['contour'] == 0)
+check('F3 is_compatible False', la.is_compatible(lb) is False)
+check('F3 report line format',
+	la.report_compatibility(lb) == "shape[0] contour[0] node[4]: type 'curve' != 'on'")
+
+lc = Layer([Shape([_s3_circle(), Contour([n.clone() for n in _s3_src_circle], closed=True)])])
+_diff = la.diff_compatibility(lc)
+check('F3 contour_count single record', len(_diff) == 1 and _diff[0]['kind'] == 'contour_count')
+
+# -- F4: curve-curve intersection ---------------------------
+from typerig.core.algo.intersect import curve_curve_intersections, line_to_cubic
+
+_hits = curve_curve_intersections(line_to_cubic((0.,0.),(100.,100.)), line_to_cubic((0.,100.),(100.,0.)))
+check('F4 crossing lines: 1 hit at (50,50)',
+	len(_hits) == 1 and abs(_hits[0][2][0] - 50.) <= 0.2 and abs(_hits[0][2][1] - 50.) <= 0.2)
+
+_arch = ((0., 0.), (0., 100.), (100., 100.), (100., 0.))
+_mirror = ((0., 75.), (0., -25.), (100., -25.), (100., 75.))
+_hits = curve_curve_intersections(_arch, _mirror)
+check('F4 arch vs mirror: 2 symmetric hits',
+	len(_hits) == 2 and abs(_hits[0][2][0] + _hits[1][2][0] - 100.) <= 0.5)
+check('F4 disjoint -> []',
+	curve_curve_intersections(_arch, ((500.,500.),(550.,600.),(650.,600.),(700.,500.))) == [])
+curve_curve_intersections(_arch, _arch)		# identical curves must terminate (depth cap)
+check('F4 identical curves terminate', True)
+
+_arch_b = CubicBezier(*_arch)
+_t_pairs, _pts = _arch_b.intersect_curve(CubicBezier(*_mirror))
+check('F4 CubicBezier.intersect_curve wrapper', len(_t_pairs) == 2 and len(_pts) == 2)
+
+_bowtie = Contour([Node(0,0,type='on'), Node(100,100,type='on'), Node(100,0,type='on'), Node(0,100,type='on')], closed=True)
+_si = _bowtie.self_intersections()
+check('F4 figure-eight: exactly 1 crossing', len(_si) == 1)
+check('F4 crossing near (50,50)',
+	len(_si) == 1 and abs(_si[0][4][0] - 50.) <= 0.5 and abs(_si[0][4][1] - 50.) <= 0.5)
+check('F4 convex contour: no self-crossings', _s3_circle().self_intersections() == [])
+
+_sq2 = Contour([Node(50,50,type='on'), Node(150,50,type='on'), Node(150,150,type='on'), Node(50,150,type='on')], closed=True)
+check('F4 Contour.intersections: 2 hits', len(_outer.intersections(_sq2)) == 2)
+
+# -- F6: offset loop cleanup --------------------------------
+_plain = _s3_circle().offset_outline(-30)
+_clean = _s3_circle().offset_outline_clean(-30)
+check('F6 convex: node count preserved', len(_clean.nodes) == len(_plain.nodes))
+check('F6 convex: converged', _clean._offset_clean_converged is True)
+
+# Chamfered square: the short 45-degree edge inverts on inward offset and
+# the adjacent long edges cross. (A plain L never self-crosses with miter
+# joins — it inverts globally — so the chamfer is the concave gate case.)
+_CH = [(0,0),(270,0),(300,30),(300,300),(0,300)]
+_cham = Contour([Node(x, y, type='on') for x, y in _CH], closed=True)
+_plain = _cham.offset_outline(-80)
+check('F6 concave: plain offset self-intersects', len(_plain.self_intersections()) >= 1)
+_clean = _cham.offset_outline_clean(-80)
+check('F6 concave: clean has no self-intersections', _clean.self_intersections() == [])
+check('F6 concave: converged flag', _clean._offset_clean_converged is True)
+
+# Shoelace counts the inverted loop negatively -> pruning it recovers area
+_a_plain = Contour._segments_area(_plain.segments, steps=32)
+_a_clean = Contour._segments_area(_clean.segments, steps=32)
+check('F6 concave: loop area recovered',
+	_a_clean > _a_plain and (_a_clean - _a_plain) / _a_plain < 0.05)
+
+# Multi-crossing case exercises the iterative passes
+_cham2 = Contour([Node(x, y, type='on') for x, y in _CH], closed=True)
+check('F6 multi-crossing input', len(_cham2.offset_outline(-60).self_intersections()) == 3)
+check('F6 multi-crossing cleaned', _cham2.offset_outline_clean(-60).self_intersections() == [])
+
+# Idempotence: cleaning an already-clean contour changes nothing
+_again = _clean.offset_outline_clean(0)
+check('F6 idempotent', len(_again.nodes) == len(_clean.nodes) and _again.self_intersections() == [])
+
+# -- F7: serialization round-trip ---------------------------
+import typerig.core.objects.fontfile as _fontfile_mod
+check('F7 import typerig.core.objects.fontfile', hasattr(_fontfile_mod, 'FontFile'))
+
+from typerig.core.objects.font import Font, FontInfo, FontMetrics
+from typerig.core.objects.master import Master, Masters
+from typerig.core.objects.kern import Kerning
+from typerig.core.objects.groups import Groups
+
+def _s3_glyph(name, dx=0):
+	sq = Contour([Node(0+dx,0,type='on'), Node(100+dx,0,type='on'),
+		Node(100+dx,100,type='on'), Node(0+dx,100,type='on')], closed=True)
+	return Glyph([Layer([Shape([sq])], name='Regular', width=120)], name=name)
+
+_features = 'feature kern {\n\tpos A V -50;\n} kern;\n# <weird & chars>\n'
+_kern = Kerning(); _kern.add_pair('A', 'V', -50)
+_groups = Groups(); _groups.set('public.kern1.H', ['H', 'I', 'N'])
+
+_font = Font([_s3_glyph('A'), _s3_glyph('V', 10)],
+	info=FontInfo('TestFam', 'Regular'),
+	metrics=FontMetrics(1000, 800, -200, 500, 700, 0),
+	masters=Masters([Master('Regular', 'Regular')]),
+	kerning=_kern, groups=_groups, features=_features)
+
+_font2 = Font.from_XML(_font.to_XML())
+check('F7 info round-trip', _font2.info.family_name == 'TestFam')
+check('F7 metrics round-trip', _font2.metrics.upm == 1000 and _font2.metrics.descender == -200)
+check('F7 masters round-trip', len(_font2.masters.data) == 1)
+check('F7 kerning round-trip', _font2.kerning[('A', 'V')] == -50)
+check('F7 groups round-trip', _font2.groups.members('public.kern1.H') == ['H', 'I', 'N'])
+check('F7 features byte-equal', _font2.features == _features)
+
+# -- F8: piecewise multi-master axis ------------------------
+from typerig.core.objects.delta import PiecewiseAxis
+
+def _s3_master(name, w, stem):
+	c = Contour([Node(0,0,type='on'), Node(w,0,type='on'), Node(w,100,type='on'), Node(0,100,type='on')], closed=True)
+	layer = Layer([Shape([c])], name=name, width=w + 20)
+	layer.stems = stem
+	return layer
+
+_pw_glyph = Glyph([
+	_s3_master('Light', 100, (40, 40)),
+	_s3_master('Regular', 200, (80, 80)),
+	_s3_master('Bold', 400, (160, 160))], name='pwtest')
+
+_axis = _pw_glyph.create_piecewise_axis(['Light', 'Regular', 'Bold'])
+_pw = _axis['point_array']
+check('F8 PiecewiseAxis type', isinstance(_pw, PiecewiseAxis) and len(_pw) == 2)
+check('F8 segment selection', _pw.segment_for_stem((60, 60))[0] == 0 and _pw.segment_for_stem((120, 120))[0] == 1)
+check('F8 clamping', _pw.segment_for_stem((10, 10))[0] == 0 and _pw.segment_for_stem((999, 999))[0] == 1)
+
+def _pw_width(stem, extrapolate=False):
+	pts = list(_pw.scale_by_stem((stem, stem), (1., 1.), (0., 0.), (0., 0.), 0., extrapolate))
+	xs = [p[0] for p in pts]
+	return max(xs) - min(xs)
+
+check('F8 stem 60 -> width 150', close(_pw_width(60), 150., 0.5))
+check('F8 stem 120 -> width 300', close(_pw_width(120), 300., 0.5))
+check('F8 stem 200 extrapolated -> width 500', close(_pw_width(200, True), 500., 1.))
+check('F8 knot continuity at stem 80', abs(_pw_width(80 - 1e-4) - _pw_width(80 + 1e-4)) <= 0.1)
+
+_scaled = _pw_glyph.layer('Regular').scale_with_axis(_axis, target_width=300)
+check('F8 scale_with_axis duck-type', abs(_scaled.bounds.width - 300.) <= 1.0)
+check('F8 scale_with_axis converged', _scaled._scale_converged is True)
 
 
 # - Finish -----------------------------

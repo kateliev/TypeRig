@@ -20,7 +20,7 @@ from typerig.core.objects.point import Point, Void
 from typerig.core.objects.array import PointArray
 
 # - Init -------------------------------
-__version__ = '0.10.9'
+__version__ = '0.11.0'
 
 # - Objects ------------------------------------
 # -- Interpolation -----------------------------
@@ -477,6 +477,84 @@ class DeltaScale(Sequence):
 			prev = (sx, sy)
 
 		return sx, sy
+
+class PiecewiseAxis(object):
+	'''Piecewise multi-master evaluator for n >= 2 ORDERED masters.
+
+	create_virtual_axis() builds ONE DeltaScale over the whole master list,
+	which derives its interpolation time from a single stem pair. This class
+	instead stores one DeltaScale per ADJACENT master pair and, for a given
+	target stem, delegates to the segment whose stem interval contains it —
+	so a ['Light', 'Regular', 'Bold'] axis interpolates Light..Regular for
+	light targets and Regular..Bold for heavy ones.
+
+	Segment selection is driven by the X-STEM only (target_stem[0]); masters
+	must be ordered by ascending x-stem. Targets outside the stem range clamp
+	to the first/last segment — extrapolation then happens INSIDE that
+	segment, consistent with DeltaScale's `extrapolate` flag.
+
+	Duck-type compatible with DeltaScale for the calls Layer.scale_with_axis
+	makes: scale_by_stem() and solve_scale_for_dimension().
+
+	Constructor (same inputs as DeltaScale):
+		PiecewiseAxis(data_array, stem_array)
+		data_array : [master_points, ...] n >= 2, matching dimensions
+		stem_array : [[(stx, sty)], ...] one stem pair per master, ascending stx
+	'''
+	def __init__(self, data_array, stem_array):
+		assert len(data_array) >= 2, 'ERROR:\tNot enough input arrays! Minimum 2 required!'
+		assert len(stem_array) == len(data_array), 'ERROR:\tNot enough stems provided!'
+
+		self.segments = [DeltaScale(data_array[i:i + 2], stem_array[i:i + 2]) for i in range(len(data_array) - 1)]
+		# Per-segment x-stem interval (lo, hi) driving segment selection
+		self.stem_bounds = [(stem_array[i][0][0], stem_array[i + 1][0][0]) for i in range(len(data_array) - 1)]
+
+	# - Internals ----------------------------------
+	def __repr__(self):
+		return '<Piecewise Axis: {} segments, stems {}>'.format(len(self.segments), self.stem_bounds)
+
+	def __len__(self):
+		return len(self.segments)
+
+	def __getitem__(self, index):
+		return self.segments[index]
+
+	# - Segment selection --------------------------
+	def segment_for_stem(self, target_stem):
+		'''Pick the master pair whose x-stem interval contains the target.
+
+		Args:
+			target_stem : (stx, sty) tuple or scalar stx — the X-STEM drives
+			              selection (Y rides along inside the segment).
+
+		Returns:
+			(index, DeltaScale): selected segment. Clamped to the first/last
+			segment when the target lies outside the stem range.
+		'''
+		stx = target_stem[0] if isinstance(target_stem, (tuple, list)) else target_stem
+
+		for idx, (lo, hi) in enumerate(self.stem_bounds):
+			if stx <= hi:
+				return idx, self.segments[idx]
+
+		last = len(self.segments) - 1
+		return last, self.segments[last]
+
+	# - Process (DeltaScale-compatible) ------------
+	def scale_by_stem(self, stem, scale_or_dimension, compensation, shift, italic_angle, extrapolate=False, to_dimension=False):
+		'''Same signature as DeltaScale.scale_by_stem — delegates to the
+		segment selected by segment_for_stem().
+		'''
+		_idx, segment = self.segment_for_stem(stem)
+		return segment.scale_by_stem(stem, scale_or_dimension, compensation, shift, italic_angle, extrapolate, to_dimension)
+
+	def solve_scale_for_dimension(self, stem, dimension, compensation=(0., 0.), shift=(0., 0.), italic_angle=0., extrapolate=False, tol=(1e-3, 1e-3), max_steps=24):
+		'''Same signature as DeltaScale.solve_scale_for_dimension — delegates
+		to the segment selected by segment_for_stem().
+		'''
+		_idx, segment = self.segment_for_stem(stem)
+		return segment.solve_scale_for_dimension(stem, dimension, compensation, shift, italic_angle, extrapolate, tol, max_steps)
+
 
 if __name__ == '__main__':
 	arr = PointArray([Point(10,10), Point(740,570), Point(70,50)])

@@ -29,7 +29,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.node import Node, DirectionalNode, node_types
 
 # - Init -------------------------------
-__version__ = '0.8.0'
+__version__ = '0.9.0'
 
 # - Classes -----------------------------
 CONTOUR_KIND_BEZIER = 'bezier'
@@ -37,7 +37,7 @@ CONTOUR_KIND_HOBBY = 'hobby'
 
 @register_xml_class
 class Contour(Container, XMLSerializable):
-	__slots__ = ('name', 'closed', 'clockwise', 'transform', 'kind')
+	__slots__ = ('name', 'closed', 'clockwise', 'transform', 'kind', '_offset_clean_converged')
 
 	XML_TAG = 'contour'
 	XML_ATTRS = ['name', 'identifier', 'kind', 'closed', 'clockwise']
@@ -72,6 +72,10 @@ class Contour(Container, XMLSerializable):
 
 		self.kind = kind
 		self.transform = kwargs.pop('transform', Transform())
+
+		# - offset_outline_clean diagnostics (not serialized; read by hosts
+		#   via getattr(contour, '_offset_clean_converged', None))
+		self._offset_clean_converged = None
 
 		# - Metadata
 		if not kwargs.pop('proxy', False): # Initialize in proxy mode
@@ -170,6 +174,36 @@ class Contour(Container, XMLSerializable):
 	def bounds(self):
 		assert len(self.data) > 0, 'Cannot return bounds for <{}> with length {}'.format(self.__class__.__name__, len(self.data))
 		return Bounds([node.point.tuple for node in self.data])
+
+	@property
+	def tight_bounds(self):
+		'''True (curve-accurate) bounding box.
+
+		Unlike `bounds` (control box: all nodes INCLUDING off-curve BCPs),
+		this walks the segments and takes curve extrema via get_bbox(),
+		so overshooting handles do not inflate the box. `bounds` keeps its
+		control-box semantics — panels and delta code depend on it.
+		'''
+		assert len(self.data) > 0, 'Cannot return bounds for <{}> with length {}'.format(self.__class__.__name__, len(self.data))
+
+		if len(self.data) < 2:
+			return self.bounds
+
+		corners = []
+
+		for segment in self.segments:
+			if isinstance(segment, Line):
+				corners.append((segment.p0.x, segment.p0.y))
+				corners.append((segment.p1.x, segment.p1.y))
+			else:
+				bbox = segment.get_bbox()
+				corners.append((bbox['x'], bbox['y']))
+				corners.append((bbox['x_max'], bbox['y_max']))
+
+		if not corners:
+			return self.bounds
+
+		return Bounds(corners)
 
 	@property
 	def node_segments(self):
@@ -515,6 +549,153 @@ class Contour(Container, XMLSerializable):
 		for node in self.nodes:
 			node.weight.x = wx
 			node.weight.y = wy
+
+	# - Compatibility ---------------------------
+	def diff_compatibility(self, other):
+		'''Diagnose WHERE interpolation compatibility breaks against `other`.
+
+		Returns a list of dict records, empty when compatible:
+			{'kind': 'node_count', 'self': n, 'other': m}          — and stops
+			{'kind': 'node_type', 'index': i, 'self': t, 'other': t} — ALL mismatches
+
+		is_compatible()-style hash checks stay the fast path; use this
+		only when you need the exact break location (MM workflows).
+		'''
+		if len(self.nodes) != len(other.nodes):
+			return [{'kind': 'node_count', 'self': len(self.nodes), 'other': len(other.nodes)}]
+
+		result = []
+
+		for i, (n0, n1) in enumerate(zip(self.nodes, other.nodes)):
+			if n0.type != n1.type:
+				result.append({'kind': 'node_type', 'index': i, 'self': n0.type, 'other': n1.type})
+
+		return result
+
+	# - Hit testing -----------------------------
+	def contains_point(self, point, steps_per_segment=32):
+		'''Winding-aware point-in-contour test.
+
+		The contour is polygonized with sample() and tested with a ray
+		caster (func.geometry.point_in_polygon). Points exactly ON the
+		outline are UNDEFINED — the underlying ray-caster is half-open;
+		do not rely on edge behavior.
+
+		Args:
+			point: Point, Node, or (x, y) tuple/list
+			steps_per_segment (int): polygonization density
+
+		Returns:
+			bool
+		'''
+		from typerig.core.func.geometry import point_in_polygon
+
+		# Duck-type .x/.y first (Point, Node, Anchor), fall back to indexing
+		try:
+			x, y = point.x, point.y
+		except AttributeError:
+			x, y = point[0], point[1]
+
+		# Quick-reject on the curve-accurate box
+		if not self.tight_bounds.contains(x, y):
+			return False
+
+		polygon = self.sample(steps_per_segment)
+
+		if len(polygon) < 3:
+			return False
+
+		return point_in_polygon((x, y), polygon)
+
+	# - Intersections ---------------------------
+	@staticmethod
+	def _segment_to_cubic_tuple(segment):
+		'''Represent any segment as a 4-point cubic tuple for algo.intersect.
+		Lines are elevated exactly; quadratics via lossless degree elevation.
+		'''
+		from typerig.core.algo.intersect import line_to_cubic
+
+		if isinstance(segment, Line):
+			return line_to_cubic(segment.p0.tuple, segment.p1.tuple)
+
+		if isinstance(segment, QuadraticBezier):
+			return segment.to_cubic().tuple
+
+		return segment.tuple
+
+	def intersections(self, other_contour, tolerance=0.1):
+		'''All segment-pair intersections with another contour.
+
+		Args:
+			other_contour (Contour): contour to intersect with
+			tolerance (float): spatial precision of reported points
+
+		Returns:
+			list of (seg_i, seg_j, t_i, t_j, (x, y)) where seg_i indexes
+			self.segments and seg_j indexes other_contour.segments.
+		'''
+		from typerig.core.algo.intersect import curve_curve_intersections, curve_bbox
+
+		self_cubics = [self._segment_to_cubic_tuple(seg) for seg in self.segments]
+		other_cubics = [other_contour._segment_to_cubic_tuple(seg) for seg in other_contour.segments]
+
+		self_boxes = [curve_bbox(c) for c in self_cubics]
+		other_boxes = [curve_bbox(c) for c in other_cubics]
+
+		result = []
+
+		for i, (ci, bi) in enumerate(zip(self_cubics, self_boxes)):
+			for j, (cj, bj) in enumerate(zip(other_cubics, other_boxes)):
+				# Cheap segment-bbox reject before recursing
+				if bi[0] > bj[2] or bj[0] > bi[2] or bi[1] > bj[3] or bj[1] > bi[3]:
+					continue
+
+				for t_i, t_j, pt in curve_curve_intersections(ci, cj, tolerance):
+					result.append((i, j, t_i, t_j, pt))
+
+		return result
+
+	def self_intersections(self, tolerance=0.1):
+		'''All self-intersections of this contour (segment pairs within it).
+
+		Adjacent segments share an endpoint; hits near that shared endpoint
+		(within a small t window, sized to the clipper's t-precision at the
+		default tolerance) are dropped so only genuine crossings are reported.
+
+		Args:
+			tolerance (float): spatial precision of reported points
+
+		Returns:
+			list of (seg_i, seg_j, t_i, t_j, (x, y)) with seg_i < seg_j.
+		'''
+		from typerig.core.algo.intersect import curve_curve_intersections, curve_bbox
+
+		cubics = [self._segment_to_cubic_tuple(seg) for seg in self.segments]
+		boxes = [curve_bbox(c) for c in cubics]
+		num = len(cubics)
+		endpoint_t = 5e-3
+
+		result = []
+
+		for i in range(num):
+			for j in range(i + 1, num):
+				if boxes[i][0] > boxes[j][2] or boxes[j][0] > boxes[i][2] or boxes[i][1] > boxes[j][3] or boxes[j][1] > boxes[i][3]:
+					continue
+
+				# Which shared endpoints must be filtered out
+				consecutive = (j == i + 1)
+				wraparound = (self.closed and i == 0 and j == num - 1)
+
+				for t_i, t_j, pt in curve_curve_intersections(cubics[i], cubics[j], tolerance):
+					if consecutive and t_i > 1. - endpoint_t and t_j < endpoint_t:
+						continue
+
+					if wraparound and t_j > 1. - endpoint_t and t_i < endpoint_t:
+						continue
+
+					result.append((i, j, t_i, t_j, pt))
+
+		return result
 
 	# - Transformation --------------------------
 	def apply_transform(self):
@@ -1071,6 +1252,139 @@ class Contour(Container, XMLSerializable):
 			for i in range(len(self.nodes)):
 				self.nodes[i].x = new_nodes[i].x
 				self.nodes[i].y = new_nodes[i].y
+
+	# -- Offset loop cleanup --------------------------
+	@staticmethod
+	def _split_segment_at(segment, t, weld_point=None):
+		'''Split a Line or CubicBezier at parameter t. When weld_point is
+		given, both halves' shared endpoint is snapped exactly onto it.
+		Returns (head, tail) segment objects.
+		'''
+		if isinstance(segment, Line):
+			mid = Point(weld_point) if weld_point is not None else segment.solve_point(t)
+			return Line(Point(segment.p0), Point(mid)), Line(Point(mid), Point(segment.p1))
+
+		head, tail = segment.solve_slice(t)
+
+		if weld_point is not None:
+			wx, wy = weld_point
+			head.p3.x, head.p3.y = wx, wy
+			tail.p0.x, tail.p0.y = wx, wy
+
+		return head, tail
+
+	@staticmethod
+	def _segments_area(segments, steps=16):
+		'''Unsigned shoelace area of a sampled segment run (treated closed).'''
+		pts = []
+
+		for segment in segments:
+			for k in range(steps):
+				pt = segment.solve_point(k / float(steps))
+				pts.append((pt.x, pt.y))
+
+		n = len(pts)
+
+		if n < 3:
+			return 0.
+
+		area = 0.
+
+		for i in range(n):
+			j = (i + 1) % n
+			area += pts[i][0] * pts[j][1] - pts[j][0] * pts[i][1]
+
+		return abs(area * 0.5)
+
+	@staticmethod
+	def _segments_to_contour(segments, closed=True):
+		'''Rebuild a Contour from an ordered run of Line/CubicBezier segments.
+		Consecutive segments are assumed to share endpoints (welded).
+		'''
+		nodes = []
+
+		for segment in segments:
+			nodes.append(Node(segment.p0.x, segment.p0.y, type=node_types['on']))
+
+			if isinstance(segment, CubicBezier):
+				nodes.append(Node(segment.p1.x, segment.p1.y, type=node_types['curve']))
+				nodes.append(Node(segment.p2.x, segment.p2.y, type=node_types['curve']))
+
+		if not closed and segments:
+			last = segments[-1]
+			end = last.p3 if isinstance(last, CubicBezier) else last.p1
+			nodes.append(Node(end.x, end.y, type=node_types['on']))
+
+		return Contour(nodes, closed=closed, proxy=False)
+
+	def offset_outline_clean(self, distance, curvature_correction=True, tolerance=0.5):
+		'''Offset contour and prune the self-intersection loops that
+		offset_outline() produces at concave joins for large distances.
+		Returns a NEW Contour — does not modify the original.
+
+		WARNING: the output DOES NOT PRESERVE NODE COUNT — welding removes
+		the node runs that form the pruned loops, so the result is NOT
+		point-compatible with the source (use plain offset_outline() when
+		Multiple Master compatibility matters).
+
+		At each crossing the two involved segments are split at the
+		intersection, and of the two possible node runs between the split
+		points the one with the LESSER sampled area (the collapse loop) is
+		dropped; the split points are welded into one on-curve node.
+		Repeats until clean or 10 passes; sets `_offset_clean_converged`
+		(True/False) on the returned contour, mirroring the scale_with_axis
+		diagnostics pattern.
+
+		Args:
+			distance (float): Offset amount in font units.
+			curvature_correction (bool): Scale handles by (1 + d * kappa).
+			tolerance (float): spatial precision of crossing detection.
+
+		Returns:
+			Contour: New offset contour with loops removed.
+		'''
+		result = self.offset_outline(distance, curvature_correction)
+		result._offset_clean_converged = True
+
+		for _pass in range(10):
+			crossings = result.self_intersections(tolerance)
+
+			if not crossings:
+				return result
+
+			seg_i, seg_j, t_i, t_j, pt = crossings[0]
+			segments = result.segments
+
+			i_head, i_tail = self._split_segment_at(segments[seg_i], t_i, pt)
+			j_head, j_tail = self._split_segment_at(segments[seg_j], t_j, pt)
+
+			# Two candidate loops formed by the crossing:
+			#   between   : (seg_i after t_i) .. (seg_j up to t_j)
+			#   complement: (seg_j after t_j) .. wrap .. (seg_i up to t_i)
+			loop_between = [i_tail] + segments[seg_i + 1:seg_j] + [j_head]
+			loop_complement = [j_tail] + segments[seg_j + 1:] + segments[:seg_i] + [i_head]
+
+			if result.closed:
+				# Keep the loop with the larger area, drop the collapse loop
+				if self._segments_area(loop_between) >= self._segments_area(loop_complement):
+					kept = loop_between
+				else:
+					kept = loop_complement
+
+				new_contour = self._segments_to_contour(kept, closed=True)
+			else:
+				# Open contour: only the between-loop can be dropped
+				kept = segments[:seg_i] + [i_head, j_tail] + segments[seg_j + 1:]
+				new_contour = self._segments_to_contour(kept, closed=False)
+
+			new_contour._offset_clean_converged = True
+			result = new_contour
+
+		# Pass cap reached — best effort, flag non-convergence
+		if result.self_intersections(tolerance):
+			result._offset_clean_converged = False
+
+		return result
 
 	def offset_outline_sdf(self, distance, sdf, curvature_correction=True, clamp_factor=0.9):
 		'''Offset contour using analytical normals with SDF distance clamping.

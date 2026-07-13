@@ -25,7 +25,7 @@ from typerig.core.objects.groups import Groups
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 
 # - Init --------------------------------
-__version__ = '0.3.0'
+__version__ = '0.4.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -443,6 +443,16 @@ class Font(Container, XMLSerializable):
 		if self.kerning.data:
 			root.append(self.kerning._to_xml_element())
 
+		# Groups (UFO-style, incl. public.kern1/2.* kerning classes)
+		if self.groups.data:
+			root.append(self.groups._to_xml_element())
+
+		# Features: raw OpenType .fea code as a text child. ET escapes and
+		# unescapes markup characters, so the string round-trips byte-equal.
+		if self.features:
+			features_elem = ET.SubElement(root, 'features')
+			features_elem.text = self.features
+
 		# Lib
 		if self.lib:
 			lib_elem = ET.SubElement(root, 'lib')
@@ -483,6 +493,12 @@ class Font(Container, XMLSerializable):
 		kerning_elem = element.find('kerning')
 		kerning = Kerning.from_XML(kerning_elem) if kerning_elem is not None else Kerning()
 
+		groups_elem = element.find('groups')
+		groups = Groups.from_XML(groups_elem) if groups_elem is not None else Groups()
+
+		features_elem = element.find('features')
+		features = features_elem.text if features_elem is not None and features_elem.text else ''
+
 		lib = {}
 		lib_elem = element.find('lib')
 		if lib_elem is not None:
@@ -507,5 +523,7 @@ class Font(Container, XMLSerializable):
 			instances 	= instances,
 			encoding 	= encoding,
 			kerning 	= kerning,
+			groups 		= groups,
+			features 	= features,
 			lib 		= lib,
 		)
