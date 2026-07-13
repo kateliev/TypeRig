@@ -478,6 +478,34 @@ def test_reference_frame_captured_or_em_never_live():
 	assert cjk.reference_frame(stub, em, use_face=True) == em
 
 
+def test_inset_frame():
+	frame = (0.0, -200.0, 1000.0, 800.0)		# w=1000, h=1000
+	assert cjk.inset_frame(frame, 0.0) == frame
+	l, b, r, t = cjk.inset_frame(frame, 0.1)
+	assert _close(l, 100.0) and _close(r, 900.0)
+	assert _close(b, -100.0) and _close(t, 700.0)
+	# clamped to 0.45
+	l2, b2, r2, t2 = cjk.inset_frame(frame, 0.9)
+	assert _close(l2, 450.0) and _close(r2, 550.0)
+
+
+def test_reference_frame_fallback_chain():
+	em = (0.0, -200.0, 1000.0, 800.0)
+	face = (50.0, -150.0, 950.0, 750.0)			# reliable
+	other = (30.0, -170.0, 970.0, 770.0)		# reliable default (active layer)
+	stub = (0.0, 0.0, 120.0, 120.0)
+	# own captured face wins over a default_face
+	assert cjk.reference_frame(face, em, default_face=other) == face
+	# no own face -> reliable default_face (active layer face) beats em/imaginary
+	assert cjk.reference_frame(None, em, default_face=other, margin=0.1) == other
+	# no own, no default -> imaginary face (em inset by margin)
+	assert cjk.reference_frame(None, em, default_face=None, margin=0.1) == cjk.inset_frame(em, 0.1)
+	# stub default is rejected -> falls through to imaginary
+	assert cjk.reference_frame(None, em, default_face=stub, margin=0.1) == cjk.inset_frame(em, 0.1)
+	# nothing usable -> em
+	assert cjk.reference_frame(None, em, default_face=None, margin=None) == em
+
+
 # - reduce_ratios -----------------------------------------------------
 def test_reduce_ratios():
 	assert cjk.reduce_ratios([]) is None

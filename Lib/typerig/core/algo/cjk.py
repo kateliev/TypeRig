@@ -868,15 +868,37 @@ def face_frame_reliable(face, em_frame, min_side_ratio=0.20, min_area_ratio=0.15
 	return (fw * fh) >= min_area_ratio * (ew * eh)
 
 
-def reference_frame(captured_face, em_frame, use_face=True):
-	'''The frame a region should be measured against: a reliable *captured* face
-	(a snapshot taken BEFORE the old parts were deleted), else the em band.
+def inset_frame(frame, margin):
+	'''Em band inset uniformly inward by `margin` (fraction 0..0.45 of each side)
+	— the "imaginary face" used when nothing was measured. Returns (l,b,r,t).'''
+	m = min(0.45, max(0.0, float(margin)))
+	left, bottom, right, top = frame
+	dx = (right - left) * m
+	dy = (top - bottom) * m
+	return (left + dx, bottom + dy, right - dx, top - dy)
+
+
+def reference_frame(captured_face, em_frame, use_face=True, default_face=None, margin=None):
+	'''The frame a region is measured against, in priority order:
+
+	  1. this layer's reliable *captured* face (a snapshot taken BEFORE parts were
+	     deleted),
+	  2. a reliable `default_face` — e.g. the active layer's face, shared across
+	     masters that were never measured ("a wrong face beats no face"),
+	  3. an imaginary face = the em band inset uniformly by `margin` (0..1),
+	  4. the em band.
 
 	Deliberately never a LIVE face of a glyph under construction: once the first
 	region is pasted, the live face IS that region, so a later paste would be
-	scaled onto it. Callers must pass a pre-deletion snapshot (or None).'''
-	if use_face and captured_face is not None and face_frame_reliable(captured_face, em_frame):
+	scaled onto it. Callers must pass pre-deletion snapshots (or None).'''
+	if not use_face:
+		return em_frame
+	if captured_face is not None and face_frame_reliable(captured_face, em_frame):
 		return captured_face
+	if default_face is not None and face_frame_reliable(default_face, em_frame):
+		return default_face
+	if margin:
+		return inset_frame(em_frame, margin)
 	return em_frame
 
 

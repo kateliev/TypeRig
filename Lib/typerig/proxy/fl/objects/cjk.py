@@ -422,22 +422,26 @@ def capture_face_frames(pg, layers):
 	return frames or None
 
 
-def region_bounds(pg, layers, frac_for_layer, captured_faces=None, use_face=True, upm=None):
+def region_bounds(pg, layers, frac_for_layer, captured_faces=None, use_face=True,
+				  upm=None, default_face=None, margin=None):
 	'''Per-master target Bounds for an IDC-region paste — one entry per layer.
 
 	frac_for_layer : callable(layer_name) -> (fx0,fy0,fx1,fy1) y-UP slot fraction,
 	                 or None to skip the layer. Lets the caller apply a per-master
 	                 measured split.
 	captured_faces : {layer_name: (l,b,r,t)} pre-deletion snapshot; a layer that is
-	                 absent (or whose face is degenerate) falls back to the master's
-	                 em band.
+	                 absent (or whose face is degenerate) falls back per the chain
+	                 below.
+	default_face   : a face rect used for masters lacking their own (e.g. the active
+	                 layer's face — "a wrong face beats no face").
+	margin         : imaginary-face inset (0..1 of the em) when nothing is measured.
 	use_face       : when False, always use the em band.
 
-	The reference frame is captured-or-em (cjk.reference_frame) — NEVER a live face
-	of the glyph under construction, so sequential region pastes don't collapse onto
-	the first one. Returns {layer_name: Bounds} (eNodesContainer bounds — the same
-	type the node-selection paste path produces, so downstream fit/align/flip are
-	untouched).'''
+	Per master the reference frame is: own captured face -> default_face -> imaginary
+	(em inset by margin) -> em band (cjk.reference_frame). NEVER a live face of the
+	glyph under construction. Returns {layer_name: Bounds} (eNodesContainer bounds —
+	the same type the node-selection paste path produces, so downstream
+	fit/align/flip are untouched).'''
 	try:
 		package = pg.package
 	except Exception:
@@ -459,7 +463,7 @@ def region_bounds(pg, layers, frac_for_layer, captured_faces=None, use_face=True
 			advance = upm
 		em = frame_for(package, name, advance, upm)
 		face = captured_faces.get(name) if captured_faces else None
-		frame = cjk.reference_frame(face, em, use_face)
+		frame = cjk.reference_frame(face, em, use_face, default_face=default_face, margin=margin)
 		x0, y0, x1, y1 = cjk.rect_in_frame(frame, frac)
 		corners = [
 			fl6.flNode(QtCore.QPointF(x0, y0), nodeType='on'),
