@@ -11,10 +11,12 @@
 # - Dependencies ------------------------
 from collections import defaultdict
 from collections.abc import MutableSequence, MutableMapping
+from functools import reduce
+from operator import getitem
 import json
 
 # - Init -------------------------------
-__version__ = '0.30.0'
+__version__ = '0.31.0'
 
 # - Objects ----------------------------
 # -- Lists -----------------------------
@@ -166,27 +168,17 @@ class ndList(CustomList):
 	def dim(self): # Dimensions
 		return len(self.data), self.__nest_level(self.data) 
 
-	def __getitem__(self, *args): 
-		if isinstance(args[0], tuple):
-			retrieve = ''
-			
-			for i in args[0]:
-				retrieve += '[{}]'.format(i)
+	def __getitem__(self, index):
+		if isinstance(index, tuple):
+			return reduce(getitem, index, self.data)
 
-			return eval('self.data{}'.format(retrieve))
+		return self.data[index]
+
+	def __setitem__(self, index, value):
+		if isinstance(index, tuple):
+			reduce(getitem, index[:-1], self.data)[index[-1]] = value
 		else:
-			return self.data[args[0]]
-
-	def __setitem__(self, *args): 
-		if isinstance(args[0], tuple):
-			retrieve = ''
-			
-			for i in args[0]:
-				retrieve += '[{}]'.format(i)
-
-			exec('self.data{}=args[1]'.format(retrieve))
-		else:
-			self.data[args[0]] = args[1]
+			self.data[index] = value
 
 # -- Dicts -----------------------------
 class CustomDict(MutableMapping):

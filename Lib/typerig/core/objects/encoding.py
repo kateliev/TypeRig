@@ -16,7 +16,7 @@ from typerig.core.objects.atom import Member, Container
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 
 # - Init --------------------------------
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -54,7 +54,6 @@ class EncodingEntry(Member, XMLSerializable):
 
 		self.name 	  = kwargs.pop('name',	   '')
 		self.unicodes = kwargs.pop('unicodes', [])
-		self.lib 	  = kwargs.pop('lib',	   {})
 
 	# -- Internals ----------------------
 	def __repr__(self):
@@ -130,9 +129,6 @@ class Encoding(Container, XMLSerializable):
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', EncodingEntry)
 		super(Encoding, self).__init__(data, default_factory=factory, **kwargs)
-
-		if not kwargs.pop('proxy', False):
-			self.lib = kwargs.pop('lib', {})
 
 	def __repr__(self):
 		return '<{}: {} entries>'.format(self.__class__.__name__, len(self.data))

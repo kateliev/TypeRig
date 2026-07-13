@@ -12,7 +12,7 @@
 import math
 
 # - Init --------------------------------
-__version__ = '0.26.3'
+__version__ = '0.27.0'
 
 # - Functions ---------------------------
 # -- Point ------------------------------
@@ -229,10 +229,9 @@ def checkInnerOuter(firstAngle, lastAngle):
 	if dirAngle <= 0:	return False
 
 # - Ploygons ----------------------------------------
-def poly_area(vertices):
-	'''Unsigned polygon area via the shoelace formula.
-	The absolute value is taken over the SUM — per-term abs breaks for
-	polygons whose cross terms change sign (any polygon away from the origin).
+def poly_area_signed(vertices):
+	'''Signed polygon area via the shoelace formula.
+	Positive = CCW (y-up), negative = CW.
 	'''
 	corners = len(vertices)
 	area = 0.0
@@ -241,7 +240,14 @@ def poly_area(vertices):
 		j = (i + 1) % corners
 		area += vertices[i][0]*vertices[j][1] - vertices[j][0]*vertices[i][1]
 
-	return abs(area)*0.5
+	return area*0.5
+
+def poly_area(vertices):
+	'''Unsigned polygon area via the shoelace formula.
+	The absolute value is taken over the SUM — per-term abs breaks for
+	polygons whose cross terms change sign (any polygon away from the origin).
+	'''
+	return abs(poly_area_signed(vertices))
 
 if __name__ == '__main__':
 	A = (0,0); B = (0,200); C = (200,200); D = (200,0)

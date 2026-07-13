@@ -13,15 +13,16 @@ import math
 from typerig.core.func.math import linInterp as lerp
 from typerig.core.func.math import ratfrac
 from typerig.core.func.utils import isMultiInstance
+from typerig.core.objects.atom import PointsArithmetic
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.1.0'
+__version__ = '0.3.0'
 
 # - Classes -----------------------------
-class QuadraticBezier(object):
+class QuadraticBezier(PointsArithmetic):
 	def __init__(self, *argv):
 		if len(argv) == 1:
 			if isinstance(argv[0], self.__class__): # Clone (deep copy — do not share Points)
@@ -45,22 +46,6 @@ class QuadraticBezier(object):
 				self.p0, self.p1, self.p2 = [Point(argv[i], argv[i+1]) for i in range(0, len(argv), 2)]
 
 		self.transform = Transform()
-
-	def __add__(self, other):
-		return self.__class__([p + other for p in self.points])
-
-	def __sub__(self, other):
-		return self.__class__([p - other for p in self.points])
-
-	def __mul__(self, other):
-		return self.__class__([p * other for p in self.points])
-
-	__rmul__ = __mul__
-
-	def __div__(self, other):
-		return self.__class__([p / other for p in self.points])
-
-	__truediv__ = __div__
 
 	def __and__(self, other):
 		return self.intersect_line(other)
@@ -264,6 +249,7 @@ class QuadraticBezier(object):
 	def solve_distance_start(self, distance, timeStep=.01):
 		'''Returns time at which the given distance to beginning of bezier is met.
 		Probing is executed withing timeStep in range from 0 to 1. The finer the step the preciser the results.
+		NOTE: measures CHORD distance (straight line from the endpoint), NOT arc length.
 		'''
 		measure = 0
 		time = 0
@@ -278,6 +264,7 @@ class QuadraticBezier(object):
 	def solve_distance_end(self, distance, timeStep=.01):
 		'''Returns time at which the given distance to end of bezier is met.
 		Probing is executed withing timeStep in range from 0 to 1. The finer the step the preciser the results.
+		NOTE: measures CHORD distance (straight line from the endpoint), NOT arc length.
 		'''
 		measure = 0
 		time = 1
@@ -448,17 +435,21 @@ class QuadraticBezier(object):
 		pt, d1, _ = self.solve_derivative_at_time(t)
 		return math.sqrt(d1.x**2 + d1.y**2)
 
-	def get_arc_length(self):
+	def _arc_length_between(self, t0, t1):
+		'''Arc length of the curve segment between parameters t0 and t1.
+		Gauss-Legendre quadrature with nodes remapped to [t0, t1].'''
+		c = (t1 - t0) * 0.5
+		m = (t1 + t0) * 0.5
 		length = 0.0
-		a, b = 0.0, 1.0
-		c = (b - a) * 0.5
-		m = (b + a) * 0.5
 
-		for i in range(0, len(self._GAUSS_LEGENDRE_T)):
+		for i in range(len(self._GAUSS_LEGENDRE_T)):
 			t = c * self._GAUSS_LEGENDRE_T[i] + m
 			length += self._GAUSS_LEGENDRE_C[i] * self._arc_length_integrand(t)
 
-		return length * 0.5 * (b - a)
+		return length * c
+
+	def get_arc_length(self):
+		return self._arc_length_between(0., 1.)
 
 	def get_arc_length_by_parts(self, parts=50):
 		step = 1.0 / parts
@@ -466,22 +457,47 @@ class QuadraticBezier(object):
 		total = 0.0
 
 		for i in range(parts):
-			t0 = i * step
-			t1 = (i + 1) * step
-
-			seg_len = 0.0
-			c = (t1 - t0) * 0.5
-			m = (t1 + t0) * 0.5
-
-			for j in range(len(self._GAUSS_LEGENDRE_T)):
-				t = c * self._GAUSS_LEGENDRE_T[j] + m
-				seg_len += self._GAUSS_LEGENDRE_C[j] * self._arc_length_integrand(t)
-
-			seg_len *= 0.5 * (t1 - t0)
-			total += seg_len
+			total += self._arc_length_between(i * step, (i + 1) * step)
 			lengths.append(total)
 
 		return lengths
+
+	def solve_t_at_length(self, length, tolerance=1e-6, max_iterations=32):
+		'''Find t such that arc length from p0 to B(t) equals `length`.
+		Newton on F(t) = arclen(0,t) - length; F'(t) = |B'(t)|.
+		Clamps to [0,1]; falls back to bisection when Newton steps outside
+		the bracket or |F'| < 1e-12.'''
+		total = self._arc_length_between(0., 1.)
+
+		if length <= 0.:
+			return 0.
+
+		if length >= total:
+			return 1.
+
+		lo, hi = 0., 1.
+		t = length / total
+
+		for _ in range(max_iterations):
+			err = self._arc_length_between(0., t) - length
+
+			if abs(err) <= tolerance:
+				return t
+
+			if err > 0.:
+				hi = t
+			else:
+				lo = t
+
+			deriv = self._arc_length_integrand(t)
+
+			if deriv < 1e-12:
+				t = (lo + hi) * 0.5
+			else:
+				t_new = t - err / deriv
+				t = t_new if lo < t_new < hi else (lo + hi) * 0.5
+
+		return t
 
 	def get_bbox(self):
 		extremes = self.solve_extremes()
@@ -580,32 +596,11 @@ class QuadraticBezier(object):
 		return points, lengths
 
 	def get_point_at_length(self, distance):
-		total_length = self.get_arc_length()
-		target = distance / total_length
-		step = 1.0 / 1000
-		accum = 0.0
-
-		for i in range(1000):
-			t0 = i * step
-			t1 = (i + 1) * step
-			pt0 = self.solve_point(t0)
-			pt1 = self.solve_point(t1)
-			seg_len = math.hypot(pt1.x - pt0.x, pt1.y - pt0.y)
-
-			if accum + seg_len >= distance:
-				remainder = distance - accum
-				if seg_len > 0:
-					frac = remainder / seg_len
-					return Point(
-						pt0.x + (pt1.x - pt0.x) * frac,
-						pt0.y + (pt1.y - pt0.y) * frac
-					)
-
-			accum += seg_len
-
-		return self.p2
+		'''Point at given arc length from p0 (clamped to the curve ends).'''
+		return self.solve_point(self.solve_t_at_length(distance))
 
 	def divide_at_length(self, distance):
+		'''Slice the curve at given arc length from p0.'''
 		total_length = self.get_arc_length()
 		if distance <= 0:
 			return self.__class__(self.p0, self.p0, self.p0), self
@@ -613,26 +608,7 @@ class QuadraticBezier(object):
 		if distance >= total_length:
 			return self, self.__class__(self.p2, self.p2, self.p2)
 
-		step = 1.0 / 1000
-		accum = 0.0
-
-		for i in range(1000):
-			t0 = i * step
-			t1 = (i + 1) * step
-			pt0 = self.solve_point(t0)
-			pt1 = self.solve_point(t1)
-			seg_len = math.hypot(pt1.x - pt0.x, pt1.y - pt0.y)
-
-			if accum + seg_len >= distance:
-				remainder = distance - accum
-				if seg_len > 0:
-					frac = remainder / seg_len
-					t_split = t0 + (t1 - t0) * frac
-					return self.solve_slice(t_split)
-
-			accum += seg_len
-
-		return self.solve_slice(0.5)
+		return self.solve_slice(self.solve_t_at_length(distance))
 
 	# -- Conversion
 	def to_cubic(self):

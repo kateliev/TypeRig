@@ -12,7 +12,7 @@
 import math, cmath, random
 
 # - Init --------------------------------
-__version__ = '0.28.0'
+__version__ = '0.29.0'
 
 epsilon = 0.000001
 
@@ -29,20 +29,48 @@ def zero_matrix(rows, cols):
 	return M
 
 def solve_equations(AM, BM):
-	'''Pure python implementaton of numpy.linalg.solve as explained by:
-	https://integratedmlai.com/system-of-equations-solution/
+	'''Solve the linear system AM * x = BM (pure-python numpy.linalg.solve).
+	Gauss-Jordan elimination with partial pivoting. Operates on copies —
+	the input matrices are NOT mutated. Returns the solution in BM shape
+	(column matrix, list of one-element rows).
+
+	Raises:
+		ValueError: when the matrix is singular (best pivot < 1e-12).
 	'''
-	for fd in range(len(AM)):
-		fdScaler = 1.0 / AM[fd][fd]
-		for j in range(len(AM)):
-			AM[fd][j] *= fdScaler
-		BM[fd][0] *= fdScaler
-		for i in list(range(len(AM)))[0:fd] + list(range(len(AM)))[fd+1:]:
-			crScaler = AM[i][fd]
-			for j in range(len(AM)):
-				AM[i][j] = AM[i][j] - crScaler * AM[fd][j]
-			BM[i][0] = BM[i][0] - crScaler * BM[fd][0]
-	return BM
+	n = len(AM)
+	A = [row[:] for row in AM]
+	B = [row[:] for row in BM]
+
+	for fd in range(n):
+		# - Partial pivoting: swap in the row with the largest pivot magnitude
+		pivot_row = max(range(fd, n), key=lambda r: abs(A[r][fd]))
+
+		if abs(A[pivot_row][fd]) < 1e-12:
+			raise ValueError('Singular matrix')
+
+		if pivot_row != fd:
+			A[fd], A[pivot_row] = A[pivot_row], A[fd]
+			B[fd], B[pivot_row] = B[pivot_row], B[fd]
+
+		fdScaler = 1.0 / A[fd][fd]
+
+		for j in range(n):
+			A[fd][j] *= fdScaler
+
+		B[fd][0] *= fdScaler
+
+		for i in range(n):
+			if i == fd:
+				continue
+
+			crScaler = A[i][fd]
+
+			for j in range(n):
+				A[i][j] -= crScaler * A[fd][j]
+
+			B[i][0] -= crScaler * B[fd][0]
+
+	return B
 
 # -- Data sets --------------------------
 def normalize2max(values):

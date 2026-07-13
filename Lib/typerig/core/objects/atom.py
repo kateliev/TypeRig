@@ -15,7 +15,7 @@ import copy, uuid
 from typerig.core.objects.collection import CustomList
 
 # - Init -------------------------------
-__version__ = '0.3.1'
+__version__ = '0.6.0'
 
 # - Objects ----------------------------
 class Atom(object):
@@ -24,6 +24,27 @@ class Atom(object):
 
 	def __init__(self, *args, **kwargs):
 		pass
+
+class PointsArithmetic(object):
+	'''Mixin: element-wise operators for objects exposing .points (list of Point)
+	and a constructor accepting a list of Points.'''
+	__slots__ = ()
+
+	def __add__(self, other):
+		return self.__class__([p + other for p in self.points])
+
+	def __sub__(self, other):
+		return self.__class__([p - other for p in self.points])
+
+	def __mul__(self, other):
+		return self.__class__([p * other for p in self.points])
+
+	__rmul__ = __mul__
+
+	def __truediv__(self, other):
+		return self.__class__([p / other for p in self.points])
+
+	__div__ = __truediv__ # Legacy alias (external user scripts may call it directly)
 
 class Navigable(object):
 	'''Mixin for objects that navigate within a parent sequence.
@@ -64,6 +85,7 @@ class Member(Navigable, Atom):
 		self.uid = uuid.uuid4()
 		self.parent = kwargs.pop('parent', None)
 		self.identifier = kwargs.get('identifier', None)
+		self.lib = kwargs.get('lib', {})
 
 	# - Internals -----------------------
 	def __hash__(self):
@@ -83,6 +105,7 @@ class Container(CustomList, Navigable, Atom):
 		# - Init
 		self.uid = uuid.uuid4()
 		self.parent = kwargs.pop('parent', None)
+		self.lib = kwargs.get('lib', {})
 		self._lock = kwargs.pop('locked', False)
 		self._subclass = kwargs.pop('default_factory', self.__class__)
 
@@ -213,13 +236,17 @@ class Linker(object):
 		return str(self.data)
 
 	# - Functions ------------------
-	def where(self, search, value):
+	def where(self, predicate):
+		'''Yield links for which predicate(link) is truthy.
+		NOTE: signature changed (S2/Stage 5) — takes a callable instead of
+		the old (search, value) string pair that was evaluated dynamically.
+		'''
 		curr_link = self
 
 		while curr_link is not None:
-			if eval('curr_link.{}{}'.format(search, value)):
+			if predicate(curr_link):
 				yield curr_link
-			
+
 			curr_link = curr_link.next
 
 if __name__ == "__main__":

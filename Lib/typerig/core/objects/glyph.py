@@ -21,7 +21,7 @@ from typerig.core.objects.layer import Layer
 from typerig.core.objects.guideline import Guideline
 
 # - Init -------------------------------
-__version__ = '0.2.6'
+__version__ = '0.3.0'
 
 # - Mark Color Palette ------------------
 # Predefined glyph flag colors stored as hex strings in XML.
@@ -46,7 +46,7 @@ MARK_COLORS_REV = {v: k for k, v in MARK_COLORS.items()}
 # - Classes -----------------------------
 @register_xml_class
 class Glyph(Container, XMLSerializable):
-	__slots__ = ('name', 'mark', 'unicodes', 'identifier', 'parent', 'selected', 'note', 'guidelines')
+	__slots__ = ('name', 'mark', 'unicodes', 'selected', 'note', 'guidelines')
 
 	XML_TAG = 'glyph'
 	XML_ATTRS = ['name', 'identifier', 'unicodes', 'selected', 'mark']

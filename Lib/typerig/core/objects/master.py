@@ -16,7 +16,7 @@ from typerig.core.objects.atom import Member, Container
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class, _convert_xml_attr
 
 # - Init --------------------------------
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 # - Helpers -----------------------------
 def _location_to_element(location):
@@ -76,7 +76,6 @@ class Master(Member, XMLSerializable):
 		self.layer_name  = kwargs.pop('layer_name',  self.name)
 		self.location 	 = kwargs.pop('location',	 {})
 		self.is_default  = kwargs.pop('is_default',  False)
-		self.lib 		 = kwargs.pop('lib',		 {})
 
 	# -- Internals ----------------------
 	def __repr__(self):
@@ -138,9 +137,6 @@ class Masters(Container, XMLSerializable):
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Master)
 		super(Masters, self).__init__(data, default_factory=factory, **kwargs)
-
-		if not kwargs.pop('proxy', False):
-			self.lib = kwargs.pop('lib', {})
 
 	def __repr__(self):
 		return '<{}: {} masters>'.format(self.__class__.__name__, len(self.data))

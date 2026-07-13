@@ -29,7 +29,7 @@ from typerig.core.objects.atom import Container
 from typerig.core.objects.node import Node, DirectionalNode, node_types
 
 # - Init -------------------------------
-__version__ = '0.6.1'
+__version__ = '0.8.0'
 
 # - Classes -----------------------------
 CONTOUR_KIND_BEZIER = 'bezier'
@@ -37,7 +37,7 @@ CONTOUR_KIND_HOBBY = 'hobby'
 
 @register_xml_class
 class Contour(Container, XMLSerializable):
-	__slots__ = ('name', 'closed', 'clockwise', 'transform', 'parent', 'lib', 'kind')
+	__slots__ = ('name', 'closed', 'clockwise', 'transform', 'kind')
 
 	XML_TAG = 'contour'
 	XML_ATTRS = ['name', 'identifier', 'kind', 'closed', 'clockwise']
@@ -246,17 +246,9 @@ class Contour(Container, XMLSerializable):
 		'''Signed area via shoelace on sampled polyline.
 		Positive = CCW, Negative = CW.
 		More accurate than get_on_area() for curved contours.
+		Deprecated alias for get_signed_area('sampled').
 		'''
-		pts = self.sample(steps_per_segment=100)
-		n = len(pts)
-		area = 0.0
-
-		for i in range(n):
-			x0, y0 = pts[i]
-			x1, y1 = pts[(i + 1) % n]
-			area += x0 * y1 - x1 * y0
-
-		return area / 2.0
+		return self.get_signed_area('sampled')
 
 	@property
 	def is_ccw(self):
@@ -297,27 +289,46 @@ class Contour(Container, XMLSerializable):
 			return self._get_knot_area() > 0
 		return self.get_on_area() > 0
 
-	def get_on_area(self):
-		'''Get contour area using on curve points only'''
-		polygon_area = []
+	def get_signed_area(self, mode='on'):
+		'''Signed shoelace area. Positive = CCW (y-up).
+		mode: 'on' (on-curve polygon), 'sampled' (curve-accurate, 100 steps/segment),
+		'knots' (hobby knot positions).
+		Single shoelace core — only the point list varies with mode.
+		'''
+		if mode == 'sampled':
+			pts = self.sample(steps_per_segment=100)
+		elif mode == 'knots':
+			pts = [(item.x, item.y) for item in self.data]
+		elif mode == 'on':
+			pts = [(node.x, node.y) for node in self.data if node.is_on]
+		else:
+			raise ValueError('Unknown mode: {}'.format(mode))
 
-		for node in self.nodes:
-			edge_sum = (node.next_on.x - node.x)*(node.next_on.y + node.y)
-			polygon_area.append(edge_sum)
-
-		return sum(polygon_area)*0.5
-
-	def _get_knot_area(self):
-		'''Shoelace area on hobby knot positions (no segment expansion).'''
-		n = len(self.data)
+		n = len(pts)
 		if n < 3:
 			return 0.
 
 		area = 0.
 		for i in range(n):
 			j = (i + 1) % n
-			area += (self.data[j].x - self.data[i].x) * (self.data[j].y + self.data[i].y)
+			area += pts[i][0]*pts[j][1] - pts[j][0]*pts[i][1]
+
 		return area * 0.5
+
+	def get_on_area(self):
+		'''Get contour area using on curve points only.
+		Historical sign convention: positive = clockwise (y-up) —
+		get_winding() and reverse() depend on it.
+		Deprecated alias for -get_signed_area('on').
+		'''
+		return -self.get_signed_area('on')
+
+	def _get_knot_area(self):
+		'''Shoelace area on hobby knot positions (no segment expansion).
+		Historical sign convention: positive = clockwise (y-up).
+		Deprecated alias for -get_signed_area('knots').
+		'''
+		return -self.get_signed_area('knots')
 
 	def get_segments(self, get_point=False):
 		assert len(self.data) > 1, 'Cannot return segments for contour with length {}'.format(len(self.data))

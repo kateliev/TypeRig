@@ -24,12 +24,12 @@ from typerig.core.func.math import slerp_angle, interpolate_directional
 from typerig.core.objects.sdf import SignedDistanceField
 
 # - Init -------------------------------
-__version__ = '0.4.2'
+__version__ = '0.6.0'
 
 # - Classes -----------------------------
 @register_xml_class
 class Shape(Container, XMLSerializable):
-	__slots__ = ('name', 'component', 'transform', 'identifier', 'parent', 'lib', '_sdf')
+	__slots__ = ('name', 'component', 'transform', '_sdf')
 
 	XML_TAG = 'shape'
 	XML_ATTRS = ['name', 'identifier', 'transform', 'component']
@@ -104,9 +104,7 @@ class Shape(Container, XMLSerializable):
 	@property
 	def bounds(self):
 		assert len(self.data) > 0, 'Cannot return bounds for <{}> with length {}'.format(self.__class__.__name__, len(self.data))
-		contour_bounds = [contour.bounds for contour in self.data]
-		bounds = sum([[(bound.x, bound.y), (bound.xmax, bound.ymax)] for bound in contour_bounds],[])
-		return Bounds(bounds)
+		return Bounds.from_bounds([contour.bounds for contour in self.data])
 
 	@property
 	def signature(self):

@@ -27,7 +27,7 @@ from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 from typerig.core.objects.groups import KERN1_PREFIX, KERN2_PREFIX
 
 # - Init --------------------------------
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -66,7 +66,6 @@ class KernPair(Member, XMLSerializable):
 		self.first  = kwargs.pop('first',  '')
 		self.second = kwargs.pop('second', '')
 		self.value  = int(kwargs.pop('value', 0))
-		self.lib    = kwargs.pop('lib', {})
 
 	# -- Internals ----------------------
 	def __repr__(self):
@@ -126,9 +125,6 @@ class Kerning(Container, XMLSerializable):
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', KernPair)
 		super(Kerning, self).__init__(data, default_factory=factory, **kwargs)
-
-		if not kwargs.pop('proxy', False):
-			self.lib = kwargs.pop('lib', {})
 
 	def __repr__(self):
 		return '<{}: {} pairs>'.format(self.__class__.__name__, len(self.data))

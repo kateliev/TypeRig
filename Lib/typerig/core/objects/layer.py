@@ -29,12 +29,13 @@ from typerig.core.func.math import slerp_angle, interpolate_directional
 from typerig.core.func.transform import adaptive_scale_directional, timer
 
 # - Init -------------------------------
-__version__ = '0.6.2'
+__version__ = '0.8.0'
 
 # - Classes -----------------------------
 @register_xml_class
 class Layer(Container, XMLSerializable): 
-	__slots__ = ('name', 'stx', 'sty', 'transform', 'mark', 'advance_width', 'advance_height', 'identifier', 'parent', 'lib', 'anchors', 'guidelines', '_sdf')
+	__slots__ = ('name', 'stx', 'sty', 'transform', 'mark', 'advance_width', 'advance_height', 'anchors', 'guidelines', '_sdf',
+	             '_scale_factors', '_scale_residual', '_scale_converged')
 
 	XML_TAG = 'layer'
 	XML_ATTRS = ['name', 'identifier', 'width', 'height', 'stx', 'sty']
@@ -62,6 +63,12 @@ class Layer(Container, XMLSerializable):
 
 		# - SDF cache (not serialized)
 		self._sdf = None
+
+		# - scale_with_axis diagnostics (not serialized; read by host panels
+		#   via getattr(layer, '_scale_converged', None))
+		self._scale_factors = None
+		self._scale_residual = None
+		self._scale_converged = None
 
 	
 	# -- Internals ------------------------------
@@ -137,9 +144,7 @@ class Layer(Container, XMLSerializable):
 	@property
 	def bounds(self):
 		assert len(self.data) > 0, 'Cannot return bounds for <{}> with length {}'.format(self.__class__.__name__, len(self.data))
-		contour_bounds = [shape.bounds for shape in self.data]
-		bounds = sum([[(bound.x, bound.y), (bound.xmax, bound.ymax)] for bound in contour_bounds],[])
-		return Bounds(bounds)
+		return Bounds.from_bounds([shape.bounds for shape in self.data])
 
 	@property
 	def signature(self):

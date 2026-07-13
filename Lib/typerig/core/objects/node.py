@@ -28,7 +28,7 @@ from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.atom import Member, Container
 
 # - Init -------------------------------
-__version__ = '0.6.0'
+__version__ = '0.7.0'
 
 node_types = {'on':'on', 'off':'off', 'curve':'curve', 'move':'move'}
 
@@ -43,7 +43,7 @@ DirectionalNode = namedtuple('DirectionalNode',	['x', 'y', 'angle_out', 'mag_out
 
 @register_xml_class
 class Node(Member, XMLSerializable): 
-	__slots__ = ('x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'identifier','complex_math','weight', 'parent', 'lib')
+	__slots__ = ('x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'complex_math', 'weight')
 
 	XML_TAG = 'node'
 	XML_ATTRS = ['x', 'y', 'type', 'smooth']

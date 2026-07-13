@@ -21,7 +21,7 @@ Each class defines its XML schema using class attributes:
 from xml.etree import ElementTree as ET
 
 # - Init --------------------------------
-__version__ = '0.5.0'
+__version__ = '0.6.0'
 
 _SENTINEL = object()  # Unique sentinel for XML_ATTR_DEFAULTS miss
 
@@ -35,7 +35,8 @@ def _format_float(v):
 # - Classes -----------------------------
 class XMLSerializable:
 	'''Mixin class for XML serialization'''
-	
+	__slots__ = ()
+
 	# Override these in subclasses
 	XML_TAG = None  # e.g., 'contour', 'node', 'glyph'
 	XML_ATTRS = []  # e.g., ['identifier', 'x', 'y']

@@ -25,7 +25,7 @@ from typerig.core.objects.groups import Groups
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 
 # - Init --------------------------------
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -63,8 +63,7 @@ class FontInfo(Member, XMLSerializable):
 		'weight_class', 'width_class',
 		'italic_angle',
 		'underline_position', 'underline_thickness',
-		'postscript_font_name',
-		'identifier', 'parent', 'lib'
+		'postscript_font_name'
 	)
 
 	XML_TAG = 'info'
@@ -136,7 +135,6 @@ class FontInfo(Member, XMLSerializable):
 		self.underline_position  = kwargs.pop('underline_position',  None)
 		self.underline_thickness = kwargs.pop('underline_thickness', None)
 		self.postscript_font_name = kwargs.pop('postscript_font_name', '')
-		self.lib 				 = kwargs.pop('lib',				 {})
 
 	# -- Internals ----------------------
 	def __repr__(self):
@@ -220,8 +218,7 @@ class FontMetrics(Member, XMLSerializable):
 		cap_height (int) : cap-height value
 		line_gap (int)   : recommended line gap
 	'''
-	__slots__ = ('upm', 'ascender', 'descender', 'x_height', 'cap_height', 'line_gap',
-	             'identifier', 'parent', 'lib')
+	__slots__ = ('upm', 'ascender', 'descender', 'x_height', 'cap_height', 'line_gap')
 
 	XML_TAG = 'metrics'
 	XML_ATTRS = ['upm', 'ascender', 'descender', 'x-height', 'cap-height', 'line-gap']
@@ -244,7 +241,6 @@ class FontMetrics(Member, XMLSerializable):
 		self.x_height 	= int(kwargs.pop('x_height',    500))
 		self.cap_height = int(kwargs.pop('cap_height',  700))
 		self.line_gap 	= int(kwargs.pop('line_gap',    0))
-		self.lib 		= kwargs.pop('lib', {})
 
 	# -- Internals ----------------------
 	def __repr__(self):
@@ -314,7 +310,7 @@ class Font(Container, XMLSerializable):
 	'''
 	__slots__ = (
 		'info', 'metrics', 'axes', 'masters', 'instances',
-		'encoding', 'kerning', 'groups', 'identifier', 'parent', 'lib', 'features'
+		'encoding', 'kerning', 'groups', 'features', '_name_index'
 	)
 
 	XML_TAG = 'font'
@@ -336,7 +332,6 @@ class Font(Container, XMLSerializable):
 			self.encoding 	= kwargs.pop('encoding', Encoding())
 			self.kerning 	= kwargs.pop('kerning',  Kerning())
 			self.groups 	= kwargs.pop('groups',   Groups())		# UFO-style flat groups (incl. public.kern1/2.* kerning classes)
-			self.lib 		= kwargs.pop('lib',      {})
 			self.features 	= kwargs.pop('features', '')			# UFO-style: raw OpenType feature code (features.fea)
 
 		# Name → index cache for fast glyph lookup

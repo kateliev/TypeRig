@@ -14,7 +14,7 @@ from typerig.core.objects.atom import Member
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 
 # - Init --------------------------------
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -35,7 +35,7 @@ class Axis(Member, XMLSerializable):
 		default (float): default axis value
 		maximum (float): maximum axis value
 	'''
-	__slots__ = ('name', 'tag', 'minimum', 'default', 'maximum', 'identifier', 'parent', 'lib')
+	__slots__ = ('name', 'tag', 'minimum', 'default', 'maximum')
 
 	XML_TAG = 'axis'
 	XML_ATTRS = ['name', 'tag', 'minimum', 'default', 'maximum', 'identifier']
@@ -56,7 +56,6 @@ class Axis(Member, XMLSerializable):
 		self.minimum = kwargs.pop('minimum', 0.)
 		self.default = kwargs.pop('default', 0.)
 		self.maximum = kwargs.pop('maximum', 1000.)
-		self.lib 	 = kwargs.pop('lib',	 {})
 
 	# -- Internals ----------------------
 	def __repr__(self):

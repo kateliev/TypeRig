@@ -17,7 +17,7 @@ from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 from typerig.core.objects.master import _location_to_element, _location_from_element
 
 # - Init --------------------------------
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -51,7 +51,6 @@ class Instance(Member, XMLSerializable):
 
 		self.name 	  = kwargs.pop('name',	   '')
 		self.location = kwargs.pop('location', {})
-		self.lib 	  = kwargs.pop('lib',	   {})
 
 	# -- Internals ----------------------
 	def __repr__(self):
@@ -96,9 +95,6 @@ class Instances(Container, XMLSerializable):
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Instance)
 		super(Instances, self).__init__(data, default_factory=factory, **kwargs)
-
-		if not kwargs.pop('proxy', False):
-			self.lib = kwargs.pop('lib', {})
 
 	def __repr__(self):
 		return '<{}: {} instances>'.format(self.__class__.__name__, len(self.data))

@@ -16,7 +16,7 @@ from typerig.core.objects.atom import Member
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 
 # - Init -------------------------------
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -24,7 +24,7 @@ class Anchor(Member, XMLSerializable):
 	'''A named position marker for mark attachment, component placement, 
 	cursive connection and similar glyph-level positioning tasks.
 	'''
-	__slots__ = ('x', 'y', 'name', 'color', 'selected', 'identifier', 'parent', 'lib')
+	__slots__ = ('x', 'y', 'name', 'color', 'selected')
 
 	XML_TAG = 'anchor'
 	XML_ATTRS = ['x', 'y', 'name', 'color', 'identifier']

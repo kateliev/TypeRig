@@ -14,14 +14,15 @@ import math
 from typerig.core.func.math import linInterp as lerp
 from typerig.core.func.math import isBetween
 from typerig.core.func.utils import isMultiInstance
+from typerig.core.objects.atom import PointsArithmetic
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.point import Point, Void
 
 # - Init -------------------------------
-__version__ = '0.28.0'
+__version__ = '0.29.0'
 
 # - Classes -----------------------------
-class Line(object):
+class Line(PointsArithmetic):
 	def __init__(self, *argv):
 		if len(argv) == 1:
 			if isinstance(argv[0], self.__class__): # Clone (deep copy — do not share Points)
@@ -49,22 +50,6 @@ class Line(object):
 				self.p0, self.p1 = Point(argv[0], argv[1]), Point(argv[2], argv[3])
 
 		self.transform = Transform()
-
-	def __add__(self, other):
-		return self.__class__(self.p0 + other, self.p1 + other)
-
-	def __sub__(self, other):
-		return self.__class__(self.p0 - other, self.p1 - other)
-
-	def __mul__(self, other):
-		return self.__class__(self.p0 * other, self.p1 * other)
-
-	__rmul__ = __mul__
-
-	def __div__(self, other):
-		return self.__class__(self.p0 / other, self.p1 / other)
-
-	__truediv__ = __div__
 
 	def __and__(self, other):
 		return self.intersect_line(other)

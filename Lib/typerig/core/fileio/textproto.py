@@ -10,10 +10,19 @@
 # that you use it at your own risk!
 
 # - Dependencies -------------------------
+import ast
 import os
 
 # - Init -----------------------------
-__version__ = '0.0.1'
+__version__ = '0.1.0'
+
+# - Helpers --------------------------
+def _literal_or_str(value):
+	'''Parse a literal safely; fall back to the raw string.'''
+	try:
+		return ast.literal_eval(value)
+	except (ValueError, SyntaxError):
+		return value
 
 # - Functions ------------------------
 def is_hex(value, base=16):
@@ -74,7 +83,7 @@ class TEXTPROTOparser(object):
 				extract_value = line_extractor(new_line, self.__mark_sep)
 				self.__accumulator = []
 
-				return (eval(extract_key), eval(extract_value))
+				return (_literal_or_str(extract_key), _literal_or_str(extract_value))
 				
 			else:
 				return self.__next__()

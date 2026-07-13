@@ -30,7 +30,7 @@ from typerig.core.objects.atom import Member, Container
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 
 # - Init --------------------------------
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 KERN1_PREFIX = 'public.kern1.'
 KERN2_PREFIX = 'public.kern2.'
@@ -64,7 +64,6 @@ class Group(Member, XMLSerializable):
 
 		self.name    = kwargs.pop('name',    '')
 		self.members = list(kwargs.pop('members', []))
-		self.lib     = kwargs.pop('lib', {})
 
 	def __repr__(self):
 		return '<{}: "{}" {} glyphs>'.format(
@@ -146,9 +145,6 @@ class Groups(Container, XMLSerializable):
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', Group)
 		super(Groups, self).__init__(data, default_factory=factory, **kwargs)
-
-		if not kwargs.pop('proxy', False):
-			self.lib = kwargs.pop('lib', {})
 
 	def __repr__(self):
 		k1 = sum(1 for g in self.data if g.is_kern1)

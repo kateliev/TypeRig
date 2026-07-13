@@ -14,7 +14,7 @@ from typerig.core.func.math import linspread, geospread, ratfrac
 from typerig.core.objects.point import Point
 
 # - Init -----------------------------
-__version__ = '0.26.5'
+__version__ = '0.27.0'
 
 # - Classes --------------------------
 class fontFamilly():
@@ -141,14 +141,46 @@ class Bounds(object):
 		
 		return return_matrix
 
+	# - Constructors -------------
+	@classmethod
+	def from_bounds(cls, bounds_list):
+		'''Union of Bounds objects.'''
+		corners = []
+
+		for bound in bounds_list:
+			corners.append((bound.x, bound.y))
+			corners.append((bound.xmax, bound.ymax))
+
+		return cls(corners)
+
 	# - Functions ----------------
 	def recalc(self, tupleList):
 		from operator import itemgetter
+
+		if not tupleList:
+			raise ValueError('Bounds requires at least one point')
+
 		min_x_tup = min(tupleList,key=itemgetter(0))
 		min_y_tup = min(tupleList,key=itemgetter(1))
 		max_x_tup = max(tupleList,key=itemgetter(0))
 		max_y_tup = max(tupleList,key=itemgetter(1))
 		return (min_x_tup, min_y_tup, max_x_tup, max_y_tup)
+
+	def union(self, other):
+		'''Union with another Bounds. Returns a NEW Bounds.'''
+		return self.__class__.from_bounds([self, other])
+
+	def contains(self, x, y):
+		'''Point-in-box test, edges inclusive.'''
+		return self.x <= x <= self.xmax and self.y <= y <= self.ymax
+
+	def inflate(self, dx, dy=None):
+		'''Grow (or shrink, negative values) by dx/dy on each side.
+		Returns a NEW Bounds. dy defaults to dx.'''
+		if dy is None:
+			dy = dx
+
+		return self.__class__([(self.x - dx, self.y - dy), (self.xmax + dx, self.ymax + dy)])
 
 	def refresh(self, tupleList):
 		min_x_tup, min_y_tup, max_x_tup, max_y_tup = self.recalc(tupleList)

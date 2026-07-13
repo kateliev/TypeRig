@@ -27,7 +27,7 @@ from typerig.core.objects.atom import Member
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 
 # - Init --------------------------------
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -49,7 +49,7 @@ class Guideline(Member, XMLSerializable):
 		color (str, optional)    : "r,g,b,a" with components in [0,1]
 		identifier (str, optional)
 	'''
-	__slots__ = ('x', 'y', 'angle', 'name', 'color', 'identifier', 'parent', 'lib')
+	__slots__ = ('x', 'y', 'angle', 'name', 'color')
 
 	XML_TAG = 'guideline'
 	XML_ATTRS = ['x', 'y', 'angle', 'name', 'color', 'identifier']
@@ -64,7 +64,6 @@ class Guideline(Member, XMLSerializable):
 		self.name       = kwargs.pop('name',       None)
 		self.color      = kwargs.pop('color',      None)
 		self.identifier = kwargs.pop('identifier', None)
-		self.lib        = kwargs.pop('lib',        {})
 
 	def __repr__(self):
 		parts = []
