@@ -9,8 +9,6 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
-
 import math
 from typerig.core.func.math import linInterp as lerp
 from typerig.core.func.math import ratfrac
@@ -26,10 +24,13 @@ __version__ = '0.30.1'
 class CubicBezier(object):
 	def __init__(self, *argv):
 		if len(argv) == 1:
-			if isinstance(argv[0], self.__class__): # Clone
-				self.p0, self.p1, self.p2, self.p3 = argv[0].p0, argv[0].p1, argv[0].p2, argv[0].p3
-			
-			if isMultiInstance(argv[0], (tuple, list)):
+			if isinstance(argv[0], self.__class__): # Clone (deep copy — do not share Points)
+				self.p0, self.p1, self.p2, self.p3 = [Point(p) for p in argv[0].points]
+
+			elif isMultiInstance(argv[0], Point): # List/tuple of Points (operator results)
+				self.p0, self.p1, self.p2, self.p3 = [Point(p) for p in argv[0]]
+
+			elif isMultiInstance(argv[0], (tuple, list)):
 				self.p0, self.p1, self.p2, self.p3 = [Point(item) for item in argv[0]]
 
 		if len(argv) == 4:
@@ -39,10 +40,10 @@ class CubicBezier(object):
 			if isMultiInstance(argv, (tuple, list)):
 				self.p0, self.p1, self.p2, self.p3 = [Point(item) for item in argv]
 
-
 		if len(argv) == 8:
 			if isMultiInstance(argv, (float, int)):
-				self.p0, self.p1, self.p2, self.p3 = [Point(argv[i], argv[i+1]) for i in range(len(argv)-1)]
+				# Interleaved scalars: x0, y0, x1, y1, x2, y2, x3, y3
+				self.p0, self.p1, self.p2, self.p3 = [Point(argv[i], argv[i+1]) for i in range(0, 8, 2)]
 
 		self.transform = Transform()
 								
@@ -58,7 +59,9 @@ class CubicBezier(object):
 	__rmul__ = __mul__
 
 	def __div__(self, other):
-		return self.__class__([p / other for p in self.points])	
+		return self.__class__([p / other for p in self.points])
+
+	__truediv__ = __div__
 
 	def __and__(self, other):
 		return self.intersect_line(other)
@@ -185,13 +188,6 @@ class CubicBezier(object):
 			self.p2 * (1 - t) + other.p2 * t,
 			self.p3 * (1 - t) + other.p3 * t
 		)
-		
-		return CubicBezier(
-			self.p0 * (1 - t) + other.p0 * t,
-			self.p1 * (1 - t) + other.p1 * t,
-			self.p2 * (1 - t) + other.p2 * t,
-			self.p3 * (1 - t) + other.p3 * t
-		)
 
 	def point_on_curve(self, point, tolerance=1e-6):
 		'''Check if a point lies on the curve within tolerance.
@@ -233,21 +229,38 @@ class CubicBezier(object):
 		return len(extremes) <= 1
 
 	def get_inflection_points(self):
-		'''Find inflection points where curvature changes sign.
-		
+		'''Find inflection points where curvature changes sign (closed form).
+
+		Curvature sign flips where cross(B'(t), B''(t)) == 0. With the power-basis
+		coefficients a, b, c (B(t) = a*t^3 + b*t^2 + c*t + d) this expands to the
+		quadratic  -3(a x b) t^2 + 3(c x a) t + (c x b) = 0,  where (u x v) is the
+		2D scalar cross product.
+
 		Returns:
-			list[tuple]: List of (Point, t) tuples for inflection points
+			list[tuple]: List of (Point, t) tuples for inflection points, 0 < t < 1
 		'''
-		inflections = []
-		for i in range(100):
-			t = i / 100.0
-			pt, d1, d2 = self.solve_derivative_at_time(t)
-			cross = d1.x * d2.y - d1.y * d2.x
-			
-			if abs(cross) < 1e-6:
-				inflections.append((pt, t))
-		
-		return inflections
+		a, b, c, _d = self.find_coeffs()
+
+		cross = lambda u, v: u.x * v.y - u.y * v.x
+
+		qa = -3. * cross(a, b)
+		qb = 3. * cross(c, a)
+		qc = cross(c, b)
+
+		roots = []
+
+		if abs(qa) < 1e-12:
+			if abs(qb) > 1e-12:
+				roots.append(-qc / qb)
+		else:
+			disc = qb * qb - 4. * qa * qc
+
+			if disc >= 0:
+				sqrt_disc = math.sqrt(disc)
+				roots.append((-qb + sqrt_disc) / (2. * qa))
+				roots.append((-qb - sqrt_disc) / (2. * qa))
+
+		return [(self.solve_point(t), t) for t in roots if 0. < t < 1.]
 	
 	# -- Modifiers
 	def align_to(self, other_line):
@@ -262,9 +275,6 @@ class CubicBezier(object):
 			result.append((x,y))
 
 		return self.__class__(result)
-
-	def asList(self):
-		return 
 
 	def doSwap(self):
 		return self.__class__(self.p3.tuple, self.p2.tuple, self.p1.tuple, self.p0.tuple)
@@ -298,8 +308,27 @@ class CubicBezier(object):
 			return math.pow(v, 1./3.)
 
 		def root_dim(a, b, c, d):
-			# Finds roots in one dimension
-			if d == 0: return []
+			# Finds roots in one dimension of d*t^3 + a*t^2 + b*t + c = 0
+			# (d is the cubic coefficient, Pomax convention).
+			if abs(d) < 1e-12:
+				# Degrade gracefully: quadratic a*t^2 + b*t + c = 0
+				if abs(a) < 1e-12:
+					# Linear b*t + c = 0
+					if abs(b) < 1e-12:
+						return []
+
+					t = -c / b
+					return [t] if 0 <= t <= 1. else []
+
+				disc = b*b - 4.*a*c
+
+				if disc < 0:
+					return []
+
+				sqrt_disc = math.sqrt(disc)
+				t1 = (-b + sqrt_disc) / (2.*a)
+				t2 = (-b - sqrt_disc) / (2.*a)
+				return [t for t in (t1, t2) if 0 <= t <= 1.]
 
 			a /= d
 			b /= d
@@ -353,13 +382,12 @@ class CubicBezier(object):
 		pi = math.pi
 		tau = 2 * pi
 		
-		# Handle edge cases: zero-length or degenerate curves
+		# find_coeffs returns (cubic, quad, lin, const); root_dim takes the cubic
+		# coefficient LAST (Pomax convention), hence the shifted unpack below.
+		# Degenerate dimensions (vanishing cubic coefficient) are handled
+		# per-dimension inside root_dim via the quadratic/linear fallback.
 		d, a, b, c = self.find_coeffs()
-		
-		# If all control points are the same (degenerate), return no roots
-		if abs(d.x) < 1e-10 and abs(a.x) < 1e-10:
-			return [], []
-		
+
 		# - Calculate
 		return root_dim(a.x, b.x, c.x, d.x), root_dim(a.y, b.y, c.y, d.y)
 		
@@ -571,70 +599,61 @@ class CubicBezier(object):
 
 		return points
 
-	def solve_parallel(self, vector, fullOutput = False):
-		'''Finds the t value along a cubic Bezier where a tangent (1st derivative) is parallel with the direction vector.
-		vector: a pair of values representing the direction of interest (magnitude is ignored).
-		returns 0.0 <= t <= 1.0 or None
-		
-		# Solving the dot product of cubic beziers first derivate to the vector given B'(t) x V. Two vectors are perpendicular if their dot product is zero. 
-		# So if you could find the (1) perpendicular of V it will be collinear == tangent of the curve so the equation to be solved is:
-		# B'(t) x V(x,y) = 0; -(a*t^2 + b*t + c)*x + (g*t^2 + h*t + i)*y = 0 solved for t, where a,b,c are coefs for X and g,h,i for Y B'(t) derivate of curve
-		# 
-		# Inspired by answer given by 'unutbu' on the stackoverflow question: http://stackoverflow.com/questions/20825173/how-to-find-a-point-if-any-on-quadratic-bezier-with-a-given-tangent-direction
-		# Recoded and recalculated for qubic beziers. Used 'Rearrange It' app at http://www.wolframalpha.com/widgets/view.jsp?id=4be4308d0f9d17d1da68eea39de9b2ce was invaluable.
-		#
-		# DOTO: Fix calculation optimization error - will yield false positive result in cases #1 and #2 if vector is 45 degrees
-		'''
-		from math import sqrt
+	def solve_parallel(self, vector, fullOutput=False):
+		'''Finds the t value along a cubic Bezier where the tangent (1st derivative)
+		is parallel with the direction vector.
+		vector: a pair of values representing the direction of interest (magnitude and sign are ignored).
+		returns 0.0 <= t <= 1.0 or None (None also when the tangent direction occurs at two distinct t)
 
-		def polyCoef(p): # Helper function
+		The tangent B'(t) is parallel to V when their 2D cross product vanishes:
+		    cross(B'(t), V) = B'x(t)*Vy - B'y(t)*Vx = 0
+		With B'(t) = a*t^2 + b*t + c per dimension (a,b,c for X; g,h,i for Y) this
+		is the quadratic  (a*Vy - g*Vx)*t^2 + (b*Vy - h*Vx)*t + (c*Vy - i*Vx) = 0.
+		Same construction as QuadraticBezier.solve_parallel(), one degree up.
+		'''
+		def polyCoef(p): # Derivative coefficients: B'(t) = a*t^2 + b*t + c
 			a = float(-3 * p[0] + 9 * p[1] - 9 * p[2] + 3 * p[3])
 			b = float(6 * p[0] - 12 * p[1] + 6 * p[2])
 			c = float(3 * p[1] - 3 * p[0])
 			return a, b, c
 
 		# - Get Coefs
-		x , y = vector[0], vector[1]
+		vx, vy = float(vector[0]), float(vector[1])
 		a, b, c = polyCoef([self.p0.x, self.p1.x, self.p2.x, self.p3.x])
 		g, h, i = polyCoef([self.p0.y, self.p1.y, self.p2.y, self.p3.y])
 
-		# -- Support eq
-		bx_hy = float(b*x - h*y)
-		cx_iy = float(c*x - i*y)
-		ax_gy = float(a*x - g*i)
+		# -- Quadratic coefficients of cross(B'(t), V)
+		qa = a*vy - g*vx
+		qb = b*vy - h*vx
+		qc = c*vy - i*vx
 
-		if x == 0 and y != 0 and g == 0 and h != 0 : #1 Optimisation
-			t = -i/h
-			return t
-
-		elif x != 0 and a == (g*y)/x and bx_hy != 0: #2 Optimisation
-			t = -cx_iy/bx_hy
-			return t
-
-		elif ax_gy != 0: #3 Regular result
-			longPoly = float(bx_hy*bx_hy - 4*cx_iy*ax_gy)
-			
-			if longPoly > 0:
-				sqrtLongPoly = sqrt(longPoly)
-				
-				numrPos = sqrtLongPoly - bx_hy
-				numrNeg = -sqrtLongPoly - bx_hy
-				
-				dnom = 2*ax_gy
-
-				ts = [numrPos/dnom, numrNeg/dnom] # solved t's for numrPos and numrNeg
-				tc = [t for t in ts if 0 <= t <= 1] # get correct t
-				
-				if fullOutput:
-					return ts
-				else:
-					if len(tc) and len(tc) < 2:
-						return tc[0]
-					else:
-						return None # Undefined point of intersection - two t's		
-				
-			else:
+		if abs(qa) < 1e-12:
+			# Linear case
+			if abs(qb) < 1e-12:
 				return None
+
+			t = -qc / qb
+			if fullOutput:
+				return [t]
+			return t if 0 <= t <= 1 else None
+
+		disc = qb*qb - 4.*qa*qc
+
+		if disc < 0:
+			return None
+
+		sqrt_disc = math.sqrt(disc)
+		ts = [(-qb + sqrt_disc) / (2.*qa), (-qb - sqrt_disc) / (2.*qa)]
+
+		if fullOutput:
+			return ts
+
+		tc = [t for t in ts if 0 <= t <= 1]
+
+		if len(tc) == 1:
+			return tc[0]
+
+		return None # No root in range, or ambiguous (two t's)
 
 	def solve_proportional_handles(self, ratio=(.3,.3)):
 		'''Equalizes handle length to given float(ratio_p1, ratio_p2 )'''
@@ -693,7 +712,7 @@ class CubicBezier(object):
 		radius_1 = hl1i.length if not math.isnan(hl1i.length) else 0.
 
 		handle_0 = hl0.length if not math.isnan(hl0.length) else 0.
-		handle_1 = hl0.length if not math.isnan(hl1.length) else 0.
+		handle_1 = hl1.length if not math.isnan(hl1.length) else 0.
 
 		#ratio_0 = ratfrac(hl0.length, radius_0, 1.)
 		#ratio_1 = ratfrac(hl1.length, radius_1, 1.)
@@ -992,16 +1011,11 @@ class CubicBezier(object):
 		if origin is None:
 			origin = self.p0
 
-		return self.__class__(
-			(self.p0.x - origin.x) * factor + origin.x,
-			(self.p1.x - origin.x) * factor + origin.x,
-			(self.p2.x - origin.x) * factor + origin.x,
-			(self.p3.x - origin.x) * factor + origin.x,
-			(self.p0.y - origin.y) * factor + origin.y,
-			(self.p1.y - origin.y) * factor + origin.y,
-			(self.p2.y - origin.y) * factor + origin.y,
-			(self.p3.y - origin.y) * factor + origin.y
-		)
+		return self.__class__(*[
+			((p.x - origin.x) * factor + origin.x,
+			 (p.y - origin.y) * factor + origin.y)
+			for p in self.points
+		])
 
 	def get_lut(self, steps=50):
 		return [self.solve_point(i / steps) for i in range(steps + 1)]

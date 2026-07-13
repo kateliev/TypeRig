@@ -10,7 +10,6 @@
 
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
 import math
 import copy
 from enum import Enum
@@ -146,7 +145,7 @@ class Transform(object):
 				xy2 * dx1 + yy2 * dy1 + dy2)
 
 	def inverse(self):
-		if self.__affine == (1.0, 0.0, 0.0, 1.0, 0.0, 0.0):
+		if self.__affine == [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]:
 			return self
 
 		xx, xy, yx, yy, dx, dy = self.__affine
@@ -166,16 +165,14 @@ class Transform(object):
 	def __getitem__(self, index):
 		return self.__affine[index]
 
-	def __getslice__(self, i, j):
-		return self.__affine[i:j]
-
-	def __cmp__(self, other):
-		xx1, xy1, yx1, yy1, dx1, dy1 = list(map(float(self.__affine)))
-		xx2, xy2, yx2, yy2, dx2, dy2 = list(map(float(other)))
-		return cmp((xx1, xy1, yx1, yy1, dx1, dy1), (xx2, xy2, yx2, yy2, dx2, dy2))
+	def __eq__(self, other):
+		try:
+			return tuple(self.__affine) == tuple(float(other[i]) for i in range(6))
+		except (TypeError, IndexError, ValueError):
+			return NotImplemented
 
 	def __hash__(self):
-		return hash(self.__affine)
+		return hash(tuple(self.__affine))
 
 	def __repr__(self):
 		return '<%s [%s %s %s %s %s %s]>' %((self.__class__.__name__,) + tuple(map(str, self.__affine)))

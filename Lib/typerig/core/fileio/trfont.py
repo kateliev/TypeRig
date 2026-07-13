@@ -36,7 +36,6 @@
 # when the font moves) and because it may reference external shared pools.
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
 
 import os
 from xml.etree import ElementTree as ET

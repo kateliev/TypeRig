@@ -9,8 +9,6 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
-
 import math
 from typerig.core.func.math import linInterp as lerp
 from typerig.core.func.math import ratfrac
@@ -26,10 +24,13 @@ __version__ = '0.1.0'
 class QuadraticBezier(object):
 	def __init__(self, *argv):
 		if len(argv) == 1:
-			if isinstance(argv[0], self.__class__): # Clone
-				self.p0, self.p1, self.p2 = argv[0].p0, argv[0].p1, argv[0].p2
+			if isinstance(argv[0], self.__class__): # Clone (deep copy — do not share Points)
+				self.p0, self.p1, self.p2 = [Point(p) for p in argv[0].points]
 
-			if isMultiInstance(argv[0], (tuple, list)):
+			elif isMultiInstance(argv[0], Point): # List/tuple of Points (operator results)
+				self.p0, self.p1, self.p2 = [Point(p) for p in argv[0]]
+
+			elif isMultiInstance(argv[0], (tuple, list)):
 				self.p0, self.p1, self.p2 = [Point(item) for item in argv[0]]
 
 		if len(argv) == 3:
@@ -58,6 +59,8 @@ class QuadraticBezier(object):
 
 	def __div__(self, other):
 		return self.__class__([p / other for p in self.points])
+
+	__truediv__ = __div__
 
 	def __and__(self, other):
 		return self.intersect_line(other)
@@ -134,9 +137,6 @@ class QuadraticBezier(object):
 			result.append((x, y))
 
 		return self.__class__(result)
-
-	def asList(self):
-		return
 
 	def doSwap(self):
 		return self.__class__(self.p2.tuple, self.p1.tuple, self.p0.tuple)
@@ -565,14 +565,11 @@ class QuadraticBezier(object):
 		if origin is None:
 			origin = self.p0
 
-		return self.__class__(
-			(self.p0.x - origin.x) * factor + origin.x,
-			(self.p1.x - origin.x) * factor + origin.x,
-			(self.p2.x - origin.x) * factor + origin.x,
-			(self.p0.y - origin.y) * factor + origin.y,
-			(self.p1.y - origin.y) * factor + origin.y,
-			(self.p2.y - origin.y) * factor + origin.y
-		)
+		return self.__class__(*[
+			((p.x - origin.x) * factor + origin.x,
+			 (p.y - origin.y) * factor + origin.y)
+			for p in self.points
+		])
 
 	def get_lut(self, steps=50):
 		return [self.solve_point(i / steps) for i in range(steps + 1)]

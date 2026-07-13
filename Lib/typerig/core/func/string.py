@@ -9,35 +9,27 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division, unicode_literals
 import string
 from itertools import product
 
 # - Init --------------------------------
-__version__ = '0.26.5'
+__version__ = '0.27.0'
 
 
 # - Functions ---------------------------
-# -- Compatibility to Py 2.7+ 
-try: unichr
-except NameError: unichr = chr
-
-try: unicode
-except NameError: unicode = str
-
 # -- Unicode ----------------------------
 def getLowercaseInt(unicodeInt):
 	''' Based on given Uppercase Unicode (Integer) returns coresponding Lowercase Unicode (Integer) '''
-	return ord(unicode(unichr(unicodeInt)).lower())
+	return ord(chr(unicodeInt).lower())
 
 def getUppercaseInt(unicodeInt):
 	''' Based on given Lowercase Uniocde (Integer) returns coresponding Uppercase Unicode (Integer) '''
-	return ord(unicode(unichr(unicodeInt)).upper())
+	return ord(chr(unicodeInt).upper())
 
 def getLowercaseCodepoint(unicodeName):
 	''' Based on given Uppercase Unicode Name (String) returns coresponding Lowercase Unicode Name! Names are in Adobe uniXXXX format'''
 	if 'uni' in unicodeName:
-		return 'uni0%X' %ord(unichr(int(unicodeName.replace('uni','0x'), 16)).lower())
+		return 'uni0%X' %ord(chr(int(unicodeName.replace('uni','0x'), 16)).lower())
 	else:
 		if unicodeName.isupper() or unicodeName.istitle():
 			return unicodeName.lower() # not encoded in Adobe uniXXXX format (output for mixed lists)
@@ -47,7 +39,7 @@ def getLowercaseCodepoint(unicodeName):
 def getUppercaseCodepoint(unicodeName):
 	''' Based on given Uppercase Unicode Name (String) returns coresponding Uppercase Unicode Name! Names are in Adobe uniXXXX format'''
 	if 'uni' in unicodeName:
-		return 'uni0%X' %ord(unichr(int(unicodeName.replace('uni','0x'), 16)).upper())
+		return 'uni0%X' %ord(chr(int(unicodeName.replace('uni','0x'), 16)).upper())
 	else:
 		if unicodeName.islower():
 			return unicodeName.title() # not encoded in Adobe uniXXXX format, capitalize fisrt letter (output for mixed lists)! Note: use .upper() for all upercase
@@ -127,11 +119,16 @@ def strRepDict(stringItems, replacementDicionary, method = 'replace'):
 		return lst2str([replacementDicionary[item] if item in replacementDicionary.keys() else item for item in stringItems], '')
 
 	elif method == 'unicodeinteger' or method == 'i':
-		return lst2str([replacementDicionary[ord(item)] for item in unicode(stringItems) if ord(item) in replacementDicionary.keys()], ' ')
+		return lst2str([replacementDicionary[ord(item)] for item in str(stringItems) if ord(item) in replacementDicionary.keys()], ' ')
 
 # - Hex colors ----------------------------------------------
 def is_hex(s):
-	return all(c in string.hexdigits for c in s.strip('#'))
+	'''True if s is a non-empty string of hex digits (optionally #-prefixed).'''
+	if not isinstance(s, str):
+		return False
+
+	digits = s.strip('#')
+	return len(digits) > 0 and all(c in string.hexdigits for c in digits)
 
 def hue_to_hex(h):
 	h = h % 360 

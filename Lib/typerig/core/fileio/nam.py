@@ -6,7 +6,6 @@
 # www.typerig.com
 
 # - Dependencies -------------------------
-from __future__ import print_function
 import os, warnings
 
 # - Init -----------------------------

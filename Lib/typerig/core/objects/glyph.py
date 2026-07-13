@@ -9,8 +9,6 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
-
 from typerig.core.objects.transform import Transform
 from typerig.core.objects.utils import Bounds
 from typerig.core.objects.delta import DeltaScale
@@ -190,7 +188,7 @@ class Glyph(Container, XMLSerializable):
 	@unicode.setter
 	def unicode(self, value):
 		try:
-			self.unicodes[0] = values
+			self.unicodes[0] = value
 		except (IndexError, AttributeError):
 			self.unicodes = [value]
 

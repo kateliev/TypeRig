@@ -13,7 +13,6 @@
 # and Janusz Nowacki, adapted to Python/TypeRig.
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
 import math
 import cmath
 

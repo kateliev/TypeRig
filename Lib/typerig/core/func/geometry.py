@@ -9,7 +9,6 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
 import math
 
 # - Init --------------------------------
@@ -39,8 +38,10 @@ def point_in_triangle(point, triangle):
 	Returns:
 		Bool
 	'''
-	trinagle_list = list(triangle) + [triangle[0]]
-	return all([ccw(point, trinagle_list[i], trinagle_list[i+1]) for i in range(3)])
+	triangle_list = list(triangle) + [triangle[0]]
+	turns = [ccw(point, triangle_list[i], triangle_list[i+1]) for i in range(3)]
+	# Point is inside when all turns agree — works for both CW and CCW triangles
+	return all(turns) or not any(turns)
 
 def point_in_polygon(point, polygon):
 	'''Point in Polygon test
@@ -229,14 +230,18 @@ def checkInnerOuter(firstAngle, lastAngle):
 
 # - Ploygons ----------------------------------------
 def poly_area(vertices):
-	corners = len(vertices) 
+	'''Unsigned polygon area via the shoelace formula.
+	The absolute value is taken over the SUM — per-term abs breaks for
+	polygons whose cross terms change sign (any polygon away from the origin).
+	'''
+	corners = len(vertices)
 	area = 0.0
-	
+
 	for i in range(corners):
 		j = (i + 1) % corners
-		area += abs(vertices[i][0]*vertices[j][1] - vertices[j][0]*vertices[i][1])
+		area += vertices[i][0]*vertices[j][1] - vertices[j][0]*vertices[i][1]
 
-	return area*0.5
+	return abs(area)*0.5
 
 if __name__ == '__main__':
 	A = (0,0); B = (0,200); C = (200,200); D = (200,0)

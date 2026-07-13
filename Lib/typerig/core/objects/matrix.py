@@ -10,14 +10,10 @@
 # www.typerig.com
 
 # - Dependencies ------------------------
-from __future__ import print_function, division
 from functools import reduce
 import operator, math, random
 
-try: #Py3+
-	from collections.abc import MutableSequence
-except ImportError: #Py2+
-	from collections import MutableSequence
+from collections.abc import MutableSequence
 
 # - Init --------------------------------
 __version__ = '0.1.5'
@@ -87,13 +83,10 @@ class Table(MutableSequence):
 	def __gt__(self, other): 
 		return self.data >  self.__cast(other)
 
-	def __ge__(self, other): 
+	def __ge__(self, other):
 		return self.data >= self.__cast(other)
 
-	def __cmp__(self, other):
-		return cmp(self.data, self.__cast(other))
-
-	def __contains__(self, item): 
+	def __contains__(self, item):
 		return item in self.data
 
 	def __len__(self): 
@@ -110,30 +103,10 @@ class Table(MutableSequence):
 	def __setitem__(self, i, item): 
 		self.data[i] = item
 
-	def __delitem__(self, i): 
+	def __delitem__(self, i):
 		del self.data[i]
 
-	def __getslice__(self, i, j):
-		i = max(i, 0); j = max(j, 0)
-		return self.__class__(self.data[i:j])
-
-	def __setslice__(self, i, j, other):
-		i = max(i, 0); j = max(j, 0)
-		
-		if isinstance(other, self.__class__):
-			self.data[i:j] = other.data
-
-		elif isinstance(other, type(self.data)):
-			self.data[i:j] = other
-
-		else:
-			self.data[i:j] = list(other)
-
-	def __delslice__(self, i, j):
-		i = max(i, 0); j = max(j, 0)
-		del self.data[i:j]
-
-	def __repr__(self): 
+	def __repr__(self):
 		return repr(self.data)
 
 	def __str__(self):

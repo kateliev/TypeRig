@@ -25,7 +25,6 @@ Usage:
 '''
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
 import os
 import colorsys
 from xml.etree import ElementTree as ET

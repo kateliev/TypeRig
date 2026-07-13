@@ -9,8 +9,6 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
-
 import math
 
 from typerig.core.objects.array import PointArray
@@ -228,7 +226,7 @@ class Shape(Container, XMLSerializable):
 		Returns:
 			lerp function(tx, ty) -> PointArray
 		'''
-		if not isinstance(other, self.__class__) and not self.is_compatible(other): return
+		if not isinstance(other, self.__class__) or not self.is_compatible(other): return
 
 		t0 = self.point_array
 		t1 = other.point_array

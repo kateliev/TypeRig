@@ -9,7 +9,6 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
 import math
 
 from typerig.core.func.math import linInterp as lerp
@@ -25,10 +24,13 @@ __version__ = '0.28.0'
 class Line(object):
 	def __init__(self, *argv):
 		if len(argv) == 1:
-			if isinstance(argv[0], self.__class__): # Clone
-				self.p0, self.p1 = argv[0].p0, argv[0].p1
+			if isinstance(argv[0], self.__class__): # Clone (deep copy — do not share Points)
+				self.p0, self.p1 = Point(argv[0].p0), Point(argv[0].p1)
 
-			if isMultiInstance(argv[0], (tuple, list)):
+			elif isMultiInstance(argv[0], Point): # List/tuple of Points
+				self.p0, self.p1 = [Point(p) for p in argv[0]]
+
+			elif isMultiInstance(argv[0], (tuple, list)):
 				self.p0, self.p1 = [Point(item) for item in argv[0]]
 
 		if len(argv) > 1:
@@ -60,7 +62,9 @@ class Line(object):
 	__rmul__ = __mul__
 
 	def __div__(self, other):
-		return self.__class__(self.p0 / other, self.p1 / other)	
+		return self.__class__(self.p0 / other, self.p1 / other)
+
+	__truediv__ = __div__
 
 	def __and__(self, other):
 		return self.intersect_line(other)

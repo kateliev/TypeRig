@@ -21,7 +21,6 @@
 # No FontLab dependency. No proxy code is imported.
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
 
 import os
 import shutil

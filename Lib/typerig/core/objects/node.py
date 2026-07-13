@@ -9,7 +9,6 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
 import math, copy
 from collections import namedtuple
 
@@ -436,7 +435,7 @@ class Node(Member, XMLSerializable):
 					node.smart_reloc(*point)
 
 			if isinstance(curr_segment, Line) and isinstance(prev_segment, Line):
-				self.smartShift(*shift.tuple)
+				self.smart_shift(*shift.tuple)
 
 	def slant_shift(self, shift_x, shift_y, angle):
 		'''Slanted move - move a node (in inclined space) according to Y coordinate slanted at given angle.
@@ -458,11 +457,11 @@ class Node(Member, XMLSerializable):
 		Bleed control trough bleed_mode parameter: 0 - any; 1 - positive bleed; 2 - negative bleed;
 		'''
 		shift_x, shift_y = randomize(0, cx), randomize(0, cy)
-		self.smartShift(shift_x, shift_y)
-		
+		self.smart_shift(shift_x, shift_y)
+
 		if bleed_mode > 0:
 			if (bleed_mode == 2 and not self.clockwise) or (bleed_mode == 1 and self.clockwise):
-				self.smartShift(-shift_x, -shift_y)		
+				self.smart_shift(-shift_x, -shift_y)		
 
 	def align_to(self, entity, align=(True, True), smart=True):
 		'''Align current node to a node or line given.

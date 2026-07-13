@@ -9,7 +9,6 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
 import math, cmath, random
 
 # - Init --------------------------------
@@ -47,40 +46,43 @@ def solve_equations(AM, BM):
 
 # -- Data sets --------------------------
 def normalize2max(values):
-	'''Normalize all values to the maximum value in a given list. 
-	
+	'''Normalize all values to the maximum value in a given list.
+	Output order matches input order.
+
 	Arguments:
 		values (list(int of float));
-	Returns: 
+	Returns:
 		list(float)
 	'''
-	return sorted([float(item)/max(values) for item in values])
+	max_value = max(values)
+	return [float(item)/max_value for item in values]
 
 def normalize2sum(values):
-	'''Normalize all values to the sum of given list so the resuting sum is always 1.0 or close as possible. 
-	
-	Arguments: 
+	'''Normalize all values to the sum of given list so the resuting sum is always 1.0 or close as possible.
+	Output order matches input order.
+
+	Arguments:
 		values (list(int of float));
-	Returns: 
+	Returns:
 		list(float)
 	'''
 	valSum = sum(values)
-	return sorted([float(item)/valSum for item in values])
+	return [float(item)/valSum for item in values]
 
 def renormalize(values, newRange, oldRange=None):
-	'''Normalize all values to the maximum value in a given list and remap them in a new given range. 
-	
-	Arguments: 
+	'''Normalize all values to the maximum value in a given list and remap them in a new given range.
+	Output order matches input order.
+
+	Arguments:
 		values (list(int of float)) : a list of values to be normalized
 		newRange (tuple(float,float)): a new range for remapping (20,250)
 		oldRange (tuple(float,float)) or None: the original range of values if None range is auto extracted from values given.
 	Returns:
 		list(float)
 	'''
-	if oldRange is not None:
-		return sorted([(max(newRange) - min(newRange))*item + min(newRange) for item in [float(item - min(oldRange))/(max(oldRange) - min(oldRange)) for item in values]])
-	else:
-		return sorted([(max(newRange) - min(newRange))*item + min(newRange) for item in [float(item - min(values))/(max(values) - min(values)) for item in values]])
+	src_min, src_max = (min(oldRange), max(oldRange)) if oldRange is not None else (min(values), max(values))
+	new_min, new_max = min(newRange), max(newRange)
+	return [(new_max - new_min)*(float(item - src_min)/(src_max - src_min)) + new_min for item in values]
 
 def maploc(axis_range, map_value):
 	''' Return mapped location over specified axis by piecewise interpolation brtween neighboring location.
@@ -119,12 +121,12 @@ def maploc(axis_range, map_value):
 					return remapper(low, high, map_value)
 
 # -- Misc -------------------------------
-def isclose(a, b, abs_tol = 1, rel_tol = 0.0):
+def isclose(a, b, abs_tol = 1e-9, rel_tol = 0.0):
 	'''Tests approximate equality for values [a] and [b] within relative [rel_tol*] and/or absolute tolerance [abs_tol]
 
 	*[rel_tol] is the amount of error allowed,relative to the larger absolute value of a or b. For example,
-	to set a tolerance of 5%, pass tol=0.05. The default tolerance is 1e-9, which assures that the
-	two values are the same within about9 decimal digits. rel_tol must be greater than 0.0
+	to set a tolerance of 5%, pass tol=0.05. The default absolute tolerance is 1e-9, matching
+	math.isclose() semantics. Pass abs_tol explicitly for looser (font-unit) comparisons.
 	'''
 	if abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol):	return True
 	return False
@@ -991,7 +993,7 @@ if __name__ == '__main__':
 	print(maploc(axis_range, 140))
 	print(three_point_circle((10,10), (20,20), (3,5)))
 	print(two_point_square((0,0), (10,10)))
-	print(find_square((50,0), (100,50)))
+	print(two_mid_square((50,0), (100,50)))
 	print(two_point_square((0,0), (34,138)))
-	print(find_square((60,95), (-9,112)))
+	print(two_mid_square((60,95), (-9,112)))
 

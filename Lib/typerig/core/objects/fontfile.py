@@ -19,7 +19,6 @@
 #   - glyph order is explicit (preserved list of names)
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
 
 import os
 

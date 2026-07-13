@@ -10,7 +10,6 @@
 
 
 # - Dependencies ---------------------
-from __future__ import absolute_import, print_function, division
 from typerig.core.func.math import linspread, geospread, ratfrac
 from typerig.core.objects.point import Point
 
@@ -71,9 +70,12 @@ class linAxis(object):
 	def update(self):
 		minAxisStem, maxAxisStem = min(self.masters.values()), max(self.masters.values())
 		minAxisPos, maxAxisPos = min(self.masters.keys()), max(self.masters.keys())
-		
+
 		self.stems = [int(round(item)) for item in list(linspread(self.masters[minAxisPos], self.masters[maxAxisPos], self.steps))]
-		self.data = { int(ratfrac(stem - minAxisPos, maxAxisStem - minAxisPos, max(self.masters.keys()))):stem for stem in self.stems}
+		# Map each stem back to its axis location: normalize in the stem domain,
+		# then remap onto the axis position range.
+		stem_span = float(maxAxisStem - minAxisStem)
+		self.data = {int(minAxisPos + ((stem - minAxisStem)/stem_span)*(maxAxisPos - minAxisPos)):stem for stem in self.stems}
 		self.instances = sorted(self.data.keys())
 
 class geoAxis(object):
@@ -92,9 +94,12 @@ class geoAxis(object):
 	def update(self):
 		minAxisStem, maxAxisStem = min(self.masters.values()), max(self.masters.values())
 		minAxisPos, maxAxisPos = min(self.masters.keys()), max(self.masters.keys())
-		
+
 		self.stems = [int(round(item)) for item in list(geospread(self.masters[minAxisPos], self.masters[maxAxisPos], self.steps))]
-		self.data = { int(ratfrac(stem - minAxisPos, maxAxisStem - minAxisPos, max(self.masters.keys()))):stem for stem in self.stems}
+		# Map each stem back to its axis location: normalize in the stem domain,
+		# then remap onto the axis position range.
+		stem_span = float(maxAxisStem - minAxisStem)
+		self.data = {int(minAxisPos + ((stem - minAxisStem)/stem_span)*(maxAxisPos - minAxisPos)):stem for stem in self.stems}
 		self.instances = sorted(self.data.keys())
 					
 # - Bounding box object ----------------------------------

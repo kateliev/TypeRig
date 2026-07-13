@@ -9,8 +9,6 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
-
 import math
 
 from typerig.core.objects.atom import Container
@@ -561,7 +559,9 @@ class Layer(Container, XMLSerializable):
 		self_x, self_y = align_matrix[mode[0].code]
 
 		if isinstance(entity, self.__class__):
-			other_x, other_y = entity.bounds.align_matrix[mode[1].code]
+			# Use the full layer-level matrix so metrics/outline origins
+			# (LSB, ADV, OTM, COM...) resolve for the target layer too
+			other_x, other_y = entity.align_matrix[mode[1].code]
 			delta_x = other_x - self_x if align[0] else 0.
 			delta_y = other_y - self_y if align[1] else 0.
 
@@ -577,7 +577,7 @@ class Layer(Container, XMLSerializable):
 
 	# - Delta --------------------------------
 	def lerp_function(self, other):
-		if not isinstance(other, self.__class__) and not self.is_compatible(other): return
+		if not isinstance(other, self.__class__) or not self.is_compatible(other): return
 
 		t0 = self.point_array
 		t1 = other.point_array

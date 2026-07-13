@@ -9,7 +9,6 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
 
 from typerig.core.objects.atom import Member
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class

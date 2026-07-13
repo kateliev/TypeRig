@@ -9,12 +9,7 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
-
-try: # Py3+
-	from collections.abc import Sequence
-except ImportError: # Py2+
-	from collections import Sequence
+from collections.abc import Sequence
 
 from typerig.core.func.utils import isMultiInstance
 from typerig.core.objects.collection import CustomList

@@ -9,17 +9,12 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
 from collections import defaultdict
+from collections.abc import MutableSequence, MutableMapping
 import json
 
-try: #Py3+ 
-	from collections.abc import MutableSequence, MutableMapping
-except ImportError: #Py2+
-	from collections import MutableSequence, MutableMapping
-
 # - Init -------------------------------
-__version__ = '0.29.2'
+__version__ = '0.30.0'
 
 # - Objects ----------------------------
 # -- Lists -----------------------------
@@ -59,11 +54,8 @@ class CustomList(MutableSequence):
 	def __gt__(self, other): 
 		return self.data >  self.__cast(other)
 
-	def __ge__(self, other): 
+	def __ge__(self, other):
 		return self.data >= self.__cast(other)
-
-	def __cmp__(self, other):
-		return cmp(self.data, self.__cast(other))
 
 	__hash__ = None # Mutable sequence, so not hashable
 
@@ -79,25 +71,8 @@ class CustomList(MutableSequence):
 	def __setitem__(self, i, item): 
 		self.data[i] = item
 
-	def __delitem__(self, i): 
+	def __delitem__(self, i):
 		del self.data[i]
-
-	def __getslice__(self, i, j):
-		i = max(i, 0); j = max(j, 0)
-		return self.__class__(self.data[i:j])
-
-	def __setslice__(self, i, j, other):
-		i = max(i, 0); j = max(j, 0)
-		if isinstance(other, self.__class__):
-			self.data[i:j] = other.data
-		elif isinstance(other, type(self.data)):
-			self.data[i:j] = other
-		else:
-			self.data[i:j] = list(other)
-
-	def __delslice__(self, i, j):
-		i = max(i, 0); j = max(j, 0)
-		del self.data[i:j]
 
 	def __add__(self, other):
 		if isinstance(other, self.__class__):
@@ -226,14 +201,8 @@ class CustomDict(MutableMapping):
 		if len(kwargs):
 			self.update(kwargs)
 
-	def __repr__(self): 
+	def __repr__(self):
 		return repr(self.data)
-
-	def __cmp__(self, dict):
-		if isinstance(dict, self.__class__):
-			return cmp(self.data, dict.data)
-		else:
-			return cmp(self.data, dict)
 
 	__hash__ = None
 
@@ -260,38 +229,16 @@ class CustomDict(MutableMapping):
 		self.data.clear()
 
 	def copy(self):
-		if self.__class__ is self.__class__:
-			return self.__class__(self.data.copy())
-		import copy
-		data = self.data
-		try:
-			self.data = {}
-			c = copy.copy(self)
-		finally:
-			self.data = data
-		c.update(self)
-		return c
+		return self.__class__(self.data.copy())
 
-	def keys(self): 
+	def keys(self):
 		return self.data.keys()
 
-	def items(self): 
+	def items(self):
 		return self.data.items()
 
-	def iteritems(self): 
-		return self.data.items()
-
-	def iterkeys(self): 
-		return self.data.iterkeys()
-
-	def itervalues(self): 
-		return self.data.itervalues()
-
-	def values(self): 
+	def values(self):
 		return self.data.values()
-
-	def has_key(self, key): 
-		return key in self.data
 
 	def update(self, dict=None, **kwargs):
 		if dict is None:
@@ -343,8 +290,8 @@ class biDict(CustomDict):
 
 		self.inverse = {}
 
-		for key, value in self.iteritems():
-			self.inverse.setdefault(value,[]).append(key) 
+		for key, value in self.items():
+			self.inverse.setdefault(value,[]).append(key)
 
 	def __setitem__(self, key, value):
 		if key in self:
@@ -372,7 +319,7 @@ class extBiDict(CustomDict):
 
 		self.inverse = {}
 
-		for key, value in self.iteritems():
+		for key, value in self.items():
 			assert isinstance(value, list), 'Value for key %s is not of type list()' %key
 
 			for item in value:

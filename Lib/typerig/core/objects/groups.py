@@ -23,7 +23,6 @@
 # and similarly for `second` with public.kern2.*.
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
 
 from xml.etree import ElementTree as ET
 

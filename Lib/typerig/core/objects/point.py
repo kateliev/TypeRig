@@ -9,7 +9,6 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
 import math
 
 from typerig.core.func.utils import isMultiInstance
@@ -66,7 +65,7 @@ class Point(object):
 				product = a * b
 				return self.__class__(product.real, product.imag)
 			else:
-				return self.__class__(self.x * other.x, self.y * other.x)
+				return self.__class__(self.x * other.x, self.y * other.y)
 		elif isinstance(other, (int, float)):
 			return self.__class__(self.x * other, self.y * other)
 		elif isinstance(other, (tuple, list)):
@@ -83,7 +82,7 @@ class Point(object):
 				product = a / b
 				return self.__class__(product.real, product.imag)
 			else:
-				return self.__class__(self.x / other.x, self.y / other.x)
+				return self.__class__(self.x / other.x, self.y / other.y)
 		elif isinstance(other, (int, float)):
 			return self.__class__(self.x / other, self.y / other)
 		elif isinstance(other, (tuple, list)):
@@ -122,6 +121,17 @@ class Point(object):
 
 	def __neg__(self):
 		return self.__class__(-self.x, -self.y)
+
+	def __eq__(self, other):
+		if isinstance(other, Point):
+			return self.x == other.x and self.y == other.y
+		elif isinstance(other, (tuple, list)) and len(other) == 2:
+			return self.x == other[0] and self.y == other[1]
+		return NotImplemented
+
+	def __hash__(self):
+		# NOTE: Point is mutable — do not mutate a Point used as a dict key/set member
+		return hash((self.x, self.y))
 
 	def __repr__(self):
 		return '<{}: {}, {}>'.format(self.__class__.__name__, self.x, self.y)

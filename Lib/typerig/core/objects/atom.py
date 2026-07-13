@@ -10,19 +10,12 @@
 # that you use it at your own risk!
 
 # - Dependencies ------------------------
-from __future__ import absolute_import, print_function, division
 import copy, uuid
 
 from typerig.core.objects.collection import CustomList
 
 # - Init -------------------------------
-__version__ = '0.3.0'
-
-# - Keep compatibility for basestring checks
-try:
-	basestring
-except NameError:
-	basestring = (str, bytes)
+__version__ = '0.3.1'
 
 # - Objects ----------------------------
 class Atom(object):
@@ -121,12 +114,12 @@ class Container(CustomList, Navigable, Atom):
 	# - Methods ------------------------
 	def _coerce(self, item):
 		'''Coerce item to _subclass if needed, set parent.
-		Primitives (int, float, basestring) pass through unchanged.'''
+		Primitives (int, float, str, bytes) pass through unchanged.'''
 		if isinstance(item, self._subclass):
 			item.parent = self
 			return item
 
-		if not isinstance(item, (int, float, basestring)):
+		if not isinstance(item, (int, float, str, bytes)):
 			return self._subclass(item, parent=self)
 
 		return item
@@ -200,7 +193,10 @@ class Linker(object):
 	def __sub__(self, other):
 		if isinstance(other, self.__class__) and self.next == other:
 			temp_link = self.next.next
-			temp_link.prev = self
+
+			if temp_link is not None:
+				temp_link.prev = self
+
 			self.next = temp_link
 
 			return self
