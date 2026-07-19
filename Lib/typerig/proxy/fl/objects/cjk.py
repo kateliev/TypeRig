@@ -43,6 +43,8 @@ from typerig.proxy.fl.objects.glyph import pGlyph
 from typerig.proxy.fl.objects.node import eNodesContainer
 
 from typerig.core.algo import cjk
+from typerig.core.algo.stem_snap import measure_stems
+from typerig.core.algo._width_audit import allowlist_from_stems
 
 __version__ = '1.0.0'
 
@@ -472,6 +474,154 @@ def region_bounds(pg, layers, frac_for_layer, captured_faces=None, use_face=True
 			fl6.flNode(QtCore.QPointF(x0, y1), nodeType='on'),
 		]
 		out[name] = eNodesContainer(corners).bounds
+	return out
+
+
+# =====================================================================
+# - Stem measurement for stem-preserving delta ------------------------
+# =====================================================================
+# Font-lib mirror of the standard stems: {master_name: {'H': [..], 'V': [..]}}.
+# Written by an app's "Set standard stems" action so tools can read them without
+# switching the active master. See read_std_stems_by_layer.
+STD_STEMS_LIB_KEY = 'com.typerig.font.standard_stems'
+
+
+def read_std_stems_by_layer(pg, layers, lib_key=STD_STEMS_LIB_KEY):
+	'''Per-master standard hinting stems as {layer_name: [(value, 'V'|'H'), ...]}.
+
+	Source order:
+	  1. a font-lib mirror under `lib_key` ({master: {'H':[..],'V':[..]}}) — clean,
+	     no master switching;
+	  2. else per-master flPackage.ps_stemsV / ps_stemsH read via setMaster (the
+	     same per-master access TypeRig's metric getters use), restored afterwards.
+	Layers with no stems are omitted; returns {} if nothing is available.'''
+	try:
+		pkg = pg.package
+	except Exception:
+		pkg = None
+	if pkg is None:
+		return {}
+
+	# 1. Font-lib mirror (preferred — no setMaster side effect). packageLib and its
+	#    nested values come back as Qt-flavoured maps/lists that may NOT support
+	#    dict.get(); access by key with try/except and coerce iterables to floats.
+	def _item(container, key):
+		try:
+			return container[key]
+		except Exception:
+			return None
+
+	def _floats(container, key):
+		seq = _item(container, key)
+		if seq is None:
+			return []
+		out_vals = []
+		try:
+			for v in seq:
+				out_vals.append(float(v))
+		except Exception:
+			pass
+		return out_vals
+
+	data = None
+	try:
+		data = pkg.packageLib[lib_key]
+	except Exception:
+		data = None
+	if data:
+		out = {}
+		for name in layers:
+			md = _item(data, name)
+			if not md:
+				continue
+			stems = [(v, 'V') for v in _floats(md, 'V')] \
+				  + [(v, 'H') for v in _floats(md, 'H')]
+			if stems:
+				out[name] = stems
+		if out:
+			return out
+
+	# 2. Per-master ps_stemsV / ps_stemsH via setMaster (restore afterwards)
+	try:
+		saved_master = pkg.master
+	except Exception:
+		saved_master = None
+
+	out = {}
+	for name in layers:
+		try:
+			pkg.setMaster(name)
+			stems = [(float(s.value), 'V') for s in (pkg.ps_stemsV or [])] \
+				  + [(float(s.value), 'H') for s in (pkg.ps_stemsH or [])]
+			if stems:
+				out[name] = stems
+		except Exception:
+			continue
+
+	if saved_master is not None:
+		try:
+			pkg.setMaster(saved_master)
+		except Exception:
+			pass
+	return out
+
+
+def measure_part_stems(tr_glyph, pg, axis_layers, fallback_stems=None,
+					   tol_frac=0.20, snap=True):
+	'''Per-master (stx, sty) stems for a paste part, measured from its OWN contours.
+
+	tr_glyph       : typerig.core Glyph (the part being pasted).
+	pg             : the target pGlyph (for per-master ps_stems).
+	axis_layers    : master/layer names of the delta axis.
+	fallback_stems : {layer: (stx, sty)} used when detection finds nothing (e.g.
+	                 the global Virtual-Axis lib values).
+	snap           : when True, each master's measurement is snapped to that
+	                 master's own PostScript hinting stems (so an off-grid value
+	                 lands on a real stem); False = raw medians.
+
+	Returns {layer: (stx, sty)} — only layers where a full pair could be formed.'''
+	ps_by_layer = read_std_stems_by_layer(pg, axis_layers) if snap else {}
+	fb = fallback_stems or {}
+
+	out = {}
+	for name in axis_layers:
+		tr_layer = tr_glyph.layer(name)
+		if tr_layer is None:
+			continue
+		contours = [cnt for shape in tr_layer.shapes for cnt in shape.contours]
+		if not contours:
+			continue
+
+		allow = None
+		if ps_by_layer.get(name):
+			allow = allowlist_from_stems(ps_by_layer[name], tol_frac)
+
+		stx, sty = measure_stems(contours, allowlist=allow)
+
+		fb_pair = fb.get(name)
+		if stx is None and fb_pair is not None:
+			stx = fb_pair[0]
+		if sty is None and fb_pair is not None:
+			sty = fb_pair[1]
+		if stx is None or sty is None:
+			continue
+		out[name] = (float(stx), float(sty))
+	return out
+
+
+def part_stem_candidates(tr_glyph, layers):
+	'''Diagnostics: {layer: (v_widths, h_widths)} raw stem-candidate widths that
+	the detector found per master — inspect these when auto-stems looks off.'''
+	from typerig.core.algo.stem_snap import stem_widths
+	out = {}
+	for name in layers:
+		tr_layer = tr_glyph.layer(name)
+		if tr_layer is None:
+			continue
+		contours = [cnt for shape in tr_layer.shapes for cnt in shape.contours]
+		if not contours:
+			continue
+		out[name] = stem_widths(contours)
 	return out
 
 

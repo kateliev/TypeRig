@@ -553,6 +553,92 @@ class StemFixer(object):
 
 
 # =====================================================================
+# - Representative stem measurement (for stem-preserving delta scale) --
+# =====================================================================
+def _median(values):
+	s = sorted(values)
+	n = len(s)
+	if n == 0:
+		return None
+	mid = n // 2
+	return s[mid] if n % 2 else 0.5 * (s[mid - 1] + s[mid])
+
+
+def _mode(values, center=None):
+	'''Most frequent value (dominant). Ties break toward `center` (else the
+	larger value). Values are bucketed exactly, so pre-snapped inputs collapse
+	onto their canonical stems.'''
+	if not values:
+		return None
+	counts = {}
+	order = {}
+	for i, v in enumerate(values):
+		counts[v] = counts.get(v, 0) + 1
+		order.setdefault(v, i)
+	best = max(counts.values())
+	tied = [v for v, c in counts.items() if c == best]
+	if len(tied) == 1:
+		return tied[0]
+	if center is not None:
+		return min(tied, key=lambda v: (abs(v - center), -v))
+	return max(tied)
+
+
+def measure_stems(contours, allowlist=None, mode=DetectMode.COINCIDENT, detector=None):
+	'''Representative (stx, sty) stem widths for a set of Contours.
+
+	stx = vertical-stem width (Axis.V candidates), sty = horizontal-stem width
+	(Axis.H). Uses StemDetector (CJK-aware topology gate) to find candidates.
+
+	When `allowlist` is given (keyed 'V'/'H'), each candidate is SNAPPED to the
+	nearest allowed stem and the result is the **most frequent** snapped stem —
+	i.e. the dominant real hinting stem, guaranteed to be an allowed value (not a
+	between-stems median). Without an allowlist, the raw MEDIAN is returned (raw
+	widths don't bucket, so a median is the stable representative there). Either
+	value is None when no candidate of that axis is found.
+
+	mode defaults to COINCIDENT (geometry-only; needs no inserted extrema), which
+	suits arbitrary pasted parts.'''
+	det = detector if detector is not None else StemDetector(mode=mode)
+	cands = det.detect(contours)
+	v = [c.measured_width for c in cands if c.axis == Axis.V]
+	h = [c.measured_width for c in cands if c.axis == Axis.H]
+
+	def reduce_axis(widths, key):
+		if not widths:
+			return None
+		if allowlist is not None:
+			# Use the standard stems as a FILTER: capture() keeps only candidates
+			# that fall inside a real stem's band and snaps them to it; wide
+			# artifacts (stroke junctions, the whole-part span) fall outside every
+			# band and are dropped — so they can't drag the estimate up. Median the
+			# survivors, then snap the median onto a real stem.
+			captured = []
+			for w in widths:
+				res = allowlist.capture(key, w)
+				if res is not None:
+					captured.append(res[0].value)
+			if not captured:
+				return None			# nothing near a real stem -> let caller fall back
+			m = _median(sorted(captured))
+			near = allowlist.nearest(key, m)
+			return near if near is not None else m
+		return _median(widths)
+
+	return (reduce_axis(v, Axis.V), reduce_axis(h, Axis.H))
+
+
+def stem_widths(contours, mode=DetectMode.COINCIDENT, detector=None):
+	'''Raw sorted (v_widths, h_widths) stem-candidate widths — diagnostics only,
+	so callers can see what the detector actually found before aggregation.'''
+	det = detector if detector is not None else StemDetector(mode=mode)
+	cands = det.detect(contours)
+	v = sorted(c.measured_width for c in cands if c.axis == Axis.V)
+	h = sorted(c.measured_width for c in cands if c.axis == Axis.H)
+	return (v, h)
+
+
+# =====================================================================
 # Stage 7-style self-tests.
 # =====================================================================
 
@@ -944,6 +1030,37 @@ def _run_stage6_tests():
 	print('Stage 6: all tests passed.')
 
 
+# --- Stage 7: representative stem measurement (measure_stems) ---
+
+def _test_measure_stems_raw():
+	c = [_make_h_glyph(stem_w=80, bar_h=40)]
+	stx, sty = measure_stems(c)
+	assert _approx(stx, 80.0) and _approx(sty, 40.0)
+	# empty input -> (None, None)
+	assert measure_stems([]) == (None, None)
+	print('  measure_stems raw: H-glyph -> stx=80, sty=40 [OK]')
+
+
+def _test_measure_stems_snapped():
+	from typerig.core.algo._width_audit import allowlist_from_stems
+	c = [_make_h_glyph(stem_w=80, bar_h=40)]
+	al = allowlist_from_stems([(78, 'V'), (120, 'V'), (42, 'H')], tol_frac=0.25)
+	stx, sty = measure_stems(c, allowlist=al)
+	assert _approx(stx, 78.0) and _approx(sty, 42.0)		# snapped to nearest std
+	# nearest() ignores the band: an off-grid value still lands on the closest std
+	assert _approx(al.nearest('V', 200.0), 120.0)
+	assert al.nearest('H', 999.0) == 42.0
+	assert al.nearest('X', 10.0) is None					# no targets for key
+	print('  measure_stems snapped: 80->78, 40->42; nearest 200->120 [OK]')
+
+
+def _run_stage7_tests():
+	print('Stage 7 - measure_stems:')
+	_test_measure_stems_raw()
+	_test_measure_stems_snapped()
+	print('Stage 7: all tests passed.')
+
+
 if __name__ == '__main__':
 	_run_stage1_tests()
 	print()
@@ -956,5 +1073,7 @@ if __name__ == '__main__':
 	_run_stage5_tests()
 	print()
 	_run_stage6_tests()
+	print()
+	_run_stage7_tests()
 	print()
 	print('stem_snap: ALL STAGES PASSED')

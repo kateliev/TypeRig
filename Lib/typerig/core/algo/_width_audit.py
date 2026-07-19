@@ -95,6 +95,29 @@ class WidthAllowlist(object):
 		nearest = min(captors, key=lambda t: abs(t.value - measured))
 		return nearest, nearest.correction(measured)
 
+	def nearest(self, key, measured):
+		'''Value of the closest target under `key`, REGARDLESS of its band, or None
+		if there are no targets. Unlike capture(), never rejects — for callers that
+		want to force a measurement onto an allowed value (snap-to-closest).'''
+		targets = self.targets_by_key.get(key, ())
+		if not targets:
+			return None
+		return min(targets, key=lambda t: abs(t.value - float(measured))).value
+
+
+def allowlist_from_stems(stems, tol_frac=0.20):
+	'''Build a WidthAllowlist from (value, key) pairs — e.g. a master's standard
+	hinting stems keyed 'V'/'H'. Each target gets a symmetric +/- tol_frac*value
+	capture band (used by capture(); nearest() ignores the band).'''
+	al = WidthAllowlist()
+	for value, key in stems:
+		v = float(value)
+		if v <= 0.0:
+			continue
+		band = abs(v) * float(tol_frac)
+		al.add(key, WidthTarget(v, band, band))
+	return al
+
 
 # - Violation vocabulary ----------------
 class Violation(object):
