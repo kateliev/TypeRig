@@ -27,9 +27,11 @@ from typerig.proxy.fl.gui.styles import css_tr_button
 # - Init -------------------------------
 global pLayers
 global pMode
+global transpose_view
 pLayers = None
 pMode = 0
-app_name, app_version = 'TR | Match Contours', '2.7'
+transpose_view = False	# - False: columns = layers, rows = contours; True: swapped
+app_name, app_version = 'TR | Match Contours', '2.8'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -79,31 +81,56 @@ class TRWContourView(QtGui.QTableWidget):
 		self.setIconSize(QtCore.QSize(draw_size, draw_size))	
 
 		# - Init
-		column_names = []
-		self.setRowCount(len(data[0][1]))
-		self.setColumnCount(len(data))
-		name_row = []
+		layer_names = [layer_data[0] for layer_data in data]
+		contour_count = len(data[0][1])
 
-		# - Populate
-		for col, layer_data in enumerate(data):
-			column_names.append(layer_data[0])
+		if transpose_view:
+			# - Rows = layers, columns = contours
+			self.setRowCount(len(data))
+			self.setColumnCount(contour_count)
 
-			for row, draw_data in enumerate(layer_data[1]):
-				newitem = QtGui.QTableWidgetItem()
-				newitem.setIcon(draw_data)
-				self.setItem(row, col, newitem)
+			for layer_idx, layer_data in enumerate(data):
+				for contour_idx, draw_data in enumerate(layer_data[1]):
+					newitem = QtGui.QTableWidgetItem()
+					newitem.setIcon(draw_data)
+					self.setItem(layer_idx, contour_idx, newitem)
 
-		self.setHorizontalHeaderLabels(column_names)
+			self.setVerticalHeaderLabels(layer_names)
+			self.setHorizontalHeaderLabels([str(i) for i in range(contour_count)])
+		else:
+			# - Columns = layers, rows = contours
+			self.setRowCount(contour_count)
+			self.setColumnCount(len(data))
+
+			for layer_idx, layer_data in enumerate(data):
+				for contour_idx, draw_data in enumerate(layer_data[1]):
+					newitem = QtGui.QTableWidgetItem()
+					newitem.setIcon(draw_data)
+					self.setItem(contour_idx, layer_idx, newitem)
+
+			self.setHorizontalHeaderLabels(layer_names)
+			self.setVerticalHeaderLabels([str(i) for i in range(contour_count)])
+
 		self.resizeRowsToContents()
 		self.resizeColumnsToContents()
 		self.blockSignals(False)
-	
+
+	# - Index mapping (transpose-aware) ----------
+	def item_layer_index(self, item):
+		return item.row() if transpose_view else item.column()
+
+	def item_contour_index(self, item):
+		return item.column() if transpose_view else item.row()
+
 	def dropEvent(self, event):
-		new_index = self.rowAt(event.pos().y())
-		
+		if transpose_view:
+			new_index = self.columnAt(event.pos().x())
+		else:
+			new_index = self.rowAt(event.pos().y())
+
 		for item in self.selectedItems():
-			old_index = item.row()
-			layer_index = item.column()
+			old_index = self.item_contour_index(item)
+			layer_index = self.item_layer_index(item)
 			self.aux.drop_item(layer_index, old_index, new_index)
 
 		self.aux.refresh()
@@ -377,8 +404,8 @@ class TRWContoursWinding(QtGui.QWidget):
 
 	def reverse_items(self):
 		for item in self.tab_glyphs.selectedItems():
-			contour_index = item.row()
-			layer_index = item.column()
+			contour_index = self.tab_glyphs.item_contour_index(item)
+			layer_index = self.tab_glyphs.item_layer_index(item)
 
 			work_layer_name = self.aux.glyph.masters()[layer_index].name
 			work_layer_contours = self.aux.glyph.layer(work_layer_name).getContours()
@@ -548,8 +575,8 @@ class TRWContoursStart(QtGui.QWidget):
 
 		# - Process selection
 		for item in self.tab_glyphs.selectedItems():
-			contour_index = item.row()
-			layer_index = item.column()
+			contour_index = self.tab_glyphs.item_contour_index(item)
+			layer_index = self.tab_glyphs.item_layer_index(item)
 
 			work_layer_name = self.aux.glyph.masters()[layer_index].name
 			work_layer_contours = self.aux.glyph.layer(work_layer_name).getContours()
@@ -563,8 +590,8 @@ class TRWContoursStart(QtGui.QWidget):
 	def shift_start_node(self, forward=True):
 		# - Process selection
 		for item in self.tab_glyphs.selectedItems():
-			contour_index = item.row()
-			layer_index = item.column()
+			contour_index = self.tab_glyphs.item_contour_index(item)
+			layer_index = self.tab_glyphs.item_layer_index(item)
 
 			work_layer_name = self.aux.glyph.masters()[layer_index].name
 			work_layer_contours = self.aux.glyph.layer(work_layer_name).getContours()
@@ -609,19 +636,25 @@ class typerig_match(QtGui.QDialog):
 		self.edt_glyph_name.setMaximumWidth(200)
 
 		# -- Buttons
+		self.btn_transpose = QtGui.QPushButton('Transpose view')
+		self.btn_transpose.setCheckable(True)
+		self.btn_transpose.setToolTip('Swap the table axes: layers and contours trade places (rows <-> columns).\nUseful for spreading many contours vertically instead of horizontally.')
+
 		self.btn_refresh = CustomPushButton('refresh', obj_name='btn_mast')
 		self.btn_refresh.setMinimumWidth(40)
 
 		self.btn_apply = QtGui.QPushButton('&Apply')
 		self.btn_apply.setMinimumWidth(200)
-		
+
+		self.btn_transpose.clicked.connect(self.toggle_transpose)
 		self.btn_refresh.clicked.connect(self.tools_refresh)
 		self.btn_apply.clicked.connect(self.tools_update)
-		
+
 		# - Layouts -------------------------------
 		lay_tail = QtGui.QHBoxLayout()
 		lay_tail.addWidget(CustomLabel('label', 'lbl_icon'))
 		lay_tail.addWidget(self.edt_glyph_name)
+		lay_tail.addWidget(self.btn_transpose)
 		lay_tail.addWidget(self.btn_refresh)
 		lay_tail.addWidget(self.btn_apply)
 		lay_tail.addStretch()
@@ -638,6 +671,11 @@ class typerig_match(QtGui.QDialog):
 		self.setGeometry(100, 100, 1440, 880)
 		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint) # Always on top!!
 		self.show()
+
+	def toggle_transpose(self):
+		global transpose_view
+		transpose_view = self.btn_transpose.isChecked()
+		self.tools_refresh()
 
 	def tools_refresh(self):
 		# - Init
