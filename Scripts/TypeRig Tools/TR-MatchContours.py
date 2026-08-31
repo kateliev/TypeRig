@@ -30,8 +30,8 @@ global pMode
 global transpose_view
 pLayers = None
 pMode = 0
-transpose_view = False	# - False: columns = layers, rows = contours; True: swapped
-app_name, app_version = 'TR | Match Contours', '2.8'
+transpose_view = True	# - Default vertical view: rows = layers, columns = contours; False swaps back
+app_name, app_version = 'TR | Match Contours', '2.9'
 
 TRToolFont = getTRIconFontPath()
 font_loaded = QtGui.QFontDatabase.addApplicationFont(TRToolFont)
@@ -50,6 +50,83 @@ accent_colors = [QtGui.QColor(*item) for item in colors_tuples]
 color_wind_ccw = QtGui.QColor(0, 0, 255, 100)
 color_wind_cw = QtGui.QColor(255, 0, 0, 100)
 color_start_accent = QtGui.QColor(0, 255, 0, 255)
+
+# - On-node count colorization (structure by on-node count only) --------------
+# -- Maximally-distinct colors (Sasha Trubetskoy set, achromatic black/gray/white
+#    and the very light yellow removed - they are invisible on the white cell
+#    background). Sorted by hue so spreading across the list == across the wheel.
+node_palette_hex = ['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231',
+					'#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe',
+					'#008080', '#e6beff', '#9a6324', '#800000',
+					'#aaffc3', '#808000', '#ffd8b1', '#000075']
+
+node_palette_sorted = sorted([QtGui.QColor(h) for h in node_palette_hex],
+							key=lambda c: (c.hue(), c.value()))
+
+def _lerp_color(c1, c2, t):
+	'''Linear blend between two QColors (used only when there are more distinct
+	node counts than palette entries).'''
+	lerp = lambda a, b: int(round(a + (b - a) * t))
+	return QtGui.QColor(lerp(c1.red(), c2.red()),
+						lerp(c1.green(), c2.green()),
+						lerp(c1.blue(), c2.blue()))
+
+def _spread_color(i, m):
+	'''Color for ordinal i of m items, spread as evenly as possible across the
+	palette (endpoints inclusive). When m exceeds the palette length the position
+	is fractional and the two nearest palette colors are blended.'''
+	last = len(node_palette_sorted) - 1
+	pos = 0.0 if m <= 1 else i * last / float(m - 1)
+	lo = int(pos)
+	frac = pos - lo
+	if frac == 0:
+		return QtGui.QColor(node_palette_sorted[lo])
+	return _lerp_color(node_palette_sorted[lo], node_palette_sorted[min(lo + 1, last)], frac)
+
+def build_count_color_map(all_counts):
+	'''Map every distinct on-node count (globally, across all layers) to a color
+	spread across the palette. Same node count -> same color in every layer.'''
+	distinct = sorted(set(all_counts))
+	m = len(distinct)
+	return {count: _spread_color(i, m) for i, count in enumerate(distinct)}
+
+# - On-node count badge (figure on a box matching the contour color, bottom-left)
+def draw_node_count_badge(pixmap, count, box_color):
+	'''Draw the on-node count as a small figure on a box colored to match the
+	contour colorization, at the bottom-left of pixmap. Text color flips between
+	white and black by box luminance so it stays readable on any palette color.
+	Drawn on the final (already upright) pixmap so the figure is not mirrored.'''
+	text = str(count)
+
+	# - Readable text on any background (perceived luminance)
+	luminance = 0.299 * box_color.red() + 0.587 * box_color.green() + 0.114 * box_color.blue()
+	text_color = QtGui.QColor('black') if luminance > 150 else QtGui.QColor('white')
+
+	badge_painter = QtGui.QPainter()
+	badge_painter.begin(pixmap)
+	badge_painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
+
+	# - Fixed pixel metrics relative to the icon size
+	font_px = max(6, int(pixmap.height() * 0.10))
+	pad = max(2, int(font_px * 0.25))
+
+	badge_font = QtGui.QFont()
+	badge_font.setPixelSize(font_px)
+	badge_font.setBold(True)
+	badge_painter.setFont(badge_font)
+
+	# - Box (avoid QFontMetrics width quirks: size by digit count)
+	box_w = int(len(text) * font_px * 0.62) + 2 * pad
+	box_h = font_px + 2 * pad
+	box_rect = QtCore.QRectF(0, pixmap.height() - box_h, box_w, box_h)
+
+	badge_painter.setPen(QtCore.Qt.NoPen)
+	badge_painter.setBrush(QtGui.QBrush(box_color))
+	badge_painter.drawRect(box_rect)
+
+	badge_painter.setPen(QtGui.QPen(text_color))
+	badge_painter.drawText(box_rect, QtCore.Qt.AlignCenter, text)
+	badge_painter.end()
 
 draw_padding = 100
 draw_size = 100
@@ -82,7 +159,10 @@ class TRWContourView(QtGui.QTableWidget):
 
 		# - Init
 		layer_names = [layer_data[0] for layer_data in data]
-		contour_count = len(data[0][1])
+		# - Size the grid by the layer with the MOST contours so that layers with
+		#   extra contours (mismatched counts) are fully shown, not truncated to the
+		#   first layer's count. Empty positions stay blank.
+		contour_count = max([len(layer_data[1]) for layer_data in data]) if data else 0
 
 		if transpose_view:
 			# - Rows = layers, columns = contours
@@ -185,20 +265,33 @@ class TRWContoursOrder(QtGui.QWidget):
 		# - Init
 		return_pixmaps = []
 
+		# - Build a global on-node-count -> color map across ALL layers first, so a
+		#   given node count colors identically in every layer (spread across palette).
+		all_counts = []
+		for layer in self.aux.glyph.masters():
+			for shape in layer.shapes:
+				for contour in shape.contours:
+					all_counts.append(len([node for node in contour.nodes() if node.isOn()]))
+
+		count_color_map = build_count_color_map(all_counts)
+
 		for layer in self.aux.glyph.masters():
 			layer_shapes = []
-			
+
 			for idx, shape in enumerate(layer.shapes):
-				layer_shapes.append(self.__drawIcons(shape.contours, accent_colors[idx]))
+				layer_shapes.append(self.__drawIcons(shape.contours, count_color_map))
 
 			return_pixmaps.append((layer.name, sum(layer_shapes,[])))
-		
+
 		return return_pixmaps
 
-	def __drawIcons(self, contours, color_accent):
+	def __drawIcons(self, contours, count_color_map):
 		# - Init
 		return_icons = []
 		sep_contours = []
+
+		# -- On-node count per contour (drives color + badge; same count -> same color)
+		node_counts = [len([node for node in contour.nodes() if node.isOn()]) for contour in contours]
 
 		# -- Prepare contours
 		cloned_contours = [contour.clone() for contour in contours]
@@ -238,8 +331,13 @@ class TRWContoursOrder(QtGui.QWidget):
 			cont_painter.drawPath(other_shape.closedPath)
 
 			# - Draw the specific contour
-			cont_painter.setBrush(QtGui.QBrush(color_accent))
-			cont_painter.setPen(QtGui.QPen(color_accent, 30, QtCore.Qt.SolidLine))
+			# -- Color by on-node count only (same count -> same color)
+			count_color = count_color_map.get(node_counts[cid], QtGui.QColor('gray'))
+			count_fill = QtGui.QColor(count_color)
+			count_fill.setAlpha(100)
+
+			cont_painter.setBrush(QtGui.QBrush(count_fill))
+			cont_painter.setPen(QtGui.QPen(count_color, 30, QtCore.Qt.SolidLine))
 			new_transform = cont_shape.transform.translate(-shape_bbox.x() + draw_padding, -shape_bbox.y() + draw_padding)
 			cont_shape.applyTransform(new_transform)
 			cont_shape.ensurePaths()
@@ -247,6 +345,10 @@ class TRWContoursOrder(QtGui.QWidget):
 
 			pixmap_transform = QtGui.QTransform().scale(draw_size/draw_dimension, -draw_size/draw_dimension)
 			pixmap_resized = cont_pixmap.transformed(pixmap_transform, QtCore.Qt.SmoothTransformation)
+
+			# - Draw on-node count badge on the final (upright) pixmap
+			draw_node_count_badge(pixmap_resized, node_counts[cid], count_color)
+
 			new_icon.addPixmap(pixmap_resized)
 
 			return_icons.append(new_icon)
@@ -638,6 +740,7 @@ class typerig_match(QtGui.QDialog):
 		# -- Buttons
 		self.btn_transpose = QtGui.QPushButton('Transpose view')
 		self.btn_transpose.setCheckable(True)
+		self.btn_transpose.setChecked(transpose_view)
 		self.btn_transpose.setToolTip('Swap the table axes: layers and contours trade places (rows <-> columns).\nUseful for spreading many contours vertically instead of horizontally.')
 
 		self.btn_refresh = CustomPushButton('refresh', obj_name='btn_mast')
