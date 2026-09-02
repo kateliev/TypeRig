@@ -627,6 +627,174 @@ class eNode(pNode):
 
 		return curve_parts
 
+	def cornerRoundSquircle(self, size=100., smoothing=0.6, isRadius=True, insert=True):
+		'''Round an angular corner as a Figma-style squircle (superellipse) corner.
+
+		Builds the corner from a central circular arc of radius R spanning an angle
+		of turn*(1 - smoothing), flanked by two symmetric 'ease' cubic Beziers that
+		blend the arc smoothly into the straight edges. The result is a 4 on-curve /
+		6 off-curve node structure (three cubic segments): ease-in, arc, ease-out.
+
+		Arguments:
+			size (float): Corner reach - the distance from the corner vertex to the
+						  point where the straight edge ends (font units), matching the
+						  meaning of the regular Round Corner radius. The circular-arc
+						  radius is derived from this and the smoothing.
+			smoothing (float): Corner smoothing s in the range 0.0 - 1.0
+							   (0.0 = plain circular fillet, 0.6 = iOS default).
+			isRadius (bool): Interpret size as arc radius (True) or edge offset (False).
+			insert (bool): Splice the new nodes into the parent contour.
+
+		Returns:
+			list(flNode): the created node chain, or None if the corner was skipped.
+		'''
+		# - Init
+		parent_contour = self.contour
+
+		nextNode = self.getNextOn(False)
+		prevNode = self.getPrevOn(False)
+
+		V = (float(self.x), float(self.y))
+
+		# - Edge unit vectors radiating from the corner vertex
+		prev_unit = Coord(prevNode.asCoord() - self.asCoord()).unit
+		next_unit = Coord(nextNode.asCoord() - self.asCoord()).unit
+		ix, iy = float(prev_unit.x), float(prev_unit.y)		# toward previous on-node
+		ox, oy = float(next_unit.x), float(next_unit.y)		# toward next on-node
+
+		# - Corner geometry
+		dot = max(-1., min(1., ix * ox + iy * oy))
+		full_angle = math.acos(dot)						# interior angle at the vertex
+		half_angle = full_angle / 2.
+		turn_angle = math.pi - full_angle					# exterior turn of the outline
+
+		# - Safety: skip (near) straight or (near) folded corners
+		if half_angle < 1e-4 or abs(math.pi - full_angle) < 1e-4:
+			return None
+		if math.sin(half_angle) < 1e-6 or math.tan(half_angle) < 1e-6:
+			return None
+
+		s = max(0., min(1., float(smoothing)))
+
+		# - Resolve the corner reach (tangent distance from the vertex, in font units)
+		if isRadius:
+			p_edge = float(size)
+		else:
+			p_edge = abs(float(size) * (math.cos(half_angle) / math.sin(half_angle)))
+
+		if p_edge <= 0.:
+			return None
+
+		# - Clamp the reach to the available edge length
+		safe_distance = min(self.distanceTo(prevNode), self.distanceTo(nextNode))
+		if p_edge > safe_distance - 0.1:
+			p_edge = safe_distance - 0.1
+
+		# - Derive the circular-arc radius from the reach and smoothing
+		#   reach = (1 + smoothing) * t0 ;  t0 = R / tan(half_angle)
+		t0 = p_edge / (1. + s)
+		radius = t0 * math.tan(half_angle)
+
+		if radius <= 0.:
+			return None
+
+		# - Arc centre O on the corner bisector
+		bx, by = ix + ox, iy + oy
+		blen = math.hypot(bx, by)
+		if blen < 1e-9:
+			return None
+		bx, by = bx / blen, by / blen
+		O = (V[0] + bx * (radius / math.sin(half_angle)),
+			 V[1] + by * (radius / math.sin(half_angle)))
+
+		# - Bisector direction from O back toward the vertex
+		dov_x, dov_y = V[0] - O[0], V[1] - O[1]
+		dov_len = math.hypot(dov_x, dov_y)
+		dov_x, dov_y = dov_x / dov_len, dov_y / dov_len
+
+		arc_measure = turn_angle * (1. - s)					# swept angle of the true arc
+		half_arc = arc_measure / 2.
+
+		def _rot(vx, vy, ang):
+			ca, sa = math.cos(ang), math.sin(ang)
+			return (vx * ca - vy * sa, vx * sa + vy * ca)
+
+		dir_a = _rot(dov_x, dov_y, +half_arc)
+		dir_b = _rot(dov_x, dov_y, -half_arc)
+
+		# - dir_a must point to the arc end on the incoming (previous) edge side
+		if (dir_a[0] * ix + dir_a[1] * iy) < (dir_b[0] * ix + dir_b[1] * iy):
+			dir_a, dir_b = dir_b, dir_a
+
+		p_in = (O[0] + dir_a[0] * radius, O[1] + dir_a[1] * radius)		# arc start (incoming side)
+		p_out = (O[0] + dir_b[0] * radius, O[1] + dir_b[1] * radius)		# arc end (outgoing side)
+
+		# - Edge tangent points
+		node_a = (V[0] + ix * p_edge, V[1] + iy * p_edge)				# on incoming edge
+		node_b = (V[0] + ox * p_edge, V[1] + oy * p_edge)				# on outgoing edge
+
+		# - Line/line intersection (point + direction), None if parallel
+		def _isect(p, d, q, e):
+			denom = d[0] * e[1] - d[1] * e[0]
+			if abs(denom) < 1e-9:
+				return None
+			t = ((q[0] - p[0]) * e[1] - (q[1] - p[1]) * e[0]) / denom
+			return (p[0] + t * d[0], p[1] + t * d[1])
+
+		# - Perpendiculars to the arc radii give the arc tangent directions
+		tan_a = (-dir_a[1], dir_a[0])
+		tan_b = (-dir_b[1], dir_b[0])
+
+		# - Ease-in second control: arc-tangent line at p_in meets the incoming edge line
+		p2_in = _isect(node_a, (ix, iy), p_in, tan_a)
+		if p2_in is None: p2_in = p_in
+		p1_in = (node_a[0] + (2. / 3.) * (p2_in[0] - node_a[0]),
+				 node_a[1] + (2. / 3.) * (p2_in[1] - node_a[1]))
+
+		# - Ease-out first control: arc-tangent line at p_out meets the outgoing edge line
+		p2_out = _isect(node_b, (ox, oy), p_out, tan_b)
+		if p2_out is None: p2_out = p_out
+		p1_out = (node_b[0] + (2. / 3.) * (p2_out[0] - node_b[0]),
+				  node_b[1] + (2. / 3.) * (p2_out[1] - node_b[1]))
+
+		# - Arc handles (single cubic approximation of the circular arc)
+		k = (4. / 3.) * math.tan(half_arc / 2.) * radius if half_arc > 1e-9 else 0.
+
+		fwd_a = tan_a if (tan_a[0] * (p_out[0] - p_in[0]) + tan_a[1] * (p_out[1] - p_in[1])) > 0 else (-tan_a[0], -tan_a[1])
+		fwd_b = tan_b if (tan_b[0] * (p_in[0] - p_out[0]) + tan_b[1] * (p_in[1] - p_out[1])) > 0 else (-tan_b[0], -tan_b[1])
+
+		arc_h0 = (p_in[0] + fwd_a[0] * k, p_in[1] + fwd_a[1] * k)
+		arc_h1 = (p_out[0] + fwd_b[0] * k, p_out[1] + fwd_b[1] * k)
+
+		# - Assemble node chain: prevNode | A (o o) Pin (o o) Pout (o o) B | nextNode
+		def _on(pt): return fl6.flNode(pt[0], pt[1], nodeType=1)
+		def _off(pt): return fl6.flNode(pt[0], pt[1], nodeType=4)
+
+		new_curve = [
+			_on((float(prevNode.x), float(prevNode.y))),					# prevNode duplicate
+			_on(node_a), _off(p1_in), _off(p2_in),
+			_on(p_in), _off(arc_h0), _off(arc_h1),
+			_on(p_out), _off(p2_out), _off(p1_out),
+			_on(node_b),
+			_on((float(nextNode.x), float(nextNode.y))),					# nextNode duplicate
+		]
+
+		# - Smooth flags on the four squircle on-curve nodes
+		for on_index in (1, 4, 7, 10):
+			new_curve[on_index].smooth = True
+
+		new_curve[0].smooth = prevNode.fl.smooth
+		new_curve[-1].smooth = nextNode.fl.smooth
+
+		# - Insert and cleanup (mirrors cornerRound surgery)
+		if insert:
+			parent_contour.insert(prevNode.index, new_curve)
+			parent_contour.removeOne(prevNode.fl)
+			parent_contour.removeNodesBetween(new_curve[-1], nextNode.fl)
+			parent_contour.removeOne(nextNode.fl)
+
+		return new_curve
+
 	def old_cornerRound(self, size=5, proportion=None, curvature=None, isRadius=False):
 		# - Calculate unit vectors and shifts
 		nextNode = self.getNextOn(False)

@@ -604,6 +604,7 @@ class TRLayerSelectNEW(QtGui.QDialog):
 # -- Universal per-master numeric value editor ----------------------------------
 TR_LIB_KEY_PREFIX = 'com.typerig.'
 TR_MASTER_VALUES_FORMAT = 'typerig.master_values/1'
+TR_MASTER_MATRIX_FORMAT = 'typerig.master_matrix/1'
 
 class TRMasterValuesDLG(QtGui.QDialog):
 	'''Universal dialog: one numeric value per font master, persisted in
@@ -915,6 +916,351 @@ class TRMasterValuesDLG(QtGui.QDialog):
 
 	# -- Result ------------------------------------------------------------
 
+	def _on_ok(self):
+		self.values = self._table_to_dict()
+		self.changed = (self.values != self._initial_data)
+		self.accept()
+
+class TRMasterMatrixDLG(QtGui.QDialog):
+	'''Per-master matrix editor: one ROW per font master, several numeric
+	COLUMNS per master, persisted in the font lib under a caller-supplied
+	reverse-domain key, with JSON export/import. Generalises TRMasterValuesDLG
+	to N value columns (e.g. outer/inner radius + handle for corner rounding).
+
+	Args:
+		font    : pFont - required; provides masters list and packageLib I/O
+		lib_key : str   - required; full reverse-domain key (must start with
+		          'com.typerig.')
+		columns : list of dicts, one per value column, each:
+		          {'key': str, 'label': str, 'type': float|int,
+		           'default': number, 'range': (min, max, step)}
+		          ('range' is advisory; the cells are validated free-text.)
+		defaults: dict[master_name -> list[value]] | callable(name)->list | None
+		          baked-in fallback for masters missing from the font lib.
+		lift_actions : list of dicts | None - optional in-dialog "lift" buttons:
+		          {'label': str, 'columns': [int,...], 'callback': callable()->
+		           dict[master_name -> list[value]], 'tooltip': str}
+		          Clicking runs the callback and writes the returned values into
+		          the given columns of the matching master rows. Use a modeless
+		          dialog (show(), not exec_()) so the glyph canvas stays live.
+		title, message : str
+		autoload: bool  - overlay font-lib values on top of the defaults on open
+		size    : tuple - (x, y, w, h)
+
+	After exec_():
+		self.values  : dict[str, list] | None  (None if cancelled)
+		self.changed : bool
+	'''
+	_COL_NAME = 0
+
+	def __init__(self, font, lib_key, columns, defaults=None,
+	             lift_actions=None, title=None, message=None, autoload=True,
+	             size=(300, 300, 560, 380), parent=None):
+		super(TRMasterMatrixDLG, self).__init__(parent)
+
+		# - Validate the key contract up front
+		if not isinstance(lib_key, basestring) or not lib_key.startswith(TR_LIB_KEY_PREFIX):
+			raise ValueError("TRMasterMatrixDLG: lib_key must start with %r (got %r)"
+			                 % (TR_LIB_KEY_PREFIX, lib_key))
+
+		# - Init state
+		self.tr_font       = font
+		self.lib_key       = lib_key
+		self.columns       = columns
+		self.ncols         = len(columns)
+		self.lift_actions  = lift_actions or []
+		self.values        = None
+		self.changed       = False
+		self._initial_data = {}
+		self.master_names  = list(self.tr_font.masters())
+		self._defaults     = self._build_defaults(defaults)
+
+		# - Widgets
+		self.lbl_main = QtGui.QLabel(message or 'Set values for each master:')
+		self.lbl_main.setWordWrap(True)
+
+		self.tbl = QtGui.QTableWidget(0, 1 + self.ncols)
+		self.tbl.setHorizontalHeaderLabels(['Master'] + [c['label'] for c in columns])
+		self.tbl.horizontalHeader().setStretchLastSection(True)
+		self.tbl.verticalHeader().setVisible(False)
+		self.tbl.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
+		self.tbl.setEditTriggers(QtGui.QAbstractItemView.AllEditTriggers)
+		self.tbl.itemChanged.connect(self._on_item_changed)
+
+		self.btn_font_load = QtGui.QPushButton('Load from Font')
+		self.btn_font_save = QtGui.QPushButton('Save to Font')
+		self.btn_file_load = QtGui.QPushButton('Load from JSON')
+		self.btn_file_save = QtGui.QPushButton('Save to JSON')
+		self.btn_reset     = QtGui.QPushButton('Reset to Defaults')
+		self.btn_ok        = QtGui.QPushButton('OK')
+		self.btn_cancel    = QtGui.QPushButton('Cancel')
+
+		self.btn_font_load.clicked.connect(self._font_load)
+		self.btn_font_save.clicked.connect(self._font_save)
+		self.btn_file_load.clicked.connect(self._file_load)
+		self.btn_file_save.clicked.connect(self._file_save)
+		self.btn_reset.clicked.connect(self._reset_defaults)
+		self.btn_ok.clicked.connect(self._on_ok)
+		self.btn_cancel.clicked.connect(lambda: self.reject())
+
+		# - Layout
+		main = QtGui.QGridLayout()
+		row = 0
+		main.addWidget(self.lbl_main, row, 0, 1, 4); row += 1
+		main.addWidget(self.tbl,      row, 0, 1, 4); row += 1
+
+		# -- Optional "lift from selection" buttons
+		if self.lift_actions:
+			lift_row = QtGui.QHBoxLayout()
+			for action in self.lift_actions:
+				btn = QtGui.QPushButton(action.get('label', 'Get'))
+				if action.get('tooltip'): btn.setToolTip(action['tooltip'])
+				btn.clicked.connect(lambda checked=False, a=action: self._run_lift(a))
+				lift_row.addWidget(btn)
+			main.addLayout(lift_row, row, 0, 1, 4); row += 1
+
+		main.addWidget(self.btn_font_load, row, 0, 1, 2)
+		main.addWidget(self.btn_font_save, row, 2, 1, 2); row += 1
+		main.addWidget(self.btn_file_load, row, 0, 1, 2)
+		main.addWidget(self.btn_file_save, row, 2, 1, 2); row += 1
+		main.addWidget(self.btn_reset,     row, 0, 1, 4); row += 1
+		main.addWidget(self.btn_cancel,    row, 0, 1, 2)
+		main.addWidget(self.btn_ok,        row, 2, 1, 2)
+		self.setLayout(main)
+
+		# - Populate. Start with baked defaults; optionally overlay font lib.
+		self._dict_to_table(self._defaults)
+		if autoload:
+			loaded, present = self._read_font_lib()
+			if present and loaded:
+				merged = dict(self._defaults)
+				merged.update(loaded)
+				self._dict_to_table(merged)
+		self._initial_data = self._table_to_dict()
+
+		# - Window
+		self.setWindowTitle(title or 'Master matrix - %s' % lib_key)
+		self.setGeometry(*size)
+		self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
+
+	# -- Defaults ----------------------------------------------------------
+	def _build_defaults(self, defaults):
+		out = {}
+		for name in self.master_names:
+			row = defaults(name) if callable(defaults) else (defaults.get(name) if isinstance(defaults, dict) else None)
+			if row is None:
+				row = [c['default'] for c in self.columns]
+			out[name] = [float(v) for v in row]
+		return out
+
+	def get_values(self):
+		return self._table_to_dict()
+
+	# -- Table <-> dict marshalling ----------------------------------------
+	def _coerce(self, col_index, v):
+		v = float(v)
+		return int(round(v)) if self.columns[col_index]['type'] is int else v
+
+	def _table_to_dict(self):
+		out = {}
+		for row in range(self.tbl.rowCount):
+			name_item = self.tbl.item(row, self._COL_NAME)
+			if name_item is None: continue
+
+			vals, ok = [], True
+			for c in range(self.ncols):
+				item = self.tbl.item(row, 1 + c)
+				if item is None: ok = False; break
+				try:
+					vals.append(self._coerce(c, item.text))
+				except (TypeError, ValueError):
+					ok = False; break
+
+			if ok: out[name_item.text()] = vals
+
+		return out
+
+	def _dict_to_table(self, data):
+		self.tbl.blockSignals(True)
+
+		known = set(self.master_names)
+		known_rows = [(name, data.get(name, self._defaults.get(name)), False) for name in self.master_names]
+		orphan_rows = [(k, data[k], True) for k in sorted(data.keys()) if k not in known]
+		all_rows = known_rows + orphan_rows
+
+		self.tbl.clearContents()
+		self.tbl.setRowCount(0)
+		self.tbl.setRowCount(len(all_rows))
+
+		for row, (name, vals, orphan) in enumerate(all_rows):
+			self._set_row(row, name, vals, orphan)
+
+		self.tbl.blockSignals(False)
+
+	def _set_row(self, row, master_name, vals, orphan=False):
+		if vals is None:
+			vals = [c['default'] for c in self.columns]
+
+		red = QtGui.QColor(255, 80, 80, 60)
+		name_item = QtGui.QTableWidgetItem(master_name)
+		name_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+		if orphan:
+			name_item.setBackground(red)
+			name_item.setToolTip('Orphan: master "%s" not present in current font.' % master_name)
+		self.tbl.setItem(row, self._COL_NAME, name_item)
+
+		for c in range(self.ncols):
+			try:
+				v = float(vals[c])
+			except (IndexError, TypeError, ValueError):
+				v = float(self.columns[c]['default'])
+			text = str(int(round(v))) if self.columns[c]['type'] is int else '{:g}'.format(v)
+			value_item = QtGui.QTableWidgetItem(text)
+			if orphan: value_item.setBackground(red)
+			self.tbl.setItem(row, 1 + c, value_item)
+
+	def _on_item_changed(self, item):
+		if item.column == self._COL_NAME: return
+		try:
+			float(item.text)
+		except (TypeError, ValueError):
+			self.tbl.blockSignals(True)
+			item.setText('{:g}'.format(float(self.columns[item.column - 1]['default'])))
+			self.tbl.blockSignals(False)
+
+	# -- Font lib I/O ------------------------------------------------------
+	def _read_font_lib(self):
+		try:
+			pkg_lib = self.tr_font.fl.packageLib
+		except Exception as ex:
+			QtGui.QMessageBox.warning(self, 'Font lib unavailable', str(ex))
+			return {}, False
+
+		try:
+			data = pkg_lib[self.lib_key]
+		except Exception:
+			return {}, False
+
+		if not isinstance(data, dict):
+			return {}, False
+
+		clean = {}
+		for k, v in data.items():
+			try:
+				clean[str(k)] = [float(x) for x in v][:self.ncols]
+			except (TypeError, ValueError):
+				continue
+		return clean, True
+
+	def _font_load(self):
+		data, present = self._read_font_lib()
+		if not present:
+			QtGui.QMessageBox.information(self, 'Load from Font', 'No data found in font lib under key:\n%s' % self.lib_key)
+			return
+		merged = dict(self._defaults); merged.update(data)
+		self._dict_to_table(merged)
+
+	def _font_save(self):
+		data = self._table_to_dict()
+		pkg_lib = self.tr_font.fl.packageLib
+		pkg_lib[self.lib_key] = {str(k): [float(x) for x in v] for k, v in data.items()}
+		self.tr_font.fl.packageLib = pkg_lib
+		print('Save to Font:\t%d master row(s) saved under key:\n%s' % (len(data), self.lib_key))
+
+	# -- JSON file I/O -----------------------------------------------------
+	def _default_dir(self):
+		try:
+			return os.path.split(self.tr_font.fg.path)[0]
+		except Exception:
+			return ''
+
+	def _suggested_filename(self):
+		stem = self.lib_key[len(TR_LIB_KEY_PREFIX):] if self.lib_key.startswith(TR_LIB_KEY_PREFIX) else self.lib_key
+		return stem + '.json'
+
+	def _file_save(self):
+		default = os.path.join(self._default_dir(), self._suggested_filename())
+		fname = QtGui.QFileDialog.getSaveFileName(self, 'Save master matrix to JSON', default, '*.json')
+		if not fname: return
+		payload = {
+			'format':  TR_MASTER_MATRIX_FORMAT,
+			'key':     self.lib_key,
+			'columns': [c['key'] for c in self.columns],
+			'values':  self._table_to_dict(),
+		}
+		try:
+			with open(fname, 'w') as f:
+				json.dump(payload, f, indent='\t', sort_keys=True)
+		except Exception as ex:
+			QtGui.QMessageBox.warning(self, 'Save to JSON failed', str(ex))
+
+	def _file_load(self):
+		fname = QtGui.QFileDialog.getOpenFileName(self, 'Load master matrix from JSON', self._default_dir(), '*.json')
+		if not fname: return
+		try:
+			with open(fname, 'r') as f:
+				blob = json.load(f)
+		except Exception as ex:
+			QtGui.QMessageBox.warning(self, 'Load from JSON failed', str(ex))
+			return
+
+		if isinstance(blob, dict) and 'values' in blob and isinstance(blob['values'], dict):
+			data = blob['values']
+		elif isinstance(blob, dict):
+			data = blob
+		else:
+			QtGui.QMessageBox.warning(self, 'Load from JSON failed', 'Unrecognized file shape (expected a dict).')
+			return
+
+		clean = {}
+		for k, v in data.items():
+			try:
+				clean[str(k)] = [float(x) for x in v][:self.ncols]
+			except (TypeError, ValueError):
+				continue
+		merged = dict(self._defaults); merged.update(clean)
+		self._dict_to_table(merged)
+
+	def _reset_defaults(self):
+		self._dict_to_table(dict(self._defaults))
+
+	# -- Lift from selection -----------------------------------------------
+	def _run_lift(self, action):
+		'''Run a lift callback and write its per-master values into the given
+		columns of the matching rows. Callback returns {master_name: [values]}
+		aligned to action['columns'].'''
+		cols = action.get('columns', [])
+		try:
+			data = action['callback']()
+		except Exception as ex:
+			QtGui.QMessageBox.warning(self, action.get('label', 'Lift'), str(ex))
+			return
+
+		if not data:
+			QtGui.QMessageBox.information(self, action.get('label', 'Lift'),
+				'Nothing measured from the current selection.')
+			return
+
+		self.tbl.blockSignals(True)
+		filled = 0
+		for r in range(self.tbl.rowCount):
+			name_item = self.tbl.item(r, self._COL_NAME)
+			if name_item is None: continue
+			vals = data.get(name_item.text)
+			if vals is None: continue
+
+			for i, c in enumerate(cols):
+				if i >= len(vals): break
+				item = self.tbl.item(r, 1 + c)
+				if item is None: continue
+				v = float(vals[i])
+				item.setText(str(int(round(v))) if self.columns[c]['type'] is int else '{:g}'.format(v))
+			filled += 1
+		self.tbl.blockSignals(False)
+
+		print('%s:\t lifted values into %d master row(s).' % (action.get('label', 'Lift'), filled))
+
+	# -- Result ------------------------------------------------------------
 	def _on_ok(self):
 		self.values = self._table_to_dict()
 		self.changed = (self.values != self._initial_data)
