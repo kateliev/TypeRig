@@ -1072,7 +1072,7 @@ class TRMasterMatrixDLG(QtGui.QDialog):
 				item = self.tbl.item(row, 1 + c)
 				if item is None: ok = False; break
 				try:
-					vals.append(self._coerce(c, item.text))
+					vals.append(self._coerce(c, item.text()))
 				except (TypeError, ValueError):
 					ok = False; break
 
@@ -1120,12 +1120,12 @@ class TRMasterMatrixDLG(QtGui.QDialog):
 			self.tbl.setItem(row, 1 + c, value_item)
 
 	def _on_item_changed(self, item):
-		if item.column == self._COL_NAME: return
+		if item.column() == self._COL_NAME: return
 		try:
-			float(item.text)
+			float(item.text())
 		except (TypeError, ValueError):
 			self.tbl.blockSignals(True)
-			item.setText('{:g}'.format(float(self.columns[item.column - 1]['default'])))
+			item.setText('{:g}'.format(float(self.columns[item.column() - 1]['default'])))
 			self.tbl.blockSignals(False)
 
 	# -- Font lib I/O ------------------------------------------------------
@@ -1140,6 +1140,14 @@ class TRMasterMatrixDLG(QtGui.QDialog):
 			data = pkg_lib[self.lib_key]
 		except Exception:
 			return {}, False
+
+		# packageLib does not round-trip nested containers; matrix data is stored
+		# as a JSON string. Accept a plain dict too for backward compatibility.
+		if isinstance(data, basestring):
+			try:
+				data = json.loads(data)
+			except Exception:
+				return {}, False
 
 		if not isinstance(data, dict):
 			return {}, False
@@ -1162,8 +1170,10 @@ class TRMasterMatrixDLG(QtGui.QDialog):
 
 	def _font_save(self):
 		data = self._table_to_dict()
+		payload = {str(k): [float(x) for x in v] for k, v in data.items()}
+		# Store as a JSON string - packageLib does not round-trip nested containers.
 		pkg_lib = self.tr_font.fl.packageLib
-		pkg_lib[self.lib_key] = {str(k): [float(x) for x in v] for k, v in data.items()}
+		pkg_lib[self.lib_key] = json.dumps(payload)
 		self.tr_font.fl.packageLib = pkg_lib
 		print('Save to Font:\t%d master row(s) saved under key:\n%s' % (len(data), self.lib_key))
 
@@ -1238,7 +1248,8 @@ class TRMasterMatrixDLG(QtGui.QDialog):
 
 		if not data:
 			QtGui.QMessageBox.information(self, action.get('label', 'Lift'),
-				'Nothing measured from the current selection.')
+				'Nothing measured from the current selection.\n'
+				'Select the reference corner on the canvas, then click again.')
 			return
 
 		self.tbl.blockSignals(True)
@@ -1246,7 +1257,7 @@ class TRMasterMatrixDLG(QtGui.QDialog):
 		for r in range(self.tbl.rowCount):
 			name_item = self.tbl.item(r, self._COL_NAME)
 			if name_item is None: continue
-			vals = data.get(name_item.text)
+			vals = data.get(name_item.text())
 			if vals is None: continue
 
 			for i, c in enumerate(cols):
@@ -1258,7 +1269,11 @@ class TRMasterMatrixDLG(QtGui.QDialog):
 			filled += 1
 		self.tbl.blockSignals(False)
 
-		print('%s:\t lifted values into %d master row(s).' % (action.get('label', 'Lift'), filled))
+		if filled == 0:
+			print('%s:\t measured %d entr(y/ies) %s but NONE matched the table masters %s'
+				% (action.get('label', 'Lift'), len(data), sorted(data.keys()), sorted(self.master_names)))
+		else:
+			print('%s:\t lifted values into %d master row(s).' % (action.get('label', 'Lift'), filled))
 
 	# -- Result ------------------------------------------------------------
 	def _on_ok(self):
