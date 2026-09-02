@@ -626,6 +626,139 @@ class Node(Member, XMLSerializable):
 
 		return (curr_node, bcp_out, bcp_in, next_node)
 
+	def corner_round_squircle(self, rounding_size=100, smoothing=0.6, is_radius=True):
+		'''Round an angular corner as a Figma-style squircle (superellipse) corner.
+
+		Builds the corner from a central circular arc spanning turn*(1 - smoothing),
+		flanked by two symmetric 'ease' cubic Beziers that blend the arc smoothly into
+		the straight edges - a 4 on-curve / 6 off-curve structure (three cubic segments:
+		ease-in, arc, ease-out).
+
+		Arguments:
+			rounding_size (float): corner reach - the distance from the corner vertex to
+				where the straight edge ends (design units), matching the meaning of the
+				corner_round radius. The circular-arc radius is derived from reach and
+				smoothing.
+			smoothing (float): corner smoothing 0.0 - 1.0 (0.0 = plain fillet, 0.6 = iOS).
+			is_radius (bool): interpret rounding_size as reach (True) or edge offset (False).
+
+		Returns:
+			tuple(Node, Node, Node, Node): (node_a, arc_start, arc_end, node_b) on-curve
+			nodes, or None if the corner was skipped.
+		'''
+		# - Actual tangent directions at the corner (BCP-aware)
+		prev_unit, next_unit = self._get_corner_tangents()
+
+		# - Corner geometry
+		angle = math.atan2(next_unit | prev_unit, next_unit & prev_unit)
+		full_angle = abs(angle)
+		half_angle = full_angle / 2.0
+		turn_angle = math.pi - full_angle
+
+		if half_angle < 1e-6 or abs(math.pi - full_angle) < 1e-6:
+			return None
+		if math.sin(half_angle) < 1e-9 or abs(math.tan(half_angle)) < 1e-9:
+			return None
+
+		s = max(0.0, min(1.0, float(smoothing)))
+
+		# - Resolve the corner reach (tangent distance from the vertex)
+		if is_radius:
+			reach = abs(float(rounding_size))
+		else:
+			reach = abs(float(rounding_size) * (math.cos(half_angle) / math.sin(half_angle)))
+
+		if reach <= 0.0:
+			return None
+
+		# - Clamp the reach to the available edge length
+		safe_distance = min(self.distance_to_prev_on, self.distance_to_next_on)
+		if reach > safe_distance - 0.1:
+			reach = safe_distance - 0.1
+
+		# - Derive the circular-arc radius: reach = (1 + s) * t0 ; t0 = r / tan(half_angle)
+		t0 = reach / (1.0 + s)
+		r = t0 * math.tan(half_angle)
+		if r <= 0.0:
+			return None
+
+		# - Vertex snapshot and bisector (point.property returns a fresh Point)
+		vertex = self.point
+		bisector = prev_unit + next_unit
+		if bisector.magnitude < 1e-9:
+			return None
+		bisector = bisector.unit
+
+		# - Arc centre and the bisector direction back toward the vertex
+		center = vertex + bisector * (r / math.sin(half_angle))
+		dov = (vertex - center).unit
+
+		arc_measure = turn_angle * (1.0 - s)
+		half_arc = arc_measure / 2.0
+
+		def _rotate(vec, a):
+			ca, sa = math.cos(a), math.sin(a)
+			return Point(vec.x * ca - vec.y * sa, vec.x * sa + vec.y * ca)
+
+		def _perp(vec):
+			return Point(-vec.y, vec.x)
+
+		def _intersect(p, d, q, e):
+			# - Lines (p + t*d) and (q + u*e); None if parallel
+			denom = d | e
+			if abs(denom) < 1e-9:
+				return None
+			t = ((q - p) | e) / denom
+			return p + d * t
+
+		dir_a = _rotate(dov, +half_arc)
+		dir_b = _rotate(dov, -half_arc)
+
+		# - dir_a must point to the arc end on the incoming (prev) edge side
+		if (dir_a & prev_unit) < (dir_b & prev_unit):
+			dir_a, dir_b = dir_b, dir_a
+
+		arc_in = center + dir_a * r						# arc start (incoming side)
+		arc_out = center + dir_b * r					# arc end (outgoing side)
+		point_a = vertex + prev_unit * reach			# tangent point on incoming edge
+		point_b = vertex + next_unit * reach			# tangent point on outgoing edge
+
+		# - Arc tangent directions (perpendicular to the radii)
+		tan_a = _perp(dir_a)
+		tan_b = _perp(dir_b)
+
+		# - Ease control points: arc-tangent line meets the straight edge line
+		p2_in = _intersect(point_a, prev_unit, arc_in, tan_a) or arc_in
+		p1_in = point_a + (p2_in - point_a) * (2.0 / 3.0)
+		p2_out = _intersect(point_b, next_unit, arc_out, tan_b) or arc_out
+		p1_out = point_b + (p2_out - point_b) * (2.0 / 3.0)
+
+		# - Arc handles (single cubic approximation of the circular arc)
+		k_arc = (4.0 / 3.0) * math.tan(half_arc / 2.0) * r if half_arc > 1e-9 else 0.0
+		fwd_a = tan_a if ((arc_out - arc_in) & tan_a) > 0 else -tan_a
+		fwd_b = tan_b if ((arc_in - arc_out) & tan_b) > 0 else -tan_b
+		arc_h0 = arc_in + fwd_a * k_arc
+		arc_h1 = arc_out + fwd_b * k_arc
+
+		# - Place the two tangent points via a mitre (node_a = self, node_b = new node)
+		node_a, node_b = self.corner_mitre(reach, is_radius=True)
+
+		# - Build the interior chain between node_a and node_b (3 cubic segments)
+		on = lambda pt: self.__class__(pt.tuple, type=node_types['on'], smooth=True)
+		off = lambda pt: self.__class__(pt.tuple, type=node_types['curve'])
+
+		node_arc_in = on(arc_in)
+		node_arc_out = on(arc_out)
+		interior = [off(p1_in), off(p2_in), node_arc_in,
+					off(arc_h0), off(arc_h1), node_arc_out,
+					off(p2_out), off(p1_out)]
+
+		i = node_a.idx
+		for offset, node in enumerate(interior):
+			node_a.parent.insert(i + 1 + offset, node)
+
+		return (node_a, node_arc_in, node_arc_out, node_b)
+
 	def corner_trap(self, parameter=10, depth=50, trap=2, smooth=True, incision=True):
 		'''Trap a corner by given incision into the glyph flesh.
 		
