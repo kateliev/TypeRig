@@ -259,6 +259,11 @@ class TRNodeBasics(QtGui.QWidget):
 		lay_cap.addWidget(self.btn_curve_monoline)
 		self.btn_curve_monoline.clicked.connect(self._on_make_monoline)
 
+		tooltip_button = 'Fake stroke\nRebuild a clean "fake" stroke from two selected side curves (8 nodes):\nsimple median skeleton + measured cap widths, re-expanded via metapen and pasted as a new contour.\n+Alt: keep the source\'s odd/slanted cap angles (instead of normalizing perpendicular)\n+Ctrl: round cap instead of flat (butt).'
+		self.btn_curve_fakestroke = CustomPushButton('S', tooltip=tooltip_button, obj_name='btn_panel')
+		lay_cap.addWidget(self.btn_curve_fakestroke)
+		self.btn_curve_fakestroke.clicked.connect(self._on_fake_stroke)
+
 		#lay_cap.setColumnStretch(lay_cap.columnCount(), 1)
 		box_cap.setLayout(lay_cap)
 		self.lay_main.addWidget(box_cap)
@@ -798,6 +803,14 @@ class TRNodeBasics(QtGui.QWidget):
 		TRNodeActionCollector.make_monoline(eGlyph(), pLayers,
 		                                    preserve_taper=preserve_taper,
 		                                    snap_lookup=snap_lookup)
+
+	def _on_fake_stroke(self):
+		mods = QtGui.QApplication.keyboardModifiers()
+		keep_cap_angle = bool(mods & QtCore.Qt.AltModifier)
+		round_cap = bool(mods & QtCore.Qt.ControlModifier)
+		TRNodeActionCollector.fake_stroke(eGlyph(), pLayers,
+		                                  round_cap=round_cap,
+		                                  keep_cap_angle=keep_cap_angle)
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):

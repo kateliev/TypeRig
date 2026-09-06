@@ -26,6 +26,7 @@ from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
 from typerig.core.func.collection import group_consecutive
 from typerig.core.objects.point import Void
 from typerig.core.objects.cubicbezier import CubicBezier
+from typerig.core.objects.metapen import fake_stroke_expand, CAP_BUTT, CAP_ROUND
 from typerig.core.base.message import *
 
 from PythonQt import QtCore
@@ -1409,4 +1410,68 @@ class TRNodeActionCollector(object):
 
 		if do_update:
 			glyph.updateObject(glyph.fl, '{};\tMake monoline @ {}.'.format(glyph.name, '; '.join(wLayers)))
+			active_workspace.getCanvas(True).refreshAll()
+
+	@staticmethod
+	def fake_stroke(glyph:eGlyph, pLayers:tuple, round_cap:bool=False, keep_cap_angle:bool=False):
+		'''Rebuild a 'fake' stroke from its two selected side curves.
+
+		Takes the same selection as make_collinear / make_monoline (two cubic
+		side segments = 4 on + 4 off nodes), derives a simple median skeleton
+		by control-point averaging, measures the two end cap widths from the
+		side endpoints, re-expands a metapen circular-nib stroke along the
+		median, and pastes the result as a new contour.
+
+		This is a deliberately cheap approximation ('fake') — clean and
+		minimal-node, not an exact reconstruction. Mid-path contrast is
+		flattened; caps are perpendicular to the median.
+
+		round_cap      : when True use a round cap, otherwise flat (butt).
+		keep_cap_angle : when True keep the source's odd / slanted cap angles
+		                 instead of cutting perpendicular (forces flat cap).
+		'''
+
+		# - Init
+		wLayers = glyph._prepareLayers(pLayers)
+
+		selection_per_layer = {layer:glyph.selectedNodes(layer, extend=eNode) for layer in wLayers}
+		do_update = False
+
+		# - Process
+		for layer, selection in selection_per_layer.items():
+			segments_set = {}
+
+			for node in selection:
+				node_segment = node.getSegmentNodes()
+				if node_segment is not None and len(node_segment) == 4:
+					unique_key = hash(tuple([node.index for node in node_segment]))
+					segments_set[unique_key] = node_segment
+
+			if len(segments_set.keys()) >= 2:
+				data = list(segments_set.values())
+
+				# - Two side segments as complex control-point tuples
+				side_a = tuple(complex(n.x, n.y) for n in data[0])
+				side_b = tuple(complex(n.x, n.y) for n in data[-1])
+
+				result = fake_stroke_expand(
+					side_a, side_b,
+					cap=CAP_ROUND if round_cap else CAP_BUTT,
+					keep_cap_angle=keep_cap_angle)
+
+				# - Paste expanded outline as new contour(s)
+				active_shape = glyph.shapes(layer)[0]
+
+				for tr_contour in result.to_contours():
+					fl_nodes = [fl6.flNode(float(nd.x), float(nd.y), nodeType=nd.type)
+					            for nd in tr_contour.nodes]
+					new_contour = fl6.flContour(fl_nodes, closed=tr_contour.closed)
+					active_shape.addContour(new_contour, True)
+
+				do_update = True
+			else:
+				output(1, 'Fake stroke', 'Selection must be 2 curves = 8 Nodes! Current = {}'.format(len(selection)))
+
+		if do_update:
+			glyph.updateObject(glyph.fl, '{};\tFake stroke @ {}.'.format(glyph.name, '; '.join(wLayers)))
 			active_workspace.getCanvas(True).refreshAll()

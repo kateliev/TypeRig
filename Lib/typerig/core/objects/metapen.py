@@ -1526,6 +1526,164 @@ class PenStroke(object):
 		)
 
 
+# - Fake stroke (skeleton rebuild) ------
+def deinflect_cubic(z0, z1, z2, z3):
+	'''Remove an S-inflection from a cubic while keeping its endpoints.
+
+	A cubic has an unwanted inflection when its two off-curve handles fall
+	on OPPOSITE sides of the chord z0-z3 (the control polygon changes bend
+	direction). This happens when averaging two imperfect source sides whose
+	handles lean opposite ways.
+
+	The fix reflects the minority handle (the one with the smaller lateral
+	offset) across the chord onto the dominant side. The along-chord
+	position of every point is preserved, so only the offending lateral
+	lean is flipped — endpoints and the dominant end's tangent are kept.
+
+	Args:
+		z0, z1, z2, z3 : complex — cubic control points
+
+	Returns:
+		(z1, z2) — corrected off-curve handles (unchanged when no S).
+	'''
+	u = z3 - z0
+	length = abs(u)
+
+	if length < 1e-9:
+		return (z1, z2)
+
+	u = u / length
+	v = u * 1j  # unit normal to the chord
+
+	# Signed lateral offset of each handle from the chord line.
+	d1 = (z1 - z0).real * v.real + (z1 - z0).imag * v.imag
+	d2 = (z2 - z0).real * v.real + (z2 - z0).imag * v.imag
+
+	# Same side (or one flat) -> no inflection to remove.
+	if d1 * d2 >= -1e-12:
+		return (z1, z2)
+
+	# Opposite sides -> reflect the smaller-lean handle across the chord.
+	if abs(d1) >= abs(d2):
+		return (z1, z2 - 2.0 * d2 * v)
+	else:
+		return (z1 - 2.0 * d1 * v, z2)
+
+
+def fake_stroke_expand(side_a, side_b, cap=CAP_BUTT, method=METHOD_DIRECTION, normal_width=True, deinflect=True, keep_cap_angle=False):
+	'''Rebuild a 'fake' stroke from its two side curves.
+
+	Given the two long side segments of a stroke (as cubic control-point
+	tuples), derive a median skeleton by control-point averaging, measure
+	the two end 'cap' widths, and re-expand a uniform / tapered stroke
+	along the median with circular nibs.
+
+	This is a deliberately cheap approximation — it produces a clean,
+	good-looking stroke ('fake'), NOT the exact original:
+		- mid-path contrast is flattened to the two measured end widths;
+		- caps are re-cut perpendicular to the median (slant is normalized).
+
+	The input is the same selection the collinear / monoline tools take:
+	two cubic side segments (4 on + 4 off nodes). The caps are inferred
+	from the four side endpoints, not from drawn geometry.
+
+	Width measurement (normal_width=True, the default): the source caps are
+	often cut on a slant, so the raw endpoint-to-endpoint chord is the
+	hypotenuse across the stroke and overstates the thickness. We instead
+	project that chord onto the median normal at each end, giving the true
+	perpendicular stroke width. Set normal_width=False to use the raw chord
+	length (legacy behaviour).
+
+	Args:
+		side_a       : (z0,z1,z2,z3) complex — first side segment
+		side_b       : (z0,z1,z2,z3) complex — second side segment
+		cap          : str — CAP_BUTT (flat) or CAP_ROUND
+		method       : int — stroke method for edge construction
+		normal_width : bool — measure width along the median normal
+		deinflect    : bool — remove S-inflection from the median skeleton
+		keep_cap_angle : bool — re-anchor the cap corners to the original
+		               side endpoints, preserving the source's odd / slanted
+		               cap angles instead of cutting perpendicular. Forces a
+		               flat (butt) cap.
+
+	Returns:
+		StrokeResult — use to_contours() for output.
+	'''
+	# Pair endpoints by proximity: decide whether the sides run parallel
+	# (a0~b0, a3~b3) or anti-parallel (a0~b3, a3~b0, the usual case).
+	straight = abs(side_a[0] - side_b[0]) + abs(side_a[3] - side_b[3])
+	crossed  = abs(side_a[0] - side_b[3]) + abs(side_a[3] - side_b[0])
+
+	if crossed <= straight:
+		# Anti-parallel: reverse B so it runs alongside A.
+		b_aligned = (side_b[3], side_b[2], side_b[1], side_b[0])
+	else:
+		b_aligned = tuple(side_b)
+
+	# Median skeleton: elementwise control-point average.
+	median = tuple((a + b) * 0.5 for a, b in zip(side_a, b_aligned))
+
+	# Remove any S-inflection imported from imperfect source handles.
+	if deinflect:
+		m1, m2 = deinflect_cubic(*median)
+		median = (median[0], m1, m2, median[3])
+
+	# Cap chords between the paired side endpoints.
+	chord_start = side_a[0] - b_aligned[0]
+	chord_end   = side_a[3] - b_aligned[3]
+
+	if normal_width:
+		# Project each cap chord onto the median normal, so a slanted cap
+		# contributes only its perpendicular (true-width) component.
+		def _perp_width(chord, direction):
+			mag = abs(direction)
+			if mag < 1e-9:
+				return abs(chord)
+			n = direction / mag * 1j  # unit normal to the axis
+			return abs(chord.real * n.real + chord.imag * n.imag)
+
+		width_start = max(_perp_width(chord_start, robust_direction(*median)), 1e-3)
+		width_end   = max(_perp_width(chord_end,   robust_direction_end(*median)), 1e-3)
+	else:
+		width_start = max(abs(chord_start), 1e-3)
+		width_end   = max(abs(chord_end), 1e-3)
+
+	nib_start = Nib.circle(width_start)
+	nib_end   = Nib.circle(width_end)
+
+	# Keep-angle mode is a flat cap re-anchored to the original endpoints.
+	body_cap = CAP_BUTT if keep_cap_angle else cap
+
+	stroke = PenStroke([median], nib_start, closed=False, method=method, cap=body_cap)
+	stroke.set_nib(nib_end, stroke.node_count - 1)
+
+	result = stroke.expand()
+
+	if keep_cap_angle and result.right and result.left:
+		# Snap the four cap corners back to the original side endpoints so
+		# the caps keep the source's odd angles. Corners already exist where
+		# a cap meets the sides, so this introduces no new nodes.
+		def _match(orig_a, orig_b, slot_p, slot_q):
+			# Assign the two originals to the two slots by nearest distance.
+			direct = abs(orig_a - slot_p) + abs(orig_b - slot_q)
+			swap   = abs(orig_a - slot_q) + abs(orig_b - slot_p)
+			return (orig_a, orig_b) if direct <= swap else (orig_b, orig_a)
+
+		# Begin cap corners: left edge end (left[-1]) and right edge start (right[0]).
+		new_left_end, new_right_start = _match(
+			side_a[0], b_aligned[0], result.left[-1], result.right[0])
+		result.left[-1] = new_left_end
+		result.right[0] = new_right_start
+
+		# End cap corners: right edge end (right[-1]) and left edge start (left[0]).
+		new_right_end, new_left_start = _match(
+			side_a[3], b_aligned[3], result.right[-1], result.left[0])
+		result.right[-1] = new_right_end
+		result.left[0] = new_left_start
+
+	return result
+
+
 # =====================================================================
 # METAFONT-inspired extensions (v0.3.0)
 # =====================================================================
