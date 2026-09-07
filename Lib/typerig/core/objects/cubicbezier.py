@@ -389,6 +389,27 @@ class CubicBezier(PointsArithmetic):
 		
 		return (intersect_times_x, intersect_times_y), (intersect_points_x, intersect_points_y)
 
+	def intersect_line_on_segment(self, other_line):
+		'''Intersection times of this curve with a line SEGMENT.
+
+		Unlike intersect_line (which returns raw x- and y-root lists, including
+		spurious roots that do not lie on the finite segment), this returns a
+		single sorted list of curve times t in [0,1] whose point actually lies
+		on other_line's segment (tested via hasPoint), de-duplicated. This is
+		what most callers of a curve-vs-segment test actually want.
+		'''
+		(times_x, times_y), _ = self.intersect_line(other_line)
+		result = []
+
+		for t in list(times_x) + list(times_y):
+			if not (0. <= t <= 1.):
+				continue
+			if other_line.hasPoint(self.solve_point(t)):
+				if not any(abs(t - u) < 1e-6 for u in result):
+					result.append(t)
+
+		return sorted(result)
+
 	def intersect_curve(self, other, tolerance=0.1):
 		'''Find intersections with another CubicBezier.
 
@@ -465,9 +486,23 @@ class CubicBezier(PointsArithmetic):
 		return pt, d1, d2
 
 	def solve_normal_at_time(self, time):
-		'''Returns point that is the unit vector of normal at given time.'''
+		'''Returns point that is the unit vector of normal at given time.
+
+		Robust at endpoints with retracted handles: when the 1st derivative
+		vanishes (|B'(t)| ~ 0) the tangent is undefined, so we fall back to the
+		chord direction (p3 - p0). If that is also degenerate a zero Point is
+		returned rather than raising ZeroDivisionError / producing NaN.
+		'''
 		_d, d1, _d2 = self.solve_derivative_at_time(time)
-		q = math.sqrt(d1.x*d1.x + d1.y*d1.y);
+		q = math.sqrt(d1.x*d1.x + d1.y*d1.y)
+
+		if q < 1e-12:
+			dx, dy = self.p3.x - self.p0.x, self.p3.y - self.p0.y
+			q = math.sqrt(dx*dx + dy*dy)
+			if q < 1e-12:
+				return Point(0., 0.)
+			return Point(-dy/q, dx/q)
+
 		return Point(-d1.y/q, d1.x/q)
 
 	def solve_tangent_at_time(self, time):
@@ -528,7 +563,7 @@ class CubicBezier(PointsArithmetic):
 			measure = math.hypot(-self.p0.x + cNode.x, -self.p0.y + cNode.y)
 			time += timeStep
 
-		return time
+		return min(1., max(0., time))
 
 	def solve_distance_end(self, distance, timeStep = .01 ):
 		'''Returns time at which the given distance to end of bezier is met.
@@ -543,7 +578,7 @@ class CubicBezier(PointsArithmetic):
 			measure = math.hypot(-self.p3.x + cNode.x, -self.p3.y + cNode.y)
 			time -= timeStep
 
-		return time
+		return min(1., max(0., time))
 
 	def solve_slice_distance(self, distance, from_start=True, timeStep = .001):
 		'''Slices bezier at time which the given distance is met. 

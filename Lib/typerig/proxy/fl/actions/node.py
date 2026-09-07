@@ -580,36 +580,92 @@ class TRNodeActionCollector(object):
 				(seg[2].x, seg[2].y),
 				(seg[3].x, seg[3].y))
 
+			# - Config: guards against cubic extrapolation blow-up.
+			# find_t_for_*() returns UNCLAMPED roots (t may be far outside [0,1]).
+			# solve_slice() is de Casteljau (cubic in t), so evaluating it at an
+			# extreme t explodes the handles and flips the curve. We therefore
+			# only trust the exact slice inside a bounded window; beyond it we
+			# fall back to a tame tangent-line slide that still hits the target.
+			T_PARAM_MARGIN = 1.0    # allow |t - end| up to one segment beyond an end
+			DIST_FACTOR    = 4.0    # ... and node travel up to N * curve chord
+
+			# - Endpoint the node currently sits on (t=0 outgoing, t=1 prev)
+			end_t = 1.0 if use_prev else 0.0
+			target_nodes = prev_seg if use_prev else seg  # FL nodes to update
+			n_idx = 3 if use_prev else 0                   # on-curve node index
+			h_idx = 2 if use_prev else 1                   # near off-curve handle
+
+			old_x = curve.p3.x if use_prev else curve.p0.x
+			old_y = curve.p3.y if use_prev else curve.p0.y
+
+			def _finite(*vals):
+				return all(v == v and v not in (float('inf'), float('-inf')) for v in vals)
+
+			# - Reference scale for the travel guard
+			chord = math.hypot(curve.p3.x - curve.p0.x, curve.p3.y - curve.p0.y)
+			ref = max(chord, curve.height if use_y else curve.width, 1.0)
+			max_travel = DIST_FACTOR * ref
+
+			def _tangent_slide():
+				'''Fake, tame extension: slide the node along the endpoint tangent
+				line until the solved axis equals target_val, translating its near
+				handle by the same delta so the tangent (curve shape at the node)
+				is preserved. Always finite; hits the target exactly.'''
+				_, d1, _ = curve.solve_derivative_at_time(end_t)
+				tx, ty = d1.x, d1.y
+
+				# Retracted handle -> no tangent; use chord direction instead
+				if math.hypot(tx, ty) < 1e-9:
+					tx, ty = curve.p3.x - curve.p0.x, curve.p3.y - curve.p0.y
+
+				denom = ty if use_y else tx
+
+				if abs(denom) > 1e-6:
+					s = (target_val - (old_y if use_y else old_x)) / denom
+					dx, dy = s * tx, s * ty
+				else:
+					# Tangent parallel to the solved axis: move straight along it
+					dx, dy = (0.0, target_val - old_y) if use_y else (target_val - old_x, 0.0)
+
+				if not _finite(dx, dy):
+					output(1, 'Align+Extrapolate', 'Node [{},{}]: degenerate tangent, skipped'.format(round(node.x), round(node.y)))
+					return
+
+				target_nodes[n_idx].x += dx; target_nodes[n_idx].y += dy
+				target_nodes[h_idx].x += dx; target_nodes[h_idx].y += dy
+
+			# - Solve (pick the root closest to the node's own endpoint)
 			candidates = curve.find_t_for_y(target_val) if use_y else curve.find_t_for_x(target_val)
+			valid = [t for t in candidates if abs(t - 0.0) > 1e-3 and abs(t - 1.0) > 1e-3]
+			best_t = min(valid, key=lambda t: abs(t - end_t)) if valid else None
 
-			if not candidates:
-				output(1, 'Align+Extrapolate', 'Node [{},{}]: no solution for {}={}'.format(
-					round(node.x), round(node.y), 'Y' if use_y else 'X', round(target_val)))
-				return
+			# - Trust the exact de Casteljau slice only inside the window
+			if best_t is not None and abs(best_t - end_t) <= T_PARAM_MARGIN:
+				first, second = curve.solve_slice(best_t)
 
-			if use_prev:
-				# Node is at t=1 of prev_seg — pick root closest to 1.0
-				# Use first sub-curve: [prev_on=p0, new_bcp1, new_bcp2, node=B(t)]
-				valid = [t for t in candidates if abs(t - 0.0) > 1e-3 and abs(t - 1.0) > 1e-3]
-				if not valid:
+				if use_prev:
+					# [prev_on=p0(fixed), outer_bcp, inner_bcp, node=B(t)]
+					new_pts = (first.p3, first.p2, first.p1)  # node, inner, outer
+					idx = (3, 2, 1)
+				else:
+					# [node=B(t), bcp1, bcp2, next_on=p3(fixed)]
+					new_pts = (second.p0, second.p1, second.p2)  # node, bcp1, bcp2
+					idx = (0, 1, 2)
+
+				travel = math.hypot(new_pts[0].x - old_x, new_pts[0].y - old_y)
+				coords_ok = _finite(*[c for p in new_pts for c in (p.x, p.y)])
+
+				if coords_ok and travel <= max_travel:
+					for k, p in zip(idx, new_pts):
+						target_nodes[k].x = p.x
+						target_nodes[k].y = p.y
 					return
-				best_t = min(valid, key=lambda t: abs(t - 1.0))
-				first, _ = curve.solve_slice(best_t)
-				# first.p0 = prev_on (unchanged), first.p3 = new node pos
-				prev_seg[3].x = first.p3.x;  prev_seg[3].y = first.p3.y  # node
-				prev_seg[2].x = first.p2.x;  prev_seg[2].y = first.p2.y  # inner bcp (near node)
-				prev_seg[1].x = first.p1.x;  prev_seg[1].y = first.p1.y  # outer bcp (near prev_on)
-			else:
-				# Node is at t=0 of outgoing seg — pick root closest to 0.0
-				# Use second sub-curve: [node=B(t), new_bcp1, new_bcp2, next_on=p3]
-				valid = [t for t in candidates if abs(t - 1.0) > 1e-3 and abs(t - 0.0) > 1e-3]
-				if not valid:
-					return
-				best_t = min(valid, key=lambda t: abs(t))
-				_, second = curve.solve_slice(best_t)
-				seg[0].x = second.p0.x;  seg[0].y = second.p0.y  # node
-				seg[1].x = second.p1.x;  seg[1].y = second.p1.y  # bcp1
-				seg[2].x = second.p2.x;  seg[2].y = second.p2.y  # bcp2
+
+				# Slice blew up (extreme t) -> tame it below
+				output(1, 'Align+Extrapolate', 'Node [{},{}]: extrapolation clamped -> tangent slide'.format(round(node.x), round(node.y)))
+
+			# - Fallback: no usable root, out-of-window, or blow-up
+			_tangent_slide()
 
 
 		for glyph in process_glyphs:
@@ -1042,11 +1098,18 @@ class TRNodeActionCollector(object):
 				angle = math.atan2(nextUnit | prevUnit, nextUnit & prevUnit)
 				radius = abs(node_A.distanceToNext()*math.sin(angle))/2.
 
+				# - Guard: a near-collinear corner yields a meaningless (and,
+				# after the -.1 hack, negative) radius. Skip rather than build a
+				# degenerate / exploding cap.
+				if not (radius == radius) or radius < 1.0:
+					output(1, 'Round Cap', 'Corner too shallow (r={}); skipped.'.format(round(radius, 2)))
+					continue
+
 				# - Build cap segments by rounding the corners
 				cap_head_A, cap_fillet_A, cap_tail_A = node_A.cornerRound(radius, curvature=(1.,1.), isRadius=False, insert=False)
-				cap_head_B, cap_fillet_B, cap_tail_B = node_B.cornerRound(radius-.1, curvature=(1.,1.), isRadius=False, insert=False) # Little hack -.1 
+				cap_head_B, cap_fillet_B, cap_tail_B = node_B.cornerRound(radius-.1, curvature=(1.,1.), isRadius=False, insert=False) # Little hack -.1
 
-				# - Build cap contour 
+				# - Build cap contour
 				new_cap_contour = cap_head_A + cap_fillet_A + cap_tail_A[:1] + cap_head_B[2:] + cap_fillet_B + cap_tail_B
 				
 				# - Insert and cleanup
@@ -1090,6 +1153,14 @@ class TRNodeActionCollector(object):
 				angle = math.atan2(nextUnit | prevUnit, nextUnit & prevUnit)
 				radius = abs(node_A.distanceToNext()*math.sin(angle))/2.
 
+				# - Guard: a near-collinear corner yields a meaningless (and,
+				# after the -.1 hack, negative) radius. Skip rather than build a
+				# degenerate / exploding cap.
+				MIN_RADIUS = 1.0
+				if not (radius == radius) or radius < MIN_RADIUS:
+					output(1, 'Round Cap', 'Corner too shallow (r={}); skipped.'.format(round(radius, 2)))
+					continue
+
 				segment_A = node_A.getPrevOn(False).getSegmentNodes(0)
 				segment_B = node_B.getSegmentNodes(0)
 
@@ -1108,14 +1179,19 @@ class TRNodeActionCollector(object):
 					do_update = True
 
 				else:
+					# Geometric radius kept as a safe fallback for the recompute below
+					radius_geom = radius
+
 					if modifiers == QtCore.Qt.ShiftModifier or modifiers == (QtCore.Qt.ControlModifier | QtCore.Qt.ShiftModifier):
 						# - Calculate radius differently
 						curve_A = Curve(*segment_A)
 						curve_B = Curve(*segment_B)
-						
-						# -- Initial segmentation
-						time_A = curve_A.solve_distance_end(radius, .001)
-						time_B = curve_B.solve_distance_start(radius, .001)
+
+						# -- Initial segmentation (arc-length, clamped to [0,1])
+						len_A = curve_A.get_arc_length()
+						len_B = curve_B.get_arc_length()
+						time_A = curve_A.solve_t_at_length(max(0., len_A - radius))
+						time_B = curve_B.solve_t_at_length(min(len_B, radius))
 						
 						# -- Find distance and normal
 						normal_A = curve_A.solve_normal_at_time(1)
@@ -1138,7 +1214,15 @@ class TRNodeActionCollector(object):
 						if not isinstance(intersect_points_B, Void):
 							radius = Line(line_B.p0.tuple, intersect_points_B.tuple).length/2
 							output(1, 'Round Cap', 'Calculated radius:{}'.format(radius))
-						
+
+						# - Bound the recomputed radius: a near-parallel / degenerate
+						# crossing can inflate it into a glyph-spanning cap. Fall back
+						# to the geometric radius when non-finite or non-positive.
+						radius_max = 4. * node_A.distanceToNext()
+						if not (radius == radius) or radius <= 0.:
+							radius = radius_geom
+						radius = min(max(radius, MIN_RADIUS), radius_max)
+
 					if modifiers == QtCore.Qt.ControlModifier or modifiers == (QtCore.Qt.ControlModifier | QtCore.Qt.ShiftModifier):
 						# - Using newer corner rounding algorithm
 						# - Build cap segments by rounding the corners
@@ -1159,8 +1243,12 @@ class TRNodeActionCollector(object):
 						# - Round Cap 
 						curve_A = Curve(*segment_A)
 						curve_B = Curve(*segment_B)
-						new_time_A = curve_A.solve_distance_end(radius, .001)
-						new_time_B = curve_B.solve_distance_start(radius, .001)
+						# Arc-length, clamped to [0,1] — avoids negative / overshoot
+						# times when radius exceeds the segment's reach.
+						len_A = curve_A.get_arc_length()
+						len_B = curve_B.get_arc_length()
+						new_time_A = curve_A.solve_t_at_length(max(0., len_A - radius))
+						new_time_B = curve_B.solve_t_at_length(min(len_B, radius))
 						
 						# -- Make the cap and update contour
 						new_A = node_A.insertBefore(new_time_A)
@@ -1200,6 +1288,14 @@ class TRNodeActionCollector(object):
 			# - Get crossing for each rounded corner
 			crossing_A = get_crossing_handles(node_list[:4])
 			crossing_B = get_crossing_handles(node_list[3:])
+
+			# - Parallel / collinear handles have no finite crossing; reloc'ing
+			# with a Void (NaN, NaN) would write NaN coords and corrupt the
+			# contour. Skip this cap instead.
+			if (isinstance(crossing_A, Void) or isinstance(crossing_B, Void)
+				or crossing_A.x != crossing_A.x or crossing_B.x != crossing_B.x):
+				output(1, 'Rebuild Cap', 'Parallel handles; cap skipped.')
+				return
 
 			# - Reloacate nodes
 			node_list[0].reloc(*crossing_A.tuple)
@@ -1263,49 +1359,104 @@ class TRNodeActionCollector(object):
 				segment_B = node_B.getSegmentNodes()
 				
 				if len(segment_A) >= 4 and len(segment_B) >= 4:
-					# - Set curves and find normals
+					# - Config: guards against cap-normalize blow-up.
+					# The old code (a) divided by a possibly-zero curve derivative
+					# when building the normal, (b) mixed the spurious x-crossing
+					# roots with the real ones and picked the SMALLEST time, and
+					# (c) reversed only the x-times by 1-t. Any of these could land
+					# the inserted node far from the cap end, so removeNodesBetween
+					# swept across the glyph and the cap "exploded".
+					NORMAL_LEN = 1000.   # half-length of the probe normal line
+					DIST_FACTOR = 4.0    # max cap length as multiple of current opening
+
+					# - Set curves
 					curve_A = Curve(*segment_A)
 					curve_B = Curve(*segment_B)
-					
-					normal_A = curve_A.solve_normal_at_time(1)
-					normal_B = curve_B.solve_normal_at_time(0)
-					
-					
-					# - Build normal lines and find intersections to juxtaposed curves
-					normal_line_A = Line(node_A.tuple, (normal_A + node_A.tuple).tuple).solve_length(1000,0) # Extend the resulting line to 1000 u
-					normal_line_B = Line(node_B.tuple, (normal_B + node_B.tuple).tuple).solve_length(1000,0)
-					
-					intersect_A_time, _ = curve_A.intersect_line(normal_line_B)
-					intersect_B_time, _ = curve_B.intersect_line(normal_line_A)
-					
-					# -- Cleanup and sort intersection results [[x_crossing_times], [y_crossing_times]] reduced to single list.
-					intersect_A_time = sorted(intersect_A_time[0] + intersect_A_time[1])
-					intersect_B_time = sorted([1 - t for t in intersect_B_time[0]] + intersect_B_time[1]) # !!! Reverse the time because of contour direction !!! Find a better way
-					
-					# - Set flags that determine where nodes will be inserted and which of nodes A or B should be removed
+
+					# - Safe unit normal at a curve endpoint (falls back to the
+					# chord normal when the handle is retracted / derivative ~0)
+					def _unit_normal(curve, t):
+						_, d1, _ = curve.solve_derivative_at_time(t)
+						m = math.hypot(d1.x, d1.y)
+						if m < 1e-9:
+							dx, dy = curve.p3.x - curve.p0.x, curve.p3.y - curve.p0.y
+							m = math.hypot(dx, dy)
+							if m < 1e-9:
+								return None
+							return (-dy / m, dx / m)
+						return (-d1.y / m, d1.x / m)
+
+					normal_A = _unit_normal(curve_A, 1)  # at node_A
+					normal_B = _unit_normal(curve_B, 0)  # at node_B
+
+					if normal_A is None or normal_B is None:
+						output(1, 'Normalize Cap', 'Degenerate curve tangent; skipped.')
+						continue
+
+					# - Symmetric probe lines (extend both ways so the hit can be
+					# on either side of the endpoint)
+					normal_line_A = Line((node_A.x - NORMAL_LEN * normal_A[0], node_A.y - NORMAL_LEN * normal_A[1]),
+					                     (node_A.x + NORMAL_LEN * normal_A[0], node_A.y + NORMAL_LEN * normal_A[1]))
+					normal_line_B = Line((node_B.x - NORMAL_LEN * normal_B[0], node_B.y - NORMAL_LEN * normal_B[1]),
+					                     (node_B.x + NORMAL_LEN * normal_B[0], node_B.y + NORMAL_LEN * normal_B[1]))
+
+					# - Pick the intersection on `curve` that lies on the finite
+					# probe line and is nearest the cap end (prefer_t). The on-line
+					# test discards spurious roots; nearest-endpoint keeps the
+					# inserted node close to the cap so the cap stays short.
+					def _pick_time(curve, probe_line, prefer_t):
+						(times_x, times_y), _ = curve.intersect_line(probe_line)
+						best, best_key = None, None
+						for t in list(times_x) + list(times_y):
+							if not (1e-3 < t < 1. - 1e-3):
+								continue
+							pt = curve.solve_point(t)
+							if not probe_line.hasPoint(pt):
+								continue
+							key = abs(t - prefer_t)
+							if best_key is None or key < best_key:
+								best, best_key = t, key
+						return best
+
+					time_A = _pick_time(curve_A, normal_line_B, 1.)  # new node on A, near node_A
+					time_B = _pick_time(curve_B, normal_line_A, 0.)  # new node on B, near node_B
+
+					# - Candidate cap lengths, rejecting non-finite / over-long caps
+					cap_ref = max(math.hypot(node_A.x - node_B.x, node_A.y - node_B.y), 1.)
+					max_cap = DIST_FACTOR * cap_ref
+
+					def _cap_len(anchor_node, curve, t):
+						if t is None:
+							return None
+						p = curve.solve_point(t)
+						length = math.hypot(anchor_node.x - p.x, anchor_node.y - p.y)
+						if length != length or length in (float('inf'), float('-inf')) or length > max_cap:
+							return None
+						return length
+
+					len_A = _cap_len(node_B, curve_A, time_A)  # cap = new A-node -> node_B
+					len_B = _cap_len(node_A, curve_B, time_B)  # cap = node_A -> new B-node
+
+					# - Choose the shorter valid cap
 					cap_flags = (False, False)
-					
-					# -- Flag heuristics
-					if len(intersect_A_time) and len(intersect_B_time):
-						cap_1 = Line(node_B.tuple, curve_A.solve_point(intersect_A_time[0]).tuple)
-						cap_2 = Line(node_A.tuple, curve_B.solve_point(intersect_B_time[0]).tuple)
-						cap_flags = (True, False) if cap_1.length < cap_2.length else (False, True)
-						
-					elif len(intersect_A_time):
+					if len_A is not None and len_B is not None:
+						cap_flags = (True, False) if len_A <= len_B else (False, True)
+					elif len_A is not None:
 						cap_flags = (True, False)
-					
-					elif len(intersect_B_time):
+					elif len_B is not None:
 						cap_flags = (False, True)
-					
-					# - Process according to flag. Insert nodes and clean up redundant ones.
+					else:
+						output(1, 'Normalize Cap', 'No sane normal cap found; skipped.')
+
+					# - Process according to flag. Insert node and clean up.
 					if cap_flags[0]:
-						new_node = node_A.insertBefore(intersect_A_time[0])
+						new_node = node_A.insertBefore(time_A)
 						new_node.smooth = False
 						parent_contour.removeNodesBetween(new_node, node_B.fl)
 						do_update = True
-					
+
 					if cap_flags[1]:
-						new_node = node_B.insertAfter(intersect_B_time[0])
+						new_node = node_B.insertAfter(time_B)
 						new_node.smooth = False
 						parent_contour.removeNodesBetween(node_A.fl, new_node)
 						do_update = True
