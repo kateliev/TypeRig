@@ -109,10 +109,10 @@ class TRToolbarPanel(QtGui.QDialog):
 
 		# - Build all tools (adds directly to lay_main)
 		self._build_node_tools()
-		self._build_curve_tools()
 		self._build_corner_tools()
-		self._build_contour_tools()
 		self._build_align_tools()
+		self._build_curve_tools()
+		self._build_contour_tools()
 		self._build_slope_tools()
 
 		# - Set Widget
