@@ -27,7 +27,7 @@ from typerig.core.objects.metapen import (
 )
 
 # - Init ------------------------------------------------------------------------
-__version__ = '1.0'
+__version__ = '1.1'
 
 # - Helpers ---------------------------------------------------------------------
 def _scale_offset(node, offset_x, offset_y, width, height):
@@ -140,9 +140,10 @@ def _remove_inclusive_range_forward(start_node, stop_node):
 
 
 def _get_crossing(node_list):
-	'''Find the intersection (crossing) point of the incoming and outgoing
-	tangent lines at the first and last on-curve nodes in a selection.
-	Used for rebuilding corners back to sharp points.
+	'''Crossing of the straight tangent lines at the ends of a selection.
+
+	NOTE: chord based and line only. Corner rebuilding uses
+	_get_corner_rebuild(), which respects curve segments.
 	'''
 	on_nodes = [node for node in node_list if node.is_on]
 	first_node, last_node = on_nodes[0], on_nodes[-1]
@@ -153,6 +154,96 @@ def _get_crossing(node_list):
 
 	crossing = line_in.intersect_line(line_out, True)
 	return crossing
+
+
+def _corner_span(from_node, to_node, limit=1000):
+	'''On-curve steps walking forward from from_node until to_node is reached.
+
+	Returns None when to_node is not reachable that way - a different contour,
+	or the walk coming back around to where it started.
+	'''
+	steps = 0
+	cursor = from_node.next_on
+
+	while cursor is not None and cursor is not to_node:
+		if cursor is from_node or steps > limit:
+			return None
+
+		steps += 1
+		cursor = cursor.next_on
+
+	if cursor is None:
+		return None
+
+	return steps + 1		# to_node collapses into the cusp as well
+
+
+def _resolve_corner_ends(node_a, node_b):
+	'''Order two selected on-curve nodes so the corner lies between them.
+
+	A selection is reported in contour order, which says nothing about where
+	the contour's start point sits: when it falls inside the corner, the node
+	*after* the corner comes first. A corner is a short, local feature, so the
+	shorter of the two ways round is the corner and the longer one is the rest
+	of the glyph. Without this a "corner" could be most of the contour.
+
+	Returns (first_on, last_on, corner_size) or None.
+	'''
+	forward = _corner_span(node_a, node_b)
+	backward = _corner_span(node_b, node_a)
+
+	if forward is None and backward is None:
+		return None
+
+	if backward is not None and (forward is None or backward < forward):
+		return node_b, node_a, backward
+
+	return node_a, node_b, forward
+
+
+def _get_corner_rebuild(node_a, node_b):
+	'''Solve the cusp that rebuilds the corner bracketed by two on-curve nodes.
+
+	The corner is whichever of the two ways round between node_a and node_b is
+	shorter; the node before it keeps the incoming side, the node after it the
+	outgoing side. Either side may be a line, a cubic or a quadratic - each is
+	run out along its own geometry until the two cross.
+
+	Returns (first_on, last_on, new_in, new_out, corner, in_nodes, next_on,
+	corner_size) or None when the two sides never meet, or when a segment is
+	not one this can handle.
+	'''
+	resolved = _resolve_corner_ends(node_a, node_b)
+
+	if resolved is None:
+		return None
+
+	first_on, last_on, corner_size = resolved
+
+	prev_on = first_on.prev_on
+	next_on = last_on.next_on
+
+	if prev_on is None or next_on is None:
+		return None
+
+	# - The corner must have something outside it left to rebuild from
+	if next_on is first_on or prev_on is last_on:
+		return None
+
+	seg_in = prev_on.segment
+	seg_out = last_on.segment
+
+	if seg_in is None or seg_out is None:
+		return None
+
+	new_in, new_out, corner = CubicBezier.corner_rebuild(seg_in, seg_out)
+
+	if corner is None:
+		return None
+
+	return (first_on, last_on, new_in, new_out, corner,
+			prev_on.segment_nodes, next_on, corner_size)
+
 
 # - Actions ---------------------------------------------------------------------
 class NodeActions(object):
@@ -397,15 +488,27 @@ class NodeActions(object):
 
 	@staticmethod
 	def corner_rebuild(contour, node_indices, cleanup=True):
-		'''Rebuild (collapse) a rounded or modified corner back to a sharp point.
-		Finds the intersection of the incoming/outgoing tangent lines and
-		moves the selection to that crossing point.
+		'''Collapse a rounded or multi-node corner back to a cusp.
+
+		The selection brackets the corner: of the two outermost selected
+		on-curve nodes, the one before the corner keeps the incoming side and
+		the one after it keeps the outgoing side. Both sides are run out along
+		their own geometry until they cross, and everything in between is
+		dropped. Which node is which is worked out from the contour, so the
+		tool does not care where the contour's start point sits.
+
+		Either side may be a line or a curve. For LL--CC--AA the result is
+		LL--AA meeting at the crossing of the line projection with the arc
+		continuation; AA keeps the curvature it had before the corner was
+		rounded, its handles recomputed by de Casteljau splitting at the solved
+		time rather than straightened.
 
 		Arguments:
 			contour (Contour): The contour to operate on.
 			node_indices (list[int]): Indices of selected nodes (must include
 				at least 2 on-curve nodes that bracket the corner region).
-			cleanup (bool): If True, remove intermediate nodes after collapsing.
+			cleanup (bool): If True, remove the corner nodes after collapsing.
+				If False, only pull the selection onto the cusp.
 
 		Returns:
 			bool: True if the corner was rebuilt.
@@ -416,34 +519,44 @@ class NodeActions(object):
 		if len(on_nodes) < 2:
 			return False
 
-		crossing = _get_crossing(selected_nodes)
+		rebuild = _get_corner_rebuild(on_nodes[0], on_nodes[-1])
 
-		if crossing is None:
+		if rebuild is None:
 			return False
 
-		if cleanup:
-			first_on = on_nodes[0]
-			last_on = on_nodes[-1]
+		first_on, last_on, new_in, new_out, corner, in_nodes, next_on, _size = rebuild
 
-			# - Move first node to crossing
-			first_on.smart_reloc(crossing.x, crossing.y)
+		if not cleanup:
+			for node in on_nodes:
+				node.smart_reloc(corner.x, corner.y)
 
-			# - Remove nodes between first and last on-curve
-			cursor = first_on.next
-			to_remove = []
+			return True
 
-			while cursor is not None and cursor is not last_on:
-				to_remove.append(cursor)
-				cursor = cursor.next
+		is_curve_in = in_nodes is not None and len(in_nodes) == 4
+		is_curve_out = isinstance(new_out, CubicBezier)
 
-			# - Also remove the last on-curve (it collapses into first)
-			to_remove.append(last_on)
+		# - Everything the solver computed for the surviving geometry is written
+		#   BEFORE the contour is restructured, so no captured node reference is
+		#   used after the removal has invalidated it
+		if is_curve_in:
+			in_nodes[1].reloc(new_in.p1.x, new_in.p1.y)
+			in_nodes[2].reloc(new_in.p2.x, new_in.p2.y)
 
-			for rm_node in reversed(to_remove):
-				rm_node.remove()
-		else:
-			for node in selected_nodes:
-				node.reloc(crossing.x, crossing.y)
+		# - A rebuilt corner is a cusp
+		first_on.smooth = False
+		first_on.reloc(corner.x, corner.y)
+
+		# - Drop the corner. This flattens the outgoing segment too, so it is
+		#   rebuilt from new_out below
+		_remove_inclusive_range_forward(first_on.next, next_on)
+
+		# - Outgoing side: give the arc its handles back
+		if is_curve_out:
+			bcp_out = Node(new_out.p1.x, new_out.p1.y, type=node_types['curve'])
+			bcp_in = Node(new_out.p2.x, new_out.p2.y, type=node_types['curve'])
+
+			contour.insert(first_on.idx + 1, bcp_out)
+			contour.insert(first_on.idx + 2, bcp_in)
 
 		return True
 

@@ -19,7 +19,7 @@ from typerig.core.objects.point import Point
 from typerig.core.objects.line import Line
 
 # - Init -------------------------------
-__version__ = '0.33.0'
+__version__ = '0.34.0'
 
 # - Classes -----------------------------
 class CubicBezier(PointsArithmetic):
@@ -427,6 +427,30 @@ class CubicBezier(PointsArithmetic):
 		from typerig.core.algo.intersect import curve_curve_intersections
 
 		hits = curve_curve_intersections(self.tuple, other.tuple, tolerance)
+		t_pairs = [(t1, t2) for t1, t2, _pt in hits]
+		points = [Point(pt) for _t1, _t2, pt in hits]
+
+		return t_pairs, points
+
+	def intersect_curve_extended(self, other, limit=4.):
+		'''Intersections with another CubicBezier WITHOUT clamping t to [0,1].
+
+		intersect_curve() reports only crossings inside both segments. This one
+		solves on the analytic continuation of both curves, so it also finds the
+		point where two arcs would have met had the corner between them not been
+		rounded away - see corner_rebuild().
+
+		Args:
+			other (CubicBezier): curve to intersect with
+			limit (float): reject parameters outside [-limit, 1 + limit]
+
+		Returns:
+			(t_pairs, points): list of (t_self, t_other) and list of Point.
+			Mirrors intersect_curve()'s shape; t may fall outside [0,1].
+		'''
+		from typerig.core.algo.intersect import curve_curve_intersections_extended
+
+		hits = curve_curve_intersections_extended(self.tuple, other.tuple, limit=limit)
 		t_pairs = [(t1, t2) for t1, t2, _pt in hits]
 		points = [Point(pt) for _t1, _t2, pt in hits]
 
@@ -1752,6 +1776,136 @@ class CubicBezier(PointsArithmetic):
 			return None, None
 
 		return new_in, new_out
+
+
+	@staticmethod
+	def _as_cubic(segment):
+		'''Normalise a segment for the corner solvers.
+
+		QuadraticBezier is degree-elevated to cubic; CubicBezier and Line pass
+		through untouched. Returns None for anything else.
+		'''
+		if isinstance(segment, CubicBezier) or isinstance(segment, Line):
+			return segment
+
+		to_cubic = getattr(segment, 'to_cubic', None)
+
+		if callable(to_cubic):
+			return CubicBezier(to_cubic().tuple)
+
+		return None
+
+	@staticmethod
+	def _pick_corner_time(times, anchor, max_extension):
+		'''Choose the parameter nearest the corner from a list of candidates.
+
+		`anchor` is 1. for a segment that ends at the corner and 0. for one that
+		starts there. A cubic continuation can cross a target several times far
+		away from the corner; only the nearest crossing within max_extension of
+		the anchor is the cusp the designer is after.
+		'''
+		candidates = [t for t in times if abs(t - anchor) <= max_extension]
+
+		if not candidates:
+			return None
+
+		return min(candidates, key=lambda t: abs(t - anchor))
+
+	@staticmethod
+	def corner_rebuild(segment_in, segment_out, max_extension=2.):
+		'''Rebuild a cusp corner from the two segments that survive it.
+
+		Given LL--CC--AA, where CC is a rounded or multi-node corner that is to
+		be discarded, this returns LL and AA extended (or trimmed) so that they
+		meet at the crossing of their own continuations. Each side keeps its own
+		nature: a line stays a line, an arc stays an arc with handles adjusted by
+		de Casteljau splitting at the solved time, so the curvature of AA away
+		from the corner is untouched.
+
+		Handles every combination of Line / CubicBezier / QuadraticBezier:
+			line/line     - intersection of the two infinite lines
+			curve/line    - unclamped curve-line root nearest the corner
+			line/curve    - same, solved on the outgoing curve
+			curve/curve   - damped Newton on C_in(t) = C_out(u)
+
+		Args:
+			segment_in: segment ENDING at the corner (its p3/p1 is the old corner side)
+			segment_out: segment STARTING at the corner
+			max_extension (float): how far past its own endpoint a segment may be
+				extended, in units of its own parameter range. 2. allows a corner
+				up to two segment-lengths away; beyond that the result is refused
+				rather than silently producing a spike.
+
+		Returns:
+			tuple(new_in, new_out, corner): new segments of the same types as the
+			inputs and the cusp Point, or (None, None, None) when the two sides
+			never meet (parallel tangents, or a crossing beyond max_extension).
+		'''
+		seg_in = CubicBezier._as_cubic(segment_in)
+		seg_out = CubicBezier._as_cubic(segment_out)
+
+		if seg_in is None or seg_out is None:
+			return None, None, None
+
+		curve_in = isinstance(seg_in, CubicBezier)
+		curve_out = isinstance(seg_out, CubicBezier)
+
+		# - Line / Line: plain projection of both onto their infinite lines
+		if not curve_in and not curve_out:
+			corner = CubicBezier._line_line_intersect(seg_in.p0, seg_in.p1, seg_out.p0, seg_out.p1)
+
+			if corner is None:
+				return None, None, None
+
+			return (Line(Point(seg_in.p0), Point(corner)),
+					Line(Point(corner), Point(seg_out.p1)),
+					corner)
+
+		# - Curve / Line: run the incoming curve out to the outgoing line
+		if curve_in and not curve_out:
+			times, _ = seg_in.intersect_line_extended(Line(seg_out.p0, seg_out.p1))
+			time_in = CubicBezier._pick_corner_time(times, 1., max_extension)
+
+			if time_in is None:
+				return None, None, None
+
+			new_in, _ = seg_in.solve_slice(time_in)
+			corner = Point(new_in.p3)
+
+			return new_in, Line(Point(corner), Point(seg_out.p1)), corner
+
+		# - Line / Curve: run the outgoing curve back to the incoming line
+		if not curve_in and curve_out:
+			times, _ = seg_out.intersect_line_extended(Line(seg_in.p0, seg_in.p1))
+			time_out = CubicBezier._pick_corner_time(times, 0., max_extension)
+
+			if time_out is None:
+				return None, None, None
+
+			_, new_out = seg_out.solve_slice(time_out)
+			corner = Point(new_out.p0)
+
+			return Line(Point(seg_in.p0), Point(corner)), new_out, corner
+
+		# - Curve / Curve: Newton on the two continuations
+		t_pairs, _ = seg_in.intersect_curve_extended(seg_out, limit=max_extension + 1.)
+		viable = [(t, u) for t, u in t_pairs
+					if abs(t - 1.) <= max_extension and abs(u) <= max_extension]
+
+		if not viable:
+			return None, None, None
+
+		time_in, time_out = min(viable, key=lambda tu: abs(tu[0] - 1.) + abs(tu[1]))
+
+		new_in, _ = seg_in.solve_slice(time_in)
+		_, new_out = seg_out.solve_slice(time_out)
+
+		# - Both halves agree to solver tolerance; weld them onto one point so
+		#   the rebuilt corner is a single coordinate, not two that nearly match
+		corner = Point(new_in.p3)
+		new_out.p0.x, new_out.p0.y = corner.x, corner.y
+
+		return new_in, new_out, corner
 
 
 if __name__ == "__main__":

@@ -5,11 +5,13 @@
 # 4-point tuples — no FontLab, no Qt, no object dependencies.
 #
 #   curve_curve_intersections(c1, c2, tol)   cubic vs cubic
+#   curve_curve_intersections_extended(...)  unclamped (extrapolated)
 #   line_to_cubic(p0, p1)                    degree-elevate a segment
 #   split_cubic(curve, t)                    de Casteljau split
 #
-# Object-level wrappers live on CubicBezier.intersect_curve()
-# and Contour.intersections() / self_intersections().
+# Object-level wrappers live on CubicBezier.intersect_curve() /
+# .intersect_curve_extended() and Contour.intersections() /
+# self_intersections().
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2026       (http://www.kateliev.com)
 # (C) TypeRig                      (http://www.typerig.com)
@@ -19,12 +21,18 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
-__version__ = '1.0.0'
+import math
+
+__version__ = '1.1.0'
 
 # - Config -------------------------------
 MAX_DEPTH = 40			# recursion cap — bounds work on coincident/overlapping curves
 DEDUP_T = 1e-4			# t1 distance below which two hits are the same point
 CLUSTER_T = 5e-3		# looser (t1, t2) clustering for adjacent leaf boxes
+NR_MAX_ITER = 64		# Newton iterations per seed in the unclamped solver
+NR_EPSILON = 1e-9		# step size below which Newton is considered converged
+NR_MAX_STEP = .5		# damping cap on a single Newton step in t/u
+NR_MIN_SINE = 1e-6		# sine of the smallest tangent angle Newton will solve at
 
 
 # - Primitives ---------------------------
@@ -159,6 +167,126 @@ def curve_curve_intersections(c1, c2, tolerance=0.1):
 	return result
 
 
+# - Extrapolated intersection ------------
+def _cubic_point(curve, t):
+	'''Point on a 4-point tuple cubic at t (valid for t outside [0,1]).'''
+	(x0, y0), (x1, y1), (x2, y2), (x3, y3) = curve
+	rt = 1. - t
+	a = rt * rt * rt
+	b = 3. * rt * rt * t
+	c = 3. * rt * t * t
+	d = t * t * t
+
+	return (a * x0 + b * x1 + c * x2 + d * x3,
+			a * y0 + b * y1 + c * y2 + d * y3)
+
+
+def _cubic_derivative(curve, t):
+	'''First derivative of a 4-point tuple cubic at t (valid outside [0,1]).'''
+	(x0, y0), (x1, y1), (x2, y2), (x3, y3) = curve
+	rt = 1. - t
+	a = 3. * rt * rt
+	b = 6. * rt * t
+	c = 3. * t * t
+
+	return (a * (x1 - x0) + b * (x2 - x1) + c * (x3 - x2),
+			a * (y1 - y0) + b * (y2 - y1) + c * (y3 - y2))
+
+
+def curve_curve_intersections_extended(c1, c2, seeds=None, limit=4., tolerance=1e-7):
+	'''Intersections of two cubics WITHOUT clamping t to the segment.
+
+	curve_curve_intersections() only reports crossings that lie inside both
+	segments. Rebuilding a corner needs the crossing of the two curves'
+	*extensions* past the region that was cut away, so this solves the 2x2
+	system F(t, u) = C1(t) - C2(u) = 0 with damped Newton-Raphson from a set
+	of seeds. Bezier arithmetic extrapolates cleanly, so a solution with
+	t > 1 or u < 0 is a genuine point on the analytic continuation of the
+	curve and can be reached by de Casteljau splitting at that parameter.
+
+	Args:
+		c1, c2     : 4-point tuple cubics
+		seeds      : iterable of (t, u) starting pairs. Default brackets the
+					 c1-end / c2-start corner, which is the corner-rebuild case.
+		limit      : reject parameters outside [-limit, 1 + limit] - keeps
+					 far-field roots of the cubic continuation out of results
+		tolerance  : residual |C1(t) - C2(u)| accepted as a root
+
+	Returns:
+		list of (t1, t2, (x, y)), de-duplicated, sorted by t1. Empty when the
+		extensions never meet (parallel tangents or divergent iteration).
+	'''
+	if seeds is None:
+		seeds = ((1., 0.), (1.1, -.1), (1.3, -.3), (.9, .1), (.7, .3), (1.6, -.6), (2., -1.))
+
+	t_min, t_max = -limit, 1. + limit
+	result = []
+
+	for t_seed, u_seed in seeds:
+		t, u = float(t_seed), float(u_seed)
+		converged = False
+
+		for _ in range(NR_MAX_ITER):
+			px, py = _cubic_point(c1, t)
+			qx, qy = _cubic_point(c2, u)
+			fx, fy = px - qx, py - qy
+
+			if abs(fx) < tolerance and abs(fy) < tolerance:
+				converged = True
+				break
+
+			d1x, d1y = _cubic_derivative(c1, t)
+			d2x, d2y = _cubic_derivative(c2, u)
+
+			# - Jacobian [[d1x, -d2x], [d1y, -d2y]]
+			det = d1y * d2x - d1x * d2y
+
+			# - |det| / (|d1| * |d2|) is the sine of the angle between the two
+			#   tangents. Testing it scaled keeps the guard independent of the
+			#   curves' size: a smooth (tangent-continuous) join has no isolated
+			#   crossing and Newton would only wander along the shared tangent.
+			scale = math.hypot(d1x, d1y) * math.hypot(d2x, d2y)
+
+			if scale < 1e-12 or abs(det) < NR_MIN_SINE * scale:
+				break
+
+			dt = (-fx * -d2y + -d2x * fy) / det
+			du = (d1x * -fy - -fx * d1y) / det
+
+			# - Damping: a single step must not bolt off into the far field
+			step = max(abs(dt), abs(du))
+
+			if step > NR_MAX_STEP:
+				scale = NR_MAX_STEP / step
+				dt *= scale
+				du *= scale
+
+			t += dt
+			u += du
+
+			if not (t_min <= t <= t_max) or not (t_min <= u <= t_max):
+				break
+
+			if abs(dt) < NR_EPSILON and abs(du) < NR_EPSILON:
+				px, py = _cubic_point(c1, t)
+				qx, qy = _cubic_point(c2, u)
+				converged = math.hypot(px - qx, py - qy) < 1e-4
+				break
+
+		if not converged:
+			continue
+
+		if not (t_min <= t <= t_max) or not (t_min <= u <= t_max):
+			continue
+
+		if any(abs(t - kt) < DEDUP_T and abs(u - ku) < DEDUP_T for kt, ku, _pt in result):
+			continue
+
+		result.append((t, u, _cubic_point(c1, t)))
+
+	return sorted(result, key=lambda hit: hit[0])
+
+
 # - Test ---------------------------------
 if __name__ == '__main__':
 	fail = [0]
@@ -190,6 +318,34 @@ if __name__ == '__main__':
 	# Identical curves: depth cap terminates, sample of hits (unspecified)
 	hits = curve_curve_intersections(arch, arch)
 	check('identical: terminates', True)
+
+	# - Extrapolated: two segments whose EXTENSIONS meet outside both
+	seg_a = line_to_cubic((0., 0.), (100., 0.))
+	seg_b = line_to_cubic((200., 100.), (200., 300.))
+	hits = curve_curve_intersections(seg_a, seg_b)
+	check('extended: clamped solver finds nothing', hits == [])
+
+	hits = curve_curve_intersections_extended(seg_a, seg_b)
+	check('extended: one hit', len(hits) == 1)
+	if hits:
+		t, u, pt = hits[0]
+		check('extended: crossing at (200,0)', abs(pt[0] - 200.) < 1e-4 and abs(pt[1]) < 1e-4)
+		check('extended: t past the end', t > 1.)
+		check('extended: u before the start', u < 0.)
+
+	# - Extrapolated: line extension into a quarter-arc extension
+	kappa = .5522847498307936
+	arc = ((200., 0.), (200., 100. * kappa), (200. - 100. * kappa, 100.), (100., 100.))
+	line = line_to_cubic((0., 0.), (150., 0.))
+	hits = curve_curve_intersections_extended(line, arc)
+	check('extended: line/arc hit', len(hits) == 1)
+	if hits:
+		check('extended: line/arc at arc start', abs(hits[0][2][0] - 200.) < 1e-3)
+
+	# - Parallel tangents never resolve
+	par_a = line_to_cubic((0., 0.), (100., 0.))
+	par_b = line_to_cubic((0., 50.), (100., 50.))
+	check('extended: parallel -> no hits', curve_curve_intersections_extended(par_a, par_b) == [])
 
 	print('-' * 30)
 	print('{} failure(s)'.format(fail[0]))

@@ -16,7 +16,7 @@ import os
 import sys
 
 # - Init -------------------------------
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 
 # - Path bootstrap (repo checkout without install) ---
 try:
@@ -718,6 +718,84 @@ check('F8 knot continuity at stem 80', abs(_pw_width(80 - 1e-4) - _pw_width(80 +
 _scaled = _pw_glyph.layer('Regular').scale_with_axis(_axis, target_width=300)
 check('F8 scale_with_axis duck-type', abs(_scaled.bounds.width - 300.) <= 1.0)
 check('F8 scale_with_axis converged', _scaled._scale_converged is True)
+
+
+# ===========================================================
+# - Corner rebuild: collapse a corner to a cusp -------------
+# ===========================================================
+# CubicBezier.corner_rebuild() takes the two segments that survive a corner
+# and extends (or trims) them until their own continuations cross. Every
+# combination of line/curve must work, and a curve must come back as the
+# curve it was before the corner was rounded away.
+
+_K = 4. * (math.sqrt(2.) - 1.) / 3.		# circular arc handle constant
+
+def _cr_same(seg_a, seg_b, tol=1e-2):
+	return all(close(a[0], b[0], tol) and close(a[1], b[1], tol)
+				for a, b in zip(seg_a.tuple, seg_b.tuple))
+
+# - The reference corner: a horizontal line meets a quarter arc at (200, 0)
+_cr_line_full = Line((0., 0.), (200., 0.))
+_cr_arc_full = CubicBezier((200., 0.), (200., 100. * _K), (200. - 100. * _K, 100.), (100., 100.))
+
+# -- Line / Curve: the arc lost its first 15% to the rounding
+_cr_line = Line((0., 0.), (170., 0.))
+_, _cr_arc = _cr_arc_full.solve_slice(.15)
+_cr_in, _cr_out, _cr_pt = CubicBezier.corner_rebuild(_cr_line, _cr_arc)
+check('G1 line/curve cusp at (200,0)', close(_cr_pt.x, 200., 1e-3) and close(_cr_pt.y, 0., 1e-3))
+check('G1 line/curve arc restored', _cr_same(_cr_out, _cr_arc_full))
+check('G1 line/curve line extended', close(_cr_in.p1.x, 200., 1e-3) and close(_cr_in.p0.x, 0.))
+
+# -- Curve / Line: mirrored, arc arrives at the corner
+_cr_arc_in_full = CubicBezier((100., 100.), (100. + 100. * _K, 100.), (200., 100. * _K), (200., 0.))
+_cr_arc_in, _ = _cr_arc_in_full.solve_slice(.85)
+_cr_in, _cr_out, _cr_pt = CubicBezier.corner_rebuild(_cr_arc_in, Line((200., -30.), (200., -200.)))
+check('G2 curve/line cusp at (200,0)', close(_cr_pt.x, 200., 1e-3) and close(_cr_pt.y, 0., 1e-3))
+check('G2 curve/line arc restored', _cr_same(_cr_in, _cr_arc_in_full))
+
+# -- Curve / Curve: two arcs meeting at a right-angle cusp
+_cr_a_full = CubicBezier((100., 100.), (100. + 100. * _K, 100.), (200., 100. * _K), (200., 0.))
+_cr_b_full = CubicBezier((200., 0.), (200. + 100. * _K, 0.), (300., 100. - 100. * _K), (300., 100.))
+_cr_a, _ = _cr_a_full.solve_slice(.8)
+_, _cr_b = _cr_b_full.solve_slice(.2)
+_cr_in, _cr_out, _cr_pt = CubicBezier.corner_rebuild(_cr_a, _cr_b)
+check('G3 curve/curve cusp at (200,0)', close(_cr_pt.x, 200., 1e-2) and close(_cr_pt.y, 0., 1e-2))
+check('G3 curve/curve incoming restored', _cr_same(_cr_in, _cr_a_full))
+check('G3 curve/curve outgoing restored', _cr_same(_cr_out, _cr_b_full))
+check('G3 curve/curve corner welded', _cr_in.p3.x == _cr_out.p0.x and _cr_in.p3.y == _cr_out.p0.y)
+
+# -- Line / Line: the original behaviour must not regress
+_cr_in, _cr_out, _cr_pt = CubicBezier.corner_rebuild(Line((0., 0.), (170., 0.)), Line((200., -30.), (200., -200.)))
+check('G4 line/line cusp at (200,0)', close(_cr_pt.x, 200.) and close(_cr_pt.y, 0.))
+
+# -- Quadratic is degree-elevated, not refused
+_cr_in, _cr_out, _cr_pt = CubicBezier.corner_rebuild(QuadraticBezier((0., 0.), (85., 0.), (170., 0.)), _cr_arc)
+check('G5 quadratic in accepted', _cr_pt is not None and close(_cr_pt.x, 200., 1e-3))
+
+# -- A cusp that falls INSIDE the outgoing arc: trim instead of extend
+_cr_long = CubicBezier((250., -50.), (250., 60.), (150., 100.), (100., 100.))
+_cr_in, _cr_out, _cr_pt = CubicBezier.corner_rebuild(Line((0., 0.), (170., 0.)), _cr_long)
+check('G6 cusp inside arc trims', _cr_pt is not None and close(_cr_pt.y, 0., 1e-3) and _cr_pt.x < 250.)
+
+# -- Refusals: no crossing, or one too far away to be a corner
+check('G7 parallel lines refused',
+		CubicBezier.corner_rebuild(Line((0., 0.), (100., 0.)), Line((150., 0.), (250., 0.))) == (None, None, None))
+check('G7 far crossing refused',
+		CubicBezier.corner_rebuild(Line((0., 0.), (170., 0.)),
+			CubicBezier((5000., 5000.), (5100., 5000.), (5200., 5100.), (5200., 5200.))) == (None, None, None))
+
+# -- A tangent-continuous join has no cusp; it must resolve to the shared
+#    point rather than shoot off into a spike
+_cr_s_a, _ = CubicBezier((100., 100.), (100. + 100. * _K, 100.), (200., 100. * _K), (200., 0.)).solve_slice(.8)
+_, _cr_s_b = CubicBezier((200., 0.), (200., -100. * _K), (200. + 100. * _K, -100.), (300., -100.)).solve_slice(.2)
+_cr_pt = CubicBezier.corner_rebuild(_cr_s_a, _cr_s_b)[2]
+check('G8 smooth join stays put', _cr_pt is None or (close(_cr_pt.x, 200., .01) and close(_cr_pt.y, 0., .01)))
+
+# -- Unclamped curve/curve solver finds what the clamped one cannot
+_cr_ext_a, _ = _cr_a_full.solve_slice(.8)
+_, _cr_ext_b = _cr_b_full.solve_slice(.2)
+check('G9 clamped solver finds nothing', _cr_ext_a.intersect_curve(_cr_ext_b)[0] == [])
+check('G9 extended solver finds one', len(_cr_ext_a.intersect_curve_extended(_cr_ext_b)[0]) == 1)
 
 
 # - Finish -----------------------------

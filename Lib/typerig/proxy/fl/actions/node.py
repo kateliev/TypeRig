@@ -13,6 +13,8 @@ from __future__ import absolute_import, print_function
 import warnings
 import math
 
+from collections import namedtuple
+
 import fontlab as fl6
 import fontgate as fgt
 
@@ -37,7 +39,7 @@ from typerig.proxy.fl.gui.widgets import getProcessGlyphs
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init ----------------------------------------------------------------------------
-__version__ = '3.4'
+__version__ = '3.5'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -66,14 +68,20 @@ def get_dummy_nodes(x, y):
 	return [fl6.flNode(x,y, nodeType=1), fl6.flNode(x,y, nodeType=4), fl6.flNode(x,y, nodeType=4)]#, fl6.flNode(x,y, nodeType=1)]
 
 def get_crossing(node_list):
+	'''Crossing of the straight prev/next lines around a selection.
+
+	NOTE: chord based and line only. Kept for callers that want the plain
+	polygon crossing; corner rebuilding uses get_corner_rebuild() instead,
+	which respects curve segments.
+	'''
 	temp_nodes = [node for node in node_list if node.isOn]
 	fisrt_node, second_node = temp_nodes[0], temp_nodes[-1]
 
-	line_in_A = fisrt_node.getPrevLine() 
+	line_in_A = fisrt_node.getPrevLine()
 	line_in_B = fisrt_node.getNextLine()
-	line_out_A = second_node.getNextLine() 
+	line_out_A = second_node.getNextLine()
 	line_out_B = second_node.getPrevLine()
-	
+
 	crossing_A = line_in_A.intersect_line(line_out_A, True)
 	crossing_B = line_in_B.intersect_line(line_out_B, True)
 
@@ -81,6 +89,181 @@ def get_crossing(node_list):
 	crossing = crossing_A if not isinstance(crossing_A, Void) else crossing_B
 
 	return crossing
+
+TRCornerRebuild = namedtuple('TRCornerRebuild',
+	'node_first node_last new_in new_out corner in_seg_nodes next_on corner_size')
+
+def get_corner_span(node_from, node_to, limit=1000):
+	'''On-curve steps walking forward from node_from until node_to is reached.
+
+	Returns None when node_to is not reachable that way - a different contour,
+	or the walk coming back around to where it started.
+	'''
+	steps = 0
+	cursor = node_from.getNextOn(False)
+
+	while cursor is not None and cursor.fl != node_to.fl:
+		if cursor.fl == node_from.fl or steps > limit:
+			return None
+
+		steps += 1
+		cursor = cursor.getNextOn(False)
+
+	if cursor is None:
+		return None
+
+	return steps + 1		# node_to collapses into the cusp as well
+
+def resolve_corner_ends(node_a, node_b):
+	'''Order two selected on-curve nodes so the corner lies between them.
+
+	selectedNodes() reports in contour order, which says nothing about where the
+	contour's start point sits: when it falls inside the corner, the node AFTER
+	the corner is reported first. A corner is a short, local feature, so the
+	shorter of the two ways round is the corner and the longer one is the rest
+	of the glyph - without this the tool would take most of the contour for
+	"the corner" and delete it.
+
+	Returns (node_first, node_last, corner_size) or None.
+	'''
+	forward = get_corner_span(node_a, node_b)
+	backward = get_corner_span(node_b, node_a)
+
+	if forward is None and backward is None:
+		return None
+
+	if backward is not None and (forward is None or backward < forward):
+		return node_b, node_a, backward
+
+	return node_a, node_b, forward
+
+def get_segment_ending_at(node):
+	'''The segment that ENDS at the given on-curve node, by walking the ring.
+
+	Returns a tuple of flNodes - 2 for a line, 4 for a cubic - or None when the
+	run of nodes is not one this handles (TrueType off-curves, malformed runs).
+
+	NOTE: this deliberately does NOT use eNode.getSegmentNodes(). That one
+	decides line-vs-curve from contour.segment(contour.getT(node)) - a float
+	parametric time - and only walks the ring afterwards. When the time lookup
+	lands on the neighbouring segment the length test describes one segment
+	while the walk builds another, so a line's on-curve nodes get handed back
+	in the slots where BCPs are expected. Writing handle coordinates into those
+	slots then moves real on-curve nodes elsewhere in the glyph. Walking the
+	ring cannot land on the wrong segment.
+	'''
+	prev_node = node.getPrev(False)
+
+	if prev_node is None:
+		return None
+
+	if prev_node.isOn:
+		return (prev_node.fl, node.fl)
+
+	bcp_in = prev_node
+	bcp_out = bcp_in.getPrev(False)
+
+	if bcp_out is None or bcp_out.isOn:
+		return None
+
+	prev_on = bcp_out.getPrev(False)
+
+	if prev_on is None or not prev_on.isOn:
+		return None
+
+	return (prev_on.fl, bcp_out.fl, bcp_in.fl, node.fl)
+
+def get_segment_starting_at(node):
+	'''The segment that STARTS at the given on-curve node, by walking the ring.
+
+	Mirror of get_segment_ending_at() - see its note on why the ring is walked
+	rather than asking for the segment by parametric time.
+	'''
+	next_node = node.getNext(False)
+
+	if next_node is None:
+		return None
+
+	if next_node.isOn:
+		return (node.fl, next_node.fl)
+
+	bcp_out = next_node
+	bcp_in = bcp_out.getNext(False)
+
+	if bcp_in is None or bcp_in.isOn:
+		return None
+
+	next_on = bcp_in.getNext(False)
+
+	if next_on is None or not next_on.isOn:
+		return None
+
+	return (node.fl, bcp_out.fl, bcp_in.fl, next_on.fl)
+
+def get_corner_segments(node_first, node_last):
+	'''Geometry of the two segments that survive a corner collapse.
+
+	node_first is the last node kept on the incoming side, node_last the first
+	node kept on the outgoing side; everything between them is the corner.
+
+	Returns (seg_in, seg_out, in_seg_nodes, next_on) where seg_in/seg_out are
+	Line or Curve depending on what the contour actually holds, in_seg_nodes is
+	the raw flNode tuple of the incoming segment and next_on is the on-curve
+	node closing the outgoing segment.
+
+	NOTE: the flNodes handed back are only good until the contour is
+	restructured - write to them before any removal, never after.
+
+	Returns None when a segment is TrueType or otherwise not handled here.
+	'''
+	in_seg_nodes = get_segment_ending_at(node_first)
+	out_seg_nodes = get_segment_starting_at(node_last)
+
+	if in_seg_nodes is None or out_seg_nodes is None:
+		return None
+
+	prev_on = in_seg_nodes[0]
+	next_on = out_seg_nodes[-1]
+
+	# - The corner must leave something outside it to rebuild from
+	if next_on == node_first.fl or prev_on == node_last.fl:
+		return None
+
+	seg_in = Curve(in_seg_nodes) if len(in_seg_nodes) == 4 else Line((prev_on.x, prev_on.y), node_first.tuple)
+	seg_out = Curve(out_seg_nodes) if len(out_seg_nodes) == 4 else Line(node_last.tuple, (next_on.x, next_on.y))
+
+	return seg_in, seg_out, in_seg_nodes, next_on
+
+def get_corner_rebuild(node_a, node_b):
+	'''Solve the cusp that rebuilds the corner bracketed by two on-curve nodes.
+
+	The corner is whichever of the two ways round between node_a and node_b is
+	shorter, so the caller need not know which of the two the selection put
+	first.
+
+	Returns a TRCornerRebuild, or None when the two nodes do not bracket a
+	single corner on one contour, or the two sides never cross - parallel, or
+	a crossing too far off to be a corner.
+	'''
+	resolved = resolve_corner_ends(node_a, node_b)
+
+	if resolved is None:
+		return None
+
+	node_first, node_last, corner_size = resolved
+	segments = get_corner_segments(node_first, node_last)
+
+	if segments is None:
+		return None
+
+	seg_in, seg_out, in_seg_nodes, next_on = segments
+	new_in, new_out, corner = CubicBezier.corner_rebuild(seg_in, seg_out)
+
+	if corner is None:
+		return None
+
+	return TRCornerRebuild(node_first, node_last, new_in, new_out, corner,
+							in_seg_nodes, next_on, corner_size)
 
 # - Actions ---------------------------------------------------------------------------
 class TRNodeActionCollector(object):
@@ -436,36 +619,112 @@ class TRNodeActionCollector(object):
 
 	@staticmethod
 	def corner_rebuild(pMode:int, pLayers:tuple, cleanup_nodes:bool=True):
+		'''Collapse a rounded or multi-node corner back to a cusp.
+
+		The selection brackets the corner: of the two outermost selected
+		on-curve nodes, the one before the corner keeps the incoming side and
+		the one after it keeps the outgoing side. Both are then run out along
+		their own geometry until they cross and everything in between is
+		dropped. Which node is which is worked out from the contour, so the
+		tool does not care where the contour's start point sits.
+
+		Either side may be a line or a curve. For LL--CC--AA the result is
+		LL--AA meeting at the crossing of the line projection with the arc
+		continuation, and AA keeps the curvature it had before the corner was
+		rounded - its handles are recomputed by de Casteljau splitting at the
+		solved time, not straightened.
+		'''
 		# - Get list of glyphs to be processed
 		process_glyphs = getProcessGlyphs(pMode)
 
 		# - Process
 		for glyph in process_glyphs:
-			# - Init	
+			# - Init
 			wLayers = glyph._prepareLayers(pLayers)
-			selection_layers_all = {layer : glyph.selectedNodes(layer, extend=eNode) for layer in wLayers}
-			selection_layers_on = {layer : [node for node in selection if node.isOn] for layer, selection in selection_layers_all.items()}
 			done_flag = False
+			nodes_reduced = 0
 
-			for layer, selection in selection_layers_on.items():			
-				if len(selection) > 1:
-					node_first = selection[0]
-					node_last = selection[-1]
-					crossing = get_crossing(selection)
+			for layer in wLayers:
+				selection = [node for node in glyph.selectedNodes(layer, extend=eNode) if node.isOn]
 
-					if cleanup_nodes:
-						node_first.smartReloc(*crossing.tuple)
-						node_first.parent.removeNodesBetween(node_first.fl, node_last.getNextOn())
+				if len(selection) < 2: continue
 
-					else:
-						for node in selection_layers_all:
-							node.reloc(*crossing.tuple)
+				# - One corner per run: a selection spanning two contours has no
+				#   single crossing to solve for. Which of the two outermost
+				#   nodes comes first is worked out from the contour, not from
+				#   the selection order
+				rebuild = get_corner_rebuild(selection[0], selection[-1])
 
-					done_flag = True
+				if rebuild is None:
+					warnings.warn('SKIP:\tNo single corner to rebuild from this selection! Layer: {}'.format(layer), LayerWarning)
+					continue
+
+				node_first = rebuild.node_first
+				new_in, new_out, corner = rebuild.new_in, rebuild.new_out, rebuild.corner
+				is_curve_in = len(rebuild.in_seg_nodes) == 4
+				is_curve_out = isinstance(new_out, CubicBezier)
+
+				# - Refuse rather than corrupt: handle coordinates may only ever
+				#   be written into off-curve slots. If anything ever hands back
+				#   an on-curve node where a BCP belongs, writing to it would
+				#   drag a real node across the glyph instead of moving a handle
+				if is_curve_in and (rebuild.in_seg_nodes[1].isOn() or rebuild.in_seg_nodes[2].isOn()):
+					warnings.warn('SKIP:\tIncoming segment is not a clean curve! Layer: {}'.format(layer), LayerWarning)
+					continue
+
+				if cleanup_nodes:
+					parent_contour = node_first.contour
+
+					# - Everything on the surviving geometry is written BEFORE
+					#   the contour is restructured. removeNodesBetween()
+					#   invalidates the flNodes captured above, so writing to
+					#   them afterwards lands on whatever now sits at those
+					#   positions - handles elsewhere in the glyph move instead.
+					#   Every other corner tool here works in this order too.
+					if is_curve_in:
+						in_seg_nodes = rebuild.in_seg_nodes
+						in_seg_nodes[1].x, in_seg_nodes[1].y = new_in.p1.x, new_in.p1.y
+						in_seg_nodes[2].x, in_seg_nodes[2].y = new_in.p2.x, new_in.p2.y
+
+					# - A rebuilt corner is a cusp. Clear the flag before the
+					#   node moves, or FL mirrors the handles back
+					node_first.fl.smooth = False
+					node_first.reloc(corner.x, corner.y)
+
+					# - Drop the corner. This flattens the outgoing segment too,
+					#   so it is rebuilt from new_out below
+					parent_contour.removeNodesBetween(node_first.fl, rebuild.next_on)
+					nodes_reduced += rebuild.corner_size
+
+					# - Outgoing side: give the arc its segment back. Every node
+					#   here is walked fresh from node_first - nothing captured
+					#   before the removal is touched again
+					if is_curve_out:
+						line_end = node_first.getNext(False)
+
+						if line_end is not None and line_end.isOn:
+							# - convertToCurve() acts on the segment ENDING at
+							#   the node, so it is called on the far end
+							line_end.fl.convertToCurve()
+
+							bcp_out = node_first.getNext(False)
+							bcp_in = bcp_out.getNext(False) if bcp_out is not None else None
+
+							if bcp_out is not None and bcp_in is not None \
+								and not bcp_out.isOn and not bcp_in.isOn:
+								bcp_out.reloc(new_out.p1.x, new_out.p1.y)
+								bcp_in.reloc(new_out.p2.x, new_out.p2.y)
+
+				else:
+					# - Keep the node count, just pull the selection onto the cusp
+					for node in selection:
+						node.smartReloc(corner.x, corner.y)
+
+				done_flag = True
 
 			if done_flag:
-				glyph.updateObject(glyph.fl, '{};\tRebuild corner:\t{} nodes reduced @ {}'.format(glyph.name, len(selection), '; '.join(wLayers)))
-			
+				glyph.updateObject(glyph.fl, '{};\tRebuild corner:\t{} nodes reduced @ {}'.format(glyph.name, nodes_reduced, '; '.join(wLayers)))
+
 		active_workspace.getCanvas(True).refreshAll()
 
 	# -- Slope tools -----------------------------------------------------------------
