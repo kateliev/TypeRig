@@ -172,9 +172,10 @@ check('A5 multi-node all dropped', len(_c5.nodes) == 4)
 
 # -- The corner may straddle the contour's start point --------------------
 # The selection is reported in contour order, so when the start point sits
-# inside the corner the node AFTER the corner is reported first. The corner is
-# the shorter way round, not the longer one; getting this wrong would take
-# most of the contour for "the corner".
+# inside the corner the node AFTER the corner is reported first. Reading the
+# ends in plain order would then take the corner the wrong way round and
+# delete most of the contour. Every selected node has to end up inside the
+# stretch that gets dropped, which is what settles the direction.
 
 _c9 = Contour([
 	Node(190., 10., type=ON),							# 0  corner  (start point!)
@@ -186,12 +187,121 @@ _c9 = Contour([
 	Node(175., 5., type=ON),							# 6  corner
 ], closed=True)
 
-check('A9 wrapped corner rebuilt', NodeActions.corner_rebuild(_c9, [1, 5]) is True)
+check('A9 wrapped corner rebuilt', NodeActions.corner_rebuild(_c9, [0, 1, 5, 6]) is True)
 check('A9 wrapped cusp at (200,0)',
 		any(close(node.x, 200.) and close(node.y, 0.) for node in _c9.nodes))
 check('A9 wrapped kept the far side', len(_c9.nodes) == 4)
 check('A9 wrapped kept (0,-200)', any(close(n.x, 0.) and close(n.y, -200.) for n in _c9.nodes))
 check('A9 wrapped kept (0,0)', any(close(n.x, 0.) and close(n.y, 0.) for n in _c9.nodes))
+check('A9 wrapped dropped the corner nodes',
+		not any(close(n.x, 190.) and close(n.y, 10.) for n in _c9.nodes)
+		and not any(close(n.x, 175.) and close(n.y, 5.) for n in _c9.nodes))
+
+# -- Winding must not matter: the same corner, contour reversed -----------
+# Reversing the winding swaps which way round is "shorter"; the result has to
+# be identical either way.
+
+_c10 = Contour([
+	Node(0., 0., type=ON),
+	Node(150., 0., type=ON),							# 1  <- selected
+	Node(175., 5., type=ON),							# 2  corner
+	Node(190., 10., type=ON),							# 3  corner
+	Node(200., -10., type=ON),							# 4  <- selected
+	Node(200., -200., type=ON),
+	Node(0., -200., type=ON),
+], closed=True)
+_c10.reverse()
+
+_c10_sel = [i for i, n in enumerate(_c10.nodes)
+			if any(close(n.x, x) and close(n.y, y)
+					for x, y in ((150., 0.), (175., 5.), (190., 10.), (200., -10.)))]
+
+check('A10 reversed winding rebuilt', NodeActions.corner_rebuild(_c10, _c10_sel) is True)
+check('A10 reversed cusp at (200,0)',
+		any(close(n.x, 200.) and close(n.y, 0.) for n in _c10.nodes))
+check('A10 reversed kept the far side', len(_c10.nodes) == 4)
+
+
+# -- Winding invariance, line/curve and curve/line ------------------------
+# The same physical corner, built both ways round. Reversing a contour swaps
+# which side of the corner is the incoming one, so LL--XX--AA in one winding
+# is AA--XX--LL in the other. Both must land on the same cusp.
+
+def _corner_contour(reverse):
+	'''Line (0,0)->(170,0), rounded corner, quarter arc up to (100,100).
+	Cusp of the two sides is (200, 0).'''
+	_, arc = ARC_OUT.solve_slice(.15)
+	contour = Contour([
+		Node(0., 0., type=ON),							# 0
+		Node(170., 0., type=ON),						# 1  <- selected
+		Node(185., 0., type=CV),						# 2  corner
+		Node(arc.p0.x, arc.p0.y - 12., type=CV),		# 3  corner
+		Node(arc.p0.x, arc.p0.y, type=ON),				# 4  <- selected
+		Node(arc.p1.x, arc.p1.y, type=CV),				# 5
+		Node(arc.p2.x, arc.p2.y, type=CV),				# 6
+		Node(100., 100., type=ON),						# 7
+		Node(0., 100., type=ON),						# 8
+	], closed=True)
+
+	if reverse:
+		contour.reverse()
+
+	picked = [i for i, n in enumerate(contour.nodes)
+				if n.is_on and (close(n.x, 170.) and close(n.y, 0.)
+								or close(n.x, arc.p0.x) and close(n.y, arc.p0.y))]
+	return contour, picked
+
+for _rev in (False, True):
+	_label = 'reversed' if _rev else 'forward'
+	_cw, _sel = _corner_contour(_rev)
+
+	check('A11 {} rebuilt'.format(_label), NodeActions.corner_rebuild(_cw, _sel) is True)
+	check('A11 {} cusp at (200,0)'.format(_label),
+			any(n.is_on and close(n.x, 200.) and close(n.y, 0.) for n in _cw.nodes))
+	check('A11 {} arc survives as a curve'.format(_label),
+			any(n.type == CV for n in _cw.nodes))
+	check('A11 {} kept (100,100) and (0,100)'.format(_label),
+			any(close(n.x, 100.) and close(n.y, 100.) for n in _cw.nodes)
+			and any(close(n.x, 0.) and close(n.y, 100.) for n in _cw.nodes))
+	check('A11 {} kept (0,0)'.format(_label),
+			any(close(n.x, 0.) and close(n.y, 0.) for n in _cw.nodes))
+
+
+# -- Restoring a circular cutout must not deform the circle ---------------
+# A rectangle with a circle bitten out of one corner, the resulting cusp then
+# rounded off. Rebuilding the cusp has to give the circle back untouched: the
+# rounding trims the arc by de Casteljau, so extending it by de Casteljau
+# restores the original cubic exactly - not approximately. If this ever drifts,
+# restored arcs will look slack next to the untouched part of the cutout.
+
+_R, _CX, _CY = 180., 180., 0.
+_cut_arc = CubicBezier((_CX - _R, _CY), (_CX - _R, _CY + _R * KAPPA),
+						(_CX - _R * KAPPA, _CY + _R), (_CX, _CY + _R))
+
+def _circle_deviation(curve, samples=128):
+	'''Worst distance between the curve and the true circle it approximates.'''
+	worst = 0.
+
+	for i in range(samples + 1):
+		point = curve.solve_point(i / float(samples))
+		worst = max(worst, abs(math.hypot(point.x - _CX, point.y - _CY) - _R))
+
+	return worst
+
+_baseline = _circle_deviation(_cut_arc)		# the cubic's own approximation error
+
+for _radius in (10., 25., 60., 120.):
+	_, _trimmed = _cut_arc.solve_slice_distance(_radius, from_start=True)
+	_edge = Line((-400., 0.), (-_radius, 0.))
+	_ni, _no, _pt = CubicBezier.corner_rebuild(_edge, _trimmed)
+
+	check('A12 r={:.0f} cusp back at the circle/edge meeting point'.format(_radius),
+			_pt is not None and close(_pt.x, 0., 1e-6) and close(_pt.y, 0., 1e-6))
+	check('A12 r={:.0f} arc restored EXACTLY'.format(_radius),
+			_no is not None and all(close(a[0], b[0], 1e-6) and close(a[1], b[1], 1e-6)
+									for a, b in zip(_no.tuple, _cut_arc.tuple)))
+	check('A12 r={:.0f} circle not deformed'.format(_radius),
+			_no is not None and _circle_deviation(_no) <= _baseline + 1e-6)
 
 
 # -- Refusals leave the contour exactly as it was -------------------------

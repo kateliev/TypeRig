@@ -93,49 +93,95 @@ def get_crossing(node_list):
 TRCornerRebuild = namedtuple('TRCornerRebuild',
 	'node_first node_last new_in new_out corner in_seg_nodes next_on corner_size')
 
-def get_corner_span(node_from, node_to, limit=1000):
-	'''On-curve steps walking forward from node_from until node_to is reached.
+def get_corner_span_nodes(node_from, node_to, limit=1000):
+	'''The on-curve nodes from node_from forward to node_to, both included.
 
 	Returns None when node_to is not reachable that way - a different contour,
 	or the walk coming back around to where it started.
 	'''
-	steps = 0
+	span = [node_from]
 	cursor = node_from.getNextOn(False)
+	steps = 0
 
-	while cursor is not None and cursor.fl != node_to.fl:
-		if cursor.fl == node_from.fl or steps > limit:
+	while cursor is not None and cursor.fl.id != node_to.fl.id:
+		if cursor.fl.id == node_from.fl.id or steps > limit:
 			return None
 
-		steps += 1
+		span.append(cursor)
 		cursor = cursor.getNextOn(False)
+		steps += 1
 
 	if cursor is None:
 		return None
 
-	return steps + 1		# node_to collapses into the cusp as well
+	span.append(cursor)
+	return span
 
-def resolve_corner_ends(node_a, node_b):
-	'''Order two selected on-curve nodes so the corner lies between them.
+def resolve_corner_ends(selection):
+	'''Pick the two nodes that bracket the corner out of a selection.
 
 	selectedNodes() reports in contour order, which says nothing about where the
 	contour's start point sits: when it falls inside the corner, the node AFTER
-	the corner is reported first. A corner is a short, local feature, so the
-	shorter of the two ways round is the corner and the longer one is the rest
-	of the glyph - without this the tool would take most of the contour for
-	"the corner" and delete it.
+	the corner is reported first and reading the ends in plain order takes the
+	corner the wrong way round - deleting a stretch of the contour elsewhere.
+
+	The selection itself settles it. The corner is the stretch about to be
+	dropped, so every selected node has to lie inside it. Judging it by which
+	way round is shorter instead would depend on the contour's winding, which
+	is not something the designer should have to think about.
 
 	Returns (node_first, node_last, corner_size) or None.
 	'''
-	forward = get_corner_span(node_a, node_b)
-	backward = get_corner_span(node_b, node_a)
+	selected_ids = set(node.fl.id for node in selection)
 
-	if forward is None and backward is None:
+	# - A contiguous run of selected nodes says outright where the corner
+	#   starts and ends: the run's first node is the one whose predecessor was
+	#   not selected, its last the one whose successor was not. This holds for
+	#   a run straddling the contour's start point, where the true ends sit in
+	#   the MIDDLE of the contour-ordered selection rather than at its edges.
+	starts, ends = [], []
+
+	for node in selection:
+		prev_on, next_on = node.getPrevOn(), node.getNextOn()
+
+		if prev_on is None or prev_on.id not in selected_ids:
+			starts.append(node)
+
+		if next_on is None or next_on.id not in selected_ids:
+			ends.append(node)
+
+	if len(starts) == 1 and len(ends) == 1:
+		candidates = [(starts[0], ends[0])]
+	else:
+		# - Not one run: only the bracketing nodes were picked, or there are
+		#   several corners. Fall back to contour order, both ways round
+		candidates = [(selection[0], selection[-1]), (selection[-1], selection[0])]
+
+	best = None
+
+	for first, last in candidates:
+		if first.fl.id == last.fl.id:
+			continue
+
+		span = get_corner_span_nodes(first, last)
+
+		if span is None:
+			continue
+
+		if not selected_ids.issubset(set(node.fl.id for node in span)):
+			continue
+
+		# - Both ways round can hold the whole selection when only the two
+		#   bracketing nodes are picked; that is genuinely ambiguous, so take
+		#   the smaller stretch
+		if best is None or len(span) < len(best[2]):
+			best = (first, last, span)
+
+	if best is None:
 		return None
 
-	if backward is not None and (forward is None or backward < forward):
-		return node_b, node_a, backward
-
-	return node_a, node_b, forward
+	# - node_first survives as the cusp, everything after it in the span goes
+	return best[0], best[1], len(best[2]) - 1
 
 def get_segment_ending_at(node):
 	'''The segment that ENDS at the given on-curve node, by walking the ring.
@@ -234,18 +280,17 @@ def get_corner_segments(node_first, node_last):
 
 	return seg_in, seg_out, in_seg_nodes, next_on
 
-def get_corner_rebuild(node_a, node_b):
-	'''Solve the cusp that rebuilds the corner bracketed by two on-curve nodes.
+def get_corner_rebuild(selection):
+	'''Solve the cusp that rebuilds the corner held by a selection.
 
-	The corner is whichever of the two ways round between node_a and node_b is
-	shorter, so the caller need not know which of the two the selection put
-	first.
+	The corner is the stretch of contour the selection covers, so the caller
+	need not know which of its nodes comes first along the contour.
 
-	Returns a TRCornerRebuild, or None when the two nodes do not bracket a
+	Returns a TRCornerRebuild, or None when the selection does not bracket a
 	single corner on one contour, or the two sides never cross - parallel, or
 	a crossing too far off to be a corner.
 	'''
-	resolved = resolve_corner_ends(node_a, node_b)
+	resolved = resolve_corner_ends(selection)
 
 	if resolved is None:
 		return None
@@ -264,6 +309,50 @@ def get_corner_rebuild(node_a, node_b):
 
 	return TRCornerRebuild(node_first, node_last, new_in, new_out, corner,
 							in_seg_nodes, next_on, corner_size)
+
+def apply_corner_rebuild(rebuild):
+	'''Replace a corner with the two rebuilt segments.
+
+	The solved segments are built as actual nodes and inserted, rather than
+	having whatever survives the removal converted back to a curve and its BCPs
+	dragged into place. de Casteljau already gives the exact handles for an
+	extended arc - for a corner that was rounded by trimming, they restore the
+	original curve exactly - but only building those nodes outright keeps them
+	exact. Converting a flattened segment and relocating its handles goes
+	through FontLab's own fix-ups and lands near the computed curve, not on it,
+	which is what made restored arcs look slack.
+
+	Returns True when the contour was rebuilt.
+	'''
+	prev_on = rebuild.in_seg_nodes[0]
+	next_on = rebuild.next_on
+	parent_contour = rebuild.node_first.contour
+
+	# - Build the run that replaces everything between prev_on and next_on:
+	#   the incoming handles, the cusp, then the outgoing handles
+	new_nodes = []
+
+	if isinstance(rebuild.new_in, CubicBezier):
+		new_nodes.append(fl6.flNode(rebuild.new_in.p1.x, rebuild.new_in.p1.y, nodeType=4))
+		new_nodes.append(fl6.flNode(rebuild.new_in.p2.x, rebuild.new_in.p2.y, nodeType=4))
+
+	cusp_node = fl6.flNode(rebuild.corner.x, rebuild.corner.y, nodeType=1)
+	new_nodes.append(cusp_node)
+
+	if isinstance(rebuild.new_out, CubicBezier):
+		new_nodes.append(fl6.flNode(rebuild.new_out.p1.x, rebuild.new_out.p1.y, nodeType=4))
+		new_nodes.append(fl6.flNode(rebuild.new_out.p2.x, rebuild.new_out.p2.y, nodeType=4))
+
+	# - Insert the new run first, then drop the old one between it and next_on.
+	#   Anchoring the removal on a node just inserted is how cornerRound() does
+	#   it; nothing that has to survive is used as a range end
+	parent_contour.insert(prev_on.index + 1, new_nodes)
+	parent_contour.removeNodesBetween(new_nodes[-1], next_on)
+
+	# - A rebuilt corner is a cusp
+	cusp_node.smooth = False
+
+	return True
 
 # - Actions ---------------------------------------------------------------------------
 class TRNodeActionCollector(object):
@@ -644,81 +733,47 @@ class TRNodeActionCollector(object):
 			done_flag = False
 			nodes_reduced = 0
 
-			for layer in wLayers:
-				selection = [node for node in glyph.selectedNodes(layer, extend=eNode) if node.isOn]
+			# - Capture the selection ONCE, as indices, before anything is
+			#   touched. The rebuild replaces nodes outright and the live
+			#   selection goes with them, so re-reading it per master leaves
+			#   every layer after the first with nothing to work on. Indices
+			#   are taken from the active layer and map onto each master
+			selected_indices = glyph.selectedNodeIndices(filterOn=True)
 
-				if len(selection) < 2: continue
+			if len(selected_indices) < 2: continue
+
+			for layer in wLayers:
+				# - Resolve the indices against THIS master, right before it is
+				#   rebuilt, so no node object is held across another master's
+				#   restructuring
+				layer_nodes = glyph.nodes(layer, extend=eNode)
+				selection = [layer_nodes[nid] for nid in selected_indices
+								if nid < len(layer_nodes) and layer_nodes[nid].isOn]
+
+				if len(selection) < 2:
+					warnings.warn('SKIP:\tSelection does not map onto this master! Layer: {}'.format(layer), LayerWarning)
+					continue
 
 				# - One corner per run: a selection spanning two contours has no
-				#   single crossing to solve for. Which of the two outermost
-				#   nodes comes first is worked out from the contour, not from
-				#   the selection order
-				rebuild = get_corner_rebuild(selection[0], selection[-1])
+				#   single crossing to solve for. Where the corner starts and
+				#   ends is worked out from the contour, not from the order the
+				#   selection happens to come back in
+				rebuild = get_corner_rebuild(selection)
 
 				if rebuild is None:
 					warnings.warn('SKIP:\tNo single corner to rebuild from this selection! Layer: {}'.format(layer), LayerWarning)
 					continue
 
-				node_first = rebuild.node_first
-				new_in, new_out, corner = rebuild.new_in, rebuild.new_out, rebuild.corner
-				is_curve_in = len(rebuild.in_seg_nodes) == 4
-				is_curve_out = isinstance(new_out, CubicBezier)
-
-				# - Refuse rather than corrupt: handle coordinates may only ever
-				#   be written into off-curve slots. If anything ever hands back
-				#   an on-curve node where a BCP belongs, writing to it would
-				#   drag a real node across the glyph instead of moving a handle
-				if is_curve_in and (rebuild.in_seg_nodes[1].isOn() or rebuild.in_seg_nodes[2].isOn()):
-					warnings.warn('SKIP:\tIncoming segment is not a clean curve! Layer: {}'.format(layer), LayerWarning)
-					continue
-
 				if cleanup_nodes:
-					parent_contour = node_first.contour
+					if not apply_corner_rebuild(rebuild):
+						continue
 
-					# - Everything on the surviving geometry is written BEFORE
-					#   the contour is restructured. removeNodesBetween()
-					#   invalidates the flNodes captured above, so writing to
-					#   them afterwards lands on whatever now sits at those
-					#   positions - handles elsewhere in the glyph move instead.
-					#   Every other corner tool here works in this order too.
-					if is_curve_in:
-						in_seg_nodes = rebuild.in_seg_nodes
-						in_seg_nodes[1].x, in_seg_nodes[1].y = new_in.p1.x, new_in.p1.y
-						in_seg_nodes[2].x, in_seg_nodes[2].y = new_in.p2.x, new_in.p2.y
-
-					# - A rebuilt corner is a cusp. Clear the flag before the
-					#   node moves, or FL mirrors the handles back
-					node_first.fl.smooth = False
-					node_first.reloc(corner.x, corner.y)
-
-					# - Drop the corner. This flattens the outgoing segment too,
-					#   so it is rebuilt from new_out below
-					parent_contour.removeNodesBetween(node_first.fl, rebuild.next_on)
 					nodes_reduced += rebuild.corner_size
-
-					# - Outgoing side: give the arc its segment back. Every node
-					#   here is walked fresh from node_first - nothing captured
-					#   before the removal is touched again
-					if is_curve_out:
-						line_end = node_first.getNext(False)
-
-						if line_end is not None and line_end.isOn:
-							# - convertToCurve() acts on the segment ENDING at
-							#   the node, so it is called on the far end
-							line_end.fl.convertToCurve()
-
-							bcp_out = node_first.getNext(False)
-							bcp_in = bcp_out.getNext(False) if bcp_out is not None else None
-
-							if bcp_out is not None and bcp_in is not None \
-								and not bcp_out.isOn and not bcp_in.isOn:
-								bcp_out.reloc(new_out.p1.x, new_out.p1.y)
-								bcp_in.reloc(new_out.p2.x, new_out.p2.y)
 
 				else:
 					# - Keep the node count, just pull the selection onto the cusp
 					for node in selection:
-						node.smartReloc(corner.x, corner.y)
+						node.smartReloc(rebuild.corner.x, rebuild.corner.y)
 
 				done_flag = True
 

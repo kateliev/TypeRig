@@ -156,64 +156,106 @@ def _get_crossing(node_list):
 	return crossing
 
 
-def _corner_span(from_node, to_node, limit=1000):
-	'''On-curve steps walking forward from from_node until to_node is reached.
+def _corner_span_nodes(from_node, to_node, limit=1000):
+	'''The on-curve nodes from from_node forward to to_node, both included.
 
 	Returns None when to_node is not reachable that way - a different contour,
 	or the walk coming back around to where it started.
 	'''
-	steps = 0
+	span = [from_node]
 	cursor = from_node.next_on
+	steps = 0
 
 	while cursor is not None and cursor is not to_node:
 		if cursor is from_node or steps > limit:
 			return None
 
-		steps += 1
+		span.append(cursor)
 		cursor = cursor.next_on
+		steps += 1
 
 	if cursor is None:
 		return None
 
-	return steps + 1		# to_node collapses into the cusp as well
+	span.append(cursor)
+	return span
 
 
-def _resolve_corner_ends(node_a, node_b):
-	'''Order two selected on-curve nodes so the corner lies between them.
+def _resolve_corner_ends(on_nodes):
+	'''Pick the two nodes that bracket the corner out of a selection.
 
 	A selection is reported in contour order, which says nothing about where
 	the contour's start point sits: when it falls inside the corner, the node
-	*after* the corner comes first. A corner is a short, local feature, so the
-	shorter of the two ways round is the corner and the longer one is the rest
-	of the glyph. Without this a "corner" could be most of the contour.
+	*after* the corner is reported first and reading the ends in plain order
+	takes the corner the wrong way round - deleting most of the contour.
+
+	The selection itself settles it. The corner is the stretch of contour about
+	to be dropped, so every selected node must lie inside it; the direction
+	where that does not hold is the wrong way round. Judging it by which way is
+	shorter instead would depend on the contour's winding, which is not
+	something the designer should have to think about.
 
 	Returns (first_on, last_on, corner_size) or None.
 	'''
-	forward = _corner_span(node_a, node_b)
-	backward = _corner_span(node_b, node_a)
+	selected = set(id(node) for node in on_nodes)
 
-	if forward is None and backward is None:
+	# - A contiguous run of selected nodes says outright where the corner
+	#   starts and ends: the run's first node is the one whose predecessor was
+	#   not selected, its last the one whose successor was not. This holds for
+	#   a run straddling the contour's start point, where the true ends sit in
+	#   the MIDDLE of the contour-ordered selection rather than at its edges.
+	starts = [node for node in on_nodes
+				if node.prev_on is None or id(node.prev_on) not in selected]
+	ends = [node for node in on_nodes
+				if node.next_on is None or id(node.next_on) not in selected]
+
+	if len(starts) == 1 and len(ends) == 1:
+		candidates = [(starts[0], ends[0])]
+	else:
+		# - Not one run: only the bracketing nodes were picked, or there are
+		#   several corners. Fall back to contour order, both ways round
+		candidates = [(on_nodes[0], on_nodes[-1]), (on_nodes[-1], on_nodes[0])]
+
+	best = None
+
+	for first, last in candidates:
+		if first is last:
+			continue
+
+		span = _corner_span_nodes(first, last)
+
+		if span is None:
+			continue
+
+		if not selected.issubset(set(id(node) for node in span)):
+			continue
+
+		# - Both ways round can hold the whole selection when only the two
+		#   bracketing nodes are picked; that is genuinely ambiguous, so take
+		#   the smaller stretch
+		if best is None or len(span) < len(best[2]):
+			best = (first, last, span)
+
+	if best is None:
 		return None
 
-	if backward is not None and (forward is None or backward < forward):
-		return node_b, node_a, backward
-
-	return node_a, node_b, forward
+	# - first_on survives as the cusp, everything after it in the span goes
+	return best[0], best[1], len(best[2]) - 1
 
 
-def _get_corner_rebuild(node_a, node_b):
-	'''Solve the cusp that rebuilds the corner bracketed by two on-curve nodes.
+def _get_corner_rebuild(on_nodes):
+	'''Solve the cusp that rebuilds the corner held by a selection.
 
-	The corner is whichever of the two ways round between node_a and node_b is
-	shorter; the node before it keeps the incoming side, the node after it the
-	outgoing side. Either side may be a line, a cubic or a quadratic - each is
-	run out along its own geometry until the two cross.
+	The corner is the stretch of contour the selection covers; the node before
+	it keeps the incoming side, the node after it the outgoing side. Either
+	side may be a line, a cubic or a quadratic - each is run out along its own
+	geometry until the two cross.
 
 	Returns (first_on, last_on, new_in, new_out, corner, in_nodes, next_on,
 	corner_size) or None when the two sides never meet, or when a segment is
 	not one this can handle.
 	'''
-	resolved = _resolve_corner_ends(node_a, node_b)
+	resolved = _resolve_corner_ends(on_nodes)
 
 	if resolved is None:
 		return None
@@ -519,7 +561,7 @@ class NodeActions(object):
 		if len(on_nodes) < 2:
 			return False
 
-		rebuild = _get_corner_rebuild(on_nodes[0], on_nodes[-1])
+		rebuild = _get_corner_rebuild(on_nodes)
 
 		if rebuild is None:
 			return False
