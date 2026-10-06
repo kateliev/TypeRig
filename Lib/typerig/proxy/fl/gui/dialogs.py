@@ -945,6 +945,9 @@ class TRMasterMatrixDLG(QtGui.QDialog):
 		          dialog (show(), not exec_()) so the glyph canvas stays live.
 		title, message : str
 		autoload: bool  - overlay font-lib values on top of the defaults on open
+		row_filter : callable(list[float]) -> list[float] | None - applied to every
+		          row read from the font lib or a JSON file, before it is fitted to
+		          the columns. Use it to migrate rows saved in an older layout.
 		size    : tuple - (x, y, w, h)
 
 	After exec_():
@@ -955,7 +958,7 @@ class TRMasterMatrixDLG(QtGui.QDialog):
 
 	def __init__(self, font, lib_key, columns, defaults=None,
 	             lift_actions=None, title=None, message=None, autoload=True,
-	             size=(300, 300, 560, 380), parent=None):
+	             size=(300, 300, 560, 380), parent=None, row_filter=None):
 		super(TRMasterMatrixDLG, self).__init__(parent)
 
 		# - Validate the key contract up front
@@ -969,6 +972,7 @@ class TRMasterMatrixDLG(QtGui.QDialog):
 		self.columns       = columns
 		self.ncols         = len(columns)
 		self.lift_actions  = lift_actions or []
+		self.row_filter    = row_filter
 		self.values        = None
 		self.changed       = False
 		self._initial_data = {}
@@ -1152,13 +1156,19 @@ class TRMasterMatrixDLG(QtGui.QDialog):
 		if not isinstance(data, dict):
 			return {}, False
 
+		return self._clean_rows(data), True
+
+	def _clean_rows(self, data):
+		'''Coerce stored rows to float lists fitted to the columns; skip bad rows.'''
 		clean = {}
 		for k, v in data.items():
 			try:
-				clean[str(k)] = [float(x) for x in v][:self.ncols]
+				row = [float(x) for x in v]
+				if self.row_filter is not None: row = [float(x) for x in self.row_filter(row)]
+				clean[str(k)] = row[:self.ncols]
 			except (TypeError, ValueError):
 				continue
-		return clean, True
+		return clean
 
 	def _font_load(self):
 		data, present = self._read_font_lib()
@@ -1221,13 +1231,7 @@ class TRMasterMatrixDLG(QtGui.QDialog):
 			QtGui.QMessageBox.warning(self, 'Load from JSON failed', 'Unrecognized file shape (expected a dict).')
 			return
 
-		clean = {}
-		for k, v in data.items():
-			try:
-				clean[str(k)] = [float(x) for x in v][:self.ncols]
-			except (TypeError, ValueError):
-				continue
-		merged = dict(self._defaults); merged.update(clean)
+		merged = dict(self._defaults); merged.update(self._clean_rows(data))
 		self._dict_to_table(merged)
 
 	def _reset_defaults(self):

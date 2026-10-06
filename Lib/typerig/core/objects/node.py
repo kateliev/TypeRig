@@ -626,7 +626,7 @@ class Node(Member, XMLSerializable):
 
 		return (curr_node, bcp_out, bcp_in, next_node)
 
-	def corner_round_squircle(self, rounding_size=100, smoothing=0.6, is_radius=True):
+	def corner_round_squircle(self, rounding_size=100, smoothing=0.6, is_radius=True, radius=None):
 		'''Round an angular corner as a Figma-style squircle (superellipse) corner.
 
 		Builds the corner from a central circular arc spanning turn*(1 - smoothing),
@@ -641,6 +641,8 @@ class Node(Member, XMLSerializable):
 				smoothing.
 			smoothing (float): corner smoothing 0.0 - 1.0 (0.0 = plain fillet, 0.6 = iOS).
 			is_radius (bool): interpret rounding_size as reach (True) or edge offset (False).
+			radius (float): explicit circular-arc radius (None = derived from reach and
+				smoothing). Used to build one side of a stroked skeleton corner.
 
 		Returns:
 			tuple(Node, Node, Node, Node): (node_a, arc_start, arc_end, node_b) on-curve
@@ -673,10 +675,11 @@ class Node(Member, XMLSerializable):
 		# - Clamp the reach to the available edge length
 		safe_distance = min(self.distance_to_prev_on, self.distance_to_next_on)
 		if reach > safe_distance - 0.1:
+			if radius is not None: radius *= (safe_distance - 0.1) / reach	# keep the shape proportional
 			reach = safe_distance - 0.1
 
 		# - Corner points: [A, c, c, arc_in, c, c, arc_out, c, c, B]
-		points = squircle_corner(self.point.tuple, prev_unit.tuple, next_unit.tuple, reach, s)
+		points = squircle_corner(self.point.tuple, prev_unit.tuple, next_unit.tuple, reach, s, radius)
 		if points is None:
 			return None
 

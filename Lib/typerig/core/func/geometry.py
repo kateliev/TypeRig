@@ -199,7 +199,7 @@ def line_intersect(a0, a1, b0, b1):
 	return x, y
 	
 # - Corners -----------------------------------------
-def squircle_corner(vertex, prev_unit, next_unit, reach, smoothing):
+def squircle_corner(vertex, prev_unit, next_unit, reach, smoothing, radius=None):
 	'''Figma-style squircle (superellipse) corner geometry.
 
 	A central circular arc spanning turn*(1 - smoothing), flanked by two symmetric
@@ -211,7 +211,12 @@ def squircle_corner(vertex, prev_unit, next_unit, reach, smoothing):
 		prev_unit, next_unit -> tuple(x, y): unit vectors from the vertex along the
 			incoming (previous) and outgoing (next) edges;
 		reach -> float: distance from the vertex to where each straight edge ends;
-		smoothing -> float: 0.0 (plain circular fillet) - 1.0; 0.6 = iOS.
+		smoothing -> float: 0.0 (plain circular fillet) - 1.0; 0.6 = iOS. Sets the
+			arc sweep: turn*(1 - smoothing);
+		radius -> float or None: circular-arc radius. None derives it from reach:
+			reach = (1 + smoothing) * radius / tan(half_angle). Pass it explicitly to
+			build an offset of another squircle corner (e.g. the outer/inner side of
+			a stroke): same arc centre and sweep, radius +/- half the stroke.
 
 	Returns:
 		list(tuple(x, y)) -> [A, c, c, arc_in, c, c, arc_out, c, c, B], A on the
@@ -231,7 +236,12 @@ def squircle_corner(vertex, prev_unit, next_unit, reach, smoothing):
 	s = max(0., min(1., float(smoothing)))
 
 	# - Circular-arc radius from reach and smoothing: reach = (1 + s) * t0 ; t0 = r / tan(half_angle)
-	radius = reach / (1. + s) * math.tan(half_angle)
+	if radius is None:
+		radius = reach / (1. + s) * math.tan(half_angle)
+
+	# - The arc must start before the straight edge ends (else the ease curves fold back)
+	elif radius / math.tan(half_angle) > reach:
+		return None
 
 	# - Arc centre on the bisector, and the direction from it back toward the vertex
 	bx, by = ix + ox, iy + oy

@@ -627,7 +627,7 @@ class eNode(pNode):
 
 		return curve_parts
 
-	def cornerRoundSquircle(self, size=100., smoothing=0.6, isRadius=True, insert=True):
+	def cornerRoundSquircle(self, size=100., smoothing=0.6, isRadius=True, insert=True, radius=None):
 		'''Round an angular corner as a Figma-style squircle (superellipse) corner.
 
 		Builds the corner from a central circular arc of radius R spanning an angle
@@ -644,6 +644,8 @@ class eNode(pNode):
 							   (0.0 = plain circular fillet, 0.6 = iOS default).
 			isRadius (bool): Interpret size as arc radius (True) or edge offset (False).
 			insert (bool): Splice the new nodes into the parent contour.
+			radius (float): Explicit circular-arc radius (None = derived from size and
+						   smoothing). Used to build one side of a stroked skeleton corner.
 
 		Returns:
 			list(flNode): the created node chain, or None if the corner was skipped.
@@ -687,10 +689,11 @@ class eNode(pNode):
 		# - Clamp the reach to the available edge length
 		safe_distance = min(self.distanceTo(prevNode), self.distanceTo(nextNode))
 		if p_edge > safe_distance - 0.1:
+			if radius is not None: radius *= (safe_distance - 0.1) / p_edge	# keep the shape proportional
 			p_edge = safe_distance - 0.1
 
 		# - Corner points: [A, c, c, Pin, c, c, Pout, c, c, B]
-		points = squircle_corner(V, (ix, iy), (ox, oy), p_edge, s)
+		points = squircle_corner(V, (ix, iy), (ox, oy), p_edge, s, radius)
 		if points is None:
 			return None
 
