@@ -1141,8 +1141,8 @@ class TRMasterMatrixDLG(QtGui.QDialog):
 		except Exception:
 			return {}, False
 
-		# packageLib does not round-trip nested containers; matrix data is stored
-		# as a JSON string. Accept a plain dict too for backward compatibility.
+		# Matrix data is stored natively ({master: [values]}, like Delta Machine).
+		# Legacy JSON-string payloads are still accepted and get rewritten on save.
 		if isinstance(data, basestring):
 			try:
 				data = json.loads(data)
@@ -1171,9 +1171,8 @@ class TRMasterMatrixDLG(QtGui.QDialog):
 	def _font_save(self):
 		data = self._table_to_dict()
 		payload = {str(k): [float(x) for x in v] for k, v in data.items()}
-		# Store as a JSON string - packageLib does not round-trip nested containers.
 		pkg_lib = self.tr_font.fl.packageLib
-		pkg_lib[self.lib_key] = json.dumps(payload)
+		pkg_lib[self.lib_key] = payload
 		self.tr_font.fl.packageLib = pkg_lib
 		print('Save to Font:\t%d master row(s) saved under key:\n%s' % (len(data), self.lib_key))
 

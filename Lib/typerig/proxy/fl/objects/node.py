@@ -16,7 +16,7 @@ import fontlab as fl6
 import PythonQt as pqt
 
 from typerig.core.func.math import randomize
-from typerig.core.func.geometry import ccw
+from typerig.core.func.geometry import ccw, squircle_corner
 from typerig.core.func.utils import get_cattr
 from typerig.core.objects.utils import Bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
@@ -666,7 +666,6 @@ class eNode(pNode):
 		dot = max(-1., min(1., ix * ox + iy * oy))
 		full_angle = math.acos(dot)						# interior angle at the vertex
 		half_angle = full_angle / 2.
-		turn_angle = math.pi - full_angle					# exterior turn of the outline
 
 		# - Safety: skip (near) straight or (near) folded corners
 		if half_angle < 1e-4 or abs(math.pi - full_angle) < 1e-4:
@@ -690,94 +689,18 @@ class eNode(pNode):
 		if p_edge > safe_distance - 0.1:
 			p_edge = safe_distance - 0.1
 
-		# - Derive the circular-arc radius from the reach and smoothing
-		#   reach = (1 + smoothing) * t0 ;  t0 = R / tan(half_angle)
-		t0 = p_edge / (1. + s)
-		radius = t0 * math.tan(half_angle)
-
-		if radius <= 0.:
+		# - Corner points: [A, c, c, Pin, c, c, Pout, c, c, B]
+		points = squircle_corner(V, (ix, iy), (ox, oy), p_edge, s)
+		if points is None:
 			return None
-
-		# - Arc centre O on the corner bisector
-		bx, by = ix + ox, iy + oy
-		blen = math.hypot(bx, by)
-		if blen < 1e-9:
-			return None
-		bx, by = bx / blen, by / blen
-		O = (V[0] + bx * (radius / math.sin(half_angle)),
-			 V[1] + by * (radius / math.sin(half_angle)))
-
-		# - Bisector direction from O back toward the vertex
-		dov_x, dov_y = V[0] - O[0], V[1] - O[1]
-		dov_len = math.hypot(dov_x, dov_y)
-		dov_x, dov_y = dov_x / dov_len, dov_y / dov_len
-
-		arc_measure = turn_angle * (1. - s)					# swept angle of the true arc
-		half_arc = arc_measure / 2.
-
-		def _rot(vx, vy, ang):
-			ca, sa = math.cos(ang), math.sin(ang)
-			return (vx * ca - vy * sa, vx * sa + vy * ca)
-
-		dir_a = _rot(dov_x, dov_y, +half_arc)
-		dir_b = _rot(dov_x, dov_y, -half_arc)
-
-		# - dir_a must point to the arc end on the incoming (previous) edge side
-		if (dir_a[0] * ix + dir_a[1] * iy) < (dir_b[0] * ix + dir_b[1] * iy):
-			dir_a, dir_b = dir_b, dir_a
-
-		p_in = (O[0] + dir_a[0] * radius, O[1] + dir_a[1] * radius)		# arc start (incoming side)
-		p_out = (O[0] + dir_b[0] * radius, O[1] + dir_b[1] * radius)		# arc end (outgoing side)
-
-		# - Edge tangent points
-		node_a = (V[0] + ix * p_edge, V[1] + iy * p_edge)				# on incoming edge
-		node_b = (V[0] + ox * p_edge, V[1] + oy * p_edge)				# on outgoing edge
-
-		# - Line/line intersection (point + direction), None if parallel
-		def _isect(p, d, q, e):
-			denom = d[0] * e[1] - d[1] * e[0]
-			if abs(denom) < 1e-9:
-				return None
-			t = ((q[0] - p[0]) * e[1] - (q[1] - p[1]) * e[0]) / denom
-			return (p[0] + t * d[0], p[1] + t * d[1])
-
-		# - Perpendiculars to the arc radii give the arc tangent directions
-		tan_a = (-dir_a[1], dir_a[0])
-		tan_b = (-dir_b[1], dir_b[0])
-
-		# - Ease-in second control: arc-tangent line at p_in meets the incoming edge line
-		p2_in = _isect(node_a, (ix, iy), p_in, tan_a)
-		if p2_in is None: p2_in = p_in
-		p1_in = (node_a[0] + (2. / 3.) * (p2_in[0] - node_a[0]),
-				 node_a[1] + (2. / 3.) * (p2_in[1] - node_a[1]))
-
-		# - Ease-out first control: arc-tangent line at p_out meets the outgoing edge line
-		p2_out = _isect(node_b, (ox, oy), p_out, tan_b)
-		if p2_out is None: p2_out = p_out
-		p1_out = (node_b[0] + (2. / 3.) * (p2_out[0] - node_b[0]),
-				  node_b[1] + (2. / 3.) * (p2_out[1] - node_b[1]))
-
-		# - Arc handles (single cubic approximation of the circular arc)
-		k = (4. / 3.) * math.tan(half_arc / 2.) * radius if half_arc > 1e-9 else 0.
-
-		fwd_a = tan_a if (tan_a[0] * (p_out[0] - p_in[0]) + tan_a[1] * (p_out[1] - p_in[1])) > 0 else (-tan_a[0], -tan_a[1])
-		fwd_b = tan_b if (tan_b[0] * (p_in[0] - p_out[0]) + tan_b[1] * (p_in[1] - p_out[1])) > 0 else (-tan_b[0], -tan_b[1])
-
-		arc_h0 = (p_in[0] + fwd_a[0] * k, p_in[1] + fwd_a[1] * k)
-		arc_h1 = (p_out[0] + fwd_b[0] * k, p_out[1] + fwd_b[1] * k)
 
 		# - Assemble node chain: prevNode | A (o o) Pin (o o) Pout (o o) B | nextNode
 		def _on(pt): return fl6.flNode(pt[0], pt[1], nodeType=1)
 		def _off(pt): return fl6.flNode(pt[0], pt[1], nodeType=4)
 
-		new_curve = [
-			_on((float(prevNode.x), float(prevNode.y))),					# prevNode duplicate
-			_on(node_a), _off(p1_in), _off(p2_in),
-			_on(p_in), _off(arc_h0), _off(arc_h1),
-			_on(p_out), _off(p2_out), _off(p1_out),
-			_on(node_b),
-			_on((float(nextNode.x), float(nextNode.y))),					# nextNode duplicate
-		]
+		new_curve = [_on((float(prevNode.x), float(prevNode.y)))]		# prevNode duplicate
+		new_curve += [(_off if i % 3 else _on)(pt) for i, pt in enumerate(points)]
+		new_curve += [_on((float(nextNode.x), float(nextNode.y)))]		# nextNode duplicate
 
 		# - Smooth flags on the four squircle on-curve nodes
 		for on_index in (1, 4, 7, 10):

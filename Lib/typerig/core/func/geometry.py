@@ -12,7 +12,7 @@
 import math
 
 # - Init --------------------------------
-__version__ = '0.27.0'
+__version__ = '0.28.0'
 
 # - Functions ---------------------------
 # -- Point ------------------------------
@@ -198,6 +198,93 @@ def line_intersect(a0, a1, b0, b1):
 
 	return x, y
 	
+# - Corners -----------------------------------------
+def squircle_corner(vertex, prev_unit, next_unit, reach, smoothing):
+	'''Figma-style squircle (superellipse) corner geometry.
+
+	A central circular arc spanning turn*(1 - smoothing), flanked by two symmetric
+	'ease' cubic Beziers that blend the arc into the straight edges: three cubic
+	segments (ease-in, arc, ease-out), 4 on-curve and 6 off-curve points.
+
+	Args:
+		vertex -> tuple(x, y): the sharp corner vertex;
+		prev_unit, next_unit -> tuple(x, y): unit vectors from the vertex along the
+			incoming (previous) and outgoing (next) edges;
+		reach -> float: distance from the vertex to where each straight edge ends;
+		smoothing -> float: 0.0 (plain circular fillet) - 1.0; 0.6 = iOS.
+
+	Returns:
+		list(tuple(x, y)) -> [A, c, c, arc_in, c, c, arc_out, c, c, B], A on the
+		incoming edge, B on the outgoing edge; or None for a degenerate corner.
+	'''
+	vx, vy = float(vertex[0]), float(vertex[1])
+	ix, iy = float(prev_unit[0]), float(prev_unit[1])
+	ox, oy = float(next_unit[0]), float(next_unit[1])
+
+	full_angle = math.acos(max(-1., min(1., ix * ox + iy * oy)))	# interior angle at the vertex
+	half_angle = full_angle / 2.
+	turn_angle = math.pi - full_angle								# exterior turn of the outline
+
+	if half_angle < 1e-6 or turn_angle < 1e-6 or reach <= 0.:
+		return None
+
+	s = max(0., min(1., float(smoothing)))
+
+	# - Circular-arc radius from reach and smoothing: reach = (1 + s) * t0 ; t0 = r / tan(half_angle)
+	radius = reach / (1. + s) * math.tan(half_angle)
+
+	# - Arc centre on the bisector, and the direction from it back toward the vertex
+	bx, by = ix + ox, iy + oy
+	blen = math.hypot(bx, by)
+	if blen < 1e-9 or radius <= 0.:
+		return None
+
+	offset = radius / math.sin(half_angle)
+	cx, cy = vx + bx / blen * offset, vy + by / blen * offset
+	dx, dy = (vx - cx) / offset, (vy - cy) / offset
+
+	half_arc = turn_angle * (1. - s) / 2.
+
+	def _rotate(x, y, a):
+		ca, sa = math.cos(a), math.sin(a)
+		return (x * ca - y * sa, x * sa + y * ca)
+
+	def _intersect(p, d, q, e):
+		# - Lines (p + t*d) and (q + u*e); None if parallel
+		denom = d[0] * e[1] - d[1] * e[0]
+		if abs(denom) < 1e-9: return None
+		t = ((q[0] - p[0]) * e[1] - (q[1] - p[1]) * e[0]) / denom
+		return (p[0] + t * d[0], p[1] + t * d[1])
+
+	dir_a, dir_b = _rotate(dx, dy, half_arc), _rotate(dx, dy, -half_arc)
+
+	# - dir_a must point to the arc end on the incoming (prev) edge side
+	if (dir_a[0] * ix + dir_a[1] * iy) < (dir_b[0] * ix + dir_b[1] * iy):
+		dir_a, dir_b = dir_b, dir_a
+
+	arc_in = (cx + dir_a[0] * radius, cy + dir_a[1] * radius)
+	arc_out = (cx + dir_b[0] * radius, cy + dir_b[1] * radius)
+	point_a = (vx + ix * reach, vy + iy * reach)
+	point_b = (vx + ox * reach, vy + oy * reach)
+
+	# - Arc tangent directions (perpendicular to the radii)
+	tan_a, tan_b = (-dir_a[1], dir_a[0]), (-dir_b[1], dir_b[0])
+
+	# - Ease control points: arc-tangent line meets the straight edge line
+	p2_in = _intersect(point_a, (ix, iy), arc_in, tan_a) or arc_in
+	p2_out = _intersect(point_b, (ox, oy), arc_out, tan_b) or arc_out
+	p1_in = (point_a[0] + (p2_in[0] - point_a[0]) * 2. / 3., point_a[1] + (p2_in[1] - point_a[1]) * 2. / 3.)
+	p1_out = (point_b[0] + (p2_out[0] - point_b[0]) * 2. / 3., point_b[1] + (p2_out[1] - point_b[1]) * 2. / 3.)
+
+	# - Arc handles (single cubic approximation of the circular arc)
+	k = (4. / 3.) * math.tan(half_arc / 2.) * radius if half_arc > 1e-9 else 0.
+	fwd_a = tan_a if (tan_a[0] * (arc_out[0] - arc_in[0]) + tan_a[1] * (arc_out[1] - arc_in[1])) > 0 else (-tan_a[0], -tan_a[1])
+	fwd_b = tan_b if (tan_b[0] * (arc_in[0] - arc_out[0]) + tan_b[1] * (arc_in[1] - arc_out[1])) > 0 else (-tan_b[0], -tan_b[1])
+	arc_h0 = (arc_in[0] + fwd_a[0] * k, arc_in[1] + fwd_a[1] * k)
+	arc_h1 = (arc_out[0] + fwd_b[0] * k, arc_out[1] + fwd_b[1] * k)
+
+	return [point_a, p1_in, p2_in, arc_in, arc_h0, arc_h1, arc_out, p2_out, p1_out, point_b]
+
 # - Angle/Connection --------------------------------
 def checkSmooth(firstAngle, lastAngle, error=4):
 	'''Check if connection is smooth within error margin.
