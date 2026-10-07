@@ -131,15 +131,15 @@ class pContour(object):
 		self.fl.applyTransform()
 
 	def scale(self, sx, sy):
-		self.fl.transform = self.fl.transform.scale(dx, dy)
+		self.fl.transform = self.fl.transform.scale(sx, sy)
 		self.fl.applyTransform()
 
 	def slant(self, deg):
-		self.fl.transform = self.fl.transform.shear(math.tan(math.radians((deg)), 0))
+		self.fl.transform = self.fl.transform.shear(math.tan(math.radians(deg)), 0)
 		self.fl.applyTransform()
-		
+
 	def rotate(self, deg):
-		self.fl.transform = self.fl.transform.rotate(math.tan(math.radians((deg))))
+		self.fl.transform = self.fl.transform.rotate(deg)
 		self.fl.applyTransform()
 
 	def pointInPolygon(self, point, use_fg=False, winding=False):
