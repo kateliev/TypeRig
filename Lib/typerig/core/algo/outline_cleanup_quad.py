@@ -18,9 +18,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from fontTools.cu2qu import curves_to_quadratic
-from fontTools.cu2qu.errors import ApproxNotFoundError
-
 from typerig.core.algo.outline_cleanup_geom import Seg
 from typerig.core.algo.outline_cleanup_convert import Knot, MContour
 from typerig.core.algo.outline_cleanup_masters import every
@@ -32,6 +29,14 @@ MAX_RETRIES = 4			# cu2qu tolerance doublings before giving up
 
 
 def _splines(curves, tol):
+	# fontTools is imported only when quadratic output is asked for,
+	# so the cubic pipeline runs without it (e.g. inside FontLab)
+	try:
+		from fontTools.cu2qu import curves_to_quadratic
+		from fontTools.cu2qu.errors import ApproxNotFoundError
+	except ImportError:
+		raise ImportError('Quadratic output needs fontTools (pip install fonttools); use output="cubic"')
+
 	for _ in range(MAX_RETRIES + 1):
 		try:
 			return curves_to_quadratic(curves, [tol] * len(curves))

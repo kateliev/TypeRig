@@ -9,7 +9,10 @@
 #
 #   clean(masters, opts)          masters[m][c]: TypeRig Contour
 #   clean_single(contours, opts)
+#   locked_nodes(masters, opts)   node indices Stage B would lock
 #
+# Output is cubic by default; 'quad' (or 'auto' on TrueType input)
+# needs fontTools cu2qu, imported lazily.
 # Caller locks: node.lib['locked'] = True on an on-curve node.
 # Open and hobby contours pass through unchanged.
 #
@@ -43,7 +46,7 @@ from typerig.core.algo.outline_cleanup_rounding import round_loop, ROUNDING_SLAC
 from typerig.core.algo.outline_cleanup_quad import to_quadratic, remove_implied
 
 __version__ = '1.0.0'
-__all__ = ['clean', 'clean_single', 'CleanOptions', 'IncompatibleMasters', 'contour_deviation']
+__all__ = ['clean', 'clean_single', 'locked_nodes', 'CleanOptions', 'IncompatibleMasters', 'contour_deviation']
 
 log = logging.getLogger(__name__)
 
@@ -59,10 +62,11 @@ class CleanOptions:
 	quad_tol: float = 1.			# max error of cubic to quadratic conversion
 	keep_extrema: bool = True
 	keep_inflections: bool = False
-	output: Literal['cubic', 'quad', 'auto'] = 'auto'
+	output: Literal['cubic', 'quad', 'auto'] = 'cubic'	# 'quad' / 'auto' need fontTools
 	round_ints: bool = True
 	min_contour_area: float = 4.	# square units; smaller contours are dropped
 	italic_angle: float = 0.		# deg; H/V and extremum tests run upright
+	simplify: bool = True			# False: degeneracy passes only (no node fitting)
 
 	def __post_init__(self):
 		if self.output not in ('cubic', 'quad', 'auto'):
@@ -144,7 +148,7 @@ def clean(masters: list[list], opts: CleanOptions | None = None) -> list[list]:
 	simplified = []
 	for mc in work:
 		mc, spans = apply_locks(mc, opts)
-		simplified.append(simplify(mc, spans, opts))
+		simplified.append(simplify(mc, spans, opts) if opts.simplify else mc)
 	work = simplified
 	assert_compatible_segments(work, 'simplify')
 
@@ -181,3 +185,23 @@ def clean(masters: list[list], opts: CleanOptions | None = None) -> list[list]:
 
 def clean_single(contours: list, opts: CleanOptions | None = None) -> list:
 	return clean([contours], opts)[0]
+
+
+def locked_nodes(masters: list[list], opts: CleanOptions | None = None) -> list[list[int]]:
+	'''Per input contour, the indices of the on-curve nodes Stage B locks
+	(after Stage A). Dropped, open and hobby contours give [].'''
+	opts = opts or CleanOptions()
+	if not masters:
+		return []
+
+	assert_compatible(masters, 'input')
+	n_m = len(masters)
+	work = [to_mcontour([masters[m][c] for m in range(n_m)], c) for c in range(len(masters[0])) if is_cleanable(masters[0][c])]
+	work, _ = stage_a(work, opts)
+
+	result = [[] for _ in masters[0]]
+	for mc in work:
+		mc, _ = apply_locks(mc, opts)
+		result[mc.index] = [k.src for k in mc.knots if k.fixed and k.src >= 0]
+
+	return result
