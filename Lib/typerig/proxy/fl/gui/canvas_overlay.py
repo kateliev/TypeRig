@@ -729,7 +729,6 @@ class CanvasOverlay(QtGui.QWidget):
 			self.setParent(vp)
 			self._input.setParent(vp)
 			self.viewport = vp
-			self._install_filter(vp)
 
 			try:
 				dpr = float(qv(vp, 'devicePixelRatioF'))
@@ -741,6 +740,7 @@ class CanvasOverlay(QtGui.QWidget):
 			self._sig_target = self._sig_view = self._sig_geom = self._mask_sig = None
 
 		self.canvas = cv
+		self._install_filter(vp)		# no-op if present; needed after detach() on the same viewport
 		self._sync_geometry()
 		self.show()
 		self._input.show()

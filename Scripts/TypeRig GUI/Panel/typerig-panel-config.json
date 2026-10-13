@@ -48,6 +48,10 @@
         true
     ],
     [
+        "MagicScale",
+        true
+    ],
+    [
         "Metrics",
         false
     ],
