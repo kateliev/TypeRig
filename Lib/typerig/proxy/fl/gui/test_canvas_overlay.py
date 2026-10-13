@@ -42,17 +42,24 @@ def _skip(reason):
 		raise SkipTest(reason)
 	pytest.skip(reason)
 
+# Names FontLab 8's PythonQt build does not expose (QObject verified missing;
+# the others unverified, so the overlay must not depend on them either)
+PYTHONQT_MISSING = ('QObject', 'QEvent', 'QFontMetrics', 'QFontMetricsF')
+
 def _install_fakes(QtCore, QtGui, QtWidgets):
-	'''Fake PythonQt (QtGui = QtGui + QtWidgets) and fontlab modules.'''
+	'''Fake PythonQt (QtGui = QtGui + QtWidgets, minus PYTHONQT_MISSING) and fontlab modules.'''
+	qtcore = types.ModuleType('PythonQt.QtCore')
 	qtgui = types.ModuleType('PythonQt.QtGui')
-	for mod in (QtGui, QtWidgets):
-		for k in dir(mod):
-			if not k.startswith('_'): setattr(qtgui, k, getattr(mod, k))
+	for target, mods in ((qtcore, (QtCore,)), (qtgui, (QtGui, QtWidgets))):
+		for mod in mods:
+			for k in dir(mod):
+				if not k.startswith('_') and k not in PYTHONQT_MISSING:
+					setattr(target, k, getattr(mod, k))
 	pythonqt = types.ModuleType('PythonQt')
-	pythonqt.QtCore = QtCore
+	pythonqt.QtCore = qtcore
 	pythonqt.QtGui = qtgui
 	sys.modules['PythonQt'] = pythonqt
-	sys.modules['PythonQt.QtCore'] = QtCore
+	sys.modules['PythonQt.QtCore'] = qtcore
 	sys.modules['PythonQt.QtGui'] = qtgui
 
 	ws = FakeWorkspace()
@@ -639,7 +646,7 @@ def test_toggle_50_times_leaves_nothing():
 		assert s.co._count_overlay_widgets() == 0 and cls.NAME not in s.co._REGISTRY
 		for _ in range(51): cls.toggle()
 		s.flush_deletes()
-		assert s.co._count_overlay_widgets() == 2 and cls.NAME in s.co._REGISTRY
+		assert s.co._count_overlay_widgets() == s.co.WIDGETS_PER_OVERLAY and cls.NAME in s.co._REGISTRY
 		s.ov = cls.instance()
 		cls.stop(); s.flush_deletes()
 		assert s.co._count_overlay_widgets() == 0
@@ -653,6 +660,52 @@ def test_detach_and_reattach():
 		assert s.ov.attach()
 		assert s.ov.isVisible() and s.ov._timer.isActive() and s.ov._filtered == [s.viewport]
 
+# - Extension hooks ----------------------
+def test_target_attribute():
+	with session(_recorder_class()) as s:
+		assert s.ov.target == ('H', 'Regular')
+		s.canvas.gi.isActive = False
+		s.tick()
+		assert s.ov.target is None
+
+def test_accept_geometry_hides_own_edits():
+	with session(_recorder_class()) as s:
+		s.canvas.gi.glyph.activeLayer.contours[0].rect = (50, 0, 95, 700)		# "tool" edit
+		s.ov.fl_layer = s.canvas.gi.glyph.activeLayer
+		s.ov.accept_geometry()
+		s.tick()
+		assert 'geometry' not in s.ov.names()
+		s.canvas.gi.glyph.activeLayer.contours[1].rect = (390, 0, 90, 700)		# outside edit
+		s.tick()
+		assert s.ov.names().count('geometry') == 1
+
+def test_on_tick_and_paint_handle_hooks():
+	base = _recorder_class()
+
+	class Custom(base):
+		NAME = 'test_custom'
+		def __init__(self):
+			base.__init__(self)
+			self.ticks = 0
+			self.custom_painted = []
+			self.handles[1].role = 'stem'				# colour role from self.colors
+		def on_tick(self): self.ticks += 1
+		def paint_handle(self, p, h, x, y, hot):
+			if h.key == 'corner':
+				self.custom_painted.append(h.key)
+				return True
+			if h.key == 'right': raise RuntimeError('handle boom')
+			return False
+
+	with session(Custom) as s:
+		s.tick(3)
+		assert s.ov.ticks >= 3
+		assert s.ov._handle_colors(s.ov.handles[1]).name() == s.ov.colors['stem'].lighter(100).name()
+		s.ov.grab()
+		assert s.ov.custom_painted and set(s.ov.custom_painted) == {'corner'}
+		assert sum('handle boom' in e for e in s.errors) == 1		# failed custom paint falls back, logged once
+		s.errors[:] = []
+
 # - Paths --------------------------------
 def _core_test_layer():
 	from typerig.core.objects.node import Node
@@ -661,6 +714,21 @@ def _core_test_layer():
 	from typerig.core.objects.layer import Layer
 	return Layer([Shape([Contour([Node(0, 0), Node(0, 100), Node(50, 150, type='curve'),
 								  Node(100, 150, type='curve'), Node(100, 0)], closed=True)])])
+
+def test_import_without_pythonqt_extras():
+	co = _env()['co']
+	pq = sys.modules['PythonQt']
+	for name in PYTHONQT_MISSING:
+		assert not hasattr(pq.QtCore, name) and not hasattr(pq.QtGui, name), name
+	assert co.EV_KEY_PRESS == _QC.QEvent.KeyPress and co.EV_SHORTCUT_OVERRIDE == _QC.QEvent.ShortcutOverride
+	assert co.EV_HIDE == _QC.QEvent.Hide and co.EV_WHEEL == _QC.QEvent.Wheel and co.EV_RESIZE == _QC.QEvent.Resize
+
+def test_label_size_fallback():
+	co = _env()['co']
+	class Broken(object):
+		def boundingRect(self, *a): raise TypeError('no overload')
+	w, h = co._text_size(Broken(), 'abc\nabcdef', 9.)
+	assert w > 0 and h > 0 and h > 9.
 
 def test_core_layer_to_path():
 	co = _env()['co']

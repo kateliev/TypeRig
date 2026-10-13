@@ -61,6 +61,16 @@ if _REGISTRY is None:
 	sys._typerig_canvas_overlays = _REGISTRY
 
 OBJECT_NAME_PREFIX = 'tr_overlay_'
+WIDGETS_PER_OVERLAY = 3		# paint layer, input layer, event filter
+
+# - Event types. QEvent may be missing from a PythonQt build; the numbers
+# are Qt's fixed QEvent::Type values.
+_QEvent = getattr(QtCore, 'QEvent', None)
+EV_RESIZE = getattr(_QEvent, 'Resize', 14)
+EV_HIDE = getattr(_QEvent, 'Hide', 18)
+EV_WHEEL = getattr(_QEvent, 'Wheel', 31)
+EV_KEY_PRESS = getattr(_QEvent, 'KeyPress', 6)
+EV_SHORTCUT_OVERRIDE = getattr(_QEvent, 'ShortcutOverride', 51)
 
 # - Accent colors (fixed; theme-independent)
 ACCENT_ACTIVE = QtGui.QColor(230, 30, 160)		# magenta
@@ -137,7 +147,7 @@ def find_active_viewport(ws=None):
 	ws = _workspace(ws)
 
 	for w in QtGui.QApplication.allWidgets():
-		if isinstance(w, (CanvasOverlay, _InputLayer)):
+		if isinstance(w, (CanvasOverlay, _InputLayer, _EventFilter)):
 			continue
 		try:
 			c = ws.getCanvasForViewport(w)
@@ -236,11 +246,27 @@ def fl_layer_to_path(fl_layer):
 
 # - Theme ------------------------------
 def theme_colors():
-	'''Theme-aware colors from the application palette plus the fixed accents.'''
-	pal = qv(QtGui.QApplication, 'palette')
-	window = pal.color(QtGui.QPalette.Window)
-	text = pal.color(QtGui.QPalette.WindowText)
-	dark = window.lightness() < 128
+	'''Theme-aware colors plus the fixed accents. Dark mode comes from
+	FontLab's preference; the application palette is only a fallback.'''
+	dark = None
+	try:
+		dark = bool(fl6.flPreferences().isDark)
+	except Exception:
+		pass
+
+	window = text = None
+	try:
+		pal = qv(QtGui.QApplication, 'palette')
+		window = QtGui.QColor(pal.color(QtGui.QPalette.Window))
+		text = QtGui.QColor(pal.color(QtGui.QPalette.WindowText))
+		if dark is None: dark = window.lightness() < 128
+	except Exception:
+		pass
+
+	if dark is None: dark = False
+	if window is None or (window.lightness() < 128) != dark:
+		window = QtGui.QColor(45, 45, 48) if dark else QtGui.QColor(246, 246, 246)
+		text = QtGui.QColor(235, 235, 235) if dark else QtGui.QColor(20, 20, 20)
 
 	label_bg = QtGui.QColor(window)
 	label_bg.setAlpha(215)
@@ -273,6 +299,25 @@ def solid_brush(color, alpha=None):
 	c = QtGui.QColor(color)
 	if alpha is not None: c.setAlpha(alpha)
 	return QtGui.QBrush(c)
+
+def _text_size(painter, text, point_size):
+	'''(width, height) of text in the painter's current font. Uses
+	QPainter.boundingRect (font metrics classes are quirky under PythonQt);
+	falls back to a character-count estimate.'''
+	try:
+		flags = QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop
+		try:
+			flags = int(flags)
+		except TypeError:
+			pass
+		r = painter.boundingRect(QtCore.QRectF(0., 0., 4000., 4000.), flags, text)
+		if r.width() > 0 and r.height() > 0:
+			return float(r.width()), float(r.height())
+	except Exception:
+		pass
+	lines = text.split('\n')
+	px = point_size * 96. / 72.
+	return max(len(line) for line in lines) * px * .6, len(lines) * px * 1.35
 
 # - Mapping -----------------------------
 class ViewMapping(object):
@@ -534,11 +579,15 @@ class _InputLayer(QtGui.QWidget):
 	def mouseDoubleClickEvent(self, e): self._owner._dispatch('double', e)
 	def leaveEvent(self, e): self._owner._dispatch('leave', e)
 
-class _EventFilter(QtCore.QObject):
-	'''Event filter for the viewport (and the focused widget while keys are captured).'''
+class _EventFilter(QtGui.QWidget):
+	'''Event filter for the viewport (and the focused widget while keys are captured).
+	A never-shown QWidget rather than a QObject: FontLab's PythonQt build does not
+	expose QtCore.QObject, and a QWidget subclass can override eventFilter too.'''
 	def __init__(self, owner):
-		QtCore.QObject.__init__(self)
+		QtGui.QWidget.__init__(self)
 		self._owner = owner
+		self.setObjectName(OBJECT_NAME_PREFIX + 'filter')
+		self.setAttribute(QtCore.Qt.WA_DontShowOnScreen, True)
 
 	def eventFilter(self, obj, ev):
 		try:
@@ -566,10 +615,16 @@ class CanvasOverlay(QtGui.QWidget):
 		on_nudge(handle, dx, dy, big)    arrow keys (font units; big = Shift)
 		on_key_press(key, modifiers)     other key presses on the canvas; return True to consume
 		wants_key(key, modifiers)        return True to claim a key from FontLab shortcuts
+		on_tick()                        every tick while attached (flush deferred work here)
+		paint_handle(p, handle, x, y, hot)  custom handle drawing; return True if drawn
 
 	State for subclasses:
 		self.handles (list[Handle]), self.canvas, self.viewport, self.glyph_info,
-		self.fl_glyph, self.fl_layer, self.mapping, self.drag, self.colors
+		self.fl_glyph, self.fl_layer, self.target ((glyph name, layer name) or None),
+		self.mapping, self.drag, self.colors
+
+	Handle.role picks the fill: 'primary', 'secondary', 'muted', or any key of
+	self.colors ('stem', 'frame', 'error', ...).
 	'''
 	NAME = 'overlay'
 	TICK_MS = 33
@@ -607,6 +662,7 @@ class CanvasOverlay(QtGui.QWidget):
 		self.glyph_info = None
 		self.fl_glyph = None
 		self.fl_layer = None
+		self.target = None
 		self.mapping = None
 		self.colors = theme_colors()
 		self.dpr_divisor = 1.
@@ -716,6 +772,13 @@ class CanvasOverlay(QtGui.QWidget):
 		except Exception:
 			return False
 
+	def accept_geometry(self):
+		'''Mark the active layer's current outline as known. Call right after the
+		tool itself edits the glyph, so on_geometry_changed fires only for edits
+		made outside the tool.'''
+		if self.fl_layer is not None:
+			self._sig_geom = fl_layer_signature(self.fl_layer)
+
 	def request_repaint(self):
 		'''Ask for a repaint (and handle/mask relayout) on the next tick.'''
 		self._repaint_requested = True
@@ -760,7 +823,7 @@ class CanvasOverlay(QtGui.QWidget):
 		self._input.setParent(None)
 		self.viewport = None
 		self.canvas = None
-		self.glyph_info = self.fl_glyph = self.fl_layer = self.mapping = None
+		self.glyph_info = self.fl_glyph = self.fl_layer = self.mapping = self.target = None
 		self._refind.reset()
 
 	def _sync_geometry(self):
@@ -830,6 +893,7 @@ class CanvasOverlay(QtGui.QWidget):
 
 		self.fl_layer = layer
 		self.mapping = mapping
+		self.target = (glyph_name, layer_name) if glyph_name is not None else None
 
 		# - Signatures
 		r = qv(self.viewport, 'rect')
@@ -854,6 +918,8 @@ class CanvasOverlay(QtGui.QWidget):
 			self._sig_view = sig_view
 			self._safe_hook('on_view_changed', mapping)
 			changed = True
+
+		self._safe_hook('on_tick')
 
 		if changed or self._repaint_requested:
 			self._repaint_requested = False
@@ -891,6 +957,8 @@ class CanvasOverlay(QtGui.QWidget):
 	def on_nudge(self, handle, dx, dy, big): pass
 	def on_key_press(self, key, modifiers): return False
 	def wants_key(self, key, modifiers): return False
+	def on_tick(self): pass
+	def paint_handle(self, p, handle, x, y, hot): return False
 
 	def _safe_hook(self, name, *args):
 		try:
@@ -956,10 +1024,9 @@ class CanvasOverlay(QtGui.QWidget):
 		font.setPointSizeF(size)
 		p.save()
 		p.setFont(font)
-		fm = QtGui.QFontMetricsF(font)
-		lines = text.split('\n')
-		w = max(fm.width(line) if hasattr(fm, 'width') else fm.horizontalAdvance(line) for line in lines) + 8.
-		h = fm.height() * len(lines) + 4.
+		w, h = _text_size(p, text, size)
+		w += 8.
+		h += 4.
 
 		x, y = view_point.x(), view_point.y()
 		code = align.upper()
@@ -1025,6 +1092,8 @@ class CanvasOverlay(QtGui.QWidget):
 			fill = self.colors['muted']
 		elif h.role == 'secondary':
 			fill = self.colors['frame']
+		elif isinstance(self.colors.get(h.role), QtGui.QColor):
+			fill = self.colors[h.role]
 		else:
 			fill = self.colors['active']
 
@@ -1036,6 +1105,10 @@ class CanvasOverlay(QtGui.QWidget):
 	def _paint_handles(self, p, mapping):
 		for h, (x, y) in self._layout(mapping):
 			hot = h is self.hover_handle or h is self.drag_handle
+			try:
+				if self.paint_handle(p, h, x, y, hot): continue
+			except Exception:
+				_log.exception('{}.paint_handle[{}]'.format(self.NAME, h.key))
 			r = h.radius + (1.5 if hot else 0.)
 			p.setPen(cosmetic_pen(self.colors['outline'], 1.5 if hot else 1.))
 			p.setBrush(QtGui.QBrush(self._handle_colors(h)))
@@ -1089,9 +1162,16 @@ class CanvasOverlay(QtGui.QWidget):
 			self._input.clearMask()
 			return
 
-		region = QtGui.QRegion()
-		for x, y, w, h in rects:
-			region = region.united(QtGui.QRegion(x, y, w, h))
+		try:
+			region = QtGui.QRegion()
+			for x, y, w, h in rects:
+				region = region.united(QtGui.QRegion(x, y, w, h))
+		except Exception:
+			# Without a mask the input layer would swallow every click: stay click-through
+			_log('qregion', 'TypeRig Overlay: QRegion unavailable in this PythonQt build; handles are view-only.')
+			self._input.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
+			self._input.clearMask()
+			return
 		self._input.setMask(region)
 		self._input.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, False)
 
@@ -1253,14 +1333,14 @@ class CanvasOverlay(QtGui.QWidget):
 		t = ev.type()
 
 		if obj is self.viewport:
-			if t in (QtCore.QEvent.Wheel, QtCore.QEvent.Resize):
+			if t in (EV_WHEEL, EV_RESIZE):
 				self.request_repaint()
 				return False
-			if t == QtCore.QEvent.Hide:
+			if t == EV_HIDE:
 				self._orphan()
 				return False
 
-		if t not in (QtCore.QEvent.KeyPress, QtCore.QEvent.ShortcutOverride):
+		if t not in (EV_KEY_PRESS, EV_SHORTCUT_OVERRIDE):
 			return False
 
 		key = ev.key()
@@ -1274,7 +1354,7 @@ class CanvasOverlay(QtGui.QWidget):
 		else:
 			ours = False
 
-		if t == QtCore.QEvent.ShortcutOverride:
+		if t == EV_SHORTCUT_OVERRIDE:
 			# Claim the key from FontLab's shortcuts so the KeyPress reaches us
 			if ours or self._safe_hook('wants_key', key, mods):
 				ev.accept()
@@ -1415,7 +1495,7 @@ def _stress_toggle(n=50):
 
 	def report():
 		left = _count_overlay_widgets()
-		expected = 2 if running else 0
+		expected = WIDGETS_PER_OVERLAY if running else 0
 		ok = left == expected
 		print('Stress toggle x{}: overlay widgets alive = {} (expected {}), registry = {} -> {}'.format(
 			n, left, expected, sorted(_REGISTRY.keys()), 'PASS' if ok else 'FAIL'))
