@@ -46,6 +46,28 @@ def _skip(reason):
 # the others unverified, so the overlay must not depend on them either)
 PYTHONQT_MISSING = ('QObject', 'QEvent', 'QFontMetrics', 'QFontMetricsF')
 
+def _strict_painter(QtGui):
+	'''QPainter that, like FontLab's PythonQt, accepts only the QPen / QBrush
+	overloads of setPen / setBrush (Qt.NoPen / Qt.NoBrush fail there) and
+	rejects drawEllipse(QPointF, rx, ry), an overload TypeRig has never used.'''
+	class StrictPainter(QtGui.QPainter):
+		def setPen(self, pen):
+			if not isinstance(pen, QtGui.QPen):
+				raise ValueError('Called setPen(QPen pen) -> void with wrong arguments: ({!r},)'.format(pen))
+			QtGui.QPainter.setPen(self, pen)
+
+		def setBrush(self, brush):
+			if not isinstance(brush, QtGui.QBrush):
+				raise ValueError('Called setBrush(QBrush brush) -> void with wrong arguments: ({!r},)'.format(brush))
+			QtGui.QPainter.setBrush(self, brush)
+
+		def drawEllipse(self, *args):
+			if len(args) == 3:
+				raise ValueError('drawEllipse(QPointF, rx, ry): unverified under PythonQt; use the QRectF overload')
+			QtGui.QPainter.drawEllipse(self, *args)
+
+	return StrictPainter
+
 def _install_fakes(QtCore, QtGui, QtWidgets):
 	'''Fake PythonQt (QtGui = QtGui + QtWidgets, minus PYTHONQT_MISSING) and fontlab modules.'''
 	qtcore = types.ModuleType('PythonQt.QtCore')
@@ -55,6 +77,7 @@ def _install_fakes(QtCore, QtGui, QtWidgets):
 			for k in dir(mod):
 				if not k.startswith('_') and k not in PYTHONQT_MISSING:
 					setattr(target, k, getattr(mod, k))
+	qtgui.QPainter = _strict_painter(QtGui)
 	pythonqt = types.ModuleType('PythonQt')
 	pythonqt.QtCore = qtcore
 	pythonqt.QtGui = qtgui
@@ -722,6 +745,30 @@ def test_import_without_pythonqt_extras():
 		assert not hasattr(pq.QtCore, name) and not hasattr(pq.QtGui, name), name
 	assert co.EV_KEY_PRESS == _QC.QEvent.KeyPress and co.EV_SHORTCUT_OVERRIDE == _QC.QEvent.ShortcutOverride
 	assert co.EV_HIDE == _QC.QEvent.Hide and co.EV_WHEEL == _QC.QEvent.Wheel and co.EV_RESIZE == _QC.QEvent.Resize
+
+def test_plain_qevent_key_types_pass_through():
+	'''PythonQt can hand eventFilter a key event as a plain QEvent (no key()).'''
+	with session(_recorder_class()) as s:
+		s.hover(s.view(480, 700))
+		for t in (_QC.QEvent.ShortcutOverride, _QC.QEvent.KeyPress):
+			assert s.ov._filter.eventFilter(s.viewport, _QC.QEvent(t)) is False
+		assert not s.errors, s.errors
+
+def test_strict_painter_is_active():
+	'''Guard: the fake really rejects the enum overloads FontLab rejects.'''
+	_env()
+	painter_cls = sys.modules['PythonQt.QtGui'].QPainter
+	img = _QG.QImage(10, 10, _QG.QImage.Format_ARGB32)
+	p = painter_cls(img)
+	try:
+		for call in (lambda: p.setBrush(_QC.Qt.NoBrush), lambda: p.setPen(_QC.Qt.NoPen),
+					 lambda: p.drawEllipse(_QC.QPointF(5, 5), 2., 2.)):
+			try:
+				call(); assert False, 'expected ValueError'
+			except ValueError:
+				pass
+	finally:
+		p.end()
 
 def test_label_size_fallback():
 	co = _env()['co']

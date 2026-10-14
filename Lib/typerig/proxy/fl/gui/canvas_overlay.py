@@ -295,6 +295,22 @@ def cosmetic_pen(color, width=1., style=None, alpha=None):
 	if style is not None: pen.setStyle(style)
 	return pen
 
+def no_pen():
+	'''Invisible pen. FontLab's PythonQt wraps only the QPen overload of
+	QPainter.setPen, so the Qt.NoPen enum cannot be passed directly.'''
+	pen = QtGui.QPen(QtGui.QColor(0, 0, 0, 0))
+	pen.setWidthF(0.)
+	return pen
+
+def draw_ellipse(p, cx, cy, rx, ry):
+	'''Ellipse centred on (cx, cy) in view px. Uses the QRectF overload, the one
+	TypeRig already relies on under PythonQt.'''
+	p.drawEllipse(QtCore.QRectF(cx - rx, cy - ry, 2. * rx, 2. * ry))
+
+def no_brush():
+	'''Empty brush (no fill); Qt.NoBrush cannot be passed to setBrush under PythonQt.'''
+	return QtGui.QBrush()
+
 def solid_brush(color, alpha=None):
 	c = QtGui.QColor(color)
 	if alpha is not None: c.setAlpha(alpha)
@@ -998,13 +1014,13 @@ class CanvasOverlay(QtGui.QWidget):
 
 	def draw_font_path(self, p, path_font, pen=None, brush=None):
 		'''Draw a QPainterPath given in font units.'''
-		p.setPen(pen if pen is not None else QtCore.Qt.NoPen)
-		p.setBrush(brush if brush is not None else QtCore.Qt.NoBrush)
+		p.setPen(pen if pen is not None else no_pen())
+		p.setBrush(brush if brush is not None else no_brush())
 		p.drawPath(self.mapping.path_to_view(path_font))
 
 	def draw_font_rect(self, p, xmin, ymin, xmax, ymax, pen=None, brush=None):
-		p.setPen(pen if pen is not None else QtCore.Qt.NoPen)
-		p.setBrush(brush if brush is not None else QtCore.Qt.NoBrush)
+		p.setPen(pen if pen is not None else no_pen())
+		p.setBrush(brush if brush is not None else no_brush())
 		p.drawRect(self.mapping.rect_to_view(xmin, ymin, xmax, ymax))
 
 	def draw_font_line(self, p, x0, y0, x1, y1, pen=None):
@@ -1038,7 +1054,7 @@ class CanvasOverlay(QtGui.QWidget):
 		else: y -= h * .5
 
 		rect = QtCore.QRectF(x, y, w, h)
-		p.setPen(QtCore.Qt.NoPen)
+		p.setPen(no_pen())
 		p.setBrush(QtGui.QBrush(background if background is not None else self.colors['label_bg']))
 		p.drawRoundedRect(rect, 3., 3.)
 		p.setPen(QtGui.QPen(color if color is not None else self.colors['text']))
@@ -1054,8 +1070,8 @@ class CanvasOverlay(QtGui.QWidget):
 	def draw_view_marker(self, p, view_point, radius=5., pen=None, cross=True):
 		'''Circle (with optional crosshair) at a view point; size in screen px.'''
 		p.setPen(pen if pen is not None else cosmetic_pen(self.colors['active'], 1.5))
-		p.setBrush(QtCore.Qt.NoBrush)
-		p.drawEllipse(view_point, radius, radius)
+		p.setBrush(no_brush())
+		draw_ellipse(p, view_point.x(), view_point.y(), radius, radius)
 		if cross:
 			x, y = view_point.x(), view_point.y()
 			r = radius * 1.8
@@ -1114,7 +1130,7 @@ class CanvasOverlay(QtGui.QWidget):
 			p.setBrush(QtGui.QBrush(self._handle_colors(h)))
 
 			if h.shape == om.SHAPE_CIRCLE:
-				p.drawEllipse(QtCore.QPointF(x, y), r, r)
+				draw_ellipse(p, x, y, r, r)
 			elif h.shape == om.SHAPE_DIAMOND:
 				diamond = QtGui.QPainterPath()
 				diamond.moveTo(x, y - r)
@@ -1188,9 +1204,15 @@ class CanvasOverlay(QtGui.QWidget):
 		self.hover_handle = handle
 		if handle is not None:
 			self.last_handle = handle
-			self._input.setCursor(QtGui.QCursor(handle.cursor_shape()))
+			try:
+				self._input.setCursor(QtGui.QCursor(handle.cursor_shape()))
+			except Exception:
+				_log('cursor', 'TypeRig Overlay: cannot set handle cursors in this PythonQt build.')
 		else:
-			self._input.unsetCursor()
+			try:
+				self._input.unsetCursor()
+			except Exception:
+				pass
 		self._set_key_capture(handle is not None or self.drag is not None)
 		self.update()
 
@@ -1343,8 +1365,13 @@ class CanvasOverlay(QtGui.QWidget):
 		if t not in (EV_KEY_PRESS, EV_SHORTCUT_OVERRIDE):
 			return False
 
-		key = ev.key()
-		mods = modifiers_set(ev.modifiers())
+		# PythonQt may hand the filter a plain QEvent (seen for some key event
+		# types): without key() we cannot tell which key it is, so let FontLab have it
+		try:
+			key = ev.key()
+			mods = modifiers_set(ev.modifiers())
+		except AttributeError:
+			return False
 		dragging = self.drag is not None
 
 		if key == QtCore.Qt.Key_Escape:
@@ -1439,13 +1466,13 @@ class _DemoOverlay(CanvasOverlay):
 		for gi in glyph_infos(self.canvas):
 			if qv(gi, 'isActive'): continue
 			p.setPen(cosmetic_pen(c['muted'], 1., QtCore.Qt.DotLine))
-			p.setBrush(QtCore.Qt.NoBrush)
+			p.setBrush(no_brush())
 			p.drawRect(mapping.canvas_rect_to_view(qv(gi, 'metricsRectOnCanvas')))
 
 		# - Metrics box
 		gi = self.glyph_info
 		p.setPen(cosmetic_pen(c['frame'], 1.))
-		p.setBrush(QtCore.Qt.NoBrush)
+		p.setBrush(no_brush())
 		p.drawRect(mapping.canvas_rect_to_view(qv(gi, 'metricsRectOnCanvas')))
 
 		# - Outline bbox
