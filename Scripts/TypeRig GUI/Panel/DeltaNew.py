@@ -38,10 +38,12 @@ from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
 from typerig.proxy.fl.gui.widgets import (
-	getTRIconFontPath, CustomPushButton, TRFlowLayout,
+	getTRIconFontPath, getTRIconFont, CustomPushButton, TRFlowLayout,
 	TRDeltaMultiAxisTree, TRCustomSpinController,
 )
 from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
+from typerig.proxy.fl.gui import canvas_overlay as co
+from typerig.proxy.fl.gui import overlay_math as om
 
 
 # - Init -------------------------------
@@ -243,6 +245,9 @@ ORIGIN_FROM_CODE = {
 	'BS': TransformOrigin.BASELINE,
 }
 ORIGIN_TO_CODE = {v: k for k, v in ORIGIN_FROM_CODE.items()}
+# grp_btn_transform button id -> origin code (Live Edit canvas)
+LIVE_ORIGIN_CODES = {1: 'BS', 2: 'BL', 3: 'TL', 4: 'BR', 5: 'TR', 6: 'CE',
+                     7: 'BM', 8: 'TM', 9: 'LM', 10: 'RM'}
 
 
 def _suggest_axis_name(input_names):
@@ -608,6 +613,16 @@ class TRDeltaNewPanel(QtGui.QWidget):
 		self.active_layer_name = None
 		self.active_canvas = None
 
+		# Live Edit (canvas) — all inert until btn_live is pressed.
+		self.live_tool = None        # TRDeltaCanvas while Live Edit is on
+		self.live_keep_axis = False  # keep the Live Axis snapshot on layer switch
+		self.live_info = None        # capture info for the canvas (None = nothing captured)
+		self.live_frame = None       # output frame (xmin, ymin, xmax, ymax), x deslanted
+		self.live_seed = None        # (vstem, hstem) seeded for the active layer
+		self._live_glyph = None      # glyph name of the last Live Edit capture
+		self._live_fail = None       # why the last Live Edit capture failed
+		self._live_sel_saved = None  # chk_selection state before Live Edit
+
 		# - Build layout
 		lay_main = QtGui.QVBoxLayout()
 
@@ -638,6 +653,13 @@ class TRDeltaNewPanel(QtGui.QWidget):
 			tooltip='Execute delta (bake targets)', enabled=False, obj_name='btn_panel')
 		self.btn_execute_scale.clicked.connect(lambda: self.execute_target())
 		lay_actions.addWidget(self.btn_execute_scale)
+
+		self.btn_live = CustomPushButton('delta_machine',
+			checkable=True, checked=False,
+			tooltip='Live Edit: show the Live Axis controls on the glyph canvas',
+			obj_name='btn_panel_opt')
+		self.btn_live.clicked.connect(lambda: self.live_edit())
+		lay_actions.addWidget(self.btn_live)
 
 		self.btn_get_stem_x = CustomPushButton('stem_vertical_alt',
 			tooltip='Get vertical stems', obj_name='btn_panel')
@@ -699,10 +721,12 @@ class TRDeltaNewPanel(QtGui.QWidget):
 
 		self.chk_metrics = CustomPushButton('metrics_advance_alt',
 			checkable=True, checked=True, tooltip='Process metrics', obj_name='btn_panel_opt')
+		self.chk_metrics.clicked.connect(lambda: self.__live_setup_changed())
 		lay_options.addWidget(self.chk_metrics)
 
 		self.chk_anchors = CustomPushButton('icon_anchor',
 			checkable=True, checked=True, tooltip='Process anchors', obj_name='btn_panel_opt')
+		self.chk_anchors.clicked.connect(lambda: self.__live_setup_changed())
 		lay_options.addWidget(self.chk_anchors)
 
 		self.chk_extrapolate = CustomPushButton('extrapolate',
@@ -754,11 +778,23 @@ class TRDeltaNewPanel(QtGui.QWidget):
 		self.grp_btn_transform.addButton(self.chk_bl, 2)
 		lay_transform.addWidget(self.chk_bl)
 
+		self.chk_bm = CustomPushButton('node_middle_bottom',
+			checkable=True, checked=False, tooltip='Transform at Bottom Middle',
+			obj_name='btn_panel_opt')
+		self.grp_btn_transform.addButton(self.chk_bm, 7)
+		lay_transform.addWidget(self.chk_bm)
+
 		self.chk_br = CustomPushButton('node_bottom_right',
 			checkable=True, checked=False, tooltip='Transform at Bottom Right',
 			obj_name='btn_panel_opt')
 		self.grp_btn_transform.addButton(self.chk_br, 4)
 		lay_transform.addWidget(self.chk_br)
+
+		self.chk_lm = CustomPushButton('node_middle_left',
+			checkable=True, checked=False, tooltip='Transform at Left Middle',
+			obj_name='btn_panel_opt')
+		self.grp_btn_transform.addButton(self.chk_lm, 9)
+		lay_transform.addWidget(self.chk_lm)
 
 		self.chk_ce = CustomPushButton('node_center',
 			checkable=True, checked=False, tooltip='Transform at Center',
@@ -766,11 +802,23 @@ class TRDeltaNewPanel(QtGui.QWidget):
 		self.grp_btn_transform.addButton(self.chk_ce, 6)
 		lay_transform.addWidget(self.chk_ce)
 
+		self.chk_rm = CustomPushButton('node_middle_right',
+			checkable=True, checked=False, tooltip='Transform at Right Middle',
+			obj_name='btn_panel_opt')
+		self.grp_btn_transform.addButton(self.chk_rm, 10)
+		lay_transform.addWidget(self.chk_rm)
+
 		self.chk_tl = CustomPushButton('node_top_left',
 			checkable=True, checked=False, tooltip='Transform at Top Left',
 			obj_name='btn_panel_opt')
 		self.grp_btn_transform.addButton(self.chk_tl, 3)
 		lay_transform.addWidget(self.chk_tl)
+
+		self.chk_tm = CustomPushButton('node_middle_top',
+			checkable=True, checked=False, tooltip='Transform at Top Middle',
+			obj_name='btn_panel_opt')
+		self.grp_btn_transform.addButton(self.chk_tm, 8)
+		lay_transform.addWidget(self.chk_tm)
 
 		self.chk_tr = CustomPushButton('node_top_right',
 			checkable=True, checked=False, tooltip='Transform at Top Right',
@@ -867,6 +915,10 @@ class TRDeltaNewPanel(QtGui.QWidget):
 		if self.chk_tl.isChecked(): self.transform_origin = TransformOrigin.TOP_LEFT
 		if self.chk_tr.isChecked(): self.transform_origin = TransformOrigin.TOP_RIGHT
 		if self.chk_ce.isChecked(): self.transform_origin = TransformOrigin.CENTER
+		if self.chk_bm.isChecked(): self.transform_origin = TransformOrigin.BOTTOM_MIDDLE
+		if self.chk_tm.isChecked(): self.transform_origin = TransformOrigin.TOP_MIDDLE
+		if self.chk_lm.isChecked(): self.transform_origin = TransformOrigin.CENTER_LEFT
+		if self.chk_rm.isChecked(): self.transform_origin = TransformOrigin.CENTER_RIGHT
 
 	def __toggle_controls(self):
 		expand = self.chk_toggle_controls.isChecked()
@@ -888,6 +940,7 @@ class TRDeltaNewPanel(QtGui.QWidget):
 		            self.cpn_value_lerp_t, self.cpn_value_ital):
 			cpn.setEnabled(not target_mode)
 		self.btn_execute_scale.setEnabled(target_mode or self._slider_can_drive())
+		self.__live_setup_changed()
 
 	def _slider_can_drive(self):
 		return len(self.setup.axes) == 1
@@ -908,6 +961,7 @@ class TRDeltaNewPanel(QtGui.QWidget):
 		# Setup changed — drop the live snapshot so the next slider tick
 		# captures the new Live Axis state.
 		self._live_snapshot = {}
+		self.__live_setup_changed()
 		if not setup.axes:
 			warnings.warn('No axes defined! Add at least one Virtual Axis.',
 				TRDeltaAxisWarning)
@@ -959,6 +1013,8 @@ class TRDeltaNewPanel(QtGui.QWidget):
 			cpn.blockSignals(True)
 			cpn.setValue(default)
 			cpn.blockSignals(False)
+
+		self.__live_setup_changed()
 
 		if verbose:
 			output(0, '%s %s' % (app_name, app_version),
@@ -1293,6 +1349,12 @@ class TRDeltaNewPanel(QtGui.QWidget):
 			self.__seed_live_sliders_from_layer(current.active_layer)
 			return True
 		if entry.get('last_layer') != current.active_layer:
+			if self.live_keep_axis:
+				# Live Edit: keep the axis; the new active layer is only the
+				# new output target. Reseed the sliders for it, no re-eject.
+				entry['last_layer'] = current.active_layer
+				self.__seed_live_sliders_from_layer(current.active_layer)
+				return True
 			# Re-snapshot at current state of all inputs.
 			if not self._refresh_live_snapshot(silent=True): return False
 			# Reset sliders to neutral for the new active layer.
@@ -1327,6 +1389,10 @@ class TRDeltaNewPanel(QtGui.QWidget):
 			cpn.blockSignals(True)
 			cpn.setValue(val)
 			cpn.blockSignals(False)
+
+		# Neutral stems for this layer: the canvas stem ring is relative to them.
+		self.live_seed = (float(vx) if vx is not None else 100.,
+		                  float(hx) if hx is not None else 100.)
 
 	def execute_scale(self, use_time=False):
 		'''Live slider mode — driven by the Live Axis (the permanent slot,
@@ -1446,6 +1512,8 @@ class TRDeltaNewPanel(QtGui.QWidget):
 
 			current.update()
 			host_refresh_canvas()
+			if self.__live_on():
+				self.__live_wrote(current, [(pos[0] + ox, pos[1] + oy) for pos in result])
 			return
 		# ----- end selection-mode short-circuit -------------------
 
@@ -1484,6 +1552,8 @@ class TRDeltaNewPanel(QtGui.QWidget):
 			return
 
 		new_layer.name = target_name
+		# Output frame for the canvas (the mount may replace FL nodes).
+		live_points = [(n.x, n.y) for n in new_layer.nodes] if self.__live_on() else None
 		try:
 			_ensure_and_mount(current, new_layer, base_input)
 		except Exception as e:
@@ -1492,6 +1562,217 @@ class TRDeltaNewPanel(QtGui.QWidget):
 
 		current.update()
 		host_refresh_canvas()
+		if live_points is not None:
+			self.__live_wrote(current, live_points)
+
+	# - Live Edit (canvas) ------------------------------------
+	# The canvas tool (TRDeltaCanvas) is a second front-end for the slider
+	# controls: it sets them through live_set() and execute_scale() writes.
+	# Lifecycle while it runs: capture on activation; a layer switch keeps
+	# the Live Axis (live_keep_axis) and only reseeds; a glyph switch, an
+	# outside node edit, a selection change or the recapture icon rebuild
+	# the snapshot. The selection decides the mode (nodes selected ->
+	# selection mode; none -> whole glyph); chk_selection mirrors it.
+	def live_edit(self):
+		'''Live Edit button: start or stop the canvas controls.'''
+		if self.btn_live.isChecked():
+			self.live_keep_axis = True
+			self._live_sel_saved = self.chk_selection.isChecked()
+			self.__live_build(True)		# capture on activation
+			self.live_tool = TRDeltaCanvas.start(self)
+		else:
+			self.live_tool = None
+			TRDeltaCanvas.stop()
+			self.__live_end()
+
+	def live_closed(self):
+		'''Close icon on the canvas.'''
+		self.btn_live.setChecked(False)
+		self.live_edit()
+
+	def live_problem(self):
+		'''Why the canvas cannot drive (banner text), or None.'''
+		if self.chk_target.isChecked():
+			return 'Target mode is on: the sliders do not drive'
+		live = self.setup.live_axis
+		if not live or len(live.inputs) < 2:
+			return 'Live Axis needs at least 2 inputs (set axes first)'
+		if self.live_info is None:
+			return self._live_fail or 'nothing captured'
+		return None
+
+	def live_state(self):
+		'''Captured state for the canvas, or None (see live_problem).
+		Returns dict: target (glyph, layer), frame and src_frame (x deslanted),
+		slant (radians, + leans right), seed (vstem, hstem), params,
+		proportional, selection (node count or None), warnings,
+		options {'metrics', 'anchors'} (panel buttons) and process (what the
+		snapshot really drives besides outlines: 'metrics', 'anchors').'''
+		if self.live_problem() is not None:
+			return None
+
+		info = self.live_info
+		return {'target': (info['glyph'], info['layer']), 'frame': self.live_frame,
+		        'src_frame': info['src_frame'], 'slant': info['slant'], 'seed': self.live_seed,
+		        'params': self.live_params(), 'proportional': self.chk_proportional.isChecked(),
+		        'selection': info['selection'], 'warnings': info['warnings'],
+		        'options': {'metrics': self.chk_metrics.isChecked(), 'anchors': self.chk_anchors.isChecked()},
+		        'process': info['process']}
+
+	def live_params(self):
+		'''Canvas values: width/height factors (1.0 = 100 %), stems in units, origin code.'''
+		width = float(self.cpn_value_width.getValue()) / 100.
+		height = width if self.chk_proportional.isChecked() else float(self.cpn_value_height.getValue()) / 100.
+		return {'width': width, 'height': height,
+		        'stem_x': float(self.cpn_value_stem_x.getValue()),
+		        'stem_y': float(self.cpn_value_stem_y.getValue()),
+		        'origin': LIVE_ORIGIN_CODES.get(self.grp_btn_transform.checkedId(), 'BS')}
+
+	def live_set(self, values):
+		'''Set controls from the canvas (factors, units, origin code) and apply once.'''
+		controls = {'width': self.cpn_value_width, 'height': self.cpn_value_height,
+		            'stem_x': self.cpn_value_stem_x, 'stem_y': self.cpn_value_stem_y}
+
+		for key, value in values.items():
+			if key == 'origin':
+				for bid, code in LIVE_ORIGIN_CODES.items():
+					if code == value and self.grp_btn_transform.checkedId() != bid:
+						self.grp_btn_transform.button(bid).setChecked(True)
+				continue
+
+			if key not in controls: continue
+			if key in ('width', 'height'):
+				value = int(round(value * 100.))
+			else:
+				value = max(1, int(round(value)))
+
+			cpn = controls[key]
+			cpn.blockSignals(True)
+			cpn.setValue(value)
+			cpn.blockSignals(False)
+
+		self.execute_scale()
+
+	def live_capture(self):
+		'''Canvas moved to another layer or glyph. Same glyph: keep the Live
+		Axis and reseed for the new active layer. Other glyph: capture it.'''
+		return self.__live_build(False)
+
+	def live_recapture(self):
+		'''Outside node edit, selection change or recapture icon: rebuild the
+		Live Axis snapshot from the current outline. No undo snapshot.'''
+		return self.__live_build(True)
+
+	def live_toggle(self, option):
+		'''Canvas metrics / anchors icon: flip the panel option. The kept
+		Live Axis was built with the old attributes, so this recaptures.'''
+		chk = {'metrics': self.chk_metrics, 'anchors': self.chk_anchors}[option]
+		chk.setChecked(not chk.isChecked())
+		self.__live_setup_changed()
+
+	def live_reset(self):
+		'''Axis reset icon: neutral controls for the active layer, applied once.
+		On a Live Axis input this writes its captured state back.'''
+		if self.live_info is None: return
+		self.__seed_live_sliders_from_layer(self.live_info['layer'])
+		self.execute_scale()
+
+	def __live_on(self):
+		return self.live_tool is not None and self.live_tool.alive
+
+	def __live_setup_changed(self):
+		'''Live Axis setup or target mode changed while Live Edit is on.'''
+		if self.__live_on():
+			self.live_recapture()
+
+	def __live_wrote(self, current, points):
+		'''After every live write: keep the output frame, notify the canvas.'''
+		info = self.live_info
+		if info is not None and points and (info['glyph'], info['layer']) == (current.name, current.active_layer):
+			self.live_frame = om.slant_bounds(points, info['slant'])
+
+		if self.__live_on():
+			self.live_tool.panel_wrote()
+
+	def __live_build(self, rebuild):
+		'''Capture for Live Edit: pick the mode from the selection, build (or
+		keep) the Live Axis snapshot, seed the controls for the active layer
+		and measure the frame. Writes nothing.
+		Args:
+			rebuild (bool): always re-eject; False keeps the snapshot when the
+				glyph and the selection mode are unchanged (layer switch).
+		'''
+		self.live_info = None
+		self._live_fail = None
+		if self.chk_target.isChecked(): return False
+		live = self.setup.live_axis
+		if not live or len(live.inputs) < 2: return False
+
+		current = host_current_glyph()
+		if current is None:
+			self._live_fail = 'no current glyph'
+			return False
+
+		active = current.active_layer
+		active_tr = current.find_layer(active)
+		nodes = active_tr.eject().nodes if active_tr is not None else []
+		if not nodes:
+			self._live_fail = 'active layer {} is empty'.format(active)
+			return False
+
+		sel = [i for i, n in enumerate(nodes) if getattr(n, 'selected', False)]
+		self.chk_selection.setChecked(bool(sel))
+		self.__refresh_options()
+
+		entry = self._live_snapshot.get(current.name)
+		keep = (not rebuild and entry is not None and self._live_glyph == current.name
+		        and (entry.get('sel_indices') or None) == (sel or None))
+
+		if keep:
+			entry['last_layer'] = active
+		elif not self._refresh_live_snapshot(silent=True):
+			self._live_fail = 'Live Axis snapshot failed on {} (missing, empty or incompatible inputs)'.format(current.name)
+			return False
+
+		entry = self._live_snapshot[current.name]
+		self.__seed_live_sliders_from_layer(active)
+
+		sel_indices = entry.get('sel_indices')
+		points = [(nodes[i].x, nodes[i].y) for i in sel_indices if i < len(nodes)] if sel_indices else [(n.x, n.y) for n in nodes]
+		slant = math.radians(-float(host_font_italic_angle()))
+		frame = om.slant_bounds(points, slant)
+
+		usable = [l.name for l in entry['core_glyph'].layers]
+		warns = []
+		skipped = [name for name in live.inputs if name not in usable]
+		if skipped:
+			warns.append('skipped inputs: {}'.format(', '.join(skipped)))
+		if active not in usable:
+			warns.append('{} is not a Live Axis input: neutral = seed stems'.format(active))
+
+		self._live_glyph = current.name
+		self.live_frame = frame
+		vaxis = entry['vaxis']
+		process = [label for attrib, label in (('metric_array', 'metrics'), ('anchor_array', 'anchors')) if attrib in vaxis]
+
+		self.live_info = {'glyph': current.name, 'layer': active, 'slant': slant, 'src_frame': frame,
+		                  'selection': len(sel_indices) if sel_indices else None, 'warnings': warns,
+		                  'process': process}
+		return True
+
+	def __live_end(self):
+		'''Live Edit stopped: give slider mode back its own options.'''
+		self.live_keep_axis = False
+		self.live_info = self.live_frame = None
+		self._live_glyph = None
+
+		if self._live_sel_saved is not None:
+			self.chk_selection.setChecked(self._live_sel_saved)
+			if not self._live_sel_saved:
+				# A selection snapshot would keep driving in selection mode
+				for name in [n for n, e in self._live_snapshot.items() if e.get('sel_indices')]:
+					del self._live_snapshot[name]
+			self._live_sel_saved = None
 
 	# - Persistence -------------------------------------------
 	def _load_tree_dict(self, raw):
@@ -1504,6 +1785,7 @@ class TRDeltaNewPanel(QtGui.QWidget):
 		self.setup, _errs = _setup_from_tree_dict(self.tree.getTree())
 		# Loaded a fresh tree — drop any stale live snapshot.
 		self._live_snapshot = {}
+		self.__live_setup_changed()
 
 	def font_save_axis_data(self):
 		setup, errors = _setup_from_tree_dict(self.tree.getTree())
@@ -1542,6 +1824,667 @@ class TRDeltaNewPanel(QtGui.QWidget):
 			raw = json.load(f)
 		self._load_tree_dict(raw)
 		output(6, app_name, 'Font: %s; Setup loaded from %s.' % (host_font_name(), fname))
+
+
+# =====================================================================
+# Live Edit canvas
+# =====================================================================
+# Frame points: code -> (sx, sy) side signs; -1 = left/bottom, 0 = middle, +1 = right/top
+_FRAME_POINTS = [('TL', -1, 1), ('TM', 0, 1), ('TR', 1, 1), ('RM', 1, 0),
+                 ('BR', 1, -1), ('BM', 0, -1), ('BL', -1, -1), ('LM', -1, 0)]
+# Delta's transform origins: the 9 frame points; 'BS' (baseline) is the font origin (0, 0)
+_ORIGIN_POINTS = [('BL', -1, -1), ('TL', -1, 1), ('BR', 1, -1), ('TR', 1, 1), ('CE', 0, 0),
+                  ('BM', 0, -1), ('TM', 0, 1), ('LM', -1, 0), ('RM', 1, 0)]
+
+_CURSORS = {(-1, 1): QtCore.Qt.SizeFDiagCursor, (1, -1): QtCore.Qt.SizeFDiagCursor,
+            (1, 1): QtCore.Qt.SizeBDiagCursor, (-1, -1): QtCore.Qt.SizeBDiagCursor,
+            (0, 1): QtCore.Qt.SizeVerCursor, (0, -1): QtCore.Qt.SizeVerCursor,
+            (1, 0): QtCore.Qt.SizeHorCursor, (-1, 0): QtCore.Qt.SizeHorCursor}
+
+_LIVE_LIMITS = {'scale': (0.1, 9.99), 'stem': (0.05, 5.)}
+
+
+def _side_coord(lo, hi, side):
+	return lo if side < 0 else hi if side > 0 else (lo + hi) * .5
+
+
+class CanvasIconStrip(object):
+	'''Row of icon buttons on a CanvasOverlay. Slot 0 sits at origin(mapping);
+	the other slots follow in its direction (-1 = to the left). Self-contained
+	(handles, layout, paint, click) so it can move to a shared module.
+
+	Entries: (key, icon, tooltip, callback, always[, checked]). icon is a
+	TypeRig Icons ligature name, or None for the close cross; always=False
+	entries show only while the owner is ready; checked() -> bool makes the
+	entry a toggle, drawn lit while on. Adding an icon is adding one entry.
+	'''
+	SLOT_PX = 24.
+	RADIUS = 9.
+	ICON_PX = 14
+
+	def __init__(self, owner, origin, entries):
+		self.owner = owner
+		self.origin = origin		# origin(mapping) -> (x, y, direction, ready) or None
+		self.entries = [tuple(e) + (None,) * (6 - len(e)) for e in entries]
+		self.actions = {}			# handle key -> (icon, callback, checked)
+		self.handles = []
+		self._font = None
+
+		for index, (key, icon, tooltip, callback, always, checked) in enumerate(self.entries):
+			handle = co.Handle('strip_' + key, self._anchor(index), om.SHAPE_CIRCLE, self.RADIUS, om.AXIS_XY,
+			                   QtCore.Qt.PointingHandCursor, 'muted', tooltip=tooltip)
+			self.handles.append(handle)
+			self.actions[handle.key] = (icon, callback, checked)
+
+	def handle(self, key):
+		for h in self.handles:
+			if h.key == 'strip_' + key: return h
+		return None
+
+	def is_checked(self, handle):
+		checked = self.actions[handle.key][2]
+		if checked is None: return False
+		try:
+			return bool(checked())
+		except Exception:
+			co._log.exception('{}.strip[{}].checked'.format(self.owner.NAME, handle.key))
+			return False
+
+	def _shown(self, entry, ready):
+		return ready or entry[4]
+
+	def _anchor(self, index):
+		def anchor(mapping):
+			o = self.origin(mapping)
+			if o is None: return None
+			x, y, direction, ready = o
+			if not self._shown(self.entries[index], ready): return None
+			slot = sum(1 for e in self.entries[:index] if self._shown(e, ready))
+			return (x + direction * slot * self.SLOT_PX, y)
+		return anchor
+
+	def owns(self, handle):
+		return handle is not None and handle.key in self.actions
+
+	def width(self, ready):
+		'''Screen px taken by the visible slots.'''
+		return sum(1 for e in self.entries if self._shown(e, ready)) * self.SLOT_PX
+
+	def click(self, handle):
+		if not self.owns(handle): return False
+		try:
+			self.actions[handle.key][1]()
+		except Exception:
+			co._log.exception('{}.strip[{}]'.format(self.owner.NAME, handle.key))
+		return True
+
+	def _icon_font(self):
+		if self._font is None:
+			try:
+				self._font = getTRIconFont(self.ICON_PX)
+			except Exception:
+				self._font = False
+		return self._font if self._font is not False else None
+
+	def paint(self, p, handle, x, y, hot):
+		if not self.owns(handle): return False
+		c = self.owner.colors
+		icon = self.actions[handle.key][0]
+		on = handle.enabled and self.is_checked(handle)
+		r = handle.radius + (1. if hot else 0.)
+		accent = c['error'] if icon is None else c['active']
+		rect = QtCore.QRectF(x - r, y - r, 2. * r, 2. * r)
+
+		p.setPen(co.cosmetic_pen(accent if hot or on else c['muted'], 1.5 if on else 1.))
+		p.setBrush(co.solid_brush(c['label_bg']))
+		p.drawRoundedRect(rect, 4., 4.)
+		if on:
+			p.setBrush(co.solid_brush(accent, 70))
+			p.drawRoundedRect(rect, 4., 4.)
+
+		ink = c['muted'] if not handle.enabled else accent if hot else c['text']
+		if icon is None:
+			p.setPen(co.cosmetic_pen(ink, 1.5))
+			k = r * .45
+			p.drawLine(QtCore.QPointF(x - k, y - k), QtCore.QPointF(x + k, y + k))
+			p.drawLine(QtCore.QPointF(x - k, y + k), QtCore.QPointF(x + k, y - k))
+			return True
+
+		flags = QtCore.Qt.AlignCenter
+		try:
+			flags = int(flags)
+		except TypeError:
+			pass
+
+		font = self._icon_font()
+		p.save()
+		if font is not None:
+			p.setFont(font)
+		p.setPen(QtGui.QPen(ink))
+		p.drawText(rect, flags, icon if font is not None else icon[:1].upper())
+		p.restore()
+		return True
+
+
+class TRDeltaCanvas(co.CanvasOverlay):
+	'''Delta Live Axis controls on the glyph canvas, driving TRDeltaNewPanel.
+
+	Frame quad (8)  width / height about the transform origin; drawn in the
+	                deslanted frame, so it is a parallelogram in italic fonts
+	Stem ring (4)   left / right: vertical stem; top / bottom: horizontal
+	                (radius x stem / seed stem of the active layer)
+	Origin cross    snaps to baseline (0, 0), BL, TL, BR, TR, CE
+	Icon strip      close, recapture, axis reset
+
+	All values go through the panel (live_set); the panel bakes and writes.
+	Stems are compensated, so the output extent is affine in width %, not
+	proportional: frame drags start from the proportional guess and refine
+	by secant on the measured output (om.EdgeSecant), at most
+	MAX_CORRECTIONS extra applies per push.
+	'''
+	NAME = 'tr_delta_live'
+	PAD_PX = 16.				# frame quad sits this far outside the output frame
+	STEM_RING_PX = (40., 110.)	# stem ring radius range on screen (before following the scale)
+	STRIP_OFFSET_PX = 22.		# icon strip: diagonal offset from the frame's top-right handle
+	PUSH_INTERVAL = .033		# seconds between live applies during a drag
+	MAX_CORRECTIONS = 2			# secant re-applies per push (frame drags)
+	SELECTION_INTERVAL = .15	# seconds between selection checks
+
+	def __init__(self, panel):
+		co.CanvasOverlay.__init__(self)
+		self.panel = panel
+		self.st = None				# panel.live_state() (params overridden during a drag)
+		self.applied = None			# params as the panel holds them
+		self.problem = None			# panel.live_problem() while st is None
+		self._press = None			# {'params', 'ring'} at drag start
+		self._drag_params = None	# params being dragged (ahead of the panel)
+		self._models = {}			# frame drag: param key -> [axis, side, edge0, EdgeSecant, target]
+		self._pending = None		# params waiting for the throttle
+		self._origin_view = None	# cursor while dragging the origin cross
+		self._sel_sig = None		# selection signature at the last capture or write
+		self._state_key = None
+		self._throttle = om.Throttle(self.PUSH_INTERVAL)
+		self._sel_throttle = om.Throttle(self.SELECTION_INTERVAL)
+		self._build_handles()
+
+	# - Panel link ----------------------
+	def _call(self, name, *args):
+		try:
+			return getattr(self.panel, name)(*args)
+		except Exception:
+			co._log.exception('{}.{}'.format(self.NAME, name))
+			return None
+
+	def _panel_alive(self):
+		try:
+			co.qv(self.panel, 'objectName')
+			return True
+		except Exception:
+			return False
+
+	def _refresh(self):
+		st = self._call('live_state')
+		self.applied = dict(st['params']) if st is not None else None
+		self.problem = self._call('live_problem') if st is None else None
+
+		if st is not None and self._drag_params is not None:
+			st = dict(st)
+			st['params'] = dict(self._drag_params)
+		self.st = st
+		self._update_options()
+
+		# Repaint when the panel changed something (spin boxes, options)
+		if st is None:
+			key = (self.problem,)
+		else:
+			key = (st['target'], st['frame'], st['proportional'], st['selection'], tuple(sorted(st['params'].items())),
+			       tuple(sorted(st['options'].items())), tuple(st['process']))
+		if key != self._state_key:
+			self._state_key = key
+			self.request_repaint()
+
+	def _push(self, params, now=False):
+		'''Send params to the panel (throttled unless now), then refine frame
+		drags against the measured output.'''
+		if not (now or self._throttle.ready()):
+			self._pending = dict(params)
+			return
+
+		self._pending = None
+		self._call('live_set', dict(params))
+
+		for _ in range(self.MAX_CORRECTIONS):
+			fixed = self._correct(params)
+			if fixed is None: break
+			params = fixed
+			self._call('live_set', dict(params))
+
+		if self._drag_params is not None:
+			self._set_drag_params(params)
+
+	def _correct(self, params):
+		'''Observe the written frame; new params if the secant moves a value
+		by at least one panel step (1 %), else None.'''
+		if not self._models or self.st is None or self.applied is None: return None
+		out, changed = dict(params), False
+
+		for key, (axis, side, edge0, model, target) in self._models.items():
+			model.observe(self.applied[key], self._frame_edge(axis, side))
+			value = om.clamp(model.solve(target), *_LIVE_LIMITS['scale'])
+			if int(round(value * 100.)) != int(round(self.applied[key] * 100.)):
+				out[key] = value
+				changed = True
+
+		return out if changed else None
+
+	def _set_drag_params(self, params):
+		self._drag_params = dict(params)
+		if self.st is not None:
+			self.st['params'] = dict(params)
+
+	def panel_wrote(self):
+		'''Called by the panel after every write: our own edit, not an outside one.'''
+		try:
+			self.accept_geometry()
+			self._refresh()
+			self._sel_sig = self._selection_signature()
+			self.request_repaint()
+		except Exception:
+			co._log.exception('{}.panel_wrote'.format(self.NAME))
+
+	def _selection_signature(self):
+		'''Cheap selection signature of the active layer: for each contour with
+		a selection, its index, selected-node count and selected bounding box.
+		(Reading every node's .selected through PythonQt is too slow per tick.)
+		Note: flContour.hasSelected needs a SelectionMode argument in FL8 (no
+		argument fails); getSelectedNodes() takes none and returns list or None.'''
+		layer = self.fl_layer
+		if layer is None: return None
+		try:
+			sig = []
+			for index, contour in enumerate(layer.getContours() or []):
+				selected = contour.getSelectedNodes()
+				if not selected: continue
+				r = contour.getSelectedBoundingBox()
+				sig.append((index, len(selected)) + om.round_sig((r.x(), r.y(), r.width(), r.height()), 1))
+			return tuple(sig)
+		except Exception:
+			co._log.exception('{}.selection_signature'.format(self.NAME))
+			return None
+
+	# - Handles -------------------------
+	def _build_handles(self):
+		H = co.Handle
+		handles = []
+
+		for code, sx, sy in _FRAME_POINTS:
+			shape = om.SHAPE_SQUARE if sx and sy else om.SHAPE_BAR_V if sx else om.SHAPE_BAR_H
+			axis = om.AXIS_XY if sx and sy else om.AXIS_X if sx else om.AXIS_Y
+			handles.append(H('scale_' + code, self._frame_anchor(sx, sy), shape, 6., axis, _CURSORS[(sx, sy)], 'primary',
+			                 tooltip='Width / Height' if sx and sy else 'Width' if sx else 'Height'))
+
+		for code, sx, sy in (('T', 0, 1), ('R', 1, 0), ('B', 0, -1), ('L', -1, 0)):
+			handles.append(H('stem_' + code, self._stem_anchor(sx, sy), om.SHAPE_CIRCLE, 5.5, om.AXIS_X if sx else om.AXIS_Y,
+			                 _CURSORS[(sx, sy)], 'stem', tooltip='Vertical stem' if sx else 'Horizontal stem'))
+
+		handles.append(H('origin', self._origin_anchor, om.SHAPE_CIRCLE, 7., om.AXIS_XY, QtCore.Qt.CrossCursor, 'primary', tooltip='Transform origin'))
+
+		self.strip = CanvasIconStrip(self, self._strip_origin, [
+			('close', None, 'Close Live Edit', self._close, True),
+			('recapture', 'refresh', 'Recapture: rebuild the Live Axis from the current outline', self._recapture, True),
+			('reset', 'axis_remove', 'Axis reset: neutral controls for this layer', self._reset, False),
+			('metrics', 'metrics_advance_alt', '', lambda: self._toggle('metrics'), False, lambda: self._option('metrics')),
+			('anchors', 'icon_anchor', '', lambda: self._toggle('anchors'), False, lambda: self._option('anchors')),
+		])
+		handles.extend(self.strip.handles)
+
+		self.handles = handles
+		self.handle = dict((h.key, h) for h in handles)
+
+	def _ready(self):
+		return self.st is not None and self.target == self.st['target']
+
+	def _frame_point(self, mapping, sx, sy, pad_px=0.):
+		'''View (x, y) of a frame point. The frame is deslanted: the point is
+		re-slanted, so the quad is a parallelogram in italic fonts. pad_px
+		pushes it outward (screen px).'''
+		x0, y0, x1, y1 = self.st['frame']
+		pad = mapping.len_to_font(pad_px) if pad_px else 0.
+		x = _side_coord(x0 - pad, x1 + pad, sx)
+		y = _side_coord(y0 - pad, y1 + pad, sy)
+		return mapping.to_view_xy(*om.reslant(x, y, self.st['slant']))
+
+	def _frame_anchor(self, sx, sy):
+		def anchor(mapping):
+			if not self._ready(): return None
+			return self._frame_point(mapping, sx, sy, self.PAD_PX)
+		return anchor
+
+	def _ring_px(self, mapping):
+		'''Stem ring radius (view px): sized from the captured frame (clamped
+		on screen), then following the scale of the output frame.'''
+		src, cur = self.st['src_frame'], self.st['frame']
+		side0 = min(src[2] - src[0], src[3] - src[1])
+		side1 = min(cur[2] - cur[0], cur[3] - cur[1])
+		follow = side1 / side0 if side0 > 0 else 1.
+		lo, hi = self.STEM_RING_PX
+		return max(om.clamp(.2 * side0 * mapping.px_per_unit, lo, hi) * follow, 1.)
+
+	def _seed(self):
+		seed = self.st['seed'] or (100., 100.)
+		return max(seed[0], 1.), max(seed[1], 1.)
+
+	def _stem_anchor(self, sx, sy):
+		def anchor(mapping):
+			if not self._ready(): return None
+			cx, cy = self._frame_point(mapping, 0, 0)
+			r = self._ring_px(mapping)
+			seed_v, seed_h = self._seed()
+			pr = self.st['params']
+			return (cx + sx * r * pr['stem_x'] / seed_v, cy - sy * r * pr['stem_y'] / seed_h)
+		return anchor
+
+	def _origin_point(self, mapping, code):
+		if code == 'BS':
+			return mapping.to_view_xy(0., 0.)
+		for c, sx, sy in _ORIGIN_POINTS:
+			if c == code:
+				return self._frame_point(mapping, sx, sy)
+		return None
+
+	def _origin_anchor(self, mapping):
+		if not self._ready(): return None
+		if self._origin_view is not None:
+			return (self._origin_view.x(), self._origin_view.y())
+		return self._origin_point(mapping, self.st['params']['origin'])
+
+	def _nearest_origin(self, view_point):
+		best, best_d = self.st['params']['origin'], None
+		for code in LIVE_ORIGIN_CODES.values():
+			x, y = self._origin_point(self.mapping, code)
+			d = (x - view_point.x())**2 + (y - view_point.y())**2
+			if best_d is None or d < best_d:
+				best, best_d = code, d
+		return best
+
+	def _strip_origin(self, mapping):
+		'''Close icon slot: diagonally off the frame's top-right handle, the
+		strip extending left; next to the banner when nothing is captured.'''
+		if not self._ready():
+			return (16., 16., 1., False)
+		x, y = self._frame_point(mapping, 1, 1, self.PAD_PX)
+		return (x + self.STRIP_OFFSET_PX, y - self.STRIP_OFFSET_PX, -1., True)
+
+	# - Overlay hooks -------------------
+	def on_attach(self):
+		self._refresh()
+
+	def on_target_changed(self, mapping):
+		self._refresh()
+		if self.target is not None and (self.st is None or self.target != self.st['target']):
+			self._call('live_capture')		# layer switch keeps the axis; glyph switch captures
+			self._refresh()
+		self._sel_sig = self._selection_signature()
+		self.request_repaint()
+
+	def on_geometry_changed(self):
+		if self.drag is None and self._ready():
+			self._recapture()				# edited with FontLab's tools (or undo)
+
+	def on_tick(self):
+		if not self._panel_alive():
+			type(self).stop()				# the panel is gone
+			return
+		if self._pending is not None:
+			self._push(self._pending, now=True)
+		elif self.drag is None:
+			if self._ready() and self._sel_throttle.ready():
+				if self._selection_signature() != self._sel_sig:
+					self._recapture()		# selection decides the mode
+					return
+			self._refresh()					# pick up changes made in the panel
+
+	def on_handle_click(self, handle, drag):
+		self.strip.click(handle)
+
+	# - Strip actions -------------------
+	def _close(self):
+		if self._panel_alive():
+			self.panel.live_closed()
+		else:
+			type(self).stop()
+
+	def _recapture(self):
+		self._call('live_recapture')
+		self._refresh()
+		self._sel_sig = self._selection_signature()
+		self.request_repaint()
+
+	def _reset(self):
+		self._call('live_reset')
+		self._refresh()
+
+	def _toggle(self, option):
+		self._call('live_toggle', option)	# the panel recaptures with the new attributes
+		self._refresh()
+		self._sel_sig = self._selection_signature()
+		self.request_repaint()
+
+	def _option(self, option):
+		return self.st is not None and self.st['options'][option]
+
+	def _update_options(self):
+		'''Metrics / anchors icons: lit while the panel option is on; disabled
+		in selection mode, which drives geometry only.'''
+		whole = self.st is not None and self.st['selection'] is None
+		for option, label in (('metrics', 'metrics'), ('anchors', 'anchors')):
+			handle = self.strip.handle(option)
+			handle.enabled = whole
+			if not whole:
+				handle.tooltip = 'Process {}: not used in selection mode'.format(label)
+			else:
+				on = self.st['options'][option]
+				active = option in self.st['process']
+				handle.tooltip = 'Process {}: {}{} (click to turn {})'.format(
+					label, 'ON' if on else 'off',
+					'' if active or not on else ' - nothing to process on this glyph',
+					'off' if on else 'on')
+
+	# - Drag ----------------------------
+	def on_drag_start(self, handle, drag):
+		self._press = None
+		if self.strip.owns(handle) or not self._ready(): return
+
+		params = dict(self.st['params'])
+		self._press = {'params': params, 'ring': self._ring_px(self.mapping)}
+		self._drag_params = dict(params)
+		self._models = {}
+
+		if handle.key.startswith('scale_'):
+			sx, sy = self._sides(handle.key[len('scale_'):])
+			for key, axis, side in self._frame_keys(sx, sy):
+				edge0 = self._frame_edge(axis, side)
+				anchor = self._origin_coord(axis, params['origin'])
+				model = om.EdgeSecant.proportional(params[key], edge0, anchor)
+				self._models[key] = [axis, side, edge0, model, edge0]
+
+	def on_drag_move(self, handle, drag):
+		if self._press is None: return
+		if handle.key == 'origin':
+			self._origin_view = drag.cur_view
+			return
+
+		params = self._params_for(handle, drag)
+		self._set_drag_params(params)
+		self._push(params)
+
+	def on_drag_end(self, handle, drag):
+		if self._press is None: return
+		if handle.key == 'origin':
+			params = dict(self._drag_params)
+			params['origin'] = self._nearest_origin(drag.cur_view)
+			self._origin_view = None
+		else:
+			params = self._params_for(handle, drag)
+
+		self._set_drag_params(params)
+		self._push(params, now=True)
+		self._press = self._drag_params = None
+		self._models = {}
+		self._refresh()
+
+	def on_drag_cancel(self, handle, drag):
+		self._origin_view = None
+		if self._press is not None:
+			params = self._press['params']
+			self._press = self._drag_params = None
+			self._models = {}
+			self._pending = None
+			self._push(params, now=True)
+		self._refresh()
+
+	# - Drag mappings -------------------
+	@staticmethod
+	def _sides(code):
+		for c, sx, sy in _FRAME_POINTS:
+			if c == code: return sx, sy
+		return 0, 0
+
+	def _frame_keys(self, sx, sy):
+		'''(param key, axis, side) driven by a frame handle. Proportional:
+		every handle drives width only (the panel copies it to height).'''
+		if self.st['proportional']:
+			return [('width', 'x', sx)] if sx else [('width', 'y', sy)]
+		keys = []
+		if sx: keys.append(('width', 'x', sx))
+		if sy: keys.append(('height', 'y', sy))
+		return keys
+
+	def _frame_edge(self, axis, side):
+		x0, y0, x1, y1 = self.st['frame']
+		if axis == 'x':
+			return x0 if side < 0 else x1
+		return y0 if side < 0 else y1
+
+	def _origin_coord(self, axis, code):
+		'''Origin coordinate on this axis (deslanted frame): the starting
+		guess of the edge model; the secant corrects for Delta's realignment.'''
+		if code == 'BS': return 0.
+		x0, y0, x1, y1 = self.st['frame']
+		for c, sx, sy in _ORIGIN_POINTS:
+			if c == code:
+				return _side_coord(x0, x1, sx) if axis == 'x' else _side_coord(y0, y1, sy)
+		return 0.
+
+	def _params_for(self, handle, drag):
+		'''Params for the current drag position, from the press state (never accumulated).'''
+		params = dict(self._press['params'])
+		group, code = handle.key.split('_', 1)
+
+		if group == 'scale':
+			dx, dy = drag.delta_font
+			dxs = dx - dy * math.tan(self.st['slant'])		# horizontal component, deslanted
+			for key, m in self._models.items():
+				axis, side, edge0, model = m[:4]
+				m[4] = edge0 + (dxs if axis == 'x' else dy)
+				params[key] = om.clamp(model.solve(m[4]), *_LIVE_LIMITS['scale'])
+
+		elif group == 'stem':
+			ring = self._press['ring']
+			seed_v, seed_h = self._seed()
+			lo, hi = _LIVE_LIMITS['stem']
+			dvx, dvy = drag.delta_view
+			if code in ('L', 'R'):
+				out_px = dvx if code == 'R' else -dvx
+				factor = om.clamp(params['stem_x'] / seed_v + out_px / ring, lo, hi)
+				params['stem_x'] = max(1., seed_v * factor)
+			else:
+				out_px = -dvy if code == 'T' else dvy
+				factor = om.clamp(params['stem_y'] / seed_h + out_px / ring, lo, hi)
+				params['stem_y'] = max(1., seed_h * factor)
+
+		return params
+
+	# - Painting ------------------------
+	def _value_line(self):
+		pr = self.st['params']
+		if self.st['proportional']:
+			parts = ['W=H {:.0f}%'.format(pr['width'] * 100.)]
+		else:
+			parts = ['W {:.0f}%  H {:.0f}%'.format(pr['width'] * 100., pr['height'] * 100.)]
+		parts.append('stem V {:.0f} u  H {:.0f} u'.format(pr['stem_x'], pr['stem_y']))
+		parts.append('origin {}'.format(pr['origin']))
+		if abs(self.st['slant']) > 1e-9:
+			parts.append('italic {:g}°'.format(round(math.degrees(self.st['slant']), 1)))
+		if self.st['selection']:
+			parts.append('[selection: {} nodes]'.format(self.st['selection']))
+		elif self.st['process']:
+			parts.append('also moves: {}'.format(' + '.join(self.st['process'])))
+		return '   '.join(parts)
+
+	def paint_overlay(self, p, mapping):
+		c = self.colors
+
+		if not self._ready():
+			text = self.problem if self.st is None else 'nothing captured on this glyph or layer'
+			x = 16. + self.strip.width(False) - 4.
+			self.draw_label(p, QtCore.QPointF(x, 16.), '{}: {}'.format(app_name, text), 'LM',
+			                color=c['error'] if self.st is None else None, offset=0.)
+			return
+
+		# - Frame quad (parallelogram in italic)
+		quad = [self._frame_point(mapping, sx, sy, self.PAD_PX) for sx, sy in ((-1, 1), (1, 1), (1, -1), (-1, -1))]
+		path = QtGui.QPainterPath()
+		path.moveTo(quad[0][0], quad[0][1])
+		for x, y in quad[1:]:
+			path.lineTo(x, y)
+		path.closeSubpath()
+		p.setPen(co.cosmetic_pen(c['active'], 1.))
+		p.setBrush(co.solid_brush(c['active'], 12))
+		p.drawPath(path)
+
+		# - Stem ring
+		cx, cy = self._frame_point(mapping, 0, 0)
+		ring = self._ring_px(mapping)
+		seed_v, seed_h = self._seed()
+		pr = self.st['params']
+		p.setPen(co.cosmetic_pen(c['stem'], 1., QtCore.Qt.DashLine))
+		p.setBrush(co.no_brush())
+		co.draw_ellipse(p, cx, cy, ring * pr['stem_x'] / seed_v, ring * pr['stem_y'] / seed_h)
+
+		# - Origin snap targets while dragging the cross
+		if self._origin_view is not None:
+			nearest = self._nearest_origin(self._origin_view)
+			for code in LIVE_ORIGIN_CODES.values():
+				x, y = self._origin_point(mapping, code)
+				hot = code == nearest
+				p.setPen(co.cosmetic_pen(c['active'], 1.5 if hot else 1.))
+				p.setBrush(co.solid_brush(c['active'], 255 if hot else 60))
+				co.draw_ellipse(p, x, y, 4., 4.)
+
+		# - Values under the frame; warnings as a red second line
+		left = min(x for x, y in quad)
+		bottom = max(y for x, y in quad)
+		rect = self.draw_label(p, QtCore.QPointF(left, bottom), self._value_line(), 'TL', offset=10.)
+		if self.st['warnings']:
+			self.draw_label(p, QtCore.QPointF(rect.left() - 4., rect.bottom()), '   '.join(self.st['warnings']), 'TL',
+			                color=c['error'], offset=4.)
+
+	def paint_handle(self, p, handle, x, y, hot):
+		if self.strip.paint(p, handle, x, y, hot):
+			return True
+
+		if handle.key == 'origin':
+			c = self.colors
+			r = handle.radius + (1.5 if hot else 0.)
+			p.setPen(co.cosmetic_pen(c['active'], 2. if hot else 1.5))
+			p.setBrush(co.solid_brush(c['label_bg']))
+			co.draw_ellipse(p, x, y, r * .55, r * .55)
+			p.drawLine(QtCore.QPointF(x - r * 1.6, y), QtCore.QPointF(x + r * 1.6, y))
+			p.drawLine(QtCore.QPointF(x, y - r * 1.6), QtCore.QPointF(x, y + r * 1.6))
+			return True
+
+		return False
 
 
 # - Tab wrapper ----------------------------

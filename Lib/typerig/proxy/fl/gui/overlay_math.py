@@ -153,6 +153,67 @@ def scale_from_drag(anchor, press, cur, eps=1e-9):
 		return 1.
 	return (cur - anchor) / ref
 
+class EdgeSecant(object):
+	'''Inverse drag for a control whose edge position is (close to) affine in
+	its value but with an unknown slope - e.g. a stem-compensated width, where
+	the extent is a*value + b, not proportional. Starts from a guessed slope,
+	then refines it with the secant through the last two observations, so the
+	dragged edge lands under the cursor after at most a step or two.
+
+	A slope that changes sign is rejected (keeps the drag monotone); a zero
+	starting slope (dragging the edge the origin sits on) stays zero, and
+	solve() then returns the last observed value.
+	'''
+	__slots__ = ('slope', 'offset', 'value', 'pos')
+
+	def __init__(self, value, pos, slope):
+		self.slope = float(slope)
+		self.value = float(value)
+		self.pos = float(pos)
+		self.offset = self.pos - self.slope * self.value
+
+	@classmethod
+	def proportional(cls, value, pos, anchor):
+		'''Start from the guess "pos scales about anchor with value".'''
+		return cls(value, pos, (pos - anchor) / value if value else 0.)
+
+	def solve(self, target, eps=1e-9):
+		'''Value that puts the edge at target.'''
+		if abs(self.slope) < eps:
+			return self.value
+		return (target - self.offset) / self.slope
+
+	def observe(self, value, pos, eps=1e-9):
+		'''Record a measured (value, edge position) pair.'''
+		value, pos = float(value), float(pos)
+		dv = value - self.value
+		if abs(dv) > eps:
+			slope = (pos - self.pos) / dv
+			if slope * self.slope > 0.:
+				self.slope = slope
+		self.value, self.pos = value, pos
+		self.offset = pos - self.slope * value
+
+# - Slant -------------------------------
+# Italic frames: the slant is a shear along X by y * tan(a); a in radians,
+# positive leans right (the sign of Delta's italic_rad = radians(-font angle)).
+def deslant(x, y, a):
+	'''Slanted -> upright: (x - y * tan(a), y).'''
+	return (x - y * math.tan(a), y)
+
+def reslant(x, y, a):
+	'''Upright -> slanted: (x + y * tan(a), y).'''
+	return (x + y * math.tan(a), y)
+
+def slant_bounds(points, a=0.):
+	'''Bounds (xmin, ymin, xmax, ymax) of (x, y) points in deslanted space
+	(plain bounds for a == 0), or None for no points.'''
+	if not points: return None
+	t = math.tan(a)
+	xs = [p[0] - p[1] * t for p in points]
+	ys = [p[1] for p in points]
+	return (min(xs), min(ys), max(xs), max(ys))
+
 # - Handle shapes -----------------------
 SHAPE_CIRCLE = 'circle'
 SHAPE_SQUARE = 'square'
@@ -490,6 +551,50 @@ def _test_drag():
 	assert scale_from_drag(100., 0., -50.) == 1.5	# anchor on the right
 	print('  drag: ok')
 
+def _test_edge_secant():
+	# Affine edge: pos = 500 * v + 100 (stem compensation adds the 100)
+	f = lambda v: 500. * v + 100.
+	m = EdgeSecant.proportional(1., f(1.), 0.)		# guess: scales about 0
+	guess = m.solve(700.)
+	assert _approx(guess, 700. / 600.) and not _approx(f(guess), 700., 1.)	# proportional misses
+	m.observe(guess, f(guess))
+	assert _approx(f(m.solve(700.)), 700., 1e-9)		# one secant step lands it
+	assert _approx(f(m.solve(450.)), 450., 1e-9)		# and stays exact for any target
+
+	# Edge the origin sits on: zero slope, value never changes
+	m = EdgeSecant.proportional(1.2, 50., 50.)
+	assert m.solve(80.) == 1.2
+	m.observe(1.3, 52.)
+	assert m.solve(80.) == 1.3 and m.slope == 0.
+
+	# A sign flip (noise around a fold) is rejected
+	m = EdgeSecant(1., 600., 600.)
+	m.observe(1.1, 590.)
+	assert m.slope == 600. and m.pos == 590.
+
+	# Left edge (negative slope about a right anchor)
+	m = EdgeSecant.proportional(1., 0., 600.)
+	assert _approx(m.solve(-60.), 1.1)
+	print('  edge secant: ok')
+
+def _test_slant():
+	a = math.radians(12.)
+	for x, y in [(0., 0.), (100., 700.), (-30., -200.)]:
+		xs, ys = deslant(x, y, a)
+		assert ys == y and _approx_pt(reslant(xs, ys, a), (x, y), 1e-9)
+	assert deslant(100., 700., 0.) == (100., 700.)
+
+	# A stem leaning right at a deslants to a constant x
+	stem = [(100. + y * math.tan(a), y) for y in (0., 350., 700.)]
+	assert all(_approx(deslant(x, y, a)[0], 100., 1e-9) for x, y in stem)
+	assert reslant(100., 700., a)[0] > 100.			# positive a leans right
+
+	b = slant_bounds(stem, a)
+	assert _approx(b[0], 100., 1e-9) and _approx(b[2], 100., 1e-9) and b[1] == 0. and b[3] == 700., b
+	assert slant_bounds([(0., 0.), (10., 5.)]) == (0., 0., 10., 5.)
+	assert slant_bounds([]) is None
+	print('  slant: ok')
+
 def _test_hit():
 	r = 6.
 	# Circle: inside, on tolerance rim, outside
@@ -634,6 +739,8 @@ if __name__ == '__main__':
 	print('overlay_math tests:')
 	_test_affine()
 	_test_drag()
+	_test_edge_secant()
+	_test_slant()
 	_test_hit()
 	_test_contour_ops()
 	_test_core_layer_ops()

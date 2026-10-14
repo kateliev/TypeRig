@@ -323,6 +323,8 @@ def _close_pt(p, q, tol=1e-6):
 # - overlay_math (pure) ------------------
 def test_overlay_math_affine(): om._test_affine()
 def test_overlay_math_drag(): om._test_drag()
+def test_overlay_math_edge_secant(): om._test_edge_secant()
+def test_overlay_math_slant(): om._test_slant()
 def test_overlay_math_hit(): om._test_hit()
 def test_overlay_math_contour_ops(): om._test_contour_ops()
 def test_overlay_math_core_layer_ops(): om._test_core_layer_ops()
