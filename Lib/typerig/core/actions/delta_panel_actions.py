@@ -39,8 +39,10 @@
 #           'metrics':     bool,   # process metric_array
 #           'anchors':     bool,   # process anchor_array
 #           'extrapolate': bool,
-#           'origin':      'BL'|'BR'|'TL'|'TR'|'CE'|'BS',  # global, stems mode
-#           'italic_angle': float                          # degrees (signed)
+#           'origin':      'BS'|'BL'|'BM'|'BR'|'LM'|'CE'|'RM'|'TL'|'TM'|'TR',
+#                                  # global, stems mode (BS = baseline 0, 0)
+#           'italic_angle': float, # degrees (signed)
+#           'selection':   bool    # live: drive only the selected nodes
 #       }
 #   }
 #
@@ -53,9 +55,11 @@ import math
 import copy
 
 from typerig.core.objects.array import PointArray
+from typerig.core.objects.delta import DeltaScale
 from typerig.core.objects.layer import Layer
 from typerig.core.objects.glyph import Glyph
 from typerig.core.objects.transform import TransformOrigin
+from typerig.core.objects.utils import Bounds
 
 
 # - Module-level state (banks). Persists across runPython calls.
@@ -77,6 +81,10 @@ _ORIGIN_FROM_CODE = {
 	'TR': TransformOrigin.TOP_RIGHT,
 	'CE': TransformOrigin.CENTER,
 	'BS': TransformOrigin.BASELINE,
+	'BM': TransformOrigin.BOTTOM_MIDDLE,
+	'TM': TransformOrigin.TOP_MIDDLE,
+	'LM': TransformOrigin.CENTER_LEFT,
+	'RM': TransformOrigin.CENTER_RIGHT,
 }
 
 
@@ -450,7 +458,18 @@ def npa_delta_master_names(glyph, scope_layers, NodeActions):
 # Live-drive dispatchers — snapshot once, drive cheap on every tick.
 # =====================================================================
 
-def npa_delta_live_set(glyph, scope_layers, NodeActions, setup_json):
+def _layer_nodes(layer):
+	'''All nodes of a layer in point_array order (shapes -> contours -> data).'''
+	return [node for shape in layer.shapes for contour in shape.contours for node in contour.data]
+
+
+def _selected_indices(layer):
+	'''Flat indices (point_array order) of the selected nodes of a layer.'''
+	if layer is None: return []
+	return [i for i, node in enumerate(_layer_nodes(layer)) if getattr(node, 'selected', False)]
+
+
+def npa_delta_live_set(glyph, scope_layers, NodeActions, setup_json, selection_layer=None):
 	'''Snapshot the input layers of the Live Axis and pre-build the
 	DeltaScale dict. Subsequent npa_delta_live_drive calls operate on
 	this frozen snapshot — they never re-read from the host glyph, so
@@ -458,6 +477,13 @@ def npa_delta_live_set(glyph, scope_layers, NodeActions, setup_json):
 
 	The setup_json shape matches the bake setup but is expected to
 	contain exactly one axis (the Live Axis) and no real targets.
+
+	Selection mode (options.selection and selection_layer given): the
+	snapshot covers only the nodes selected on selection_layer (the
+	host's active layer). Each input's point_array is sliced by those
+	indices and a DeltaScale is built from the slices — filter at the
+	snapshot, not at the write. Nothing selected -> whole layer.
+	Geometry only: metrics and anchors are not driven in this mode.
 	'''
 	global _live_snapshot
 	import json as _json
@@ -518,14 +544,31 @@ def npa_delta_live_set(glyph, scope_layers, NodeActions, setup_json):
 		return {'ok': False, 'error': 'No usable point_array on snapshot.',
 		        'skipped': skipped}
 
-	snap_glyph = Glyph(snap_layers, name=glyph.name)
-	try:
-		vaxis = snap_glyph.create_virtual_axis(
-			[l.name for l in snap_layers], attributes=viable)
-	except Exception as e:
-		_live_snapshot = None
-		return {'ok': False,
-		        'error': 'create_virtual_axis failed: %s' % e}
+	sel_indices = None
+	if opts.get('selection', False) and selection_layer:
+		sel_indices = _selected_indices(glyph.layer(selection_layer)) or None
+
+	if sel_indices:
+		try:
+			data_array, stem_array = [], []
+			for layer in snap_layers:
+				points = list(layer.point_array.tuple)
+				data_array.append([points[i] for i in sel_indices if i < len(points)])
+				stem_array.append([layer.stems])
+			vaxis = {'point_array': DeltaScale(data_array, stem_array)}
+			viable = ['point_array']
+		except Exception as e:
+			_live_snapshot = None
+			return {'ok': False, 'error': 'Selection snapshot failed: %s' % e}
+	else:
+		snap_glyph = Glyph(snap_layers, name=glyph.name)
+		try:
+			vaxis = snap_glyph.create_virtual_axis(
+				[l.name for l in snap_layers], attributes=viable)
+		except Exception as e:
+			_live_snapshot = None
+			return {'ok': False,
+			        'error': 'create_virtual_axis failed: %s' % e}
 
 	_live_snapshot = {
 		'snap_layers': snap_layers,
@@ -535,19 +578,28 @@ def npa_delta_live_set(glyph, scope_layers, NodeActions, setup_json):
 		'italic_rad': math.radians(-float(opts.get('italic_angle', 0.0))),
 		'extrapolate': bool(opts.get('extrapolate', True)),
 		'global_origin': _origin_of(opts),
+		'sel_indices': sel_indices,
 	}
 	return {'ok': True, 'inputs': len(snap_layers),
-	        'viable': viable, 'skipped': skipped}
+	        'viable': viable, 'skipped': skipped,
+	        'used': [l.name for l in snap_layers],
+	        'selection': len(sel_indices) if sel_indices else None}
 
 
 def npa_delta_live_drive(glyph, scope_layers, NodeActions,
-                          target_name, vstem, hstem, sx, sy):
+                          target_name, vstem, hstem, sx, sy, origin=None):
 	'''Drive the named layer on the live glyph from the cached snapshot.
 
 	The snapshot was captured by the most recent npa_delta_live_set.
 	Reading from the snapshot — not from the live glyph — is what
 	prevents the cascade (each tick computes from the original frozen
 	inputs).
+
+	origin: optional transform-origin code for this call (see
+	_ORIGIN_FROM_CODE); None keeps the snapshot's options.origin.
+	Whole layer: the result's origin point lands on the same point of
+	the base input's bounds. Selection mode: on the same point of the
+	current selection bounds (BS: no realignment).
 	'''
 	global _live_snapshot
 	state = _live_snapshot
@@ -557,6 +609,17 @@ def npa_delta_live_drive(glyph, scope_layers, NodeActions,
 	dst = glyph.layer(target_name)
 	if dst is None:
 		return {'ok': False, 'error': 'Target layer "%s" not on glyph.' % target_name}
+
+	global_origin = state['global_origin']
+	if origin is not None:
+		if origin not in _ORIGIN_FROM_CODE:
+			return {'ok': False, 'error': 'Unknown origin code "%s".' % origin}
+		global_origin = _ORIGIN_FROM_CODE[origin]
+
+	if state.get('sel_indices'):
+		return _live_drive_selection(state, dst, global_origin,
+		                             (float(vstem), float(hstem)),
+		                             (float(sx) / 100.0, float(sy) / 100.0))
 
 	base_layer = state['snap_layers'][0]
 	try:
@@ -573,7 +636,7 @@ def npa_delta_live_drive(glyph, scope_layers, NodeActions,
 		new_layer = _bake_target_stems(
 			base_layer, state['vaxis'], target,
 			state['italic_rad'], state['extrapolate'],
-			state['global_origin'], source_bounds)
+			global_origin, source_bounds)
 	except Exception as e:
 		return {'ok': False, 'error': 'Bake failed: %s' % e}
 
@@ -589,6 +652,44 @@ def npa_delta_live_drive(glyph, scope_layers, NodeActions,
 		except Exception: pass
 
 	return {'ok': True}
+
+
+def _live_drive_selection(state, dst, global_origin, stem, scale):
+	'''Selection mode: scale the snapshot slice and write it in place into
+	the destination nodes at the snapshot indices (node identity, and so
+	the host selection, survive).'''
+	sel = state['sel_indices']
+	nodes = _layer_nodes(dst)
+	if max(sel) >= len(nodes):
+		return {'ok': False, 'error': 'Target layer is incompatible with the selection snapshot.'}
+
+	current = [i for i, node in enumerate(nodes) if getattr(node, 'selected', False)]
+	if current and current != sel:
+		return {'ok': False, 'error': 'Selection changed since snapshot — re-snapshot.'}
+
+	try:
+		result = list(state['vaxis']['point_array'].scale_by_stem(
+			stem, scale, (0., 0.), (0., 0.),
+			state['italic_rad'], state['extrapolate']))
+	except Exception as e:
+		return {'ok': False, 'error': 'Selection drive failed: %s' % e}
+
+	ox = oy = 0.
+	if global_origin is not None and global_origin != TransformOrigin.BASELINE:
+		try:
+			src_b = Bounds([(nodes[i].x, nodes[i].y) for i in sel])
+			dst_b = Bounds(result)
+			sx0, sy0 = src_b.align_matrix[global_origin.code]
+			dx0, dy0 = dst_b.align_matrix[global_origin.code]
+			ox, oy = sx0 - dx0, sy0 - dy0
+		except Exception:
+			ox = oy = 0.
+
+	for i, pos in zip(sel, result):
+		nodes[i].x = pos[0] + ox
+		nodes[i].y = pos[1] + oy
+
+	return {'ok': True, 'selection': len(sel)}
 
 
 def npa_delta_live_clear(glyph, scope_layers, NodeActions):

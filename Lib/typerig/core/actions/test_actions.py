@@ -337,6 +337,80 @@ check('A8 no-cleanup both on the cusp',
 		and close(_c8.nodes[2].x, 200.) and close(_c8.nodes[2].y, 0.))
 
 
+# -- Delta live drive: per-call origin, 9 frame origins, selection mode ---
+import json
+from typerig.core.objects.shape import Shape
+from typerig.core.objects.layer import Layer
+from typerig.core.objects.glyph import Glyph
+from typerig.core.actions import delta_panel_actions as dpa
+
+def _rect(x, y, w, h):
+	return Contour([Node(x, y, type=ON), Node(x, y + h, type=ON), Node(x + w, y + h, type=ON), Node(x + w, y, type=ON)], closed=True)
+
+def _h_layer(name, stem_v, bar, width):
+	# H: left stem, right stem, crossbar (bar = (x, y, w, h))
+	return Layer([Shape([_rect(50, 0, stem_v, 700), _rect(550 - stem_v, 0, stem_v, 700), _rect(*bar)])], name=name, width=width)
+
+def _delta_glyph():
+	return Glyph([_h_layer('Regular', 80, (130, 320, 340, 60), 600),
+				  _h_layer('Bold', 160, (210, 300, 180, 100), 600)], name='H')
+
+def _live_setup(selection=False, origin='BS'):
+	return json.dumps({'axes': [{'name': 'Live', 'targets': [],
+				'inputs': [{'name': 'Regular', 'vstem': 80, 'hstem': 60}, {'name': 'Bold', 'vstem': 160, 'hstem': 100}]}],
+				'options': {'metrics': True, 'anchors': True, 'extrapolate': True, 'origin': origin, 'selection': selection}})
+
+def _xy(layer):
+	return [(n.x, n.y) for n in dpa._layer_nodes(layer)]
+
+def _bounds(points):
+	return (min(p[0] for p in points), min(p[1] for p in points), max(p[0] for p in points), max(p[1] for p in points))
+
+_g = _delta_glyph()
+_reg0 = _xy(_g.layer('Regular'))
+_res = dpa.npa_delta_live_set(_g, ['Regular'], None, _live_setup())
+check('D1 live_set whole layer', _res['ok'] and _res['selection'] is None and 'point_array' in _res['viable'])
+
+_res = dpa.npa_delta_live_drive(_g, ['Regular'], None, 'Regular', 80, 60, 100, 100)
+check('D2 legacy call (no origin): neutral reproduces the input',
+		_res['ok'] and all(close(a[0], b[0]) and close(a[1], b[1]) for a, b in zip(_xy(_g.layer('Regular')), _reg0)))
+
+for _code, _fixed in (('RM', lambda b: (b[2], (b[1] + b[3]) / 2.)), ('BL', lambda b: (b[0], b[1])),
+					  ('TM', lambda b: ((b[0] + b[2]) / 2., b[3])), ('CE', lambda b: ((b[0] + b[2]) / 2., (b[1] + b[3]) / 2.))):
+	_res = dpa.npa_delta_live_drive(_g, ['Regular'], None, 'Regular', 80, 60, 130, 120, origin=_code)
+	_b = _bounds(_xy(_g.layer('Regular')))
+	_want = _fixed(_bounds(_reg0))
+	check('D3 origin {} stays put while scaling'.format(_code),
+			_res['ok'] and close(_fixed(_b)[0], _want[0]) and close(_fixed(_b)[1], _want[1]) and _b[2] - _b[0] > 520.)
+
+check('D4 unknown origin refused', not dpa.npa_delta_live_drive(_g, ['Regular'], None, 'Regular', 80, 60, 100, 100, origin='XX')['ok'])
+check('D4 all frame origins known', all(c in dpa._ORIGIN_FROM_CODE for c in ('BS', 'BL', 'BM', 'BR', 'LM', 'CE', 'RM', 'TL', 'TM', 'TR')))
+
+# Selection mode: only the crossbar (nodes 8..11) is driven, in place
+_g = _delta_glyph()
+for _n in dpa._layer_nodes(_g.layer('Regular'))[8:12]: _n.selected = True
+_res = dpa.npa_delta_live_set(_g, ['Regular'], None, _live_setup(selection=True), selection_layer='Regular')
+check('D5 live_set selection snapshot', _res['ok'] and _res['selection'] == 4 and _res['viable'] == ['point_array'])
+
+_nodes = dpa._layer_nodes(_g.layer('Regular'))
+_stems0 = [(n.x, n.y) for n in _nodes[:8]]
+_bar0 = _bounds([(n.x, n.y) for n in _nodes[8:12]])
+_res = dpa.npa_delta_live_drive(_g, ['Regular'], None, 'Regular', 80, 60, 150, 100, origin='CE')
+_bar1 = _bounds([(n.x, n.y) for n in _nodes[8:12]])
+check('D6 selection drive in place (same node objects)', _res['ok'] and _res['selection'] == 4 and dpa._layer_nodes(_g.layer('Regular')) == _nodes)
+check('D6 unselected nodes untouched', [(n.x, n.y) for n in _nodes[:8]] == _stems0)
+check('D6 bar grew about its centre, bar height kept',
+		_bar1[2] - _bar1[0] > _bar0[2] - _bar0[0] + 50. and close((_bar1[0] + _bar1[2]) / 2., (_bar0[0] + _bar0[2]) / 2.)
+		and close(_bar1[3] - _bar1[1], 60.))
+
+_nodes[0].selected = True
+check('D7 changed selection refused', not dpa.npa_delta_live_drive(_g, ['Regular'], None, 'Regular', 80, 60, 100, 100)['ok'])
+
+_g = _delta_glyph()
+_res = dpa.npa_delta_live_set(_g, ['Regular'], None, _live_setup(selection=True), selection_layer='Regular')
+check('D8 selection option with nothing selected -> whole layer', _res['ok'] and _res['selection'] is None)
+
+
 # - Finish -----------------------------
 print()
 if fails:
