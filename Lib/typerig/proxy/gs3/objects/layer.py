@@ -8,6 +8,32 @@
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
+# --- GS3 + GS4 host-write quirks: SINGLE SOURCE OF TRUTH ---
+#
+# This module is the ONE place where host-side mutation of a GSLayer's
+# outline is written. Panels and plugin bundles MUST route all writes
+# (new paths, appends, clears, replacements) through the trLayer methods
+# below, never by importing GSPath / GSNode / GSLINE / ... directly.
+#
+# Why: GS3 and GS4 differ on how a layer's path collection is written.
+#   GS3  — layer.paths is a mutable list; .append() works.
+#   GS4  — layer.paths is a read-only proxy (GSProxyShapes); .append()
+#          raises. The portable write surface is layer.shapes, assigned
+#          as a fresh list that mixes GSPath + GSComponent.
+# The dual-safe idiom is: `layer.shapes = list(layer.shapes) + [new]`.
+# It works on both versions; use it everywhere via trLayer helpers.
+#
+# Node construction uses the string API ('line' / 'curve' / 'offcurve')
+# which is accepted on both GS3 and GS4. Do NOT import GSLINE / GSCURVE /
+# GSOFFCURVE constants in callers; those are GS-version-sensitive and
+# unnecessary.
+#
+# Any new path/shape construction helper belongs here (or in contour.py
+# for the GSPath builder). If you find yourself writing a local
+# _build_gs_path or layer.paths.append in a panel, you are off-pattern —
+# add the helper here and call it. See porting_guide.md anti-pattern #14.
+# ---------------------------------------------------------------------
+
 # - Dependencies -------------------------
 from __future__ import print_function
 
@@ -105,6 +131,51 @@ class trLayer(Layer):
 	def _sync_host(self):
 		'''No-op: outline trShape writes to layer.paths directly.'''
 		pass
+
+	# - Host-write API (GS3 + GS4 safe) -----
+	# These are the ONLY sanctioned entry points for mutating a layer's
+	# shape collection from panels / plugins. See module header.
+
+	def set_shapes(self, shapes):
+		'''Replace all shapes (GSPath + GSComponent) on the host layer.
+
+		Args:
+			shapes: iterable of GSPath / GSComponent (or trShape — unwrapped).
+
+		GS4-safe: assigns a fresh list to layer.shapes rather than mutating
+		the layer.paths proxy.
+		'''
+		raw = []
+		for s in shapes:
+			raw.append(s.host if isinstance(s, trShape) else s)
+		self.host.shapes = raw
+		self.data = self._build_shapes()
+
+	def clear_shapes(self):
+		'''Remove every path and component from the host layer.'''
+		self.host.shapes = []
+		self.data = self._build_shapes()
+
+	def append_shape(self, shape):
+		'''Append one GSPath or GSComponent to the host layer.
+
+		GS4-safe: rebuilds the shapes list; never calls layer.paths.append
+		or layer.shapes.append (both unreliable or unavailable in GS4).
+		'''
+		raw = shape.host if isinstance(shape, trShape) else shape
+		self.host.shapes = list(self.host.shapes) + [raw]
+		self.data = self._build_shapes()
+
+	def append_contour(self, core_contour):
+		'''Append a core Contour as a new GSPath on the host layer.
+
+		Converts via _build_gs_path (string-typed, GS3+GS4 compatible) and
+		assigns through the GS4-safe shapes idiom. Returns the new GSPath.
+		'''
+		gs_path = _build_gs_path(core_contour)
+		self.host.shapes = list(self.host.shapes) + [gs_path]
+		self.data = self._build_shapes()
+		return gs_path
 
 	# - Eject / mount -------------------------
 	def eject(self):
