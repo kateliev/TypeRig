@@ -41,7 +41,7 @@ from typerig.core.algo._width_audit import (
 # ratio + on-curve point-in-polygon. Already vetted for CJK siblings.
 from typerig.core.algo.matchmaker import _contour_strictly_contains
 
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 
 
 # - Axis enum ---------------------------
@@ -70,6 +70,21 @@ class Topology(object):
 	'''
 	STRICT     = 'strict'
 	PERMISSIVE = 'permissive'
+
+
+# - Cascade scope enum ------------------
+class Cascade(object):
+	'''Which contours a stem correction moves (StemFixer.plan_cascade).
+
+	STEM   : only the contour(s) holding the two stem faces.
+	FAMILY : the faces' contours plus everything they contain or are
+	         contained by (outer + counters). Default: an 'o' keeps both
+	         walls when one is snapped; separate CJK strokes stay put.
+	LAYER  : every contour in the layer moves with the cascade.
+	'''
+	STEM   = 'stem'
+	FAMILY = 'family'
+	LAYER  = 'layer'
 
 
 # - Tunables ----------------------------
@@ -285,8 +300,16 @@ class StemDetector(object):
 			if m == 0:
 				continue
 
+			# Only line segments form straight faces. A curve segment's
+			# outgoing direction is its handle, not the segment: an extremum
+			# with an axis-aligned handle would otherwise be joined to the
+			# next on-curve (e.g. right extremum + top extremum of an 'o').
+			# Curve extrema are picked up below by tangent_class.
 			seg_class = []
 			for i in on_curve_indices:
+				if not nodes[(i + 1) % len(nodes)].is_on:
+					seg_class.append(None)
+					continue
 				ax, sign = _classify_dir(*_outgoing_dir(nodes[i]),
 				                          tangent_deg=self.tangent_deg)
 				seg_class.append((ax, sign) if ax is not None else None)
@@ -501,11 +524,15 @@ class StemFixer(object):
 	'''Builds and applies a StemCorrectionPlan via the IUP cascade.'''
 
 	def __init__(self, anchor='lower'):
-		if anchor not in ('lower', 'upper'):
-			raise ValueError('anchor must be \'lower\' or \'upper\'')
+		if anchor not in ('lower', 'upper', 'center'):
+			raise ValueError('anchor must be \'lower\', \'upper\' or \'center\'')
 		self.anchor = anchor
 
 	def plan_iup(self, violations, contours, eps=1e-6):
+		'''Legacy plan: shift the nodes of the target-edge contour that lie
+		beyond the cut. See plan_cascade() for the interpolating version.'''
+		if self.anchor == 'center':
+			raise ValueError('plan_iup supports \'lower\' / \'upper\' only; use plan_cascade')
 		plan = StemCorrectionPlan()
 
 		for v in violations:
@@ -544,12 +571,304 @@ class StemFixer(object):
 
 		return plan
 
+	def plan_cascade(self, violations, contours, scope=Cascade.FAMILY, keep=(), pin_extremes=True, eps=1e-6):
+		'''IUP plan along each axis: stem faces are knots, everything else is
+		interpolated between them (TrueType IUP on one axis).
+
+		Each captured stem gives two knots: its lower face moves by d_lo and
+		its upper face by d_hi, with (d_lo, d_hi) = (0, d) for anchor
+		'lower', (-d, 0) for 'upper' and (-d/2, +d/2) for 'center',
+		d = target - measured. Nodes between knots are interpolated (the
+		counters absorb the change); nodes beyond the outermost knots move
+		with the nearest one. Face nodes and their handles take their face
+		value exactly, so every stem lands on target even when knots of
+		different stems interleave.
+
+		keep: StemCandidates that must not change width (e.g. stems already
+		on target). Both their faces get the map's value at their centre,
+		so interpolation between moved stems cannot bend them.
+
+		pin_extremes: the lowest / highest coordinate of each group stays
+		put unless it is a stem face (baseline, cap height, the side of a
+		glyph beyond its last stem): the counters absorb the change.
+		False: parts beyond the outermost stems move with them.
+
+		scope picks the contours a stem acts on (see Cascade): the two
+		face contours, their containment family (outer + counters, default)
+		or the whole layer. Each group gets its own map, built from the
+		stems with a face in it.
+
+		Duplicate candidates (same axis, faces and contour set) count once.
+		'''
+		plan = StemCorrectionPlan()
+		family = contour_families(contours) if scope == Cascade.FAMILY else None
+
+		def group_of(ci):
+			if scope == Cascade.LAYER:
+				return 0
+			if scope == Cascade.FAMILY:
+				return min(family[ci])
+			return ci
+
+		def members_of(cand):
+			if scope == Cascade.LAYER:
+				return set(range(len(contours)))
+			if scope == Cascade.FAMILY:
+				return family[cand.edge_a.contour_idx] | family[cand.edge_b.contour_idx]
+			return {cand.edge_a.contour_idx, cand.edge_b.contour_idx}
+
+		def evaluate(knots, c):
+			if not knots:
+				return 0.0
+			if c <= knots[0][0]:
+				return knots[0][1]
+			if c >= knots[-1][0]:
+				return knots[-1][1]
+			for (c0, v0), (c1, v1) in zip(knots, knots[1:]):
+				if c0 <= c <= c1:
+					return v0 if c1 - c0 <= eps else v0 + (v1 - v0) * (c - c0) / (c1 - c0)
+			return knots[-1][1]
+
+		def merged(raw):
+			'''Sort knots by coord; equal coords average.'''
+			out = []
+			for c, v in sorted(raw):
+				if out and abs(out[-1][0] - c) <= eps:
+					out[-1][2].append(v)
+				else:
+					out.append([c, None, [v]])
+			return [(c, sum(vs) / len(vs)) for c, _, vs in out]
+
+		for axis in (Axis.V, Axis.H):
+			raw = {}		# group -> [(coord, value)]
+			face = {}		# (ci, ni) -> value
+			touched = {}	# group -> members
+			seen = set()
+
+			for v in violations:
+				cand = v.source
+				d = v.target.value - cand.measured_width
+				if cand.axis != axis or abs(d) <= eps:
+					continue
+				members = members_of(cand)
+				key = (round(cand.edge_a.coord, 3), round(cand.edge_b.coord, 3), tuple(sorted(members)))
+				if key in seen:
+					continue
+				seen.add(key)
+
+				if self.anchor == 'lower':
+					d_lo, d_hi = 0.0, d
+				elif self.anchor == 'upper':
+					d_lo, d_hi = -d, 0.0
+				else:
+					d_lo, d_hi = -0.5 * d, 0.5 * d
+
+				for ci in members:
+					g = group_of(ci)
+					touched.setdefault(g, set()).add(ci)
+					raw.setdefault(g, []).extend(((cand.edge_a.coord, d_lo), (cand.edge_b.coord, d_hi)))
+				for edge, value in ((cand.edge_a, d_lo), (cand.edge_b, d_hi)):
+					for ni in _with_handles(contours[edge.contour_idx], edge.node_indices):
+						face[(edge.contour_idx, ni)] = value
+
+			if not raw:
+				continue
+
+			# - Pinned extremes (unless a face sits there)
+			pins = {}		# group -> [pinned coords]
+			if pin_extremes:
+				for g, members in touched.items():
+					coords = [nd.x if axis == Axis.V else nd.y
+					          for ci in members for nd in contours[ci].nodes]
+					faces = [c for c, _ in raw[g]]
+					for c in (min(coords), max(coords)):
+						if all(abs(c - f) > eps for f in faces):
+							raw[g].append((c, 0.0))
+							pins.setdefault(g, []).append(c)
+
+			# - Rigid stems: both faces follow the map at their centre
+			knots = {g: merged(r) for g, r in raw.items()}
+			for cand in keep:
+				if cand.axis != axis:
+					continue
+				for ci in members_of(cand):
+					g = group_of(ci)
+					if g not in knots:
+						continue
+					lo, hi = cand.edge_a.coord, cand.edge_b.coord
+					if any(lo - eps <= c <= hi + eps for c in pins.get(g, ())):
+						value = 0.0		# the stem is the pinned extreme
+					else:
+						value = evaluate(knots[g], 0.5 * (lo + hi))
+					raw[g].extend(((cand.edge_a.coord, value), (cand.edge_b.coord, value)))
+					for edge in (cand.edge_a, cand.edge_b):
+						for ni in _with_handles(contours[edge.contour_idx], edge.node_indices):
+							face.setdefault((edge.contour_idx, ni), value)
+			knots = {g: merged(r) for g, r in raw.items()}
+
+			for g, members in touched.items():
+				for ci in members:
+					for ni, nd in enumerate(contours[ci].nodes):
+						value = face.get((ci, ni))
+						if value is None:
+							value = evaluate(knots[g], nd.x if axis == Axis.V else nd.y)
+						if value == 0.0:
+							continue
+						if axis == Axis.V:
+							plan.add(ci, ni, value, 0.0)
+						else:
+							plan.add(ci, ni, 0.0, value)
+
+		return plan
+
 	def apply(self, plan, contours):
 		for (ci, ni), (dx, dy) in plan.deltas.items():
 			if dx == 0.0 and dy == 0.0:
 				continue
 			contours[ci].nodes[ni].shift(dx, dy)
 		return contours
+
+
+def _with_handles(contour, node_indices):
+	'''Node indices plus the off-curve handles attached to them.'''
+	nodes = contour.nodes
+	n = len(nodes)
+	out = set()
+	for i in node_indices:
+		out.add(i)
+		for j in ((i - 1) % n, (i + 1) % n):
+			if not nodes[j].is_on:
+				out.add(j)
+	return out
+
+
+def contour_families(contours):
+	'''Containment families: {contour_idx: set(contour indices)} where a
+	family is the transitive closure of "strictly contains" (outer and its
+	counters, counters' islands, ...). Siblings stay in separate families.'''
+	n = len(contours)
+	parent = list(range(n))
+
+	def find(i):
+		while parent[i] != i:
+			parent[i] = parent[parent[i]]
+			i = parent[i]
+		return i
+
+	for i in range(n):
+		for j in range(n):
+			if i != j and _contour_strictly_contains(contours[i], contours[j]):
+				parent[find(j)] = find(i)
+
+	groups = {}
+	for i in range(n):
+		groups.setdefault(find(i), set()).add(i)
+	return {i: groups[find(i)] for i in range(n)}
+
+
+def _shear(contours, slope):
+	'''x -= y * slope for every node (slope = tan(italic angle)).'''
+	if slope == 0.0:
+		return
+	for c in contours:
+		for nd in c.nodes:
+			nd.x -= nd.y * slope
+
+
+class StemSnapReport(object):
+	'''Result of snap_stems().
+
+	candidates  -- every StemCandidate the detector found (after the
+	               selection filter).
+	captured    -- StemViolations inside some target band (zero deltas
+	               included: "already on target").
+	moved       -- the captured stems that needed a correction.
+	out_of_band -- candidates no target claims (left alone).
+	plan        -- the StemCorrectionPlan (empty on a dry run with
+	               nothing to do).
+	applied     -- True when the contours were changed.
+	'''
+	__slots__ = ('candidates', 'captured', 'moved', 'out_of_band', 'plan', 'applied')
+
+	def __init__(self):
+		self.candidates, self.captured, self.moved, self.out_of_band = [], [], [], []
+		self.plan = StemCorrectionPlan()
+		self.applied = False
+
+	def nodes(self, which='moved'):
+		'''(contour_idx, node_idx) of the face nodes of `which` stems.'''
+		out = set()
+		for v in getattr(self, which):
+			for e in (v.source.edge_a, v.source.edge_b):
+				out.update((e.contour_idx, i) for i in e.node_indices)
+		return out
+
+
+def snap_stems(contours, allowlist, detector=None, axis=None,
+               anchor='center', scope=Cascade.FAMILY, italic_angle=0.0,
+               selected=None, round_ints=False, pin_extremes=True, apply=True):
+	'''Detect, audit and snap axis-aligned stems in one call.
+
+	contours     -- list[Contour]; changed IN PLACE when apply is True.
+	allowlist    -- WidthAllowlist keyed Axis.V / Axis.H.
+	detector     -- StemDetector (default: extrema mode, strict topology).
+	axis         -- Axis.V / Axis.H / None (both).
+	anchor       -- 'lower' / 'upper' / 'center' (see StemFixer.plan_cascade).
+	scope        -- Cascade.STEM / FAMILY / LAYER.
+	italic_angle -- degrees; the outline is deslanted for detection and
+	                the correction, then slanted back. Vertical stems of
+	                an italic are measured perpendicular to the slant axis
+	                in the upright frame (i.e. horizontally, as designers
+	                and hinting stems measure them).
+	selected     -- optional set of (contour_idx, node_idx): only stems
+	                with a face node in it are processed.
+	round_ints   -- round the moved nodes to integers.
+	pin_extremes -- keep glyph extremes that are not stem faces in place
+	                (see StemFixer.plan_cascade).
+	apply        -- False = dry run; contours keep their coordinates.
+
+	Returns a StemSnapReport.
+	'''
+	det = detector if detector is not None else StemDetector()
+	slope = math.tan(math.radians(italic_angle)) if italic_angle else 0.0
+	report = StemSnapReport()
+
+	_shear(contours, slope)
+	try:
+		found = det.detect(contours, axis=axis)
+		cands = found
+		if selected is not None:
+			selected = set(selected)
+			cands = [c for c in cands
+			         if any((e.contour_idx, i) in selected
+			                for e in (c.edge_a, c.edge_b) for i in e.node_indices)]
+		report.candidates = cands
+		report.captured = StemAuditor(allowlist).audit(cands)
+		report.moved = [v for v in report.captured if v.delta != 0.0]
+		claimed = set(id(v.source) for v in report.captured)
+		report.out_of_band = [c for c in cands if id(c) not in claimed]
+
+		if report.moved:
+			# Every stem not snapped stays rigid unless it overlaps a snapped one
+			spans = [(v.source.axis, v.source.edge_a.coord, v.source.edge_b.coord) for v in report.moved]
+			moving = set(id(v.source) for v in report.moved)
+			keep = [c for c in found if id(c) not in moving
+			        and not any(a == c.axis and c.edge_a.coord < hi and lo < c.edge_b.coord
+			                    for a, lo, hi in spans)]
+			report.plan = StemFixer(anchor=anchor).plan_cascade(
+				report.moved, contours, scope=scope, keep=keep, pin_extremes=pin_extremes)
+		if apply and len(report.plan):
+			StemFixer(anchor=anchor).apply(report.plan, contours)
+			report.applied = True
+	finally:
+		_shear(contours, -slope)
+
+	if report.applied and round_ints:
+		for ci, ni in report.plan.deltas:
+			nd = contours[ci].nodes[ni]
+			nd.x, nd.y = float(round(nd.x)), float(round(nd.y))
+
+	return report
 
 
 # =====================================================================
@@ -1061,6 +1380,182 @@ def _run_stage7_tests():
 	print('Stage 7: all tests passed.')
 
 
+# --- Stage 8: cascade planner + snap_stems ---
+
+def _o_glyph(wall_l=40, wall_r=40, counter_w=120, h=600, top=40):
+	outer = _make_rect_contour(0, 0, wall_l + counter_w + wall_r, h)
+	counter = _make_cw_rect_contour(wall_l, top, counter_w, h - 2 * top)
+	return [outer, counter]
+
+
+def _v_widths(contours):
+	return sorted(round(c.measured_width, 3)
+	              for c in StemDetector().detect(contours, axis=Axis.V))
+
+
+def _test_cascade_o_both_walls():
+	'''Both walls 40 -> 38. Family cascade must move the counter AND the
+	outer right face; plan_iup (one contour only) gets the right wall wrong.'''
+	al = WidthAllowlist({Axis.V: [WidthTarget(38, 5, 5)]})
+	for anchor in ('lower', 'upper', 'center'):
+		cs = _o_glyph()
+		r = snap_stems(cs, al, axis=Axis.V, anchor=anchor)
+		assert r.applied and len(r.moved) == 2
+		assert _v_widths(cs).count(38.0) == 2, (anchor, _v_widths(cs))
+	print('  family cascade: o walls 40/40 -> 38/38 for lower/upper/center [OK]')
+
+
+def _test_cascade_center_keeps_centre():
+	cs = [_make_rect_contour(100, 0, 31, 600)]
+	al = WidthAllowlist({Axis.V: [WidthTarget(29, 5, 5)]})
+	snap_stems(cs, al, axis=Axis.V, anchor='center')
+	xs = sorted(set(nd.x for nd in cs[0].nodes))
+	assert _approx(xs[0], 101.0) and _approx(xs[1], 130.0), xs
+	print('  center anchor: 100..131 -> 101..130 [OK]')
+
+
+def _test_cascade_two_stems_one_contour():
+	gly = [_make_h_glyph(stem_w=31, bar_h=40)]
+	al = WidthAllowlist({Axis.V: [WidthTarget(29, 5, 5)]})
+	snap_stems(gly, al, axis=Axis.V, anchor='lower')
+	assert _v_widths(gly).count(29.0) == 2, _v_widths(gly)
+	print('  cascade: H with two 31 stems -> both 29 [OK]')
+
+
+def _test_cascade_siblings_untouched():
+	a = _make_rect_contour(0, 0, 31, 600)
+	b = _make_rect_contour(200, 0, 60, 600)
+	before = [(nd.x, nd.y) for nd in b.nodes]
+	al = WidthAllowlist({Axis.V: [WidthTarget(29, 5, 5)]})
+	snap_stems([a, b], al, anchor='lower', scope=Cascade.FAMILY)
+	assert [(nd.x, nd.y) for nd in b.nodes] == before
+	snap_stems([a, b], WidthAllowlist({Axis.V: [WidthTarget(27, 5, 5)]}),
+	           anchor='lower', scope=Cascade.LAYER)
+	assert [(nd.x, nd.y) for nd in b.nodes] == before		# rigid + pinned extreme
+	snap_stems([a, b], WidthAllowlist({Axis.V: [WidthTarget(25, 5, 5)]}),
+	           anchor='lower', scope=Cascade.LAYER, pin_extremes=False)
+	assert _approx(b.nodes[0].x, 198.0), b.nodes[0].x
+	print('  family scope leaves sibling alone; layer scope moves it (pins off) [OK]')
+
+
+def _test_dry_run_and_selection():
+	cs = [_make_rect_contour(0, 0, 31, 600), _make_rect_contour(200, 0, 31, 600)]
+	al = WidthAllowlist({Axis.V: [WidthTarget(29, 5, 5)]})
+	r = snap_stems(cs, al, axis=Axis.V, apply=False)
+	assert not r.applied and len(r.moved) == 2 and _v_widths(cs) == [31.0, 31.0]
+	r = snap_stems(cs, al, axis=Axis.V, selected={(1, 0)})
+	assert len(r.moved) == 1 and _v_widths(cs) == [29.0, 31.0], _v_widths(cs)
+	print('  dry run changes nothing; selection limits to picked stem [OK]')
+
+
+def _test_italic_deslant():
+	'''Parallelogram stem slanted 10deg, horizontal width 31 -> 29.'''
+	t = math.tan(math.radians(10.0))
+	pts = [(0, 0), (31, 0), (31 + 600 * t, 600), (600 * t, 600)]
+	cs = [Contour([Node(x, y) for x, y in pts], closed=True)]
+	al = WidthAllowlist({Axis.V: [WidthTarget(29, 5, 5)]})
+	assert not snap_stems(cs, al, axis=Axis.V, apply=False).captured
+	r = snap_stems(cs, al, axis=Axis.V, italic_angle=10.0, anchor='lower')
+	assert len(r.moved) == 1
+	n = cs[0].nodes
+	assert _approx(n[1].x - n[0].x, 29.0) and _approx(n[2].x - n[3].x, 29.0)
+	assert _approx(n[3].x, 600 * t)
+	print('  italic: 10deg slanted stem 31 -> 29, slant kept [OK]')
+
+
+def _test_round_ints():
+	cs = [_make_rect_contour(0, 0, 30, 600)]
+	al = WidthAllowlist({Axis.V: [WidthTarget(29, 5, 5)]})
+	snap_stems(cs, al, axis=Axis.V, anchor='center', round_ints=True)
+	assert all(nd.x == int(nd.x) for nd in cs[0].nodes)
+	print('  round_ints: moved nodes on integers [OK]')
+
+
+def _ellipse(cx, cy, rx, ry, ccw=True, k=0.5523):
+	'''Four-extrema cubic ellipse.'''
+	P = [(cx + rx, cy), (cx, cy + ry), (cx - rx, cy), (cx, cy - ry)]
+	T = [(0, ry), (-rx, 0), (0, -ry), (rx, 0)]
+	nodes = []
+	for i in range(4):
+		p, q, t0, t1 = P[i], P[(i + 1) % 4], T[i], T[(i + 1) % 4]
+		nodes += [Node(p[0], p[1], type='on'),
+		          Node(p[0] + t0[0] * k, p[1] + t0[1] * k, type='curve'),
+		          Node(q[0] - t1[0] * k, q[1] - t1[1] * k, type='curve')]
+	if not ccw:
+		nodes = [Node(n.x, n.y, type=n.type) for n in reversed(nodes)]
+	return Contour(nodes, closed=True)
+
+
+def _test_curved_o():
+	'''Round 'o': walls 38 (V) and 40 (H) at the extrema. Snap to 36:
+	extrema land on target and handles stay axis-aligned.'''
+	cs = [_ellipse(300, 300, 300, 320), _ellipse(300, 300, 262, 280, ccw=False)]
+	al = WidthAllowlist({Axis.V: [WidthTarget(36, 5, 5)], Axis.H: [WidthTarget(36, 5, 5)]})
+	r = snap_stems(cs, al)
+	assert sorted((v.key, round(v.measured, 3)) for v in r.moved) == \
+		[('H', 40.0), ('H', 40.0), ('V', 38.0), ('V', 38.0)], r.moved
+	widths = sorted((c.axis, round(c.measured_width, 3)) for c in StemDetector().detect(cs))
+	assert widths == [('H', 36.0)] * 2 + [('V', 36.0)] * 2, widths
+	for c in cs:
+		for i, on in enumerate(c.nodes):
+			if not on.is_on:
+				continue
+			for h in (c.nodes[i - 1], c.nodes[(i + 1) % len(c.nodes)]):
+				assert _approx(on.x, h.x) or _approx(on.y, h.y), 'handle tilted'
+	print('  curved o: extrema stems 38/40 -> 36, handles stay H/V [OK]')
+
+
+def _test_cascade_counters_absorb():
+	'''H with two 31 stems, center anchor: each stem keeps its centre,
+	the counter absorbs, the outline shrinks by 1 per side only.'''
+	gly = [_make_h_glyph(stem_w=31, bar_h=40, glyph_w=400)]
+	snap_stems(gly, WidthAllowlist({Axis.V: [WidthTarget(29, 5, 5)]}), axis=Axis.V, anchor='center')
+	xs = sorted(set(nd.x for nd in gly[0].nodes))
+	assert xs == [1.0, 30.0, 370.0, 399.0], xs
+	print('  center: H 0|31..369|400 -> 1|30..370|399, counter absorbs [OK]')
+
+
+def _test_cascade_keeps_on_target_stem():
+	'''Comb: stems 31 | 29 | 31 at x 0, 100, 200 in one layer. Snapping the
+	outer two must not bend the middle one (already on target).'''
+	cs = [_make_rect_contour(0, 0, 31, 600), _make_rect_contour(100, 0, 29, 600),
+	      _make_rect_contour(200, 0, 31, 600)]
+	al = WidthAllowlist({Axis.V: [WidthTarget(29, 5, 5)]})
+	snap_stems(cs, al, axis=Axis.V, anchor='lower', scope=Cascade.LAYER)
+	assert _v_widths(cs) == [29.0, 29.0, 29.0], _v_widths(cs)
+	print('  on-target stem between moved stems stays rigid [OK]')
+
+
+def _test_pin_extremes():
+	'''H crossbar 42 -> 40 centered: baseline and top stay put.'''
+	gly = [_make_h_glyph(stem_w=80, bar_h=42)]
+	al = WidthAllowlist({Axis.H: [WidthTarget(40, 5, 5)]})
+	snap_stems(gly, al, axis=Axis.H, anchor='center')
+	ys = sorted(set(round(nd.y, 6) for nd in gly[0].nodes))
+	assert ys == [0.0, 280.0, 320.0, 600.0], ys
+	gly = [_make_h_glyph(stem_w=80, bar_h=42)]
+	snap_stems(gly, al, axis=Axis.H, anchor='center', pin_extremes=False)
+	ys = sorted(set(round(nd.y, 6) for nd in gly[0].nodes))
+	assert ys == [1.0, 280.0, 320.0, 599.0], ys
+	print('  pin_extremes: bar 42 -> 40, baseline / top kept (off: they follow) [OK]')
+
+
+def _run_stage8_tests():
+	print('Stage 8 - plan_cascade / snap_stems:')
+	_test_cascade_o_both_walls()
+	_test_cascade_center_keeps_centre()
+	_test_cascade_two_stems_one_contour()
+	_test_cascade_siblings_untouched()
+	_test_dry_run_and_selection()
+	_test_italic_deslant()
+	_test_round_ints()
+	_test_curved_o()
+	_test_cascade_counters_absorb()
+	_test_cascade_keeps_on_target_stem()
+	_test_pin_extremes()
+	print('Stage 8: all tests passed.')
+
+
 if __name__ == '__main__':
 	_run_stage1_tests()
 	print()
@@ -1075,5 +1570,7 @@ if __name__ == '__main__':
 	_run_stage6_tests()
 	print()
 	_run_stage7_tests()
+	print()
+	_run_stage8_tests()
 	print()
 	print('stem_snap: ALL STAGES PASSED')

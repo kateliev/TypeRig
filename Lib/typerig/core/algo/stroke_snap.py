@@ -34,7 +34,7 @@ from typerig.core.algo._width_audit import (
 	WidthTarget, WidthAllowlist, Violation,
 )
 
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 
 
 # - Stroke type taxonomy ---------------
@@ -309,6 +309,10 @@ class StrokeFixer(object):
 	For each captured violation, distance = delta / 2. offset_outline
 	applies its distance to BOTH faces, so width changes by delta exactly.
 	Centerline and advance preserved.
+
+	offset_outline grows a CCW contour and shrinks a CW one for the same
+	distance, so the sign is flipped for CW strokes: a positive delta
+	always thickens the stroke whatever its direction.
 	'''
 	def __init__(self, curvature_correction=True):
 		self.curvature_correction = bool(curvature_correction)
@@ -327,12 +331,101 @@ class StrokeFixer(object):
 		out = list(strokes)
 		for ci, dist in plan.offsets.items():
 			if 0 <= ci < len(out) and dist != 0.0:
+				signed = dist if strokes[ci].is_ccw else -dist
 				try:
 					out[ci] = strokes[ci].offset_outline(
-						dist, curvature_correction=self.curvature_correction)
+						signed, curvature_correction=self.curvature_correction)
 				except Exception:
 					pass
 		return out
+
+
+# - One-call pipeline -------------------
+class StrokeSnapReport(object):
+	'''Result of snap_strokes().
+
+	strokes      -- the stroke contours that were measured (the input
+	                contours, or the output of stroke separation).
+	measurements -- StrokeMeasurement per measured stroke.
+	captured     -- StrokeViolations inside some band (zero deltas kept).
+	moved        -- captured strokes that needed a correction.
+	contours     -- the output contour list (same length and order as the
+	                input unless `separated` is True).
+	separated    -- True when the outline was split into strokes, i.e.
+	                the output replaces the input wholesale.
+	skipped      -- input indices not measured (counters, open contours).
+	'''
+	__slots__ = ('strokes', 'measurements', 'captured', 'moved',
+	             'contours', 'separated', 'skipped')
+
+	def __init__(self):
+		self.strokes, self.measurements, self.captured, self.moved = [], [], [], []
+		self.contours, self.separated, self.skipped = [], False, []
+
+
+def _cubic(contour):
+	return contour.to_cubic_contour() if contour.has_quadratic else contour
+
+
+def snap_strokes(contours, allowlist, match_on='median', mat_quality=_DEFAULT_MAT_QUALITY,
+                 separate=False, beta_min=1.5, sample_step=20.0,
+                 axis_tol_deg=_DEFAULT_AXIS_TOL_DEG, dot_aspect=_DEFAULT_DOT_ASPECT,
+                 selected=None, round_ints=False, apply=True):
+	'''Measure, classify, audit and snap strokes in one call.
+
+	contours  -- list[Contour]. Never changed in place: the result is in
+	             report.contours.
+	allowlist -- WidthAllowlist keyed by StrokeType.
+	separate  -- False (default): every closed contour is one stroke (the
+	             usual CJK build with overlapping stroke contours); contours
+	             inside another (counters) are skipped. True: split the
+	             outline into strokes first (stroke_sep, MAT) — the result
+	             is a new set of overlapping stroke contours.
+	selected  -- optional set of contour indices to process (ignored when
+	             separate is True).
+	round_ints -- round the snapped strokes to integers.
+	apply     -- False = dry run (report.contours is the input).
+	'''
+	report = StrokeSnapReport()
+	contours = [_cubic(c) for c in contours]
+
+	if separate:
+		from typerig.core.algo.stroke_sep import separate_strokes
+		strokes = [_cubic(c) for c in separate_strokes(
+			contours, beta_min=beta_min, sample_step=sample_step, debug=False)]
+		indices = list(range(len(strokes)))
+		report.separated = True
+	else:
+		from typerig.core.algo.matchmaker import _contour_strictly_contains
+		strokes = contours
+		indices = []
+		for i, c in enumerate(contours):
+			inner = any(j != i and _contour_strictly_contains(contours[j], c)
+			            for j in range(len(contours)))
+			if not getattr(c, 'closed', True) or inner or (selected is not None and i not in selected):
+				report.skipped.append(i)
+			else:
+				indices.append(i)
+
+	measurer = StrokeMeasurer(mat_quality=mat_quality)
+	classifier = StrokeClassifier(axis_tol_deg=axis_tol_deg, dot_aspect=dot_aspect)
+	report.strokes = [strokes[i] for i in indices]
+	report.measurements = [classifier.classify(measurer.measure(s)) for s in report.strokes]
+	report.captured = StrokeAuditor(allowlist, match_on=match_on).audit(report.measurements)
+	report.moved = [v for v in report.captured if v.delta != 0.0]
+
+	if not apply:
+		report.contours = list(contours)
+		return report
+
+	fixer = StrokeFixer()
+	plan = fixer.plan(report.moved, strokes)
+	report.contours = fixer.apply(plan, strokes)
+	if round_ints:
+		for ci in plan.offsets:
+			for nd in report.contours[ci].nodes:
+				nd.x, nd.y = float(round(nd.x)), float(round(nd.y))
+	return report
 
 
 # =====================================================================
@@ -546,6 +639,41 @@ def _run_stage5_tests():
 	print('Stage 5: all tests passed.')
 
 
+# --- Stage 6: direction + snap_strokes ---
+
+def _make_cw_rect_contour(x, y, w, h):
+	nodes = [Node(x, y), Node(x, y + h), Node(x + w, y + h), Node(x + w, y)]
+	return Contour(nodes, closed=True)
+
+
+def _test_fixer_cw_direction():
+	'''A CW stroke too thin must get thicker, like a CCW one.'''
+	for make in (_make_rect_contour, _make_cw_rect_contour):
+		c = make(0, 0, 600, 27).to_cubic_contour()
+		al = WidthAllowlist({StrokeType.HORIZONTAL: [WidthTarget(29, 5, 5)]})
+		r = snap_strokes([c], al, mat_quality='draft')
+		ys = [nd.y for nd in r.contours[0].nodes if nd.is_on]
+		assert max(ys) - min(ys) > 27.5, (make.__name__, max(ys) - min(ys))
+	print('  CW and CCW strokes both thicken on positive delta [OK]')
+
+
+def _test_snap_strokes_skips_counters_and_dry_run():
+	outer = _make_rect_contour(0, 0, 200, 600)
+	counter = _make_cw_rect_contour(40, 40, 120, 520)
+	al = WidthAllowlist({StrokeType.VERTICAL: [WidthTarget(29, 5, 5)]})
+	r = snap_strokes([outer, counter], al, mat_quality='draft', apply=False)
+	assert r.skipped == [1] and len(r.measurements) == 1
+	assert r.contours[0] is outer
+	print('  snap_strokes: counter skipped; dry run returns input [OK]')
+
+
+def _run_stage6_tests():
+	print('Stage 6 - direction / snap_strokes:')
+	_test_fixer_cw_direction()
+	_test_snap_strokes_skips_counters_and_dry_run()
+	print('Stage 6: all tests passed.')
+
+
 if __name__ == '__main__':
 	_run_stage1_tests()
 	print()
@@ -556,5 +684,7 @@ if __name__ == '__main__':
 	_run_stage4_tests()
 	print()
 	_run_stage5_tests()
+	print()
+	_run_stage6_tests()
 	print()
 	print('stroke_snap: ALL STAGES PASSED')
