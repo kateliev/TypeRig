@@ -1,0 +1,23 @@
+# encoding: utf-8
+# -------------------------------------------------------------------------
+# typerig.gui.gs3 — reusable Glyphs 3/4 panel framework
+#
+# What lives here (one source of truth across every TR-style Glyphs plugin):
+#
+#   config.py       UI namespace + GS3/GS4 host detection and presets
+#   panel_base.py   TRPanelBase + @register_panel for tool sub-panels
+#   widgets.py      IconButton (square, icon-font ligature-rendered)
+#   icon_font.py    register_icon_font() + tr_attr() for OpenType rlig icons
+#   scope.py        polymorphic pLayers resolver (tuple or [(name, type), …])
+#   dialogs.py      inline layer-picker + master-values dialog
+#   assets/         shared icon font (typerig-icons.ttf)
+#
+# A new TR Glyphs plugin typically only ships:
+#   - plugin.py            Glyphs plugin entry stub
+#   - main_panel.py        TRMainPanel with its masthead and tabs
+#   - configurator.py      tool-list persistence
+#   - Panel/*.py           the tool sub-panels (subclassing TRPanelBase)
+# ... and imports everything else from typerig.gui.gs3.
+#
+# See `Lib/porting_guide.md` in the TypeRig-Glyphs repo for the full guide.
+# -------------------------------------------------------------------------
