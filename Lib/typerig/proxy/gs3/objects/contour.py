@@ -13,7 +13,7 @@ from __future__ import print_function
 
 import GlyphsApp
 
-from typerig.proxy.gs3.objects.node import trNode, _build_gs_node, _CORE_TO_GS3
+from typerig.proxy.gs3.objects.node import trNode, _build_gs_node, _CORE_TO_GS3, _GS3_TO_CORE
 from typerig.core.objects.contour import Contour
 from typerig.core.objects.node import Node
 
@@ -189,14 +189,18 @@ class trContour(Contour):
 
 	def mount(self, core_contour):
 		'''Write core Contour data back into the GS3 host.
-		Updates nodes in-place when count matches, otherwise rebuilds.
+		Updates nodes in-place when the node types match one to one,
+		otherwise rebuilds (a same-count result with different types would
+		leave stale BCP/on-curve types on the host).
 
 		Args:
 			core_contour (Contour): Pure core Contour with data to apply.
 		'''
 		host_nodes = list(self.host.nodes)
+		host_types = [_GS3_TO_CORE.get(n.type, 'on') for n in host_nodes]
+		core_types = [n.type for n in core_contour.nodes]
 
-		if len(core_contour.nodes) == len(host_nodes):
+		if core_types == host_types:
 			# Structure unchanged — update geometry and smooth only.
 			# GS3 on-curve type ('line' vs 'curve') reflects segment structure that
 			# did not change, so we must not overwrite it with a flat _CORE_TO_GS3

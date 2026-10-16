@@ -27,6 +27,7 @@ Fields are grouped under sub-namespaces by concern:
     UI.BTN        — buttons (size, icon point size)
     UI.LAYOUT     — universal spacing (gap, pad, margin, section title)
     UI.SPN        — numeric EditText dimensions
+    UI.FORM       — label + field grids, check boxes, text buttons
     UI.LIST       — table (vanilla.List) dimensions
     UI.STATUS     — status / warning text block
     UI.WIN        — main window dimensions and minimums
@@ -201,6 +202,20 @@ LBL = SimpleNamespace(
 	GAP_AFTER = 4,   # tight gap between a single-char label and the next widget
 )
 
+# - Form rows (label + numeric field grids, check boxes, text buttons) ----
+# Dense parameter panels (Cleanup) lay out "Label: [field]" pairs in
+# columns. Row pitch is SPN.H + ROW_GAP; tighter than LAYOUT.GAP so a
+# dozen parameters fit the default window height.
+FORM = SimpleNamespace(
+	LBL_W      = 64,      # "Collinear:"-style field label column width
+	FIELD_W    = SPN.W_WIDE,  # numeric field width in a form grid
+	ROW_GAP    = 6,       # vertical gap between form rows
+	CHK_H      = 20,      # vanilla.CheckBox row height (small style)
+	CHK_STYLE  = 'small', # NSControlSize for check boxes
+	BTN_W      = 90,      # text button width (three per row at WIN.W)
+	BTN_STYLE  = 'small', # NSControlSize for text buttons
+)
+
 # - Table (vanilla.List) --------------------------------------------------
 # Column widths named by purpose so panels can reference them instead of
 # inlining raw numbers in columnDescriptions dicts.
@@ -285,6 +300,7 @@ UI = SimpleNamespace(
 	LAYOUT   = LAYOUT,
 	SPN      = SPN,
 	LBL      = LBL,
+	FORM     = FORM,
 	LIST     = LIST,
 	STATUS   = STATUS,
 	WIN      = WIN,
