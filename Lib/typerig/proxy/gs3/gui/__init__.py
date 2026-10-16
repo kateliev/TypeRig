@@ -1,6 +1,6 @@
 # encoding: utf-8
 # -------------------------------------------------------------------------
-# typerig.gui.gs3 — reusable Glyphs 3/4 panel framework
+# typerig.proxy.gs3.gui — reusable Glyphs 3/4 panel framework
 #
 # What lives here (one source of truth across every TR-style Glyphs plugin):
 #
@@ -17,7 +17,7 @@
 #   - main_panel.py        TRMainPanel with its masthead and tabs
 #   - configurator.py      tool-list persistence
 #   - Panel/*.py           the tool sub-panels (subclassing TRPanelBase)
-# ... and imports everything else from typerig.gui.gs3.
+# ... and imports everything else from typerig.proxy.gs3.gui.
 #
 # See `Lib/porting_guide.md` in the TypeRig-Glyphs repo for the full guide.
 # -------------------------------------------------------------------------

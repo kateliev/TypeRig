@@ -54,7 +54,7 @@ def register_icon_font(ttf_path=None):
 	if ttf_path is None:
 		ttf_path = _DEFAULT_TTF
 	if not os.path.isfile(ttf_path):
-		print('[typerig.gui.gs3] icon font not found:', ttf_path)
+		print('[typerig.proxy.gs3.gui] icon font not found:', ttf_path)
 		return False
 	url = NSURL.fileURLWithPath_(ttf_path)
 	ok, err = CTFontManagerRegisterFontsForURL(url, kCTFontManagerScopeProcess, None)
