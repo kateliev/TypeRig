@@ -231,8 +231,16 @@ class trLayer(Layer):
 	def copy_to_background(self):
 		'''Append copies of this layer's shapes to its background
 		(Glyphs' counterpart of the FL mask layer).'''
+		# A layer without a background may answer None: start it from a copy
+		# of the layer (the documented `layer.background = layer.copy()`).
+		# Otherwise append, then assign the background back so a lazily
+		# created one is stored on the layer.
 		background = self.host.background
+		if background is None:
+			self.host.background = self.host.copy()
+			return
 		background.shapes = list(background.shapes) + [copy.copy(s) for s in self.host.shapes]
+		self.host.background = background
 
 	def set_locked(self, locked=True):
 		'''Lock / unlock every path and component on the layer.'''
