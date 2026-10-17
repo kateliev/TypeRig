@@ -231,6 +231,14 @@ class trLayer(Layer):
 	def copy_to_background(self):
 		'''Append copies of this layer's shapes to its background
 		(Glyphs' counterpart of the FL mask layer).'''
+		# Native Path > Copy to Background (GS3 + GS4 GlyphsCore): whole layer
+		# (checkSelection False), old background kept (FL: add to the mask).
+		# Writing background.shapes from Python stores the shapes but does
+		# not show them on Glyphs 4 (user test, 2026-10-17).
+		native = getattr(self.host, 'contentToBackgroundCheckSelection_keepOldBackground_', None)
+		if native is not None:
+			native(False, True)
+			return
 		# A layer without a background may answer None: start it from a copy
 		# of the layer (the documented `layer.background = layer.copy()`).
 		# Otherwise append, then assign the background back so a lazily
