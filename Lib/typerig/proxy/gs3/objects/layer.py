@@ -37,6 +37,8 @@
 # - Dependencies -------------------------
 from __future__ import print_function
 
+import copy
+
 import GlyphsApp
 
 from typerig.proxy.gs3.objects.shape  import trShape, _build_gs_shape
@@ -113,6 +115,34 @@ class trLayer(Layer):
 		if value:
 			self.host.vertWidth = float(value)
 
+	# Sidebearings come from the host: Glyphs measures the true outline
+	# (components included) and its setters move everything on the layer.
+	# Core Layer.LSB / RSB use the control box of the paths only.
+	@property
+	def LSB(self):
+		return float(self.host.LSB)
+
+	@LSB.setter
+	def LSB(self, value):
+		self.host.LSB = float(value)
+
+	@property
+	def RSB(self):
+		return float(self.host.RSB)
+
+	@RSB.setter
+	def RSB(self, value):
+		self.host.RSB = float(value)
+
+	@property
+	def visible(self):
+		'''Layer visibility in the edit view (eye icon in the Layers panel).'''
+		return bool(getattr(self.host, 'visible', False))
+
+	@visible.setter
+	def visible(self, value):
+		self.host.visible = bool(value)
+
 	@property
 	def anchors(self):
 		return [trAnchor(a, parent=self) for a in self.host.anchors]
@@ -176,6 +206,53 @@ class trLayer(Layer):
 		self.host.shapes = list(self.host.shapes) + [gs_path]
 		self.data = self._build_shapes()
 		return gs_path
+
+	def copy_shapes_from(self, other, clean=False):
+		'''Append copies of other's paths and components (clean=True: replace).
+
+		Args:
+			other (trLayer): source layer.
+
+		Returns:
+			bool: True if other had shapes.
+		'''
+		incoming = [copy.copy(s) for s in other.host.shapes]
+		kept = [] if clean else list(self.host.shapes)
+		self.host.shapes = kept + incoming
+		self.data = self._build_shapes()
+		return bool(incoming)
+
+	def swap_shapes(self, other):
+		'''Exchange all paths and components with another trLayer.'''
+		mine = [copy.copy(s) for s in self.host.shapes]
+		self.set_shapes([copy.copy(s) for s in other.host.shapes])
+		other.set_shapes(mine)
+
+	def copy_to_background(self):
+		'''Append copies of this layer's shapes to its background
+		(Glyphs' counterpart of the FL mask layer).'''
+		background = self.host.background
+		background.shapes = list(background.shapes) + [copy.copy(s) for s in self.host.shapes]
+
+	def set_locked(self, locked=True):
+		'''Lock / unlock every path and component on the layer.'''
+		for shape in self.host.shapes:
+			shape.locked = bool(locked)
+
+	# - Guides ---------------------------------
+	@property
+	def _guides_attr(self):
+		return 'guides' if hasattr(self.host, 'guides') else 'guideLines'	# GS3+ / GS2
+
+	def copy_guides_from(self, other, clean=False):
+		'''Append copies of other's guides (clean=True: replace).'''
+		incoming = [copy.copy(g) for g in getattr(other.host, other._guides_attr)]
+		kept = [] if clean else list(getattr(self.host, self._guides_attr))
+		setattr(self.host, self._guides_attr, kept + incoming)
+		return bool(incoming)
+
+	def clear_guides(self):
+		setattr(self.host, self._guides_attr, [])
 
 	# - Eject / mount -------------------------
 	def eject(self):

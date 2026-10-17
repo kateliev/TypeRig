@@ -185,19 +185,46 @@ class trGlyph(Glyph):
 			pass
 
 	# - Layer management ---------------------
-	def add_layer(self, layer_name):
+	def add_layer(self, layer_name, master_id=None):
 		'''Create a new empty GSLayer and add it to the host glyph.
 
 		Args:
 			layer_name (str): Name for the new layer.
+			master_id (str or None): Master the layer belongs to; default the
+				master of the active layer.
 
 		Returns:
 			trLayer: Proxy wrapping the newly created GSLayer.
 		'''
+		if master_id is None:
+			active = self.find_layer(self.active_layer)
+			if active is not None:
+				master_id = active.host.associatedMasterId or active.host.layerId
 		new_layer      = GlyphsApp.GSLayer()
 		new_layer.name = str(layer_name)
+		if master_id:
+			new_layer.associatedMasterId = master_id
 		self.host.layers.append(new_layer)
 		return trLayer(new_layer)
+
+	def remove_layer(self, layer_name):
+		'''Remove a non-master layer by name. Master layers are kept (Glyphs
+		removes them only with their master).
+
+		Returns:
+			bool: True if a layer was removed.
+		'''
+		for gs_layer in self.host.layers:
+			if gs_layer.name != layer_name:
+				continue
+			if getattr(gs_layer, 'isMasterLayer', gs_layer.layerId == gs_layer.associatedMasterId):
+				return False
+			try:
+				self.host.removeLayerForId_(gs_layer.layerId)
+			except AttributeError:
+				del self.host.layers[gs_layer.layerId]
+			return True
+		return False
 
 	def duplicate_layer(self, src_name, dst_name):
 		'''Copy layer src_name as a new non-master layer dst_name on the same

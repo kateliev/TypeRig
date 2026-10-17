@@ -18,7 +18,7 @@ from typerig.core.objects.shape import Shape
 from typerig.core.objects.contour import Contour
 
 # - Init ------------------------------------------------------------------------
-__version__ = '1.0'
+__version__ = '1.1'
 
 # - Actions ---------------------------------------------------------------------
 class LayerActions(object):
@@ -199,6 +199,79 @@ class LayerActions(object):
 				swapped = True
 
 		return swapped
+
+	@staticmethod
+	def layer_copy_anchors(source_layer, target_layer, clean_target=False):
+		'''Copy anchors from one layer to another. Anchors are unique by name:
+		a source anchor replaces a target anchor of the same name.
+
+		Arguments:
+			source_layer (Layer): The layer to copy anchors from.
+			target_layer (Layer): The layer to copy anchors to.
+			clean_target (bool): If True, drop all target anchors first.
+
+		Returns:
+			bool: True if anchors were copied.
+		'''
+		if not source_layer.anchors:
+			return False
+
+		detach = lambda a: a.eject() if hasattr(a, 'eject') else copy.deepcopy(a)
+		incoming = [detach(a) for a in source_layer.anchors]
+		names = set(a.name for a in incoming)
+		kept = [] if clean_target else [detach(a) for a in target_layer.anchors if a.name not in names]
+		target_layer.anchors = kept + incoming
+		return True
+
+	@staticmethod
+	def layer_transform(layer, scale_x=100., scale_y=100.,
+	                    translate_x=0., translate_y=0.,
+	                    rotate=0., skew_x=0., skew_y=0.,
+	                    origin='C'):
+		'''Apply an affine transform to all nodes and anchors of a layer
+		around an origin on the layer bounding box.
+
+		Arguments:
+			layer (Layer): The layer to transform.
+			scale_x, scale_y (float): Percent scale (100 = identity).
+			translate_x, translate_y (float): Translation in font units.
+			rotate (float): Rotation in degrees (positive = counter-clockwise).
+			skew_x, skew_y (float): Skew angles in degrees.
+			origin (str): Bounds.align_matrix code ('BL', 'BM', 'BR', 'TL',
+				'TM', 'TR', 'LM', 'C', 'RM') or 'O' for absolute origin (0, 0).
+
+		Returns:
+			bool: True if anything was transformed.
+		'''
+		from typerig.core.objects.transform import Transform
+		from typerig.core.objects.utils import Bounds
+
+		nodes = layer.nodes
+		if not nodes:
+			return False
+
+		if origin == 'O':
+			ox, oy = 0., 0.
+		else:
+			# Bounds of the nodes: Layer.bounds asserts on component shapes
+			matrix = Bounds([n.tuple for n in nodes]).align_matrix
+			ox, oy = matrix.get(origin, matrix['C'])
+
+		# Chain written in reverse of application order (see ContourActions.contour_transform)
+		t = (Transform()
+			.translate(ox + float(translate_x), oy + float(translate_y))
+			.skew(skew_x, skew_y)
+			.rotate(rotate)
+			.scale(float(scale_x) / 100., float(scale_y) / 100.)
+			.translate(-ox, -oy))
+
+		for node in nodes:
+			node.x, node.y = t.applyTransformation(node.x, node.y)
+
+		for anchor in layer.anchors:
+			anchor.x, anchor.y = t.applyTransformation(anchor.x, anchor.y)
+
+		return True
 
 	@staticmethod
 	def layer_clean_shapes(layer):
