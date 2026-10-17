@@ -330,6 +330,34 @@ def npa_align(glyph, scope_layers, NodeActions, mode,
             )
 
 
+def npa_align_to_y(glyph, scope_layers, NodeActions, y_by_layer,
+                   smart_shift=True, keep_relations=False, lerp_shift=False,
+                   intercept=False, extrapolate=False):
+    """Align selected nodes vertically to a per-layer Y value.
+
+    y_by_layer: dict[layer_name -> y]. The host fills it from each layer's
+    master metrics (ascender, cap height, x-height, baseline, descender).
+    Layers missing from the dict are skipped. Modifier kwargs as npa_align.
+    """
+    from typerig.core.objects.point import Point
+    for name in scope_layers:
+        y = y_by_layer.get(name)
+        lyr = glyph.layer(name)
+        if y is None or lyr is None:
+            continue
+        nodes = _selected_nodes(lyr)
+        if nodes:
+            NodeActions.nodes_align(
+                nodes, 'T',
+                smart_shift=smart_shift,
+                keep_relations=keep_relations,
+                lerp_shift=lerp_shift,
+                intercept=intercept,
+                extrapolate=extrapolate,
+                target=Point(0., float(y)),
+            )
+
+
 def npa_target_set(glyph, scope_layers, NodeActions, safe_distance=0):
     """Store the centroid of the current selection as align target.
 
@@ -389,6 +417,15 @@ def npa_slope_copy(glyph, scope_layers, NodeActions):
         _slope_bank = NodeActions.slope_from_nodes(sel[0], sel[-1])
     else:
         _slope_bank = 0
+    return _slope_bank
+
+
+def npa_slope_from_angle(glyph, scope_layers, NodeActions, angle):
+    """Store the slope of an italic angle (degrees from vertical, positive
+    leans right) in the slope bank, for npa_slope_paste. Returns the slope."""
+    import math
+    global _slope_bank
+    _slope_bank = math.tan(math.radians(90. - float(angle)))
     return _slope_bank
 
 

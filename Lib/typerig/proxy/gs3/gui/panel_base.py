@@ -62,45 +62,65 @@ class TRPanelBase(object):
 	p_layers  = (True, False, False, False)
 
 	# - Lifecycle ---------------------------------------------------------
-	def __init__(self):
+	def __init__(self, state=None, posSize=None):
+		'''state   : TRScopeState or None. None = read the module globals
+		          that TRMainPanel broadcasts (TR Panel behaviour).
+		posSize : the Group's frame; default fills the parent.'''
 		if self.name is None:
 			raise TypeError(
 				'%s must set a `name` class attribute' % self.__class__.__name__)
-		self.group = vanilla.Group((0, 0, -0, -0))
-		self.build()
+		self.state = state
+		self.group = vanilla.Group(posSize if posSize is not None else (0, 0, -0, -0))
+		self.content_h = self.build()
 
 	def build(self):
-		'''Populate `self.group` with vanilla widgets. Required.'''
+		'''Populate `self.group` with vanilla widgets. Required.
+
+		Return the content height (the final y), or None if unknown. Hosts
+		with a fixed-height area (sidebar palette) size themselves from it.
+		'''
 		raise NotImplementedError(
 			'%s must implement build()' % self.__class__.__name__)
 
 	# - Live masthead state ----------------------------------------------
-	# TRMainPanel._broadcast_to assigns `pMode` and `pLayers` to the
-	# subclass's own module every time the user flips a pill. Read them
-	# back fresh — do NOT cache into self.*.
+	# With a state (palette host), read it. Without one, TRMainPanel's
+	# _broadcast_to assigns `pMode` and `pLayers` to the subclass's own
+	# module every time the user flips a pill. Read them back fresh — do
+	# NOT cache into self.*.
 	@property
 	def _module(self):
 		return sys.modules[self.__class__.__module__]
 
 	@property
 	def pMode(self):
+		if self.state is not None:
+			return self.state.pMode
 		return getattr(self._module, 'pMode', self.p_mode)
 
 	@property
 	def pLayers(self):
+		if self.state is not None:
+			return self.state.pLayers
 		return getattr(self._module, 'pLayers', self.p_layers)
+
+	def font(self):
+		'''The host's font: the state's (palette: its window's font), else Glyphs.font.'''
+		if self.state is not None:
+			return self.state.font()
+		try:
+			from GlyphsApp import Glyphs
+		except Exception:
+			return None
+		return Glyphs.font
 
 	# - Common utilities (used to live as `_active_glyph` / `_get_modifiers`
 	# duplicated in every panel). Call via `self.active_glyph()` etc.
 	def active_glyph(self):
 		'''Return the current trGlyph, or None if nothing is open/selected.'''
-		try:
-			from GlyphsApp import Glyphs
-		except Exception:
+		font = self.font()
+		if font is None or not font.selectedLayers:
 			return None
-		if Glyphs.font is None or not Glyphs.font.selectedLayers:
-			return None
-		gs_glyph = Glyphs.font.selectedLayers[0].parent
+		gs_glyph = font.selectedLayers[0].parent
 		if gs_glyph is None:
 			return None
 		from typerig.proxy.gs3.objects.glyph import trGlyph
