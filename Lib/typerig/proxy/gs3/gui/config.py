@@ -26,8 +26,10 @@ Fields are grouped under sub-namespaces by concern:
 
     UI.BTN        — buttons (size, icon point size)
     UI.LAYOUT     — universal spacing (gap, pad, margin, section title)
-    UI.SPN        — numeric EditText dimensions
-    UI.FORM       — label + field grids, check boxes, text buttons
+    UI.ENTRY      — Panel entry fields, one preset per kind (STYLE / W / H)
+    UI.SPN        — numeric EditText dimensions (legacy: dialogs, IconAssist)
+    UI.LBL        — single-char label column, label-to-field gap
+    UI.FORM     — label + field grids, check boxes, text buttons
     UI.LIST       — table (vanilla.List) dimensions
     UI.STATUS     — status / warning text block
     UI.WIN        — main window dimensions and minimums
@@ -179,12 +181,54 @@ _LAYOUT_GS4 = SimpleNamespace(
 )
 LAYOUT = _LAYOUT_GS3 if HOST_MAJOR == 3 else _LAYOUT_GS4
 
-# - Numeric EditText ------------------------------------------------------
-# H auto-tracks BTN.SIZE so a spinbox on a button-row lines up with the
-# icon buttons next to it — one knob (BTN.SIZE) controls both. SIZE_STYLE
-# feeds vanilla's `sizeStyle=` keyword, which sets the native NSControlSize
-# (None = regular, 'small' = NSSmallControlSize, 'mini' = NSMiniControlSize);
-# apply the SAME value in every panel to keep spinboxes visually uniform.
+# - Entry fields (TR Panel) -----------------------------------------------
+# Every non-button control a Panel tab places on a button row: numeric and
+# text fields, popups, combo boxes, segmented switches, check boxes, sliders
+# and form labels. Each kind takes the same three parameters (same scheme as
+# the Toolbar's PALETTE.ENTRY in palette_config.py, but in px — the Panel
+# has no grid):
+#   STYLE : vanilla sizeStyle — 'mini', 'small' or 'regular' (NSControlSize);
+#           sets the font size and the natural height of the control
+#   W     : width in px; None = to the right edge of the tab (-LAYOUT.PAD)
+#   H     : height in px; None = the control's natural height for STYLE.
+#           Taller text fields keep their text at the top (AppKit), so
+#           prefer a bigger STYLE over a bigger H
+# Place them with gui/entry.py (add_entry): the control is centred
+# vertically on the BTN row and keeps CLEAR px from the buttons on both
+# sides. CLEAR covers vanilla's +6 px frame padding around every
+# vanilla.Button (frameAdjustments 'regular' = (-6, -8, 12, 12)), the
+# control's own padding (popup 3 px) and a visible gap. A field placed
+# right after `x += BTN + small_gap` runs into the button's drawn bezel.
+def _entry(style, w, h=None):
+	return SimpleNamespace(STYLE=style, W=w, H=h)
+
+_ENTRY_GS3 = SimpleNamespace(
+	NUM     = _entry('regular', 50),    # numeric EditText (sizes, angles, transforms)
+	TEXT    = _entry('regular', None),  # free-text EditText (names, lists)
+	POPUP   = _entry('regular', 120),   # PopUpButton (mode / layer choice)
+	COMBO   = _entry('regular', 120),   # ComboBox (choice or typed value)
+	SEGMENT = _entry('regular', 120),   # SegmentedButton (view switch)
+	CHECK   = _entry('regular', 150),   # CheckBox with a short title
+	SLIDER  = _entry('regular', 120),   # Slider
+	LABEL   = _entry('regular', 80),    # TextBox caption ("Collinear:") before a field
+	CLEAR   = 10,                       # space between a vanilla.Button and a control (>= 6 + 3 + gap)
+)
+_ENTRY_GS4 = SimpleNamespace(
+	NUM     = _entry('regular', 50),
+	TEXT    = _entry('regular', None),
+	POPUP   = _entry('regular', 120),
+	COMBO   = _entry('regular', 120),
+	SEGMENT = _entry('regular', 120),
+	CHECK   = _entry('regular', 150),
+	SLIDER  = _entry('regular', 120),
+	LABEL   = _entry('regular', 80),
+	CLEAR   = 12,
+)
+ENTRY = _ENTRY_GS3 if HOST_MAJOR == 3 else _ENTRY_GS4
+
+# - Numeric EditText (legacy) ---------------------------------------------
+# TR Panel tabs use ENTRY above. SPN is kept for gui/dialogs.py and the
+# IconAssist panels; do not use it in new code.
 SPN = SimpleNamespace(
 	W          = 44,         # standard numeric edit width
 	W_WIDE     = 50,         # wider — for angles, long transforms, big ranges
@@ -194,28 +238,31 @@ SPN = SimpleNamespace(
 )
 
 # - Short single-char labels (X / Y axis letters etc.) --------------------
-# Narrow label columns placed immediately before a spinbox or button.
+# Narrow ENTRY.LABEL columns placed immediately before a field.
 LBL = SimpleNamespace(
 	W         = 14,  # single-char label column width
-	H         = 18,  # single-char label height
-	Y_OFFSET  = 4,   # vertical offset vs the adjacent spinbox baseline
-	GAP_AFTER = 4,   # tight gap between a single-char label and the next widget
+	GAP_AFTER = 4,   # gap between a label (any width) and its field
 )
 
-# - Form rows (label + numeric field grids, check boxes, text buttons) ----
-# Dense parameter panels (Cleanup) lay out "Label: [field]" pairs in
-# columns. Row pitch is SPN.H + ROW_GAP; tighter than LAYOUT.GAP so a
-# dozen parameters fit the default window height.
-FORM = SimpleNamespace(
-	LBL_W      = 64,      # "Collinear:"-style field label column width
-	FIELD_W    = SPN.W_WIDE,  # numeric field width in a form grid
+# - Form rows (label + field grids, check boxes, text buttons) -----------
+# Dense parameter tabs (Cleanup, Stem Snap) lay out "Label: [field]" pairs
+# in columns. Each row is a BTN-high slot (fields centred on it, as on a
+# button row); ROW = BTN.SIZE + ROW_GAP. ROW_GAP must keep the drawn
+# frames of regular popups (24 px + vanilla padding 6) apart.
+_FORM_GS3 = SimpleNamespace(
 	ROW_GAP    = 6,       # vertical gap between form rows
-	CHK_H      = 20,      # vanilla.CheckBox row height (small style)
-	CHK_STYLE  = 'small', # NSControlSize for check boxes
+	CHK_H      = 22,      # check-box grid row pitch (regular CheckBox: 16 + 4 padding)
 	BTN_W      = 90,      # text button width (three per row at WIN.W)
 	BTN_STYLE  = 'small', # NSControlSize for text buttons
-	POP_W      = 120,     # popup / segmented control width beside icon buttons (Delta)
 )
+_FORM_GS4 = SimpleNamespace(
+	ROW_GAP    = 8,
+	CHK_H      = 22,
+	BTN_W      = 90,
+	BTN_STYLE  = 'small',
+)
+FORM = _FORM_GS3 if HOST_MAJOR == 3 else _FORM_GS4
+FORM.ROW = BTN.SIZE + FORM.ROW_GAP   # form row pitch (derived)
 
 # - Table (vanilla.List) --------------------------------------------------
 # Column widths named by purpose so panels can reference them instead of
@@ -307,6 +354,7 @@ ASSETS = SimpleNamespace(
 UI = SimpleNamespace(
 	BTN      = BTN,
 	LAYOUT   = LAYOUT,
+	ENTRY    = ENTRY,
 	SPN      = SPN,
 	LBL      = LBL,
 	FORM     = FORM,
