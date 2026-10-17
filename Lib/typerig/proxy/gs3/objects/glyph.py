@@ -39,6 +39,12 @@ _GS3_COLOR_TO_HEX = {
 }
 _HEX_TO_GS3_COLOR = {v: k for k, v in _GS3_COLOR_TO_HEX.items() if v is not None}
 
+# Backgrounds as layers. A Glyphs background (GSLayer.background) is not in
+# glyph.layers; each layer owns one. FL naming addresses it as a layer:
+# 'mask.Regular' = the background of 'Regular'. A real layer with that name
+# wins over the background.
+BACKGROUND_PREFIX = 'mask.'
+
 # - Classes ------------------------------
 class trGlyph(Glyph):
 	'''Proxy to GSGlyph object.
@@ -214,6 +220,10 @@ class trGlyph(Glyph):
 		Returns:
 			bool: True if a layer was removed.
 		'''
+		gs_layer, owner = self._resolve(layer_name)
+		if owner is not None:		# background: remove it (documented: layer.background = None)
+			owner.background = None
+			return True
 		for gs_layer in self.host.layers:
 			if gs_layer.name != layer_name:
 				continue
@@ -243,13 +253,13 @@ class trGlyph(Glyph):
 			trLayer or None: the new layer, None if src_name does not exist.
 		'''
 		import copy
-		src = self.find_layer(src_name)
-		if src is None:
+		gs_src, owner = self._resolve(src_name)
+		if gs_src is None:
 			return None
-		gs_src = src.host
+		master_of = owner if owner is not None else gs_src		# a background: its owner's master
 		new_layer = GlyphsApp.GSLayer()
 		new_layer.name = str(dst_name)
-		new_layer.associatedMasterId = gs_src.associatedMasterId or gs_src.layerId
+		new_layer.associatedMasterId = master_of.associatedMasterId or master_of.layerId
 		self.host.layers.append(new_layer)
 		new_layer.width = gs_src.width
 		dst = trLayer(new_layer)
@@ -264,12 +274,49 @@ class trGlyph(Glyph):
 			layer_name (str): Layer name to search for.
 
 		Returns:
-			trLayer or None
+			trLayer or None — a background for 'mask.<layer>' (BACKGROUND_PREFIX)
 		'''
+		gs_layer, _ = self._resolve(layer_name)
+		return trLayer(gs_layer) if gs_layer is not None else None
+
+	def layer(self, layer_name=None):
+		'''Core Glyph.layer, plus backgrounds addressed as 'mask.<layer>'.'''
+		found = Glyph.layer(self, layer_name)
+		if found is None and layer_name:
+			found = self.find_layer(layer_name)
+		return found
+
+	# - Backgrounds as layers ------------------
+	def _host_layer(self, layer_name):
 		for gs_layer in self.host.layers:
 			if gs_layer.name == layer_name:
-				return trLayer(gs_layer)
+				return gs_layer
 		return None
+
+	def _resolve(self, layer_name):
+		'''(GSLayer, owner): owner is the foreground GSLayer when layer_name
+		names a background, else None. (None, None) if nothing matches.'''
+		gs_layer = self._host_layer(layer_name)
+		if gs_layer is not None:
+			return gs_layer, None
+		if layer_name and layer_name.startswith(BACKGROUND_PREFIX):
+			owner = self._host_layer(layer_name[len(BACKGROUND_PREFIX):])
+			if owner is not None and owner.background is not None:
+				return owner.background, owner
+		return None, None
+
+	def is_background(self, layer_name):
+		'''True if layer_name resolves to a background, not a real layer.'''
+		return self._resolve(layer_name)[1] is not None
+
+	def background_names(self):
+		''''mask.<layer>' for every layer whose background holds shapes or anchors.'''
+		names = []
+		for gs_layer in self.host.layers:
+			bg = gs_layer.background
+			if bg is not None and gs_layer.name and (len(bg.shapes) or len(bg.anchors)):
+				names.append(BACKGROUND_PREFIX + gs_layer.name)
+		return names
 
 	# - Eject / mount -------------------------
 	def eject(self):
