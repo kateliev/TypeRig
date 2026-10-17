@@ -115,13 +115,15 @@ class ContourActions(object):
 		if not nodes:
 			return False
 
-		search_nodes = nodes[1:] if forward else list(reversed(nodes[1:]))
+		# - Walk away from the current start (host-aware: GS3 keeps it last)
+		n = len(nodes)
+		start = getattr(contour, 'start_index', 0)
+		steps = range(1, n) if forward else range(n - 1, 0, -1)
 
-		for i, node in enumerate(search_nodes):
-			if node.is_on:
-				# - Find original index in contour
-				original_index = nodes.index(node)
-				contour.set_start(original_index)
+		for k in steps:
+			index = (start + k) % n
+			if nodes[index].is_on:
+				contour.set_start(index)
 				return True
 
 		return False
@@ -201,12 +203,13 @@ class ContourActions(object):
 
 	# -- Contour ordering tools -------------------------------------------------
 	@staticmethod
-	def contour_set_order(shape, sort_direction=0, sort_mode='BL'):
+	def contour_set_order(shape, sort_direction=0, sort_mode='BL', descending=False):
 		'''Sort the contours within a shape by their bounding box position.
 
 		Arguments:
 			shape (Shape): The shape whose contours will be reordered.
-			sort_direction (int): Sort direction (0 = ascending, 1 = descending).
+			sort_direction (int): Primary axis (0 = X, 1 = Y).
+			descending (bool): Primary axis high -> low.
 			sort_mode (str): Sort anchor corner. One of:
 				'BL' - Bottom-Left
 				'TL' - Top-Left
@@ -219,7 +222,25 @@ class ContourActions(object):
 		if len(shape.contours) < 2:
 			return False
 
-		shape.sort(sort_direction, sort_mode)
+		shape.sort(sort_direction, sort_mode, descending=descending)
+		return True
+
+	@staticmethod
+	def contour_apply_order(shape, order):
+		'''Rearrange contours by an index list taken from another (compatible)
+		shape, so every master gets the same order.
+
+		Arguments:
+			shape (Shape): The shape whose contours will be reordered.
+			order (list[int]): Contour indices, e.g. from Shape.sort_order().
+
+		Returns:
+			bool: True if the order was applied.
+		'''
+		if len(shape.contours) < 2 or sorted(order) != list(range(len(shape.contours))):
+			return False
+
+		shape.reorder(order)
 		return True
 
 	@staticmethod

@@ -174,9 +174,17 @@ class trShape(Shape):
 	def reverse(self):
 		if not self.is_component:
 			self.data = list(reversed(self.data))
-			existing_comps = [s for s in self.host.shapes
-			                  if isinstance(s, GlyphsApp.GSComponent)]
-			self.host.shapes = [c.host for c in self.data] + existing_comps
+			self._sync_host()
+
+	def reorder(self, order):
+		# Core reorder only touches self.data — push the new order to the layer.
+		# Glyphs reads layer.shapes opposite to TypeRig's reading order (checked
+		# on .notdef: core order came out exactly reversed), so store it flipped.
+		# Core sort() and contour_apply_order() both land here.
+		if not self.is_component:
+			Shape.reorder(self, order)
+			self.data = list(reversed(self.data))
+			self._sync_host()
 
 	# - Eject / mount -------------------------
 	def eject(self):

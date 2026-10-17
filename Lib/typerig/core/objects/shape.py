@@ -26,6 +26,88 @@ from typerig.core.objects.sdf import SignedDistanceField
 # - Init -------------------------------
 __version__ = '0.7.0'
 
+# - Helpers -----------------------------
+def _box_inside(inner, outer, tolerance):
+	return (inner.x >= outer.x - tolerance and inner.xmax <= outer.xmax + tolerance and
+			inner.y >= outer.y - tolerance and inner.ymax <= outer.ymax + tolerance)
+
+def _probe_inside(inner, outer, probes=3):
+	'''Majority vote of a few on-curve nodes of `inner` against `outer`.
+	One probe is not enough: a node may sit ON the outer outline, where
+	contains_point() is undefined.'''
+	on_nodes = [node for node in inner.data if node.is_on] or list(inner.data)
+	step = max(1, len(on_nodes) // probes)
+	picks = on_nodes[::step][:probes]
+	hits = sum(1 for node in picks if outer.contains_point(node))
+	return hits * 2 > len(picks)
+
+def contour_reading_order(contours, direction=0, mode='BL', descending=False, tolerance=1.):
+	'''Order contours for reading, keeping nested contours with their parent.
+
+	1. Nesting: each contour's parent is the smallest contour that encloses
+	   it (box test + point-in-contour probe). Parents come first, then their
+	   children, so counters stay next to their outer contour (.notdef, %, ©).
+	2. Siblings are sorted on the `mode` corner along `direction`, then
+	   grouped into rows: a contour joins the current row when it is within
+	   `tolerance` of the row's FIRST contour (no drift along a long chain,
+	   no rounding-boundary splits). Rows read left -> right when sorting by
+	   Y, top -> bottom when sorting by X.
+
+	Args:
+		contours (list[Contour]): contours to order.
+		direction (int): primary axis, 0 = X, 1 = Y.
+		mode (str): bounds corner used as the sort point ('BL', 'TL', ...).
+		descending (bool): primary axis high -> low.
+		tolerance (float): primary values this close count as the same row.
+
+	Returns:
+		list[int]: indices into `contours`.
+	'''
+	count = len(contours)
+	if count < 2:
+		return list(range(count))
+
+	boxes = [contour.tight_bounds for contour in contours]
+	areas = [(box.xmax - box.x) * (box.ymax - box.y) for box in boxes]
+	corner = [box.align_matrix[mode.upper()] for box in boxes]
+
+	# - Nesting tree: parent = smallest strictly larger enclosing contour
+	children = {None: []}
+	for i in range(count):
+		parent = None
+		for j in range(count):
+			if i == j or areas[j] <= areas[i]:
+				continue
+			if parent is not None and areas[j] >= areas[parent]:
+				continue
+			if _box_inside(boxes[i], boxes[j], tolerance) and _probe_inside(contours[i], contours[j]):
+				parent = j
+		children.setdefault(parent, []).append(i)
+
+	# - Siblings: primary sort, row grouping, cross-axis within a row
+	sign = -1 if descending else 1
+	cross_sign = -1 if direction == 0 else 1
+	primary = lambda i: corner[i][direction]
+	cross = lambda i: cross_sign * corner[i][1 - direction]
+
+	def order_siblings(ids):
+		rows = []
+		for i in sorted(ids, key=lambda i: (sign * primary(i), cross(i))):
+			if rows and abs(primary(i) - primary(rows[-1][0])) <= tolerance:
+				rows[-1].append(i)
+			else:
+				rows.append([i])
+		return [i for row in rows for i in sorted(row, key=cross)]
+
+	result = []
+	def walk(parent):
+		for i in order_siblings(children.get(parent, [])):
+			result.append(i)
+			walk(i)
+
+	walk(None)
+	return result
+
 # - Classes -----------------------------
 @register_xml_class
 class Shape(Container, XMLSerializable):
@@ -143,9 +225,17 @@ class Shape(Container, XMLSerializable):
 	def reverse(self):
 		self.data = list(reversed(self.data))
 
-	def sort(self, direction=0, mode='BL'):
-		contour_bounds = [(contour, contour.bounds.align_matrix[mode.upper()]) for contour in self.contours]
-		self.data = [contour_pair[0] for contour_pair in sorted(contour_bounds, key=lambda d: d[1][direction])]
+	def sort_order(self, direction=0, mode='BL', descending=False, tolerance=1.):
+		'''Contour indices in reading order (see contour_reading_order).'''
+		return contour_reading_order(self.contours, direction, mode, descending, tolerance)
+
+	def reorder(self, order):
+		'''Rearrange contours by an index list (e.g. one from sort_order()).'''
+		self.data = [self.data[i] for i in order]
+
+	def sort(self, direction=0, mode='BL', descending=False, tolerance=1.):
+		'''Sort contours in reading order, nested contours after their parent.'''
+		self.reorder(self.sort_order(direction, mode, descending, tolerance))
 
 	def set_weight(self, wx, wy):
 		'''Set x and y weights (a.k.a. stems) for all nodes'''

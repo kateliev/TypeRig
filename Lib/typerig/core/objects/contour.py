@@ -313,6 +313,12 @@ class Contour(Container, XMLSerializable):
 			)
 
 	# -- Functions ------------------------------
+	@property
+	def start_index(self):
+		'''Index of the start node in self.data. Core/FL convention: first node.
+		Host proxies with a different convention (GS3: last node) override this.'''
+		return 0
+
 	def set_start(self, index):
 		index = self.nodes[index].prev_on.idx if not self.nodes[index].is_on else index
 		self.data = self.data[index:] + self.data[:index] 

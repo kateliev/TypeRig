@@ -645,13 +645,38 @@ def npa_contour_order(glyph, scope_layers, NodeActions, ContourActions, directio
     Args:
         direction (int): Axis selector — 0 = sort by X, 1 = sort by Y.
         mode (str): Reference corner: 'BL', 'TL', 'BR', 'TR'.
-        reverse (bool): Reverse the resulting order (descending instead of ascending).
+        reverse (bool): Descending on the primary axis. Ties still read
+            left -> right / top -> bottom (a full list flip would break that).
+
+    The order is computed ONCE on a reference layer (the active layer if in
+    scope, else the first) and applied to every compatible layer, so masters
+    cannot drift apart when contours are nearly level. Incompatible layers
+    are sorted on their own and reported.
     """
-    for lyr in _iter_scope(glyph, scope_layers):
-        for s in lyr.shapes:
-            ContourActions.contour_set_order(s, direction, mode)
-            if reverse:
-                ContourActions.contour_reverse_order(s)
+    layers = list(_iter_scope(glyph, scope_layers))
+    if not layers:
+        return
+
+    active = glyph.layer() if hasattr(glyph, 'active_layer') else None
+    ref = next((lyr for lyr in layers if active is not None and lyr.name == active.name), layers[0])
+    ref_shapes = list(ref.shapes)
+    ref_orders = [s.sort_order(direction, mode, reverse) for s in ref_shapes]
+
+    def shape_sig(shape):
+        return [len(c.data) for c in shape.contours]
+
+    # Signatures BEFORE any reordering (ref itself gets reordered in the loop)
+    ref_sigs = [shape_sig(s) for s in ref_shapes]
+
+    for lyr in layers:
+        for k, s in enumerate(lyr.shapes):
+            if k < len(ref_sigs) and shape_sig(s) == ref_sigs[k]:
+                ContourActions.contour_apply_order(s, ref_orders[k])
+            else:
+                if len(s.contours) > 1:
+                    print('[contour order] {} / {}: not compatible with {}, sorted on its own.'.format(
+                        getattr(glyph, 'name', '?'), lyr.name, ref.name))
+                ContourActions.contour_set_order(s, direction, mode, descending=reverse)
 
 
 def npa_contour_order_reverse(glyph, scope_layers, NodeActions, ContourActions):

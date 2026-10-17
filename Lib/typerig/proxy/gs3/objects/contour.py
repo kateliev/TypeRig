@@ -165,11 +165,21 @@ class trContour(Contour):
 		self.host.reverse()
 		self.data = list(reversed(self.data))
 
+	@property
+	def start_index(self):
+		'''GlyphsApp keeps the start node of a closed path LAST in path.nodes
+		(nodes[0] is the node after it). Open paths start at nodes[0].'''
+		return len(self.host.nodes) - 1 if self.closed else 0
+
 	def set_start(self, index):
 		# Ensure index points to an on-curve node
 		nodes = self.nodes
 		index = nodes[index].prev_on.idx if not nodes[index].is_on else index
-		self.data = self.data[index:] + self.data[:index]
+
+		# Closed: rotate so the node lands LAST (GS start convention), otherwise
+		# Glyphs shows the node before it as the start.
+		cut = index + 1 if self.closed else index
+		self.data = self.data[cut:] + self.data[:cut]
 		self.host.nodes = [n.host for n in self.data]
 
 	# - Host sync ----------------------------
