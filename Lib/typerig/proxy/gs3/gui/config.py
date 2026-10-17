@@ -215,7 +215,6 @@ FORM = SimpleNamespace(
 	BTN_W      = 90,      # text button width (three per row at WIN.W)
 	BTN_STYLE  = 'small', # NSControlSize for text buttons
 	POP_W      = 120,     # popup / segmented control width beside icon buttons (Delta)
-	CODE_W     = 64,      # popup holding a two-letter code (Delta target origin)
 )
 
 # - Table (vanilla.List) --------------------------------------------------
@@ -233,7 +232,7 @@ LIST = SimpleNamespace(
 	COL_TAG_W   = 32,   # short tag column (On, Version)
 	COL_TYPE_W  = 80,   # layer-type column
 	COL_NARROW_W = 40,  # narrow numeric column (Delta targets)
-	COL_MODE_W  = 52,   # popup column with a short word (Delta target mode)
+	COL_UNITS_W = 36,   # checkbox column with a short title (Delta target Units)
 	CELL_GAP    = 4,    # horizontal intercell spacing for dense tables (macOS 26 default is 17)
 )
 
@@ -245,7 +244,7 @@ STATUS = SimpleNamespace(
 
 # - Main window -----------------------------------------------------------
 WIN = SimpleNamespace(
-	W        = 360,  # default FloatingWindow width
+	W        = 420,  # default FloatingWindow width (Delta Bake targets table: name + 5 columns)
 	H        = 780,  # default FloatingWindow height (picker folded away); fits Delta Bake with 6-row tables
 	MIN_W    = 300,  # minSize width
 	MIN_H    = 300,  # minSize height

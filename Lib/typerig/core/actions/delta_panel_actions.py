@@ -271,6 +271,11 @@ def _norm_target(t):
 		origin = t.get('origin', 'BL')
 		out.update(w=_to_float(t.get('w'), 600.), h=_to_float(t.get('h'), 700.),
 		           origin=origin if origin in _ORIGIN_FROM_CODE else 'BL')
+	# Keep the other mode's numbers when a host stores both (Glyphs toggles
+	# a row between stems and units without losing them); bake ignores them.
+	for key in ('vstem', 'hstem', 'sx', 'sy', 'w', 'h'):
+		if key not in out and _to_float(t.get(key)) is not None:
+			out[key] = float(t[key])
 	return out
 
 
