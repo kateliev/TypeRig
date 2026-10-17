@@ -18,9 +18,10 @@
 #     dropped at intersection time.
 #   - In tuple mode with both flags False → fall back to active layer.
 #
-# v1 coverage:
-#   pMode  — only 0 (active glyph) is implemented; window/font-selection
-#            deferred. Callers operate on a single glyph.
+# Glyph scope (pMode, masthead Glyph / Window / Selection pills):
+#   scope_layers() works on one glyph; scope_glyphs() resolves pMode to
+#   the GSGlyphs a panel iterates (0 active glyph, 1 glyphs in the edit
+#   tab, 2 glyphs selected in the font window, 3 whole font).
 # -------------------------------------------------------------------------
 
 from __future__ import division, print_function
@@ -86,3 +87,36 @@ def scope_layers(pMode, pLayers, tr_glyph):
 			names.append(name)
 
 	return names
+
+
+def scope_glyphs(pMode, font):
+	'''Return the GSGlyphs for pMode: 0 active glyph, 1 glyphs in the current
+	edit tab (falls back to the active glyph), 2 font-window selection,
+	3 every glyph. De-duplicated, in display order.'''
+	if font is None:
+		return []
+
+	def _active():
+		layers = font.selectedLayers
+		return [layers[0].parent] if layers and layers[0].parent is not None else []
+
+	if pMode == 1:
+		tab = font.currentTab
+		if tab is None:
+			return _active()
+		# tab.layers holds GSControlLayer line breaks too: they have no glyph
+		glyphs = [getattr(layer, 'parent', None) for layer in tab.layers]
+		glyphs = [g for g in glyphs if g is not None and getattr(g, 'name', None)]
+	elif pMode == 2:
+		glyphs = list(font.selection or [])
+	elif pMode == 3:
+		glyphs = list(font.glyphs)
+	else:
+		return _active()
+
+	out, seen = [], set()
+	for glyph in glyphs:
+		if glyph.name not in seen:
+			seen.add(glyph.name)
+			out.append(glyph)
+	return out

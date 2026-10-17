@@ -214,17 +214,27 @@ FORM = SimpleNamespace(
 	CHK_STYLE  = 'small', # NSControlSize for check boxes
 	BTN_W      = 90,      # text button width (three per row at WIN.W)
 	BTN_STYLE  = 'small', # NSControlSize for text buttons
+	POP_W      = 120,     # popup / segmented control width beside icon buttons (Delta)
+	CODE_W     = 64,      # popup holding a two-letter code (Delta target origin)
 )
 
 # - Table (vanilla.List) --------------------------------------------------
 # Column widths named by purpose so panels can reference them instead of
 # inlining raw numbers in columnDescriptions dicts.
+_LIST_ROW_H    = 19  # row pitch incl. intercell spacing (17 + 2 on pre-26 macOS; 17 on macOS 26)
+_LIST_HEADER_H = 28  # header view height (macOS 26; 23-25 earlier)
+_LIST_ROWS     = 6   # minimum visible rows (3 masters + room)
+
 LIST = SimpleNamespace(
-	H           = 110,  # default table height (Delta Live Axis rows)
+	ROWS        = _LIST_ROWS,
+	H           = _LIST_HEADER_H + _LIST_ROWS * _LIST_ROW_H + 4,  # table height for ROWS rows (+ border)
 	COL_W       = 56,   # numeric column width (default)
 	COL_CHECK_W = 20,   # checkbox column (tight)
 	COL_TAG_W   = 32,   # short tag column (On, Version)
 	COL_TYPE_W  = 80,   # layer-type column
+	COL_NARROW_W = 40,  # narrow numeric column (Delta targets)
+	COL_MODE_W  = 52,   # popup column with a short word (Delta target mode)
+	CELL_GAP    = 4,    # horizontal intercell spacing for dense tables (macOS 26 default is 17)
 )
 
 # - Status text -----------------------------------------------------------
@@ -236,7 +246,7 @@ STATUS = SimpleNamespace(
 # - Main window -----------------------------------------------------------
 WIN = SimpleNamespace(
 	W        = 360,  # default FloatingWindow width
-	H        = 600,  # default FloatingWindow height (picker folded away)
+	H        = 780,  # default FloatingWindow height (picker folded away); fits Delta Bake with 6-row tables
 	MIN_W    = 300,  # minSize width
 	MIN_H    = 300,  # minSize height
 )

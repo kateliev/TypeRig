@@ -199,6 +199,37 @@ class trGlyph(Glyph):
 		self.host.layers.append(new_layer)
 		return trLayer(new_layer)
 
+	def duplicate_layer(self, src_name, dst_name):
+		'''Copy layer src_name as a new non-master layer dst_name on the same
+		master (FL pGlyph.duplicateLayer, references=False): shapes, anchors
+		and advance width are copied, so the new layer has the same node
+		structure and on-curve types as the source.
+
+		A fresh GSLayer is used rather than GSLayer.copy(): the copy keeps the
+		source layerId, which Glyphs shows as a nested (brace-style) entry.
+
+		Args:
+			src_name (str): Name of the layer to copy.
+			dst_name (str): Name for the new layer.
+
+		Returns:
+			trLayer or None: the new layer, None if src_name does not exist.
+		'''
+		import copy
+		src = self.find_layer(src_name)
+		if src is None:
+			return None
+		gs_src = src.host
+		new_layer = GlyphsApp.GSLayer()
+		new_layer.name = str(dst_name)
+		new_layer.associatedMasterId = gs_src.associatedMasterId or gs_src.layerId
+		self.host.layers.append(new_layer)
+		new_layer.width = gs_src.width
+		dst = trLayer(new_layer)
+		dst.set_shapes([copy.copy(shape) for shape in gs_src.shapes])
+		new_layer.anchors = [copy.copy(anchor) for anchor in gs_src.anchors]
+		return dst
+
 	def find_layer(self, layer_name):
 		'''Find a layer by name and return its proxy, or None.
 
