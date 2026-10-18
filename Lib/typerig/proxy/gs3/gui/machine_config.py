@@ -21,34 +21,35 @@ from .config import HOST_MAJOR, _LIST_ROW_H, _LIST_HEADER_H
 
 
 # - Window ----------------------------------------------------------------
-# The height is derived from the tab content (fixed-height lists, so every
-# field sits on a top-anchored row); the width is user resizable and the
-# right list of each tab stretches with it.
+# Resizable both ways: the lists stretch, the columns keep COLUMNS.SPLIT.
+# The default height comes from the tab content at LIST.ROWS rows.
 _WIN_GS3 = SimpleNamespace(
 	W           = 1060,   # default window width: the left third holds the input buttons row
-	MIN_W       = 1060,   # = W: the service row and the left column do not reflow
-	MAX_W       = 2400,
+	MIN_W       = 1060,   # = W: the service row and the left column's button bar do not reflow
 	TABS_TOP    = 8,      # tab view inset from the window top
-	TABS_CHROME = 42,     # tab view height beyond its content (tab bar + frame)
+	TABS_CHROME = 30,     # tab view height beyond its item view (tab bar + frame; macOS 26)
 	TABS_SIDE   = 16,     # tab view width beyond its content (frame, both sides)
 	INSET       = 10,     # inset of a tab's content from the tab frame
 )
 _WIN_GS4 = SimpleNamespace(
 	W           = 1060,
 	MIN_W       = 1060,
-	MAX_W       = 2400,
 	TABS_TOP    = 10,
-	TABS_CHROME = 46,
+	TABS_CHROME = 30,
 	TABS_SIDE   = 16,
 	INSET       = 12,
 )
 
 # - Lists -----------------------------------------------------------------
 # Row pitch and header height as config.py's UI.LIST (macOS 26 values).
-_ROWS = 14
+# The window is resizable: lists open at ROWS and stretch with the window;
+# MIN_ROWS sets the smallest window height.
+_ROWS, _MIN_ROWS = 14, 6
 LIST = SimpleNamespace(
-	ROWS = _ROWS,                                     # visible rows of every list
-	H    = _LIST_HEADER_H + _ROWS * _LIST_ROW_H + 4,   # table height (+ border)
+	ROWS     = _ROWS,                                         # visible rows at the default height
+	H        = _LIST_HEADER_H + _ROWS * _LIST_ROW_H + 4,       # table height (+ border)
+	MIN_ROWS = _MIN_ROWS,
+	MIN_H    = _LIST_HEADER_H + _MIN_ROWS * _LIST_ROW_H + 4,
 )
 
 # - Columns ---------------------------------------------------------------
