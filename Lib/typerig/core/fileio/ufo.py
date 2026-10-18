@@ -31,10 +31,7 @@ from fontTools.ufoLib import UFOReader, UFOWriter, UFOFormatVersion
 from fontTools.ufoLib.glifLib import (
 	writeGlyphToString, readGlyphFromString,
 )
-from fontTools.designspaceLib import (
-	DesignSpaceDocument, AxisDescriptor,
-	SourceDescriptor, InstanceDescriptor,
-)
+from fontTools.designspaceLib import DesignSpaceDocument
 
 from typerig.core.objects.font import Font, FontInfo, FontMetrics
 from typerig.core.objects.glyph import Glyph
@@ -50,6 +47,10 @@ from typerig.core.objects.instance import Instances, Instance
 from typerig.core.objects.encoding import Encoding
 from typerig.core.objects.kern import Kerning, KernPair
 from typerig.core.objects.groups import Groups
+from typerig.core.fileio.designspace import (		# shared with the Delta Machine (axes / masters only)
+	build_document, safe_filename as _safe_filename, ufo_filename,
+	axes_from_document, instances_from_document, default_source,
+)
 
 # - Init --------------------------------
 __version__ = '0.1.0'
@@ -794,38 +795,12 @@ def _designspace_path_for(ufo_path):
 	return base + '.designspace'
 
 
-def _safe_filename(name):
-	'''Make a filesystem-safe filename fragment from a master/layer name.'''
-	out = []
-	for ch in str(name):
-		if ch.isalnum() or ch in ('-', '_', '.'):
-			out.append(ch)
-		else:
-			out.append('_')
-	return ''.join(out) or 'master'
-
-
 def _read_designspace_axes(doc):
-	axes = []
-	for ad in doc.axes:
-		axes.append(Axis(
-			name    = ad.name,
-			tag     = ad.tag,
-			minimum = ad.minimum,
-			default = ad.default,
-			maximum = ad.maximum,
-		))
-	return axes
+	return axes_from_document(doc)
 
 
 def _read_designspace_instances(doc):
-	out = []
-	for id_ in doc.instances:
-		out.append(Instance(
-			name     = id_.name or id_.styleName or 'Instance',
-			location = dict(id_.location or {}),
-		))
-	return Instances(out)
+	return instances_from_document(doc)
 
 
 # - Converter ---------------------------
@@ -908,42 +883,15 @@ class UfoConverter(object):
 		if default_master is None:
 			default_master = masters[0]
 
-		doc = DesignSpaceDocument()
-
-		for axis in font.axes:
-			ad = AxisDescriptor()
-			ad.name    = axis.name
-			ad.tag     = axis.tag
-			ad.minimum = float(axis.minimum)
-			ad.default = float(axis.default)
-			ad.maximum = float(axis.maximum)
-			doc.addAxis(ad)
-
-		written_ufos = []
+		sources = {}
 		for master in masters:
-			ufo_filename = '{}-{}.ufo'.format(stem, _safe_filename(master.name))
-			ufo_path     = os.path.join(ds_dir, ufo_filename)
+			ufo_name = ufo_filename(stem, master.name)
+			ufo_path = os.path.join(ds_dir, ufo_name)
 			self._write_master_ufo(font, master, ufo_path)
-			written_ufos.append(ufo_filename)
+			sources[master.name] = (ufo_name, ufo_path)		# each UFO uses its default layer
 
-			sd = SourceDescriptor()
-			sd.filename   = ufo_filename
-			sd.path       = ufo_path
-			sd.familyName = font.info.family_name
-			sd.styleName  = master.name
-			sd.name       = master.name
-			# Each UFO uses its default layer — no layerName needed.
-			sd.location   = dict(master.location)
-			doc.addSource(sd)
-
-		for inst in font.instances.data:
-			id_ = InstanceDescriptor()
-			id_.familyName = font.info.family_name
-			id_.styleName  = inst.name
-			id_.name       = inst.name
-			id_.location   = dict(inst.location)
-			doc.addInstance(id_)
-
+		doc = build_document(font.axes, masters, font.instances.data,
+		                     font.info.family_name, sources)
 		doc.write(ds_path)
 		return ds_path
 
@@ -1050,13 +998,7 @@ class UfoConverter(object):
 			raise ValueError('Designspace has no <source> entries: {}'.format(ds_path))
 
 		# Pick a default source
-		default_source = None
-		for sd in sources:
-			if (sd.location or {}) == default_loc:
-				default_source = sd
-				break
-		if default_source is None:
-			default_source = sources[0]
+		default_sd = default_source(doc, axes)
 
 		# Build masters + per-source TR layers
 		masters_list   = []
@@ -1065,7 +1007,7 @@ class UfoConverter(object):
 		glyph_extras   = {}			# {glyph_name: extras dict from default UFO}
 		glyph_order    = []
 
-		default_path = _resolve(default_source)
+		default_path = _resolve(default_sd)
 		default_reader_holder = {'reader': None, 'info': None,
 		                         'groups': {}, 'kerning': {}, 'features': ''}
 
@@ -1151,7 +1093,7 @@ class UfoConverter(object):
 
 		if explicit_order is None:
 			default_reader = UFOReader(default_path, validate=False)
-			default_layer_name = default_source.layerName or default_reader.getDefaultLayerName()
+			default_layer_name = default_sd.layerName or default_reader.getDefaultLayerName()
 			default_gs = default_reader.getGlyphSet(layerName=default_layer_name)
 			explicit_order = list(default_gs.keys())
 			default_reader.close()
@@ -1327,35 +1269,9 @@ class UfoConverter(object):
 		if not font.axes and not font.masters.data:
 			return None
 
-		doc = DesignSpaceDocument()
-		for axis in font.axes:
-			ad = AxisDescriptor()
-			ad.name    = axis.name
-			ad.tag     = axis.tag
-			ad.minimum = float(axis.minimum)
-			ad.default = float(axis.default)
-			ad.maximum = float(axis.maximum)
-			doc.addAxis(ad)
-
-		ufo_filename = os.path.basename(ufo_path)
-		for master in font.masters.data:
-			sd = SourceDescriptor()
-			sd.filename   = ufo_filename
-			sd.path       = ufo_path
-			sd.familyName = font.info.family_name
-			sd.styleName  = master.name
-			sd.name       = master.name
-			sd.layerName  = master.layer_name
-			sd.location   = dict(master.location)
-			doc.addSource(sd)
-
-		for inst in font.instances.data:
-			id_ = InstanceDescriptor()
-			id_.familyName = font.info.family_name
-			id_.styleName  = inst.name
-			id_.name       = inst.name
-			id_.location   = dict(inst.location)
-			doc.addInstance(id_)
+		ufo_name = os.path.basename(ufo_path)
+		doc = build_document(font.axes, font.masters.data, font.instances.data, font.info.family_name,
+		                     {m.name: (ufo_name, ufo_path, m.layer_name) for m in font.masters.data})
 
 		ds_path = _designspace_path_for(ufo_path)
 		doc.write(ds_path)
