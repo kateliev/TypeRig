@@ -23,7 +23,8 @@
 #               ],
 #               'targets': [
 #                   # any target may add 'metrics' / 'anchors': bool
-#                   # (default: the option of the same name)
+#                   # (default: the option of the same name); stems and
+#                   # mixed targets may add 'origin' (default: options)
 #                   # stems-mode target
 #                   {'mode': 'stems', 'name': str,
 #                    'vstem': float, 'hstem': float,
@@ -350,6 +351,8 @@ def _norm_target(t):
 	for key in ('anchors', 'metrics'):		# per-target switches (Delta Machine)
 		if isinstance(t.get(key), bool):
 			out[key] = t[key]
+	if mode != 'dimensions' and t.get('origin') in _ORIGIN_FROM_CODE:
+		out['origin'] = t['origin']		# per-target transform origin (Delta Machine)
 	if mode in ('stems', 'mixed'):
 		out.update(vstem=_to_float(t.get('vstem'), 100.), hstem=_to_float(t.get('hstem'), 100.),
 		           sx=_to_float(t.get('sx'), 100.), sy=_to_float(t.get('sy'), 100.))
@@ -592,17 +595,19 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 				continue
 			mode = target.get('mode', 'stems')
 			entry = {}
+			# A stems / mixed target may carry its own origin (Delta Machine rows)
+			origin = _ORIGIN_FROM_CODE.get(target.get('origin'), global_origin)
 			try:
 				if mode == 'stems':
 					new_layer = _bake_target_stems(
 						base_layer, vaxis, target,
 						italic_rad, extrapolate,
-						global_origin, source_bounds)
+						origin, source_bounds)
 				elif mode == 'mixed':
 					new_layer, converged, scales = _bake_target_mixed(
 						base_layer, vaxis, target,
 						italic_rad, extrapolate,
-						global_origin, source_bounds)
+						origin, source_bounds)
 					entry['scales'] = list(scales)
 					if not converged:
 						warnings.append('Axis "%s" / target "%s": size not reached.'

@@ -8,11 +8,14 @@
 # TRImageCell); these are the editable ones, same build:
 #   TREditCell  — editable text (alignment left / center / right)
 #   TRCheckCell — check box, centred; enabled=False greys it out
+#   TRPopUpCell — pop-up menu (items = titles); the value is the title
 #
 #     dict(identifier='vstem', title='V st.', editable=True, width=52,
 #          cellClass=TREditCell, cellClassArguments=dict(alignment='right'))
 #     dict(identifier='kerning', title='K', editable=True, width=30,
 #          cellClass=TRCheckCell, cellClassArguments=dict(enabled=False))
+#     dict(identifier='origin', title='Origin', editable=True, width=104,
+#          cellClass=TRPopUpCell, cellClassArguments=dict(items=['Baseline', 'Center']))
 #
 # List2 protocol: a cell has _nsObject, set(value), get(); for an editable
 # column vanilla passes callback=<data source cellEditCallback>, which the
@@ -105,3 +108,29 @@ class TRCheckCell(_Cell):
 
 	def get(self):
 		return bool(self._button.state())
+
+
+class TRPopUpCell(_Cell):
+	'''Pop-up menu cell (small, borderless as in a table); value = item title.'''
+	def __init__(self, editable=False, callback=None, items=(), **kwargs):
+		popup = AppKit.NSPopUpButton.alloc().initWithFrame_pullsDown_(((0, 0), (TL.CELL_W, 0)), False)
+		popup.setBordered_(False)
+		popup.cell().setControlSize_(AppKit.NSControlSizeSmall)
+		popup.setFont_(AppKit.NSFont.systemFontOfSize_(AppKit.NSFont.systemFontSizeForControlSize_(AppKit.NSControlSizeSmall)))
+		popup.addItemsWithTitles_(list(items))
+		h = popup.intrinsicContentSize().height
+		pad = TL.CELL_PAD
+		view = AppKit.NSView.alloc().initWithFrame_(((0, 0), (TL.CELL_W, h + 2 * pad)))
+		popup.setFrame_(((0, pad), (TL.CELL_W, h)))
+		popup.setAutoresizingMask_(_FLEX_W | _FLEX_TB)
+		popup.setEnabled_(bool(editable))
+		view.addSubview_(popup)
+		self._nsObject, self._popup = view, popup
+		self._wire(popup, callback if editable else None)
+
+	def set(self, value):
+		if value is not None and self._popup.itemWithTitle_(str(value)) is not None:
+			self._popup.selectItemWithTitle_(str(value))
+
+	def get(self):
+		return self._popup.titleOfSelectedItem()

@@ -36,9 +36,14 @@ SELECTION  = ''				# group of a row that works on the selected glyphs
 SELECTION_LABEL = 'Selection'
 UNITS      = ('%', 'u')		# percent of the base input, font units
 ORIGINS    = ('BS', 'BL', 'BM', 'BR', 'LM', 'CE', 'RM', 'TL', 'TM', 'TR')
+ORIGIN_LABELS = (		# (code, label) — the per-row Origin popup
+	('BS', 'Baseline'), ('BL', 'Bottom left'), ('BM', 'Bottom middle'), ('BR', 'Bottom right'),
+	('LM', 'Left middle'), ('CE', 'Center'), ('RM', 'Right middle'),
+	('TL', 'Top left'), ('TM', 'Top middle'), ('TR', 'Top right'),
+)
 
 OPTION_DEFAULTS = {
-	'origin': 'BS',				# transform origin of every target
+	'origin': 'BS',				# legacy (v0.1): one origin for all rows; rows have their own now
 	'extrapolate': True,
 	'selection_only': False,	# named groups: only their selected glyphs
 	'skip_composites': True,	# composites (and mixed glyphs) get no delta: target layer + metrics only
@@ -57,6 +62,7 @@ ADVANCED_DEFAULTS = {
 TARGET_DEFAULTS = {
 	'layer': '', 'group': SELECTION, 'vstem': 100., 'hstem': 100.,
 	'width': {'value': 100., 'unit': '%'}, 'height': {'value': 100., 'unit': '%'},
+	'origin': 'BS',				# transform origin of the row (BS = baseline, 0 / 0)
 	'anchors': True, 'metrics': True, 'kerning': False,
 }
 
@@ -106,11 +112,15 @@ def machine_new(masters=()):
 	}
 
 
-def norm_target(row):
-	'''Any target row -> the document shape (missing keys get defaults).'''
+def norm_target(row, origin='BS'):
+	'''Any target row -> the document shape (missing keys get defaults;
+	origin: for rows saved without one).'''
 	out = copy.deepcopy(TARGET_DEFAULTS)
+	out['origin'] = origin if origin in ORIGINS else 'BS'
 	if not isinstance(row, dict):
 		return out
+	if row.get('origin') in ORIGINS:
+		out['origin'] = row['origin']
 	out['layer'] = str(row.get('layer', row.get('name', '')) or '').strip()
 	out['group'] = str(row.get('group', SELECTION) or SELECTION).strip()
 	for key in ('vstem', 'hstem'):
@@ -154,7 +164,7 @@ def _from_delta_setup(raw):
 	for ax in setup['axes']:
 		targets = []
 		for t in ax['targets']:
-			row = norm_target(dict(t, layer=t['name']))
+			row = norm_target(dict(t, layer=t['name']), origin=opts.get('origin', 'BS'))
 			row['anchors'], row['metrics'] = bool(opts.get('anchors', True)), bool(opts.get('metrics', True))
 			targets.append(row)
 		doc['axes'].append({'name': ax['name'],
@@ -195,7 +205,8 @@ def machine_normalize(raw):
 				inputs.append({'name': str(r['name']), 'vstem': _num(r.get('vstem'), r.get('vstem')),
 				               'hstem': _num(r.get('hstem'), r.get('hstem'))})
 		doc['axes'].append({'name': str(ax.get('name', '') or '').strip(), 'inputs': inputs,
-		                    'targets': [norm_target(t) for t in ax.get('targets', []) or [] if isinstance(t, dict)]})
+		                    'targets': [norm_target(t, origin=doc['options']['origin'])
+		                                for t in ax.get('targets', []) or [] if isinstance(t, dict)]})
 	doc['groups'] = [g for g in (norm_group(g) for g in raw.get('groups', []) or []) if g is not None]
 	return doc
 
@@ -233,7 +244,8 @@ def target_to_core(row, scales=None):
 	reference glyph; the row then bakes as plain stems mode.'''
 	w, h = row['width'], row['height']
 	core = {'name': row['layer'], 'vstem': float(row['vstem']), 'hstem': float(row['hstem']),
-	        'anchors': bool(row['anchors']), 'metrics': bool(row['metrics']), 'color': ''}
+	        'anchors': bool(row['anchors']), 'metrics': bool(row['metrics']),
+	        'origin': row.get('origin', 'BS'), 'color': ''}
 	if scales is not None:
 		core.update(mode='stems', sx=float(scales[0]), sy=float(scales[1]))
 		return core

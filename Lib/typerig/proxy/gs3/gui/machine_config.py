@@ -24,8 +24,8 @@ from .config import HOST_MAJOR, _LIST_ROW_H, _LIST_HEADER_H
 # Resizable both ways: the lists stretch, the columns keep COLUMNS.SPLIT.
 # The default height comes from the tab content at LIST.ROWS rows.
 _WIN_GS3 = SimpleNamespace(
-	W           = 1060,   # default window width: the left third holds the input buttons row
-	MIN_W       = 1060,   # = W: the service row and the left column's button bar do not reflow
+	W           = 1340,   # default window width: the targets table fits without scrolling (Layer ~150 px)
+	MIN_W       = 1100,   # the service row and the left column's button bar do not reflow
 	TABS_TOP    = 8,      # tab view inset from the window top
 	TABS_CHROME = 30,     # tab view height beyond its item view (tab bar + frame; macOS 26)
 	TABS_SIDE   = 16,     # tab view width beyond its content (frame, both sides)
@@ -34,8 +34,8 @@ _WIN_GS3 = SimpleNamespace(
 	PROGRESS_GAP = 6,     # progress bar to status line
 )
 _WIN_GS4 = SimpleNamespace(
-	W           = 1060,
-	MIN_W       = 1060,
+	W           = 1340,
+	MIN_W       = 1100,
 	TABS_TOP    = 10,
 	TABS_CHROME = 30,
 	TABS_SIDE   = 16,
@@ -62,11 +62,13 @@ LIST = SimpleNamespace(
 # column of each table takes the remaining width).
 COLUMNS = SimpleNamespace(
 	SPLIT   = 1. / 3,   # left list share of the tab width
-	STEM    = 52,       # V st. / H st.
-	DIM     = 66,       # Width / Height ('60 %', '700 u')
-	GROUP   = 110,      # Group name (targets)
-	CHECK   = 40,       # Anchors / Metrics / Kerning check boxes
-	RESULT  = 70,       # last bake of a row: '12/14 +3c'
+	STEM    = 48,       # V st. / H st.
+	DIM     = 60,       # Width / Height ('60 %', '700 u')
+	GROUP   = 100,      # Group name (targets)
+	CHECK   = 38,       # Anchors / Metrics / Kerning check boxes
+	RESULT  = 64,       # last bake of a row: '12/14 +3c'
+	ORIGIN  = 108,      # transform origin popup of a row ('Bottom middle')
+	LAYER_MIN = 100,    # target layer name: never narrower (the table scrolls instead)
 	COUNT   = 44,       # glyph count (groups)
 	REF     = 52,       # reference glyph (groups)
 	UNICODE = 56,       # Unicode (glyphs of a group)
