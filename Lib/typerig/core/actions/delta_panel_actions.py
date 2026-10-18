@@ -22,10 +22,21 @@
 #                    'color': str}
 #               ],
 #               'targets': [
+#                   # any target may add 'metrics' / 'anchors': bool
+#                   # (default: the option of the same name)
 #                   # stems-mode target
 #                   {'mode': 'stems', 'name': str,
 #                    'vstem': float, 'hstem': float,
 #                    'sx': float, 'sy': float,          # percent
+#                    'color': str},
+#                   # mixed-mode target: target stems, width and / or
+#                   # height in units ('fit' names the units axes), the
+#                   # other axis in percent (Delta Machine)
+#                   {'mode': 'mixed', 'name': str,
+#                    'vstem': float, 'hstem': float,
+#                    'fit': 'w'|'h'|'wh',
+#                    'sx': float, 'sy': float,          # percent, axes not in fit
+#                    'w': float, 'h': float,            # units, axes in fit
 #                    'color': str},
 #                   # dimensions-mode target
 #                   {'mode': 'dimensions', 'name': str,
@@ -202,6 +213,77 @@ def _bake_target_stems(base_layer, vaxis, target, italic_rad,
 	return new_layer
 
 
+def _measure_box(delta, stem, scale, italic_rad, extrapolate):
+	'''(width, height) of the point box that delta gives for stem / scale.'''
+	pts = list(delta.scale_by_stem(stem, scale, (0., 0.), (0., 0.), italic_rad, extrapolate))
+	if not pts:
+		return 0., 0.
+	xs = [p[0] for p in pts]
+	ys = [p[1] for p in pts]
+	return max(xs) - min(xs), max(ys) - min(ys)
+
+
+def _solve_scale(delta, stem, scale, dims, italic_rad, extrapolate, tol=0.01, steps=16):
+	'''Scale factors (sx, sy) that make the point box of delta hit dims.
+
+	scale: (sx, sy) start; an axis whose dims entry is None keeps its value
+	(fixed percent). dims: (width | None, height | None) in units.
+	With compensation 0 the box is affine in each scale, so a secant on the
+	measured box converges in one or two steps; the fixed axis is held at
+	its own value while solving, so an italic shear (x depends on y) is
+	part of the measure. Returns ((sx, sy), converged, (res_w, res_h)).
+	'''
+	s = [float(scale[0]), float(scale[1])]
+	solve = [i for i in (0, 1) if dims[i] is not None]
+	prev_s = prev_m = None
+	m = _measure_box(delta, stem, tuple(s), italic_rad, extrapolate)
+	for _ in range(steps):
+		if all(abs(m[i] - dims[i]) <= tol for i in solve):
+			break
+		new = list(s)
+		for i in solve:
+			slope = None
+			if prev_s is not None and s[i] != prev_s[i]:
+				slope = (m[i] - prev_m[i]) / (s[i] - prev_s[i])
+			if slope:
+				new[i] = s[i] - (m[i] - dims[i]) / slope
+			elif m[i]:
+				new[i] = s[i] * dims[i] / m[i]		# proportional seed
+		prev_s, prev_m, s = s, m, new
+		m = _measure_box(delta, stem, tuple(s), italic_rad, extrapolate)
+	res = tuple(abs(m[i] - dims[i]) if dims[i] is not None else 0. for i in (0, 1))
+	return (s[0], s[1]), all(r <= max(tol, 0.5) for r in res), res
+
+
+def _mixed_scale(vaxis, target, italic_rad, extrapolate):
+	'''Mixed-mode scales in percent: the % axes as given, the units axes
+	(target['fit'] in 'w', 'h', 'wh') solved on the point_array box.
+	Returns ((sx %, sy %), converged, residual).'''
+	fit = target.get('fit', '') or ''
+	stem = (float(target['vstem']), float(target['hstem']))
+	scale = (float(target.get('sx', 100.)) / 100. if 'w' not in fit else 1.,
+	         float(target.get('sy', 100.)) / 100. if 'h' not in fit else 1.)
+	dims = (float(target['w']) if 'w' in fit else None,
+	        float(target['h']) if 'h' in fit else None)
+	if dims == (None, None):
+		return (scale[0] * 100., scale[1] * 100.), True, (0., 0.)
+	(sx, sy), ok, res = _solve_scale(vaxis['point_array'], stem, scale, dims, italic_rad, extrapolate)
+	return (sx * 100., sy * 100.), ok, res
+
+
+def _bake_target_mixed(base_layer, vaxis, target, italic_rad,
+                       extrapolate, global_origin, source_bounds):
+	'''Mixed-mode: target stems (like stems mode) with width and / or
+	height in units. The units axes are solved first, then the target is
+	baked as stems mode with the solved percentages. Unlike dimensions
+	mode, the target stems are used. Returns (layer, converged, scales).'''
+	scales, ok, _res = _mixed_scale(vaxis, target, italic_rad, extrapolate)
+	as_stems = dict(target, sx=scales[0], sy=scales[1])
+	layer = _bake_target_stems(base_layer, vaxis, as_stems, italic_rad,
+	                           extrapolate, global_origin, source_bounds)
+	return layer, ok, scales
+
+
 def _bake_target_dims(base_layer, vaxis, target, extrapolate):
 	'''Dimensions-mode: delegate to core's iterative scale_with_axis.'''
 	origin = _ORIGIN_FROM_CODE.get(target.get('origin', 'BL'),
@@ -262,11 +344,18 @@ def _norm_input(row):
 
 
 def _norm_target(t):
-	mode = 'dimensions' if t.get('mode') in ('dimensions', 'dims') else 'stems'
+	mode = t.get('mode')
+	mode = 'dimensions' if mode in ('dimensions', 'dims') else 'mixed' if mode == 'mixed' else 'stems'
 	out = {'mode': mode, 'name': str(t.get('name', '') or ''), 'color': t.get('color', '') or ''}
-	if mode == 'stems':
+	for key in ('anchors', 'metrics'):		# per-target switches (Delta Machine)
+		if isinstance(t.get(key), bool):
+			out[key] = t[key]
+	if mode in ('stems', 'mixed'):
 		out.update(vstem=_to_float(t.get('vstem'), 100.), hstem=_to_float(t.get('hstem'), 100.),
 		           sx=_to_float(t.get('sx'), 100.), sy=_to_float(t.get('sy'), 100.))
+		if mode == 'mixed':
+			fit = ''.join(c for c in 'wh' if c in str(t.get('fit', '') or ''))
+			out.update(fit=fit, w=_to_float(t.get('w'), 600.), h=_to_float(t.get('h'), 700.))
 	else:
 		origin = t.get('origin', 'BL')
 		out.update(w=_to_float(t.get('w'), 600.), h=_to_float(t.get('h'), 700.),
@@ -372,6 +461,78 @@ def delta_setup_validate(setup):
 
 
 # - Dispatchers ---------------------------------------------------
+def _build_axis(glyph, axis, requested, warnings):
+	'''Resolve an axis' input layers (stems set) and build its virtual axis.
+	Returns (vaxis, base_layer, viable) or None (warnings say why).'''
+	axis_name = axis.get('name', '<unnamed>')
+	inputs = axis.get('inputs', [])
+	if len(inputs) < 2:
+		warnings.append('Axis "%s": needs at least 2 inputs.' % axis_name)
+		return None
+
+	# Resolve input layers + set stems. Skip empties.
+	input_layers = []
+	empty = []
+	missing = []
+	for inp in inputs:
+		name = inp.get('name')
+		layer = glyph.layer(name)
+		if layer is None:
+			missing.append(name)
+			continue
+		if _attr_len(layer, 'point_array') == 0:
+			empty.append(name)
+			continue
+		try:
+			layer.stems = (float(inp['vstem']), float(inp['hstem']))
+		except (KeyError, ValueError, TypeError):
+			warnings.append('Axis "%s": input "%s" has invalid stems.'
+				% (axis_name, name))
+			continue
+		input_layers.append(layer)
+
+	if missing:
+		warnings.append('Axis "%s": missing layers %s.'
+			% (axis_name, ', '.join(missing)))
+	if empty:
+		warnings.append('Axis "%s": empty input layers %s.'
+			% (axis_name, ', '.join(empty)))
+	if len(input_layers) < 2:
+		warnings.append('Axis "%s": fewer than 2 usable inputs.'
+			% axis_name)
+		return None
+
+	# Decide attribs viable across all surviving inputs.
+	viable, skipped = _viable_attribs(input_layers, requested)
+	for s in skipped:
+		warnings.append('Axis "%s": %s — skipped.' % (axis_name, s))
+	if 'point_array' not in viable:
+		warnings.append('Axis "%s": no usable point_array.' % axis_name)
+		return None
+
+	# Build the virtual axis once.
+	try:
+		vaxis = glyph.create_virtual_axis(
+			[l.name for l in input_layers], attributes=viable)
+	except Exception as e:
+		warnings.append('Axis "%s": create_virtual_axis failed: %s'
+			% (axis_name, e))
+		return None
+	return vaxis, input_layers[0], viable
+
+
+def _requested_attribs(opts, axes):
+	'''Attributes to build: point_array, plus metrics / anchors when the
+	options or any target ask for them (targets may switch them per row).'''
+	targets = [t for ax in axes for t in ax.get('targets', [])]
+	requested = ['point_array']
+	for attrib, key in (('metric_array', 'metrics'), ('anchor_array', 'anchors')):
+		default = opts.get(key, True)
+		if any(t.get(key, default) for t in targets) or (default and not targets):
+			requested.append(attrib)
+	return requested
+
+
 def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 	'''Bake all targets across all axes in the supplied setup against
 	the active glyph. Returns a JSON-serialisable status dict.
@@ -379,6 +540,10 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 	scope_layers is ignored — Delta operates over the layers named in
 	the setup, not over the layer-mode scope. The host is expected to
 	keep glyph current.
+
+	A target may carry its own 'metrics' / 'anchors' (bool, default: the
+	option); when off, that attribute is left out of the entry's 'viable'
+	and the target layer keeps its own metrics / anchors.
 	'''
 	global _last_setup
 
@@ -398,10 +563,7 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 	italic_rad = math.radians(-italic_deg)
 	extrapolate = bool(opts.get('extrapolate', True))
 	global_origin = _origin_of(opts)
-
-	requested = ['point_array']
-	if opts.get('metrics', True): requested.append('metric_array')
-	if opts.get('anchors', True): requested.append('anchor_array')
+	requested = _requested_attribs(opts, axes)
 
 	warnings = []
 	targets_baked = 0
@@ -410,63 +572,12 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 
 	for axis in axes:
 		axis_name = axis.get('name', '<unnamed>')
-		inputs = axis.get('inputs', [])
-		if len(inputs) < 2:
-			warnings.append('Axis "%s": needs at least 2 inputs.' % axis_name)
+		built = _build_axis(glyph, axis, requested, warnings)
+		if built is None:
 			continue
-
-		# Resolve input layers + set stems. Skip empties.
-		input_layers = []
-		empty = []
-		missing = []
-		for inp in inputs:
-			name = inp.get('name')
-			layer = glyph.layer(name)
-			if layer is None:
-				missing.append(name)
-				continue
-			if _attr_len(layer, 'point_array') == 0:
-				empty.append(name)
-				continue
-			try:
-				layer.stems = (float(inp['vstem']), float(inp['hstem']))
-			except (KeyError, ValueError, TypeError):
-				warnings.append('Axis "%s": input "%s" has invalid stems.'
-					% (axis_name, name))
-				continue
-			input_layers.append(layer)
-
-		if missing:
-			warnings.append('Axis "%s": missing layers %s.'
-				% (axis_name, ', '.join(missing)))
-		if empty:
-			warnings.append('Axis "%s": empty input layers %s.'
-				% (axis_name, ', '.join(empty)))
-		if len(input_layers) < 2:
-			warnings.append('Axis "%s": fewer than 2 usable inputs.'
-				% axis_name)
-			continue
-
-		# Decide attribs viable across all surviving inputs.
-		viable, skipped = _viable_attribs(input_layers, requested)
-		for s in skipped:
-			warnings.append('Axis "%s": %s — skipped.' % (axis_name, s))
-		if 'point_array' not in viable:
-			warnings.append('Axis "%s": no usable point_array.' % axis_name)
-			continue
-
-		# Build the virtual axis once.
-		try:
-			vaxis = glyph.create_virtual_axis(
-				[l.name for l in input_layers], attributes=viable)
-		except Exception as e:
-			warnings.append('Axis "%s": create_virtual_axis failed: %s'
-				% (axis_name, e))
-			continue
-
+		vaxis, base_layer, viable = built
 		axes_built += 1
 
-		base_layer = input_layers[0]
 		base_name = base_layer.name
 		try:
 			source_bounds = base_layer.bounds
@@ -480,12 +591,22 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 					% axis_name)
 				continue
 			mode = target.get('mode', 'stems')
+			entry = {}
 			try:
 				if mode == 'stems':
 					new_layer = _bake_target_stems(
 						base_layer, vaxis, target,
 						italic_rad, extrapolate,
 						global_origin, source_bounds)
+				elif mode == 'mixed':
+					new_layer, converged, scales = _bake_target_mixed(
+						base_layer, vaxis, target,
+						italic_rad, extrapolate,
+						global_origin, source_bounds)
+					entry['scales'] = list(scales)
+					if not converged:
+						warnings.append('Axis "%s" / target "%s": size not reached.'
+							% (axis_name, t_name))
 				else:
 					new_layer = _bake_target_dims(
 						base_layer, vaxis, target, extrapolate)
@@ -494,13 +615,17 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 					% (axis_name, t_name, e))
 				continue
 
+			t_viable = [a for a in viable
+			            if not (a == 'metric_array' and not target.get('metrics', opts.get('metrics', True)))
+			            and not (a == 'anchor_array' and not target.get('anchors', opts.get('anchors', True)))]
+
 			new_layer.name = t_name
 			# Ensure FL/host layer exists, then copy our scaled geometry in.
 			dst, rebuilt = _ensure_target_layer(glyph, base_layer, t_name)
 			dst.point_array = new_layer.point_array
-			if 'metric_array' in viable:
+			if 'metric_array' in t_viable:
 				dst.metric_array = new_layer.metric_array
-			if 'anchor_array' in viable:
+			if 'anchor_array' in t_viable:
 				dst.anchor_array = new_layer.anchor_array
 			# Origin realignment for stems mode already baked into new_layer;
 			# mirror by shifting dst to match new_layer's bounds origin.
@@ -513,8 +638,9 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 				pass
 
 			targets_baked += 1
-			baked.append({'axis': axis_name, 'name': t_name, 'base': base_name,
-			              'rebuilt': rebuilt, 'viable': list(viable)})
+			entry.update({'axis': axis_name, 'name': t_name, 'base': base_name,
+			              'rebuilt': rebuilt, 'viable': t_viable})
+			baked.append(entry)
 
 	return {
 		'ok': True,
@@ -523,6 +649,49 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 		'baked': baked,
 		'warnings': warnings,
 	}
+
+
+def npa_delta_solve_target(glyph, scope_layers, NodeActions, setup_json):
+	'''Solve the scales of every mixed-mode target on this glyph without
+	writing anything: the first pass of a reference-glyph bake (solve on
+	H, then bake the whole group with these percentages).
+
+	Returns {'ok', 'scales': [{'axis', 'name', 'sx', 'sy', 'converged',
+	'residual'}], 'warnings'}; sx / sy in percent. Stems targets echo their
+	own sx / sy; dimensions targets are skipped.
+	'''
+	try:
+		setup = json.loads(setup_json)
+	except (TypeError, ValueError) as e:
+		return {'ok': False, 'error': 'setup_json parse failed: %s' % e}
+	opts = setup.get('options', {}) or {}
+	italic_rad = math.radians(-float(opts.get('italic_angle', 0.0)))
+	extrapolate = bool(opts.get('extrapolate', True))
+
+	warnings, scales = [], []
+	for axis in setup.get('axes', []):
+		axis_name = axis.get('name', '<unnamed>')
+		built = _build_axis(glyph, axis, ['point_array'], warnings)
+		if built is None:
+			continue
+		vaxis = built[0]
+		for target in axis.get('targets', []):
+			mode = target.get('mode', 'stems')
+			if mode == 'dimensions':
+				continue
+			try:
+				if mode == 'mixed':
+					(sx, sy), ok, res = _mixed_scale(vaxis, target, italic_rad, extrapolate)
+				else:
+					sx, sy = float(target.get('sx', 100.)), float(target.get('sy', 100.))
+					ok, res = True, (0., 0.)
+			except Exception as e:
+				warnings.append('Axis "%s" / target "%s": solve failed: %s'
+					% (axis_name, target.get('name'), e))
+				continue
+			scales.append({'axis': axis_name, 'name': target.get('name'), 'sx': sx, 'sy': sy,
+			               'converged': ok, 'residual': list(res)})
+	return {'ok': bool(scales), 'scales': scales, 'warnings': warnings}
 
 
 def npa_delta_measure_stem(glyph, scope_layers, NodeActions, layer_name, axis):
