@@ -15,7 +15,7 @@
 #   'plain' — at the copied coordinates (contours) / aligned (nodes)
 #   'fit'   — affine scale into the bounds of the node selection
 #   'delta' — Delta Machine scale into the selection bounds, stems kept;
-#             axis from a Delta setup (delta_panel_actions setup dict)
+#             axis: the Delta panel's Live Axis (clip_live_axis)
 # Then flip around its own centre and align its `align` corner onto
 # the same corner of the selection bounds (codes: Bounds.align_matrix).
 #
@@ -27,6 +27,7 @@
 from __future__ import absolute_import, print_function, division
 
 import copy
+import json
 import xml.etree.ElementTree as ET
 from collections import OrderedDict
 
@@ -168,40 +169,36 @@ def _stems(row):
 		return None
 
 
-def clip_delta_axis(setup, axis_name=None):
-	"""Axis for Delta paste from a core Delta setup dict
-	(delta_panel_actions.delta_setup_normalize).
+def clip_live_axis(live):
+	"""Delta paste axis from the Delta panel's Live Axis data
+	({'inputs': [{'name', 'vstem', 'hstem'}], 'options': {...}}, a dict or
+	its JSON text).
 
-	Returns (name, inputs, extra) or None: inputs = OrderedDict layer ->
-	(vstem, hstem), the axis masters sorted by vstem (DeltaScale needs a
-	monotonic axis); extra = stems for other layers, from the stem targets
-	and the masters table (FL: 'Target Layers'). axis_name None = the first
-	axis with two or more inputs."""
-	axes = [ax for ax in setup.get('axes', []) if len(ax.get('inputs', [])) >= 2]
-	if axis_name is not None:
-		axes = [ax for ax in axes if ax.get('name') == axis_name]
-	if not axes:
+	Returns {'name': 'Live', 'inputs': OrderedDict layer -> (vstem, hstem)
+	sorted by vstem (DeltaScale needs a monotonic axis), 'extrapolate': bool},
+	or None when the Live Axis has fewer than two layers with stems."""
+	if isinstance(live, (str, bytes)):
+		live = json.loads(live)
+	if not isinstance(live, dict):
 		return None
-	axis = axes[0]
-	rows = [(r['name'], _stems(r)) for r in axis['inputs']]
-	inputs = OrderedDict(sorted(((n, s) for n, s in rows if s), key=lambda kv: kv[1][0]))
-	extra = {}
-	for row in list(setup.get('masters', [])) + [t for t in axis.get('targets', []) if t.get('mode', 'stems') == 'stems']:
-		stems = _stems(row)
-		if stems and row.get('name'):
-			extra[row['name']] = stems
-	return axis.get('name', ''), inputs, extra
+	rows = [(r.get('name'), _stems(r)) for r in live.get('inputs', []) or [] if isinstance(r, dict)]
+	inputs = OrderedDict(sorted(((n, s) for n, s in rows if n and s), key=lambda kv: kv[1][0]))
+	if len(inputs) < 2:
+		return None
+	options = live.get('options') or {}
+	return {'name': 'Live', 'inputs': inputs, 'extrapolate': bool(options.get('extrapolate', True))}
 
 
 def _delta_ready(bank, delta):
 	"""(working copy of bank, virtual axis) or (None, reason)."""
 	if delta is None:
-		return None, 'Delta: no axis in the Delta setup (two or more inputs).'
-	_, inputs, _ = delta
+		return None, 'Delta: no Live Axis (two or more layers with stems).'
+	inputs = delta['inputs']
 	work = copy.deepcopy(bank)
 	names = [n for n in inputs if work.layer(n) is not None]
 	if len(names) < 2:
-		return None, 'Delta: the item must hold two or more axis layers (%s).' % ', '.join(inputs)
+		return None, 'Delta: the item has %s; the Live Axis needs %s.' % (
+			', '.join(l.name for l in bank.layers), ', '.join(inputs))
 	for n in names:
 		work.layer(n).stems = inputs[n]
 	return (work, work.virtual_axis(names)), None
@@ -209,13 +206,13 @@ def _delta_ready(bank, delta):
 
 def _delta_scale(layer, vaxis, delta, stem_name, target, origin=TransformOrigin.CENTER):
 	"""Scaled copy of a bank layer, or (None, reason)."""
-	_, inputs, extra = delta
-	stems = inputs.get(stem_name) or extra.get(stem_name)
+	stems = delta['inputs'].get(stem_name)
 	if stems is None:
-		return None, 'no stems for %s in the Delta setup' % stem_name
+		return None, '%s is not on the Live Axis (no stems)' % stem_name
 	layer.stems = stems
 	try:
-		return layer.scale_with_axis(vaxis, target.width, target.height, transform_origin=origin), None
+		return layer.scale_with_axis(vaxis, target.width, target.height, extrapolate=delta.get('extrapolate', True),
+		                             transform_origin=origin), None
 	except (ZeroDivisionError, ValueError) as error:		# degenerate axis (e.g. masters differ in stems only)
 		return None, 'Delta could not solve %s: %s' % (stem_name, error)
 
@@ -276,7 +273,7 @@ def npa_clip_paste_contours(glyph, scope_layers, banks, mode='plain', align='C',
 	mode  : 'plain' | 'fit' | 'delta' — fit and delta need a node selection
 	        on the target layer (its bounds); plain keeps the copied place
 	to_background : paste into 'mask.<layer>'
-	delta : clip_delta_axis() result (mode 'delta')
+	delta : clip_live_axis() result (mode 'delta')
 	Returns (done layer names, skipped lines)."""
 	done, skipped = [], []
 	flip_h, flip_v = flip
