@@ -26,6 +26,7 @@ import copy
 import json
 
 from typerig.core.actions import delta_panel_actions as dpa
+from typerig.core.actions import designspace_actions as dsa
 
 # - Init -------------------------------------------------------------------
 TOOL       = 'TypeRig Delta Machine'
@@ -108,6 +109,7 @@ def machine_new(masters=()):
 		'options': dict(OPTION_DEFAULTS),
 		'masters': [{'name': str(n)} for n in masters],
 		'axes': [], 'groups': [],
+		'designspace': dsa.plan_new(),		# Designspace tab: font axes + masters plan
 		'advanced': dict(ADVANCED_DEFAULTS),
 	}
 
@@ -208,6 +210,7 @@ def machine_normalize(raw):
 		                    'targets': [norm_target(t, origin=doc['options']['origin'])
 		                                for t in ax.get('targets', []) or [] if isinstance(t, dict)]})
 	doc['groups'] = [g for g in (norm_group(g) for g in raw.get('groups', []) or []) if g is not None]
+	doc['designspace'] = dsa.plan_normalize(raw.get('designspace'))
 	return doc
 
 

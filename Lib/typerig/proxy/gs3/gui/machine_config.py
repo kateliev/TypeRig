@@ -69,6 +69,14 @@ COLUMNS = SimpleNamespace(
 	RESULT  = 64,       # last bake of a row: '12/14 +3c'
 	ORIGIN  = 108,      # transform origin popup of a row ('Bottom middle')
 	LAYER_MIN = 100,    # target layer name: never narrower (the table scrolls instead)
+	AX_TAG  = 48,       # Designspace tab, axes: tag
+	AX_NUM  = 46,       # Designspace tab, axes: min / default / max
+	AX_NAME_MIN = 80,   # Designspace tab, axes: name never narrower
+	DRIVER  = 84,       # Designspace tab, axes: 'Driven by' popup
+	M_NAME  = 130,      # Designspace tab, masters: name
+	SOURCE  = 150,      # Designspace tab, masters: where a new master comes from
+	COORD   = 76,       # Designspace tab, masters: one coordinate column per axis
+	DEFAULT = 52,       # Designspace tab, masters: default (origin) check box
 	COUNT   = 44,       # glyph count (groups)
 	REF     = 52,       # reference glyph (groups)
 	UNICODE = 56,       # Unicode (glyphs of a group)
@@ -109,6 +117,16 @@ COLORS = SimpleNamespace(
 		'Mark'     : 'systemPurpleColor',
 		'Other'    : None,
 		'Missing'  : 'systemRedColor',     # in the group, not in the font
+	},
+	MASTER_COLORS = {	# Designspace tab: masters by what Apply does with them
+		'Font'  : 'systemGreenColor',      # in the font
+		'New'   : 'systemBlueColor',       # added on Apply (empty or a copy)
+		'Target': 'systemOrangeColor',     # added on Apply from a Delta target layer
+		'Remove': 'systemRedColor',        # removed on Apply
+	},
+	AXIS_COLORS = {
+		'Font'  : 'systemGreenColor',
+		'New'   : 'systemBlueColor',
 	},
 )
 
