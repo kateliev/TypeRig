@@ -88,6 +88,18 @@ class GlyphsDeltaHost(object):
 		from typerig.proxy.gs3.gui.scope import scope_glyphs
 		return [g.name for g in scope_glyphs(mode, self._font())]
 
+	def selected_names(self):
+		'''Glyphs selected in Glyphs: the Font view selection, or the selected
+		glyphs of the edit tab (font.selectedLayers covers both).'''
+		font = self._font()
+		names = []
+		for layer in (font.selectedLayers or []) if font is not None else []:
+			glyph = getattr(layer, 'parent', None)		# GSControlLayer line breaks have none
+			name = getattr(glyph, 'name', None)
+			if name and name not in names:
+				names.append(name)
+		return names
+
 	def open_tab(self, names):
 		font = self._font()
 		if font is not None and names:

@@ -30,6 +30,8 @@ _WIN_GS3 = SimpleNamespace(
 	TABS_CHROME = 30,     # tab view height beyond its item view (tab bar + frame; macOS 26)
 	TABS_SIDE   = 16,     # tab view width beyond its content (frame, both sides)
 	INSET       = 10,     # inset of a tab's content from the tab frame
+	PROGRESS_H  = 12,     # bake progress bar above the status line
+	PROGRESS_GAP = 6,     # progress bar to status line
 )
 _WIN_GS4 = SimpleNamespace(
 	W           = 1060,
@@ -38,6 +40,8 @@ _WIN_GS4 = SimpleNamespace(
 	TABS_CHROME = 30,
 	TABS_SIDE   = 16,
 	INSET       = 12,
+	PROGRESS_H  = 12,
+	PROGRESS_GAP = 6,
 )
 
 # - Lists -----------------------------------------------------------------
@@ -62,6 +66,7 @@ COLUMNS = SimpleNamespace(
 	DIM     = 66,       # Width / Height ('60 %', '700 u')
 	GROUP   = 110,      # Group name (targets)
 	CHECK   = 40,       # Anchors / Metrics / Kerning check boxes
+	RESULT  = 70,       # last bake of a row: '12/14 +3c'
 	COUNT   = 44,       # glyph count (groups)
 	REF     = 52,       # reference glyph (groups)
 	UNICODE = 56,       # Unicode (glyphs of a group)
