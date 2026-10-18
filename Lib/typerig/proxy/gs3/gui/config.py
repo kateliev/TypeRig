@@ -31,6 +31,7 @@ Fields are grouped under sub-namespaces by concern:
     UI.LBL        — single-char label column, label-to-field gap
     UI.FORM     — label + field grids, check boxes, text buttons
     UI.LIST       — table (vanilla.List) dimensions
+    UI.TINTLIST   — colour-coded list: dots + row tint (gui/tint_list.py)
     UI.THUMB      — outline thumbnails and the thumbnail grid (gui/thumbnail.py)
     UI.STATUS     — status / warning text block
     UI.WIN        — main window dimensions and minimums
@@ -284,6 +285,29 @@ LIST = SimpleNamespace(
 	CELL_GAP    = 4,    # horizontal intercell spacing for dense tables (macOS 26 default is 17)
 )
 
+# - Colour-coded list (gui/tint_list.py, TRTintList) ---------------------
+# A vanilla.List2 whose rows are colour coded by a "kind" value: a dot
+# column (filled or hollow circle) and a light full-row tint. Colours name
+# NSColor class methods (system colours follow light / dark mode); None =
+# no colour for that kind. LAYER_COLORS is the default map (layer types as
+# gui/dialogs.layer_kind names them). One set for GS3 + GS4.
+TINTLIST = SimpleNamespace(
+	DOT_D          = 10,     # dot diameter (pt)
+	DOT_LINE       = 1.5,    # outline width of a hollow dot (pt)
+	DOT_COL_W      = 22,     # dot column width
+	TINT           = 0.12,   # row tint alpha; 0 = no tint
+	FILLED         = False,  # default dot: hollow
+	FILL_ON_SELECT = True,   # selected rows flip their dot (hollow <-> filled)
+	LAYER_COLORS   = {
+		'Master'  : 'systemGreenColor',
+		'Brace'   : 'systemBlueColor',
+		'Bracket' : 'systemPurpleColor',
+		'Color'   : 'systemOrangeColor',
+		'Mask'    : 'systemRedColor',
+		'Layer'   : None,
+	},
+)
+
 # - Outline thumbnails (gui/thumbnail.py) --------------------------------
 # Contours drawn as images: thumb_image() and the TRThumbGrid picker
 # (Clipboard bank and later part pickers). SIZES are the cell edge in pt;
@@ -390,6 +414,7 @@ UI = SimpleNamespace(
 	LBL      = LBL,
 	FORM     = FORM,
 	LIST     = LIST,
+	TINTLIST = TINTLIST,
 	THUMB    = THUMB,
 	STATUS   = STATUS,
 	WIN      = WIN,
