@@ -46,7 +46,7 @@ PAD       = PALETTE.PAD
 COLS      = PALETTE.COLS
 SEP       = PALETTE.SEP
 MAST_H    = PALETTE.MAST_H
-FLD_STYLE = PALETTE.FLD_STYLE
+ENTRY     = PALETTE.ENTRY
 CELL      = BTN + GAP
 
 
@@ -121,13 +121,75 @@ class TRToolbarBase(TRPanelBase):
 			self._advance()
 		return out
 
-	def field(self, name, value, tooltip):
-		'''One-cell numeric field in flow order, stored as self.group.<name>.'''
-		fld = vanilla.EditText(self._cell(), value, sizeStyle=FLD_STYLE)
-		fld.getNSTextField().setToolTip_(tooltip)
-		setattr(self.group, name, fld)
-		self._advance()
-		return fld
+	# - Entry fields (presets in palette_config.PALETTE.ENTRY) ------------
+	def entry(self, name, preset, factory, tooltip=None, cells=None):
+		'''Place any non-button control on the grid. Shared by every entry
+		kind so they size and align the same way.
+
+		preset  : a PALETTE.ENTRY.<KIND> namespace (STYLE / CELLS / H)
+		factory : callable(posSize, sizeStyle) -> vanilla control
+		cells   : width override in grid cells; None = preset.CELLS
+		          (preset.CELLS None = the full row)
+		Starts a new row when the entry does not fit the current one; height
+		is preset.H or the control's natural height, centred vertically on
+		the button row. Stored as self.group.<name>; returns the control.
+		'''
+		cells = cells or preset.CELLS or COLS
+		cells = min(cells, COLS)
+		if self._col + cells > COLS:
+			self.newline()
+		x, y, _, _ = self._cell()
+		w = cells * BTN + (cells - 1) * GAP
+		ctrl = factory((x, y, w, BTN), preset.STYLE)
+		h = preset.H or self._natural_height(ctrl)
+		ctrl.setPosSize((x, y + (BTN - h) / 2., w, h))
+		if tooltip:
+			ctrl.setToolTip(tooltip)
+		setattr(self.group, name, ctrl)
+		for _ in range(cells):
+			self._advance()
+		return ctrl
+
+	@staticmethod
+	def _natural_height(ctrl):
+		h = ctrl._nsObject.intrinsicContentSize().height		# vanilla has no common public NSView accessor
+		return h if h > 0 else BTN		# no intrinsic height -> button height
+
+	def field(self, name, value, tooltip=None, cells=None):
+		'''Numeric EditText (ENTRY.NUM). Read with self.group.<name>.get().'''
+		return self.entry(name, ENTRY.NUM,
+			lambda ps, st: vanilla.EditText(ps, value, sizeStyle=st), tooltip, cells)
+
+	def text(self, name, value='', tooltip=None, cells=None, callback=None):
+		'''Free-text EditText (ENTRY.TEXT); full row by default.'''
+		return self.entry(name, ENTRY.TEXT,
+			lambda ps, st: vanilla.EditText(ps, value, sizeStyle=st, callback=callback), tooltip, cells)
+
+	def popup(self, name, items, tooltip=None, cells=None, callback=None):
+		'''PopUpButton (ENTRY.POPUP). Read the index with self.group.<name>.get().'''
+		return self.entry(name, ENTRY.POPUP,
+			lambda ps, st: vanilla.PopUpButton(ps, items, sizeStyle=st, callback=callback), tooltip, cells)
+
+	def combo(self, name, items, tooltip=None, cells=None, callback=None):
+		'''ComboBox (ENTRY.COMBO): pick from items or type a value.'''
+		return self.entry(name, ENTRY.COMBO,
+			lambda ps, st: vanilla.ComboBox(ps, items, sizeStyle=st, callback=callback), tooltip, cells)
+
+	def checkbox(self, name, title, value=False, tooltip=None, cells=None, callback=None):
+		'''CheckBox with a short title (ENTRY.CHECK).'''
+		return self.entry(name, ENTRY.CHECK,
+			lambda ps, st: vanilla.CheckBox(ps, title, value=value, sizeStyle=st, callback=callback), tooltip, cells)
+
+	def slider(self, name, min_value, max_value, value, tooltip=None, cells=None, callback=None):
+		'''Slider (ENTRY.SLIDER).'''
+		return self.entry(name, ENTRY.SLIDER,
+			lambda ps, st: vanilla.Slider(ps, minValue=min_value, maxValue=max_value, value=value,
+			                              sizeStyle=st, callback=callback), tooltip, cells)
+
+	def label(self, name, title, tooltip=None, cells=None):
+		'''Short caption TextBox (ENTRY.LABEL).'''
+		return self.entry(name, ENTRY.LABEL,
+			lambda ps, st: vanilla.TextBox(ps, title, sizeStyle=st), tooltip, cells)
 
 	def separator(self, key):
 		'''Close the row and draw a thin line between sections.'''

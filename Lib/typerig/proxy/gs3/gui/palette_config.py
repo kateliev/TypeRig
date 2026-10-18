@@ -21,6 +21,41 @@ from types import SimpleNamespace
 from .config import HOST_MAJOR
 
 
+# - Entry fields ----------------------------------------------------------
+# Every non-button control a palette places on the grid. Each kind takes the
+# same three parameters, so new widgets reuse them instead of new numbers:
+#   STYLE : vanilla sizeStyle — 'mini', 'small' or 'regular' (NSControlSize);
+#           sets the font size and the natural height of the control
+#   CELLS : width in grid cells (buttons, with the gaps between them);
+#           None = the full row (COLS)
+#   H     : height in px; None = the control's natural height for STYLE.
+#           Taller text fields keep their text at the top (AppKit), so
+#           prefer a bigger STYLE over a bigger H
+# Entries are centred vertically on the button row; one that does not fit
+# the rest of the row starts a new row.
+def _entry(style, cells, h=None):
+	return SimpleNamespace(STYLE=style, CELLS=cells, H=h)
+
+_ENTRY_GS3 = SimpleNamespace(
+	NUM    = _entry('regular', 2),     # numeric EditText (sizes, angles, counts)
+	TEXT   = _entry('regular', None),  # free-text EditText (names, expressions)
+	POPUP  = _entry('regular', 3),     # PopUpButton (mode / preset choice)
+	COMBO  = _entry('regular', 3),     # ComboBox (choice or typed value)
+	CHECK  = _entry('regular', 2),     # CheckBox with a short title
+	SLIDER = _entry('regular', 3),     # Slider
+	LABEL  = _entry('regular', 2),     # TextBox (short caption)
+)
+_ENTRY_GS4 = SimpleNamespace(
+	NUM    = _entry('regular', 2),
+	TEXT   = _entry('regular', None),
+	POPUP  = _entry('regular', 3),
+	COMBO  = _entry('regular', 3),
+	CHECK  = _entry('regular', 2),
+	SLIDER = _entry('regular', 3),
+	LABEL  = _entry('regular', 2),
+)
+
+
 # - Grid ------------------------------------------------------------------
 # vanilla cannot reflow live, so palettes flow their buttons once, at build
 # time, into a grid of COLS columns. Glyphs' own palettes are built
@@ -39,7 +74,7 @@ _PALETTE_GS3 = SimpleNamespace(
 	PAD      = 12,   # inset from the palette edge
 	COLS     = 5,    # buttons per row; sections reflow at build time
 	SEP      = 17,   # vertical space taken by a section separator line
-	FLD_STYLE = 'small',  # NSControlSize for a one-cell numeric field
+	ENTRY    = _ENTRY_GS3,  # entry-field presets (above)
 )
 _PALETTE_GS4 = SimpleNamespace(
 	BTN      = 22,
@@ -49,7 +84,7 @@ _PALETTE_GS4 = SimpleNamespace(
 	PAD      = 14,
 	COLS     = 5,
 	SEP      = 18,
-	FLD_STYLE = 'small',
+	ENTRY    = _ENTRY_GS4,
 )
 PALETTE = _PALETTE_GS3 if HOST_MAJOR == 3 else _PALETTE_GS4
 PALETTE.W      = PALETTE.COLS * PALETTE.BTN + (PALETTE.COLS - 1) * PALETTE.GAP + 2 * PALETTE.PAD
