@@ -41,6 +41,7 @@ OPTION_DEFAULTS = {
 	'origin': 'BS',				# transform origin of every target
 	'extrapolate': True,
 	'selection_only': False,	# named groups: only their selected glyphs
+	'skip_composites': True,	# composites (and mixed glyphs) get no delta: target layer + metrics only
 }
 
 # Advanced tab: stored, not used yet (the engine options of later versions)

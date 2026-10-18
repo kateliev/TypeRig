@@ -175,6 +175,85 @@ class GlyphsDeltaHost(object):
 			raise RuntimeError('layer "{}" does not match the base input'.format(core_layer.name))
 		self.write_layer(gs_layer, core_layer, viable)
 
+	# - Composites -----------------------------------------------------------
+	# A composite layer has components and no paths: nothing to interpolate.
+	# The Delta Machine skips it (option Skip composites) and gives it the
+	# target layer here instead, so the font stays complete, with its width
+	# following the components' base glyphs.
+	METRICS_KEYS = ('leftMetricsKey', 'rightMetricsKey', 'widthMetricsKey')
+
+	def _layer_named(self, glyph, name):
+		for gs_layer in glyph.layers:
+			if gs_layer.name == name:
+				return gs_layer
+		return None
+
+	def shape_kind(self, glyph, layer_name):
+		'''outline (paths only), composite (components only), mixed, empty —
+		of layer_name, else of the first layer.'''
+		layer = self._layer_named(glyph, layer_name)
+		if layer is None:
+			layer = glyph.layers[0] if len(glyph.layers) else None
+		if layer is None:
+			return 'empty'
+		paths, components = len(layer.paths), len(layer.components)
+		if paths and components:
+			return 'mixed'
+		if components:
+			return 'composite'
+		return 'outline' if paths else 'empty'
+
+	def bake_composite(self, glyph, base_name, target_name, metrics=True):
+		'''Target layer of a composite glyph without the delta.
+
+		The layer is made from the base input (components, anchors, width)
+		when it is missing. With metrics:
+		  - metrics keys (glyph or layer): Glyphs computes them, syncMetrics();
+		  - auto-aligned components: Glyphs aligns them to their base glyphs;
+		  - else width and component positions are scaled by the first
+		    component's base glyph: its target / base advance width (x) and
+		    outline height (y). The base layer is the reference, so a second
+		    bake does not compound.
+		Returns {'created', 'aligned', 'scale': (rx, ry) | None, 'notes': [...]}.'''
+		import copy
+		from typerig.proxy.gs3.objects.glyph import trGlyph
+		tr_glyph = trGlyph(glyph)
+		out = {'created': False, 'aligned': False, 'scale': None, 'notes': []}
+		target = tr_glyph.find_layer(target_name)
+		if target is None:
+			target = tr_glyph.duplicate_layer(base_name, target_name)
+			if target is None:
+				raise RuntimeError('no layer "{}" to copy'.format(base_name))
+			out['created'] = True
+		layer, base = target.host, self._layer_named(glyph, base_name)
+		components = list(layer.components)
+		out['aligned'] = bool(components) and all(c.automaticAlignment for c in components)
+		for c in components:		# a component shows its base glyph's layer of the same name, if Glyphs finds one
+			shown = c.componentLayer
+			if shown is not None and shown.name != target_name:
+				out['notes'].append('{} shows its {} layer'.format(c.componentName, shown.name))
+		if not metrics or base is None:
+			return out
+		if any(getattr(layer, k, None) or getattr(glyph, k, None) for k in self.METRICS_KEYS):
+			layer.syncMetrics()
+			out['notes'].append('metrics keys synced')
+			return out
+		if out['aligned'] or not components:
+			return out
+		first = components[0].component
+		b_in = self._layer_named(first, base_name) if first is not None else None
+		b_out = self._layer_named(first, target_name) if first is not None else None
+		if b_in is None or b_out is None or not b_in.width or not b_in.bounds.size.height:
+			out['notes'].append('{} has no {} layer: width kept'.format(components[0].componentName, target_name))
+			return out
+		rx = float(b_out.width) / float(b_in.width)
+		ry = float(b_out.bounds.size.height) / float(b_in.bounds.size.height)
+		layer.width = float(base.width) * rx
+		for c, ref in zip(components, list(base.components)):
+			c.position = (float(ref.position.x) * rx, float(ref.position.y) * ry)
+		out['scale'] = (rx, ry)
+		return out
+
 	def begin_glyph_undo(self, glyph):
 		try:
 			glyph.beginUndo()

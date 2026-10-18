@@ -68,6 +68,14 @@ COLUMNS = SimpleNamespace(
 	CASE    = 84,       # case / category (glyphs of a group)
 )
 
+# - Setup service row ----------------------------------------------------
+# Four check boxes share the row with seven buttons and two popups, so they
+# are sized to their titles ('Skip composites' is the longest) instead of
+# UI.ENTRY.CHECK.W.
+SERVICE = SimpleNamespace(
+	CHECK_W = 128,
+)
+
 # - Advanced tab ---------------------------------------------------------
 ADVANCED = SimpleNamespace(
 	LABEL_W = 150,      # form label column
@@ -101,6 +109,7 @@ MACHINE = SimpleNamespace(
 	WIN      = _WIN_GS3 if HOST_MAJOR == 3 else _WIN_GS4,
 	LIST     = LIST,
 	COLUMNS  = COLUMNS,
+	SERVICE  = SERVICE,
 	ADVANCED = ADVANCED,
 	COLORS   = COLORS,
 )
