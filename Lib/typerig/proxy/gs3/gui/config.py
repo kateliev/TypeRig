@@ -31,6 +31,7 @@ Fields are grouped under sub-namespaces by concern:
     UI.LBL        — single-char label column, label-to-field gap
     UI.FORM     — label + field grids, check boxes, text buttons
     UI.LIST       — table (vanilla.List) dimensions
+    UI.THUMB      — outline thumbnails and the thumbnail grid (gui/thumbnail.py)
     UI.STATUS     — status / warning text block
     UI.WIN        — main window dimensions and minimums
     UI.MASTHEAD   — masthead band geometry
@@ -283,6 +284,36 @@ LIST = SimpleNamespace(
 	CELL_GAP    = 4,    # horizontal intercell spacing for dense tables (macOS 26 default is 17)
 )
 
+# - Outline thumbnails (gui/thumbnail.py) --------------------------------
+# Contours drawn as images: thumb_image() and the TRThumbGrid picker
+# (Clipboard bank and later part pickers). SIZES are the cell edge in pt;
+# the grid cycles through them. Stroke and node sizes are in thumbnail pt,
+# so they stay the same at every SIZE. TONES name NSColor class methods
+# (system colours follow light / dark mode); a tone is picked per item.
+_THUMB_GS3 = SimpleNamespace(
+	SIZES      = (48, 64, 96, 128),  # cell edge (pt), cycled by the grid
+	SIZE_INDEX = 1,                  # default entry in SIZES
+	INSET      = 6,      # outline-to-cell-edge margin inside the image
+	PAD        = 8,      # grid inset from the scroll view edge
+	GAP        = 8,      # space between grid cells
+	CAP_H      = 14,     # caption height under a cell (0 = no caption)
+	CAP_STYLE  = 'mini', # NSControlSize for captions
+	STROKE     = 1.5,    # open-contour stroke width (pt)
+	NODE       = 2.,     # on-curve node dot radius (pt)
+	BEZEL      = 2,      # cell button bezel (.flexiblePush honours height; shows the on state)
+	WINDING    = 'nonzero',  # fill rule: 'nonzero' (Glyphs, direction matters) or 'evenodd'
+)
+_THUMB_GS4 = SimpleNamespace(**vars(_THUMB_GS3))
+THUMB = _THUMB_GS3 if HOST_MAJOR == 3 else _THUMB_GS4
+THUMB.TONES = {
+	'label'  : 'labelColor',          # default outline
+	'muted'  : 'tertiaryLabelColor',  # context drawn behind a part
+	'accent' : 'controlAccentColor',
+	'green'  : 'systemGreenColor',    # Clipboard: all masters copied
+	'blue'   : 'systemBlueColor',     # Clipboard: some masters
+	'red'    : 'systemRedColor',      # Clipboard: one layer only
+}
+
 # - Status text -----------------------------------------------------------
 STATUS = SimpleNamespace(
 	H          = 34,       # two-line status / warning text under a panel
@@ -359,6 +390,7 @@ UI = SimpleNamespace(
 	LBL      = LBL,
 	FORM     = FORM,
 	LIST     = LIST,
+	THUMB    = THUMB,
 	STATUS   = STATUS,
 	WIN      = WIN,
 	MASTHEAD = MASTHEAD,

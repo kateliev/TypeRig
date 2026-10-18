@@ -10,6 +10,7 @@
 #   icon_font.py    register_icon_font() + tr_attr() for OpenType rlig icons
 #   scope.py        polymorphic pLayers resolver (tuple or [(name, type), …])
 #   dialogs.py      inline layer-picker + master-values dialog
+#   thumbnail.py    contours drawn as images + TRThumbGrid picker
 #   assets/         shared icon font (typerig-icons.ttf)
 #
 # A new TR Glyphs plugin typically only ships:
