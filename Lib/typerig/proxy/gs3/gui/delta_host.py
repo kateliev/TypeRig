@@ -35,9 +35,20 @@ class GlyphsDeltaHost(object):
 		return Glyphs.font
 
 	def font_key(self):
-		'''Identity of the current font (setups are kept per font).'''
+		'''Identity of the current font (setups are kept per font).
+
+		The ObjC pointer, not id(): Glyphs.font may hand out a new Python
+		wrapper on each access, and an id() that changes made the Delta
+		Machine take every Execute for a font switch (it parked the edits
+		and loaded a fresh setup; seen in Glyphs 4, 2026-10-18).'''
 		font = self._font()
-		return id(font) if font is not None else None
+		if font is None:
+			return None
+		try:
+			import objc
+			return objc.pyobjc_id(font)
+		except Exception:
+			return id(font)
 
 	def font_info(self):
 		'''{'family', 'version', 'file'} of the current font.'''
