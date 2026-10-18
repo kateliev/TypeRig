@@ -56,6 +56,21 @@ _ENTRY_GS4 = SimpleNamespace(
 )
 
 
+# - Section captions --------------------------------------------------------
+# Optional title above each section of a Toolbar ("Nodes", "Align", ...).
+# Space above a caption = the grid GAP after the last row + SEP.
+#   SHOW   : False hides every caption (sections keep their spacing)
+#   STYLE  : vanilla sizeStyle of the caption text ('mini' / 'small' / 'regular')
+#   H      : height in px; None = natural height for STYLE
+#   GAP    : space between the caption and the first row of its section
+#   INDENT : x offset from PAD; negative moves the caption left
+def _caption(show, style, gap, indent=0, h=None):
+	return SimpleNamespace(SHOW=show, STYLE=style, H=h, GAP=gap, INDENT=indent)
+
+_CAPTION_GS3 = _caption(True, 'regular', 8, indent=-4)
+_CAPTION_GS4 = _caption(True, 'regular', 10, indent=-4)
+
+
 # - Grid ------------------------------------------------------------------
 # vanilla cannot reflow live, so palettes flow their buttons once, at build
 # time, into a grid of COLS columns. Glyphs' own palettes are built
@@ -73,7 +88,9 @@ _PALETTE_GS3 = SimpleNamespace(
 	GAP      = 12,   # gap between grid cells, both directions
 	PAD      = 12,   # inset from the palette edge
 	COLS     = 5,    # buttons per row; sections reflow at build time
-	SEP      = 17,   # vertical space taken by a section separator line
+	SEP      = 4,    # extra space between sections (on top of GAP)
+	SEP_LINE = False,  # draw a thin line in the separator space
+	CAPTION  = _CAPTION_GS3,  # section captions (above)
 	ENTRY    = _ENTRY_GS3,  # entry-field presets (above)
 )
 _PALETTE_GS4 = SimpleNamespace(
@@ -83,7 +100,9 @@ _PALETTE_GS4 = SimpleNamespace(
 	GAP      = 18,
 	PAD      = 14,
 	COLS     = 5,
-	SEP      = 18,
+	SEP      = 4,
+	SEP_LINE = False,
+	CAPTION  = _CAPTION_GS4,
 	ENTRY    = _ENTRY_GS4,
 )
 PALETTE = _PALETTE_GS3 if HOST_MAJOR == 3 else _PALETTE_GS4

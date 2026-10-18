@@ -31,12 +31,13 @@
 from __future__ import division, print_function, unicode_literals
 
 import vanilla
+from AppKit import NSColor
 
 from .panel_base     import TRPanelBase
 from .masthead       import TRMasthead
 from .widgets        import GridIconButton
 from .palette_config import PALETTE
-from .typerig_bootstrap import get_node_actions, get_curve_actions, get_contour_actions
+from .typerig_bootstrap import get_node_actions, get_curve_actions, get_contour_actions, get_cut_actions
 
 # - Layout aliases — values live in palette_config.py. Do NOT redeclare.
 BTN       = PALETTE.BTN
@@ -191,12 +192,35 @@ class TRToolbarBase(TRPanelBase):
 		return self.entry(name, ENTRY.LABEL,
 			lambda ps, st: vanilla.TextBox(ps, title, sizeStyle=st), tooltip, cells)
 
-	def separator(self, key):
-		'''Close the row and draw a thin line between sections.'''
+	def separator(self, key, title=None):
+		'''Close the row and leave SEP space before the next section, with a
+		thin line when PALETTE.SEP_LINE is on, then the section caption
+		`title` (see caption()). `key` must be unique.'''
 		self.newline()
-		y = self._y - GAP + SEP // 2
-		#setattr(self.group, 'sep_' + key, vanilla.HorizontalLine((PAD, y, -PAD, 1)))
+		if PALETTE.SEP_LINE:
+			y = self._y - GAP + SEP // 2
+			setattr(self.group, 'sep_' + key, vanilla.HorizontalLine((PAD, y, -PAD, 1)))
 		self._y += SEP
+		if title:
+			self.caption(key, title)
+
+	def caption(self, key, title):
+		'''Section caption at the start of a new row (PALETTE.CAPTION): small
+		secondary-colour text, stored as self.group.cap_<key>. Use it directly
+		for the first section, which follows the masthead separator.'''
+		cap = PALETTE.CAPTION
+		if not cap.SHOW:
+			return None
+		self.newline()
+		x = PAD + cap.INDENT
+		box = vanilla.TextBox((x, self._y, -PAD, BTN), title, sizeStyle=cap.STYLE)
+		ns = box.getNSTextField()
+		ns.setTextColor_(NSColor.secondaryLabelColor())
+		h = cap.H or ns.intrinsicContentSize().height
+		box.setPosSize((x, self._y, -PAD, h))
+		setattr(self.group, 'cap_' + key, box)
+		self._y += h + cap.GAP
+		return box
 
 	# - npa dispatchers (base .run: scope -> undo -> op -> redraw) --------
 	def run_node(self, op):
@@ -215,3 +239,10 @@ class TRToolbarBase(TRPanelBase):
 		NodeActions, npa = get_node_actions()
 		CA               = get_contour_actions()
 		self.run(lambda g, sc: op(g, sc, NodeActions, npa, CA))
+
+	def run_cut(self, op):
+		'''op(trGlyph, scope, NodeActions, ContourActions, cut_npa)'''
+		NodeActions, _ = get_node_actions()
+		CA             = get_contour_actions()
+		cut_npa        = get_cut_actions()
+		self.run(lambda g, sc: op(g, sc, NodeActions, CA, cut_npa))
