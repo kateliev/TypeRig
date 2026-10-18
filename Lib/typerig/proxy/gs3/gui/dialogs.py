@@ -598,6 +598,32 @@ class TRLayerSelectDialog(object):
 # between hosts via either packageLib<->userData (manual) or JSON export.
 #
 # Storage in Glyphs: font.userData[lib_key] -> dict[master_name -> float]
+def read_master_values(font, lib_key):
+	'''Per-master values stored by TRMasterValuesDialog: font.userData[lib_key]
+	as dict[master_name -> float], or {} if absent or malformed. Same reading
+	as TR Panel Node's _read_lib_dict, shared for Toolbars.'''
+	if font is None:
+		return {}
+	try:
+		ud  = font.userData
+		raw = ud.get(lib_key) if hasattr(ud, 'get') else ud[lib_key]
+	except Exception:
+		return {}
+	if raw is None:
+		return {}
+	try:
+		items = raw.items() if hasattr(raw, 'items') else dict(raw).items()
+	except Exception:
+		return {}
+	out = {}
+	for k, v in items:
+		try:
+			out[str(k)] = float(v)
+		except (TypeError, ValueError):
+			continue
+	return out
+
+
 class TRMasterValuesDialog(object):
 	'''Modal-style per-master numeric value editor.
 
