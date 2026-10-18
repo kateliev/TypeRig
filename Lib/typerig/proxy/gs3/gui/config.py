@@ -295,6 +295,8 @@ TINTLIST = SimpleNamespace(
 	DOT_D          = 10,     # dot diameter (pt)
 	DOT_LINE       = 1.5,    # outline width of a hollow dot (pt)
 	DOT_COL_W      = 22,     # dot column width
+	CELL_PAD       = 2,      # inset of text / image inside a cell
+	CELL_W         = 100,    # initial cell width (the table sizes cells to the column)
 	TINT           = 0.12,   # row tint alpha; 0 = no tint
 	FILLED         = False,  # default dot: hollow
 	FILL_ON_SELECT = True,   # selected rows flip their dot (hollow <-> filled)

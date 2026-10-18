@@ -42,6 +42,7 @@ from .config import UI
 
 TL = UI.TINTLIST
 DOT_ID = '_tr_dot'		# identifier of the dot column
+SORT_KIND = '_tr_kind_rank'	# sort key of the dot column: kind order in the colour map
 
 
 # - Colours and dots ------------------------------------------------------
@@ -54,21 +55,38 @@ def ns_color(color):
 
 _dots = {}
 
+_DOT_SCALE = 2		# bitmap pixels per pt (Retina)
+
 def dot_image(color, filled=False, d=None, line=None):
 	'''Cached NSImage of a circle, d x d pt: filled, or hollow with a `line`
 	outline. color: as ns_color; None = an empty image (keeps the column).
-	Drawn when displayed, so system colours follow light / dark mode.'''
+
+	Rendered once into a bitmap, in the app's current light / dark
+	appearance (part of the cache key). No drawing-handler block: AppKit
+	may call such a block at any time, also while Glyphs quits, and a
+	Python callback there can hang or crash the app.'''
 	d = TL.DOT_D if d is None else d
 	line = TL.DOT_LINE if line is None else line
-	key = (color if not isinstance(color, AppKit.NSColor) else id(color), bool(filled), d, line)
+	app = AppKit.NSApplication.sharedApplication()
+	appearance = app.effectiveAppearance()
+	key = (color if not isinstance(color, AppKit.NSColor) else id(color), bool(filled), d, line,
+	       appearance.name() if appearance is not None else None)
 	if key in _dots:
 		return _dots[key]
+	px = int(round(d * _DOT_SCALE))
+	rep = AppKit.NSBitmapImageRep.alloc().initWithBitmapDataPlanes_pixelsWide_pixelsHigh_bitsPerSample_samplesPerPixel_hasAlpha_isPlanar_colorSpaceName_bytesPerRow_bitsPerPixel_(
+		None, px, px, 8, 4, True, False, AppKit.NSDeviceRGBColorSpace, 0, 0)
+	rep.setSize_((d, d))
 	ns = ns_color(color)
-
-	def draw(rect):
-		if ns is not None:
+	if ns is not None:
+		previous = AppKit.NSAppearance.currentAppearance()
+		AppKit.NSAppearance.setCurrentAppearance_(appearance)		# resolve system colours
+		AppKit.NSGraphicsContext.saveGraphicsState()
+		try:
+			AppKit.NSGraphicsContext.setCurrentContext_(
+				AppKit.NSGraphicsContext.graphicsContextWithBitmapImageRep_(rep))
 			inset = line / 2. if not filled else 0.5
-			oval = AppKit.NSBezierPath.bezierPathWithOvalInRect_(AppKit.NSInsetRect(rect, inset, inset))
+			oval = AppKit.NSBezierPath.bezierPathWithOvalInRect_(((inset, inset), (d - 2 * inset, d - 2 * inset)))
 			if filled:
 				ns.setFill()
 				oval.fill()
@@ -76,11 +94,67 @@ def dot_image(color, filled=False, d=None, line=None):
 				ns.setStroke()
 				oval.setLineWidth_(line)
 				oval.stroke()
-		return True
-
-	image = AppKit.NSImage.imageWithSize_flipped_drawingHandler_((d, d), False, draw)
+		finally:
+			AppKit.NSGraphicsContext.restoreGraphicsState()
+			AppKit.NSAppearance.setCurrentAppearance_(previous)
+	image = AppKit.NSImage.alloc().initWithSize_((d, d))
+	image.addRepresentation_(rep)
 	_dots[key] = image
 	return image
+
+
+# - Cells without Auto Layout ---------------------------------------------
+# vanilla's List2 cells use Auto Layout: EditTextList2Cell pins its text
+# field with "H:|[editText]|", ImageList2Cell is an "auto" view with no
+# constraints. In TR Panel (a window already under Auto Layout) the text
+# width then propagated up: tab view width >= content, the SplitView
+# re-sized its panes and the list collapsed to 2 px; Glyphs later hung
+# (seen 2026-10-18, GS4). These cells are frame-based: a plain container
+# view with autoresizing masks and no constraints. List2 only needs
+# _nsObject, set(), get() on a cell.
+_FLEX_W  = AppKit.NSViewWidthSizable
+_FLEX_TB = AppKit.NSViewMinYMargin | AppKit.NSViewMaxYMargin		# centred vertically
+_FLEX_LR = AppKit.NSViewMinXMargin | AppKit.NSViewMaxXMargin		# centred horizontally
+
+
+class TRTextCell(object):
+	'''Read-only text cell for List2 / TRTintList, vertically centred.'''
+	def __init__(self, editable=False, callback=None, **kwargs):
+		field = AppKit.NSTextField.labelWithString_('')
+		field.setLineBreakMode_(AppKit.NSLineBreakByTruncatingTail)
+		h = field.intrinsicContentSize().height
+		pad = TL.CELL_PAD
+		w = TL.CELL_W
+		view = AppKit.NSView.alloc().initWithFrame_(((0, 0), (w, h + 2 * pad)))
+		field.setFrame_(((pad, pad), (w - 2 * pad, h)))
+		field.setAutoresizingMask_(_FLEX_W | _FLEX_TB)
+		view.addSubview_(field)
+		self._nsObject, self._field = view, field
+
+	def set(self, value):
+		self._field.setStringValue_('' if value is None else str(value))
+
+	def get(self):
+		return self._field.stringValue()
+
+
+class TRImageCell(object):
+	'''Image cell (dot column), centred both ways, drawn at its own size.'''
+	def __init__(self, editable=False, callback=None, **kwargs):
+		d = TL.DOT_D
+		pad = TL.CELL_PAD
+		view = AppKit.NSView.alloc().initWithFrame_(((0, 0), (d + 2 * pad, d + 2 * pad)))
+		image = AppKit.NSImageView.alloc().initWithFrame_(((pad, pad), (d, d)))
+		image.setImageScaling_(AppKit.NSImageScaleNone)
+		image.setAutoresizingMask_(_FLEX_LR | _FLEX_TB)
+		view.addSubview_(image)
+		self._nsObject, self._image = view, image
+
+	def set(self, value):
+		self._image.setImage_(value)
+
+	def get(self):
+		return self._image.image()
 
 
 # - Table delegate: row tint ----------------------------------------------
@@ -99,22 +173,37 @@ def _delegate_init(self, tableView):
 	return _init_as(TRTintListDelegate, _BASE_INIT)(self, tableView)
 
 
+# The delegate only forwards to the Python wrapper (TRTintList): the ObjC
+# class lives for the whole Glyphs session, the wrapper is re-imported, so
+# behaviour changes made in the wrapper take effect on a module reload.
 def _delegate_did_add_row_view(self, tableView, rowView, row):
-	# Logic stays on the Python wrapper (reload-safe: an ObjC class lives for
-	# the whole Glyphs session, the wrapper class is re-imported)
 	try:
 		rowView.setBackgroundColor_(self.vanillaWrapper().row_tint(row))
 	except Exception as error:
 		print('[TRTintList] row tint:', error)
 
 
-# An ObjC class can be defined once per process: reuse it on module reload.
+def _delegate_sort_changed(self, tableView, oldDescriptors):
+	try:
+		self.vanillaWrapper().sort_changed()
+	except Exception as error:
+		print('[TRTintList] sort:', error)
+		self._updateArrangedIndexes()
+
+
+# An ObjC class can be defined once per process and is reused on a module
+# reload. Its name carries a version: bump _DELEGATE_VERSION whenever the
+# delegate's methods change, or a running Glyphs keeps the old class (seen
+# 2026-10-18: the one-column sort fix did not take effect without a restart).
+_DELEGATE_VERSION = 2
+_DELEGATE_NAME = str('TRTintListDelegate_v%d' % _DELEGATE_VERSION)
 try:
-	TRTintListDelegate = objc.lookUpClass('TRTintListDelegate')
+	TRTintListDelegate = objc.lookUpClass(_DELEGATE_NAME)
 except objc.nosuchclass_error:
-	TRTintListDelegate = type(str('TRTintListDelegate'), (VanillaList2DataSourceAndDelegate,), dict(
+	TRTintListDelegate = type(_DELEGATE_NAME, (VanillaList2DataSourceAndDelegate,), dict(
 		initWithTableView_=_delegate_init,
 		tableView_didAddRowView_forRow_=_delegate_did_add_row_view,
+		tableView_sortDescriptorsDidChange_=_delegate_sort_changed,
 	))
 
 
@@ -132,6 +221,14 @@ class TRTintList(vanilla.List2):
 	Everything else goes to vanilla.List2; alternatingRowColors defaults to
 	False (zebra rows fight the tint). The dot column is added in front of
 	columnDescriptions; it is not part of the items.
+
+	Sorting (allowsSorting, default True): clicking a column title sorts by
+	it. Columns are sortable unless their description says sortable=False;
+	the dot column sorts by colour: the order of the kinds in `colors`
+	(unknown kinds last). One column at a time: a new column sorts
+	ascending, the same column again toggles; ties keep the item order. Item indexes (get, getSelectedIndexes,
+	setRowFilled) do not change when sorted; getArrangedIndexes gives the
+	order on screen.
 	'''
 	dataSourceAndDelegateClass = TRTintListDelegate
 
@@ -147,14 +244,30 @@ class TRTintList(vanilla.List2):
 		self._row_filled     = {}		# id(item) -> bool override
 		self._selected       = set()	# id(item) of selected items
 		self._user_selection = selectionCallback
-		columns = list(columnDescriptions)
-		if dots:
+		# Read-only columns without their own cell get TRTextCell (no Auto
+		# Layout, see above); editable columns keep vanilla's cell
+		columns = []
+		for desc in columnDescriptions:
+			desc = dict(desc)
+			if 'cellClass' not in desc and not desc.get('editable'):
+				desc['cellClass'] = TRTextCell
+			desc.setdefault('sortable', True)		# vanilla's default is not sortable
+			columns.append(desc)
+		if dots:		# sortable below, by colour: its value is an image
 			columns.insert(0, dict(identifier=DOT_ID, title='', width=TL.DOT_COL_W, sortable=False,
-			                       cellClass=vanilla.ImageList2Cell, cellClassArguments=dict(scale='none'),
-			                       getFunction=self._dot_for_item))
+			                       cellClass=TRImageCell, getFunction=self._dot_for_item))
 		kwargs.setdefault('alternatingRowColors', False)
+		kwargs.setdefault('allowsSorting', True)
 		super(TRTintList, self).__init__(posSize, list(items), columnDescriptions=columns,
 		                                 selectionCallback=self._on_selection, **kwargs)
+		if dots and self._allowsSorting:
+			# The dot column sorts by a key of its own; List2 looks a sort key
+			# up in the data source's getters (no public API for that)
+			self._dataSourceAndDelegate._valueGetters[SORT_KIND] = dict(function=self._kind_rank)
+			column = self.getNSTableView().tableColumnWithIdentifier_(DOT_ID)
+			column.setSortDescriptorPrototype_(
+				AppKit.NSSortDescriptor.sortDescriptorWithKey_ascending_(SORT_KIND, True))
+			column.setHeaderToolTip_('Sort by colour')
 
 	# - Items ------------------------------------------------------------
 	def set(self, items):
@@ -167,6 +280,12 @@ class TRTintList(vanilla.List2):
 		if isinstance(item, dict):
 			return item.get(self._kind_key)
 		return getattr(item, self._kind_key, None)
+
+	def _kind_rank(self, item):
+		'''Sort key of the dot column: position of the kind in the colour map.'''
+		order = list(self._color_keys)
+		kind = self.kind(item)
+		return order.index(kind) if kind in order else len(order)
 
 	# - Colours and tint -------------------------------------------------
 	def setColors(self, colors, refresh=True):
@@ -243,8 +362,28 @@ class TRTintList(vanilla.List2):
 		super(TRTintList, self)._breakCycles()
 
 	# - Refresh ----------------------------------------------------------
+	def sort_changed(self):
+		'''A column title was clicked (table delegate). One sort column at a
+		time: NSTableView keeps every column clicked before as a secondary key
+		in its old direction (after Name twice and Type, masters showed Regular
+		above Light). Keep the clicked column only; ties stay in item order.'''
+		tableView = self.getNSTableView()
+		descriptors = tableView.sortDescriptors()
+		if len(descriptors) > 1:
+			tableView.setSortDescriptors_(descriptors[:1])		# comes back here once more
+			return
+		self._dataSourceAndDelegate._updateArrangedIndexes()
+
+	def resetSort(self):
+		'''Back to item order (as given to set()): clear the column sort.'''
+		self.getNSTableView().setSortDescriptors_([])		# delegate -> sort_changed -> rearrange
+
 	def _on_selection(self, sender):
-		self._selected = {id(item) for item in self.getSelectedItems()}
+		# Not getSelectedItems(): vanilla's List2 compares item indexes with row
+		# indexes there, so on a sorted list it returns the wrong items (the
+		# wrong row's dot filled, 2026-10-18). getSelectedIndexes maps rows right.
+		items = self.get()
+		self._selected = {id(items[i]) for i in self.getSelectedIndexes()}
 		self._refresh_dots()
 		if self._user_selection is not None:
 			self._user_selection(self)
