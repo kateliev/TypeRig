@@ -19,6 +19,7 @@ from typerig.core.algo.stroke_sep_common import (
     check_contour_compatibility,
 )
 from typerig.core.algo.mat_extract import extract_medial_axis
+from typerig.core.algo.stem_center import StemCenterSnap, StemCenterStatus
 
 
 # ===================================================================
@@ -227,6 +228,58 @@ def npa_contour_slice_align(glyph, scope_layers, NodeActions, ContourActions,
         aligned = _auto_align_core_layer(core_layer, ContourActions)
         if sliced or aligned:
             _mount(lyr, core_layer)
+
+
+def npa_stem_center(glyph, scope_layers, NodeActions, ContourActions,
+                    force_axis=None, active_layer=None):
+    """Stem-Center Snap: snap the selected nodes of each scope layer to the
+    centerline of the perpendicular stem they sit inside. Mirrors FL
+    TRStemCenterActionCollector.snap_stem_center.
+
+    force_axis: 'H' (horizontal stem, nodes move on Y), 'V' (vertical stem,
+    nodes move on X) or None (decided from the active layer's selection
+    bbox). active_layer: layer whose selection drives the axis; default
+    the first scope layer. Only coordinates change, so the live layer is
+    written directly (no mount).
+
+    Returns dict[layer_name -> StemCenterStatus] (OK, AXIS_AMBIGUOUS,
+    NO_CANDIDATE or NO_SELECTION).
+    """
+    contours_by_layer, selections_by_layer, live_by_layer = {}, {}, {}
+    for name in scope_layers:
+        lyr = glyph.layer(name)
+        core_layer = _eject(lyr) if lyr is not None else None
+        if core_layer is None:
+            continue
+        core_contours = [c for sh in core_layer.shapes for c in sh.contours]
+        live_contours = [c for sh in lyr.shapes for c in sh.contours]
+        if not core_contours or len(core_contours) != len(live_contours):
+            continue
+        sel = [(ci, ni) for ci, c in enumerate(live_contours)
+               for ni, n in enumerate(c.data) if n.selected]
+        contours_by_layer[name] = core_contours
+        selections_by_layer[name] = sel
+        live_by_layer[name] = live_contours
+    if not contours_by_layer:
+        return {}
+
+    if active_layer not in contours_by_layer:
+        active_layer = next((n for n in scope_layers if n in contours_by_layer), None)
+    plan = StemCenterSnap(contours_by_layer, selections_by_layer,
+                          force_axis=force_axis, active_layer=active_layer).plan()
+
+    for name, entry in plan.items():
+        if entry.status != StemCenterStatus.OK:
+            continue
+        set_y = entry.center_axis == 'Y'
+        live = live_by_layer[name]
+        for ci, ni in selections_by_layer[name]:
+            node = live[ci].data[ni]
+            if set_y:
+                node.y = entry.target_coord
+            else:
+                node.x = entry.target_coord
+    return dict((name, entry.status) for name, entry in plan.items())
 
 
 # ===================================================================

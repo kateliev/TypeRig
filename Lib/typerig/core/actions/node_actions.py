@@ -507,6 +507,19 @@ class NodeActions(object):
 		return node.corner_mitre(-overlap, is_radius)
 
 	@staticmethod
+	def corner_loop_to_target(node, target_x, target_y, safe_distance=0.):
+		'''Loop a corner by extending its segments toward a target position
+		(see Node.corner_loop_to_target).
+
+		Returns:
+			tuple(Node, Node) or None
+		'''
+		if not node.is_on:
+			return None
+
+		return node.corner_loop_to_target(target_x, target_y, safe_distance)
+
+	@staticmethod
 	def corner_trap(node, parameter=10, depth=50, trap=2, smooth=True, incision=True):
 		'''Create an ink trap at a corner node.
 

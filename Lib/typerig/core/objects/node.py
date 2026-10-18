@@ -592,6 +592,110 @@ class Node(Member, XMLSerializable):
 
 		return (self, next_node)
 
+	def corner_loop_to_target(self, target_x, target_y, safe_distance=0.):
+		'''Loop the corner by extending both segments toward a target position.
+
+		Port of FL eNode.cornerLoopToTargets. Each segment is extended past
+		the corner (curves by extrapolating the cubic, lines along their
+		direction) until it reaches the target on the axis its tangent at
+		the corner runs along. A new on-curve node is inserted after this
+		one; the edge between them becomes a line, so the corner turns into
+		a loop reaching for the target.
+
+		Arguments:
+			target_x, target_y (float): target position
+			safe_distance (float): pull back from the target by this much
+				on each axis
+
+		Returns:
+			tuple(Node, Node) or None if a segment cannot be extended.
+		'''
+		if not self.is_on:
+			return None
+
+		# - Safe distance: reduce the shift on each axis
+		if safe_distance:
+			dx = target_x - self.x
+			dy = target_y - self.y
+			if abs(dx) > 1e-6:
+				target_x -= math.copysign(safe_distance, dx)
+			if abs(dy) > 1e-6:
+				target_y -= math.copysign(safe_distance, dy)
+
+		def _cubic(seg):
+			return CubicBezier(*[n.point for n in seg]) if seg is not None and len(seg) == 4 else None
+
+		def _line_ext(origin, corner):
+			# Extend the line origin -> corner (t > 1) to the target on its main axis
+			dx, dy = corner.x - origin.x, corner.y - origin.y
+			if abs(dx) <= 1e-6 and abs(dy) <= 1e-6:
+				return None
+			if abs(dy) > abs(dx):
+				t = (target_y - origin.y) / dy
+				return Point(origin.x + dx * t, target_y)
+			t = (target_x - origin.x) / dx
+			return Point(target_x, origin.y + dy * t)
+
+		prev_on = self.prev_on
+		in_seg  = prev_on.segment_nodes if prev_on is not None else None
+		out_seg = self.segment_nodes
+		curve_in, curve_out = _cubic(in_seg), _cubic(out_seg)
+
+		new_in_end = new_out_start = in_handles = out_handles = None
+
+		# - Incoming segment: extend past p3 (t > 1)
+		if curve_in is not None:
+			tan = curve_in.p3 - curve_in.p2
+			if abs(tan.x) < 1e-6 and abs(tan.y) < 1e-6:
+				tan = curve_in.p3 - curve_in.p0
+			use_y = abs(tan.y) > abs(tan.x)
+			times = curve_in.find_t_for_y(target_y) if use_y else curve_in.find_t_for_x(target_x)
+			beyond = [t for t in times if t > 1. + 1e-3]
+			if beyond:
+				first, _ = curve_in.solve_slice(min(beyond))
+				new_in_end = first.p3
+				in_handles = (first.p1, first.p2)
+		elif prev_on is not None:
+			new_in_end = _line_ext(prev_on, self)
+
+		# - Outgoing segment: extend before p0 (t < 0)
+		if curve_out is not None:
+			tan = curve_out.p1 - curve_out.p0
+			if abs(tan.x) < 1e-6 and abs(tan.y) < 1e-6:
+				tan = curve_out.p3 - curve_out.p0
+			use_y = abs(tan.y) > abs(tan.x)
+			times = curve_out.find_t_for_y(target_y) if use_y else curve_out.find_t_for_x(target_x)
+			beyond = [t for t in times if t < -1e-3]
+			if beyond:
+				_, second = curve_out.solve_slice(max(beyond))
+				new_out_start = second.p0
+				out_handles = (second.p1, second.p2)
+		else:
+			new_out_start = _line_ext(self.next_on, self)
+
+		if new_in_end is None or new_out_start is None:
+			return None
+
+		# - Incoming handles
+		if in_handles is not None:
+			in_seg[1].point = Point(in_handles[0].x, in_handles[0].y)
+			in_seg[2].point = Point(in_handles[1].x, in_handles[1].y)
+
+		# - New node after self: the edge self -> next_node is the loop line
+		next_node = self.insert_after(0.)
+		self.smooth = next_node.smooth = False
+		self.reloc(new_in_end.x, new_in_end.y)
+		next_node.reloc(new_out_start.x, new_out_start.y)
+
+		# - Outgoing handles (now on next_node's segment)
+		if out_handles is not None:
+			seg = next_node.segment_nodes
+			if seg is not None and len(seg) == 4:
+				seg[1].point = Point(out_handles[0].x, out_handles[0].y)
+				seg[2].point = Point(out_handles[1].x, out_handles[1].y)
+
+		return (self, next_node)
+
 	def corner_round(self, rounding_size=5, is_radius=False):
 		# Cubic bezier arc approximation constant: 4*(sqrt(2)-1)/3
 		k = (4.0 * (math.sqrt(2.0) - 1.0)) / 3.0

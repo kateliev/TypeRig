@@ -18,6 +18,7 @@ from typerig.core.objects.shape import Shape
 _slope_bank = 0
 _align_target = None
 _hobby_bank = {}    # layer_name -> (alpha, beta) Hobby curvature tuple
+_loop_targets = {}  # layer_name -> (x, y) target for npa_corner_loop_to_target
 
 
 # ===================================================================
@@ -128,6 +129,39 @@ def npa_corner_loop(glyph, scope_layers, NodeActions, value):
                 targets = [n for n in c.data if n.selected and n.is_on]
                 for n in targets:
                     NodeActions.corner_loop(n, value)
+
+
+def npa_loop_target_set(glyph, scope_layers, NodeActions):
+    """Store the first selected on-curve node of each scope layer as that
+    layer's loop target. Returns the number of layers with a target."""
+    global _loop_targets
+    _loop_targets = {}
+    for name in scope_layers:
+        lyr = glyph.layer(name)
+        if lyr is None:
+            continue
+        sel = _selected_oncurve(lyr)
+        if sel:
+            _loop_targets[name] = (sel[0].x, sel[0].y)
+    return len(_loop_targets)
+
+
+def npa_loop_target_clear(glyph, scope_layers, NodeActions):
+    """Clear the stored loop targets."""
+    global _loop_targets
+    _loop_targets = {}
+
+
+def npa_corner_loop_to_target(glyph, scope_layers, NodeActions, safe_distance=0.):
+    """Loop the selected corners of each scope layer toward that layer's
+    stored target (npa_loop_target_set), pulled back by safe_distance."""
+    for name in scope_layers:
+        target = _loop_targets.get(name)
+        lyr = glyph.layer(name)
+        if target is None or lyr is None:
+            continue
+        for node in reversed(_selected_oncurve(lyr)):
+            NodeActions.corner_loop_to_target(node, target[0], target[1], safe_distance)
 
 
 def npa_corner_trap(glyph, scope_layers, NodeActions):
