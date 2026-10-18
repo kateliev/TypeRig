@@ -304,6 +304,7 @@ TINTLIST = SimpleNamespace(
 		'Bracket' : 'systemPurpleColor',
 		'Color'   : 'systemOrangeColor',
 		'Mask'    : 'systemRedColor',
+		'Background' : 'systemRedColor',  # 'mask.<layer>' rows (FL mask; Layer tab)
 		'Layer'   : None,
 	},
 )
