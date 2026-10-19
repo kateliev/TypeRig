@@ -31,10 +31,9 @@ def service(tmp_path, monkeypatch):
         state["calls"].append(args)
         code, out, err = 0, "", ""
         if args[1] == "api":
-            if state["release"] is None:
-                code, err = 1, "gh: Not Found (HTTP 404)"
-            else:
-                out = json.dumps(state["release"])
+            # Like GitHub: only the releases listing includes drafts.
+            assert not any("releases/tags/" in str(a) for a in args)
+            out = "" if state["release"] is None else json.dumps(state["release"])
         elif args[2] == "create":
             state["release"] = {
                 "draft": True,
@@ -131,6 +130,17 @@ def test_auth_failure_is_not_treated_as_missing_release(monkeypatch):
         lambda *a, **kw: subprocess.CompletedProcess(a, 1, "", "HTTP 401"),
     )
     with pytest.raises(RuntimeError, match="HTTP 401"):
+        github.info("owner/repo", "v2.1.0")
+
+
+def test_duplicate_releases_for_one_tag_need_inspection(monkeypatch):
+    release = json.dumps({"tag_name": "v2.1.0", "draft": True})
+    monkeypatch.setattr(
+        github,
+        "run",
+        lambda *a, **kw: subprocess.CompletedProcess(a, 0, f"{release}\n{release}\n", ""),
+    )
+    with pytest.raises(RuntimeError, match="Several GitHub releases"):
         github.info("owner/repo", "v2.1.0")
 
 

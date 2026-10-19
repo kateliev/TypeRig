@@ -54,6 +54,17 @@ def test_prepare_read_only_permission_cannot_release(repo, prepared):
     assert tools.prepare(repo, write=False, verbose=False)["repo"] == "owner/repo"
 
 
+def test_prepare_trusts_actions_token_with_empty_permission(
+    repo, prepared, monkeypatch
+):
+    prepared[0]["viewerPermission"] = ""
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    with pytest.raises(RuntimeError, match="write access"):
+        tools.prepare(repo, write=True, verbose=False)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    assert tools.prepare(repo, write=True, verbose=False)["repo"] == "owner/repo"
+
+
 def test_prepare_refuses_different_push_repository(repo, prepared):
     tools.git(
         "remote",
