@@ -16,7 +16,7 @@ from typerig.core.objects.shape import Shape
 
 # -- Module-level state (slope bank, align target, hobby bank) -------
 _slope_bank = 0
-_align_target = None
+_align_targets = {} # layer_name -> Point target for npa_align / npa_collapse_to_target
 _hobby_bank = {}    # layer_name -> (alpha, beta) Hobby curvature tuple
 _loop_targets = {}  # layer_name -> (x, y) target for npa_corner_loop_to_target
 
@@ -346,11 +346,15 @@ def npa_align(glyph, scope_layers, NodeActions, mode,
     """Align selected nodes using the given mode string.
 
     Modifier kwargs are forwarded to NodeActions.nodes_align. When
-    use_target=True, the stored align target (set via npa_target_set) is
-    passed in as the override target.
+    use_target=True, each layer's stored align target (set via
+    npa_target_set) is passed in as the override target; layers without
+    a stored target fall back to the mode-computed one.
     """
-    target = _align_target if use_target else None
-    for lyr in _iter_scope(glyph, scope_layers):
+    for name in scope_layers:
+        lyr = glyph.layer(name)
+        if lyr is None:
+            continue
+        target = _align_targets.get(name) if use_target else None
         nodes = _selected_nodes(lyr)
         if nodes:
             NodeActions.nodes_align(
@@ -393,46 +397,53 @@ def npa_align_to_y(glyph, scope_layers, NodeActions, y_by_layer,
 
 
 def npa_target_set(glyph, scope_layers, NodeActions, safe_distance=0):
-    """Store the centroid of the current selection as align target.
+    """Store a per-layer align target from the current selection.
 
-    Optional safe_distance is added to both X and Y of the centroid (matches
-    the FL popup's safe-distance spinbox: pull back from target on each axis).
-    Returns True if target was set, False otherwise.
+    For each scope layer: one selected node -> that node's coordinates on
+    the layer; several -> the centroid of the layer's selection. So the
+    target follows the node across masters (FL popup-node-align target_set).
+    Optional safe_distance is added to both X and Y (pull back from target
+    on each axis). Returns True if any layer got a target.
     """
-    global _align_target
-    active = glyph.layer(scope_layers[0] if scope_layers else None)
-    if active is None:
-        _align_target = None
-        return False
-    sel = _selected_nodes(active)
-    if not sel:
-        _align_target = None
-        return False
+    global _align_targets
     from typerig.core.objects.point import Point
-    _align_target = Point(
-        sum(n.x for n in sel) / len(sel) + safe_distance,
-        sum(n.y for n in sel) / len(sel) + safe_distance
-    )
-    return True
+    _align_targets = {}
+    for name in scope_layers:
+        lyr = glyph.layer(name)
+        if lyr is None:
+            continue
+        sel = _selected_nodes(lyr)
+        if not sel:
+            continue
+        if len(sel) == 1:
+            tx, ty = sel[0].x, sel[0].y
+        else:
+            tx = sum(n.x for n in sel) / len(sel)
+            ty = sum(n.y for n in sel) / len(sel)
+        _align_targets[name] = Point(tx + safe_distance, ty + safe_distance)
+    return bool(_align_targets)
 
 
 def npa_target_clear(glyph, scope_layers, NodeActions):
-    """Clear the stored align target."""
-    global _align_target
-    _align_target = None
+    """Clear the stored align targets."""
+    global _align_targets
+    _align_targets = {}
 
 
 def npa_collapse_to_target(glyph, scope_layers, NodeActions):
-    """Move all selected nodes to the stored align target."""
-    if _align_target is None:
-        return
-    for lyr in _iter_scope(glyph, scope_layers):
+    """Move all selected nodes of each scope layer to that layer's stored
+    align target."""
+    for name in scope_layers:
+        target = _align_targets.get(name)
+        lyr = glyph.layer(name)
+        if target is None or lyr is None:
+            continue
         for s in lyr.shapes:
             for c in s.contours:
                 for n in c.data:
                     if n.selected:
-                        n.x = _align_target.x
-                        n.y = _align_target.y
+                        n.x = target.x
+                        n.y = target.y
 
 
 # ===================================================================
