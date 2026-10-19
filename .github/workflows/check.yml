@@ -1,0 +1,58 @@
+# this_file: .github/workflows/check.yml
+name: Check
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.12.18"
+          python-version: "3.11"
+      - name: Tooling and standalone algorithm tests
+        env:
+          PYTHONPATH: Lib
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: >-
+          uv run --no-project --python 3.11 --with pytest --with pytest-cov
+          --with gitnextver==1.0.4 --with packaging --with twine --with hatch-vcs
+          --with hatchling --with fonttools python -m pytest -p pytest_cov -q tests
+          Lib/typerig/core/algo/test_cjk.py Lib/typerig/core/algo/test_outline_cleanup.py
+          --cov=release --cov=publish --cov=_release --cov=_github --cov=_artifacts
+          --cov-report=term-missing --cov-fail-under=80
+      - name: Standalone object checks
+        env:
+          PYTHONPATH: Lib
+        run: uv run --no-project --python 3.11 --with fonttools python Lib/typerig/core/objects/test_objects.py
+      - name: Standalone action checks
+        env:
+          PYTHONPATH: Lib
+        run: uv run --no-project --python 3.11 python Lib/typerig/core/actions/test_actions.py
+      - name: CLI help
+        run: |
+          uv run release.py --help
+          uv run publish.py --help

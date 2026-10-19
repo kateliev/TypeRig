@@ -1,0 +1,43 @@
+# this_file: pyproject.toml
+[build-system]
+requires = ["hatchling>=1.27", "hatch-vcs>=0.4"]
+build-backend = "hatchling.build"
+
+[project]
+name = "typerig"
+dynamic = ["version"]
+description = "TypeRig font geometry, interpolation, and host integration library"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MPL-2.0"
+license-files = ["LICENSE"]
+authors = [{name = "Vassil Kateliev"}]
+dependencies = ["fonttools>=4"]
+
+[project.urls]
+Homepage = "https://www.typerig.com"
+Repository = "https://github.com/kateliev/TypeRig"
+Issues = "https://github.com/kateliev/TypeRig/issues"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+fallback_version = "2.1.0.dev0"
+tag_regex = '^v(?P<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))$'
+git_describe_command = "git describe --dirty --tags --long --match v[0-9]*.[0-9]*.[0-9]* --exclude *[!0-9.v]* --exclude *.*.*.* --exclude *v*v* --exclude v0[0-9]*.*.* --exclude v*.0[0-9]*.* --exclude v*.*.0[0-9]*"
+
+[tool.hatch.build]
+exclude = ["**/__pycache__", "**/*.pyc", "**/.DS_Store", "**/.claude"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["Lib/typerig"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["Lib/typerig", "pyproject.toml", "README.md", "LICENSE", "DEPENDENCIES.md", "RELEASING.md", "release.py", "publish.py", "_release.py", "_github.py", "_artifacts.py", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
