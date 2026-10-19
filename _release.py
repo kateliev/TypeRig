@@ -171,7 +171,11 @@ def prepare(root: Path, *, write: bool, verbose: bool) -> dict:
     )
     if info["nameWithOwner"].casefold() != repo.casefold():
         raise RuntimeError("GitHub repository identity does not match origin")
-    if write and info["viewerPermission"] not in ("WRITE", "MAINTAIN", "ADMIN"):
+    # Actions' GITHUB_TOKEN reports an empty viewerPermission; its access is
+    # granted by the workflow's `permissions:` block, so trust that instead.
+    permission = info["viewerPermission"]
+    in_actions = os.environ.get("GITHUB_ACTIONS") == "true" and not permission
+    if write and not in_actions and permission not in ("WRITE", "MAINTAIN", "ADMIN"):
         raise RuntimeError("GitHub write access is required")
     git("fetch", "--tags", "origin", cwd=root, verbose=verbose)
     return {
