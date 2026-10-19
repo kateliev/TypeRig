@@ -30,8 +30,8 @@ from typerig.core.actions import designspace_actions as dsa
 
 # - Init -------------------------------------------------------------------
 TOOL       = 'TypeRig Delta Machine'
-VERSION    = '0.2'
-FORMAT     = 1
+VERSION    = '0.3'
+FORMAT     = 2				# 2 (v0.3): advanced.italic_fix; advanced.italic / italic_angle used. 1 reads as 2 (fix off)
 LIB_KEY    = 'com.typerig.delta.machine.setup'		# font lib; the panel keys are in core/base/lib_keys.py
 SELECTION  = ''				# group of a row that works on the selected glyphs
 SELECTION_LABEL = 'Selection'
@@ -55,10 +55,16 @@ OPTION_DEFAULTS = {
 STATUSES = ('done', 'warning', 'failed')
 STATUS_LABELS = {'done': 'Done', 'warning': 'Warnings', 'failed': 'Failed'}
 
+# Italic fix of the bake (core delta_panel_actions options, same keys):
+# all off by default, so a document without it bakes as before.
+ITALIC_FIX_DEFAULTS = dict((k, dpa.DELTA_OPTION_DEFAULTS[k]) for k in dpa.ITALIC_FIX_KEYS)
+ITALIC_SOURCES = ('master', 'none', 'custom')
+
 # Advanced tab. flag* / log* work since v0.2: glyphs are coloured by status
 # after a bake (RGBA 0..1), a text log is written to log_dir ('' = the
-# font's folder). The engine options (engine .. italic_angle) are stored,
-# not used yet.
+# font's folder). Since v0.3 (format 2) italic / italic_angle choose the
+# bake's italic angle and italic_fix holds the italic fix options. The
+# engine options (engine, interpolation, stems) are stored, not used yet.
 ADVANCED_DEFAULTS = {
 	'flag': False,				# colour the processed glyphs by status (overwrites their colour)
 	'flag_done': [0.20, 0.78, 0.35, 1.],		# green
@@ -69,8 +75,9 @@ ADVANCED_DEFAULTS = {
 	'engine': 'delta-scale',	# delta-scale | piecewise | adaptive
 	'interpolation': 'linear',	# linear | clamp (no extrapolation past the inputs)
 	'stems': 'table',			# table | self-metered (measure each glyph's own stems)
-	'italic': 'master',			# master | none | custom
-	'italic_angle': 0.,
+	'italic': 'master',			# master (italic angle of the first input's master) | none | custom
+	'italic_angle': 0.,			# custom angle, degrees, Glyphs sign (positive leans right)
+	'italic_fix': dict(ITALIC_FIX_DEFAULTS),
 	'notes': '',
 }
 FLAG_KEYS = {status: 'flag_' + status for status in STATUSES}
@@ -136,7 +143,7 @@ def machine_new(masters=()):
 		'masters': [{'name': str(n)} for n in masters],
 		'axes': [], 'groups': [],
 		'designspace': dsa.plan_new(),		# Designspace tab: font axes + masters plan
-		'advanced': dict(ADVANCED_DEFAULTS),
+		'advanced': copy.deepcopy(ADVANCED_DEFAULTS),
 	}
 
 
@@ -164,6 +171,21 @@ def norm_target(row, origin='BS'):
 	for key in ('anchors', 'metrics', 'kerning'):
 		if isinstance(row.get(key), bool):
 			out[key] = row[key]
+	return out
+
+
+def norm_italic_fix(raw):
+	'''advanced.italic_fix -> every key of ITALIC_FIX_DEFAULTS (bool switches,
+	float numbers >= 0); missing (format 1) -> the defaults: fix off.'''
+	out = dict(ITALIC_FIX_DEFAULTS)
+	raw = raw if isinstance(raw, dict) else {}
+	for key, default in ITALIC_FIX_DEFAULTS.items():
+		if key not in raw:
+			continue
+		if isinstance(default, bool):
+			out[key] = bool(raw[key])
+		else:
+			out[key] = max(0., _num(raw[key], default))
 	return out
 
 
@@ -221,7 +243,11 @@ def machine_normalize(raw):
 	if doc['options']['origin'] not in ORIGINS:
 		doc['options']['origin'] = 'BS'
 	adv = raw.get('advanced') or {}
-	doc['advanced'].update({k: adv[k] for k in ADVANCED_DEFAULTS if k in adv})
+	doc['advanced'].update({k: adv[k] for k in ADVANCED_DEFAULTS if k in adv and k != 'italic_fix'})
+	doc['advanced']['italic_fix'] = norm_italic_fix(adv.get('italic_fix'))	# format 1: none -> off
+	if doc['advanced']['italic'] not in ITALIC_SOURCES:
+		doc['advanced']['italic'] = 'master'
+	doc['advanced']['italic_angle'] = _num(doc['advanced']['italic_angle'], 0.)
 	for key in FLAG_KEYS.values():
 		doc['advanced'][key] = norm_color(doc['advanced'][key], ADVANCED_DEFAULTS[key])
 	doc['advanced']['flag'] = bool(doc['advanced']['flag'])
@@ -382,18 +408,38 @@ def core_setup(doc, picks, solved=None, italic_angle=0.):
 		axes.append({'name': ax['name'], 'inputs': ax['inputs'],
 		             'targets': [target_to_core(ax['targets'][i], solved.get((a, i))) for i in rows]})
 	opts = doc.get('options', OPTION_DEFAULTS)
-	return {'axes': axes, 'options': {
-		'origin': opts.get('origin', 'BS'), 'extrapolate': bool(opts.get('extrapolate', True)),
-		'metrics': True, 'anchors': True, 'italic_angle': float(italic_angle)}}
+	options = {'origin': opts.get('origin', 'BS'), 'extrapolate': bool(opts.get('extrapolate', True)),
+	           'metrics': True, 'anchors': True, 'italic_angle': float(italic_angle)}
+	options.update(italic_fix(doc))
+	return {'axes': axes, 'options': options}
+
+
+def italic_fix(doc):
+	'''The document's italic fix options (core option keys).'''
+	return norm_italic_fix((doc.get('advanced') or {}).get('italic_fix'))
+
+
+def bake_italic_angle(doc, master_angle):
+	'''Bake italic angle, Glyphs sign, by advanced.italic: master ->
+	master_angle (of the axis' first input), none -> 0, custom -> italic_angle.'''
+	adv = doc.get('advanced') or {}
+	source = adv.get('italic', 'master')
+	if source == 'none':
+		return 0.
+	if source == 'custom':
+		return _num(adv.get('italic_angle'), 0.)
+	return float(master_angle or 0.)
 
 
 def ref_setup(doc, ref, italic_angle=0.):
 	'''Core setup of the reference pass: one axis, the one units row.'''
 	ax = doc['axes'][ref['axis']]
+	options = {'extrapolate': bool(doc.get('options', OPTION_DEFAULTS).get('extrapolate', True)),
+	           'italic_angle': float(italic_angle)}
+	options.update(italic_fix(doc))
 	return {'axes': [{'name': ax['name'], 'inputs': ax['inputs'],
 	                  'targets': [target_to_core(ax['targets'][ref['row']])]}],
-	        'options': {'extrapolate': bool(doc.get('options', OPTION_DEFAULTS).get('extrapolate', True)),
-	                    'italic_angle': float(italic_angle)}}
+	        'options': options}
 
 
 def machine_dump(doc):
@@ -402,6 +448,22 @@ def machine_dump(doc):
 	ordered = {k: doc[k] for k in first if k in doc}
 	ordered.update({k: v for k, v in doc.items() if k not in ordered})
 	return json.dumps(ordered, indent=2, ensure_ascii=False)
+
+
+def italic_summary(doc):
+	'''One line: angle source and the italic fix switches that are on.'''
+	adv = doc.get('advanced') or ADVANCED_DEFAULTS
+	source = adv.get('italic', 'master')
+	angle = {'master': 'master angle', 'none': 'upright (no angle)'}.get(
+		source, 'custom %g deg' % _num(adv.get('italic_angle'), 0.))
+	fix = italic_fix(doc)
+	titles = dict((k, t) for k, t, _h in dpa.ITALIC_FIX_SWITCHES)
+	on = [titles[k].lower() for k, _t, _h in dpa.ITALIC_FIX_SWITCHES if fix.get(k)]
+	if not fix.get('keep_directions'):
+		on = [t for t in on if t == titles['italic_tan'].lower()]	# the rest needs Lock directions
+	numbers = ', '.join('%s %g' % (t.lower(), fix[k]) for k, t, _h in dpa.ITALIC_FIX_NUMBERS) \
+		if fix.get('keep_directions') else ''
+	return '%s; fix %s%s' % (angle, ', '.join(on) if on else 'off', ' (%s)' % numbers if numbers else '')
 
 
 # - Bake log ---------------------------------------------------------------
@@ -450,6 +512,7 @@ def machine_log(doc, run):
 	out.append('Options:  extrapolate %s, selected only %s, skip composites %s' % (
 		'on' if opts.get('extrapolate', True) else 'off', 'on' if opts.get('selection_only') else 'off',
 		'on' if opts.get('skip_composites', True) else 'off'))
+	out.append('Italic:   %s' % italic_summary(doc))
 
 	out += ['', 'Setup']
 	for ax in doc.get('axes', []):

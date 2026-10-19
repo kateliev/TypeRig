@@ -54,8 +54,16 @@
 #           'origin':      'BS'|'BL'|'BM'|'BR'|'LM'|'CE'|'RM'|'TL'|'TM'|'TR',
 #                                  # global, stems mode (BS = baseline 0, 0)
 #           'italic_angle': float, # degrees (signed)
-#           'keep_directions': bool, # italic: put horizontal / vertical /
-#                                  # slanted handles back after the bake
+#           # italic fix: all off by default (see DELTA_OPTION_DEFAULTS)
+#           'italic_tan': bool,    # exact slope tan(angle) (off: radians)
+#           'keep_directions': bool, # put horizontal / vertical / slanted
+#                                  # handles back after the bake
+#           'keep_extremes': bool, # move upright extremes to the new
+#                                  # vertical extreme (needs keep_directions)
+#           'keep_tension': bool,  # curves get the inputs' Hobby tension
+#                                  # back (needs keep_directions)
+#           'balanced' / 'live_balanced': bool, 'extreme_tol' / 'lock_tol' /
+#           'tension_scale': float, 'tension_on_rebuilt': bool
 #           'selection':   bool    # live: drive only the selected nodes
 #       }
 #   }
@@ -183,47 +191,61 @@ def _apply_array(layer, attrib, data):
 
 def _italic_slope(opts):
 	'''Engine slope (dx per dy) for options.italic_angle (degrees, core sign).
-	adaptive_scale de-slants with x - y*i, so i must be a slope (tan), not
-	an angle in radians.'''
-	return math.tan(math.radians(-float(opts.get('italic_angle', 0.0) or 0.0)))
+	adaptive_scale de-slants with x - y*i. Default (italic_tan off): the
+	angle in radians is used as the slope, as Delta always did (12 deg ->
+	11.83 deg effective). italic_tan: the exact slope tan(angle).'''
+	angle = math.radians(-float(opts.get('italic_angle', 0.0) or 0.0))
+	return math.tan(angle) if opts.get('italic_tan', DELTA_OPTION_DEFAULTS['italic_tan']) else angle
 
 
-# - Direction lock (italic) ----------------------------------------
+# - Italic fix: direction lock, re-extremize, tension ------------
 # In italic mode adaptive_scale de-slants, scales X and Y apart, then
 # re-slants. Horizontal and on-slant handles survive an anisotropic
-# scale, true vertical handles lean by ~ angle * (1 - sx/sy). The lock
-# labels every handle that is horizontal / vertical / on the slant in
-# ALL inputs and puts it back after the bake (before host rounding).
+# scale; true vertical handles lean by ~ angle * (1 - sx/sy), and the
+# point where the curve is really vertical slides along the curve
+# (narrow counters most). After the bake, on the baked core layer and
+# before host rounding:
+#   1. re-extremize: a smooth node whose handles are vertical in ALL
+#      inputs moves along the baked curve to its new vertical extreme
+#      (exact; the leftover merges into the neighbour segment). When
+#      that merge misses by more than EXTREME_FIT_TOLERANCE, bakes look
+#      for a balanced position between the old node and the extreme
+#      where both segments fit (Live: plain lock);
+#   2. lock: other labelled handles go back to H / V / slant;
+#   3. tension: each curve gets the Hobby tension of the inputs back
+#      (interpolated at the target stem; TENSION_ON_REBUILT: also the
+#      curves re-extremize rebuilt).
+# Only coordinates move: node count, order and types never change.
+# Built on core Contour.node_segments, CubicBezier (solve_parallel,
+# solve_slice, solve_hobby), hobbyspline.recover_tension and the
+# outline cleanup fitters (fit_one, Levien fit_run).
 # See TypeRig-Glyphs Handouts/delta_italic_handles_handout.md.
-LOCK_TOLERANCE = 0.5		# units: max off-direction drift in the inputs
+# Defaults of the tunable options (setup options lock_tol / extreme_tol /
+# tension_scale / tension_on_rebuilt; see DELTA_OPTION_DEFAULTS).
+LOCK_TOLERANCE = 1.		# units: max off-direction drift in the inputs (lab: 1)
+EXTREME_FIT_TOLERANCE = 10.	# units: max shape change when re-extremizing; else snap (lab: 10+ looks good)
+EXTREME_MARGIN = 0.02		# segment time kept clear of the far node
+BALANCE_SCAN = 8			# balanced search: coarse samples, then golden steps
+BALANCE_REFINE = 10
+TENSION_SCALE = 1.			# multiplier on the restored tension (1 = as in the inputs)
+TENSION_RANGE = (.5, 2.)	# restored Hobby tension is clamped to this
+TENSION_ON_REBUILT = False	# restore tension on curves re-extremize rebuilt too (lab: bad with it on)
 
 _LOCK_H, _LOCK_V, _LOCK_S = 'h', 'v', 's'
 
 
-def _handle_owners(layer):
-	'''[(off_index, on_index)] in point_array order: each off-curve that
-	sits next to an on-curve is that node's handle. Off-curves between two
-	on-curves (quadratic) or between two off-curves are skipped. Contours
-	wrap (open contours end on on-curves, so the wrap never pairs them).
-	Also returns {on_index: smooth}.'''
-	pairs, smooth, base = [], {}, 0
-	for shape in layer.shapes:
-		for contour in shape.contours:
-			nodes = list(contour.data)
-			n = len(nodes)
-			for k, node in enumerate(nodes):
-				if node.is_on:
-					smooth[base + k] = bool(getattr(node, 'smooth', False))
-					continue
-				if n < 2: continue
-				p, q = (k - 1) % n, (k + 1) % n
-				prev_on, next_on = nodes[p].is_on, nodes[q].is_on
-				if prev_on and not next_on:
-					pairs.append((base + k, base + p))
-				elif next_on and not prev_on:
-					pairs.append((base + k, base + q))
-			base += n
-	return pairs, smooth
+def _contours_of(layer):
+	'''[((shape index, contour index), contour)] of a core layer.'''
+	return [((si, ci), contour) for si, shape in enumerate(layer.shapes)
+	        for ci, contour in enumerate(shape.contours)]
+
+
+def _cubic_runs(contour):
+	'''Node-index quads (i0, i1, i2, i3) of the cubic segments of a core
+	contour (Contour.node_segments; off-curves of type 'curve').'''
+	index = dict((id(node), i) for i, node in enumerate(contour.data))
+	return [tuple(index[id(n)] for n in seg) for seg in contour.node_segments
+	        if len(seg) == 4 and not seg[1].is_on and seg[1].type == 'curve']
 
 
 def _direction_of(node, handle, slope, tol):
@@ -239,76 +261,381 @@ def _direction_of(node, handle, slope, tol):
 	return None
 
 
+def _tension_of(pts):
+	'''Hobby tension (alpha, beta) of a cubic (4 (x, y) points) by core
+	recover_tension, or None for a straight segment or a retracted handle.'''
+	from typerig.core.objects.hobbyspline import recover_tension, is_line_segment
+	z = [complex(p[0], p[1]) for p in pts]
+	if abs(z[1] - z[0]) < 1e-6 or abs(z[3] - z[2]) < 1e-6 or is_line_segment(*z):
+		return None
+	return recover_tension(*z)
+
+
 def direction_labels(input_layers, slope, tol=LOCK_TOLERANCE):
-	'''Lock plan for an axis: {'pairs': [(off, on, label)], 'smooth': {on: bool}}.
-	A handle is labelled only when it has the same direction in every input.
-	Returns None when there is nothing to lock (upright design, < 2 inputs).'''
+	'''Italic fix plan for an axis, from its compatible input layers (stems
+	set). Nodes are addressed (shape, contour, node) by index, the same in
+	every compatible layer. Keys:
+	  'shape':    [((si, ci), node count)] of the first input;
+	  'segments': [(key0, key1, key2, key3)] cubic segments;
+	  'pairs':    [(off key, on key, label)] handles with one direction
+	              ('h' / 'v' / 's') in every input;
+	  'handles':  {on key: [off keys]};  'smooth': {on key: bool};
+	  'extremes': [(on key, segment in, segment out)] smooth nodes with both
+	              handles vertical and a cubic on each side;
+	  'tension':  {segment: [(alpha, beta) per input]};
+	  'stems':    [vstem per input] ([] when not set).
+	Returns None for an upright design (slope 0) or incompatible inputs.'''
 	if not slope or len(input_layers) < 2:
 		return None
-	pairs, smooth = _handle_owners(input_layers[0])
-	arrays = [list(l.point_array.tuple) for l in input_layers]
-	size = len(arrays[0])
-	if any(len(a) != size for a in arrays):
+	shapes = [_contours_of(layer) for layer in input_layers]
+	shape = [(key, len(c.data)) for key, c in shapes[0]]
+	if any([(key, len(c.data)) for key, c in other] != shape for other in shapes[1:]):
 		return None
-	locked = []
-	for off, on in pairs:
-		labels = set(_direction_of(a[on], a[off], slope, tol) for a in arrays)
-		if len(labels) == 1 and None not in labels:
-			locked.append((off, on, labels.pop()))
-	if not locked:
-		return None
-	return {'pairs': locked, 'handles': pairs, 'smooth': smooth, 'size': size}
 
+	segments, handles, smooth = [], {}, {}
+	for (si, ci), contour in shapes[0]:
+		for i0, i1, i2, i3 in _cubic_runs(contour):
+			keys = tuple((si, ci, i) for i in (i0, i1, i2, i3))
+			segments.append(keys)
+			handles.setdefault(keys[0], []).append(keys[1])
+			handles.setdefault(keys[3], []).append(keys[2])
+		for i, node in enumerate(contour.data):
+			if node.is_on:
+				smooth[(si, ci, i)] = bool(getattr(node, 'smooth', False))
 
-def lock_directions(points, plan, slope):
-	'''Put labelled handles back on their direction (points: list of (x, y),
-	changed in place and returned). Vertical: x = node x (Y kept). Slant:
-	back on the slant line through the node (Y kept). Horizontal: y = node y.
-	A smooth node with one locked handle turns its other handle to stay in
-	line (length kept). Returns (points, moved, max_drift).'''
-	if not plan or len(points) != plan['size']:
-		return points, 0, 0.
-	moved, drift, locked_by_on = 0, 0., {}
-	for off, on, label in plan['pairs']:
-		nx, ny = points[on]
-		hx, hy = points[off]
+	def xy(layer, key):
+		node = layer.shapes[key[0]].contours[key[1]].data[key[2]]
+		return (node.x, node.y)
+
+	pairs = []
+	for on, offs in handles.items():
+		for off in offs:
+			labels = set(_direction_of(xy(l, on), xy(l, off), slope, tol) for l in input_layers)
+			if len(labels) == 1 and None not in labels:
+				pairs.append((off, on, labels.pop()))
+
+	vertical = {}
+	for off, on, label in pairs:
 		if label == _LOCK_V:
-			new = (nx, hy)
-		elif label == _LOCK_S:
-			new = (nx + (hy - ny) * slope, hy)
-		else:
-			new = (hx, ny)
-		d = math.hypot(new[0] - hx, new[1] - hy)
-		if d > 1e-9:
-			moved += 1
-			drift = max(drift, d)
-		points[off] = new
-		locked_by_on.setdefault(on, []).append(off)
+			vertical.setdefault(on, []).append(off)
+	seg_in = dict((seg[3], k) for k, seg in enumerate(segments))
+	seg_out = dict((seg[0], k) for k, seg in enumerate(segments))
+	extremes = [(on, seg_in[on], seg_out[on]) for on, offs in sorted(vertical.items())
+	            if len(offs) == 2 and smooth.get(on) and on in seg_in and on in seg_out
+	            and seg_in[on] != seg_out[on]]
 
-	# Smooth nodes: keep the free handle in line with the locked one
-	handles = {}
-	for off, on in plan['handles']:
-		handles.setdefault(on, []).append(off)
-	for on, offs in locked_by_on.items():
-		if len(offs) != 1 or not plan['smooth'].get(on):
-			continue
-		others = [o for o in handles.get(on, []) if o not in offs]
-		if len(others) != 1:
-			continue
-		nx, ny = points[on]
-		lx, ly = points[offs[0]][0] - nx, points[offs[0]][1] - ny
-		ll = math.hypot(lx, ly)
-		ox, oy = points[others[0]]
-		ol = math.hypot(ox - nx, oy - ny)
-		if ll < 1e-9 or ol < 1e-9:
-			continue
-		new = (nx - lx / ll * ol, ny - ly / ll * ol)
-		d = math.hypot(new[0] - ox, new[1] - oy)
-		if d > 1e-9:
-			moved += 1
-			drift = max(drift, d)
-		points[others[0]] = new
-	return points, moved, drift
+	tension = {}
+	for k, seg in enumerate(segments):
+		values = [_tension_of([xy(l, key) for key in seg]) for l in input_layers]
+		if None not in values:
+			tension[k] = values
+
+	stems = []
+	for layer in input_layers:
+		try:
+			stems.append(float(layer.stems[0]))
+		except (AttributeError, TypeError, ValueError, IndexError):
+			stems = []						# no stems: tension is not restored
+			break
+
+	return {'shape': shape, 'segments': segments, 'pairs': pairs, 'handles': handles,
+	        'smooth': smooth, 'extremes': extremes, 'tension': tension, 'stems': stems}
+
+
+def _axis_time(stems, value):
+	'''Position of value on the input stems (0 = first input, 1 = second, ...),
+	piecewise linear, extrapolated past the ends. None if stems are flat.'''
+	n = len(stems)
+	for i in range(n - 1):
+		lo, hi = stems[i], stems[i + 1]
+		if hi == lo: continue
+		if min(lo, hi) <= value <= max(lo, hi) or (i == 0 and (value - lo) * (hi - lo) < 0) or i == n - 2:
+			return i + (value - lo) / (hi - lo)
+	return None
+
+
+def _target_tension(plan, k, vstem):
+	'''Inputs' Hobby tension of segment k at vstem (interpolated, clamped to
+	TENSION_RANGE), or None (not measured / no stems).'''
+	values = plan['tension'].get(k)
+	if values is None or len(plan['stems']) < 2 or vstem is None:
+		return None
+	t = _axis_time(plan['stems'], vstem)
+	if t is None:
+		return None
+	i = min(max(int(math.floor(t)), 0), len(values) - 2)
+	f = t - i
+	lo, hi = TENSION_RANGE
+	scale = plan.get('tension_scale', TENSION_SCALE)
+	return tuple(min(max((values[i][j] + (values[i + 1][j] - values[i][j]) * f) * scale, lo), hi)
+	             for j in (0, 1))
+
+
+class _FitOptions(object):
+	'''Options for core outline_cleanup_simplify.fit_one.'''
+	def __init__(self, tol):
+		self.fit_tol, self.eps_point, self.eps_handle = tol, .5, .5
+
+
+def _merge_fit(run, tol):
+	'''One cubic for a run of cubics with the run's end tangents (core
+	fit_one: Levien area / moment fit, then Schneider). Returns (points,
+	error) or None when nothing is within tol.'''
+	from typerig.core.algo.outline_cleanup_geom import Seg
+	from typerig.core.algo.outline_cleanup_simplify import fit_one
+	fit = fit_one([Seg(tuple(seg)) for seg in run], _FitOptions(tol))
+	if fit is None or len(fit[0].p) != 4:
+		return None
+	return tuple(tuple(p) for p in fit[0].p), fit[1]
+
+
+def _tangent_fit(run, tol, t_start=None, t_end=None):
+	'''One cubic for a run with given end directions (core Levien fit_run).
+	Returns (points, error) or None.'''
+	from typerig.core.algo.outline_cleanup_geom import Seg
+	from typerig.core.algo.outline_cleanup_fit_levien import fit_run
+	fit = fit_run([Seg(tuple(seg)) for seg in run], tol, .5, .5, t_start, t_end)
+	if fit is None or len(fit[0].p) != 4:
+		return None
+	return tuple(tuple(p) for p in fit[0].p), fit[1]
+
+
+class _Fixer(object):
+	'''The italic fix on one baked core layer (see lock_directions).'''
+	def __init__(self, layer, plan, slope):
+		self.plan, self.slope = plan, slope
+		self.contours = dict(_contours_of(layer))
+
+	def node(self, key):
+		return self.contours[key[:2]].data[key[2]]
+
+	def xy(self, key):
+		node = self.node(key)
+		return (node.x, node.y)
+
+	def put(self, key, p):
+		node = self.node(key)
+		node.x, node.y = float(p[0]), float(p[1])
+
+	def cubic(self, seg):
+		from typerig.core.objects.cubicbezier import CubicBezier
+		return CubicBezier(*[self.xy(key) for key in seg])
+
+	def write(self, seg, pts):
+		for key, p in zip(seg, pts):
+			self.put(key, p)
+
+	# - Re-extremize
+	def extreme(self, on, k_in, k_out, tol, balanced):
+		'''Move one extreme node. Returns ('exact' | 'balanced', error) or None.'''
+		segs = self.plan['segments']
+		A, B = self.cubic(segs[k_in]), self.cubic(segs[k_out])
+
+		def vertical_times(seg, lo, hi):
+			return [t for t in (seg.solve_parallel((0., 1.), fullOutput=True) or []) if lo <= t <= hi]
+
+		cand = [(1. - t, 'in', t) for t in vertical_times(A, EXTREME_MARGIN, 1.)]
+		cand += [(t, 'out', t) for t in vertical_times(B, 0., 1. - EXTREME_MARGIN)]
+		if not cand:
+			return None
+		gap, side, t = min(cand)
+		if gap < 1e-6:
+			return 'exact', 0.					# already on the extreme
+
+		# Exact: the piece with the extreme stays, the rest merges
+		if side == 'in':
+			kept, piece = A.solve_slice(t)
+			fit = _merge_fit([piece.tuple, B.tuple], tol)
+			result = (kept.tuple, fit[0]) if fit else None
+		else:
+			piece, kept = B.solve_slice(t)
+			fit = _merge_fit([A.tuple, piece.tuple], tol)
+			result = (fit[0], kept.tuple) if fit else None
+		if result is not None:
+			self.done(on, segs[k_in], segs[k_out], result)
+			return 'exact', fit[1]
+		if not balanced:
+			return None
+
+		# Balanced: slide part way (time u on the side that holds the extreme),
+		# vertical handles, both segments fitted; minimise the worse error.
+		up = (piece.p3.y - piece.p2.y) if side == 'out' else (piece.p1.y - piece.p0.y)
+		vdir = (0., 1. if up >= 0. else -1.)
+		bound = tol * 3.
+
+		def trial(u):
+			if side == 'out':
+				lo, hi = B.solve_slice(u)
+				left = _tangent_fit([A.tuple, lo.tuple], bound, t_end=vdir)
+				right = _tangent_fit([hi.tuple], bound, t_start=vdir)
+			else:
+				lo, hi = A.solve_slice(u)
+				left = _tangent_fit([lo.tuple], bound, t_end=vdir)
+				right = _tangent_fit([hi.tuple, B.tuple], bound, t_start=vdir)
+			if left is None or right is None:
+				return float('inf'), None
+			return max(left[1], right[1]), (left[0], right[0])
+
+		a, b = (0., t) if side == 'out' else (t, 1.)
+		a, b = a + (b - a) * .02, b - (b - a) * .02	# keep clear of both ends
+		samples = [a + (b - a) * k / float(BALANCE_SCAN - 1) for k in range(BALANCE_SCAN)]
+		scored = [(trial(u), u) for u in samples]
+		best_i = min(range(len(scored)), key=lambda k: scored[k][0][0])
+		lo_u = samples[max(best_i - 1, 0)]
+		hi_u = samples[min(best_i + 1, len(samples) - 1)]
+		best, best_u = scored[best_i]
+		g = (math.sqrt(5.) - 1.) / 2.			# golden section on the bracket
+		x1, x2 = hi_u - g * (hi_u - lo_u), lo_u + g * (hi_u - lo_u)
+		f1, f2 = trial(x1), trial(x2)
+		for _ in range(BALANCE_REFINE):
+			for f, x in ((f1, x1), (f2, x2)):
+				if f[0] < best[0]:
+					best, best_u = f, x
+			if f1[0] <= f2[0]:
+				hi_u, x2, f2 = x2, x1, f1
+				x1 = hi_u - g * (hi_u - lo_u)
+				f1 = trial(x1)
+			else:
+				lo_u, x1, f1 = x1, x2, f2
+				x2 = lo_u + g * (hi_u - lo_u)
+				f2 = trial(x2)
+		if best[1] is None or best[0] > tol:
+			return None
+		self.done(on, segs[k_in], segs[k_out], best[1])
+		return 'balanced', best[0]
+
+	def done(self, on, seg_in, seg_out, result):
+		new_a, new_b = result
+		self.write(seg_in, new_a)
+		self.write(seg_out, new_b)
+		x = self.node(on).x						# exact vertical
+		for key in (seg_in[2], seg_out[1]):
+			self.put(key, (x, self.node(key).y))
+
+	# - Lock
+	def lock(self, skip):
+		'''Labelled handles back on their direction; smooth partners in line.
+		Returns (moved, max drift).'''
+		moved, drift, locked_by_on = 0, 0., {}
+		for off, on, label in self.plan['pairs']:
+			if on in skip:
+				continue
+			nx, ny = self.xy(on)
+			hx, hy = self.xy(off)
+			if label == _LOCK_V:
+				new = (nx, hy)
+			elif label == _LOCK_S:
+				new = (nx + (hy - ny) * self.slope, hy)
+			else:
+				new = (hx, ny)
+			d = math.hypot(new[0] - hx, new[1] - hy)
+			if d > 1e-9:
+				moved += 1
+				drift = max(drift, d)
+			self.put(off, new)
+			locked_by_on.setdefault(on, []).append(off)
+
+		for on, offs in locked_by_on.items():
+			if len(offs) != 1 or not self.plan['smooth'].get(on):
+				continue
+			others = [o for o in self.plan['handles'].get(on, []) if o not in offs]
+			if len(others) != 1:
+				continue
+			nx, ny = self.xy(on)
+			lx, ly = self.xy(offs[0])[0] - nx, self.xy(offs[0])[1] - ny
+			ox, oy = self.xy(others[0])
+			ll, ol = math.hypot(lx, ly), math.hypot(ox - nx, oy - ny)
+			if ll < 1e-9 or ol < 1e-9:
+				continue
+			new = (nx - lx / ll * ol, ny - ly / ll * ol)
+			d = math.hypot(new[0] - ox, new[1] - oy)
+			if d > 1e-9:
+				moved += 1
+				drift = max(drift, d)
+			self.put(others[0], new)
+		return moved, drift
+
+	# - Tension
+	def tension(self, vstem, skip_segments):
+		'''Inputs' Hobby tension back on every measured cubic not in
+		skip_segments (core CubicBezier.solve_hobby keeps handle directions).'''
+		changed = 0
+		for k in self.plan['tension']:
+			if k in skip_segments:
+				continue
+			tension = _target_tension(self.plan, k, vstem)
+			if tension is None:
+				continue
+			seg = self.plan['segments'][k]
+			cubic = self.cubic(seg)
+			if _tension_of(cubic.tuple) is None:
+				continue						# baked curve straight / retracted: leave it
+			try:
+				new = cubic.solve_hobby(tension).tuple
+			except (ZeroDivisionError, ValueError, OverflowError):
+				continue
+			if not all(math.isfinite(v) for p in new for v in p):
+				continue
+			self.put(seg[1], new[1])
+			self.put(seg[2], new[2])
+			changed += 1
+		return changed
+
+
+def lock_directions(layer, plan, slope, vstem=None):
+	'''Italic fix on a baked core layer (changed in place), switched by the
+	plan (_italic_plan): re-extremize ('keep_extremes'; 'balanced': search a
+	balanced position when the exact move misses 'fit_tol'), lock the
+	labelled handles, restore tension ('keep_tension', needs vstem;
+	'tension_on_rebuilt', 'tension_scale'). Vertical lock: x = node x (Y kept); slant: back on the
+	slant line through the node (Y kept); horizontal: y = node y. A smooth
+	node with one locked handle turns its other handle in line (length
+	kept). Returns a report {'locked', 'drift', 'extremes', 'balanced',
+	'fit_error', 'fallbacks', 'tension'}.'''
+	report = {'locked': 0, 'drift': 0., 'extremes': 0, 'balanced': 0,
+	          'fit_error': 0., 'fallbacks': 0, 'tension': 0}
+	if not plan:
+		return report
+	if [(key, len(c.data)) for key, c in _contours_of(layer)] != plan['shape']:
+		return report							# not the layout the plan was built on
+
+	fixer = _Fixer(layer, plan, slope)
+	done, rebuilt = set(), set()
+	if plan.get('keep_extremes'):
+		for on, k_in, k_out in plan['extremes']:
+			res = fixer.extreme(on, k_in, k_out, plan.get('fit_tol', EXTREME_FIT_TOLERANCE),
+			                    plan.get('balanced', False))
+			if res is None:
+				report['fallbacks'] += 1
+				continue
+			kind, error = res
+			done.add(on)
+			if error > 0.:
+				rebuilt.update((k_in, k_out))
+				report['extremes' if kind == 'exact' else 'balanced'] += 1
+				report['fit_error'] = max(report['fit_error'], error)
+
+	report['locked'], report['drift'] = fixer.lock(done)
+	if plan.get('keep_tension') and vstem is not None and plan.get('tension'):
+		on_rebuilt = plan.get('tension_on_rebuilt', TENSION_ON_REBUILT)
+		report['tension'] = fixer.tension(vstem, set() if on_rebuilt else rebuilt)
+	return report
+
+
+def _italic_plan(input_layers, slope, opts, live=False):
+	'''direction_labels plan with the option switches and knobs, or None when
+	the italic fix is off (keep_directions) or not needed. live: the
+	balanced search follows 'live_balanced' instead of 'balanced'.'''
+	opt = lambda key: opts.get(key, DELTA_OPTION_DEFAULTS[key])	# defaults: one place for every host
+	if not opt('keep_directions'):
+		return None
+	plan = direction_labels(input_layers, slope, float(opt('lock_tol')))
+	if plan is not None:
+		plan.update(keep_extremes=bool(opt('keep_extremes')), keep_tension=bool(opt('keep_tension')),
+		            balanced=bool(opt('live_balanced' if live else 'balanced')),
+		            fit_tol=float(opt('extreme_tol')), tension_scale=float(opt('tension_scale')),
+		            tension_on_rebuilt=bool(opt('tension_on_rebuilt')))
+	return plan
 
 
 def _bake_target_stems(base_layer, vaxis, target, italic_rad,
@@ -316,10 +643,10 @@ def _bake_target_stems(base_layer, vaxis, target, italic_rad,
 	'''Stems-mode: drive DeltaScale.scale_by_stem for every viable
 	attribute, write into a clone of base_layer, realign to chosen
 	origin (skip when origin is BASELINE — that's scale_by_stem's native
-	reference). lock: a direction_labels plan; when given, labelled
-	handles are put back on their direction (italic direction lock).
-	report: optional dict, gets 'locked' (handles moved) and 'drift'
-	(largest move, units).
+	reference). lock: an _italic_plan; when given, the italic fix runs on
+	the baked layer (lock_directions, switched by the plan's
+	'keep_extremes' / 'keep_tension' / 'balanced'). report: optional dict,
+	gets the summed lock_directions report.
 	'''
 	new_layer = base_layer.clone()
 
@@ -335,12 +662,13 @@ def _bake_target_stems(base_layer, vaxis, target, italic_rad,
 			))
 		except (IndexError, ValueError, AssertionError):
 			continue
-		if attrib == 'point_array' and lock:
-			result, moved, drift = lock_directions(result, lock, italic_rad)
-			if report is not None:
-				report['locked'] = report.get('locked', 0) + moved
-				report['drift'] = max(report.get('drift', 0.), drift)
 		_apply_array(new_layer, attrib, result)
+		if attrib == 'point_array' and lock:
+			fix = lock_directions(new_layer, lock, italic_rad, stem[0])
+			if report is not None:
+				for key, value in fix.items():
+					worst = key in ('drift', 'fit_error')
+					report[key] = max(report.get(key, 0.), value) if worst else report.get(key, 0) + value
 
 	if global_origin is not None and global_origin != TransformOrigin.BASELINE:
 		try:
@@ -452,8 +780,46 @@ def _bake_target_dims(base_layer, vaxis, target, extrapolate):
 DELTA_OPTION_DEFAULTS = {
 	'metrics': True, 'anchors': True, 'extrapolate': True,
 	'origin': 'BS', 'italic_angle': 0., 'selection': False,
-	'keep_directions': True,
+	# Italic fix (TypeRig-Glyphs Handouts/delta_italic_handles_handout.md):
+	# all off by default (2026-10-19, user): Delta bakes as it always did.
+	# The Delta Italic Lab switches them for trials.
+	'italic_tan': False,			# exact slope tan(angle); off = radians as slope (original)
+	'keep_directions': False,		# lock H / V / slant handles (master switch of the fix)
+	'keep_extremes': False,			# move upright extremes to the new vertical extreme
+	'keep_tension': False,			# inputs' Hobby tension back on every curve
+	'balanced': True,				# bakes: balanced extreme search when the exact move misses
+	'live_balanced': False,			# Live: the same (slower per tick)
+	'extreme_tol': EXTREME_FIT_TOLERANCE,	# units
+	'lock_tol': LOCK_TOLERANCE,		# units
+	'tension_scale': TENSION_SCALE,
+	'tension_on_rebuilt': TENSION_ON_REBUILT,
 }
+
+# Italic fix fields for the hosts' option forms (Delta Machine Advanced,
+# Delta Italic Lab): (option key, title, tooltip). Order = form order.
+ITALIC_FIX_SWITCHES = (
+	('italic_tan', 'Exact slope (tan)',
+	 'Use tan(angle) as the de-slant slope. Off: the angle in radians, as Delta always did.'),
+	('keep_directions', 'Lock directions',
+	 'Put handles that are horizontal / vertical / on the slant in every input back on that direction.\n'
+	 'Master switch: the other switches need it.'),
+	('keep_extremes', 'Re-extremize',
+	 'Move upright side extremes to where the scaled curve is really vertical.'),
+	('balanced', 'Balanced search',
+	 'When the exact move bends the curve more than the fit tolerance, stop part way so both curves fit.'),
+	('keep_tension', 'Restore tension',
+	 'Curves get the Hobby tension of the inputs back (interpolated at the V stem).'),
+	('tension_on_rebuilt', 'Tension on moved curves',
+	 'Restore tension also on the curves next to a moved extreme (lab: looks bad).'),
+)
+ITALIC_FIX_NUMBERS = (
+	('extreme_tol', 'Fit tolerance (u)',
+	 'Largest shape change a moved extreme may cause; else the node only gets its handles locked.'),
+	('lock_tol', 'Lock tolerance (u)',
+	 'How far off a direction an input handle may be and still count as on it.'),
+	('tension_scale', 'Tension scale', 'Multiplier on the restored tension (1 = as in the inputs).'),
+)
+ITALIC_FIX_KEYS = tuple(k for k, _t, _h in ITALIC_FIX_SWITCHES + ITALIC_FIX_NUMBERS)
 
 
 def _to_float(value, default=None):
@@ -703,8 +1069,7 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 		return {'ok': False, 'error': 'No axes defined.'}
 
 	opts = setup.get('options', {}) or {}
-	italic_rad = _italic_slope(opts)		# a slope (tan), named for the engine argument
-	keep_directions = bool(opts.get('keep_directions', True))
+	italic_rad = _italic_slope(opts)		# the engine's slope argument (see _italic_slope)
 	extrapolate = bool(opts.get('extrapolate', True))
 	global_origin = _origin_of(opts)
 	requested = _requested_attribs(opts, axes)
@@ -721,7 +1086,7 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 			continue
 		vaxis, base_layer, viable, input_layers = built
 		axes_built += 1
-		lock = direction_labels(input_layers, italic_rad) if keep_directions else None
+		lock = _italic_plan(input_layers, italic_rad, opts)
 
 		base_name = base_layer.name
 		try:
@@ -786,9 +1151,12 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 				pass
 
 			targets_baked += 1
-			if lock_report.get('locked'):
-				entry['locked'] = lock_report['locked']
-				entry['drift'] = round(lock_report['drift'], 2)
+			for key in ('locked', 'extremes', 'balanced', 'fallbacks', 'tension'):
+				if lock_report.get(key):
+					entry[key] = lock_report[key]
+			for key in ('drift', 'fit_error'):
+				if lock_report.get(key):
+					entry[key] = round(lock_report[key], 2)
 			entry.update({'axis': axis_name, 'name': t_name, 'base': base_name,
 			              'rebuilt': rebuilt, 'viable': t_viable})
 			baked.append(entry)
@@ -1069,8 +1437,7 @@ def npa_delta_live_set(glyph, scope_layers, NodeActions, setup_json, selection_l
 		'viable': viable,
 		'options': opts,
 		'italic_rad': _italic_slope(opts),
-		'lock': (direction_labels(snap_layers, _italic_slope(opts))
-		         if opts.get('keep_directions', True) and not sel_indices else None),
+		'lock': _italic_plan(snap_layers, _italic_slope(opts), opts, live=True) if not sel_indices else None,
 		'extrapolate': bool(opts.get('extrapolate', True)),
 		'global_origin': _origin_of(opts),
 		'sel_indices': sel_indices,
@@ -1128,10 +1495,11 @@ def npa_delta_live_drive(glyph, scope_layers, NodeActions,
 		'sx': float(sx), 'sy': float(sy),
 	}
 	try:
+		italic = {}
 		new_layer = _bake_target_stems(
 			base_layer, state['vaxis'], target,
 			state['italic_rad'], state['extrapolate'],
-			global_origin, source_bounds, state.get('lock'))
+			global_origin, source_bounds, state.get('lock'), italic)
 	except Exception as e:
 		return {'ok': False, 'error': 'Bake failed: %s' % e}
 
@@ -1146,7 +1514,10 @@ def npa_delta_live_drive(glyph, scope_layers, NodeActions,
 		try: dst.anchor_array = new_layer.anchor_array
 		except Exception: pass
 
-	return {'ok': True}
+	result = {'ok': True}
+	if state.get('lock'):
+		result['italic'] = italic		# italic fix report (lock_directions)
+	return result
 
 
 def _live_drive_selection(state, dst, global_origin, stem, scale):

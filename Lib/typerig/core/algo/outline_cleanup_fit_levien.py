@@ -176,9 +176,12 @@ def _roots(poly, D):
 
 
 # - Fit ----------------------------------
-def fit_run(segs: list[Seg], tol: float, eps_point: float = .5, eps_handle: float = .5) -> tuple[Seg, float] | None:
+def fit_run(segs: list[Seg], tol: float, eps_point: float = .5, eps_handle: float = .5,
+            t_start: Point | None = None, t_end: Point | None = None) -> tuple[Seg, float] | None:
 	'''Replace a run of segments with one cubic (or a line for a straight
-	run). Returns (segment, max error) or None if nothing is within tol.'''
+	run). Returns (segment, max error) or None if nothing is within tol.
+	t_start / t_end: optional unit travel directions to use at the ends
+	instead of the run's own tangents (t_end arrives at the last point).'''
 	src = [s.p for s in segs]
 	span = (segs[0].src[0], segs[-1].src[1])
 	p0, p3 = src[0][0], src[-1][-1]
@@ -187,8 +190,8 @@ def fit_run(segs: list[Seg], tol: float, eps_point: float = .5, eps_handle: floa
 	if length < eps_point:
 		return None
 
-	t0 = start_tangent(src[0], eps_handle)
-	t1 = end_tangent(src[-1], eps_handle)
+	t0 = t_start if t_start is not None else start_tangent(src[0], eps_handle)
+	t1 = t_end if t_end is not None else end_tangent(src[-1], eps_handle)
 	if t0 is None or t1 is None:
 		return None
 

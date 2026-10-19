@@ -103,6 +103,11 @@ ADVANCED = SimpleNamespace(
 	COLOR   = SimpleNamespace(STYLE=None, W=44, H=24),   # vanilla.ColorWell (add_entry preset; it has no sizeStyle)
 	PATH    = SimpleNamespace(STYLE='small', W=420, H=None),   # log folder (TextBox, truncated in the middle)
 	SECTION_GAP = 10,   # extra space above a section title
+	# Italic block (v0.3): beside the Engine mock-up form, from its title down
+	ITALIC_X       = 560,  # left edge of the block (the Engine form and the notes end before it)
+	ITALIC_LABEL_W = 110,  # 'Italic angle:' and number captions
+	ITALIC_COLUMNS = 2,    # italic fix check boxes per row
+	ITALIC_CHECK_W = 200,  # one check box column
 )
 
 # - Colours ----------------------------------------------------------------

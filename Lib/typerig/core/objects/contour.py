@@ -374,7 +374,12 @@ class Contour(Container, XMLSerializable):
 		assert len(self.data) > 1, 'Cannot return segments for contour with length {}'.format(len(self.data))
 		contour_segments = []
 		contour_nodes = self.data[:]
-		if self.closed: contour_nodes.append(contour_nodes[0])
+		if self.closed:
+			# Walk from the first on-curve: a closed contour may start with
+			# off-curves (Glyphs keeps the start node LAST). data is not reordered.
+			start = next((i for i, n in enumerate(contour_nodes) if n.is_on), 0)
+			contour_nodes = contour_nodes[start:] + contour_nodes[:start]
+			contour_nodes.append(contour_nodes[0])
 
 		while len(contour_nodes):
 			node = contour_nodes[0]

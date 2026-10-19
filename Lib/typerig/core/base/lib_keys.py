@@ -25,6 +25,10 @@ DELTA_LIVE_LIB_KEY       = 'com.typerig.panel.delta.live'
 # Clipboard / Explorer and TR-DeltaPreview.
 DELTA_AXISSETUP_LIB_KEY  = 'com.typerig.delta.machine.axissetup'
 
+# Delta Italic Lab (TypeRig-Glyphs) axis, controls and italic fix options
+# (JSON): a trial bench, kept apart from the Delta setups.
+DELTA_LAB_LIB_KEY        = 'com.typerig.delta.italiclab'
+
 # - Node tools -----------------------
 # Per-master snap target widths {master name: value}. Shared by TR Panel
 # Node and TR Toolbar (Glyphs) and FL Node, so a value saved in one
