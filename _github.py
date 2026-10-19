@@ -10,15 +10,31 @@ from _release import ROOT, run
 
 
 def info(repo: str, tag: str, *, root: Path = ROOT) -> dict | None:
-    """Distinguish a missing release from authentication/network failure."""
+    """Find the tag's release, drafts included; the releases/tags endpoint hides drafts.
+
+    Distinguishes a missing release from authentication/network failure.
+    """
     result = run(
-        "gh", "api", f"repos/{repo}/releases/tags/{tag}", cwd=root, check=False
+        "gh",
+        "api",
+        "--paginate",
+        f"repos/{repo}/releases",
+        "--jq",
+        f'.[] | select(.tag_name == "{tag}")',
+        cwd=root,
+        check=False,
     )
     if result.returncode:
-        if "HTTP 404" in result.stderr:
-            return None
         raise RuntimeError(f"Cannot read GitHub release: {result.stderr}")
-    return json.loads(result.stdout)
+    decoder, text, end, found = json.JSONDecoder(), result.stdout.strip(), 0, []
+    while end < len(text):
+        release, end = decoder.raw_decode(text, end)
+        found.append(release)
+        while end < len(text) and text[end].isspace():
+            end += 1
+    if len(found) > 1:
+        raise RuntimeError(f"Several GitHub releases use {tag}; delete the extras")
+    return found[0] if found else None
 
 
 def download(repo: str, tag: str, name: str, directory: Path, root: Path) -> Path:
