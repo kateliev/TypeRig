@@ -30,7 +30,7 @@ from typerig.core.actions import designspace_actions as dsa
 
 # - Init -------------------------------------------------------------------
 TOOL       = 'TypeRig Delta Machine'
-VERSION    = '0.1'
+VERSION    = '0.2'
 FORMAT     = 1
 LIB_KEY    = 'com.typerig.delta.machine.setup'		# font lib; the panel keys are in core/base/lib_keys.py
 SELECTION  = ''				# group of a row that works on the selected glyphs
@@ -50,8 +50,22 @@ OPTION_DEFAULTS = {
 	'skip_composites': True,	# composites (and mixed glyphs) get no delta: target layer + metrics only
 }
 
-# Advanced tab: stored, not used yet (the engine options of later versions)
+# Glyph status after a bake, mildest first: a glyph keeps the worst status
+# any of its layers reached (flag colour, log section)
+STATUSES = ('done', 'warning', 'failed')
+STATUS_LABELS = {'done': 'Done', 'warning': 'Warnings', 'failed': 'Failed'}
+
+# Advanced tab. flag* / log* work since v0.2: glyphs are coloured by status
+# after a bake (RGBA 0..1), a text log is written to log_dir ('' = the
+# font's folder). The engine options (engine .. italic_angle) are stored,
+# not used yet.
 ADVANCED_DEFAULTS = {
+	'flag': False,				# colour the processed glyphs by status (overwrites their colour)
+	'flag_done': [0.20, 0.78, 0.35, 1.],		# green
+	'flag_warning': [1.00, 0.80, 0.00, 1.],		# yellow
+	'flag_failed': [1.00, 0.23, 0.19, 1.],		# red
+	'log': False,				# write a log file per bake
+	'log_dir': '',				# folder of the log; '' = next to the font file
 	'engine': 'delta-scale',	# delta-scale | piecewise | adaptive
 	'interpolation': 'linear',	# linear | clamp (no extrapolation past the inputs)
 	'stems': 'table',			# table | self-metered (measure each glyph's own stems)
@@ -59,6 +73,7 @@ ADVANCED_DEFAULTS = {
 	'italic_angle': 0.,
 	'notes': '',
 }
+FLAG_KEYS = {status: 'flag_' + status for status in STATUSES}
 
 TARGET_DEFAULTS = {
 	'layer': '', 'group': SELECTION, 'vstem': 100., 'hstem': 100.,
@@ -98,6 +113,17 @@ def parse_dimension(value, default_unit='%'):
 def format_dimension(dim):
 	'''{'value', 'unit'} -> '60 %' / '700 u'.'''
 	return '{:g} {}'.format(dim['value'], dim['unit'])
+
+
+def norm_color(value, default):
+	'''[r, g, b(, a)] in 0..1 -> [r, g, b, a] (4 decimals); else a copy of default.'''
+	try:
+		rgba = [min(1., max(0., float(c))) for c in value][:4]
+	except (TypeError, ValueError):
+		return list(default)
+	if len(rgba) < 3:
+		return list(default)
+	return [round(c, 4) for c in rgba + [1.] * (4 - len(rgba))]
 
 
 # - Document ---------------------------------------------------------------
@@ -196,6 +222,11 @@ def machine_normalize(raw):
 		doc['options']['origin'] = 'BS'
 	adv = raw.get('advanced') or {}
 	doc['advanced'].update({k: adv[k] for k in ADVANCED_DEFAULTS if k in adv})
+	for key in FLAG_KEYS.values():
+		doc['advanced'][key] = norm_color(doc['advanced'][key], ADVANCED_DEFAULTS[key])
+	doc['advanced']['flag'] = bool(doc['advanced']['flag'])
+	doc['advanced']['log'] = bool(doc['advanced']['log'])
+	doc['advanced']['log_dir'] = str(doc['advanced']['log_dir'] or '')
 	doc['masters'] = [{'name': str(m.get('name'))} for m in raw.get('masters', []) or []
 	                  if isinstance(m, dict) and m.get('name')]
 	for ax in raw.get('axes', []) or []:
@@ -371,3 +402,89 @@ def machine_dump(doc):
 	ordered = {k: doc[k] for k in first if k in doc}
 	ordered.update({k: v for k, v in doc.items() if k not in ordered})
 	return json.dumps(ordered, indent=2, ensure_ascii=False)
+
+
+# - Bake log ---------------------------------------------------------------
+def worst_status(a, b):
+	'''The worse of two glyph statuses (STATUSES order; None = not set).'''
+	if a is None:
+		return b
+	return a if STATUSES.index(a) >= STATUSES.index(b or 'done') else b
+
+
+def log_file_name(family, stamp):
+	'''<Family>-delta-machine-<YYYYMMDD-HHMMSS>.log; stamp: a datetime.'''
+	safe = ''.join(c for c in (family or 'font') if c.isalnum() or c in '-_') or 'font'
+	return '%s-delta-machine-%s.log' % (safe, stamp.strftime('%Y%m%d-%H%M%S'))
+
+
+def _wrapped(names, width=96, indent='  '):
+	lines, line = [], ''
+	for name in names:
+		if line and len(line) + 1 + len(name) > width:
+			lines.append(indent + line)
+			line = name
+		else:
+			line = (line + ' ' + name) if line else name
+	if line:
+		lines.append(indent + line)
+	return lines
+
+
+def machine_log(doc, run):
+	'''Text of a bake log. run (the engine fills it):
+		started (str), seconds (float), font {'family', 'version', 'file'},
+		app (str), jobs [{'layer', 'glyphs', 'composites'}],
+		glyphs {name: {'status', 'notes': [str]}} in bake order,
+		warnings [str] (not tied to one glyph), summary (str).'''
+	font = run.get('font') or {}
+	glyphs = run.get('glyphs') or {}
+	by_status = {s: [n for n, g in glyphs.items() if g['status'] == s] for s in STATUSES}
+	opts = doc.get('options', OPTION_DEFAULTS)
+	out = ['%s %s — bake log' % (TOOL, VERSION), '',
+	       'Date:     %s (%.1f s)' % (run.get('started', ''), run.get('seconds', 0.)),
+	       'Font:     %s %s%s' % (font.get('family') or '(no family name)', font.get('version', ''),
+	                              ' (%s)' % font['file'] if font.get('file') else ' (not saved)')]
+	if run.get('app'):
+		out.append('App:      %s' % run['app'])
+	out.append('Options:  extrapolate %s, selected only %s, skip composites %s' % (
+		'on' if opts.get('extrapolate', True) else 'off', 'on' if opts.get('selection_only') else 'off',
+		'on' if opts.get('skip_composites', True) else 'off'))
+
+	out += ['', 'Setup']
+	for ax in doc.get('axes', []):
+		out.append('  Axis "%s": inputs %s' % (ax['name'], ', '.join(
+			'%s (V %s / H %s)' % (r['name'], '%g' % _num(r['vstem'], 0.), '%g' % _num(r['hstem'], 0.)) for r in ax['inputs'])
+			or 'none'))
+		for t in ax['targets']:
+			out.append('    %s / %s: V %g, H %g, width %s, height %s, origin %s%s%s' % (
+				t['layer'], t['group'] or SELECTION_LABEL, _num(t['vstem'], 0.), _num(t['hstem'], 0.),
+				format_dimension(t['width']), format_dimension(t['height']),
+				dict(ORIGIN_LABELS).get(t.get('origin', 'BS'), t.get('origin', 'BS')),
+				'' if t['anchors'] else ', no anchors', '' if t['metrics'] else ', no metrics'))
+
+	out += ['', 'Jobs']
+	for i, job in enumerate(run.get('jobs', [])):
+		out.append('  %d/%d %s: %d glyph(s)%s' % (i + 1, len(run['jobs']), job['layer'], job['glyphs'],
+		                                         ', %d composite(s)' % job['composites'] if job.get('composites') else ''))
+	if not run.get('jobs'):
+		out.append('  none')
+
+	out += ['', 'Result: %d glyph(s): %d done, %d with warnings, %d failed' % (
+		len(glyphs), len(by_status['done']), len(by_status['warning']), len(by_status['failed']))]
+	if run.get('summary'):
+		out.append('  ' + run['summary'])
+	for status in ('failed', 'warning'):
+		if by_status[status]:
+			out += ['', '%s (%d)' % (STATUS_LABELS[status], len(by_status[status]))]
+			for name in by_status[status]:
+				notes = glyphs[name]['notes'] or ['(no reason given)']
+				out.append('  %s: %s' % (name, notes[0]))
+				out.extend('  %s  %s' % (' ' * len(name), n) for n in notes[1:])
+	if by_status['done']:
+		out += ['', '%s (%d)' % (STATUS_LABELS['done'], len(by_status['done']))]
+		out += _wrapped(by_status['done'])
+	if run.get('warnings'):
+		out += ['', 'Other warnings (%d)' % len(run['warnings'])]
+		out += ['  ' + w for w in run['warnings']]
+	return '\n'.join(out) + '\n'

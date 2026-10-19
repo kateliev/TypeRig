@@ -293,6 +293,31 @@ class GlyphsDeltaHost(object):
 		from GlyphsApp import Glyphs
 		Glyphs.redraw()
 
+	def app_info(self):
+		'''"Glyphs <version> (<build>)" for logs.'''
+		from GlyphsApp import Glyphs
+		return 'Glyphs {} ({})'.format(getattr(Glyphs, 'versionString', '?'), getattr(Glyphs, 'buildNumber', '?'))
+
+	# Glyphs' label colours (glyph.color index 0..11), for hosts without
+	# custom glyph colours: the nearest one is used
+	LABEL_RGB = ((0.97, 0.29, 0.25), (1.0, 0.58, 0.2), (0.6, 0.4, 0.2), (1.0, 0.85, 0.15),
+	             (0.55, 0.9, 0.35), (0.2, 0.6, 0.25), (0.5, 0.8, 1.0), (0.15, 0.4, 0.9),
+	             (0.6, 0.35, 0.85), (0.95, 0.35, 0.75), (0.75, 0.75, 0.75), (0.35, 0.35, 0.35))
+
+	def flag_glyph(self, glyph, rgba):
+		'''Colour a glyph (Font view label) with rgba in 0..1: a custom
+		colour (glyph.colorObject, Glyphs 3+), else the nearest label colour.'''
+		r, g, b, a = (list(rgba) + [1.])[:4]
+		try:
+			from AppKit import NSColor
+			glyph.colorObject = NSColor.colorWithDeviceRed_green_blue_alpha_(r, g, b, a)
+			return
+		except Exception:
+			pass
+		near = min(range(len(self.LABEL_RGB)),
+		           key=lambda i: sum((x - y) ** 2 for x, y in zip(self.LABEL_RGB[i], (r, g, b))))
+		glyph.color = near
+
 	# - Design space (Designspace tab) ---------------------------------------------
 	# Glyphs 3.2+ keeps master coordinates in internalAxesValues (design) /
 	# externalAxesValues (user), keyed by axis.axisId; earlier versions in

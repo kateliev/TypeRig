@@ -97,6 +97,12 @@ ADVANCED = SimpleNamespace(
 	FIELD_W = 220,      # popups / fields
 	NOTES_H = 120,      # notes text box
 	NOTE_H  = 34,       # two-line explanation above the form
+	# Glyph flags / Log sections above the mock-up form
+	CHECK_W = 190,      # section check boxes ('Flag processed glyphs')
+	SWATCH_LABEL_W = 70,   # 'Done:' / 'Warnings:' / 'Failed:' before a colour well
+	COLOR   = SimpleNamespace(STYLE=None, W=44, H=24),   # vanilla.ColorWell (add_entry preset; it has no sizeStyle)
+	PATH    = SimpleNamespace(STYLE='small', W=420, H=None),   # log folder (TextBox, truncated in the middle)
+	SECTION_GAP = 10,   # extra space above a section title
 )
 
 # - Colours ----------------------------------------------------------------
