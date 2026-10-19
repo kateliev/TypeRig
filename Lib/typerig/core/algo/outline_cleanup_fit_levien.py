@@ -228,7 +228,10 @@ def fit_run(segs: list[Seg], tol: float, eps_point: float = .5, eps_handle: floa
 
 	cands = []
 	for d1 in _roots(poly, D):
-		d0 = _peval(N, d1) / _peval(D, d1)
+		den = _peval(D, d1)
+		if abs(den) < DEN_EPS:
+			continue		# a sign change across D's pole, not a root: no handle length
+		d0 = _peval(N, d1) / den
 		if d0 <= 0. or d0 > D_MAX:
 			continue
 

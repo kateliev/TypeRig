@@ -45,8 +45,8 @@ def compensator(sf, cf, st0, st1):
 	    cf = 1  ->  stem' = st0 * sf   stems scale fully with the glyph
 	So cf=0 makes q exactly cancel the scale's effect on stroke weight.
 	'''
-	b = float(st1)/st0					# stem ratio between the two masters
 	try:
+		b = float(st1)/st0				# stem ratio between the two masters
 		# q = (sf^(cf-1) - b) / (1 - b). At cf=1 this is 1 (full comp);
 		# at cf=0 it is (1/sf - b)/(1-b) (stem-preserving).
 		q = float(sf**(cf - 1.) - b)/(1. - b)

@@ -409,6 +409,10 @@ class _Fixer(object):
 	def __init__(self, layer, plan, slope):
 		self.plan, self.slope = plan, slope
 		self.contours = dict(_contours_of(layer))
+		self.errors = []					# exceptions caught on the way (fallback chain)
+
+	def caught(self, where, e):
+		self.errors.append('%s: %s: %s' % (where, type(e).__name__, e))
 
 	def node(self, key):
 		return self.contours[key[:2]].data[key[2]]
@@ -449,11 +453,11 @@ class _Fixer(object):
 		# Exact: the piece with the extreme stays, the rest merges
 		if side == 'in':
 			kept, piece = A.solve_slice(t)
-			fit = _merge_fit([piece.tuple, B.tuple], tol)
+			fit = self.safe_fit(_merge_fit, 'exact merge', [piece.tuple, B.tuple], tol)
 			result = (kept.tuple, fit[0]) if fit else None
 		else:
 			piece, kept = B.solve_slice(t)
-			fit = _merge_fit([A.tuple, piece.tuple], tol)
+			fit = self.safe_fit(_merge_fit, 'exact merge', [A.tuple, piece.tuple], tol)
 			result = (fit[0], kept.tuple) if fit else None
 		if result is not None:
 			self.done(on, segs[k_in], segs[k_out], result)
@@ -470,12 +474,12 @@ class _Fixer(object):
 		def trial(u):
 			if side == 'out':
 				lo, hi = B.solve_slice(u)
-				left = _tangent_fit([A.tuple, lo.tuple], bound, t_end=vdir)
-				right = _tangent_fit([hi.tuple], bound, t_start=vdir)
+				left = self.safe_fit(_tangent_fit, 'balanced fit', [A.tuple, lo.tuple], bound, t_end=vdir)
+				right = self.safe_fit(_tangent_fit, 'balanced fit', [hi.tuple], bound, t_start=vdir)
 			else:
 				lo, hi = A.solve_slice(u)
-				left = _tangent_fit([lo.tuple], bound, t_end=vdir)
-				right = _tangent_fit([hi.tuple, B.tuple], bound, t_start=vdir)
+				left = self.safe_fit(_tangent_fit, 'balanced fit', [lo.tuple], bound, t_end=vdir)
+				right = self.safe_fit(_tangent_fit, 'balanced fit', [hi.tuple, B.tuple], bound, t_start=vdir)
 			if left is None or right is None:
 				return float('inf'), None
 			return max(left[1], right[1]), (left[0], right[0])
@@ -507,6 +511,15 @@ class _Fixer(object):
 			return None
 		self.done(on, segs[k_in], segs[k_out], best[1])
 		return 'balanced', best[0]
+
+	def safe_fit(self, fit, where, *args, **kwargs):
+		'''A curve fit; an exception counts as "no fit" (that sample or merge
+		is skipped, the next fallback takes over) and is recorded.'''
+		try:
+			return fit(*args, **kwargs)
+		except Exception as e:
+			self.caught(where, e)
+			return None
 
 	def done(self, on, seg_in, seg_out, result):
 		new_a, new_b = result
@@ -567,16 +580,19 @@ class _Fixer(object):
 		for k in self.plan['tension']:
 			if k in skip_segments:
 				continue
-			tension = _target_tension(self.plan, k, vstem)
-			if tension is None:
-				continue
 			seg = self.plan['segments'][k]
-			cubic = self.cubic(seg)
-			if _tension_of(cubic.tuple) is None:
-				continue						# baked curve straight / retracted: leave it
 			try:
+				tension = _target_tension(self.plan, k, vstem)
+				if tension is None:
+					continue
+				cubic = self.cubic(seg)
+				if _tension_of(cubic.tuple) is None:
+					continue					# baked curve straight / retracted: leave it
 				new = cubic.solve_hobby(tension).tuple
 			except (ZeroDivisionError, ValueError, OverflowError):
+				continue
+			except Exception as e:				# anything else: this curve keeps its handles
+				self.caught('tension', e)
 				continue
 			if not all(math.isfinite(v) for p in new for v in p):
 				continue
@@ -595,9 +611,16 @@ def lock_directions(layer, plan, slope, vstem=None):
 	slant line through the node (Y kept); horizontal: y = node y. A smooth
 	node with one locked handle turns its other handle in line (length
 	kept). Returns a report {'locked', 'drift', 'extremes', 'balanced',
-	'fit_error', 'fallbacks', 'tension'}.'''
+	'fit_error', 'fallbacks', 'tension', 'errors'}.
+
+	Fallback chain (nothing here stops a bake): a fit that raises is "no
+	fit" (balanced sample skipped / exact merge -> balanced search); an
+	extreme that raises keeps its node and gets the lock only (a fallback);
+	a curve whose tension raises keeps its handles. 'errors' lists what was
+	caught. _scale_layer goes one step further: if the whole fix raises, the
+	layer is plain Delta.'''
 	report = {'locked': 0, 'drift': 0., 'extremes': 0, 'balanced': 0,
-	          'fit_error': 0., 'fallbacks': 0, 'tension': 0}
+	          'fit_error': 0., 'fallbacks': 0, 'tension': 0, 'errors': []}
 	if not plan:
 		return report
 	if [(key, len(c.data)) for key, c in _contours_of(layer)] != plan['shape']:
@@ -607,8 +630,12 @@ def lock_directions(layer, plan, slope, vstem=None):
 	done, rebuilt = set(), set()
 	if plan.get('keep_extremes'):
 		for on, k_in, k_out in plan['extremes']:
-			res = fixer.extreme(on, k_in, k_out, plan.get('fit_tol', EXTREME_FIT_TOLERANCE),
-			                    plan.get('balanced', False))
+			try:
+				res = fixer.extreme(on, k_in, k_out, plan.get('fit_tol', EXTREME_FIT_TOLERANCE),
+				                    plan.get('balanced', False))
+			except Exception as e:				# this node: the lock only
+				fixer.caught('extreme %s' % (on,), e)
+				res = None
 			if res is None:
 				report['fallbacks'] += 1
 				continue
@@ -623,6 +650,7 @@ def lock_directions(layer, plan, slope, vstem=None):
 	if plan.get('keep_tension') and vstem is not None and plan.get('tension'):
 		on_rebuilt = plan.get('tension_on_rebuilt', TENSION_ON_REBUILT)
 		report['tension'] = fixer.tension(vstem, set() if on_rebuilt else rebuilt)
+	report['errors'] = fixer.errors
 	return report
 
 
@@ -658,12 +686,41 @@ def _scale_layer(base_layer, vaxis, stem, scale, italic_rad, extrapolate, lock=N
 			continue
 		_apply_array(new_layer, attrib, result)
 		if attrib == 'point_array' and lock:
-			fix = lock_directions(new_layer, lock, italic_rad, stem[0])
+			before = [(node.x, node.y) for node in new_layer.nodes]
+			try:
+				fix = lock_directions(new_layer, lock, italic_rad, stem[0])
+			except Exception as e:				# last fallback: plain Delta for this layer
+				for node, (x, y) in zip(new_layer.nodes, before):
+					node.x, node.y = x, y
+				fix = {'fix_failed': 1, 'errors': ['italic fix: %s: %s' % (type(e).__name__, e)]}
 			if report is not None:
-				for key, value in fix.items():
-					worst = key in ('drift', 'fit_error')
-					report[key] = max(report.get(key, 0.), value) if worst else report.get(key, 0) + value
+				_merge_fix_report(report, fix)
 	return new_layer
+
+
+def _merge_fix_report(report, fix):
+	'''Add a lock_directions report into report: counts summed, drift /
+	fit_error the worst, errors appended.'''
+	for key, value in fix.items():
+		if key == 'errors':
+			report.setdefault('errors', []).extend(value)
+		elif key in ('drift', 'fit_error'):
+			report[key] = max(report.get(key, 0.), value)
+		else:
+			report[key] = report.get(key, 0) + value
+
+
+def fix_warning(report):
+	'''One line for a bake report whose italic fix fell back on an error,
+	or None. Fallbacks without an error (no fit within tolerance) are
+	normal and not reported here.'''
+	errors = report.get('errors') or []
+	if not errors:
+		return None
+	more = ' (+%d more)' % (len(errors) - 1) if len(errors) > 1 else ''
+	if report.get('fix_failed'):
+		return 'italic fix failed, plain Delta used: %s%s' % (errors[0], more)
+	return 'italic fix fell back (lock only where it failed): %s%s' % (errors[0], more)
 
 
 def _place_in_metrics(layer, ghost, slope):
@@ -722,8 +779,12 @@ def _bake_target_stems(base_layer, vaxis, target, italic_rad,
 		new_layer.shift(dx, dy)
 
 	if msx is not None:
+		ghost_report = {}
 		ghost = _scale_layer(base_layer, vaxis, stem, (msx / 100., scale[1]),
-		                     italic_rad, extrapolate, lock)
+		                     italic_rad, extrapolate, lock, ghost_report)
+		if report is not None and ghost_report.get('errors'):
+			report.setdefault('errors', []).extend('metrics ' + e for e in ghost_report['errors'])
+			report['fix_failed'] = report.get('fix_failed', 0) + ghost_report.get('fix_failed', 0)
 		if dy:
 			ghost.shift(0., dy)
 		_place_in_metrics(new_layer, ghost, italic_rad if measure_slope is None else measure_slope)
@@ -1223,9 +1284,12 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 				pass
 
 			targets_baked += 1
-			for key in ('locked', 'extremes', 'balanced', 'fallbacks', 'tension'):
+			for key in ('locked', 'extremes', 'balanced', 'fallbacks', 'tension', 'fix_failed'):
 				if lock_report.get(key):
 					entry[key] = lock_report[key]
+			why = fix_warning(lock_report)
+			if why:
+				warnings.append('Axis "%s" / target "%s": %s' % (axis_name, t_name, why))
 			for key in ('drift', 'fit_error'):
 				if lock_report.get(key):
 					entry[key] = round(lock_report[key], 2)
