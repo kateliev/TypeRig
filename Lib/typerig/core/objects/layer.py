@@ -179,6 +179,19 @@ class Layer(Container, XMLSerializable):
 		delta = value - self.RSB
 		self.ADV += delta
 
+	def italic_sidebearings(self, slope=0., pivot_y=0., tight=True):
+		'''(LSB, RSB) of the outline de-slanted by slope (dx per dy, tan of
+		the italic angle) about the line y = pivot_y, as Glyphs shows them
+		for an italic angle (pivot: half x-height). slope 0: plain bounds.
+		tight: curve extremes (as Glyphs); else the control box (LSB / RSB).'''
+		layer = self
+		if slope:
+			layer = self.clone()
+			for node in layer.nodes:
+				node.x -= (node.y - pivot_y) * slope
+		layer_bounds = layer.tight_bounds if tight else layer.bounds
+		return layer_bounds.x, self.ADV - (layer_bounds.x + layer_bounds.width)
+
 	@property
 	def BSB(self):
 		'''Layer's Bottom sidebearing'''

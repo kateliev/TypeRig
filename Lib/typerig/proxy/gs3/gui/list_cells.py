@@ -6,7 +6,8 @@
 # into fixed-frame windows (the TR Panel list collapse of 2026-10-18, see
 # tint_list.py). TRTintList ships read-only frame-based cells (TRTextCell,
 # TRImageCell); these are the editable ones, same build:
-#   TREditCell  — editable text (alignment left / center / right)
+#   TREditCell  — editable text (alignment left / center / right); off=<text>:
+#                 a row whose value is that text shows it grey, not editable
 #   TRCheckCell — check box, centred; enabled=False greys it out
 #   TRPopUpCell — pop-up menu (items = titles); the value is the title
 #
@@ -59,8 +60,10 @@ class _Cell(object):
 
 
 class TREditCell(_Cell):
-	'''Editable text cell; commits on Return / Tab / focus loss.'''
-	def __init__(self, editable=False, callback=None, alignment='left', **kwargs):
+	'''Editable text cell; commits on Return / Tab / focus loss. off: the
+	value that marks a row whose cell is off (shown grey, not editable;
+	e.g. Delta Machine Met. W while Met. is off).'''
+	def __init__(self, editable=False, callback=None, alignment='left', off=None, **kwargs):
 		field = AppKit.NSTextField.alloc().initWithFrame_(((0, 0), (TL.CELL_W, 0)))
 		field.setBezeled_(False)
 		field.setBordered_(False)
@@ -77,10 +80,17 @@ class TREditCell(_Cell):
 		field.setAutoresizingMask_(_FLEX_W | _FLEX_TB)
 		view.addSubview_(field)
 		self._nsObject, self._field = view, field
+		self._editable, self._off = bool(editable), off
 		self._wire(field, callback if editable else None)
 
 	def set(self, value):
-		self._field.setStringValue_('' if value is None else str(value))
+		text = '' if value is None else str(value)
+		if self._off is not None:
+			on = text != self._off
+			self._field.setEditable_(self._editable and on)
+			self._field.setSelectable_(self._editable and on)
+			self._field.setTextColor_(AppKit.NSColor.labelColor() if on else AppKit.NSColor.tertiaryLabelColor())
+		self._field.setStringValue_(text)
 
 	def get(self):
 		return self._field.stringValue()

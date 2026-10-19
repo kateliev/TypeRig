@@ -30,12 +30,14 @@ from typerig.core.actions import designspace_actions as dsa
 
 # - Init -------------------------------------------------------------------
 TOOL       = 'TypeRig Delta Machine'
-VERSION    = '0.3'
-FORMAT     = 2				# 2 (v0.3): advanced.italic_fix; advanced.italic / italic_angle used. 1 reads as 2 (fix off)
+VERSION    = '0.4'
+FORMAT     = 3				# 3 (v0.4): flag_* are Glyphs label colour indexes (1 / 2: RGBA -> nearest label);
+							# optional target 'msx'. 2 (v0.3): advanced.italic_fix. 1 reads as 3 (fix off)
 LIB_KEY    = 'com.typerig.delta.machine.setup'		# font lib; the panel keys are in core/base/lib_keys.py
 SELECTION  = ''				# group of a row that works on the selected glyphs
 SELECTION_LABEL = 'Selection'
 UNITS      = ('%', 'u')		# percent of the base input, font units
+METRICS_SCALE_OFF = '—'		# Met. W cell of a row with Met. off (shown grey, not editable)
 ORIGINS    = ('BS', 'BL', 'BM', 'BR', 'LM', 'CE', 'RM', 'TL', 'TM', 'TR')
 ORIGIN_LABELS = (		# (code, label) — the per-row Origin popup
 	('BS', 'Baseline'), ('BL', 'Bottom left'), ('BM', 'Bottom middle'), ('BR', 'Bottom right'),
@@ -60,16 +62,26 @@ STATUS_LABELS = {'done': 'Done', 'warning': 'Warnings', 'failed': 'Failed'}
 ITALIC_FIX_DEFAULTS = dict((k, dpa.DELTA_OPTION_DEFAULTS[k]) for k in dpa.ITALIC_FIX_KEYS)
 ITALIC_SOURCES = ('master', 'none', 'custom')
 
+# Glyphs' label colours (glyph.color index): (name, approximate RGB for the
+# swatches). Glyph flags use these only, so a flag is a colour the Font
+# view filter knows. Older documents stored RGBA: the nearest label is used.
+LABEL_COLORS = (
+	('Red', (0.96, 0.29, 0.25)), ('Orange', (1.00, 0.58, 0.20)), ('Brown', (0.62, 0.43, 0.24)),
+	('Yellow', (1.00, 0.85, 0.15)), ('Light green', (0.55, 0.90, 0.35)), ('Dark green', (0.20, 0.60, 0.25)),
+	('Light blue', (0.50, 0.80, 1.00)), ('Dark blue', (0.15, 0.40, 0.90)), ('Purple', (0.60, 0.35, 0.85)),
+	('Magenta', (0.95, 0.35, 0.75)), ('Light gray', (0.75, 0.75, 0.75)), ('Charcoal', (0.35, 0.35, 0.35)),
+)
+
 # Advanced tab. flag* / log* work since v0.2: glyphs are coloured by status
-# after a bake (RGBA 0..1), a text log is written to log_dir ('' = the
+# after a bake (a Glyphs label colour, format 3), a text log is written to log_dir ('' = the
 # font's folder). Since v0.3 (format 2) italic / italic_angle choose the
 # bake's italic angle and italic_fix holds the italic fix options. The
 # engine options (engine, interpolation, stems) are stored, not used yet.
 ADVANCED_DEFAULTS = {
 	'flag': False,				# colour the processed glyphs by status (overwrites their colour)
-	'flag_done': [0.20, 0.78, 0.35, 1.],		# green
-	'flag_warning': [1.00, 0.80, 0.00, 1.],		# yellow
-	'flag_failed': [1.00, 0.23, 0.19, 1.],		# red
+	'flag_done': 4,				# label colour index (LABEL_COLORS): light green
+	'flag_warning': 3,			# yellow
+	'flag_failed': 0,			# red
 	'log': False,				# write a log file per bake
 	'log_dir': '',				# folder of the log; '' = next to the font file
 	'engine': 'delta-scale',	# delta-scale | piecewise | adaptive
@@ -87,6 +99,7 @@ TARGET_DEFAULTS = {
 	'width': {'value': 100., 'unit': '%'}, 'height': {'value': 100., 'unit': '%'},
 	'origin': 'BS',				# transform origin of the row (BS = baseline, 0 / 0)
 	'anchors': True, 'metrics': True, 'kerning': False,
+	'msx': None,				# metrics scale, percent (Met. W); None = the metrics follow the outline
 }
 
 
@@ -122,15 +135,55 @@ def format_dimension(dim):
 	return '{:g} {}'.format(dim['value'], dim['unit'])
 
 
-def norm_color(value, default):
-	'''[r, g, b(, a)] in 0..1 -> [r, g, b, a] (4 decimals); else a copy of default.'''
+def parse_metrics_scale(value):
+	'''Met. W cell -> (ok, percent | None). '' / None -> (True, None):
+	the metrics follow the outline. '90', '90%', '90 %' -> (True, 90.).
+	Percent only: units ('600 u') and other text -> (False, None).
+	The sidebearings are the ones DM gives at this percent (core
+	delta_panel_actions, target 'msx'), never a numeric scale of LSB / RSB.'''
+	if value is None:
+		return True, None
+	if isinstance(value, (int, float)) and not isinstance(value, bool):
+		return True, float(value)
+	text = str(value).strip().replace(' ', '')
+	if not text:
+		return True, None
+	if text.endswith('%'):
+		text = text[:-1]
+	number = _num(text)
+	return (True, number) if number is not None else (False, None)
+
+
+def format_metrics_scale(msx):
+	'''percent | None -> '90 %' / ''.'''
+	return '' if msx is None else '{:g} %'.format(msx)
+
+
+def row_label(row):
+	'''Target row -> 'Small caps / Lowercase: 80 % / metrics 90 %' (bake
+	report: the rows with a metrics scale).'''
+	text = '%s / %s: %s x %s' % (row['layer'], row['group'] or SELECTION_LABEL,
+	                             format_dimension(row['width']), format_dimension(row['height']))
+	if row.get('metrics') and row.get('msx') is not None:
+		text += ' / metrics ' + format_metrics_scale(row['msx'])
+	return text
+
+
+def norm_label(value, default):
+	'''Glyph flag colour -> a label colour index (0..11, LABEL_COLORS).
+	An index passes; [r, g, b(, a)] in 0..1 (formats 1 / 2) -> the nearest
+	label; anything else -> default.'''
+	if isinstance(value, bool):
+		return default
+	if isinstance(value, (int, float)):
+		return int(value) if float(value) == int(value) and 0 <= value < len(LABEL_COLORS) else default
 	try:
-		rgba = [min(1., max(0., float(c))) for c in value][:4]
+		rgb = [min(1., max(0., float(c))) for c in value][:3]
 	except (TypeError, ValueError):
-		return list(default)
-	if len(rgba) < 3:
-		return list(default)
-	return [round(c, 4) for c in rgba + [1.] * (4 - len(rgba))]
+		return default
+	if len(rgb) < 3:
+		return default
+	return min(range(len(LABEL_COLORS)), key=lambda i: sum((a - b) ** 2 for a, b in zip(LABEL_COLORS[i][1], rgb)))
 
 
 # - Document ---------------------------------------------------------------
@@ -171,6 +224,8 @@ def norm_target(row, origin='BS'):
 	for key in ('anchors', 'metrics', 'kerning'):
 		if isinstance(row.get(key), bool):
 			out[key] = row[key]
+	ok, msx = parse_metrics_scale(row.get('msx'))		# older documents: none -> None
+	out['msx'] = msx if ok else None
 	return out
 
 
@@ -249,7 +304,7 @@ def machine_normalize(raw):
 		doc['advanced']['italic'] = 'master'
 	doc['advanced']['italic_angle'] = _num(doc['advanced']['italic_angle'], 0.)
 	for key in FLAG_KEYS.values():
-		doc['advanced'][key] = norm_color(doc['advanced'][key], ADVANCED_DEFAULTS[key])
+		doc['advanced'][key] = norm_label(doc['advanced'][key], ADVANCED_DEFAULTS[key])
 	doc['advanced']['flag'] = bool(doc['advanced']['flag'])
 	doc['advanced']['log'] = bool(doc['advanced']['log'])
 	doc['advanced']['log_dir'] = str(doc['advanced']['log_dir'] or '')
@@ -295,6 +350,8 @@ def machine_validate(doc):
 			for key in ('width', 'height'):
 				if t[key]['value'] <= 0:
 					errors.append('Axis "%s" / %s: %s must be > 0.' % (ax['name'], t['layer'], key))
+			if t.get('msx') is not None and t['msx'] <= 0:
+				errors.append('Axis "%s" / %s: metrics scale must be > 0.' % (ax['name'], t['layer']))
 	return errors
 
 
@@ -306,6 +363,8 @@ def target_to_core(row, scales=None):
 	core = {'name': row['layer'], 'vstem': float(row['vstem']), 'hstem': float(row['hstem']),
 	        'anchors': bool(row['anchors']), 'metrics': bool(row['metrics']),
 	        'origin': row.get('origin', 'BS'), 'color': ''}
+	if row.get('msx') is not None:
+		core['msx'] = float(row['msx'])		# a fixed percent, also after the reference pass
 	if scales is not None:
 		core.update(mode='stems', sx=float(scales[0]), sy=float(scales[1]))
 		return core
@@ -524,7 +583,9 @@ def machine_log(doc, run):
 				t['layer'], t['group'] or SELECTION_LABEL, _num(t['vstem'], 0.), _num(t['hstem'], 0.),
 				format_dimension(t['width']), format_dimension(t['height']),
 				dict(ORIGIN_LABELS).get(t.get('origin', 'BS'), t.get('origin', 'BS')),
-				'' if t['anchors'] else ', no anchors', '' if t['metrics'] else ', no metrics'))
+				'' if t['anchors'] else ', no anchors',
+				', metrics %s' % format_metrics_scale(t['msx']) if t['metrics'] and t.get('msx') is not None
+				else '' if t['metrics'] else ', no metrics'))
 
 	out += ['', 'Jobs']
 	for i, job in enumerate(run.get('jobs', [])):

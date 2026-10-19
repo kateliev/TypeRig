@@ -25,6 +25,10 @@
 #                   # any target may add 'metrics' / 'anchors': bool
 #                   # (default: the option of the same name); stems and
 #                   # mixed targets may add 'origin' (default: options)
+#                   # and 'msx': metrics scale in percent (None / missing:
+#                   # the metrics follow the outline). The sidebearings
+#                   # come from a DM bake at (msx, sy), the outline is
+#                   # placed in them; the origin then works on Y only
 #                   # stems-mode target
 #                   {'mode': 'stems', 'name': str,
 #                    'vstem': float, 'hstem': float,
@@ -638,22 +642,12 @@ def _italic_plan(input_layers, slope, opts, live=False):
 	return plan
 
 
-def _bake_target_stems(base_layer, vaxis, target, italic_rad,
-                       extrapolate, global_origin, source_bounds, lock=None, report=None):
-	'''Stems-mode: drive DeltaScale.scale_by_stem for every viable
-	attribute, write into a clone of base_layer, realign to chosen
-	origin (skip when origin is BASELINE — that's scale_by_stem's native
-	reference). lock: an _italic_plan; when given, the italic fix runs on
-	the baked layer (lock_directions, switched by the plan's
-	'keep_extremes' / 'keep_tension' / 'balanced'). report: optional dict,
-	gets the summed lock_directions report.
-	'''
+def _scale_layer(base_layer, vaxis, stem, scale, italic_rad, extrapolate, lock=None, report=None):
+	'''Clone of base_layer with every attribute of vaxis driven by
+	DeltaScale.scale_by_stem at stem / scale (factors). lock: an
+	_italic_plan, run on the baked outline (lock_directions); report:
+	optional dict, gets the summed lock_directions report.'''
 	new_layer = base_layer.clone()
-
-	stem = (float(target['vstem']), float(target['hstem']))
-	scale = (float(target.get('sx', 100.0)) / 100.0,
-	         float(target.get('sy', 100.0)) / 100.0)
-
 	for attrib, delta_scale in vaxis.items():
 		try:
 			result = list(delta_scale.scale_by_stem(
@@ -669,15 +663,70 @@ def _bake_target_stems(base_layer, vaxis, target, italic_rad,
 				for key, value in fix.items():
 					worst = key in ('drift', 'fit_error')
 					report[key] = max(report.get(key, 0.), value) if worst else report.get(key, 0) + value
+	return new_layer
 
+
+def _place_in_metrics(layer, ghost, slope):
+	'''Metrics scale (target 'msx'): shift layer (outline + anchors) so
+	its LSB is the ghost's, and set its advance so its RSB is the ghost's.
+	Both are measured the same way (italic_sidebearings, de-slanted by
+	slope); the pivot cancels out, so none is needed.'''
+	lsb_m, rsb_m = ghost.italic_sidebearings(slope)
+	lsb, _rsb = layer.italic_sidebearings(slope)
+	layer.shift(lsb_m - lsb, 0.)
+	layer.ADV += rsb_m - layer.italic_sidebearings(slope)[1]
+
+
+def _bake_target_stems(base_layer, vaxis, target, italic_rad,
+                       extrapolate, global_origin, source_bounds, lock=None, report=None,
+                       measure_slope=None):
+	'''Stems-mode: drive DeltaScale.scale_by_stem for every viable
+	attribute, write into a clone of base_layer, realign to chosen
+	origin (skip when origin is BASELINE — that's scale_by_stem's native
+	reference). lock: an _italic_plan; when given, the italic fix runs on
+	the baked layer (lock_directions, switched by the plan's
+	'keep_extremes' / 'keep_tension' / 'balanced'). report: optional dict,
+	gets the summed lock_directions report.
+
+	Metrics scale: a target with 'msx' (percent, needs 'metric_array' in
+	vaxis) gets its sidebearings from a "ghost" bake at (msx, sy), same
+	stems (same interpolation time) and same sy as the outline; the
+	outline at (sx, sy) is placed in them (_place_in_metrics). The origin
+	then works on the vertical only. Never scale LSB / RSB numerically
+	next to a DM outline: DM is not affine, so the error differs per
+	glyph (TypeRig-Glyphs Handouts/delta_metrics_scale_handout.md).
+	measure_slope: de-slant slope of the sidebearing measure (default
+	italic_rad).
+	'''
+	stem = (float(target['vstem']), float(target['hstem']))
+	scale = (float(target.get('sx', 100.0)) / 100.0,
+	         float(target.get('sy', 100.0)) / 100.0)
+	msx = _to_float(target.get('msx'))
+	if 'metric_array' not in vaxis:
+		msx = None
+
+	new_layer = _scale_layer(base_layer, vaxis, stem, scale, italic_rad, extrapolate, lock, report)
+
+	dx = dy = 0.
 	if global_origin is not None and global_origin != TransformOrigin.BASELINE:
 		try:
 			sx0, sy0 = source_bounds.align_matrix[global_origin.code]
 			dest_bounds = new_layer.bounds
 			dx0, dy0 = dest_bounds.align_matrix[global_origin.code]
-			new_layer.shift(sx0 - dx0, sy0 - dy0)
+			dx, dy = sx0 - dx0, sy0 - dy0
 		except Exception:
 			pass
+	if msx is not None:
+		dx = 0.								# horizontal: from the metrics
+	if dx or dy:
+		new_layer.shift(dx, dy)
+
+	if msx is not None:
+		ghost = _scale_layer(base_layer, vaxis, stem, (msx / 100., scale[1]),
+		                     italic_rad, extrapolate, lock)
+		if dy:
+			ghost.shift(0., dy)
+		_place_in_metrics(new_layer, ghost, italic_rad if measure_slope is None else measure_slope)
 
 	return new_layer
 
@@ -741,15 +790,17 @@ def _mixed_scale(vaxis, target, italic_rad, extrapolate):
 
 
 def _bake_target_mixed(base_layer, vaxis, target, italic_rad,
-                       extrapolate, global_origin, source_bounds, lock=None, report=None):
+                       extrapolate, global_origin, source_bounds, lock=None, report=None,
+                       measure_slope=None):
 	'''Mixed-mode: target stems (like stems mode) with width and / or
 	height in units. The units axes are solved first, then the target is
 	baked as stems mode with the solved percentages. Unlike dimensions
-	mode, the target stems are used. Returns (layer, converged, scales).'''
+	mode, the target stems are used. A metrics scale ('msx') stays a fixed
+	percent. Returns (layer, converged, scales).'''
 	scales, ok, _res = _mixed_scale(vaxis, target, italic_rad, extrapolate)
 	as_stems = dict(target, sx=scales[0], sy=scales[1])
 	layer = _bake_target_stems(base_layer, vaxis, as_stems, italic_rad,
-	                           extrapolate, global_origin, source_bounds, lock, report)
+	                           extrapolate, global_origin, source_bounds, lock, report, measure_slope)
 	return layer, ok, scales
 
 
@@ -870,6 +921,8 @@ def _norm_target(t):
 		origin = t.get('origin', 'BL')
 		out.update(w=_to_float(t.get('w'), 600.), h=_to_float(t.get('h'), 700.),
 		           origin=origin if origin in _ORIGIN_FROM_CODE else 'BL')
+	if _to_float(t.get('msx')) is not None:
+		out['msx'] = float(t['msx'])		# metrics scale, percent (Delta Machine); bake: stems / mixed only
 	# Keep the other mode's numbers when a host stores both (Glyphs toggles
 	# a row between stems and units without losing them); bake ignores them.
 	for key in ('vstem', 'hstem', 'sx', 'sy', 'w', 'h'):
@@ -1070,6 +1123,7 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 
 	opts = setup.get('options', {}) or {}
 	italic_rad = _italic_slope(opts)		# the engine's slope argument (see _italic_slope)
+	measure_slope = math.tan(math.radians(-float(opts.get('italic_angle', 0.) or 0.)))	# sidebearings as Glyphs shows them
 	extrapolate = bool(opts.get('extrapolate', True))
 	global_origin = _origin_of(opts)
 	requested = _requested_attribs(opts, axes)
@@ -1105,17 +1159,33 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 			lock_report = {}
 			# A stems / mixed target may carry its own origin (Delta Machine rows)
 			origin = _ORIGIN_FROM_CODE.get(target.get('origin'), global_origin)
+			metrics_on = target.get('metrics', opts.get('metrics', True))
+			msx = _to_float(target.get('msx'))
+			if msx is not None:
+				why = None
+				if mode == 'dimensions':
+					why = 'not supported in dimensions mode'
+				elif msx <= 0:
+					why = 'must be > 0'
+				elif metrics_on and 'metric_array' not in viable:
+					why = 'no usable metrics'
+				if why:
+					warnings.append('Axis "%s" / target "%s": metrics scale ignored (%s).'
+						% (axis_name, t_name, why))
+				if why or not metrics_on:		# metrics off: the row keeps its own metrics
+					msx = None
+				target = dict(target, msx=msx)
 			try:
 				if mode == 'stems':
 					new_layer = _bake_target_stems(
 						base_layer, vaxis, target,
 						italic_rad, extrapolate,
-						origin, source_bounds, lock, lock_report)
+						origin, source_bounds, lock, lock_report, measure_slope)
 				elif mode == 'mixed':
 					new_layer, converged, scales = _bake_target_mixed(
 						base_layer, vaxis, target,
 						italic_rad, extrapolate,
-						origin, source_bounds, lock, lock_report)
+						origin, source_bounds, lock, lock_report, measure_slope)
 					entry['scales'] = list(scales)
 					if not converged:
 						warnings.append('Axis "%s" / target "%s": size not reached.'
@@ -1128,8 +1198,10 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 					% (axis_name, t_name, e))
 				continue
 
+			if msx is not None:
+				entry['msx'] = msx
 			t_viable = [a for a in viable
-			            if not (a == 'metric_array' and not target.get('metrics', opts.get('metrics', True)))
+			            if not (a == 'metric_array' and not metrics_on)
 			            and not (a == 'anchor_array' and not target.get('anchors', opts.get('anchors', True)))]
 
 			new_layer.name = t_name

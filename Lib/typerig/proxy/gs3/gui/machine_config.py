@@ -24,7 +24,7 @@ from .config import HOST_MAJOR, _LIST_ROW_H, _LIST_HEADER_H
 # Resizable both ways: the lists stretch, the columns keep COLUMNS.SPLIT.
 # The default height comes from the tab content at LIST.ROWS rows.
 _WIN_GS3 = SimpleNamespace(
-	W           = 1340,   # default window width: the targets table fits without scrolling (Layer ~150 px)
+	W           = 1400,   # default window width: the targets table fits without scrolling (Layer ~150 px; 1340 before Met. W)
 	MIN_W       = 1100,   # the service row and the left column's button bar do not reflow
 	TABS_TOP    = 8,      # tab view inset from the window top
 	TABS_CHROME = 30,     # tab view height beyond its item view (tab bar + frame; macOS 26)
@@ -34,7 +34,7 @@ _WIN_GS3 = SimpleNamespace(
 	PROGRESS_GAP = 6,     # progress bar to status line
 )
 _WIN_GS4 = SimpleNamespace(
-	W           = 1340,
+	W           = 1400,
 	MIN_W       = 1100,
 	TABS_TOP    = 10,
 	TABS_CHROME = 30,
@@ -66,6 +66,7 @@ COLUMNS = SimpleNamespace(
 	DIM     = 60,       # Width / Height ('60 %', '700 u')
 	GROUP   = 100,      # Group name (targets)
 	CHECK   = 38,       # Anchors / Metrics / Kerning check boxes
+	MSX     = 48,       # Met. W: metrics scale ('90 %', '—' while Met. is off)
 	RESULT  = 64,       # last bake of a row: '12/14 +3c'
 	ORIGIN  = 108,      # transform origin popup of a row ('Bottom middle')
 	LAYER_MIN = 100,    # target layer name: never narrower (the table scrolls instead)
@@ -92,22 +93,25 @@ SERVICE = SimpleNamespace(
 )
 
 # - Advanced tab ---------------------------------------------------------
+# Sections (Glyph flags, Log, Italic, Engine) one under the other in two
+# columns: what does not fit in the first column goes to the second; when
+# both are full the tab scrolls. Every option is on its own row.
 ADVANCED = SimpleNamespace(
-	LABEL_W = 150,      # form label column
+	LABEL_W = 150,      # Engine form label column
 	FIELD_W = 220,      # popups / fields
-	NOTES_H = 120,      # notes text box
-	NOTE_H  = 34,       # two-line explanation above the form
-	# Glyph flags / Log sections above the mock-up form
+	NOTES_H = 120,      # notes text box: smallest height (it takes the rest of its column)
+	NOTE_H  = 34,       # two-line explanation above the Engine form
 	CHECK_W = 190,      # section check boxes ('Flag processed glyphs')
-	SWATCH_LABEL_W = 70,   # 'Done:' / 'Warnings:' / 'Failed:' before a colour well
-	COLOR   = SimpleNamespace(STYLE=None, W=44, H=24),   # vanilla.ColorWell (add_entry preset; it has no sizeStyle)
-	PATH    = SimpleNamespace(STYLE='small', W=420, H=None),   # log folder (TextBox, truncated in the middle)
-	SECTION_GAP = 10,   # extra space above a section title
-	# Italic block (v0.3): beside the Engine mock-up form, from its title down
-	ITALIC_X       = 560,  # left edge of the block (the Engine form and the notes end before it)
+	SWATCH_LABEL_W = 70,   # 'Done:' / 'Warnings:' / 'Failed:' before a label colour popup; 'Folder:'
+	LABEL_POP = SimpleNamespace(STYLE='small', W=150, H=None),  # Glyphs label colour popup (swatch + name)
+	PATH    = SimpleNamespace(STYLE='small', W=120, H=None),   # log folder: W = narrowest; as wide as its text
+	PATH_PAD = 8,       # log folder text: room past the measured text (field insets)
+	LOG_BTN_W = 70,     # log text buttons before they are sized to their titles
+	SECTION_GAP = 14,   # space between two sections of a column
+	COL_GAP     = 48,   # space between the two columns
+	COL_MIN_W   = 440,  # a column is never narrower (the tab is ~1000 wide at the smallest window)
+	BUILD_H     = 1000, # provisional section height while building (rows are pinned to the top)
 	ITALIC_LABEL_W = 110,  # 'Italic angle:' and number captions
-	ITALIC_COLUMNS = 2,    # italic fix check boxes per row
-	ITALIC_CHECK_W = 200,  # one check box column
 )
 
 # - Colours ----------------------------------------------------------------
