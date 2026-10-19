@@ -67,7 +67,9 @@ uv run publish.py
 Authenticate with `UV_PUBLISH_TOKEN` in the environment, or use uv's trusted
 publishing inside GitHub Actions. Tokens are never command-line arguments.
 Use `--test-pypi` with a TestPyPI token to test that separate registry.
-PyPI credentials need upload permission for the existing `typerig` project.
+For first publication, configure a pending trusted publisher; if `typerig`
+already exists, arrange project access. [PYPI.md](PYPI.md) gives Vassil the
+complete Windows setup, including both cases.
 
 Publishing requires an exact stable tag at HEAD and the same tag on origin.
 It downloads just that release's wheel and sdist into a temporary directory,
@@ -101,7 +103,9 @@ The CLI enforces canonical semver after GitHub's broader tag filter.
 Manual workflow dispatch can resume an existing tag. Runs for a tag are
 serialized, and published release assets are reused rather than rebuilt for PyPI.
 
-Configure one publishing authentication method before pushing the first tag:
+Follow [PYPI.md](PYPI.md) before pushing the first tag. It covers the pending
+publisher needed for a new PyPI project and the existing-project alternative.
+Configure one publishing authentication method:
 
 - Preferred: add a PyPI trusted publisher for repository `kateliev/TypeRig`,
   workflow `release.yml`, environment `pypi`, owned by the GitHub account

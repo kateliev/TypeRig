@@ -31,6 +31,7 @@ def package_repo(repo):
         "LICENSE",
         "DEPENDENCIES.md",
         "RELEASING.md",
+        "PYPI.md",
         "release.py",
         "publish.py",
         "_release.py",

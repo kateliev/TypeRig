@@ -34,7 +34,7 @@ exclude = ["**/__pycache__", "**/*.pyc", "**/.DS_Store", "**/.claude"]
 packages = ["Lib/typerig"]
 
 [tool.hatch.build.targets.sdist]
-only-include = ["Lib/typerig", "pyproject.toml", "README.md", "LICENSE", "DEPENDENCIES.md", "RELEASING.md", "release.py", "publish.py", "_release.py", "_github.py", "_artifacts.py", "tests"]
+only-include = ["Lib/typerig", "pyproject.toml", "README.md", "LICENSE", "DEPENDENCIES.md", "RELEASING.md", "PYPI.md", "release.py", "publish.py", "_release.py", "_github.py", "_artifacts.py", "tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -13,7 +13,7 @@ python -m pip install .
 ```
 
 For development, use `python -m pip install -e .` instead. Release versions come
-from Git tags via `hatch-vcs`; see [releasing and publishing](RELEASING.md).
+from Git tags via `hatch-vcs`; see [releases](RELEASING.md) and [PyPI setup](PYPI.md).
 
 This installs the `typerig` package from `Lib/`, including its bundled resources,
 and the `fonttools` dependency used by font file I/O. For example:
