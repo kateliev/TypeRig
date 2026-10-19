@@ -1157,6 +1157,106 @@ def _requested_attribs(opts, axes):
 	return requested
 
 
+# - Diagnosis -------------------------------------------------------
+# Why a glyph cannot be baked, in detail: the bake's own warnings say
+# "empty input layers" or "no usable point_array"; these lines say which
+# layer, what it holds and where the inputs stop matching.
+def _layer_summary(layer):
+	'''"3 contours, 36 nodes (12/12/12), 2 components, anchors top, bottom".'''
+	contours = layer.contours
+	comps = [s for s in layer.shapes if getattr(s, 'is_component', False)]
+	text = '%d contour(s), %d node(s)' % (len(contours), sum(len(c.nodes) for c in contours))
+	if contours and len(contours) <= 12:
+		text += ' (%s)' % '/'.join(str(len(c.nodes)) for c in contours)
+	if comps:
+		text += ', %d component(s) %s' % (len(comps), ', '.join(str(getattr(s, 'component', '?')) for s in comps))
+	anchors = [a.name for a in layer.anchors]
+	text += ', anchors %s' % (', '.join(anchors) if anchors else 'none')
+	return text
+
+
+def _near_names(name, names):
+	'''Layer names that differ from name only in case or spaces.'''
+	key = (name or '').replace(' ', '').lower()
+	return [n for n in names if n != name and (n or '').replace(' ', '').lower() == key]
+
+
+def _node_kind(node):
+	return 'off' if node.type == 'off' else 'on'
+
+
+def _compare_inputs(named):
+	'''Where compatible inputs stop matching. named: [(name, layer)].
+	Returns lines; empty when node structure and anchors agree.'''
+	lines = []
+	first_name, first = named[0]
+	for name, layer in named[1:]:
+		a, b = first.contours, layer.contours
+		pair = '"%s" vs "%s"' % (first_name, name)
+		if len(a) != len(b):
+			lines.append('%s: %d vs %d contour(s).' % (pair, len(a), len(b)))
+		for ci, (ca, cb) in enumerate(zip(a, b)):
+			if len(ca.nodes) != len(cb.nodes):
+				lines.append('%s: contour %d has %d vs %d node(s) (first difference).' % (
+					pair, ci + 1, len(ca.nodes), len(cb.nodes)))
+				break
+			bad = next((ni for ni, (na, nb) in enumerate(zip(ca.nodes, cb.nodes))
+			            if _node_kind(na) != _node_kind(nb)), None)
+			if bad is not None:
+				lines.append('%s: contour %d node %d is %s-curve vs %s-curve (wrong start point or direction?).' % (
+					pair, ci + 1, bad + 1, _node_kind(ca.nodes[bad]), _node_kind(cb.nodes[bad])))
+				break
+		na, nb = [x.name for x in first.anchors], [x.name for x in layer.anchors]
+		if len(na) != len(nb):
+			lines.append('%s: anchors %s vs %s (anchors skipped).' % (
+				pair, ', '.join(na) or 'none', ', '.join(nb) or 'none'))
+	return lines
+
+
+def delta_diagnose(glyph, setup):
+	'''Lines that explain why the inputs of setup (dict or JSON) do or do
+	not make a Delta axis on glyph (core Glyph): every input layer found or
+	not (near names, duplicates), what it holds, the stems, and the first
+	contour / node where the inputs differ.'''
+	if not isinstance(setup, dict):
+		try:
+			setup = json.loads(setup)
+		except (TypeError, ValueError) as e:
+			return ['setup cannot be read: %s' % e]
+	names = [l.name for l in glyph.layers]
+	lines = []
+	for axis in setup.get('axes', []):
+		head = 'Axis "%s"' % axis.get('name', '<unnamed>')
+		usable = []
+		for inp in axis.get('inputs', []):
+			name = inp.get('name')
+			count = names.count(name)
+			if not count:
+				near = _near_names(name, names)
+				lines.append('%s: input "%s" is not on the glyph%s. Layers: %s.' % (
+					head, name, ' (did you mean %s?)' % ', '.join('"%s"' % n for n in near) if near else '',
+					', '.join('"%s"' % n for n in names) or 'none'))
+				continue
+			layer = glyph.layer(name)
+			text = '%s: input "%s": %s' % (head, name, _layer_summary(layer))
+			if count > 1:
+				text += '; %d layers have this name, the first one is used' % count
+			try:
+				float(inp['vstem']), float(inp['hstem'])
+			except (KeyError, ValueError, TypeError):
+				text += '; stems invalid (V %r, H %r)' % (inp.get('vstem'), inp.get('hstem'))
+			lines.append(text + '.')
+			if _attr_len(layer, 'point_array'):
+				usable.append((name, layer))
+			else:
+				lines.append('%s: input "%s" has no outline nodes%s.' % (head, name,
+					' (components only: decompose, or turn Skip composites on)'
+					if any(getattr(s, 'is_component', False) for s in layer.shapes) else ''))
+		if len(usable) >= 2:
+			lines.extend('%s: %s' % (head, l) for l in _compare_inputs(usable))
+	return lines
+
+
 def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 	'''Bake all targets across all axes in the supplied setup against
 	the active glyph. Returns a JSON-serialisable status dict.

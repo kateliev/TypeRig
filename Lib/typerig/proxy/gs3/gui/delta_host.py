@@ -195,7 +195,8 @@ class GlyphsDeltaHost(object):
 			target.host.anchors = [copy.copy(anchor) for anchor in base.host.anchors]
 		gs_layer = target.host
 		if len(self._nodes(gs_layer)) != len(core_layer.nodes):
-			raise RuntimeError('layer "{}" does not match the base input'.format(core_layer.name))
+			raise RuntimeError('layer "{}" has {} node(s), the baked outline {} (base input "{}")'.format(
+				core_layer.name, len(self._nodes(gs_layer)), len(core_layer.nodes), base_name))
 		self.write_layer(gs_layer, core_layer, viable)
 
 	# - Composites -----------------------------------------------------------
@@ -210,6 +211,35 @@ class GlyphsDeltaHost(object):
 			if gs_layer.name == name:
 				return gs_layer
 		return None
+
+	def layer_report(self, glyph, names):
+		'''Lines on the GS layers behind names, as Glyphs sees them: each
+		layer with that name (the first one is the one Delta reads), its
+		kind (master / special / backup), paths, nodes and components. For
+		the failure notes of the Delta Machine.'''
+		lines = []
+		for name in names:
+			found = [l for l in glyph.layers if l.name == name]
+			if not found:
+				continue
+			for k, layer in enumerate(found):
+				if getattr(layer, 'isMasterLayer', False):
+					kind = 'master layer'
+				elif getattr(layer, 'isSpecialLayer', False):
+					kind = 'special layer (brace / bracket)'
+				else:
+					kind = 'backup / other layer of master {}'.format(layer.associatedMasterId)
+				paths = list(layer.paths)
+				nodes = sum(len(p.nodes) for p in paths)
+				open_paths = sum(1 for p in paths if not p.closed)
+				text = 'GS "{}"{}: {}, {} path(s), {} node(s), {} component(s)'.format(
+					name, ' #{}'.format(k + 1) if len(found) > 1 else '', kind, len(paths), nodes, len(layer.components))
+				if open_paths:
+					text += ', {} open path(s)'.format(open_paths)
+				if k:
+					text += ' — not used (an earlier layer has this name)'
+				lines.append(text + '.')
+		return lines
 
 	def shape_kind(self, glyph, layer_name):
 		'''outline (paths only), composite (components only), mixed, empty —
