@@ -4,6 +4,28 @@ A Python framework for font design and engineering. Started as a personal toolki
 
 TypeRig has objects for manipulating font outlines — points, nodes, contours, shapes, layers and glyphs — plus math helpers for interpolation, adaptive scaling and curve processing. A proxy layer wraps FontLab internals so the same code works both standalone and inside the host app. On top of that sits a collection of GUI panels, toolbars, and dialog tools that cover most of what I need in a daily font production workflow. Experimental, evolving, and perpetually work-in-progress.
 
+## Install the Python library
+
+From a local checkout (Python 3.10 or newer):
+
+```sh
+python -m pip install .
+```
+
+For development, use `python -m pip install -e .` instead. Release versions come
+from Git tags via `hatch-vcs`; see [releases](RELEASING.md) and [PyPI setup](PYPI.md).
+
+This installs the `typerig` package from `Lib/`, including its bundled resources,
+and the `fonttools` dependency used by font file I/O. For example:
+
+```python
+from typerig.core.objects.point import Point
+```
+
+The geometry core runs outside a font editor. Host proxies require their
+respective FontLab or Glyphs APIs. This installation does not install the GUI
+scripts from `Scripts/`; use the existing host installers for those tools.
+
 ## FontLab Scripts and Tools
 
 The FontLab-facing part of TypeRig is the biggest chunk in practice — a collection of GUI tools that cover most of the font design and production workflow. Built with PythonQt, hooked into FontLab's undo, multi-master aware.
