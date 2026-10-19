@@ -32,7 +32,7 @@ from typerig.core.actions import designspace_actions as dsa
 TOOL       = 'TypeRig Delta Machine'
 VERSION    = '0.1'
 FORMAT     = 1
-LIB_KEY    = 'com.typerig.delta.machine.setup'		# font lib; the panel uses ...axissetup / panel.delta.live
+LIB_KEY    = 'com.typerig.delta.machine.setup'		# font lib; the panel keys are in core/base/lib_keys.py
 SELECTION  = ''				# group of a row that works on the selected glyphs
 SELECTION_LABEL = 'Selection'
 UNITS      = ('%', 'u')		# percent of the base input, font units
