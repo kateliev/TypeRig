@@ -54,6 +54,8 @@
 #           'origin':      'BS'|'BL'|'BM'|'BR'|'LM'|'CE'|'RM'|'TL'|'TM'|'TR',
 #                                  # global, stems mode (BS = baseline 0, 0)
 #           'italic_angle': float, # degrees (signed)
+#           'keep_directions': bool, # italic: put horizontal / vertical /
+#                                  # slanted handles back after the bake
 #           'selection':   bool    # live: drive only the selected nodes
 #       }
 #   }
@@ -179,12 +181,145 @@ def _apply_array(layer, attrib, data):
 		setattr(layer, attrib, data)
 
 
+def _italic_slope(opts):
+	'''Engine slope (dx per dy) for options.italic_angle (degrees, core sign).
+	adaptive_scale de-slants with x - y*i, so i must be a slope (tan), not
+	an angle in radians.'''
+	return math.tan(math.radians(-float(opts.get('italic_angle', 0.0) or 0.0)))
+
+
+# - Direction lock (italic) ----------------------------------------
+# In italic mode adaptive_scale de-slants, scales X and Y apart, then
+# re-slants. Horizontal and on-slant handles survive an anisotropic
+# scale, true vertical handles lean by ~ angle * (1 - sx/sy). The lock
+# labels every handle that is horizontal / vertical / on the slant in
+# ALL inputs and puts it back after the bake (before host rounding).
+# See TypeRig-Glyphs Handouts/delta_italic_handles_handout.md.
+LOCK_TOLERANCE = 0.5		# units: max off-direction drift in the inputs
+
+_LOCK_H, _LOCK_V, _LOCK_S = 'h', 'v', 's'
+
+
+def _handle_owners(layer):
+	'''[(off_index, on_index)] in point_array order: each off-curve that
+	sits next to an on-curve is that node's handle. Off-curves between two
+	on-curves (quadratic) or between two off-curves are skipped. Contours
+	wrap (open contours end on on-curves, so the wrap never pairs them).
+	Also returns {on_index: smooth}.'''
+	pairs, smooth, base = [], {}, 0
+	for shape in layer.shapes:
+		for contour in shape.contours:
+			nodes = list(contour.data)
+			n = len(nodes)
+			for k, node in enumerate(nodes):
+				if node.is_on:
+					smooth[base + k] = bool(getattr(node, 'smooth', False))
+					continue
+				if n < 2: continue
+				p, q = (k - 1) % n, (k + 1) % n
+				prev_on, next_on = nodes[p].is_on, nodes[q].is_on
+				if prev_on and not next_on:
+					pairs.append((base + k, base + p))
+				elif next_on and not prev_on:
+					pairs.append((base + k, base + q))
+			base += n
+	return pairs, smooth
+
+
+def _direction_of(node, handle, slope, tol):
+	dx, dy = handle[0] - node[0], handle[1] - node[1]
+	if abs(dx) <= tol and abs(dy) <= tol:
+		return None							# retracted handle
+	if abs(dy) <= tol:
+		return _LOCK_H
+	if abs(dx) <= tol:
+		return _LOCK_V
+	if abs(dx - dy * slope) <= tol:
+		return _LOCK_S
+	return None
+
+
+def direction_labels(input_layers, slope, tol=LOCK_TOLERANCE):
+	'''Lock plan for an axis: {'pairs': [(off, on, label)], 'smooth': {on: bool}}.
+	A handle is labelled only when it has the same direction in every input.
+	Returns None when there is nothing to lock (upright design, < 2 inputs).'''
+	if not slope or len(input_layers) < 2:
+		return None
+	pairs, smooth = _handle_owners(input_layers[0])
+	arrays = [list(l.point_array.tuple) for l in input_layers]
+	size = len(arrays[0])
+	if any(len(a) != size for a in arrays):
+		return None
+	locked = []
+	for off, on in pairs:
+		labels = set(_direction_of(a[on], a[off], slope, tol) for a in arrays)
+		if len(labels) == 1 and None not in labels:
+			locked.append((off, on, labels.pop()))
+	if not locked:
+		return None
+	return {'pairs': locked, 'handles': pairs, 'smooth': smooth, 'size': size}
+
+
+def lock_directions(points, plan, slope):
+	'''Put labelled handles back on their direction (points: list of (x, y),
+	changed in place and returned). Vertical: x = node x (Y kept). Slant:
+	back on the slant line through the node (Y kept). Horizontal: y = node y.
+	A smooth node with one locked handle turns its other handle to stay in
+	line (length kept). Returns (points, moved, max_drift).'''
+	if not plan or len(points) != plan['size']:
+		return points, 0, 0.
+	moved, drift, locked_by_on = 0, 0., {}
+	for off, on, label in plan['pairs']:
+		nx, ny = points[on]
+		hx, hy = points[off]
+		if label == _LOCK_V:
+			new = (nx, hy)
+		elif label == _LOCK_S:
+			new = (nx + (hy - ny) * slope, hy)
+		else:
+			new = (hx, ny)
+		d = math.hypot(new[0] - hx, new[1] - hy)
+		if d > 1e-9:
+			moved += 1
+			drift = max(drift, d)
+		points[off] = new
+		locked_by_on.setdefault(on, []).append(off)
+
+	# Smooth nodes: keep the free handle in line with the locked one
+	handles = {}
+	for off, on in plan['handles']:
+		handles.setdefault(on, []).append(off)
+	for on, offs in locked_by_on.items():
+		if len(offs) != 1 or not plan['smooth'].get(on):
+			continue
+		others = [o for o in handles.get(on, []) if o not in offs]
+		if len(others) != 1:
+			continue
+		nx, ny = points[on]
+		lx, ly = points[offs[0]][0] - nx, points[offs[0]][1] - ny
+		ll = math.hypot(lx, ly)
+		ox, oy = points[others[0]]
+		ol = math.hypot(ox - nx, oy - ny)
+		if ll < 1e-9 or ol < 1e-9:
+			continue
+		new = (nx - lx / ll * ol, ny - ly / ll * ol)
+		d = math.hypot(new[0] - ox, new[1] - oy)
+		if d > 1e-9:
+			moved += 1
+			drift = max(drift, d)
+		points[others[0]] = new
+	return points, moved, drift
+
+
 def _bake_target_stems(base_layer, vaxis, target, italic_rad,
-                       extrapolate, global_origin, source_bounds):
+                       extrapolate, global_origin, source_bounds, lock=None, report=None):
 	'''Stems-mode: drive DeltaScale.scale_by_stem for every viable
 	attribute, write into a clone of base_layer, realign to chosen
 	origin (skip when origin is BASELINE — that's scale_by_stem's native
-	reference).
+	reference). lock: a direction_labels plan; when given, labelled
+	handles are put back on their direction (italic direction lock).
+	report: optional dict, gets 'locked' (handles moved) and 'drift'
+	(largest move, units).
 	'''
 	new_layer = base_layer.clone()
 
@@ -200,6 +335,11 @@ def _bake_target_stems(base_layer, vaxis, target, italic_rad,
 			))
 		except (IndexError, ValueError, AssertionError):
 			continue
+		if attrib == 'point_array' and lock:
+			result, moved, drift = lock_directions(result, lock, italic_rad)
+			if report is not None:
+				report['locked'] = report.get('locked', 0) + moved
+				report['drift'] = max(report.get('drift', 0.), drift)
 		_apply_array(new_layer, attrib, result)
 
 	if global_origin is not None and global_origin != TransformOrigin.BASELINE:
@@ -273,7 +413,7 @@ def _mixed_scale(vaxis, target, italic_rad, extrapolate):
 
 
 def _bake_target_mixed(base_layer, vaxis, target, italic_rad,
-                       extrapolate, global_origin, source_bounds):
+                       extrapolate, global_origin, source_bounds, lock=None, report=None):
 	'''Mixed-mode: target stems (like stems mode) with width and / or
 	height in units. The units axes are solved first, then the target is
 	baked as stems mode with the solved percentages. Unlike dimensions
@@ -281,7 +421,7 @@ def _bake_target_mixed(base_layer, vaxis, target, italic_rad,
 	scales, ok, _res = _mixed_scale(vaxis, target, italic_rad, extrapolate)
 	as_stems = dict(target, sx=scales[0], sy=scales[1])
 	layer = _bake_target_stems(base_layer, vaxis, as_stems, italic_rad,
-	                           extrapolate, global_origin, source_bounds)
+	                           extrapolate, global_origin, source_bounds, lock, report)
 	return layer, ok, scales
 
 
@@ -312,6 +452,7 @@ def _bake_target_dims(base_layer, vaxis, target, extrapolate):
 DELTA_OPTION_DEFAULTS = {
 	'metrics': True, 'anchors': True, 'extrapolate': True,
 	'origin': 'BS', 'italic_angle': 0., 'selection': False,
+	'keep_directions': True,
 }
 
 
@@ -466,7 +607,7 @@ def delta_setup_validate(setup):
 # - Dispatchers ---------------------------------------------------
 def _build_axis(glyph, axis, requested, warnings):
 	'''Resolve an axis' input layers (stems set) and build its virtual axis.
-	Returns (vaxis, base_layer, viable) or None (warnings say why).'''
+	Returns (vaxis, base_layer, viable, input_layers) or None (warnings say why).'''
 	axis_name = axis.get('name', '<unnamed>')
 	inputs = axis.get('inputs', [])
 	if len(inputs) < 2:
@@ -521,7 +662,7 @@ def _build_axis(glyph, axis, requested, warnings):
 		warnings.append('Axis "%s": create_virtual_axis failed: %s'
 			% (axis_name, e))
 		return None
-	return vaxis, input_layers[0], viable
+	return vaxis, input_layers[0], viable, input_layers
 
 
 def _requested_attribs(opts, axes):
@@ -562,8 +703,8 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 		return {'ok': False, 'error': 'No axes defined.'}
 
 	opts = setup.get('options', {}) or {}
-	italic_deg = float(opts.get('italic_angle', 0.0))
-	italic_rad = math.radians(-italic_deg)
+	italic_rad = _italic_slope(opts)		# a slope (tan), named for the engine argument
+	keep_directions = bool(opts.get('keep_directions', True))
 	extrapolate = bool(opts.get('extrapolate', True))
 	global_origin = _origin_of(opts)
 	requested = _requested_attribs(opts, axes)
@@ -578,8 +719,9 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 		built = _build_axis(glyph, axis, requested, warnings)
 		if built is None:
 			continue
-		vaxis, base_layer, viable = built
+		vaxis, base_layer, viable, input_layers = built
 		axes_built += 1
+		lock = direction_labels(input_layers, italic_rad) if keep_directions else None
 
 		base_name = base_layer.name
 		try:
@@ -595,6 +737,7 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 				continue
 			mode = target.get('mode', 'stems')
 			entry = {}
+			lock_report = {}
 			# A stems / mixed target may carry its own origin (Delta Machine rows)
 			origin = _ORIGIN_FROM_CODE.get(target.get('origin'), global_origin)
 			try:
@@ -602,12 +745,12 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 					new_layer = _bake_target_stems(
 						base_layer, vaxis, target,
 						italic_rad, extrapolate,
-						origin, source_bounds)
+						origin, source_bounds, lock, lock_report)
 				elif mode == 'mixed':
 					new_layer, converged, scales = _bake_target_mixed(
 						base_layer, vaxis, target,
 						italic_rad, extrapolate,
-						origin, source_bounds)
+						origin, source_bounds, lock, lock_report)
 					entry['scales'] = list(scales)
 					if not converged:
 						warnings.append('Axis "%s" / target "%s": size not reached.'
@@ -643,6 +786,9 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 				pass
 
 			targets_baked += 1
+			if lock_report.get('locked'):
+				entry['locked'] = lock_report['locked']
+				entry['drift'] = round(lock_report['drift'], 2)
 			entry.update({'axis': axis_name, 'name': t_name, 'base': base_name,
 			              'rebuilt': rebuilt, 'viable': t_viable})
 			baked.append(entry)
@@ -670,7 +816,7 @@ def npa_delta_solve_target(glyph, scope_layers, NodeActions, setup_json):
 	except (TypeError, ValueError) as e:
 		return {'ok': False, 'error': 'setup_json parse failed: %s' % e}
 	opts = setup.get('options', {}) or {}
-	italic_rad = math.radians(-float(opts.get('italic_angle', 0.0)))
+	italic_rad = _italic_slope(opts)
 	extrapolate = bool(opts.get('extrapolate', True))
 
 	warnings, scales = [], []
@@ -922,7 +1068,9 @@ def npa_delta_live_set(glyph, scope_layers, NodeActions, setup_json, selection_l
 		'vaxis': vaxis,
 		'viable': viable,
 		'options': opts,
-		'italic_rad': math.radians(-float(opts.get('italic_angle', 0.0))),
+		'italic_rad': _italic_slope(opts),
+		'lock': (direction_labels(snap_layers, _italic_slope(opts))
+		         if opts.get('keep_directions', True) and not sel_indices else None),
 		'extrapolate': bool(opts.get('extrapolate', True)),
 		'global_origin': _origin_of(opts),
 		'sel_indices': sel_indices,
@@ -983,7 +1131,7 @@ def npa_delta_live_drive(glyph, scope_layers, NodeActions,
 		new_layer = _bake_target_stems(
 			base_layer, state['vaxis'], target,
 			state['italic_rad'], state['extrapolate'],
-			global_origin, source_bounds)
+			global_origin, source_bounds, state.get('lock'))
 	except Exception as e:
 		return {'ok': False, 'error': 'Bake failed: %s' % e}
 
