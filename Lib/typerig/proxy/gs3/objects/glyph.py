@@ -117,8 +117,9 @@ class trGlyph(Glyph):
 
 	@property
 	def unicodes(self):
-		'''Unicode values as a list of integers.'''
-		return [int(u, 16) for u in self.host.unicodes if u]
+		'''Unicode values as a list of integers ([] for an unencoded glyph:
+		Glyphs gives None there, not an empty list).'''
+		return [int(u, 16) for u in (self.host.unicodes or ()) if u]
 
 	@unicodes.setter
 	def unicodes(self, other):
