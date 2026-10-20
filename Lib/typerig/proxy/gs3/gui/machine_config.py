@@ -114,6 +114,11 @@ ADVANCED = SimpleNamespace(
 	ITALIC_LABEL_W = 110,  # 'Italic angle:' and number captions
 )
 
+# - Help tab ---------------------------------------------------------------
+HELP = SimpleNamespace(
+	PAD = 10,           # text inset inside the scroll view (both axes)
+)
+
 # - Colours ----------------------------------------------------------------
 # NSColor class-method names (follow light / dark mode). Groups get the
 # next colour of GROUP_COLORS when they are made; the colour is stored in
@@ -151,5 +156,6 @@ MACHINE = SimpleNamespace(
 	COLUMNS  = COLUMNS,
 	SERVICE  = SERVICE,
 	ADVANCED = ADVANCED,
+	HELP     = HELP,
 	COLORS   = COLORS,
 )

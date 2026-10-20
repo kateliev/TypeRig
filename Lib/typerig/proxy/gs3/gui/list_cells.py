@@ -6,7 +6,8 @@
 # into fixed-frame windows (the TR Panel list collapse of 2026-10-18, see
 # tint_list.py). TRTintList ships read-only frame-based cells (TRTextCell,
 # TRImageCell); these are the editable ones, same build:
-#   TREditCell  — editable text (alignment left / center / right); off=<text>:
+#   TREditCell  — editable text (alignment left / center / right); inherit=<prefix>:
+#                 values with the prefix are inherited (grey, editable); off=<text>:
 #                 a row whose value is that text shows it grey, not editable
 #   TRCheckCell — check box, centred; enabled=False greys it out
 #   TRPopUpCell — pop-up menu (items = titles); the value is the title
@@ -62,8 +63,10 @@ class _Cell(object):
 class TREditCell(_Cell):
 	'''Editable text cell; commits on Return / Tab / focus loss. off: the
 	value that marks a row whose cell is off (shown grey, not editable;
-	e.g. Delta Machine Met. W while Met. is off).'''
-	def __init__(self, editable=False, callback=None, alignment='left', off=None, **kwargs):
+	e.g. Delta Machine Met. W while Met. is off). inherit: a prefix that
+	marks an inherited value (shown grey without the prefix, editable;
+	Delta Machine override rows); get() returns what is shown.'''
+	def __init__(self, editable=False, callback=None, alignment='left', off=None, inherit=None, **kwargs):
 		field = AppKit.NSTextField.alloc().initWithFrame_(((0, 0), (TL.CELL_W, 0)))
 		field.setBezeled_(False)
 		field.setBordered_(False)
@@ -80,16 +83,21 @@ class TREditCell(_Cell):
 		field.setAutoresizingMask_(_FLEX_W | _FLEX_TB)
 		view.addSubview_(field)
 		self._nsObject, self._field = view, field
-		self._editable, self._off = bool(editable), off
+		self._editable, self._off, self._inherit = bool(editable), off, inherit
 		self._wire(field, callback if editable else None)
 
 	def set(self, value):
 		text = '' if value is None else str(value)
+		on, dim = True, False
 		if self._off is not None:
 			on = text != self._off
 			self._field.setEditable_(self._editable and on)
 			self._field.setSelectable_(self._editable and on)
-			self._field.setTextColor_(AppKit.NSColor.labelColor() if on else AppKit.NSColor.tertiaryLabelColor())
+		if self._inherit and text.startswith(self._inherit):
+			text, dim = text[len(self._inherit):], True
+		if self._off is not None or self._inherit:
+			self._field.setTextColor_(AppKit.NSColor.tertiaryLabelColor() if not on else
+			                          AppKit.NSColor.secondaryLabelColor() if dim else AppKit.NSColor.labelColor())
 		self._field.setStringValue_(text)
 
 	def get(self):

@@ -9,14 +9,18 @@ The Delta Machine bakes target layers from virtual axes, like the Delta
 panel's Bake, but each target row also names a glyph group, so one layer
 can get different stems and sizes for different glyphs (Vassil for the
 lowercase with one set of values, Vassil for the uppercase with another).
-A row without a group works on the selected glyphs. Width and height are
+A row without a group works on the selected glyphs. A row may name several
+groups, or All groups (every group of the document, also groups added
+later); an override row under it changes the values for one of its groups
+and inherits the cells it leaves empty (format 4). Width and height are
 in percent (default) or in units, each on its own: 60 % wide and exactly
 700 units high is one row. Units are measured on the group's reference
 glyph when it has one (the scale found there is used for the whole group,
 so overshoots and descenders keep their proportions), else on each glyph.
 
 This module is host neutral: the document (normalize, validate), unit
-parsing, and the plan that turns the rows into one core Delta setup per
+parsing, machine_expand (rows -> one resolved row per group, overrides
+first) and the plan that turns the rows into one core Delta setup per
 glyph (delta_panel_actions.npa_delta_bake / npa_delta_solve_target).
 '''
 
@@ -30,12 +34,18 @@ from typerig.core.actions import designspace_actions as dsa
 
 # - Init -------------------------------------------------------------------
 TOOL       = 'TypeRig Delta Machine'
-VERSION    = '0.4'
-FORMAT     = 3				# 3 (v0.4): flag_* are Glyphs label colour indexes (1 / 2: RGBA -> nearest label);
-							# optional target 'msx'. 2 (v0.3): advanced.italic_fix. 1 reads as 3 (fix off)
+VERSION    = '0.5'
+FORMAT     = 4				# 4 (v0.5): target 'groups' (list, '*' = all), 'id', 'parent', 'inherit'; 3 'group' reads
+							# as a one-group row. 3 (v0.4): flag_* are Glyphs label colour indexes (1 / 2: RGBA ->
+							# nearest label); optional target 'msx'. 2 (v0.3): advanced.italic_fix. 1 reads as 3 (fix off)
 LIB_KEY    = 'com.typerig.delta.machine.setup'		# font lib; the panel keys are in core/base/lib_keys.py
 SELECTION  = ''				# group of a row that works on the selected glyphs
 SELECTION_LABEL = 'Selection'
+ALL_GROUPS = '*'			# in a row's groups: every group of the document (also ones added later)
+ALL_GROUPS_LABEL = 'All groups'
+INHERIT_KEYS = ('vstem', 'hstem', 'width', 'height', 'origin', 'anchors', 'metrics', 'msx', 'kerning')
+INHERIT_MARK = '\u200b'		# leads a table cell value inherited from the general row (shown grey)
+OVERRIDE_MARK = '\u21b3'	# Layer cell of an override row (its layer is the general row's)
 UNITS      = ('%', 'u')		# percent of the base input, font units
 METRICS_SCALE_OFF = '—'		# Met. W cell of a row with Met. off (shown grey, not editable)
 ORIGINS    = ('BS', 'BL', 'BM', 'BR', 'LM', 'CE', 'RM', 'TL', 'TM', 'TR')
@@ -95,7 +105,10 @@ ADVANCED_DEFAULTS = {
 FLAG_KEYS = {status: 'flag_' + status for status in STATUSES}
 
 TARGET_DEFAULTS = {
-	'layer': '', 'group': SELECTION, 'vstem': 100., 'hstem': 100.,
+	'layer': '', 'groups': [],	# [] = Selection, ['*'] = all groups, else group names
+	'id': '', 'parent': '',		# parent: id of the general row an override row belongs to
+	'inherit': [],				# override row: INHERIT_KEYS taken from the general row
+	'vstem': 100., 'hstem': 100.,
 	'width': {'value': 100., 'unit': '%'}, 'height': {'value': 100., 'unit': '%'},
 	'origin': 'BS',				# transform origin of the row (BS = baseline, 0 / 0)
 	'anchors': True, 'metrics': True, 'kerning': False,
@@ -162,7 +175,8 @@ def format_metrics_scale(msx):
 def row_label(row):
 	'''Target row -> 'Small caps / Lowercase: 80 % / metrics 90 %' (bake
 	report: the rows with a metrics scale).'''
-	text = '%s / %s: %s x %s' % (row['layer'], row['group'] or SELECTION_LABEL,
+	group = (row['group'] or SELECTION_LABEL) if 'group' in row else groups_label(row)
+	text = '%s / %s: %s x %s' % (row['layer'], group,
 	                             format_dimension(row['width']), format_dimension(row['height']))
 	if row.get('metrics') and row.get('msx') is not None:
 		text += ' / metrics ' + format_metrics_scale(row['msx'])
@@ -210,7 +224,10 @@ def norm_target(row, origin='BS'):
 	if row.get('origin') in ORIGINS:
 		out['origin'] = row['origin']
 	out['layer'] = str(row.get('layer', row.get('name', '')) or '').strip()
-	out['group'] = str(row.get('group', SELECTION) or SELECTION).strip()
+	out['groups'] = norm_groups(row.get('groups') if 'groups' in row else row.get('group', SELECTION))
+	out['id'] = str(row.get('id', '') or '').strip()
+	out['parent'] = str(row.get('parent', '') or '').strip()
+	out['inherit'] = [k for k in INHERIT_KEYS if k in (row.get('inherit') or [])]
 	for key in ('vstem', 'hstem'):
 		out[key] = _num(row.get(key), out[key])
 	for key, legacy_pct, legacy_units in (('width', 'sx', 'w'), ('height', 'sy', 'h')):
@@ -226,6 +243,137 @@ def norm_target(row, origin='BS'):
 			out[key] = row[key]
 	ok, msx = parse_metrics_scale(row.get('msx'))		# older documents: none -> None
 	out['msx'] = msx if ok else None
+	return out
+
+
+def norm_groups(value):
+	'''A row's groups: list of names, ['*'] (all groups) or [] (Selection).
+	Reads format 3 (one name, '' = Selection).'''
+	if value is None or isinstance(value, (str, bytes)):
+		value = [value] if value else []
+	out = []
+	for g in value:
+		g = str(g or '').strip()
+		if g and g not in out:
+			out.append(g)
+	return [ALL_GROUPS] if ALL_GROUPS in out else out
+
+
+def groups_label(row):
+	'''Group cell text: Selection, All groups, or the names.'''
+	groups = row.get('groups', [])
+	if not groups:
+		return SELECTION_LABEL
+	if groups == [ALL_GROUPS]:
+		return ALL_GROUPS_LABEL
+	return ', '.join(groups)
+
+
+def covers(row, group, doc_groups=None):
+	'''Does a row take group (a name; SELECTION = the selection)?'''
+	groups = row.get('groups', [])
+	if group == SELECTION:
+		return not groups
+	if groups == [ALL_GROUPS]:
+		return doc_groups is None or group in doc_groups
+	return group in groups
+
+
+def overlap(a, b):
+	'''Two groups lists take a common group (Selection only meets Selection).'''
+	if not a or not b:
+		return not a and not b
+	if ALL_GROUPS in a or ALL_GROUPS in b:
+		return True
+	return bool(set(a) & set(b))
+
+
+def is_override(row):
+	return bool(row.get('parent'))
+
+
+def resolve(row, parent):
+	'''An override row with its inherited cells taken from the general row.'''
+	out = copy.deepcopy(row)
+	if parent is not None:
+		for key in row.get('inherit', []):
+			out[key] = copy.deepcopy(parent[key])
+	return out
+
+
+def new_row_id(targets):
+	'''An id no row of targets has ('r1', 'r2', ...).'''
+	used = set(t.get('id') for t in targets)
+	n = 1
+	while 'r%d' % n in used:
+		n += 1
+	return 'r%d' % n
+
+
+def target_tree(targets):
+	'''Rows ordered general row, then its overrides; ids unique (rows
+	without overrides may have none: new_row_id gives one when needed);
+	an override whose general row is missing (or is an override itself, or
+	has no group to override) becomes a general row with its own values.'''
+	used = set()
+	for t in targets:
+		if t['id'] in used:
+			t['id'] = new_row_id(targets)
+		if t['id']:
+			used.add(t['id'])
+	by_id = dict((t['id'], t) for t in targets)
+	for t in targets:
+		p = by_id.get(t['parent'])
+		if not t['parent']:
+			t['inherit'] = []
+		elif p is None or p['parent'] or not p['groups'] or len(t['groups']) != 1 or t['groups'] == [ALL_GROUPS] \
+				or not covers(p, t['groups'][0]) or p is t:
+			t['parent'], t['inherit'] = '', []
+	for t in targets:		# a second pass: a demoted general row may have been someone's parent
+		if t['parent'] and by_id[t['parent']]['parent']:
+			t['parent'], t['inherit'] = '', []
+	out = []
+	for t in targets:
+		if not t['parent']:
+			out.append(t)
+			for c in targets:
+				if c['parent'] and c['parent'] == t['id']:
+					c['layer'] = t['layer']
+					out.append(c)
+	return out
+
+
+def machine_expand(doc):
+	'''The document with every target row resolved for the bake: override
+	rows first (their inherited cells filled in), then the general rows,
+	one row per group (All groups = the document's groups; a group with an
+	override row is left to it), Selection rows as before. Expanded rows
+	carry 'group' (one name, SELECTION) and 'source' (index of the row in
+	the axis). machine_plan / core_setup / ref_setup work on this.'''
+	out = copy.deepcopy(doc)
+	names = [g['name'] for g in doc.get('groups', [])]
+	for ax, src in zip(out.get('axes', []), doc.get('axes', [])):
+		rows = src['targets']
+		by_id = dict((t['id'], t) for t in rows if t.get('id'))
+		overridden = {}
+		expanded = []
+		for i, t in enumerate(rows):
+			p = by_id.get(t.get('parent'))
+			if t.get('parent') and p is not None:
+				overridden.setdefault(p['id'], set()).add(t['groups'][0])
+				expanded.append(dict(resolve(t, p), group=t['groups'][0], source=i))
+		for i, t in enumerate(rows):
+			if t.get('parent') and t['parent'] in by_id:
+				continue
+			groups = t.get('groups', [])
+			if not groups:
+				expanded.append(dict(copy.deepcopy(t), group=SELECTION, source=i))
+				continue
+			for g in (names if groups == [ALL_GROUPS] else groups):
+				if g not in overridden.get(t.get('id'), ()):
+					expanded.append(dict(copy.deepcopy(t), group=g, source=i))
+		ax['targets'] = expanded
+	out['expanded'] = True
 	return out
 
 
@@ -274,7 +422,7 @@ def _from_delta_setup(raw):
 			targets.append(row)
 		doc['axes'].append({'name': ax['name'],
 		                    'inputs': [{'name': r['name'], 'vstem': r['vstem'], 'hstem': r['hstem']} for r in ax['inputs']],
-		                    'targets': targets})
+		                    'targets': target_tree(targets)})
 	return doc
 
 
@@ -319,31 +467,47 @@ def machine_normalize(raw):
 				inputs.append({'name': str(r['name']), 'vstem': _num(r.get('vstem'), r.get('vstem')),
 				               'hstem': _num(r.get('hstem'), r.get('hstem'))})
 		doc['axes'].append({'name': str(ax.get('name', '') or '').strip(), 'inputs': inputs,
-		                    'targets': [norm_target(t, origin=doc['options']['origin'])
-		                                for t in ax.get('targets', []) or [] if isinstance(t, dict)]})
+		                    'targets': target_tree([norm_target(t, origin=doc['options']['origin'])
+		                                            for t in ax.get('targets', []) or [] if isinstance(t, dict)])})
 	doc['groups'] = [g for g in (norm_group(g) for g in raw.get('groups', []) or []) if g is not None]
 	doc['designspace'] = dsa.plan_normalize(raw.get('designspace'))
 	return doc
 
 
 def machine_validate(doc):
-	'''Errors that stop a bake (empty list = ready).'''
+	'''Errors that stop a bake (empty list = ready). doc: the document
+	(not expanded); the values are checked as the bake sees them.'''
 	errors = []
-	core_axes = [{'name': ax['name'], 'inputs': ax['inputs'],
-	              'targets': [{'name': '%s / %s' % (t['layer'], t['group'] or SELECTION_LABEL)} for t in ax['targets']]}
-	             for ax in doc.get('axes', [])]
-	errors.extend(dpa.delta_setup_validate({'axes': core_axes}))
 	groups = {}
 	for g in doc.get('groups', []):
-		if g['name'] in groups or g['name'] == SELECTION_LABEL:
-			errors.append('Group names must be unique and not "%s": %s.' % (SELECTION_LABEL, g['name']))
+		if g['name'] in groups or g['name'] in (SELECTION_LABEL, ALL_GROUPS_LABEL, ALL_GROUPS):
+			errors.append('Group names must be unique and not "%s" or "%s": %s.' % (
+				SELECTION_LABEL, ALL_GROUPS_LABEL, g['name']))
 		groups[g['name']] = g
-	for ax in doc.get('axes', []):
-		for t in ax['targets']:
+	for ax in [] if doc.get('expanded') else doc.get('axes', []):
+		rows = ax['targets']
+		for i, t in enumerate(rows):
 			if not t['layer']:
 				errors.append('Axis "%s": a target has no layer name.' % ax['name'])
-			if t['group'] and t['group'] not in groups:
-				errors.append('Axis "%s" / %s: unknown group "%s".' % (ax['name'], t['layer'], t['group']))
+			for g in t.get('groups', []):
+				if g != ALL_GROUPS and g not in groups:
+					errors.append('Axis "%s" / %s: unknown group "%s".' % (ax['name'], t['layer'], g))
+			for j in range(i):
+				u = rows[j]
+				if u['layer'] != t['layer'] or is_override(u) != is_override(t):
+					continue
+				if is_override(t) and u['parent'] == t['parent'] and u['groups'] == t['groups']:
+					errors.append('Axis "%s" / %s: two override rows for %s.' % (ax['name'], t['layer'], t['groups'][0]))
+				elif not is_override(t) and overlap(u['groups'], t['groups']):
+					errors.append('Axis "%s" / %s: rows "%s" and "%s" take the same glyphs; use an override row.' % (
+						ax['name'], t['layer'], groups_label(u), groups_label(t)))
+	xdoc = doc if doc.get('expanded') else machine_expand(doc)
+	core_axes = [{'name': ax['name'], 'inputs': ax['inputs'],
+	              'targets': [{'name': '%s / %s' % (t['layer'], t['group'] or SELECTION_LABEL)} for t in ax['targets']]}
+	             for ax in xdoc.get('axes', [])]
+	errors.extend(dpa.delta_setup_validate({'axes': core_axes}))
+	for ax in xdoc.get('axes', []):
+		for t in ax['targets']:
 			for key in ('vstem', 'hstem'):
 				if _num(t[key], 0.) <= 0:
 					errors.append('Axis "%s" / %s: %s must be > 0.' % (ax['name'], t['layer'], key))
@@ -352,7 +516,7 @@ def machine_validate(doc):
 					errors.append('Axis "%s" / %s: %s must be > 0.' % (ax['name'], t['layer'], key))
 			if t.get('msx') is not None and t['msx'] <= 0:
 				errors.append('Axis "%s" / %s: metrics scale must be > 0.' % (ax['name'], t['layer']))
-	return errors
+	return [e for i, e in enumerate(errors) if e not in errors[:i]]	# one per expanded group otherwise
 
 
 # - Plan -------------------------------------------------------------------
@@ -391,11 +555,17 @@ def machine_plan(doc, selection, existing=None):
 	selection_only option, the only glyphs named groups may touch).
 	existing: glyph names in the font (None = no check).
 
-	Per glyph and (axis, layer) the first matching row wins; rows with a
-	named group come before Selection rows. Returns
+	Works on the expanded document (machine_expand; a plain document is
+	expanded here): row indexes are those of the expanded rows, each with
+	one group and 'source' = the row in the document. Per glyph and (axis,
+	layer) the first matching row wins: override rows, then rows with a
+	named group, then Selection rows. Returns
 	  {'glyphs': {glyph: [(axis_index, row_index), ...]},   # in font order of first appearance
 	   'refs':   [{'axis', 'row', 'glyph'}],               # units rows solved on a reference glyph
-	   'warnings': [...]}'''
+	   'warnings': [...],
+	   'doc': the expanded document (for core_setup / ref_setup)}'''
+	if not doc.get('expanded'):
+		doc = machine_expand(doc)
 	opts = doc.get('options', OPTION_DEFAULTS)
 	selection = [g for g in selection if existing is None or g in existing]
 	selected = set(selection)
@@ -427,8 +597,11 @@ def machine_plan(doc, selection, existing=None):
 			if not names:
 				continue
 			group = groups.get(row['group'])
-			if group is not None and group['reference'] and has_units(row):
-				if existing is None or group['reference'] in existing:
+			if group is not None and has_units(row):
+				if not group['reference']:
+					warnings.append('Axis "%s" / %s / %s: size in units, but the group has no reference glyph (Groups '
+					                'tab, Ref.); each glyph is measured on its own.' % (ax['name'], row['layer'], row['group']))
+				elif existing is None or group['reference'] in existing:
 					refs.append({'axis': a, 'row': i, 'glyph': group['reference']})
 				else:
 					warnings.append('Group "%s": reference glyph %s is not in the font; each glyph is measured on its own.'
@@ -450,7 +623,7 @@ def machine_plan(doc, selection, existing=None):
 			                % (ax['name'], layer, len(names), first, second, ' '.join(names[:8])))
 	if missing:
 		warnings.append('%d group glyph(s) not in the font: %s' % (len(missing), ' '.join(sorted(missing)[:8])))
-	return {'glyphs': {name: picks[name] for name in order}, 'refs': refs, 'warnings': warnings}
+	return {'glyphs': {name: picks[name] for name in order}, 'refs': refs, 'warnings': warnings, 'doc': doc}
 
 
 def core_setup(doc, picks, solved=None, italic_angle=0.):
@@ -578,9 +751,17 @@ def machine_log(doc, run):
 		out.append('  Axis "%s": inputs %s' % (ax['name'], ', '.join(
 			'%s (V %s / H %s)' % (r['name'], '%g' % _num(r['vstem'], 0.), '%g' % _num(r['hstem'], 0.)) for r in ax['inputs'])
 			or 'none'))
+		by_id = dict((t['id'], t) for t in ax['targets'] if t.get('id'))
 		for t in ax['targets']:
-			out.append('    %s / %s: V %g, H %g, width %s, height %s, origin %s%s%s' % (
-				t['layer'], t['group'] or SELECTION_LABEL, _num(t['vstem'], 0.), _num(t['hstem'], 0.),
+			parent = by_id.get(t.get('parent'))
+			label = '%s / %s' % (t['layer'], groups_label(t))
+			if parent is not None:
+				label = '    %s (override of %s%s)' % (label, groups_label(parent),
+				                                    '; own: ' + ', '.join(k for k in INHERIT_KEYS if k not in t['inherit'])
+				                                    if len(t['inherit']) < len(INHERIT_KEYS) else '; all inherited')
+				t = resolve(t, parent)
+			out.append('    %s: V %g, H %g, width %s, height %s, origin %s%s%s' % (
+				label, _num(t['vstem'], 0.), _num(t['hstem'], 0.),
 				format_dimension(t['width']), format_dimension(t['height']),
 				dict(ORIGIN_LABELS).get(t.get('origin', 'BS'), t.get('origin', 'BS')),
 				'' if t['anchors'] else ', no anchors',
