@@ -224,9 +224,10 @@ class GlyphsDeltaHost(object):
 
 	# - Composites -----------------------------------------------------------
 	# A composite layer has components and no paths: nothing to interpolate.
-	# The Delta Machine skips it (option Skip composites) and gives it the
-	# target layer here instead, so the font stays complete, with its width
-	# following the components' base glyphs.
+	# bake_composite gives it the target layer, its width following the
+	# components' base glyphs. Since 2026-10-20 the Delta Machine does not
+	# call it (glyphs with components are not baked, user decision); kept
+	# for a later composite pass. bake_empty serves empty glyphs (spaces).
 	METRICS_KEYS = ('leftMetricsKey', 'rightMetricsKey', 'widthMetricsKey')
 
 	def _layer_named(self, glyph, name):
@@ -290,11 +291,13 @@ class GlyphsDeltaHost(object):
 		    component's base glyph: its target / base advance width (x) and
 		    outline height (y). The base layer is the reference, so a second
 		    bake does not compound.
-		Returns {'created', 'aligned', 'scale': (rx, ry) | None, 'notes': [...]}.'''
+		Returns {'created', 'aligned', 'scale': (rx, ry) | None, 'notes': [...],
+		'info': [...]}: notes are problems (the glyph gets a warning), info is
+		what was done as asked (metrics keys synced).'''
 		import copy
 		from typerig.proxy.gs3.objects.glyph import trGlyph
 		tr_glyph = trGlyph(glyph)
-		out = {'created': False, 'aligned': False, 'scale': None, 'notes': []}
+		out = {'created': False, 'aligned': False, 'scale': None, 'notes': [], 'info': []}
 		target = tr_glyph.find_layer(target_name)
 		if target is None:
 			target = tr_glyph.duplicate_layer(base_name, target_name)
@@ -312,7 +315,7 @@ class GlyphsDeltaHost(object):
 			return out
 		if any(getattr(layer, k, None) or getattr(glyph, k, None) for k in self.METRICS_KEYS):
 			layer.syncMetrics()
-			out['notes'].append('metrics keys synced')
+			out['info'].append('metrics keys synced')
 			return out
 		if out['aligned'] or not components:
 			return out
@@ -328,6 +331,43 @@ class GlyphsDeltaHost(object):
 		for c, ref in zip(components, list(base.components)):
 			c.position = (float(ref.position.x) * rx, float(ref.position.y) * ry)
 		out['scale'] = (rx, ry)
+		return out
+
+	def layer_widths(self, glyph, names):
+		'''{layer name: advance width} of the glyph's layers named in names.'''
+		out = {}
+		for name in names:
+			layer = self._layer_named(glyph, name)
+			if layer is not None:
+				out[name] = float(layer.width)
+		return out
+
+	def bake_empty(self, glyph, base_name, target_name, width=None, metrics=True):
+		'''Target layer of an empty glyph (spaces, CR: no paths, no
+		components), no delta: made from the base input when it is missing;
+		with metrics, metrics keys are synced by Glyphs, else the advance
+		width is set to width (None: kept). Returns {'created', 'width',
+		'notes', 'info'}.'''
+		from typerig.proxy.gs3.objects.glyph import trGlyph
+		tr_glyph = trGlyph(glyph)
+		out = {'created': False, 'width': None, 'notes': [], 'info': []}
+		target = tr_glyph.find_layer(target_name)
+		if target is None:
+			target = tr_glyph.duplicate_layer(base_name, target_name)
+			if target is None:
+				raise RuntimeError('no layer "{}" to copy'.format(base_name))
+			out['created'] = True
+		layer = target.host
+		if not metrics:
+			return out
+		if any(getattr(layer, k, None) or getattr(glyph, k, None) for k in self.METRICS_KEYS):
+			layer.syncMetrics()
+			out['info'].append('metrics keys synced')
+		elif width is not None:
+			layer.width = round(float(width))
+			out['width'] = layer.width
+		else:
+			out['notes'].append('no input width to interpolate: width kept')
 		return out
 
 	def begin_glyph_undo(self, glyph):

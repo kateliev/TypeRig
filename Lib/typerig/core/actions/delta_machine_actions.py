@@ -65,7 +65,6 @@ OPTION_DEFAULTS = {
 	'origin': 'BS',				# legacy (v0.1): one origin for all rows; rows have their own now
 	'extrapolate': True,
 	'selection_only': False,	# named groups: only their selected glyphs
-	'skip_composites': True,	# composites (and mixed glyphs) get no delta: target layer + metrics only
 }
 
 # Glyph status after a bake, mildest first: a glyph keeps the worst status
@@ -604,6 +603,40 @@ def target_to_core(row, scales=None):
 	return core
 
 
+def empty_advance(inputs, widths, row, scales=None, extrapolate=True):
+	'''Advance width of an empty glyph (a space: nothing to interpolate) on
+	a resolved target row: the input layers' widths interpolated along the
+	axis by V stem (piecewise linear, as the Delta engine reads the stems),
+	times the row's width percent (Met. W when set; a units width uses the
+	solved scales of the reference pass, else 100 %).
+	inputs: the axis inputs [{'name', 'vstem'}]; widths: {name: width}.
+	None when no input has a width.'''
+	pts = sorted((_num(r.get('vstem'), 0.), float(widths[r['name']])) for r in inputs
+	             if widths.get(r.get('name')) is not None)
+	if not pts:
+		return None
+	v = _num(row.get('vstem'), pts[0][0])
+	if len(pts) == 1:
+		w = pts[0][1]
+	else:
+		if not extrapolate:
+			v = min(max(v, pts[0][0]), pts[-1][0])
+		i = 0
+		while i < len(pts) - 2 and v > pts[i + 1][0]:
+			i += 1
+		(v0, w0), (v1, w1) = pts[i], pts[i + 1]
+		w = w0 if v1 == v0 else w0 + (w1 - w0) * (v - v0) / (v1 - v0)
+	if row.get('msx') is not None:
+		sx = float(row['msx'])
+	elif scales is not None:
+		sx = float(scales[0])
+	elif row['width']['unit'] == '%':
+		sx = float(row['width']['value'])
+	else:
+		sx = 100.
+	return w * sx / 100.
+
+
 def has_units(row):
 	return row['width']['unit'] == 'u' or row['height']['unit'] == 'u'
 
@@ -811,9 +844,8 @@ def machine_log(doc, run):
 	                              ' (%s)' % font['file'] if font.get('file') else ' (not saved)')]
 	if run.get('app'):
 		out.append('App:      %s' % run['app'])
-	out.append('Options:  extrapolate %s, selected only %s, skip composites %s' % (
-		'on' if opts.get('extrapolate', True) else 'off', 'on' if opts.get('selection_only') else 'off',
-		'on' if opts.get('skip_composites', True) else 'off'))
+	out.append('Options:  extrapolate %s, selected only %s' % (
+		'on' if opts.get('extrapolate', True) else 'off', 'on' if opts.get('selection_only') else 'off'))
 	out.append('Italic:   %s' % italic_summary(doc))
 
 	out += ['', 'Axes']
@@ -842,7 +874,7 @@ def machine_log(doc, run):
 	out += ['', 'Jobs']
 	for i, job in enumerate(run.get('jobs', [])):
 		out.append('  %d/%d %s: %d glyph(s)%s' % (i + 1, len(run['jobs']), job['layer'], job['glyphs'],
-		                                         ', %d composite(s)' % job['composites'] if job.get('composites') else ''))
+		                                         ', %d with components, not baked' % job['composites'] if job.get('composites') else ''))
 	if not run.get('jobs'):
 		out.append('  none')
 
