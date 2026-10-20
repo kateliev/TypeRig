@@ -80,6 +80,8 @@ COLUMNS = SimpleNamespace(
 	DEFAULT = 52,       # Designspace tab, masters: default (origin) check box
 	COUNT   = 44,       # glyph count (groups)
 	REF     = 52,       # reference glyph (groups)
+	AXIS    = 110,      # axis a target row computes from (Targets tab)
+	AX_INPUTS = 160,    # input layers of an axis (Axes tab)
 	UNICODE = 56,       # Unicode (glyphs of a group)
 	CASE    = 84,       # case / category (glyphs of a group)
 )
