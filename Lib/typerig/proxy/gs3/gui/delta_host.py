@@ -100,6 +100,29 @@ class GlyphsDeltaHost(object):
 				names.append(name)
 		return names
 
+	def ot_code(self):
+		'''OpenType code for core glyph_groups_actions.ot_index:
+		{'features': [(tag, code)], 'classes': [(name, code)], 'prefixes': [code]}.
+		Automatic features hold the code Glyphs generated last.'''
+		font = self._font()
+		out = {'features': [], 'classes': [], 'prefixes': []}
+		if font is None:
+			return out
+		for key, attr in (('features', 'features'), ('classes', 'classes'), ('prefixes', 'featurePrefixes')):
+			try:
+				items = list(getattr(font, attr) or [])
+			except Exception:
+				items = []
+			for item in items:
+				try:
+					code = str(item.code or '')
+					if getattr(item, 'disabled', False) or getattr(item, 'active', True) is False:
+						continue
+				except Exception:
+					continue
+				out[key].append(code if key == 'prefixes' else (str(item.name or ''), code))
+		return out
+
 	def open_tab(self, names):
 		font = self._font()
 		if font is not None and names:

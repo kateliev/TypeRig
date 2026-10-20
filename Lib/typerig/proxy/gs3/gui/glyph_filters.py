@@ -12,6 +12,8 @@
 #   match_pattern(names, pat)  glob patterns: '*.sc  a* -a.alt'
 #   glyph_kind(glyph)          colour key: Uppercase / Lowercase / Smallcaps /
 #                              Figure / Mark / Other
+#   glyph_record(glyph)        host-neutral record for core
+#                              glyph_groups_actions (auto groups, export)
 #
 # Case: GS3.2+ and GS4 have glyph.case (GSUppercase = 1, GSLowercase = 2,
 # GSSmallcaps = 3, GSMinor = 4); older GS3 used subCategory 'Uppercase' /
@@ -103,6 +105,48 @@ def glyph_info(glyph):
 	label = ' '.join(str(x) for x in (category, case or (sub if sub and sub != case else '')) if x)
 	return {'name': str(_attr(glyph, 'name') or ''), 'unicode': str(_attr(glyph, 'unicode') or ''),
 	        'category': label, 'kind': glyph_kind(glyph)}
+
+
+def _unicodes(glyph):
+	codes = _attr(glyph, 'unicodes')
+	try:
+		codes = [str(c) for c in codes] if codes else []
+	except TypeError:
+		codes = []
+	if not codes and _attr(glyph, 'unicode'):
+		codes = [str(_attr(glyph, 'unicode'))]
+	return codes
+
+
+def _first_layer(glyph):
+	try:
+		layers = glyph.layers
+		return layers[0] if len(layers) else None
+	except Exception:
+		return None
+
+
+def glyph_record(glyph):
+	'''{'name', 'unicodes', 'category', 'subCategory', 'case', 'script',
+	'export', 'shape', 'components'} of a GSGlyph (core glyph_groups_actions
+	record). Shape and components: the first layer (first master).'''
+	layer = _first_layer(glyph)
+	components, paths = [], 0
+	if layer is not None:
+		try:
+			components = [str(getattr(c, 'componentName', None) or c.name) for c in layer.components]
+		except Exception:
+			components = []
+		try:
+			paths = len(layer.paths)
+		except Exception:
+			paths = 0
+	shape = 'mixed' if paths and components else 'composite' if components else 'outline' if paths else 'empty'
+	return {'name': str(_attr(glyph, 'name') or ''), 'unicodes': _unicodes(glyph),
+	        'category': _category(glyph), 'subCategory': str(_attr(glyph, 'subCategory') or ''),
+	        'case': glyph_case(glyph) or '', 'script': str(_attr(glyph, 'script') or ''),
+	        'export': _attr(glyph, 'export') is not False,
+	        'shape': shape if layer is not None else '', 'components': components}
 
 
 # - Filters ----------------------------------------------------------------
