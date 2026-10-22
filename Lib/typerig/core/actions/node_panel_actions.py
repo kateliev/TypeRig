@@ -29,6 +29,24 @@ def _selected_indices(contour):
     return [i for i, n in enumerate(contour.data) if n.selected]
 
 
+def _selected_segment_starts(contour, select_one_node=False):
+    """Indices of on-curve nodes whose outgoing segment is selected.
+    A segment counts when both its on-curve ends are selected (FL rule).
+    select_one_node=True: every selected on-curve node counts (FL Alt).
+    """
+    on_idx = [i for i, n in enumerate(contour.data) if n.is_on]
+    selected = set(i for i in on_idx if contour.data[i].selected)
+
+    if select_one_node:
+        return sorted(selected)
+
+    pairs = list(zip(on_idx, on_idx[1:]))
+    if contour.closed and len(on_idx) > 1:
+        pairs.append((on_idx[-1], on_idx[0]))
+
+    return [a for a, b in pairs if a in selected and b in selected]
+
+
 def _selected_nodes(layer):
     """Gather all selected nodes on a layer."""
     return [n for s in layer.shapes for c in s.contours
@@ -52,22 +70,26 @@ def _iter_scope(glyph, scope_layers):
 # ===================================================================
 # 1. NODE TOOLS
 # ===================================================================
-def npa_insert(glyph, scope_layers, NodeActions, t=0.5):
-    """Insert node at parametric position t on selected segments."""
+def npa_insert(glyph, scope_layers, NodeActions, t=0.5, select_one_node=False):
+    """Insert node at parametric position t on selected segments.
+    A segment needs both on-curve ends selected; select_one_node=True
+    (Alt) splits the outgoing segment of every selected on-curve node.
+    """
     for lyr in _iter_scope(glyph, scope_layers):
         for s in lyr.shapes:
             for c in s.contours:
-                idx = _selected_indices(c)
+                idx = _selected_segment_starts(c, select_one_node)
                 if idx:
                     NodeActions.node_insert(c, idx, t)
 
 
-def npa_insert_at_extremes(glyph, scope_layers, NodeActions):
-    """Insert nodes at curve extremes."""
+def npa_insert_at_extremes(glyph, scope_layers, NodeActions, select_one_node=False):
+    """Insert nodes at curve extremes of selected segments (same selection
+    rule as npa_insert)."""
     for lyr in _iter_scope(glyph, scope_layers):
         for s in lyr.shapes:
             for c in s.contours:
-                idx = _selected_indices(c)
+                idx = _selected_segment_starts(c, select_one_node)
                 if idx:
                     NodeActions.node_insert_at_extremes(c, idx)
 
