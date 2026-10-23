@@ -93,6 +93,33 @@ def get_crossing(node_list):
 TRCornerRebuild = namedtuple('TRCornerRebuild',
 	'node_first node_last new_in new_out corner in_seg_nodes next_on corner_size')
 
+def _start_node_in_fl_range(node_a, node_b):
+	'''Check whether the contour's start node lies in the forward walk from
+	node_a to node_b (exclusive of both endpoints). Returns True when the
+	start node would be removed by removeNodesBetween or similar operations.
+	'''
+	parent_contour = node_a.contour
+	if parent_contour is None:
+		return False
+
+	start_node = parent_contour.first
+	if start_node is None:
+		return False
+
+	start_id = start_node.id
+	cursor = node_a.getNext(False)
+	guard = 10000
+
+	while cursor is not None and cursor.fl.id != node_b.fl.id and guard > 0:
+		if cursor.fl.id == start_id:
+			return True
+		if cursor.fl.id == node_a.fl.id:
+			break
+		cursor = cursor.getNext(False)
+		guard -= 1
+
+	return False
+
 def get_corner_span_nodes(node_from, node_to, limit=1000):
 	'''The on-curve nodes from node_from forward to node_to, both included.
 
@@ -1408,11 +1435,16 @@ class TRNodeActionCollector(object):
 		do_update = False
 		
 		# - Process
-		for layer, selection in selection_per_layer.items():		
+		for layer, selection in selection_per_layer.items():
 			if len(selection) == 2:
 				node_A, node_B = selection
 				parent_contour = node_A.contour
-				
+
+				# - Refuse when the contour start node is in the cap region
+				if _start_node_in_fl_range(node_A, node_B):
+					warnings.warn('ABORT:\tRound cap refused: contour start node is inside the cap region! Move the start point first. Layer: {}'.format(layer), NodeWarning)
+					continue
+
 				# - Get Angle and radius
 				nextNode_A = node_A.getNextOn(False)
 				prevNode_A = node_A.getPrevOn(False)
@@ -1437,14 +1469,14 @@ class TRNodeActionCollector(object):
 
 				# - Build cap contour
 				new_cap_contour = cap_head_A + cap_fillet_A + cap_tail_A[:1] + cap_head_B[2:] + cap_fillet_B + cap_tail_B
-				
+
 				# - Insert and cleanup
 				parent_contour.insert(prevNode_A.index, new_cap_contour)
 				parent_contour.removeOne(prevNode_A.fl)
 				parent_contour.removeNodesBetween(new_cap_contour[-1], nextNode_B.fl)
 				parent_contour.removeOne(nextNode_B.fl)
-			
-				do_update = True			
+
+				do_update = True
 
 		if do_update:
 			glyph.updateObject(glyph.fl, '{};\tRound Cap @ {}.'.format(glyph.name, '; '.join(wLayers)))
@@ -1462,12 +1494,17 @@ class TRNodeActionCollector(object):
 		do_update = False
 		
 		# - Process
-		for layer, selection in selection_per_layer.items():		
+		for layer, selection in selection_per_layer.items():
 			if len(selection) == 2:
 				# - Init
 				node_A, node_B = selection
 				parent_contour = node_A.contour
-				
+
+				# - Refuse when the contour start node is in the cap region
+				if _start_node_in_fl_range(node_A, node_B):
+					warnings.warn('ABORT:\tRound cap refused: contour start node is inside the cap region! Move the start point first. Layer: {}'.format(layer), NodeWarning)
+					continue
+
 				nextNode_A = node_A.getNextOn(False)
 				prevNode_A = node_A.getPrevOn(False)
 				nextNode_B = node_B.getNextOn(False)
@@ -1611,6 +1648,11 @@ class TRNodeActionCollector(object):
 
 		# - Helpers
 		def rebuild_cap(node_list, keep_nodes):
+			# - Refuse when the contour start node is in the cap region
+			if not keep_nodes and _start_node_in_fl_range(node_list[0], node_list[6]):
+				warnings.warn('ABORT:\tRebuild cap refused: contour start node is inside the cap region! Move the start point first.', NodeWarning)
+				return
+
 			# - Get crossing for each rounded corner
 			crossing_A = get_crossing_handles(node_list[:4])
 			crossing_B = get_crossing_handles(node_list[3:])

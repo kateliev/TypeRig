@@ -11,6 +11,7 @@
 # - Dependencies -------------------------
 from __future__ import print_function
 import math
+import warnings
 
 import fontlab as fl6
 import PythonQt as pqt
@@ -20,6 +21,7 @@ from typerig.core.func.geometry import ccw, squircle_corner
 from typerig.core.func.utils import get_cattr
 from typerig.core.objects.utils import Bounds
 from typerig.proxy.fl.objects.base import Coord, Line, Vector, Curve
+from typerig.core.base.message import NodeWarning
 
 # - Init ---------------------------------
 __version__ = '0.29.2'
@@ -550,6 +552,13 @@ class eNode(pNode):
 		# - Init
 		parent_contour = self.contour
 
+		# - Refuse when the target is the contour start node
+		if insert and parent_contour is not None:
+			start_node = parent_contour.first
+			if start_node is not None and self.fl.id == start_node.id:
+				warnings.warn('ABORT:\tRound corner refused: target is the contour start node! Move the start point first.', NodeWarning)
+				return None
+
 		# - Calculate unit vectors and radii
 		nextNode = self.getNextOn(False)
 		prevNode = self.getPrevOn(False)
@@ -652,6 +661,13 @@ class eNode(pNode):
 		'''
 		# - Init
 		parent_contour = self.contour
+
+		# - Refuse when the target is the contour start node
+		if insert and parent_contour is not None:
+			start_node = parent_contour.first
+			if start_node is not None and self.fl.id == start_node.id:
+				warnings.warn('ABORT:\tSquircle corner refused: target is the contour start node! Move the start point first.', NodeWarning)
+				return None
 
 		nextNode = self.getNextOn(False)
 		prevNode = self.getPrevOn(False)

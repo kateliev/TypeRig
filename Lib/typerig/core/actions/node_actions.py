@@ -139,6 +139,24 @@ def _remove_inclusive_range_forward(start_node, stop_node):
 		n.remove()
 
 
+def _start_node_in_range(contour, node_a, node_b):
+	'''Check whether the contour's start node lies in the forward walk from
+	node_a to node_b (exclusive of both endpoints). Returns True when the
+	start node would be removed by _remove_inclusive_range_forward(node_a.next, node_b).
+	'''
+	start_node = contour.nodes[contour.start_index]
+	cursor = node_a.next
+	guard = 10000
+
+	while cursor is not None and cursor is not node_b and guard > 0:
+		if cursor is start_node:
+			return True
+		cursor = cursor.next
+		guard -= 1
+
+	return False
+
+
 def _get_crossing(node_list):
 	'''Crossing of the straight tangent lines at the ends of a selection.
 
@@ -667,6 +685,10 @@ class NodeActions(object):
 		if not node_a.is_on or not node_b.is_on or node_a is node_b:
 			return None
 
+		if _start_node_in_range(contour, node_a, node_b):
+			print('WARNING:\tCap butt refused: contour start node is inside the cap region! Move the start point first.')
+			return None
+
 		seg_in_a = node_a.prev_on.segment    # segment ending at A
 		seg_out_b = node_b.segment           # segment starting at B
 
@@ -775,6 +797,10 @@ class NodeActions(object):
 		node_b = nodes[idx_b]
 
 		if not node_a.is_on or not node_b.is_on or node_a is node_b:
+			return None
+
+		if _start_node_in_range(contour, node_a, node_b):
+			print('WARNING:\tCap round refused: contour start node is inside the cap region! Move the start point first.')
 			return None
 
 		seg_in_a = node_a.prev_on.segment
@@ -927,6 +953,10 @@ class NodeActions(object):
 		if not node_a.is_on or not node_b.is_on or node_a is node_b:
 			return None
 
+		if _start_node_in_range(contour, node_a, node_b):
+			print('WARNING:\tCap angular refused: contour start node is inside the cap region! Move the start point first.')
+			return None
+
 		seg_in_a = node_a.prev_on.segment
 		seg_out_b = node_b.segment
 
@@ -989,6 +1019,10 @@ class NodeActions(object):
 		# The two boundary on-curves — first and last in contour order
 		node_a = selected_on[0]
 		node_b = selected_on[-1]
+
+		if _start_node_in_range(contour, node_a, node_b):
+			print('WARNING:\tCap rebuild refused: contour start node is inside the cap region! Move the start point first.')
+			return None
 
 		# Try the perpendicular butt cut first (handles italic caps).
 		result = NodeActions.cap_butt(contour, node_a.idx, node_b.idx, side='auto')
