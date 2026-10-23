@@ -262,6 +262,16 @@ def _get_corner_rebuild(on_nodes):
 
 	first_on, last_on, corner_size = resolved
 
+	# - Refuse when the contour start node falls inside the corner.
+	#   Removing or restructuring the start node can crash the host app.
+	contour = first_on.contour
+	if contour is not None:
+		start_node = contour.nodes[contour.start_index]
+		span = _corner_span_nodes(first_on, last_on)
+		if span is not None and start_node in span:
+			print('WARNING:\tRebuild corner refused: contour start node is inside the selection! Move the start point first.')
+			return None
+
 	prev_on = first_on.prev_on
 	next_on = last_on.next_on
 

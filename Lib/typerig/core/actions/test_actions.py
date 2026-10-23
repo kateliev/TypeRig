@@ -187,15 +187,11 @@ _c9 = Contour([
 	Node(175., 5., type=ON),							# 6  corner
 ], closed=True)
 
-check('A9 wrapped corner rebuilt', NodeActions.corner_rebuild(_c9, [0, 1, 5, 6]) is True)
-check('A9 wrapped cusp at (200,0)',
-		any(close(node.x, 200.) and close(node.y, 0.) for node in _c9.nodes))
-check('A9 wrapped kept the far side', len(_c9.nodes) == 4)
+check('A9 wrapped corner refused (start node in selection)',
+		NodeActions.corner_rebuild(_c9, [0, 1, 5, 6]) is False)
+check('A9 wrapped contour untouched', len(_c9.nodes) == 7)
 check('A9 wrapped kept (0,-200)', any(close(n.x, 0.) and close(n.y, -200.) for n in _c9.nodes))
 check('A9 wrapped kept (0,0)', any(close(n.x, 0.) and close(n.y, 0.) for n in _c9.nodes))
-check('A9 wrapped dropped the corner nodes',
-		not any(close(n.x, 190.) and close(n.y, 10.) for n in _c9.nodes)
-		and not any(close(n.x, 175.) and close(n.y, 5.) for n in _c9.nodes))
 
 # -- Winding must not matter: the same corner, contour reversed -----------
 # Reversing the winding swaps which way round is "shorter"; the result has to

@@ -312,11 +312,17 @@ class TRSmartCorner(QtGui.QVBoxLayout):
 					wLayers = glyph._prepareLayers(pLayers)
 					selection_layers = {layer:glyph.selectedNodes(layer, filterOn=True, extend=eNode) for layer in wLayers}
 
-					for layer, selection in selection_layers.items():			
+					for layer, selection in selection_layers.items():
 						if len(selection) > 1:
 							node_first = selection[0]
 							node_last = selection[-1]
-							
+
+							# - Refuse when the contour start node is in the selection
+							start_node = node_first.contour.first
+							if start_node is not None and start_node.id in set(n.fl.id for n in selection):
+								warnings.warn('ABORT:\tRebuild corner refused: contour start node is inside the selection! Move the start point first. Layer: {}'.format(layer), NodeWarning)
+								continue
+
 							line_in = node_first.getPrevLine() if node_first.getPrevOn(False) not in selection else node_first.getNextLine()
 							line_out = node_last.getNextLine() if node_last.getNextOn(False) not in selection else node_last.getPrevLine()
 

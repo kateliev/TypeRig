@@ -296,6 +296,18 @@ def get_corner_rebuild(selection):
 		return None
 
 	node_first, node_last, corner_size = resolved
+
+	# - Refuse when the contour start node falls inside the corner.
+	#   Removing or restructuring the start node causes FontLab to halt.
+	start_node = node_first.contour.first
+	if start_node is not None:
+		span = get_corner_span_nodes(node_first, node_last)
+		if span is not None:
+			span_ids = set(node.fl.id for node in span)
+			if start_node.id in span_ids:
+				warnings.warn('ABORT:\tRebuild corner refused: contour start node is inside the selection! Move the start point first.', NodeWarning)
+				return None
+
 	segments = get_corner_segments(node_first, node_last)
 
 	if segments is None:
