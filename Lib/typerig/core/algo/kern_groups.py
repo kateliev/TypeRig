@@ -15,6 +15,8 @@
 #   plan_merge(kset, side, names, new, preserve)        groups into one
 #   group_rows(kset, side) / validate(kset, glyphs)     tables and checks for the window
 #   leaders_from_cla(classes, kset)                     leaders read from a CLA file
+#   auto_groups(kset, components, workset, glyphs)      groups from composites and suffixes (FL Kern Classes)
+#   plan_auto(kset, proposal, preserve)                 the proposal as a ChangeSet
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2018-2026  (http://www.kateliev.com)
 # (C) TypeRig                      (http://www.typerig.com)
@@ -304,3 +306,115 @@ def leaders_from_cla(classes, kset):
 		if not found:
 			skipped.append((name, 'no such group'))
 	return out, skipped
+
+
+# - Auto build (FL Kern Classes "Auto Build Classes", fixed) ----------------------------
+AUTO_BAN = ('sups', 'subs', 'dnom', 'numr', 'notdef', 'null')
+
+
+def _base_of(glyph, components, workset, names):
+	'''(base, reason): the one letter component of a composite, else the name
+	without its suffix (a.ss01 -> a); (None, reason) when none or several.'''
+	comps = [c for c in dict.fromkeys(components.get(glyph, [])) if c in workset and c != glyph]
+	if len(comps) == 1:
+		return comps[0], 'component'
+	if len(comps) > 1:
+		return None, 'several letter components: %s' % ', '.join(comps)
+	if '.' in glyph.strip('.'):
+		base = glyph.split('.')[0]
+		if base in names and base != glyph:
+			return base, 'suffix'
+	return None, ''
+
+
+def auto_groups(kset, components, workset, glyphs, only_ungrouped=True, ban=AUTO_BAN):
+	'''Groups from composites and suffixes, on both sides.
+	components {glyph: [component names]}, workset: the base letters (glyphs that
+	may lead a group), glyphs: every glyph name. A glyph joins the group its root
+	base has on that side (a new group named like the base when it has none).
+	only_ungrouped: glyphs that have a group on a side keep it.
+	Returns {'groups': {side: {group: [glyphs to add]}}, 'new': {side: [groups]},
+	'kept': [(side, glyph, group)], 'warnings': [(glyph, reason)]}.'''
+	names, workset = set(glyphs), set(workset)
+	out = {'groups': {LEFT: {}, RIGHT: {}}, 'new': {LEFT: [], RIGHT: []}, 'kept': [], 'warnings': []}
+	roots = {}
+	for glyph in glyphs:
+		if any(b in glyph for b in ban):
+			continue
+		base, reason = _base_of(glyph, components, workset, names)
+		if base is None:
+			if reason:
+				out['warnings'].append((glyph, reason))
+			continue
+		seen = {glyph}
+		while base not in seen:		# follow chains: Aogonek.ss01 -> Aogonek -> A
+			seen.add(base)
+			nxt, _r = _base_of(base, components, workset, names)
+			if nxt is None:
+				break
+			base = nxt
+		roots[glyph] = base
+	for glyph, base in sorted(roots.items()):
+		for side in SIDES:
+			current = kset.group_of(glyph, side)
+			target = kset.group_of(base, side)
+			if current is not None and (only_ungrouped or current == target):
+				if current != target:
+					out['kept'].append((side, glyph, current))
+				continue
+			if target is None:
+				target = base
+				if target not in kset.groups[side] and target not in out['new'][side]:
+					out['new'][side].append(target)
+					out['groups'][side].setdefault(target, []).append(base)
+			members = out['groups'][side].setdefault(target, [])
+			if glyph not in members:
+				members.append(glyph)
+	return out
+
+
+def plan_auto(kset, proposal, preserve=True, base=None):
+	'''One ChangeSet for an auto_groups proposal (moves group by group, on top of base).'''
+	total = ChangeSet('auto groups')
+	pending = ChangeSet('auto base')
+	if base is not None:
+		_merge(pending, base)
+	moved = 0
+	for side in SIDES:
+		for name, glyphs in sorted(proposal['groups'][side].items()):
+			cs = plan_move(kset, side, glyphs, name, preserve, pending)
+			_merge(pending, cs)
+			_merge(total, cs)
+			moved += len(glyphs)
+	total.log = ['Auto groups: %d glyph(s) placed, %d new group(s)%s' % (
+		moved, len(proposal['new'][LEFT]) + len(proposal['new'][RIGHT]), ', rendering kept' if preserve else '')]
+	return total
+
+
+def _merge(into, cs):
+	for side in SIDES:
+		for name, members in cs.groups[side].items():
+			into.set_group(side, name, members)
+	for master, entry in cs.pairs.items():
+		for pair in entry['remove']:
+			into.remove(master, pair)
+		for pair, value in entry['set'].items():
+			into.set(master, pair, value)
+	into.locked.extend(cs.locked)
+
+
+def auto_text(proposal):
+	lines = []
+	for side in SIDES:
+		groups = proposal['groups'][side]
+		lines.append('%s side: %d group(s) get %d glyph(s); new: %s' % (
+			side.capitalize(), len(groups), sum(len(v) for v in groups.values()),
+			', '.join(proposal['new'][side]) or 'none'))
+		for name, glyphs in sorted(groups.items())[:30]:
+			lines.append('  %s + %s' % (name, ' '.join(glyphs)))
+	if proposal['kept']:
+		lines.append('Kept in their own group: %d (e.g. %s)' % (len(proposal['kept']), ', '.join(
+			'%s %s in %s' % k for k in proposal['kept'][:8])))
+	for glyph, reason in proposal['warnings'][:20]:
+		lines.append('Not placed: %s (%s)' % (glyph, reason))
+	return '\n'.join(lines) + '\n'
