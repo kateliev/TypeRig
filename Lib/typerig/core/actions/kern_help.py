@@ -14,7 +14,7 @@
 
 from __future__ import unicode_literals
 
-__version__ = '0.3.0'
+__version__ = '0.4.0'
 
 HELP_TEXT = '''TR KERN — HELP
 
@@ -23,7 +23,7 @@ TR Kern manages the kerning of a font. This version has these tools:
 - Rules copies kerning by analogy, for example from O V to Odieresis V. You keep the rules in the font.
 - Strings makes proof strings and pair lists.
 - Import puts kerning from an external source (an autokerner, DTL KernMaster) into your font. Your kerning groups do not change.
-- Job writes the files that DTL KernMaster needs: a pair list (KRN) and the classes (CLA).
+- Job composes the pairs for DTL KernMaster and writes its files: the pairs (KRN) and the classes (CLA).
 
 Most buttons show an icon. Hold the pointer on a button to see its name and what it does.
 
@@ -34,7 +34,7 @@ Pair — two sides with a kerning value. A side is a glyph or a group.
 Group — a kerning group (class). A group is on the left side or on the right side of a pair.
 Exception — a pair where at least one side is a glyph, not a group. It changes the value for that glyph only.
 Class value — the value of a group pair, for example @T @o = -50.
-Key glyph — the glyph that stands for a group. It is the member with the same name as the group, else the first member.
+Key glyph (leader) — the glyph that stands for a group. It is the leader that you set, else the member with the same name as the group, else the first member.
 Source — a file with flat glyph pairs: an AFM file, or a KRN file with values.
 Coverage — the glyphs that a source knows. In an AFM file, these are the glyphs in its CharMetrics list.
 Snapshot — a copy of the kerning before a change, kept in a folder next to the font.
@@ -217,16 +217,24 @@ If the font is not saved, there is no folder. Then "Restore last" works only unt
 
 10. JOB — DTL KERNMASTER
 
-1. Open the Job tab.
-2. Select the pairs:
-   - Font kerning: the pairs that each master has now.
-   - A × B: the pairs from the A list and the B list.
-3. For A × B, type glyph names or groups. Use @name for a group and @* for all groups of that side. "Use groups" changes each glyph to its group.
-4. Select the masters.
-5. Click "Export job" and select a folder.
-The tool writes one KRN file for each master and one CLA file for the font.
+The Job tab writes the files that DTL KernMaster needs: one KRN file (the pairs to kern) for each master and one CLA file (the classes). It works like the FontRig Kern Job Composer, and it opens and saves the same composition files (JSON).
 
-Class names in the files have the side at the end: _1 is the left side, _2 is the right side. For example, @T_1 and @o_2.
+Compositions — a job is a list of blocks. A block has items. Each item is on the left side (1ST), on the right side (2ND), or on both. A block gives each 1ST item with each 2ND item. The job is all the blocks together. A pair that is in two blocks is written one time.
 
-DTL KernMaster gives back AFM files. Import them in the Import tab. The groups of the font stay the same.
+Items — glyph names, characters, @group, @* (all groups of that side) or a set: *Uppercase, *Lowercase, *Smallcaps, *Figures, *Marks, *Alternates, *Ligatures, *Other. An item can have more than one name, separated by spaces. A group name from a CLA file (for example @T_1) is also correct.
+
+To make a job:
+1. Click + under the blocks to make a block. Double-click its name to change it.
+2. Type an item in the "New item" field and press Return. Or copy a list and click Paste ("quoted","names", /slash/names, names, separated by commas, or one name on each line).
+3. Set 1ST and 2ND for each item.
+4. Select the masters. "Use groups" writes a glyph as its group, if it has one.
+5. Click Preview. Read what the files will have: the pairs of each block, the total, the warnings, the classes and the pairs.
+6. Click "Export job" and select a folder.
+To use the pairs that each master has now, select "Font kerning" in the Pairs menu.
+
+Class names have the side at the end: _1 is the left side, _2 is the right side. For example, @T_1 and @o_2.
+
+Leaders — DTL KernMaster kerns a class with its first glyph, the leader. The CLA file puts the leader of each group first. The same leader is the key glyph of the import (section 6), of Explain and of the proof strings. You set the leaders in the Groups tab (a later version). Until then, the leader is the member with the same name as the group, else the first member.
+
+DTL KernMaster gives back AFM files. Import them in the Import tab. Export job sets the "Strip" text of the import, so that the AFM files find their masters.
 '''

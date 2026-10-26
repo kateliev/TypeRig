@@ -5,7 +5,8 @@
 # read only: this module never adds, renames or removes a group.
 #
 # Per group pair (bucket) the class value is chosen by a rule:
-#   key    the key glyphs' pair (member named like the group), else mode
+#   key    the leaders' pair (stored leader, else the member named like
+#          the group), else mode
 #   mode   the value most members agree with (within tolerance)
 #   median the middle value (median_low, so it is a real member value)
 # Members that differ by more than the tolerance become exceptions,
@@ -38,8 +39,7 @@ from __future__ import absolute_import, print_function, division
 import re
 from collections import Counter
 
-from typerig.core.algo.kern_model import (KernSet, LEFT, RIGHT, is_group, group_key, group_name,
-                                         key_glyph, to_int)
+from typerig.core.algo.kern_model import (KernSet, LEFT, RIGHT, is_group, group_key, group_name, to_int)
 
 __version__ = '0.1.0'
 
@@ -171,7 +171,7 @@ def reclass(flat, groups, rule=RULE_DEFAULT, tolerance=0, absent=ABSENT_DEFAULT,
 			return key
 		name = group_name(key)
 		chosen = (keys.get(side) or {}).get(name)
-		return chosen or key_glyph(name, kset.groups[side].get(name, []))
+		return chosen or kset.leader(name, side)
 
 	table, desired = {}, {}
 	report = {'buckets': 0, 'cells': 0, 'present': 0, 'kinds': Counter(), 'key_fallback': [], 'outside': set()}

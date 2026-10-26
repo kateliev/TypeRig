@@ -11,9 +11,11 @@
 #   plan_text(...)                         the report shown before / after Apply
 # Snapshots (sidecar folder next to the font, user decision 2026-10-26):
 #   snapshot_folder / snapshot_write / snapshot_list / snapshot_read
-# KernMaster job (KRN pair list + CLA classes):
+# KernMaster job (KRN pair list + CLA classes, leader first):
 #   job_classes(kset), job_pairs_font(kset, master), job_pairs_ab(kset, a, b)
-# Font lib (locks, jobs, rule sets, strings settings): LIB_KEY, lib_normalize
+#   compositions (FontRig Kern Job Composer JSON): normalize_blocks,
+#   job_pairs_blocks(kset, blocks, ...), job_preview_text(...)
+# Font lib (locks, jobs, rule sets, strings settings, group leaders): LIB_KEY, lib_normalize
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2026       (http://www.kateliev.com)
 # (C) TypeRig                      (http://www.typerig.com)
@@ -35,7 +37,7 @@ from typerig.core.algo.kern_model import (ChangeSet, KernSet, LEFT, RIGHT, is_gr
                                          group_key, to_int)
 from typerig.core.fileio import afm, krn
 
-__version__ = '0.3.0'
+__version__ = '0.4.0'
 
 # - Init -------------------------------------------------------------------
 SCOPE_MERGE_CLEAR, SCOPE_REPLACE, SCOPE_MERGE = 'merge_clear', 'replace', 'merge'
@@ -51,7 +53,8 @@ SOURCE_TYPES = ('afm', 'krn')	# import sources (KRN: only pairs that carry a val
 # KernMaster job: CLA has no sides, so a group gets the side in its name.
 # Same convention as the FL Kern Classes auto build (name_1 = 1st / left, name_2 = 2nd / right).
 JOB_SIDE_SUFFIX = {LEFT: '_1', RIGHT: '_2'}
-JOB_SOURCES = (('font', 'Font kerning (pairs as stored)'), ('ab', 'A × B'))
+JOB_SOURCES = (('blocks', 'Compositions'), ('font', 'Font kerning (pairs as stored)'))
+JOB_PREVIEW_LINES = 3000	# preview: KRN lines shown at most (the files hold all)
 
 IMPORT_DEFAULTS = {
 	'rule': krc.RULE_DEFAULT,		# key | mode | median
@@ -298,13 +301,14 @@ def job_name(key, side):
 
 
 def job_classes(kset):
-	'''[(class name, members)] for the CLA file, both sides, side suffixed.'''
+	'''[(class name, members)] for the CLA file, both sides, side suffixed,
+	the group leader first (KernMaster kerns a class by its first member).'''
 	out = []
 	for side in (LEFT, RIGHT):
 		for name in sorted(kset.groups[side]):
-			members = kset.groups[side][name]
+			members = kset.ordered_members(name, side)
 			if members:
-				out.append((name + JOB_SIDE_SUFFIX[side], list(members)))
+				out.append((name + JOB_SIDE_SUFFIX[side], members))
 	return out
 
 
@@ -339,7 +343,8 @@ def job_pairs_ab(kset, a_text, b_text, use_groups=True):
 
 # - Font lib -----------------------------------------------------------------
 def lib_new():
-	return {'format': LIB_FORMAT, 'locks': [], 'job': {}, 'import': {}, 'rules': [], 'strings': {}}
+	return {'format': LIB_FORMAT, 'locks': [], 'job': {}, 'import': {}, 'rules': [], 'strings': {},
+	        'leaders': {LEFT: {}, RIGHT: {}}}
 
 
 def lib_normalize(data):
@@ -353,6 +358,8 @@ def lib_normalize(data):
 				out[key] = dict(data[key])
 		from typerig.core.algo.kern_rules import normalize_sets
 		out['rules'] = normalize_sets(data.get('rules'))
+		leaders = data.get('leaders') if isinstance(data.get('leaders'), dict) else {}
+		out['leaders'] = {side: {str(k): str(v) for k, v in (leaders.get(side) or {}).items()} for side in (LEFT, RIGHT)}
 	return out
 
 
@@ -470,3 +477,126 @@ def merge_changes(into, cs):
 	into.locked.extend(cs.locked)
 	into.log.extend(cs.log)
 	return into
+
+
+
+# - KernMaster job: compositions ----------------------------------------------------
+# A composition block (FontRig Kern Job Composer format, JSON compatible):
+#   [name, [[item, first, second], ...]]
+# item: glyph names, @group (a _1 / _2 side suffix is accepted), @* (every
+# group of the side), *Set (host glyph set), characters; several space
+# separated. A block gives every 1ST item x every 2ND item.
+
+def block_new(name='Block'):
+	return [str(name), []]
+
+
+def normalize_blocks(data):
+	'''Composer JSON (or our own) -> [[name, [[item, first, second], ...]], ...]; junk dropped.'''
+	out = []
+	for block in data or []:
+		if not isinstance(block, (list, tuple)) or len(block) != 2 or not isinstance(block[1], (list, tuple)):
+			continue
+		items = []
+		for item in block[1]:
+			if isinstance(item, (list, tuple)) and len(item) >= 3 and str(item[0]).strip():
+				items.append([str(item[0]).strip(), bool(item[1]), bool(item[2])])
+		out.append([str(block[0]), items])
+	return out
+
+
+def _job_keys(kset, text, side, use_groups, sets, glyphs, char_map, report):
+	'''Side keys for an item text. Unknown names and glyphs turned into
+	groups are noted in report.'''
+	keys = []
+	for token in str(text or '').split():
+		if token == '@*':
+			found = [group_key(n) for n in sorted(kset.groups[side])]
+		elif token.startswith('@'):
+			name = group_name(token)
+			suffix = JOB_SIDE_SUFFIX[side]
+			if name not in kset.groups[side] and name.endswith(suffix) and name[:-len(suffix)] in kset.groups[side]:
+				name = name[:-len(suffix)]
+			found = [group_key(name)] if name in kset.groups[side] else []
+		elif token.startswith('*') and sets is not None:
+			found = list(sets.get(token[1:], []))
+		else:
+			glyph = char_map.get(token, token) if (char_map and len(token) == 1) else token
+			found = [glyph] if glyphs is None or glyph in glyphs else []
+		if not found:
+			report['unknown'].add(token)
+		for key in found:
+			if not is_group(key) and use_groups:
+				grouped = kset.side_key(key, side)
+				if grouped != key:
+					report['grouped'].add('%s \u2192 %s' % (key, job_name(grouped, side)))
+					key = grouped
+			if key not in keys:
+				keys.append(key)
+	return keys
+
+
+def job_pairs_blocks(kset, blocks, use_groups=True, sets=None, glyphs=None, char_map=None):
+	'''Pairs of composition blocks in job names, unique, in block order.
+	Returns (pairs, report): report {'blocks': [(name, pairs)], 'duplicates', 'unknown': set,
+	'grouped': set, 'empty': [block names without 1ST or 2ND items]}.'''
+	glyphs = set(glyphs) if glyphs is not None else None
+	report = {'blocks': [], 'duplicates': 0, 'unknown': set(), 'grouped': set(), 'empty': []}
+	pairs, seen = [], set()
+	for name, items in normalize_blocks(blocks):
+		lefts, rights = [], []
+		for text, first, second in items:
+			if first:
+				lefts += [k for k in _job_keys(kset, text, LEFT, use_groups, sets, glyphs, char_map, report) if k not in lefts]
+			if second:
+				rights += [k for k in _job_keys(kset, text, RIGHT, use_groups, sets, glyphs, char_map, report) if k not in rights]
+		if not lefts or not rights:
+			report['empty'].append(name)
+		count = 0
+		for left in lefts:
+			for right in rights:
+				pair = (job_name(left, LEFT), job_name(right, RIGHT))
+				count += 1
+				if pair in seen:
+					report['duplicates'] += 1
+					continue
+				seen.add(pair)
+				pairs.append(pair)
+		report['blocks'].append((name, count))
+	return pairs, report
+
+
+def job_preview_text(pairs_by_master, classes, report=None, limit=JOB_PREVIEW_LINES):
+	'''What Export job writes: blocks, warnings, CLA (leader first), KRN.'''
+	masters = list(pairs_by_master)
+	lines = ['JOB PREVIEW: %d master(s): %s' % (len(masters), ', '.join(masters)), '']
+	if report is not None:
+		lines.append('Blocks:')
+		for name, count in report['blocks']:
+			lines.append('  %-28s %d pairs' % (name, count))
+		total = len(next(iter(pairs_by_master.values()))) if pairs_by_master else 0
+		lines.append('Total: %d pairs%s' % (total, ' (%d repeated across blocks, written once)' % report['duplicates']
+		                                       if report['duplicates'] else ''))
+		warnings = []
+		if report['unknown']:
+			warnings.append('Not found (ignored): ' + ', '.join(sorted(report['unknown'])))
+		if report['empty']:
+			warnings.append('Blocks without 1ST or 2ND items (no pairs): ' + ', '.join(report['empty']))
+		if report['grouped']:
+			shown = sorted(report['grouped'])
+			warnings.append('Written as their groups (Use groups): ' + ', '.join(shown[:30])
+			                + (' \u2026' if len(shown) > 30 else ''))
+		if warnings:
+			lines.append('')
+			lines.append('Warnings:')
+			lines += ['  ' + w for w in warnings]
+	lines += ['', 'CLA: %d classes (leader first)' % len(classes)]
+	lines += ['  @%s = [%s];' % (name, ' '.join(members)) for name, members in classes]
+	same = len(set(tuple(p) for p in pairs_by_master.values())) <= 1
+	groups = [('all masters', next(iter(pairs_by_master.values())))] if same and pairs_by_master else list(pairs_by_master.items())
+	for title, pairs in groups:
+		lines += ['', 'KRN (%s): %d pairs' % (title, len(pairs))]
+		lines += ['  KPX %s %s' % p for p in pairs[:limit]]
+		if len(pairs) > limit:
+			lines.append('  \u2026 %d more (all are written)' % (len(pairs) - limit))
+	return '\n'.join(lines) + '\n'

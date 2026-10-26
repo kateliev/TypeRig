@@ -33,7 +33,7 @@
 
 from __future__ import absolute_import, print_function, division
 
-from typerig.core.algo.kern_model import LEFT, RIGHT, is_group, group_name, key_glyph
+from typerig.core.algo.kern_model import LEFT, RIGHT, is_group, group_name
 
 __version__ = '0.1.0'
 
@@ -84,10 +84,10 @@ def expand_side(text, kset=None, side=LEFT, sets=None, char_map=None, glyphs=Non
 	out = []
 	for token in str(text or '').split():
 		if token == '@*' and kset is not None:
-			found = [key_glyph(n, kset.groups[side][n]) for n in sorted(kset.groups[side])]
+			found = [kset.leader(n, side) for n in sorted(kset.groups[side])]
 		elif token.startswith('@') and kset is not None:
 			members = kset.groups[side].get(group_name(token), [])
-			found = [key_glyph(group_name(token), members)] if members else []
+			found = [kset.leader(group_name(token), side)] if members else []
 		elif token.startswith(SETS_TOKEN) and sets is not None:
 			found = list(sets.get(token[1:], []))
 		elif glyphs is not None and token in glyphs:
@@ -118,7 +118,7 @@ def table_pairs(kset, master, pairs=None):
 		for key, side in ((left, LEFT), (right, RIGHT)):
 			if is_group(key):
 				name = group_name(key)
-				glyph_pair.append(key_glyph(name, kset.groups[side].get(name, [])) or key)
+				glyph_pair.append(kset.leader(name, side) or key)
 			else:
 				glyph_pair.append(key)
 		glyph_pair = tuple(glyph_pair)

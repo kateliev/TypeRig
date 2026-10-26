@@ -3,7 +3,7 @@
 TR Kern — UI configuration.
 
 Sizes of the TR Kern window (TypeRig Kern.glyphsPlugin): tabs Pairs,
-Rules, Strings, Import, Job, Help. Buttons, gaps, entry fields and lists come from config.py
+Rules, Strings, Import, Job (blocks | items | preview), Help. Buttons, gaps, entry fields and lists come from config.py
 (UI), as in TR Panel; only what is particular to this window lives here.
 
 Same rules as config.py: no layout literal in the plugin; add a field here
@@ -61,6 +61,7 @@ COLUMNS = SimpleNamespace(
 	SPREAD  = 56,       # Pairs grid: max - min across the masters
 	RULES_SPLIT = 1. / 3,  # Rules tab: rule sets list share (the editor takes the rest)
 	RULE_CHECK = 44,    # Rules list: Live / Class check boxes
+	JOB_SPLIT = (.25, .33),  # Job tab: blocks | items | preview (the rest), shares of the tab width
 )
 
 # - Forms -----------------------------------------------------------------

@@ -29,7 +29,7 @@ from __future__ import absolute_import, print_function, division
 
 import re
 
-from typerig.core.algo.kern_model import (ChangeSet, LEFT, RIGHT, is_group, group_name, key_glyph, to_int)
+from typerig.core.algo.kern_model import (ChangeSet, LEFT, RIGHT, is_group, group_name, to_int)
 
 __version__ = '0.1.0'
 
@@ -146,7 +146,7 @@ def _glyph_of(kset, side, pos):
 	'''A source side as a glyph: a @group stands for its key glyph.'''
 	if is_group(side):
 		name = group_name(side)
-		return key_glyph(name, kset.groups[pos].get(name, []))
+		return kset.leader(name, pos)
 	return side
 
 

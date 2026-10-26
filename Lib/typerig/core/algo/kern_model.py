@@ -10,7 +10,8 @@
 # groups are used on the first side of a pair. A FontLab KernBothSide
 # class is the same name on both sides.
 #
-#   KernSet                       masters, pairs, groups, locks, rules, sidebearings
+#   KernSet                       masters, pairs, groups, leaders, locks, rules, sidebearings
+#   KernSet.leader(name, side)    the glyph that stands for a group (stored leader, else key_glyph)
 #   KernSet.resolve(m, a, b)      (value, key, level) as the font renders it
 #   KernSet.explain(a, b)         the whole chain, per master
 #   KernSet.flatten(m)            {(glyph, glyph): value} for every covered pair
@@ -87,11 +88,13 @@ class KernSet(object):
 		masters (list)       : master names, in font order
 		pairs (dict)         : {master: {(left, right): int}}
 		groups (dict)        : {'left': {name: [glyphs]}, 'right': {name: [glyphs]}}
+		leaders (dict)       : {'left': {name: glyph}, 'right': {...}}: the glyph that stands for a group
+		                       (DTL KernMaster: first CLA member; import key pair; explain; proof strings)
 		locks (set)          : pair keys that operations must never change (all masters)
 		rules (list)         : stored analogy rule sets (dicts), kept for the host / later phases
 		sidebearings (dict)  : {master: {glyph: (lsb, rsb)}} at snapshot time, for spacing compensation
 	'''
-	def __init__(self, masters=None, pairs=None, groups=None, locks=None, rules=None, sidebearings=None):
+	def __init__(self, masters=None, pairs=None, groups=None, locks=None, rules=None, sidebearings=None, leaders=None):
 		self.masters = list(masters or [])
 		self.pairs = {m: {} for m in self.masters}
 		for master, table in (pairs or {}).items():
@@ -102,6 +105,10 @@ class KernSet(object):
 		for side in SIDES:
 			for name, members in ((groups or {}).get(side) or {}).items():
 				self.groups[side][str(name)] = [str(g) for g in members]
+		self.leaders = {LEFT: {}, RIGHT: {}}
+		for side in SIDES:
+			for name, glyph in ((leaders or {}).get(side) or {}).items():
+				self.leaders[side][str(name)] = str(glyph)
 		self.locks = set(tuple(k) for k in (locks or ()))
 		self.rules = list(rules or [])
 		self.sidebearings = copy.deepcopy(sidebearings or {})
@@ -143,6 +150,24 @@ class KernSet(object):
 		if is_group(key):
 			return list(self.groups[side].get(group_name(key), []))
 		return [key]
+
+	def leader(self, name, side):
+		'''The glyph that stands for group name on a side: the stored leader
+		when it is a member, else key_glyph (named like the group, else first).'''
+		members = self.groups[side].get(name, [])
+		stored = self.leaders[side].get(name)
+		if stored and stored in members:
+			return stored
+		return key_glyph(name, members)
+
+	def ordered_members(self, name, side):
+		'''Members with the leader first (CLA export: KernMaster kerns a class by its first member).'''
+		members = list(self.groups[side].get(name, []))
+		lead = self.leader(name, side)
+		if lead in members:
+			members.remove(lead)
+			members.insert(0, lead)
+		return members
 
 	def conflicts(self):
 		'''Glyphs in more than one group of the same side: {side: {glyph: [groups]}}.'''
@@ -216,6 +241,7 @@ class KernSet(object):
 			'masters': list(masters),
 			'pairs': {m: [[l, r, v] for (l, r), v in sorted(self.pairs[m].items())] for m in masters},
 			'groups': copy.deepcopy(self.groups),
+			'leaders': copy.deepcopy(self.leaders),
 			'locks': sorted([list(k) for k in self.locks]),
 			'rules': copy.deepcopy(self.rules),
 			'sidebearings': {m: {g: list(sb) for g, sb in t.items()}
@@ -229,7 +255,7 @@ class KernSet(object):
 		sidebearings = {m: {g: tuple(sb) for g, sb in t.items()} for m, t in (data.get('sidebearings') or {}).items()}
 		return cls(masters=data.get('masters'), pairs=pairs, groups=data.get('groups'),
 		           locks=[tuple(k) for k in (data.get('locks') or [])], rules=data.get('rules'),
-		           sidebearings=sidebearings)
+		           sidebearings=sidebearings, leaders=data.get('leaders'))
 
 	def copy(self):
 		return KernSet.from_dict(self.to_dict())

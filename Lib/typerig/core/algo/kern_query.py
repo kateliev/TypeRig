@@ -36,7 +36,7 @@ from __future__ import absolute_import, print_function, division
 import re
 import shlex
 
-from typerig.core.algo.kern_model import (LEFT, RIGHT, is_group, group_name, group_key, pair_kind, key_glyph)
+from typerig.core.algo.kern_model import (LEFT, RIGHT, is_group, group_name, group_key, pair_kind)
 
 __version__ = '0.1.0'
 
@@ -242,7 +242,7 @@ def row_glyphs(kset, pair):
 	out = []
 	for key, side in zip(pair, (LEFT, RIGHT)):
 		if is_group(key):
-			out.append(key_glyph(group_name(key), kset.groups[side].get(group_name(key), [])) or key)
+			out.append(kset.leader(group_name(key), side) or key)
 		else:
 			out.append(key)
 	return tuple(out)
