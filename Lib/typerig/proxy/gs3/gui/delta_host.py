@@ -586,9 +586,14 @@ class GlyphsDeltaHost(object):
 				m['id'] = master.id
 				if kind in ('copy', 'target'):
 					self._fill_master(font, master, source, src_name if kind == 'target' else None, progress)
-					pairs = self._copy_kerning(font, source.id, master.id)
-					log.append('Added master %s (%s %s; %d kerning pairs copied, not scaled)'
-					           % (m['name'], 'target layer' if kind == 'target' else 'copy of', src_name, pairs))
+					baked = self.promote_kerning(src_name, master.id) if kind == 'target' else None
+					if baked is not None:
+						log.append('Added master %s (target layer %s; %d kerning pairs from the Delta Machine lib)'
+						           % (m['name'], src_name, baked))
+					else:
+						pairs = self._copy_kerning(font, source.id, master.id)
+						log.append('Added master %s (%s %s; %d kerning pairs copied, not scaled)'
+						           % (m['name'], 'target layer' if kind == 'target' else 'copy of', src_name, pairs))
 				else:
 					log.append('Added master %s (empty)' % m['name'])
 
@@ -626,6 +631,136 @@ class GlyphsDeltaHost(object):
 			except Exception:
 				pass
 		return plan, log
+
+	# - Kerning (LTR) ---------------------------------------------------------
+	# Core keys (delta_kerning_actions): '@name' for a group, the side
+	# following from the place in the pair; a glyph name for an exception.
+	# Glyphs: @MMK_L_<glyph.rightKerningGroup> on the left of a pair,
+	# @MMK_R_<glyph.leftKerningGroup> on the right; exceptions by glyph id.
+	GS_LEFT, GS_RIGHT = '@MMK_L_', '@MMK_R_'
+
+	def master_id(self, name):
+		'''Id of the master named name (a target that is a master), else None.'''
+		font = self._font()
+		if font is None:
+			return None
+		return next((m.id for m in font.masters if m.name == name), None)
+
+	def layer_master(self, layer_name):
+		'''(id, name) of the master a non-master layer is associated with, else (None, '').'''
+		font = self._font()
+		master = self._master_of_layer(font, layer_name) if font is not None else None
+		return (master.id, str(master.name)) if master is not None else (None, '')
+
+	def _kern_key(self, font, key):
+		key = str(key)
+		if key.startswith(self.GS_LEFT) or key.startswith(self.GS_RIGHT):
+			return '@' + key[len(self.GS_LEFT):]
+		if key.startswith('@'):
+			return key
+		glyph = font.glyphForId_(key) if hasattr(font, 'glyphForId_') else None
+		if glyph is None:
+			try:
+				glyph = font.glyphs[key]
+			except Exception:
+				glyph = None
+		return str(glyph.name) if glyph is not None else key
+
+	def _gs_key(self, key, side):
+		if key.startswith('@'):
+			return (self.GS_LEFT if side == 'left' else self.GS_RIGHT) + key[1:]
+		return key
+
+	def kerning_table(self, master_id):
+		'''LTR kerning of a master as {(left, right): value}, core keys.'''
+		font = self._font()
+		if font is None or master_id is None:
+			return {}
+		try:
+			table = font.kerning[master_id]
+		except Exception:
+			return {}
+		out = {}
+		for left, rights in (table or {}).items():
+			l = self._kern_key(font, left)
+			for right, value in rights.items():
+				try:
+					out[(l, self._kern_key(font, right))] = float(value)
+				except (TypeError, ValueError):
+					pass
+		return out
+
+	def kerning_groups(self):
+		'''{'left': {group: [glyphs]}, 'right': {group: [glyphs]}}: left = the
+		left side of a pair (glyph.rightKerningGroup), right = leftKerningGroup.'''
+		out = {'left': {}, 'right': {}}
+		for glyph in self.glyphs():
+			for side, attr in (('left', 'rightKerningGroup'), ('right', 'leftKerningGroup')):
+				name = getattr(glyph, attr, None)
+				if name:
+					out[side].setdefault(str(name), []).append(str(glyph.name))
+		return out
+
+	def component_bases(self):
+		'''{glyph: first component's glyph} for glyphs whose first master layer
+		has components (exceptions on composites follow their base glyph).'''
+		font = self._font()
+		out = {}
+		if font is None or not len(font.masters):
+			return out
+		mid = font.masters[0].id
+		for glyph in font.glyphs:
+			layer = glyph.layers[mid]
+			components = list(getattr(layer, 'components', []) or []) if layer is not None else []
+			if components and components[0].componentName:
+				out[str(glyph.name)] = str(components[0].componentName)
+		return out
+
+	def write_kerning(self, master_id, sets, remove=()):
+		'''Set pairs {(left, right): value} and remove pairs in a master (LTR,
+		core keys). Returns (set, removed, failed).'''
+		font = self._font()
+		if font is None or master_id is None:
+			return 0, 0, len(sets) + len(remove)
+		done = gone = failed = 0
+		try:
+			font.disableUpdateInterface()
+		except Exception:
+			pass
+		try:
+			for (left, right) in remove:
+				try:
+					font.removeKerningForPair(master_id, self._gs_key(left, 'left'), self._gs_key(right, 'right'))
+					gone += 1
+				except Exception:
+					failed += 1
+			for (left, right), value in sets.items():
+				try:
+					font.setKerningForPair(master_id, self._gs_key(left, 'left'), self._gs_key(right, 'right'), value)
+					done += 1
+				except Exception:
+					failed += 1
+		finally:
+			try:
+				font.enableUpdateInterface()
+			except Exception:
+				pass
+		return done, gone, failed
+
+	def promote_kerning(self, layer_name, master_id):
+		'''Write the kerning the Delta Machine keeps in the font lib for
+		layer_name into a master and drop it from the lib. Returns the pairs
+		written, None when the lib has no kerning for that layer.'''
+		from typerig.core.actions import delta_kerning_actions as dka
+		lib = dka.lib_normalize(self.load_data(dka.LIB_KEY))
+		entry = lib['targets'].get(layer_name)
+		if entry is None or master_id is None:
+			return None
+		sets, remove = dka.write_plan(self.kerning_table(master_id), dka.lib_entry_result(entry))
+		done, _gone, _failed = self.write_kerning(master_id, sets, remove)
+		del lib['targets'][layer_name]
+		self.save_data(dka.LIB_KEY, lib)
+		return done
 
 	# - Font storage ----------------------------------------------------------
 	def load_data(self, key):

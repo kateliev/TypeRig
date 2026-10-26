@@ -105,9 +105,13 @@ ADVANCED_DEFAULTS = {
 	'italic': 'master',			# master (italic angle of the first input's master) | none | custom
 	'italic_angle': 0.,			# custom angle, degrees, Glyphs sign (positive leans right)
 	'italic_fix': dict(ITALIC_FIX_DEFAULTS),
+	'kern_groups': 'mean',		# kerning, group whose members differ: mean | key | refuse (delta_kerning_actions)
+	'kern_sides': 'complete',	# kerning, pair side with no baked glyph: complete | skip | keep
 	'notes': '',
 }
 FLAG_KEYS = {status: 'flag_' + status for status in STATUSES}
+KERN_GROUP_RULES = ('mean', 'key', 'refuse')		# labels: delta_kerning_actions.GROUP_RULES
+KERN_SIDE_RULES = ('complete', 'skip', 'keep')		# labels: delta_kerning_actions.SIDE_RULES
 
 TARGET_DEFAULTS = {
 	'layer': '', 'axis': '',	# axis: name of the axis the row is computed from
@@ -502,6 +506,10 @@ def machine_normalize(raw):
 	doc['advanced']['flag'] = bool(doc['advanced']['flag'])
 	doc['advanced']['log'] = bool(doc['advanced']['log'])
 	doc['advanced']['log_dir'] = str(doc['advanced']['log_dir'] or '')
+	if doc['advanced']['kern_groups'] not in KERN_GROUP_RULES:
+		doc['advanced']['kern_groups'] = ADVANCED_DEFAULTS['kern_groups']
+	if doc['advanced']['kern_sides'] not in KERN_SIDE_RULES:
+		doc['advanced']['kern_sides'] = ADVANCED_DEFAULTS['kern_sides']
 	doc['masters'] = [{'name': str(m.get('name'))} for m in raw.get('masters', []) or []
 	                  if isinstance(m, dict) and m.get('name')]
 	origin = doc['options']['origin']
@@ -833,6 +841,7 @@ def machine_log(doc, run):
 		started (str), seconds (float), font {'family', 'version', 'file'},
 		app (str), jobs [{'layer', 'glyphs', 'composites'}],
 		glyphs {name: {'status', 'notes': [str]}} in bake order,
+		kerning [str] (one line per target layer),
 		warnings [str] (not tied to one glyph), summary (str).'''
 	font = run.get('font') or {}
 	glyphs = run.get('glyphs') or {}
@@ -847,6 +856,9 @@ def machine_log(doc, run):
 	out.append('Options:  extrapolate %s, selected only %s' % (
 		'on' if opts.get('extrapolate', True) else 'off', 'on' if opts.get('selection_only') else 'off'))
 	out.append('Italic:   %s' % italic_summary(doc))
+	adv = doc.get('advanced') or {}
+	out.append('Kerning:  groups %s, unbaked sides %s (LTR)' % (
+		adv.get('kern_groups', 'mean'), adv.get('kern_sides', 'complete')))
 
 	out += ['', 'Axes']
 	for ax in doc.get('axes', []):
@@ -892,6 +904,9 @@ def machine_log(doc, run):
 	if by_status['done']:
 		out += ['', '%s (%d)' % (STATUS_LABELS['done'], len(by_status['done']))]
 		out += _wrapped(by_status['done'])
+	if run.get('kerning'):
+		out += ['', 'Kerning']
+		out += ['  ' + line for line in run['kerning']]
 	if run.get('warnings'):
 		out += ['', 'Other warnings (%d)' % len(run['warnings'])]
 		out += ['  ' + w for w in run['warnings']]
