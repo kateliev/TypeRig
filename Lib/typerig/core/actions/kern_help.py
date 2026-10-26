@@ -14,13 +14,14 @@
 
 from __future__ import unicode_literals
 
-__version__ = '0.5.0'
+__version__ = '0.6.0'
 
 HELP_TEXT = '''TR KERN — HELP
 
 TR Kern manages the kerning of a font. This version has these tools:
 - Pairs shows every pair of every master. You find, edit, change in bulk, copy between masters and lock pairs.
 - Groups edits the kerning groups and their leaders. Optionally, it keeps the spacing as it is.
+- Cleanup finds kerning that you can remove or simplify, and fixes it.
 - Rules copies kerning by analogy, for example from O V to Odieresis V. You keep the rules in the font.
 - Strings makes proof strings and pair lists.
 - Import puts kerning from an external source (an autokerner, DTL KernMaster) into your font. Your kerning groups do not change.
@@ -131,10 +132,33 @@ Glyphs of a group (right side):
 Leaders — the leader stands for its group. DTL KernMaster kerns a class with its first glyph, so the CLA file of the Job tab puts the leader first. The import, Explain, Rules and the proof strings use the same leader. A leader change does not change the kerning, and it is saved in the font at once.
 To copy the leaders from a CLA file (for example a file that KernMaster used), click the file button. The first glyph of each class becomes the leader of the group with the same name (_1 = left side, _2 = right side, no suffix = both sides).
 
+Auto — makes groups from composites and suffixes. A glyph with one letter component joins the group of that letter (Aacute joins A). A glyph with a suffix joins the group of its base (a.ss01 joins a). A chain goes to its first base (Aogonek.ss01 joins A). Glyphs that have a group keep it. A glyph with two letter components (for example fi) does not join a group; the report shows it. If the base has no group, the tool makes a group with the name of the base. The changes are pending.
+
 Validate — finds glyphs in two groups of one side, empty groups, glyphs that are not in the font, groups with the name of a glyph that is not a member, and pairs with a missing group or glyph.
 
 
-4. RULES
+4. CLEANUP
+
+Each check finds first. Nothing changes until you click "Plan fixes" and then Apply. The checks use the kerning with the pending changes.
+
+The checks:
+- Pairs that change nothing — a pair that gives its glyph pairs the same values that they get without it. All pair kinds are checked. Fix: remove (the spacing does not change).
+- Compress group pairs — the pairs of a group pair (for example @T @o and its exceptions) are written again with fewer pairs. Each glyph pair keeps its value. This finds glyph pairs that fit a class, and class values that the exceptions do not agree with. Regions with a locked pair are skipped.
+- Pairs missing in some masters — "covered": another pair gives these glyphs a value in that master; "uncovered": they get 0.
+  Missing fix: Fill resolved (default) writes the value that the master shows now, so nothing changes visually. If the glyph pairs of the missing pair have different values, the report says "approximate". Copy from master: the value of the master that you select. Remove everywhere: the pair is removed from all masters.
+- Pairs with a missing group or glyph — Fix: remove.
+- Small values — values below "Small below". Fix: remove. This changes the spacing, so it is off by default.
+- Sign flips and large spreads — a pair that is positive in one master and negative in another, or that changes by more than "Spread over" between masters. Report only.
+
+Tolerance — "Pairs that change nothing" and "Compress" can move a glyph pair by this value (units). 0 keeps the spacing exactly.
+
+To clean up:
+1. Select the checks. Set the options.
+2. Click Find. Read the report.
+3. Click "Plan fixes". Then click Apply.
+
+
+5. RULES
 
 A rule copies the kerning of one pair to other pairs. Write one rule on each line:
   destination pairs = source pair [@adjust]
@@ -159,7 +183,7 @@ To use rules:
 The report under the rules shows mistakes with their line numbers.
 
 
-5. STRINGS
+6. STRINGS
 
 1. Select the pairs:
    - Selected pairs or Shown pairs of the Pairs tab. A group stands for its key glyph.
@@ -170,19 +194,19 @@ The report under the rules shows mistakes with their line numbers.
 4. Click "New tab", or copy the text: /names (for Glyphs and FontLab), plain text (other apps) or KPX lines.
 
 
-6. IMPORT — QUICK START
+7. IMPORT — QUICK START
 
 1. Open the Import tab.
 2. Click "Add sources" and select one or more AFM files.
 3. Make sure that each source has the correct master. The tool finds the master from the file name.
 4. If the master is wrong, select the source. Then use the "Set master…" menu.
-5. Set the options (section 7). The defaults are correct for a complete autokerner export.
+5. Set the options (section 8). The defaults are correct for a complete autokerner export.
 6. Click Preview. Read the report.
 7. Click Apply. The tool keeps a snapshot first.
 8. Read the self check at the end of the report.
 
 
-7. IMPORT — THE OPTIONS
+8. IMPORT — THE OPTIONS
 
 Class value — how the tool selects the value of a group pair from the values of its glyphs:
 - Key glyph (default): the value of the key glyphs. For @T @o, this is the value of T o. If the source does not have T o, the tool uses Mode for that group pair and tells you.
@@ -220,7 +244,7 @@ Groups never change. The tool uses the groups that are in the font.
 Locked pairs — the tool never changes a locked pair. The report shows them. You lock pairs in the Pairs tab.
 
 
-8. IMPORT — NAMES
+9. IMPORT — NAMES
 
 AFM files from a compiled font often use production names, for example uni0414. The tool finds the font glyph:
 1. the same name,
@@ -229,7 +253,7 @@ AFM files from a compiled font often use production names, for example uni0414. 
 Pairs with a glyph that the tool does not find are not imported. The report shows these glyphs.
 
 
-9. IMPORT — THE REPORT
+10. IMPORT — THE REPORT
 
 Preview shows the plan for each master:
 - added, changed, unchanged and removed pairs,
@@ -238,14 +262,14 @@ Preview shows the plan for each master:
 Apply writes the plan. Then it reads the master again and does a self check. The self check compares each glyph pair with the source. "The master renders the source exactly" means that the import is correct. A locked pair can show as a difference.
 
 
-10. SNAPSHOTS AND RESTORE
+11. SNAPSHOTS AND RESTORE
 
 Before Apply writes (Pairs or Import), the tool saves a snapshot of each master that changes. The snapshot is in a folder next to the font file: <font file>.trkern.
 "Restore last" writes back the kerning from before the last Apply.
 If the font is not saved, there is no folder. Then "Restore last" works only until you close the window.
 
 
-11. JOB — DTL KERNMASTER
+12. JOB — DTL KERNMASTER
 
 The Job tab writes the files that DTL KernMaster needs: one KRN file (the pairs to kern) for each master and one CLA file (the classes). It works like the FontRig Kern Job Composer, and it opens and saves the same composition files (JSON).
 
@@ -264,7 +288,7 @@ To use the pairs that each master has now, select "Font kerning" in the Pairs me
 
 Class names have the side at the end: _1 is the left side, _2 is the right side. For example, @T_1 and @o_2.
 
-Leaders — DTL KernMaster kerns a class with its first glyph, the leader. The CLA file puts the leader of each group first. The same leader is the key glyph of the import (section 7), of Explain and of the proof strings. You set the leaders in the Groups tab (section 3). If a group has no leader, it is the member with the same name as the group, else the first member.
+Leaders — DTL KernMaster kerns a class with its first glyph, the leader. The CLA file puts the leader of each group first. The same leader is the key glyph of the import (section 8), of Explain and of the proof strings. You set the leaders in the Groups tab (section 3). If a group has no leader, it is the member with the same name as the group, else the first member.
 
 DTL KernMaster gives back AFM files. Import them in the Import tab. Export job sets the "Strip" text of the import, so that the AFM files find their masters.
 '''
