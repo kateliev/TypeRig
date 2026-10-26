@@ -27,7 +27,7 @@ from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class
 from typerig.core.objects.groups import KERN1_PREFIX, KERN2_PREFIX
 
 # - Init --------------------------------
-__version__ = '0.3.0'
+__version__ = '0.4.0'
 
 # - Classes -----------------------------
 @register_xml_class
@@ -113,7 +113,7 @@ class Kerning(Container, XMLSerializable):
 		kern[('public.kern1.H', 'public.kern2.A')] = -30
 		kern.value('A', 'V')    # → -50
 	'''
-	__slots__ = ('identifier', 'parent', 'lib')
+	__slots__ = ('identifier', 'parent', 'lib', '_index')
 
 	XML_TAG = 'kerning'
 	XML_ATTRS = []
@@ -125,6 +125,7 @@ class Kerning(Container, XMLSerializable):
 	def __init__(self, data=None, **kwargs):
 		factory = kwargs.pop('default_factory', KernPair)
 		super(Kerning, self).__init__(data, default_factory=factory, **kwargs)
+		self._index = None		# (first, second) -> KernPair, rebuilt when stale
 
 	def __repr__(self):
 		return '<{}: {} pairs>'.format(self.__class__.__name__, len(self.data))
@@ -151,26 +152,48 @@ class Kerning(Container, XMLSerializable):
 	def pairs(self):
 		return self.data
 
+	@classmethod
+	def from_pairs(cls, pairs):
+		'''Kerning from {(first, second): value} in one pass.'''
+		return cls([KernPair(first, second, int(value)) for (first, second), value in pairs.items()])
+
+	def as_dict(self):
+		'''{(first, second): value}.'''
+		return {(p.first, p.second): p.value for p in self.data}
+
 	# -- Pair management ----------------
+	def _lookup(self):
+		'''Key index; rebuilt when the pair list changed length (direct edits of data).'''
+		index = getattr(self, '_index', None)
+		if index is None or len(index) != len(self.data):
+			index = {(p.first, p.second): p for p in self.data}
+			self._index = index
+		return index
+
 	def add_pair(self, first, second, value):
 		'''Add or overwrite a kern pair.'''
 		existing = self.get_pair(first, second)
 		if existing is not None:
 			existing.value = int(value)
 		else:
-			self.data.append(KernPair(first, second, int(value)))
+			index = self._lookup()		# before the append: the length check stays in step
+			pair = KernPair(first, second, int(value))
+			self.data.append(pair)
+			index[(first, second)] = pair
 
 	def remove_pair(self, first, second):
 		'''Remove a kern pair by first/second. No-op if not found.'''
 		self.data = [p for p in self.data
 		             if not (p.first == first and p.second == second)]
+		self._index = None
 
 	def get_pair(self, first, second):
 		'''Return KernPair for (first, second), or None.'''
-		for pair in self.data:
-			if pair.first == first and pair.second == second:
-				return pair
-		return None
+		pair = self._lookup().get((first, second))
+		if pair is not None and (pair.first != first or pair.second != second):
+			self._index = None		# a pair was renamed in place: rebuild once
+			pair = self._lookup().get((first, second))
+		return pair
 
 	def value(self, first, second):
 		'''Return kern value for (first, second), or None.'''

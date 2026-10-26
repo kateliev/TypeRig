@@ -305,12 +305,13 @@ class Font(Container, XMLSerializable):
 		masters (Masters)     : masters Container
 		instances (Instances) : instances Container
 		encoding (Encoding)   : unicode map
-		kerning (Kerning)     : kern pairs and classes
+		kerning (Kerning)     : kern pairs of the default master (UFO: the default source)
+		master_kerning (dict) : {master name: Kerning} for the other masters (kerning_for)
 		lib (dict)            : arbitrary font-level metadata
 	'''
 	__slots__ = (
 		'info', 'metrics', 'axes', 'masters', 'instances',
-		'encoding', 'kerning', 'groups', 'features', '_name_index'
+		'encoding', 'kerning', 'master_kerning', 'groups', 'features', '_name_index'
 	)
 
 	XML_TAG = 'font'
@@ -331,6 +332,7 @@ class Font(Container, XMLSerializable):
 			self.instances 	= kwargs.pop('instances',Instances())
 			self.encoding 	= kwargs.pop('encoding', Encoding())
 			self.kerning 	= kwargs.pop('kerning',  Kerning())
+			self.master_kerning = dict(kwargs.pop('master_kerning', {}))	# {master name: Kerning}, non-default masters
 			self.groups 	= kwargs.pop('groups',   Groups())		# UFO-style flat groups (incl. public.kern1/2.* kerning classes)
 			self.features 	= kwargs.pop('features', '')			# UFO-style: raw OpenType feature code (features.fea)
 
@@ -405,6 +407,31 @@ class Font(Container, XMLSerializable):
 		g = self.glyph(name)
 		return list(g.unicodes) if g and g.unicodes else []
 
+	# -- Kerning per master ------------
+	def default_master_name(self):
+		'''Name of the default master (is_default, else the first), or None.'''
+		masters = list(self.masters.data)
+		for master in masters:
+			if master.is_default:
+				return master.name
+		return masters[0].name if masters else None
+
+	def kerning_for(self, master_name=None, create=False):
+		'''Kerning of a master: the default master's is font.kerning; others
+		live in master_kerning. None when missing and create is False.'''
+		if master_name is None or master_name == self.default_master_name():
+			return self.kerning
+		kerning = self.master_kerning.get(master_name)
+		if kerning is None and create:
+			kerning = self.master_kerning[master_name] = Kerning()
+		return kerning
+
+	def set_kerning_for(self, master_name, kerning):
+		if master_name is None or master_name == self.default_master_name():
+			self.kerning = kerning
+		else:
+			self.master_kerning[master_name] = kerning
+
 	def get_marks(self, *mark_values):
 		marks = set(mark_values)
 		return [g for g in self.data if g.mark in marks]
@@ -442,6 +469,13 @@ class Font(Container, XMLSerializable):
 
 		if self.kerning.data:
 			root.append(self.kerning._to_xml_element())
+
+		# Other masters' kerning: <kerning master="Bold"> (the plain element is the default master)
+		for master_name, kerning in sorted(self.master_kerning.items()):
+			if kerning is not None and kerning.data:
+				elem = kerning._to_xml_element()
+				elem.set('master', str(master_name))
+				root.append(elem)
 
 		# Groups (UFO-style, incl. public.kern1/2.* kerning classes)
 		if self.groups.data:
@@ -490,8 +524,14 @@ class Font(Container, XMLSerializable):
 		encoding_elem = element.find('encoding')
 		encoding = Encoding.from_XML(encoding_elem) if encoding_elem is not None else Encoding()
 
-		kerning_elem = element.find('kerning')
-		kerning = Kerning.from_XML(kerning_elem) if kerning_elem is not None else Kerning()
+		kerning = Kerning()
+		master_kerning = {}
+		for kerning_elem in element.findall('kerning'):
+			master_name = kerning_elem.get('master')
+			if master_name:
+				master_kerning[master_name] = Kerning.from_XML(kerning_elem)
+			else:
+				kerning = Kerning.from_XML(kerning_elem)
 
 		groups_elem = element.find('groups')
 		groups = Groups.from_XML(groups_elem) if groups_elem is not None else Groups()
@@ -523,6 +563,7 @@ class Font(Container, XMLSerializable):
 			instances 	= instances,
 			encoding 	= encoding,
 			kerning 	= kerning,
+			master_kerning = master_kerning,
 			groups 		= groups,
 			features 	= features,
 			lib 		= lib,
