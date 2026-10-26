@@ -12,7 +12,7 @@ from datetime import datetime
 from typerig.core.base import message
 
 # - Init -----------------------------
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 # - Classes --------------------------
 class CLAparser(object):
@@ -47,18 +47,22 @@ class CLAparser(object):
 		return self
 
 	def __next__(self):
-		new_line = next(self.__file_data)
-		
-		if self.__file_data is None or new_line == None:
+		# Returns (class_name, [members]) per '@name = [a b c];' line
+		if self.__file_data is None:
 			raise StopIteration
-		else:
-			if self.__class_line in new_line:
-				class_name, class_members = new_line.strip().split('=')
-				class_name = class_name.strip().replace(self.__class_line, '')
-				class_members = class_members.strip().replace('[', '').replace(']', '').replace(self.__end_line,'').split(' ')
-				return (class_name, class_members)
-			else:
-				return self.__next__()
+
+		for new_line in self.__file_data:	# ends with StopIteration at end of file
+			new_line = new_line.strip()
+
+			if not new_line.startswith(self.__class_line) or '=' not in new_line:
+				continue	# comments, blank lines
+
+			class_name, class_members = new_line.split('=', 1)
+			class_name = class_name.strip()[len(self.__class_line):]
+			class_members = class_members.replace('[', ' ').replace(']', ' ').replace(self.__end_line, ' ').split()
+			return (class_name, class_members)
+
+		raise StopIteration
 
 	def next(self):
 		# Python 2 fixup
@@ -85,16 +89,16 @@ class CLAparser(object):
 # - Test -----------------------------
 if __name__ == '__main__':
 	root_dir = os.path.dirname(os.path.dirname(__file__))
-	guz_siti = '1.cla'
-	guz_siti_out = 'test.cla'
-	guz_file = os.path.join(root_dir, krn_siti)
-	guz_file_out = os.path.join(root_dir, krn_filename_out)
+	cla_filename = '1.cla'
+	cla_filename_out = 'test.cla'
+	cla_file = os.path.join(root_dir, cla_filename)
+	cla_file_out = os.path.join(root_dir, cla_filename_out)
 
 	append_glyphs = []
-	with CLAparser(krn_file) as reader:
+	with CLAparser(cla_file) as reader:
 		for a in reader:
 			append_glyphs.append(a)
-	
-	with CLAparser(krn_file_out, 'w') as writer:
+
+	with CLAparser(cla_file_out, 'w') as writer:
 		writer.dump(append_glyphs)
 			

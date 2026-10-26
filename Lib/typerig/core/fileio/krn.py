@@ -12,7 +12,7 @@ from datetime import datetime
 from typerig.core.base import message
 
 # - Init -----------------------------
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 # - Classes --------------------------
 class KRNparser(object):
@@ -47,15 +47,20 @@ class KRNparser(object):
 		return self
 
 	def __next__(self):
-		new_line = self.__file_object.readline().strip()
-
-		if self.__file_object is None or new_line == b'':
+		# Returns (first, second) or (first, second, value) per KPX line
+		if self.__file_object is None:
 			raise StopIteration
-		else:
-			if self.__kern_line in new_line:
-				return tuple(new_line.strip(self.__kern_line).strip().split())
-			else:
-				return self.__next__()
+
+		while True:
+			raw_line = self.__file_object.readline()
+
+			if raw_line == '':	# end of file (a blank line is '\n')
+				raise StopIteration
+
+			parts = raw_line.split()
+
+			if len(parts) >= 3 and parts[0] == self.__kern_line:
+				return tuple(parts[1:4])
 
 	def next(self):
 		# Python 2 fixup
@@ -81,8 +86,8 @@ class KRNparser(object):
 			# - Dump
 			self.__file_object.writelines(file_head)
 
-			for first, second in pair_list:
-				self.__file_object.write('{} {} {}\n'.format(self.__kern_line, first, second))
+			for pair in pair_list:	# (first, second) job pairs, or (first, second, value)
+				self.__file_object.write(' '.join([self.__kern_line] + [str(item) for item in pair]) + '\n')
 
 			self.__file_object.writelines(file_tail)
 
