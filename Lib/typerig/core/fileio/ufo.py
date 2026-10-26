@@ -850,8 +850,10 @@ class UfoConverter(object):
 		UFOs are named "<stem>-<MasterName>.ufo" next to the .designspace
 		(e.g. mytypeface.designspace alongside mytypeface-Light.ufo,
 		mytypeface-Black.ufo). Each UFO holds a single default layer
-		containing that master's glyphs. Font-level groups, kerning and
-		features are written to every UFO so each remains a complete UFO.
+		containing that master's glyphs. Groups and features are written to
+		every UFO; each UFO gets its master's kerning (font.kerning_for), or
+		the default master's when the font has no kerning for that master
+		(older single-kerning fonts), so each remains a complete UFO.
 		'''
 		ds_path = os.path.abspath(ds_path)
 		ds_dir  = os.path.dirname(ds_path)
@@ -923,9 +925,11 @@ class UfoConverter(object):
 		if font.groups and len(font.groups.data):
 			writer.writeGroups({g.name: list(g.members) for g in font.groups.data})
 
-		if font.kerning and len(font.kerning.data):
-			writer.writeKerning({(p.first, p.second): int(p.value)
-			                     for p in font.kerning.pairs})
+		kerning = font.kerning_for(master.name)
+		if kerning is None:
+			kerning = font.kerning		# no kerning of its own: the default master's (as before per-master kerning)
+		if kerning and len(kerning.data):
+			writer.writeKerning({(p.first, p.second): int(p.value) for p in kerning.pairs})
 
 		if font.features:
 			writer.writeFeatures(font.features)
@@ -1010,6 +1014,7 @@ class UfoConverter(object):
 		default_path = _resolve(default_sd)
 		default_reader_holder = {'reader': None, 'info': None,
 		                         'groups': {}, 'kerning': {}, 'features': ''}
+		master_kerning = {}		# {master name: Kerning} of the non-default sources
 
 		for sd in sources:
 			ufo_path = _resolve(sd)
@@ -1044,6 +1049,10 @@ class UfoConverter(object):
 				default_reader_holder['kerning']  = reader.readKerning() or {}
 				default_reader_holder['features'] = reader.readFeatures() or ''
 				default_reader_holder['lib']      = reader.readLib() or {}
+			else:
+				pairs = reader.readKerning() or {}
+				if pairs:
+					master_kerning[master_name] = Kerning.from_pairs(pairs)
 
 			gs = reader.getGlyphSet(layerName=ufo_layer_name)
 
@@ -1154,9 +1163,7 @@ class UfoConverter(object):
 		for name, members in (default_reader_holder['groups'] or {}).items():
 			groups.set(name, list(members))
 
-		kerning = Kerning()
-		for (first, second), value in (default_reader_holder['kerning'] or {}).items():
-			kerning.add_pair(first, second, int(value))
+		kerning = Kerning.from_pairs(default_reader_holder['kerning'] or {})
 
 		font = Font(
 			glyphs,
@@ -1167,6 +1174,7 @@ class UfoConverter(object):
 			instances = instances,
 			groups    = groups,
 			kerning   = kerning,
+			master_kerning = master_kerning,
 			features  = default_reader_holder['features'] or '',
 			encoding  = Encoding(),
 		)
@@ -1306,9 +1314,7 @@ class UfoConverter(object):
 		for name, members in groups_dict.items():
 			groups.set(name, list(members))
 
-		kerning = Kerning()
-		for (first, second), value in kerning_dict.items():
-			kerning.add_pair(first, second, int(value))
+		kerning = Kerning.from_pairs(kerning_dict)
 
 		# Layers
 		layer_names    = list(reader.getLayerNames())
