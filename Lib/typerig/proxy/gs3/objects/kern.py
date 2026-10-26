@@ -244,6 +244,20 @@ class GlyphsKernHost(object):
 				names.append(str(name))
 		return names
 
+	def components(self):
+		'''{glyph: [component glyph names]} of the first master layer (auto groups).'''
+		font = self._font()
+		out = {}
+		if font is None or not len(font.masters):
+			return out
+		mid = font.masters[0].id
+		for glyph in font.glyphs:
+			layer = glyph.layers[mid]
+			names = [str(c.componentName) for c in (getattr(layer, 'components', None) or []) if c.componentName]
+			if names:
+				out[str(glyph.name)] = names
+		return out
+
 	def glyph_sets(self):
 		'''{set name: [glyphs]} for proof strings (*Uppercase, *Lowercase, ...).'''
 		from typerig.proxy.gs3.gui.glyph_filters import glyph_kind
