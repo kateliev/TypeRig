@@ -3,7 +3,7 @@
 TR Kern — UI configuration.
 
 Sizes of the TR Kern window (TypeRig Kern.glyphsPlugin): tabs Pairs,
-Groups, Rules, Strings, Import, Job (blocks | items | preview), Help. Buttons, gaps, entry fields and lists come from config.py
+Groups, Cleanup, Rules, Strings, Import, Job (blocks | items | preview), Help. Buttons, gaps, entry fields and lists come from config.py
 (UI), as in TR Panel; only what is particular to this window lives here.
 
 Same rules as config.py: no layout literal in the plugin; add a field here
@@ -63,6 +63,9 @@ COLUMNS = SimpleNamespace(
 	RULE_CHECK = 44,    # Rules list: Live / Class check boxes
 	JOB_SPLIT = (.25, .33),  # Job tab: blocks | items | preview (the rest), shares of the tab width
 	GROUPS_SPLIT = .5,  # Groups tab: groups list share (members: the rest)
+	CLEANUP_SPLIT = .5, # Cleanup tab: checks + options share (report: the rest)
+	FOUND   = 52,       # Cleanup list: findings count
+	SAFE    = 66,       # Cleanup list: keeps rendering / changes it
 	LEADER  = 110,      # Groups list: leader glyph
 	LEAD_MARK = 30,     # Members list: leader mark column
 )
@@ -96,6 +99,12 @@ GROUPS = SimpleNamespace(
 	MEMBERS_MIN_H = 120,  # Groups: members list never lower
 	NAME_W = 110,       # Groups: new group name field
 )
+_CLEAN_ROWS, _CHECK_ROW_H = 6, 24   # check-cell rows are taller than text rows (measured at build time too)
+CLEANUP = SimpleNamespace(
+	LIST_H   = _LIST_HEADER_H + _CLEAN_ROWS * _CHECK_ROW_H + 6,   # the checks list: never lower than this
+	LIST_PAD = 6,       # measured list height: border + a little air
+	ROWS     = 5,       # option rows under the list
+)
 STRINGS = SimpleNamespace(
 	COMBO_W  = 260,     # pattern combo box
 	FILLER_W = 110,     # filler combo boxes
@@ -125,6 +134,10 @@ COLORS = SimpleNamespace(
 		'nomaster' : 'systemOrangeColor',   # no master matched yet
 		'empty'    : 'systemRedColor',      # no pairs in the file
 	},
+	CHECK = {	# Cleanup list: fixes that keep the rendering / that change it
+		'safe'     : None,
+		'changes'  : 'systemOrangeColor',
+	},
 	RULE = {	# Rules list: live sets re-run after every change
 		'live'     : 'systemGreenColor',
 		'plain'    : None,
@@ -148,6 +161,7 @@ KERN = SimpleNamespace(
 	EXPLAIN = EXPLAIN,
 	RULES   = RULES,
 	GROUPS  = GROUPS,
+	CLEANUP = CLEANUP,
 	STRINGS = STRINGS,
 	NUDGE   = NUDGE,
 	HELP    = HELP,
