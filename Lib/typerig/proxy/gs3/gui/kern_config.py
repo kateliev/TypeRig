@@ -1,0 +1,97 @@
+# encoding: utf-8
+"""
+TR Kern — UI configuration.
+
+Sizes of the TR Kern window (TypeRig Kern.glyphsPlugin): tabs Import, Job,
+Help (Phase 1). Buttons, gaps, entry fields and lists come from config.py
+(UI), as in TR Panel; only what is particular to this window lives here.
+
+Same rules as config.py: no layout literal in the plugin; add a field here
+first, then alias it. GS3 / GS4 presets, picked by HOST_MAJOR.
+
+    from typerig.proxy.gs3.gui.kern_config import KERN
+    WIN_W = KERN.WIN.W
+"""
+from __future__ import division, print_function, unicode_literals
+
+from types import SimpleNamespace
+
+from .config import HOST_MAJOR, _LIST_ROW_H, _LIST_HEADER_H
+
+
+# - Window ----------------------------------------------------------------
+# Resizable both ways: lists and reports stretch, columns keep COLUMNS.SPLIT.
+_WIN_GS3 = SimpleNamespace(
+	W           = 1160,   # default window width: the sources table fits without scrolling
+	MIN_W       = 900,    # the option form and the button bars do not reflow
+	TABS_TOP    = 8,      # tab view inset from the window top
+	TABS_CHROME = 30,     # tab view height beyond its item view (tab bar + frame; macOS 26)
+	TABS_SIDE   = 16,     # tab view width beyond its content (frame, both sides)
+	INSET       = 10,     # inset of a tab's content from the tab frame
+)
+_WIN_GS4 = SimpleNamespace(
+	W           = 1160,
+	MIN_W       = 900,
+	TABS_TOP    = 10,
+	TABS_CHROME = 30,
+	TABS_SIDE   = 16,
+	INSET       = 12,
+)
+
+# - Lists -----------------------------------------------------------------
+_ROWS, _MIN_ROWS = 16, 8
+LIST = SimpleNamespace(
+	ROWS     = _ROWS,                                         # visible rows at the default height
+	H        = _LIST_HEADER_H + _ROWS * _LIST_ROW_H + 4,       # table height (+ border)
+	MIN_H    = _LIST_HEADER_H + _MIN_ROWS * _LIST_ROW_H + 4,
+)
+
+# - Columns ---------------------------------------------------------------
+# Import tab: sources (left SPLIT of the content width) | options + report.
+# Column widths of the sources table (the file name takes the rest).
+COLUMNS = SimpleNamespace(
+	SPLIT   = .5,       # left column share of the tab width
+	FILE_MIN = 140,     # file name: never narrower (the table scrolls instead)
+	MASTER  = 100,      # master a source goes to
+	COUNT   = 52,       # pairs / glyphs / not-in-font counts
+)
+
+# - Forms -----------------------------------------------------------------
+# Import options and the Job form: 'Label: [field]' rows, one per option.
+FORM = SimpleNamespace(
+	LABEL_W = 110,      # caption column ('Class value:', 'Absent pairs:')
+	FIELD_W = 190,      # popups
+	NUM_W   = 60,       # numbers (tolerance, round, drop, clamp)
+	TEXT_W  = 420,      # A / B pair lists (Job)
+	CHECK_W = 160,      # 'Use groups'
+	BTN_W   = 120,      # text buttons before they are sized to their titles
+)
+
+# - Report / Help ----------------------------------------------------------
+REPORT = SimpleNamespace(
+	PAD   = 6,          # text inset inside the report view
+	MIN_H = 120,        # report never lower (the window minimum keeps it)
+)
+HELP = SimpleNamespace(
+	PAD = 10,           # text inset inside the help view (both axes)
+)
+
+# - Colours ----------------------------------------------------------------
+# NSColor class-method names (follow light / dark mode). Sources by state.
+COLORS = SimpleNamespace(
+	SOURCE = {
+		'ready'    : 'systemGreenColor',    # master set, pairs read
+		'nomaster' : 'systemOrangeColor',   # no master matched yet
+		'empty'    : 'systemRedColor',      # no pairs in the file
+	},
+)
+
+KERN = SimpleNamespace(
+	WIN     = _WIN_GS3 if HOST_MAJOR == 3 else _WIN_GS4,
+	LIST    = LIST,
+	COLUMNS = COLUMNS,
+	FORM    = FORM,
+	REPORT  = REPORT,
+	HELP    = HELP,
+	COLORS  = COLORS,
+)

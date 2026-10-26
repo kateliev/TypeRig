@@ -653,53 +653,24 @@ class GlyphsDeltaHost(object):
 		return (master.id, str(master.name)) if master is not None else (None, '')
 
 	def _kern_key(self, font, key):
-		key = str(key)
-		if key.startswith(self.GS_LEFT) or key.startswith(self.GS_RIGHT):
-			return '@' + key[len(self.GS_LEFT):]
-		if key.startswith('@'):
-			return key
-		glyph = font.glyphForId_(key) if hasattr(font, 'glyphForId_') else None
-		if glyph is None:
-			try:
-				glyph = font.glyphs[key]
-			except Exception:
-				glyph = None
-		return str(glyph.name) if glyph is not None else key
+		from typerig.proxy.gs3.objects.kern import core_key
+		return core_key(font, key)
 
 	def _gs_key(self, key, side):
-		if key.startswith('@'):
-			return (self.GS_LEFT if side == 'left' else self.GS_RIGHT) + key[1:]
-		return key
+		from typerig.proxy.gs3.objects.kern import gs_key
+		return gs_key(key, side)
 
 	def kerning_table(self, master_id):
-		'''LTR kerning of a master as {(left, right): value}, core keys.'''
-		font = self._font()
-		if font is None or master_id is None:
-			return {}
-		try:
-			table = font.kerning[master_id]
-		except Exception:
-			return {}
-		out = {}
-		for left, rights in (table or {}).items():
-			l = self._kern_key(font, left)
-			for right, value in rights.items():
-				try:
-					out[(l, self._kern_key(font, right))] = float(value)
-				except (TypeError, ValueError):
-					pass
-		return out
+		'''LTR kerning of a master as {(left, right): value}, core keys
+		(proxy/gs3/objects/kern.py, shared with TR Kern).'''
+		from typerig.proxy.gs3.objects.kern import master_table
+		return master_table(self._font(), master_id)
 
 	def kerning_groups(self):
 		'''{'left': {group: [glyphs]}, 'right': {group: [glyphs]}}: left = the
 		left side of a pair (glyph.rightKerningGroup), right = leftKerningGroup.'''
-		out = {'left': {}, 'right': {}}
-		for glyph in self.glyphs():
-			for side, attr in (('left', 'rightKerningGroup'), ('right', 'leftKerningGroup')):
-				name = getattr(glyph, attr, None)
-				if name:
-					out[side].setdefault(str(name), []).append(str(glyph.name))
-		return out
+		from typerig.proxy.gs3.objects.kern import kerning_groups
+		return kerning_groups(self._font())
 
 	def component_bases(self):
 		'''{glyph: first component's glyph} for glyphs whose first master layer
@@ -719,33 +690,8 @@ class GlyphsDeltaHost(object):
 	def write_kerning(self, master_id, sets, remove=()):
 		'''Set pairs {(left, right): value} and remove pairs in a master (LTR,
 		core keys). Returns (set, removed, failed).'''
-		font = self._font()
-		if font is None or master_id is None:
-			return 0, 0, len(sets) + len(remove)
-		done = gone = failed = 0
-		try:
-			font.disableUpdateInterface()
-		except Exception:
-			pass
-		try:
-			for (left, right) in remove:
-				try:
-					font.removeKerningForPair(master_id, self._gs_key(left, 'left'), self._gs_key(right, 'right'))
-					gone += 1
-				except Exception:
-					failed += 1
-			for (left, right), value in sets.items():
-				try:
-					font.setKerningForPair(master_id, self._gs_key(left, 'left'), self._gs_key(right, 'right'), value)
-					done += 1
-				except Exception:
-					failed += 1
-		finally:
-			try:
-				font.enableUpdateInterface()
-			except Exception:
-				pass
-		return done, gone, failed
+		from typerig.proxy.gs3.objects.kern import write_pairs
+		return write_pairs(self._font(), master_id, sets, remove)
 
 	def promote_kerning(self, layer_name, master_id):
 		'''Write the kerning the Delta Machine keeps in the font lib for
