@@ -468,7 +468,10 @@ def interpolate_plan(kset, a, b, t, dst, pairs=None, mode='overwrite', base=None
 
 
 def merge_changes(into, cs):
-	'''Add a ChangeSet on top of another (later wins); locked lists add up.'''
+	'''Add a ChangeSet on top of another (later wins, groups too); locked lists add up.'''
+	for side in (LEFT, RIGHT):
+		for name, members in cs.groups[side].items():
+			into.set_group(side, name, members)
 	for master, entry in cs.pairs.items():
 		for pair in entry['remove']:
 			into.remove(master, pair)

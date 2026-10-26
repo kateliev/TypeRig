@@ -233,6 +233,17 @@ class GlyphsKernHost(object):
 			out[master] = write_pairs(font, self.master_id(master), entry['set'], entry['remove'])
 		return out
 
+	def selected_names(self):
+		'''Glyphs selected in Glyphs: the Font view selection, or the selected glyphs of the edit tab.'''
+		font = self._font()
+		names = []
+		for layer in (font.selectedLayers or []) if font is not None else []:
+			glyph = getattr(layer, 'parent', None)		# GSControlLayer line breaks have none
+			name = getattr(glyph, 'name', None)
+			if name and str(name) not in names:
+				names.append(str(name))
+		return names
+
 	def glyph_sets(self):
 		'''{set name: [glyphs]} for proof strings (*Uppercase, *Lowercase, ...).'''
 		from typerig.proxy.gs3.gui.glyph_filters import glyph_kind
