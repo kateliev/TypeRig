@@ -3,7 +3,7 @@
 TR Kern — UI configuration.
 
 Sizes of the TR Kern window (TypeRig Kern.glyphsPlugin): tabs Pairs,
-Rules, Strings, Import, Job (blocks | items | preview), Help. Buttons, gaps, entry fields and lists come from config.py
+Groups, Rules, Strings, Import, Job (blocks | items | preview), Help. Buttons, gaps, entry fields and lists come from config.py
 (UI), as in TR Panel; only what is particular to this window lives here.
 
 Same rules as config.py: no layout literal in the plugin; add a field here
@@ -62,6 +62,9 @@ COLUMNS = SimpleNamespace(
 	RULES_SPLIT = 1. / 3,  # Rules tab: rule sets list share (the editor takes the rest)
 	RULE_CHECK = 44,    # Rules list: Live / Class check boxes
 	JOB_SPLIT = (.25, .33),  # Job tab: blocks | items | preview (the rest), shares of the tab width
+	GROUPS_SPLIT = .5,  # Groups tab: groups list share (members: the rest)
+	LEADER  = 110,      # Groups list: leader glyph
+	LEAD_MARK = 30,     # Members list: leader mark column
 )
 
 # - Forms -----------------------------------------------------------------
@@ -87,6 +90,11 @@ EXPLAIN = SimpleNamespace(
 RULES = SimpleNamespace(
 	REPORT_H = 96,      # Rules: report under the editor
 	EDIT_MIN_H = 120,   # Rules: editor never lower
+)
+GROUPS = SimpleNamespace(
+	REPORT_H = 96,      # Groups: report (validate, CLA leaders, log) under the members
+	MEMBERS_MIN_H = 120,  # Groups: members list never lower
+	NAME_W = 110,       # Groups: new group name field
 )
 STRINGS = SimpleNamespace(
 	COMBO_W  = 260,     # pattern combo box
@@ -139,6 +147,7 @@ KERN = SimpleNamespace(
 	REPORT  = REPORT,
 	EXPLAIN = EXPLAIN,
 	RULES   = RULES,
+	GROUPS  = GROUPS,
 	STRINGS = STRINGS,
 	NUDGE   = NUDGE,
 	HELP    = HELP,
