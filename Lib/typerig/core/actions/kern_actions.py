@@ -13,7 +13,7 @@
 #   snapshot_folder / snapshot_write / snapshot_list / snapshot_read
 # KernMaster job (KRN pair list + CLA classes):
 #   job_classes(kset), job_pairs_font(kset, master), job_pairs_ab(kset, a, b)
-# Font lib (locks, jobs): LIB_KEY, lib_normalize
+# Font lib (locks, jobs, rule sets, strings settings): LIB_KEY, lib_normalize
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2026       (http://www.kateliev.com)
 # (C) TypeRig                      (http://www.typerig.com)
@@ -339,7 +339,7 @@ def job_pairs_ab(kset, a_text, b_text, use_groups=True):
 
 # - Font lib -----------------------------------------------------------------
 def lib_new():
-	return {'format': LIB_FORMAT, 'locks': [], 'job': {}, 'import': {}}
+	return {'format': LIB_FORMAT, 'locks': [], 'job': {}, 'import': {}, 'rules': [], 'strings': {}}
 
 
 def lib_normalize(data):
@@ -348,9 +348,11 @@ def lib_normalize(data):
 	if isinstance(data, dict):
 		locks = data.get('locks') or []
 		out['locks'] = [list(p) for p in locks if isinstance(p, (list, tuple)) and len(p) == 2]
-		for key in ('job', 'import'):
+		for key in ('job', 'import', 'strings'):
 			if isinstance(data.get(key), dict):
 				out[key] = dict(data[key])
+		from typerig.core.algo.kern_rules import normalize_sets
+		out['rules'] = normalize_sets(data.get('rules'))
 	return out
 
 

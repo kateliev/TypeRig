@@ -3,7 +3,7 @@
 TR Kern — UI configuration.
 
 Sizes of the TR Kern window (TypeRig Kern.glyphsPlugin): tabs Pairs,
-Import, Job, Help. Buttons, gaps, entry fields and lists come from config.py
+Rules, Strings, Import, Job, Help. Buttons, gaps, entry fields and lists come from config.py
 (UI), as in TR Panel; only what is particular to this window lives here.
 
 Same rules as config.py: no layout literal in the plugin; add a field here
@@ -59,6 +59,8 @@ COLUMNS = SimpleNamespace(
 	TYPE    = 40,       # Pairs grid: kind (CC / CG / GC / GG)
 	VALUE   = 62,       # Pairs grid: one value column per master
 	SPREAD  = 56,       # Pairs grid: max - min across the masters
+	RULES_SPLIT = 1. / 3,  # Rules tab: rule sets list share (the editor takes the rest)
+	RULE_CHECK = 44,    # Rules list: Live / Class check boxes
 )
 
 # - Forms -----------------------------------------------------------------
@@ -81,6 +83,21 @@ FORM = SimpleNamespace(
 EXPLAIN = SimpleNamespace(
 	MIN_H = 120,        # Pairs: explain view never lower
 )
+RULES = SimpleNamespace(
+	REPORT_H = 96,      # Rules: report under the editor
+	EDIT_MIN_H = 120,   # Rules: editor never lower
+)
+STRINGS = SimpleNamespace(
+	COMBO_W  = 260,     # pattern combo box
+	FILLER_W = 110,     # filler combo boxes
+	SUFFIX_W = 70,      # suffix fields
+	OUT_MIN_H = 120,    # output text never lower
+)
+NUDGE = SimpleNamespace(	# Pairs grid keys + / -: value step
+	STEP   = 5,         # plain
+	SHIFT  = 1,         # with Shift (fine)
+	OPTION = 25,        # with Option (coarse)
+)
 
 # - Report / Help ----------------------------------------------------------
 REPORT = SimpleNamespace(
@@ -99,6 +116,10 @@ COLORS = SimpleNamespace(
 		'nomaster' : 'systemOrangeColor',   # no master matched yet
 		'empty'    : 'systemRedColor',      # no pairs in the file
 	},
+	RULE = {	# Rules list: live sets re-run after every change
+		'live'     : 'systemGreenColor',
+		'plain'    : None,
+	},
 	PAIR = {	# Pairs grid rows by kind; pending / locked win over the kind
 		'pending'  : 'systemOrangeColor',   # changed, not written yet
 		'locked'   : 'systemGrayColor',     # never changed by an operation
@@ -116,6 +137,9 @@ KERN = SimpleNamespace(
 	FORM    = FORM,
 	REPORT  = REPORT,
 	EXPLAIN = EXPLAIN,
+	RULES   = RULES,
+	STRINGS = STRINGS,
+	NUDGE   = NUDGE,
 	HELP    = HELP,
 	COLORS  = COLORS,
 )

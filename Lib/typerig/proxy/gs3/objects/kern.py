@@ -233,6 +233,44 @@ class GlyphsKernHost(object):
 			out[master] = write_pairs(font, self.master_id(master), entry['set'], entry['remove'])
 		return out
 
+	def glyph_sets(self):
+		'''{set name: [glyphs]} for proof strings (*Uppercase, *Lowercase, ...).'''
+		from typerig.proxy.gs3.gui.glyph_filters import glyph_kind
+		names = {'Figure': 'Figures', 'Mark': 'Marks'}
+		sets = {k: [] for k in ('Uppercase', 'Lowercase', 'Smallcaps', 'Figures', 'Marks', 'Other',
+		                        'Alternates', 'Ligatures')}
+		font = self._font()
+		for glyph in (font.glyphs if font is not None else []):
+			name = str(glyph.name)
+			try:
+				kind = glyph_kind(glyph)
+			except Exception:
+				kind = 'Other'
+			sets[names.get(kind, kind)].append(name)
+			if '.' in name.strip('.'):
+				sets['Alternates'].append(name)
+			if '_' in name.strip('_'):
+				sets['Ligatures'].append(name)
+		return sets
+
+	def current_pair(self):
+		'''(left, right) glyph names around the text cursor of the active edit tab, or None.'''
+		font = self._font()
+		tab = getattr(font, 'currentTab', None) if font is not None else None
+		if tab is None:
+			return None
+		try:
+			layers = list(tab.layers)
+			cursor = int(tab.textCursor)
+		except Exception:
+			return None
+		if not 0 < cursor < len(layers):
+			return None
+		glyphs = [getattr(layers[i], 'parent', None) for i in (cursor - 1, cursor)]
+		if any(g is None or not getattr(g, 'name', None) for g in glyphs):
+			return None		# a line break (GSControlLayer) on one side
+		return str(glyphs[0].name), str(glyphs[1].name)
+
 	def open_tab(self, text):
 		font = self._font()
 		if font is not None and text:
