@@ -35,7 +35,7 @@ from typerig.core.algo.kern_model import (ChangeSet, KernSet, LEFT, RIGHT, is_gr
                                          group_key, to_int)
 from typerig.core.fileio import afm, krn
 
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 
 # - Init -------------------------------------------------------------------
 SCOPE_MERGE_CLEAR, SCOPE_REPLACE, SCOPE_MERGE = 'merge_clear', 'replace', 'merge'
@@ -352,3 +352,119 @@ def lib_normalize(data):
 			if isinstance(data.get(key), dict):
 				out[key] = dict(data[key])
 	return out
+
+
+# - Bulk value operations (Pairs tab) -------------------------------------------
+# cells: [(master, pair)]. Missing cells (the pair is not in that master)
+# are only written by 'set'; every other operation skips them.
+BULK_OPS = (
+	('set', 'Set to'), ('add', 'Add'), ('add_abs', 'Add away from 0'), ('scale', 'Scale %'),
+	('round', 'Round to'), ('clamp', 'Clamp to ±'), ('drop', 'Remove if |v| <'),
+	('remove', 'Remove'), ('replace', 'Replace value'),
+)
+COPY_MODES = (('fill', 'Fill missing only'), ('overwrite', 'Overwrite'))
+
+
+def _bulk_value(op, value, a, b):
+	'''New value for one cell, None = remove, False = leave as is.'''
+	if op == 'set':
+		return a
+	if value is None:
+		return False
+	if op == 'add':
+		return value + a
+	if op == 'add_abs':
+		return value + a if value > 0 else value - a if value < 0 else value
+	if op == 'scale':
+		return value * a / 100.
+	if op == 'round':
+		return a * round(value / a) if a else value
+	if op == 'clamp':
+		return max(-abs(a), min(abs(a), value))
+	if op == 'drop':
+		return None if abs(value) < a else False
+	if op == 'remove':
+		return None
+	if op == 'replace':
+		return b if value == a else False
+	raise ValueError('Unknown operation: %s' % op)
+
+
+def bulk_plan(kset, cells, op, a=0, b=0, base=None):
+	'''ChangeSet for a bulk operation on cells. base: a ChangeSet whose
+	values count as current (pending edits), else the kerning itself.'''
+	cs = ChangeSet(op)
+	pending = base.pairs if base is not None else {}
+	for master, pair in cells:
+		pair = tuple(pair)
+		entry = pending.get(master, {})
+		if pair in entry.get('remove', ()):
+			value = None
+		else:
+			value = entry.get('set', {}).get(pair, kset.pairs.get(master, {}).get(pair))
+		new = _bulk_value(op, value, float(a or 0), float(b or 0))
+		if new is False:
+			continue
+		if new is None:
+			if value is not None:
+				cs.remove(master, pair, kset.locks)
+		elif value is None or to_int(new) != value:
+			cs.set(master, pair, new, kset.locks)
+	return cs
+
+
+def effective_table(kset, master, base=None):
+	'''A master's pairs with a pending ChangeSet (base) on top.'''
+	table = dict(kset.pairs.get(master, {}))
+	entry = base.pairs.get(master) if base is not None else None
+	if entry:
+		for pair in entry['remove']:
+			table.pop(pair, None)
+		table.update(entry['set'])
+	return table
+
+
+def copy_plan(kset, src, dst, pairs=None, k=1., c=0., mode='fill', base=None):
+	'''Master to master: dst = src * k + c, for pairs (default: all of src).
+	fill: only pairs dst does not have; overwrite: every pair. base: pending
+	changes that count as current.'''
+	cs = ChangeSet('copy %s > %s' % (src, dst))
+	source, target = effective_table(kset, src, base), effective_table(kset, dst, base)
+	for pair in sorted(source if pairs is None else [tuple(p) for p in pairs]):
+		if pair not in source or (mode == 'fill' and pair in target):
+			continue
+		value = to_int(source[pair] * float(k) + float(c))
+		if target.get(pair) != value:
+			cs.set(dst, pair, value, kset.locks)
+	return cs
+
+
+def interpolate_plan(kset, a, b, t, dst, pairs=None, mode='overwrite', base=None):
+	'''dst = a + (b - a) * t per pair (t 0 = a, 1 = b, outside: extrapolate).
+	A pair missing in a or b counts as 0 there, as Glyphs interpolates.
+	base: pending changes that count as current.'''
+	cs = ChangeSet('interpolate %s %s > %s' % (a, b, dst))
+	ta, tb, target = (effective_table(kset, m, base) for m in (a, b, dst))
+	keys = (set(ta) | set(tb)) if pairs is None else set(tuple(p) for p in pairs)
+	for pair in sorted(keys):
+		if pair not in ta and pair not in tb:
+			continue
+		if mode == 'fill' and pair in target:
+			continue
+		va, vb = ta.get(pair, 0), tb.get(pair, 0)
+		value = to_int(va + (vb - va) * float(t))
+		if target.get(pair) != value:
+			cs.set(dst, pair, value, kset.locks)
+	return cs
+
+
+def merge_changes(into, cs):
+	'''Add a ChangeSet on top of another (later wins); locked lists add up.'''
+	for master, entry in cs.pairs.items():
+		for pair in entry['remove']:
+			into.remove(master, pair)
+		for pair, value in entry['set'].items():
+			into.set(master, pair, value)
+	into.locked.extend(cs.locked)
+	into.log.extend(cs.log)
+	return into

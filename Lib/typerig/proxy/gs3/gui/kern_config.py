@@ -2,8 +2,8 @@
 """
 TR Kern — UI configuration.
 
-Sizes of the TR Kern window (TypeRig Kern.glyphsPlugin): tabs Import, Job,
-Help (Phase 1). Buttons, gaps, entry fields and lists come from config.py
+Sizes of the TR Kern window (TypeRig Kern.glyphsPlugin): tabs Pairs,
+Import, Job, Help. Buttons, gaps, entry fields and lists come from config.py
 (UI), as in TR Panel; only what is particular to this window lives here.
 
 Same rules as config.py: no layout literal in the plugin; add a field here
@@ -23,7 +23,7 @@ from .config import HOST_MAJOR, _LIST_ROW_H, _LIST_HEADER_H
 # Resizable both ways: lists and reports stretch, columns keep COLUMNS.SPLIT.
 _WIN_GS3 = SimpleNamespace(
 	W           = 1160,   # default window width: the sources table fits without scrolling
-	MIN_W       = 900,    # the option form and the button bars do not reflow
+	MIN_W       = 1000,   # the Pairs operations and the button bars do not reflow
 	TABS_TOP    = 8,      # tab view inset from the window top
 	TABS_CHROME = 30,     # tab view height beyond its item view (tab bar + frame; macOS 26)
 	TABS_SIDE   = 16,     # tab view width beyond its content (frame, both sides)
@@ -31,7 +31,7 @@ _WIN_GS3 = SimpleNamespace(
 )
 _WIN_GS4 = SimpleNamespace(
 	W           = 1160,
-	MIN_W       = 900,
+	MIN_W       = 1000,
 	TABS_TOP    = 10,
 	TABS_CHROME = 30,
 	TABS_SIDE   = 16,
@@ -54,6 +54,11 @@ COLUMNS = SimpleNamespace(
 	FILE_MIN = 140,     # file name: never narrower (the table scrolls instead)
 	MASTER  = 100,      # master a source goes to
 	COUNT   = 52,       # pairs / glyphs / not-in-font counts
+	PAIRS_SPLIT = .6,   # Pairs tab: grid share of the tab width (operations panel: the rest)
+	KEY     = 120,      # Pairs grid: left / right side (glyph or @group)
+	TYPE    = 40,       # Pairs grid: kind (CC / CG / GC / GG)
+	VALUE   = 62,       # Pairs grid: one value column per master
+	SPREAD  = 56,       # Pairs grid: max - min across the masters
 )
 
 # - Forms -----------------------------------------------------------------
@@ -65,6 +70,16 @@ FORM = SimpleNamespace(
 	TEXT_W  = 420,      # A / B pair lists (Job)
 	CHECK_W = 160,      # 'Use groups'
 	BTN_W   = 120,      # text buttons before they are sized to their titles
+	OP_W    = 150,      # Pairs: bulk operation popup
+	MASTER_W = 130,     # Pairs: master popups (From / To / Mix with / Masters)
+	MODE_W  = 140,      # Pairs: copy mode popup
+	KIND_W  = 100,      # Pairs: kind filter popup
+	SEARCH_MIN = 200,   # Pairs: search field never narrower
+	SHORT_LABEL_W = 44, # Pairs: 'From:', 'To:', 'Mix:', 'In:' captions
+	TINY_LABEL_W = 20,  # Pairs: one-character captions ('t', '\u00d7', '+')
+)
+EXPLAIN = SimpleNamespace(
+	MIN_H = 120,        # Pairs: explain view never lower
 )
 
 # - Report / Help ----------------------------------------------------------
@@ -84,6 +99,14 @@ COLORS = SimpleNamespace(
 		'nomaster' : 'systemOrangeColor',   # no master matched yet
 		'empty'    : 'systemRedColor',      # no pairs in the file
 	},
+	PAIR = {	# Pairs grid rows by kind; pending / locked win over the kind
+		'pending'  : 'systemOrangeColor',   # changed, not written yet
+		'locked'   : 'systemGrayColor',     # never changed by an operation
+		'CC'       : None,                  # group + group
+		'CG'       : 'systemBlueColor',     # group + glyph (exception)
+		'GC'       : 'systemBlueColor',     # glyph + group (exception)
+		'GG'       : 'systemPurpleColor',   # glyph + glyph (exception)
+	},
 )
 
 KERN = SimpleNamespace(
@@ -92,6 +115,7 @@ KERN = SimpleNamespace(
 	COLUMNS = COLUMNS,
 	FORM    = FORM,
 	REPORT  = REPORT,
+	EXPLAIN = EXPLAIN,
 	HELP    = HELP,
 	COLORS  = COLORS,
 )
