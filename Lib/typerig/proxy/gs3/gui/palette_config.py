@@ -64,8 +64,12 @@ _ENTRY_GS4 = SimpleNamespace(
 #   H      : height in px; None = natural height for STYLE
 #   GAP    : space between the caption and the first row of its section
 #   INDENT : x offset from PAD; negative moves the caption left
-def _caption(show, style, gap, indent=0, h=None):
-	return SimpleNamespace(SHOW=show, STYLE=style, H=h, GAP=gap, INDENT=indent)
+#   FOLD   : disclosure arrow before the caption; folds the section (TRToolbarBase)
+#   FOLD_W : arrow size (square, px); the caption text starts after it
+#   FOLD_GAP : space under the caption of a folded section
+def _caption(show, style, gap, indent=0, h=None, fold=True, fold_w=13, fold_gap=4):
+	return SimpleNamespace(SHOW=show, STYLE=style, H=h, GAP=gap, INDENT=indent,
+	                       FOLD=fold, FOLD_W=fold_w, FOLD_GAP=fold_gap)
 
 _CAPTION_GS3 = _caption(True, 'regular', 8, indent=-4)
 _CAPTION_GS4 = _caption(True, 'regular', 10, indent=-4)
