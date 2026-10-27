@@ -753,6 +753,107 @@ def npa_contour_order_reverse(glyph, scope_layers, NodeActions, ContourActions):
             ContourActions.contour_reverse_order(s)
 
 
+BOOL_OPERATIONS = ('add', 'subtract', 'intersect', 'exclude')   # FL contour_bool names
+
+
+def _outline_contours(layer):
+    """All contours of the non-component shapes, in order (= host path indices)."""
+    return [c for s in layer.shapes if not getattr(s, 'is_component', False) for c in s.contours]
+
+
+def npa_contour_bool(glyph, scope_layers, operation='add', reverse=False):
+    """Boolean operation on selected contours (all if none) - FL contour_bool.
+
+    The operands are read ONCE on a reference layer (the active layer if in
+    scope, else the first) and applied by contour index to every layer in
+    scope: Glyphs keeps a separate selection per layer, so other masters
+    have none to read. Left fold in index order (reverse: from the last,
+    FL Alt); the result takes the place of the base operand. Open contours
+    are not operands and stay. Layers whose contour count differs from the
+    reference are skipped and reported; results that differ in node
+    structure across layers are reported (no fix).
+
+    The geometry is the host's: each layer must offer
+    path_boolean(indices, operation, reverse) -> (status, new_paths, message)
+    (Glyphs: trLayer.path_boolean, engine proxy/gs3/objects/pathops).
+
+    Args:
+        operation (str): 'add', 'subtract', 'intersect' or 'exclude'.
+        reverse (bool): fold from the last operand.
+
+    Returns:
+        dict: layer name -> status ('OK', 'EMPTY', 'TOO_FEW', 'BAD_INDEX',
+        'ENGINE_ERROR', 'INCOMPATIBLE', 'NO_HOST'). Empty if nothing ran.
+    """
+    tag = '[contour bool] {}'.format(getattr(glyph, 'name', '?'))
+
+    if operation not in BOOL_OPERATIONS:
+        print('{}: unknown operation {!r}.'.format(tag, operation))
+        return {}
+
+    layers = list(_iter_scope(glyph, scope_layers))
+    if not layers:
+        return {}
+
+    active = glyph.layer() if hasattr(glyph, 'active_layer') else None
+    ref = next((lyr for lyr in layers if active is not None and lyr.name == active.name), layers[0])
+
+    # - Operands from the reference layer
+    ref_contours = _outline_contours(ref)
+    indices = [i for i, c in enumerate(ref_contours) if any(n.selected for n in c.data)]
+    if not indices:
+        indices = list(range(len(ref_contours)))
+
+    operand_ids = [i for i in indices if ref_contours[i].closed]
+    if len(operand_ids) < 2:
+        print('{}: select 2 or more closed contours (got {}).'.format(tag, len(operand_ids)))
+        return {}
+
+    # - Apply on every layer
+    statuses = {}
+    for lyr in layers:
+        if not hasattr(lyr, 'path_boolean'):
+            statuses[lyr.name] = 'NO_HOST'
+            print('{} / {}: no boolean engine on this host.'.format(tag, lyr.name))
+            continue
+
+        if len(_outline_contours(lyr)) != len(ref_contours):
+            statuses[lyr.name] = 'INCOMPATIBLE'
+            print('{} / {}: {} contours, {} has {}: skipped.'.format(
+                tag, lyr.name, len(_outline_contours(lyr)), ref.name, len(ref_contours)))
+            continue
+
+        status, new_paths, message = lyr.path_boolean(indices, operation, reverse)
+        statuses[lyr.name] = status
+        if status not in ('OK', 'EMPTY'):
+            print('{} / {}: {} {}'.format(tag, lyr.name, status, message))
+        elif status == 'EMPTY':
+            print('{} / {}: {} left nothing; operands removed.'.format(tag, lyr.name, operation))
+
+        # - Select the result on the reference layer, so a second click chains
+        if lyr is ref and status == 'OK':
+            base_id = operand_ids[-1] if reverse else operand_ids[0]
+            start = base_id - sum(1 for i in operand_ids if i < base_id)
+            for k, c in enumerate(_outline_contours(lyr)):
+                keep = start <= k < start + len(new_paths)
+                for n in c.data:
+                    n.selected = keep
+
+    # - Compatibility of the results
+    def signature(layer):
+        return [tuple(n.type for n in c.data) for c in _outline_contours(layer)]
+
+    done = [lyr for lyr in layers if statuses.get(lyr.name) in ('OK', 'EMPTY')]
+    if len(done) > 1:
+        ref_done = ref if ref in done else done[0]
+        ref_sig = signature(ref_done)
+        differ = [lyr.name for lyr in done if lyr is not ref_done and signature(lyr) != ref_sig]
+        if differ:
+            print('{}: result not compatible with {} on: {}.'.format(tag, ref_done.name, ', '.join(differ)))
+
+    return statuses
+
+
 def npa_contour_align(glyph, scope_layers, NodeActions, ContourActions,
                       align_x='C', align_y='E', mode='CC',
                       contours_A_by_layer=None, contours_B_by_layer=None):
