@@ -37,7 +37,7 @@ from typerig.core.algo.kern_model import (ChangeSet, KernSet, LEFT, RIGHT, is_gr
                                          group_key, to_int)
 from typerig.core.fileio import afm, krn
 
-__version__ = '0.4.0'
+__version__ = '0.5.0'
 
 # - Init -------------------------------------------------------------------
 SCOPE_MERGE_CLEAR, SCOPE_REPLACE, SCOPE_MERGE = 'merge_clear', 'replace', 'merge'
@@ -48,7 +48,7 @@ FILL_WARNING = .5	# absent = 0 on a source that fills less of its group pairs: w
 LIB_KEY = 'com.typerig.kern'	# font lib: locks, saved jobs
 LIB_FORMAT = 1
 SNAPSHOT_SUFFIX = '.trkern'		# sidecar folder next to the font: <font file>.trkern/
-SOURCE_TYPES = ('afm', 'krn')	# import sources (KRN: only pairs that carry a value)
+SOURCE_TYPES = ('afm', 'krn', 'otf', 'ttf', 'ufo')	# import sources (KRN: only pairs with a value; UFO: a folder)
 
 # KernMaster job: CLA has no sides, so a group gets the side in its name.
 # Same convention as the FL Kern Classes auto build (name_1 = 1st / left, name_2 = 2nd / right).
@@ -192,9 +192,17 @@ def import_files_to_masters(paths, masters, strip=''):
 def read_source(path):
 	'''Read an import source file. AFM: KPX / KP pairs, CharMetrics as coverage.
 	KRN: KPX lines that carry a value (a job list without values gives nothing).
+	OTF / TTF: the GPOS kern feature flattened (fileio/otkern), every glyph as coverage.
+	UFO (folder): kerning flattened through its own groups, every glyph as coverage.
 	Returns {'path', 'name', 'font_name', 'kerning': {(a, b): value}, 'glyphs': [names] or None}.'''
+	path = path.rstrip(os.sep)
 	ext = os.path.splitext(path)[1].lower().lstrip('.')
 	out = {'path': path, 'name': os.path.basename(path), 'font_name': '', 'kerning': {}, 'glyphs': None}
+	if ext in ('otf', 'ttf', 'ufo'):
+		from typerig.core.fileio import otkern
+		data = otkern.read_ufo(path) if ext == 'ufo' else otkern.read_font(path)
+		out.update(font_name=data['font_name'], kerning=data['kerning'], glyphs=data['glyphs'] or None)
+		return out
 	if ext == 'krn':
 		with krn.KRNparser(path) as reader:
 			for row in reader:
