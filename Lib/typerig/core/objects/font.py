@@ -405,7 +405,7 @@ class Font(Container, XMLSerializable):
 			return enc
 
 		g = self.glyph(name)
-		return list(g.unicodes) if g and g.unicodes else []
+		return list(g.unicodes) if g is not None and g.unicodes else []		# a Glyph is a Container: no layers = falsy
 
 	# -- Kerning per master ------------
 	def default_master_name(self):
