@@ -12,8 +12,8 @@
 #   observer.restore(); observer.bind_button(btn); observer.toggle(btn)
 #   (see observer.py, TRObserver)
 #
-# The pointer comes from an AppKit local event monitor (mouse moved, left
-# mouse down clears), not Glyphs' MOUSEMOVED: one path for GS3 and GS4.
+# The pointer comes from the observer's AppKit event monitor (mouse moved,
+# left mouse down clears), not Glyphs' MOUSEMOVED: one path for GS3 and GS4.
 # Rays are native layer.intersectionsBetweenPoints; a layer with
 # components is measured on a decomposed copy. The per-layer cache is
 # dropped on UPDATEINTERFACE (edits). DRAWFOREGROUND draws in glyph space.
@@ -21,14 +21,14 @@
 
 from __future__ import division, print_function, unicode_literals
 
-from GlyphsApp import Glyphs, UPDATEINTERFACE, DRAWFOREGROUND
-from AppKit import (NSEvent, NSBezierPath, NSColor, NSFont, NSMakeRect, NSPointInRect,
+from GlyphsApp import UPDATEINTERFACE, DRAWFOREGROUND
+from AppKit import (NSBezierPath, NSColor, NSFont, NSMakeRect,
                     NSAttributedString, NSFontAttributeName, NSForegroundColorAttributeName,
                     NSEventMaskMouseMoved, NSEventMaskLeftMouseDown, NSEventTypeLeftMouseDown)
 
 from typerig.core.algo.chord_probe import normal_chord
 
-from .observer       import TRObserver
+from .observer       import TRObserver, edit_view_at
 from .palette_config import PALETTE
 
 PROBE        = PALETTE.PROBE
@@ -53,30 +53,21 @@ def _has_components(layer):
 
 
 class StemProbe(TRObserver):
-	key  = 'com.typerig.observer.stemProbe'
-	name = 'stem probe'
+	key        = 'com.typerig.observer.stemProbe'
+	name       = 'stem probe'
+	event_mask = NSEventMaskMouseMoved | NSEventMaskLeftMouseDown
 
 	def __init__(self):
-		self._result  = None		# (layer, chord) under the pointer
-		self._view    = None		# graphic view to redraw
-		self._src     = None		# (layer, measured layer, fill path, reach)
-		self._monitor = None		# NSEvent local monitor token
-		self._error   = None		# last message printed (no flood per mouse move)
+		self._result = None		# (layer, chord) under the pointer
+		self._view   = None		# graphic view to redraw
+		self._src    = None		# (layer, measured layer, fill path, reach)
 		super(StemProbe, self).__init__()
 
 	def callbacks(self):
 		return [(self._on_update, UPDATEINTERFACE),
 		        (self._on_draw,   DRAWFOREGROUND)]
 
-	def installed(self):
-		if self._monitor is None:
-			self._monitor = NSEvent.addLocalMonitorForEventsMatchingMask_handler_(
-				NSEventMaskMouseMoved | NSEventMaskLeftMouseDown, self._on_event)
-
 	def removed(self):
-		if self._monitor is not None:
-			NSEvent.removeMonitor_(self._monitor)
-			self._monitor = None
 		self._clear()
 		self._src = None
 
@@ -92,20 +83,10 @@ class StemProbe(TRObserver):
 		return self._src
 
 	def _measure(self, event):
-		font = Glyphs.font
-		tab = font.currentTab if font is not None else None
-		if tab is None:
+		hit = edit_view_at(event)
+		if hit is None:
 			return self._clear()
-		view = tab.graphicView()
-		if event.window() != view.window():
-			return self._clear()
-		if not NSPointInRect(view.convertPoint_fromView_(event.locationInWindow(), None), view.visibleRect()):
-			return self._clear()
-
-		layer = view.activeLayer()
-		if layer is None:
-			return self._clear()
-		pt = view.getActiveLocation_(event)		# active layer coordinates
+		view, layer, pt = hit
 
 		_, src, path, reach = self._source(layer)
 		if path is None or not path.containsPoint_(pt):
@@ -125,22 +106,15 @@ class StemProbe(TRObserver):
 			if self._view is not None:
 				self._view.setNeedsDisplay_(True)
 
-	def _report(self, e):
-		msg = str(e)
-		if msg != self._error:
-			self._error = msg
-			print('[TypeRig] stem probe:', msg)
-
 	# - Callbacks ---------------------------------------------------------
-	def _on_event(self, event):
-		'''Local monitor handler: must hand the event back to AppKit.'''
+	def on_event(self, event):
 		try:
 			if event.type() == NSEventTypeLeftMouseDown:
 				self._clear()
 			else:
 				self._measure(event)
 		except Exception as e:
-			self._report(e)
+			self.report(e)
 			self._clear()
 		return event
 
@@ -155,7 +129,7 @@ class StemProbe(TRObserver):
 			scale = info['Scale'] if 'Scale' in info else 1.
 			self._draw(result[1], scale)
 		except Exception as e:
-			self._report(e)
+			self.report(e)
 
 	# - Draw --------------------------------------------------------------
 	def _draw(self, chord, scale):

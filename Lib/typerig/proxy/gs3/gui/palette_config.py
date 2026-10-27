@@ -150,3 +150,24 @@ PALETTE.PROBE = SimpleNamespace(
 	TEXT     = 'whiteColor',         # label text on the badge
 )
 
+# - Node slide (gui/node_slider.py) ---------------------------------------
+# Option-drag slides a node along its incoming segment, Cmd+Option along
+# the outgoing one (core algo/node_slide.py). T is the time on the original
+# segment; beyond 0 / 1 the segment is extended.
+PALETTE.SLIDE = SimpleNamespace(
+	HIT      = 8,     # screen pt: mouse down this close to a selected node grabs it
+	EXTEND   = 1.,    # how far past the far end the node may go, in segment time
+	MARGIN   = .01,   # keeps the node off the segment's other end (no zero-length segment)
+)
+
+# - Node add ghost (gui/node_ghost.py) ------------------------------------
+# Ghost of the node Ctrl+Option+right click inserts: nearest point on the
+# active layer's paths. Screen pt; NSColor class method names.
+PALETTE.GHOST = SimpleNamespace(
+	SNAP     = 12,    # show the ghost when the pointer is this close to a path
+	R        = 4.,    # ghost node radius
+	STROKE   = 1.5,   # ghost outline width
+	ALPHA    = .35,   # ghost fill alpha
+	COLOR    = 'systemOrangeColor',
+)
+

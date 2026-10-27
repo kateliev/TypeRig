@@ -27,6 +27,15 @@ class TRScopeState(object):
 		self.pLayers = (True, False, False, False)
 		self._font_resolver = font_resolver         # callable -> GSFont or None
 
+	def owns_font(self, font):
+		'''True if this host's own font (no Glyphs.font fallback) is `font`.'''
+		if self._font_resolver is None or font is None:
+			return False
+		try:
+			return self._font_resolver() == font
+		except Exception:
+			return False
+
 	def font(self):
 		if self._font_resolver is not None:
 			try:

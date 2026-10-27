@@ -14,7 +14,9 @@
 #   thumbnail.py    contours drawn as images + TRThumbGrid picker
 #   observer.py     TRObserver: base for the Toolbar observer row
 #   layer_toast.py  observer: layer name toast at the pointer on layer change
-#   stem_probe.py   observer: live stem widths under the pointer
+#   stem_probe.py   observer: live stem width under the pointer
+#   node_slider.py  observer: Option-drag a node along its segment
+#   node_ghost.py   observer: ghost node on the path, Ctrl+Option+right click adds it
 #   assets/         shared icon font (typerig-icons.ttf)
 #
 # A new TR Glyphs plugin typically only ships:
