@@ -16,6 +16,7 @@ from AppKit import (
 	NSPushOnPushOffButton,
 	NSMomentaryPushInButton,
 	NSCenterTextAlignment,
+	NSColor,
 )
 
 from .icon_font import tr_attr
@@ -40,6 +41,14 @@ class IconButton(vanilla.Button):
 	             checkable=False, size=None):
 		if size is None:
 			size = UI.BTN.ICON_PT
+		# A checked toggle takes its icon colour from UI.BTN.ON_TINT. A click
+		# flips the state inside AppKit, so the callback is wrapped to recolour.
+		self._on_tint = None
+		if checkable and UI.BTN.ON_TINT is not None:
+			self._on_tint = NSColor.colorWithSRGBRed_green_blue_alpha_(*(tuple(UI.BTN.ON_TINT) + (1.,)))
+		self._user_callback = callback
+		if self._on_tint is not None:
+			callback = self._clicked
 		super().__init__(posSize, '', callback=callback)
 		ns = self.getNSButton()
 		# Resolve frame height for baseline-offset math. Negative h (right-
@@ -68,15 +77,27 @@ class IconButton(vanilla.Button):
 	def setToken(self, token):
 		'''Swap the rendered icon (e.g. fold_up <-> fold_down).'''
 		self._token = token
-		self.getNSButton().setAttributedTitle_(
-			tr_attr(token, size=self._size,
-			        baseline_offset=self._baseline_offset))
+		self._retint()
 
 	def isChecked(self):
 		return bool(self.getNSButton().state())
 
 	def setChecked(self, value):
 		self.getNSButton().setState_(1 if value else 0)
+		if self._on_tint is not None:
+			self._retint()
+
+	def _retint(self):
+		'''Redraw the title; ON_TINT colours it while the toggle is checked.'''
+		color = self._on_tint if self._on_tint is not None and self.isChecked() else None
+		self.getNSButton().setAttributedTitle_(
+			tr_attr(self._token, size=self._size, color=color,
+			        baseline_offset=self._baseline_offset))
+
+	def _clicked(self, sender):
+		self._retint()
+		if self._user_callback is not None:
+			self._user_callback(sender)
 
 
 # Bezels that fill their frame: drawn rect == alignment rect, room for the icon.
