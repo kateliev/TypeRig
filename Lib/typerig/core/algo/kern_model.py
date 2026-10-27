@@ -93,8 +93,10 @@ class KernSet(object):
 		locks (set)          : pair keys that operations must never change (all masters)
 		rules (list)         : stored analogy rule sets (dicts), kept for the host / later phases
 		sidebearings (dict)  : {master: {glyph: (lsb, rsb)}} at snapshot time, for spacing compensation
+		locations (dict)     : {master: {axis: value}} from the host (interpolate / nearest master)
 	'''
-	def __init__(self, masters=None, pairs=None, groups=None, locks=None, rules=None, sidebearings=None, leaders=None):
+	def __init__(self, masters=None, pairs=None, groups=None, locks=None, rules=None, sidebearings=None, leaders=None,
+	             locations=None):
 		self.masters = list(masters or [])
 		self.pairs = {m: {} for m in self.masters}
 		for master, table in (pairs or {}).items():
@@ -112,6 +114,7 @@ class KernSet(object):
 		self.locks = set(tuple(k) for k in (locks or ()))
 		self.rules = list(rules or [])
 		self.sidebearings = copy.deepcopy(sidebearings or {})
+		self.locations = {str(m): {str(a): float(v) for a, v in (loc or {}).items()} for m, loc in (locations or {}).items()}
 		self._inverse = None
 
 	def __repr__(self):
@@ -246,6 +249,7 @@ class KernSet(object):
 			'rules': copy.deepcopy(self.rules),
 			'sidebearings': {m: {g: list(sb) for g, sb in t.items()}
 			                 for m, t in self.sidebearings.items() if m in masters},
+			'locations': {m: dict(loc) for m, loc in self.locations.items() if m in masters},
 		}
 
 	@classmethod
@@ -255,7 +259,7 @@ class KernSet(object):
 		sidebearings = {m: {g: tuple(sb) for g, sb in t.items()} for m, t in (data.get('sidebearings') or {}).items()}
 		return cls(masters=data.get('masters'), pairs=pairs, groups=data.get('groups'),
 		           locks=[tuple(k) for k in (data.get('locks') or [])], rules=data.get('rules'),
-		           sidebearings=sidebearings, leaders=data.get('leaders'))
+		           sidebearings=sidebearings, leaders=data.get('leaders'), locations=data.get('locations'))
 
 	def copy(self):
 		return KernSet.from_dict(self.to_dict())

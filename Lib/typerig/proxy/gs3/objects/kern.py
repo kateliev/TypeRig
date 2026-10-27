@@ -209,12 +209,31 @@ class GlyphsKernHost(object):
 			return None
 		return next((m.id for m in font.masters if m.name == name), None)
 
+	def master_locations(self):
+		'''{master: {axis name: value}} (Glyphs 3 / 4 master axis values).'''
+		font = self._font()
+		out = {}
+		if font is None:
+			return out
+		axes = [str(getattr(a, 'name', '') or getattr(a, 'axisTag', '')) for a in (getattr(font, 'axes', None) or [])]
+		for master in font.masters:
+			values = getattr(master, 'axes', None)
+			if values is None:
+				values = getattr(master, 'internalAxesValues', None)
+			try:
+				values = list(values or [])
+			except TypeError:
+				values = []
+			out[str(master.name)] = {a: float(v) for a, v in zip(axes, values) if a}
+		return out
+
 	def read_kernset(self, masters=None):
-		'''The font's kerning as a KernSet (all masters, or the named ones).'''
+		'''The font's kerning as a KernSet (all masters, or the named ones), with master locations.'''
 		font = self._font()
 		names = self.master_names() if masters is None else list(masters)
 		pairs = {name: master_table(font, self.master_id(name)) for name in names}
-		return KernSet(names, pairs=pairs, groups=kerning_groups(font))
+		locations = {m: loc for m, loc in self.master_locations().items() if m in names}
+		return KernSet(names, pairs=pairs, groups=kerning_groups(font), locations=locations)
 
 	def name_tables(self):
 		return name_tables(self._font())

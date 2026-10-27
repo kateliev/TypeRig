@@ -44,7 +44,8 @@ CHECKS = (	# (key, title, keeps rendering)
 	('small', 'Small values', False),
 	('outliers', 'Sign flips and large spreads across masters', False),
 )
-MISMATCH_FIXES = (('fill', 'Fill resolved'), ('copy', 'Copy from master'), ('remove', 'Remove everywhere'))
+MISMATCH_FIXES = (('fill', 'Fill resolved'), ('copy', 'Copy from master'), ('nearest', 'Copy nearest master'),
+                  ('interpolate', 'Interpolate (location)'), ('remove', 'Remove everywhere'))
 OPTION_DEFAULTS = {'tolerance': 0, 'small': 5, 'spread': 60, 'mismatch_fix': 'fill', 'copy_from': ''}
 _ORDER = {'GG': 0, 'GC': 1, 'CG': 2, 'CC': 3}
 
@@ -177,6 +178,49 @@ def find_mismatch(kset):
 	return out
 
 
+# - Locations: nearest master, interpolation --------------------------------------
+def _distance(kset, a, b):
+	'''Distance of two masters by location (axes both have); by master order without locations.'''
+	la, lb = kset.locations.get(a), kset.locations.get(b)
+	if la and lb:
+		axes = set(la) & set(lb)
+		if axes:
+			return sum((la[x] - lb[x]) ** 2 for x in axes) ** .5
+	order = kset.masters
+	return abs(order.index(a) - order.index(b)) if a in order and b in order else float('inf')
+
+
+def nearest_value(kset, master, values):
+	'''(value, source master): the value of the nearest master that has one.'''
+	have = [m for m, v in values.items() if v is not None and m != master]
+	if not have:
+		return None, None
+	source = min(have, key=lambda m: (_distance(kset, master, m), kset.masters.index(m)))
+	return values[source], source
+
+
+def interpolated_value(kset, master, values):
+	'''(value, how): piecewise linear along the one axis on which the masters differ,
+	from the masters that have the pair; outside their range or with several axes:
+	the nearest master ('nearest').'''
+	have = {m: v for m, v in values.items() if v is not None and m != master}
+	loc = kset.locations.get(master) or {}
+	axes = set()
+	for m in list(have) + [master]:
+		axes |= set(kset.locations.get(m) or {})
+	moving = [x for x in sorted(axes)
+	          if len(set((kset.locations.get(m) or {}).get(x) for m in list(have) + [master])) > 1]
+	if len(moving) == 1 and len(have) >= 2 and moving[0] in loc:
+		axis = moving[0]
+		points = sorted(((kset.locations[m][axis], v) for m, v in have.items() if axis in (kset.locations.get(m) or {})))
+		t = loc[axis]
+		for (x0, v0), (x1, v1) in zip(points, points[1:]):
+			if x0 <= t <= x1 and x1 != x0:
+				return int(round(v0 + (v1 - v0) * (t - x0) / (x1 - x0))), 'interpolate'
+	value, _source = nearest_value(kset, master, values)
+	return value, 'nearest'
+
+
 # - Orphans / small / outliers --------------------------------------------------------------
 def find_orphans(kset, glyphs=None):
 	glyphs = set(glyphs) if glyphs is not None else None
@@ -262,6 +306,17 @@ def fix(kset, check, findings, opts=None):
 					continue
 				for master in info['missing']:
 					cs.set(master, pair, source, kset.locks)
+			elif how in ('nearest', 'interpolate'):
+				for master in info['missing']:
+					if how == 'nearest':
+						value, _src = nearest_value(kset, master, info['values'])
+					else:
+						value, used = interpolated_value(kset, master, info['values'])
+						if used == 'nearest':
+							cs.log.append('%s %s in %s: nearest master (not between masters on one axis)'
+							              % (pair[0], pair[1], master))
+					if value is not None:
+						cs.set(master, pair, value, kset.locks)
 			else:
 				for master in info['missing']:
 					cs.set(master, pair, info['fill'][master], kset.locks)

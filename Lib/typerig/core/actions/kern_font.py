@@ -75,9 +75,8 @@ def kernset_from_font(font, masters=None):
 		kerning = font.kerning_for(name if font.masters.data else None)
 		pairs[name] = {(core_key(p.first, LEFT), core_key(p.second, RIGHT)): p.value
 		               for p in (kerning.data if kerning is not None else [])}
-	kset = KernSet(names, pairs=pairs, groups=groups)
-	kset.locations = {m: loc for m, loc in master_locations(font).items() if m in names}
-	return kset
+	return KernSet(names, pairs=pairs, groups=groups,
+	               locations={m: loc for m, loc in master_locations(font).items() if m in names})
 
 
 def apply_to_font(font, cs):
