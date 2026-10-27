@@ -14,7 +14,7 @@
 
 from __future__ import unicode_literals
 
-__version__ = '0.7.0'
+__version__ = '0.8.0'
 
 HELP_TEXT = '''TR KERN — HELP
 
@@ -302,4 +302,10 @@ Class names have the side at the end: _1 is the left side, _2 is the right side.
 Leaders — DTL KernMaster kerns a class with its first glyph, the leader. The CLA file puts the leader of each group first. The same leader is the key glyph of the import (section 8), of Explain and of the proof strings. You set the leaders in the Groups tab (section 3). If a group has no leader, it is the member with the same name as the group, else the first member.
 
 DTL KernMaster gives back AFM files. Import them in the Import tab. Export job sets the "Strip" text of the import, so that the AFM files find their masters.
+
+
+13. COMMAND LINE (tr-kern)
+
+TR Kern also works without an editor, on UFO, designspace and .trfont files: the command tr-kern (or python -m typerig.core.actions.kern_cli). It uses the same engine as this window. For a UFO or a designspace it writes only the kerning, the groups and the TR Kern settings; it does not change outlines, font info or features. Each write keeps a snapshot next to the font; "tr-kern restore" brings it back.
+Commands: info, import, cleanup, job, rules, pairs, groups, restore. Type "tr-kern COMMAND -h" for the options of a command. Changes are only planned until you add --apply (import writes unless you add --dry-run).
 '''

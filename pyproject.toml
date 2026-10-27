@@ -14,6 +14,9 @@ license-files = ["LICENSE"]
 authors = [{name = "Vassil Kateliev"}]
 dependencies = ["fonttools>=4"]
 
+[project.scripts]
+tr-kern = "typerig.core.actions.kern_cli:main"
+
 [project.urls]
 Homepage = "https://www.typerig.com"
 Repository = "https://github.com/kateliev/TypeRig"
