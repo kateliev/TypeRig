@@ -14,7 +14,7 @@
 
 from __future__ import unicode_literals
 
-__version__ = '0.6.0'
+__version__ = '0.7.0'
 
 HELP_TEXT = '''TR KERN — HELP
 
@@ -37,7 +37,7 @@ Group — a kerning group (class). A group is on the left side or on the right s
 Exception — a pair where at least one side is a glyph, not a group. It changes the value for that glyph only.
 Class value — the value of a group pair, for example @T @o = -50.
 Key glyph (leader) — the glyph that stands for a group. It is the leader that you set, else the member with the same name as the group, else the first member.
-Source — a file with flat glyph pairs: an AFM file, or a KRN file with values.
+Source — kerning from outside the font: an AFM file, a KRN file with values, a compiled font (OTF or TTF), or a UFO.
 Coverage — the glyphs that a source knows. In an AFM file, these are the glyphs in its CharMetrics list.
 Snapshot — a copy of the kerning before a change, kept in a folder next to the font.
 Pending — a change that is planned but not written to the font yet.
@@ -145,7 +145,11 @@ The checks:
 - Pairs that change nothing — a pair that gives its glyph pairs the same values that they get without it. All pair kinds are checked. Fix: remove (the spacing does not change).
 - Compress group pairs — the pairs of a group pair (for example @T @o and its exceptions) are written again with fewer pairs. Each glyph pair keeps its value. This finds glyph pairs that fit a class, and class values that the exceptions do not agree with. Regions with a locked pair are skipped.
 - Pairs missing in some masters — "covered": another pair gives these glyphs a value in that master; "uncovered": they get 0.
-  Missing fix: Fill resolved (default) writes the value that the master shows now, so nothing changes visually. If the glyph pairs of the missing pair have different values, the report says "approximate". Copy from master: the value of the master that you select. Remove everywhere: the pair is removed from all masters.
+  Missing fix: Fill resolved (default) writes the value that the master shows now, so nothing changes visually. If the glyph pairs of the missing pair have different values, the report says "approximate".
+  Copy from master: the value of the master that you select.
+  Copy nearest master: the value of the nearest master that has the pair (by the axis values of the masters).
+  Interpolate (location): the value between the masters that have the pair, along the axis on which the masters differ. Outside these masters, or when more than one axis differs, the tool uses the nearest master and the report says so.
+  Remove everywhere: the pair is removed from all masters.
 - Pairs with a missing group or glyph — Fix: remove.
 - Small values — values below "Small below". Fix: remove. This changes the spacing, so it is off by default.
 - Sign flips and large spreads — a pair that is positive in one master and negative in another, or that changes by more than "Spread over" between masters. Report only.
@@ -197,7 +201,7 @@ The report under the rules shows mistakes with their line numbers.
 7. IMPORT — QUICK START
 
 1. Open the Import tab.
-2. Click "Add sources" and select one or more AFM files.
+2. Click "Add…" and select one or more sources: AFM, KRN with values, OTF, TTF or UFO.
 3. Make sure that each source has the correct master. The tool finds the master from the file name.
 4. If the master is wrong, select the source. Then use the "Set master…" menu.
 5. Set the options (section 8). The defaults are correct for a complete autokerner export.
@@ -217,6 +221,13 @@ Example: the source has T o -50, T oacute -50, Tcaron o -50, Tcaron oacute -20.
 Key glyph and Mode both give @T @o = -50. The tool adds one exception: Tcaron oacute -20.
 
 Tolerance — glyph pairs that are this close to the class value do not get an exception. Use it for noisy sources, for example 2 or 5 units.
+
+Sources in detail:
+- AFM — the KPX pairs. The CharMetrics list gives the coverage.
+- KRN — only lines with a value.
+- OTF / TTF — the kern feature (GPOS), as the font applies it: exceptions before classes, lookups added together. A font without GPOS kerning gives its old kern table. A variable font gives its default instance. All glyphs of the font are the coverage.
+- UFO (a folder) — its kerning, applied through its own groups. All glyphs of the UFO are the coverage.
+The tool always makes flat glyph pairs from a source first. Then it writes them on your groups.
 
 Absent pairs — what a glyph pair means if it is not in the source:
 - Absent = 0 (default): the glyph pair must not be kerned. Use this for a complete export. Autokerners do not write pairs with the value 0.
