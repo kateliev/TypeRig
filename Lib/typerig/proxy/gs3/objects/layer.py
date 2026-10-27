@@ -32,6 +32,9 @@
 # for the GSPath builder). If you find yourself writing a local
 # _build_gs_path or layer.paths.append in a panel, you are off-pattern —
 # add the helper here and call it. See porting_guide.md anti-pattern #14.
+#
+# Boolean operations: trLayer.path_boolean, engine in pathops.py (the only
+# module that touches GSPathOperator).
 # ---------------------------------------------------------------------
 
 # - Dependencies -------------------------
@@ -44,10 +47,11 @@ import GlyphsApp
 from typerig.proxy.gs3.objects.shape  import trShape, _build_gs_shape
 from typerig.proxy.gs3.objects.anchor import trAnchor, _build_gs_anchor
 from typerig.proxy.gs3.objects.contour import _build_gs_path
+from typerig.proxy.gs3.objects import pathops
 from typerig.core.objects.layer import Layer
 
 # - Init ---------------------------------
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 # - Classes ------------------------------
 class trLayer(Layer):
@@ -206,6 +210,70 @@ class trLayer(Layer):
 		self.host.shapes = list(self.host.shapes) + [gs_path]
 		self.data = self._build_shapes()
 		return gs_path
+
+	def path_boolean(self, indices, operation, reverse=False):
+		'''Boolean operation on the paths at indices (FL contour_bool).
+
+		Left fold over the closed paths at indices, in index order (reverse:
+		from the last). The result replaces the operands at the z-position
+		of the base operand (first; reverse: last). Open paths at indices
+		are not operands and stay where they are. Components and other paths
+		are kept. Engine: pathops (GSPathOperator).
+
+		Args:
+			indices (iterable of int): indices into layer.paths.
+			operation (str): pathops.OP_ADD / OP_SUBTRACT / OP_INTERSECT / OP_EXCLUDE.
+			reverse (bool): fold from the last operand (FL Alt).
+
+		Returns:
+			tuple (status, new_paths, message):
+				status: pathops.STATUS_OK, STATUS_EMPTY (operands removed,
+				nothing added), STATUS_TOO_FEW / STATUS_BAD_INDEX /
+				STATUS_ENGINE_ERROR (layer not changed).
+				new_paths (list of GSPath): the paths now on the layer.
+				message (str): reason when not OK; open paths skipped.
+		'''
+		paths = list(self.host.paths)
+		indices = sorted(set(indices))
+
+		if any(i < 0 or i >= len(paths) for i in indices):
+			return pathops.STATUS_BAD_INDEX, [], 'indices %s, layer has %d paths' % (indices, len(paths))
+
+		operand_ids = [i for i in indices if paths[i].closed]
+		open_ids = [i for i in indices if not paths[i].closed]
+		note = 'open paths kept: %s' % open_ids if open_ids else ''
+
+		if len(operand_ids) < 2:
+			return pathops.STATUS_TOO_FEW, [], 'need 2 closed paths, got %d' % len(operand_ids)
+
+		try:
+			result = pathops.fold([paths[i] for i in operand_ids], operation, reverse)
+		except pathops.PathOpError as error:
+			return pathops.STATUS_ENGINE_ERROR, [], str(error)
+
+		# - Rebuild shapes: layer.paths order is the order of GSPaths in
+		# layer.shapes, so the path counter maps shapes to indices.
+		base_id = operand_ids[-1] if reverse else operand_ids[0]
+		drop_ids = set(operand_ids)
+		new_shapes = []
+		path_id = -1
+
+		for shape in self.host.shapes:
+			if not isinstance(shape, GlyphsApp.GSPath):
+				new_shapes.append(shape)
+				continue
+
+			path_id += 1
+			if path_id == base_id:
+				new_shapes.extend(result)
+			elif path_id not in drop_ids:
+				new_shapes.append(shape)
+
+		self.host.shapes = new_shapes
+		self.data = self._build_shapes()
+
+		status = pathops.STATUS_OK if result else pathops.STATUS_EMPTY
+		return status, result, note
 
 	def copy_shapes_from(self, other, clean=False):
 		'''Append copies of other's paths and components (clean=True: replace).
