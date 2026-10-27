@@ -17,6 +17,14 @@
 #           [--no-groups] [--preview]
 #   tr-kern rules FONT RULES.txt [--no-class] [--master M] [--dry-run]
 #   tr-kern restore FONT [--list] [--snapshot PATH]
+#   tr-kern pairs FONT [--query Q] [--explain A|V] [--limit N]
+#           [--op set|add|add_abs|scale|round|clamp|drop|remove|replace --value N [--value2 N]]
+#           [--copy FROM TO [--k K] [--c C]] [--interpolate A B T TO] [--mode fill|overwrite]
+#           [--master M ...] [--lock | --unlock] [--apply]
+#   tr-kern groups FONT [--side left|right] [--members NAME] [--auto] [--validate]
+#           [--leaders-from CLA] [--leader NAME GLYPH] [--move GLYPH... --to NAME | --out GLYPH...]
+#           [--new NAME GLYPH...] [--rename OLD NEW] [--delete NAME...] [--merge NAME...]
+#           [--no-preserve] [--apply]
 #
 #   python -m typerig.core.actions.kern_cli ...   or   main(argv) -> exit code
 # -----------------------------------------------------------
@@ -35,7 +43,6 @@ import os
 import sys
 
 from typerig.core.algo import kern_cleanup as kc
-from typerig.core.algo import kern_groups as kg
 from typerig.core.algo import kern_model as km
 from typerig.core.algo import kern_reclass as krc
 from typerig.core.actions import kern_actions as ka
@@ -222,6 +229,121 @@ def cmd_restore(args):
 	return 0
 
 
+def _finish(doc, engine, apply, what):
+	n = engine.pending_count()
+	if not n:
+		_out('%s: nothing to change.' % what)
+		return 0
+	if not apply:
+		_out('%s: %d change(s) planned; nothing written (use --apply).' % (what, n))
+		return 0
+	engine.apply_pending()
+	_save(doc, engine)
+	return 0
+
+
+def cmd_pairs(args):
+	doc, engine = _open(args.font)
+	if args.explain:
+		engine.set_query('?' + args.explain)
+		_out(engine.explain)
+		return 0
+	engine.set_query(args.query or '')
+	if engine.query_error:
+		_out('Query: %s' % engine.query_error, sys.stderr)
+		return 1
+	pairs = engine.shown_pairs()
+	masters = args.master or None
+	if masters and any(m not in engine.masters() for m in masters):
+		_out('Masters: %s' % ', '.join(engine.masters()), sys.stderr)
+		return 1
+	acting = args.op or args.copy or args.interpolate or args.lock or args.unlock
+	if not acting:
+		kset = engine.pairs_kset()
+		_out('%-22s %-22s %-4s %s' % ('left', 'right', 'kind', '  '.join('%8s' % m[:8] for m in kset.masters)))
+		for row in engine.shown()[:args.limit]:
+			_out('%-22s %-22s %-4s %s' % (row['pair'][0], row['pair'][1], row['kind'], '  '.join(
+				'%8s' % ('' if row['values'].get(m) is None else row['values'][m]) for m in kset.masters)))
+		_out('%d of %d pairs%s' % (len(engine.shown()), len(engine.rows()),
+		     '' if len(engine.shown()) <= args.limit else ' (first %d listed; --limit)' % args.limit))
+		return 0
+	if args.lock or args.unlock:
+		engine.lock(pairs, bool(args.lock))
+		doc.save()
+		_out(engine.message)
+		return 0
+	if args.op:
+		engine.bulk(args.op, args.value or 0, args.value2 or 0, pairs, masters)
+	if args.copy:
+		engine.copy_master(args.copy[0], args.copy[1], args.k, args.c, args.mode or 'fill',
+		                   pairs if args.query else None)
+	if args.interpolate:
+		a, b, t, dst = args.interpolate
+		engine.interpolate_master(a, b, float(t), dst, args.mode or 'overwrite', pairs if args.query else None)
+	_out(engine.message)
+	return _finish(doc, engine, args.apply, 'Pairs')
+
+
+def cmd_groups(args):
+	doc, engine = _open(args.font)
+	engine.set_group_side(args.side)
+	engine.set_preserve(not args.no_preserve)
+	did = False
+	if args.leaders_from:
+		engine.copy_leaders_from_cla(args.leaders_from)
+		doc.save()
+		_out(engine.groups_report)
+		did = True
+	if args.leader:
+		if not engine.set_leader(args.leader[0], args.leader[1]):
+			_out(engine.message, sys.stderr)
+			return 1
+		doc.save()
+		_out(engine.message)
+		did = True
+	if args.validate:
+		engine.validate_groups()
+		_out(engine.groups_report)
+		did = True
+	if args.members:
+		members = engine.group_members(args.members)
+		_out('%s (%s): %s' % (args.members, args.side, ' '.join(members) if members else 'no such group'))
+		did = True
+	planned = False
+	if args.auto:
+		engine.auto_groups()
+		_out(engine.groups_report)
+		planned = True
+	if args.new:
+		engine.add_group(args.new[0], args.new[1:])
+		planned = True
+	if args.move:
+		if not args.to:
+			_out('--move needs --to GROUP', sys.stderr)
+			return 1
+		engine.move_glyphs(args.move, args.to)
+		planned = True
+	if args.out:
+		engine.move_glyphs(args.out, None)
+		planned = True
+	if args.rename:
+		engine.rename_group(args.rename[0], args.rename[1])
+		planned = True
+	if args.delete:
+		engine.delete_groups(args.delete)
+		planned = True
+	if args.merge:
+		engine.merge_groups(args.merge)
+		planned = True
+	if planned:
+		_out(engine.message)
+		return _finish(doc, engine, args.apply, 'Groups')
+	if not did:
+		for row in engine.group_rows():
+			_out('%-24s %4d glyphs %5d pairs  leader %s' % (row['name'], row['members'], row['pairs'], row['leader']))
+	return 0
+
+
 # - Parser ------------------------------------------------------------------------
 def parser():
 	p = argparse.ArgumentParser(prog=PROG, description='TR Kern: kerning of UFO, designspace and .trfont files.')
@@ -275,6 +397,44 @@ def parser():
 	s.add_argument('--master')
 	s.add_argument('--dry-run', action='store_true')
 	s.set_defaults(func=cmd_rules)
+
+	s = sub.add_parser('pairs', help='list / explain pairs, bulk operations, master to master, locks')
+	s.add_argument('font')
+	s.add_argument('--query', help='search, as in the Pairs tab: T|*  @O|@A  <-50  missing:Bold  kind:GG')
+	s.add_argument('--explain', metavar='A|V', help='how the font finds the value of a glyph pair')
+	s.add_argument('--limit', type=int, default=200, help='rows listed (default 200)')
+	s.add_argument('--op', choices=[k for k, _t in ka.BULK_OPS], help='bulk operation on the found pairs')
+	s.add_argument('--value', type=float)
+	s.add_argument('--value2', type=float, help='replace: the new value')
+	s.add_argument('--master', nargs='+', help='masters the operation changes (default: all)')
+	s.add_argument('--copy', nargs=2, metavar=('FROM', 'TO'), help='master to master (the found pairs with --query)')
+	s.add_argument('--k', type=float, default=1., help='copy: multiply')
+	s.add_argument('--c', type=float, default=0., help='copy: add')
+	s.add_argument('--interpolate', nargs=4, metavar=('A', 'B', 'T', 'TO'))
+	s.add_argument('--mode', choices=[k for k, _t in ka.COPY_MODES])
+	s.add_argument('--lock', action='store_true', help='lock the found pairs')
+	s.add_argument('--unlock', action='store_true')
+	s.add_argument('--apply', action='store_true', help='write the changes')
+	s.set_defaults(func=cmd_pairs)
+
+	s = sub.add_parser('groups', help='kerning groups: list, members, auto, validate, leaders, edits')
+	s.add_argument('font')
+	s.add_argument('--side', choices=list(km.SIDES), default=km.LEFT)
+	s.add_argument('--members', metavar='NAME')
+	s.add_argument('--auto', action='store_true', help='groups from composites and suffixes')
+	s.add_argument('--validate', action='store_true')
+	s.add_argument('--leaders-from', metavar='CLA', help='leaders from a CLA file (written at once)')
+	s.add_argument('--leader', nargs=2, metavar=('NAME', 'GLYPH'), help='set a leader (written at once)')
+	s.add_argument('--new', nargs='+', metavar='NAME', help='NAME GLYPH...: a new group')
+	s.add_argument('--move', nargs='+', metavar='GLYPH')
+	s.add_argument('--to', metavar='NAME')
+	s.add_argument('--out', nargs='+', metavar='GLYPH', help='glyphs out of their groups')
+	s.add_argument('--rename', nargs=2, metavar=('OLD', 'NEW'))
+	s.add_argument('--delete', nargs='+', metavar='NAME')
+	s.add_argument('--merge', nargs='+', metavar='NAME', help='merge into the first')
+	s.add_argument('--no-preserve', action='store_true', help='glyphs take the values of their new groups')
+	s.add_argument('--apply', action='store_true', help='write the group edits')
+	s.set_defaults(func=cmd_groups)
 
 	s = sub.add_parser('restore', help='bring back a snapshot (the latest by default)')
 	s.add_argument('font')
