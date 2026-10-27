@@ -113,3 +113,20 @@ PALETTE.MIN_H  = PALETTE.MAST_H + 2 * (PALETTE.BTN + PALETTE.GAP)  # masthead + 
 # TRMasthead adds group_gap ON TOP of the 4 normal gaps between 5 pills.
 PALETTE.MAST_GROUP_GAP = max(0, PALETTE.W - 2 * PALETTE.PAD - 5 * PALETTE.BTN - 4 * PALETTE.GAP)
 
+# - Toast (gui/layer_toast.py) --------------------------------------------
+# Small label shown at the pointer, then faded out; switched from the
+# Toolbar observer row. Colours name NSColor class methods. One set for
+# GS3 + GS4.
+PALETTE.TOAST = SimpleNamespace(
+	OFFSET   = (20, 20),  # right, down from the pointer (pt)
+	HOLD     = 0.8,       # seconds fully visible
+	FADE     = 0.4,       # seconds fade-out
+	FONT_PT  = 12,        # bold system font size
+	PAD_X    = 8,         # label inset, horizontal
+	PAD_Y    = 4,         # label inset, vertical
+	RADIUS   = 6,         # corner radius
+	BG       = 'blackColor',
+	BG_ALPHA = 0.78,
+	FG       = 'systemOrangeColor',
+)
+

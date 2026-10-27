@@ -20,8 +20,10 @@
 #
 # Glyphs makes one palette instance per document window and calls
 # settings() from init(), before it sets the window controller — so the
-# Toolbar's font is resolved lazily, on each click. No Glyphs callbacks are
-# registered: an unremoved callback can crash Glyphs on quit.
+# Toolbar's font is resolved lazily, on each click. No per-Toolbar Glyphs
+# callbacks: an unremoved callback can crash Glyphs on quit. Observers on
+# the observer row (layer_toast.py) keep one module-level callback and
+# remove it on NSApplicationWillTerminate.
 # -------------------------------------------------------------------------
 
 from __future__ import division, print_function, unicode_literals
