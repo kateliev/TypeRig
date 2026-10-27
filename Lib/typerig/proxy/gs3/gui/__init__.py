@@ -12,7 +12,9 @@
 #   dialogs.py      inline layer-picker + master-values dialog
 #   tint_list.py    TRTintList: List2 colour coded by kind (dots + row tint)
 #   thumbnail.py    contours drawn as images + TRThumbGrid picker
+#   observer.py     TRObserver: base for the Toolbar observer row
 #   layer_toast.py  observer: layer name toast at the pointer on layer change
+#   stem_probe.py   observer: live stem widths under the pointer
 #   assets/         shared icon font (typerig-icons.ttf)
 #
 # A new TR Glyphs plugin typically only ships:

@@ -130,3 +130,23 @@ PALETTE.TOAST = SimpleNamespace(
 	FG       = 'systemOrangeColor',
 )
 
+# - Stem probe (gui/stem_probe.py) ----------------------------------------
+# Live stem measurement drawn in the edit view while the pointer is inside
+# the outline: one chord through the pointer along the normal of the
+# nearest outline (core algo/chord_probe.py). Sizes are screen pt (divided
+# by the view scale when drawn). Colours name NSColor class methods. One
+# set for GS3 + GS4.
+PALETTE.PROBE = SimpleNamespace(
+	STEPS    = 36,    # angles scanned over 180 deg (both sides: 72 directions, 5 deg apart)
+	REFINE   = 10,    # golden-section steps after the scan (5 deg -> ~0.04 deg)
+	DECIMALS = 1,     # digits after the point in the label
+	STROKE   = 1.,    # chord line width
+	DOT      = 2.5,   # chord end dot radius
+	FONT_PT  = 10,    # label font size
+	PAD_X    = 4,     # label badge inset, horizontal
+	PAD_Y    = 1,     # label badge inset, vertical
+	RADIUS   = 3,     # label badge corner radius
+	COLOR    = 'systemOrangeColor',  # chord and badge
+	TEXT     = 'whiteColor',         # label text on the badge
+)
+

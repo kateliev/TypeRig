@@ -22,8 +22,8 @@
 # settings() from init(), before it sets the window controller — so the
 # Toolbar's font is resolved lazily, on each click. No per-Toolbar Glyphs
 # callbacks: an unremoved callback can crash Glyphs on quit. Observers on
-# the observer row (layer_toast.py) keep one module-level callback and
-# remove it on NSApplicationWillTerminate.
+# the observer row (observer.py) are one per session and remove their
+# callbacks on NSApplicationWillTerminate.
 # -------------------------------------------------------------------------
 
 from __future__ import division, print_function, unicode_literals
