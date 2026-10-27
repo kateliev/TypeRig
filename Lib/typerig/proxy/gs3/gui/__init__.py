@@ -17,6 +17,7 @@
 #   stem_probe.py   observer: live stem width under the pointer
 #   node_slider.py  observer: Option-drag a node along its segment
 #   node_ghost.py   observer: ghost node on the path, Ctrl+Option+right click adds it
+#   key_nudge.py    observer: arrow keys move nodes by per-master X / Y steps
 #   assets/         shared icon font (typerig-icons.ttf)
 #
 # A new TR Glyphs plugin typically only ships:

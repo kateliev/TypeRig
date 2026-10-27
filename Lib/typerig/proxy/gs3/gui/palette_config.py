@@ -171,3 +171,13 @@ PALETTE.GHOST = SimpleNamespace(
 	COLOR    = 'systemOrangeColor',
 )
 
+# - Keyboard nudge (gui/key_nudge.py) -------------------------------------
+# Arrow keys move selected nodes by a per-master X / Y step (font lib,
+# Option+click the button to set). Modifier multipliers as in Glyphs.
+PALETTE.KEYS = SimpleNamespace(
+	DEFAULT   = (1., 1.),   # X / Y step for a master with no entry
+	SHIFT     = 10.,        # Shift + arrow
+	SHIFT_CMD = 100.,       # Shift + Cmd + arrow
+	METHOD    = 'SMART',    # core NodeActions.nodes_move: handles move with their node
+)
+

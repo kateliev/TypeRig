@@ -997,3 +997,152 @@ class TRMasterValuesDialog(object):
 			alert.runModal()
 		except Exception:
 			print('[TypeRig Panel] %s: %s' % (title, message))
+
+
+# - Per-master X / Y steps ----------------------------------------------------
+# Storage in Glyphs: font.userData[lib_key] -> dict[master_name -> [x, y]]
+def read_master_steps(font, lib_key, default=(1., 1.)):
+	'''Per-master (x, y) steps stored by TRMasterStepsDialog, as
+	dict[master_name -> (x, y)]; {} if absent. Malformed entries get `default`.'''
+	if font is None:
+		return {}
+	try:
+		ud  = font.userData
+		raw = ud.get(lib_key) if hasattr(ud, 'get') else ud[lib_key]
+		items = raw.items() if hasattr(raw, 'items') else dict(raw).items()
+	except Exception:
+		return {}
+	out = {}
+	for k, v in items:
+		try:
+			out[str(k)] = (float(v[0]), float(v[1]))
+		except (TypeError, ValueError, IndexError, KeyError):
+			out[str(k)] = tuple(default)
+	return out
+
+
+class TRMasterStepsDialog(object):
+	'''Modal per-master X / Y step editor.
+
+	A table Master | X | Y (editable), and X / Y fields with Set selected /
+	Set all to give the selected rows or every master the same pair. OK
+	writes font.userData[lib_key] and returns dict[master_name -> (x, y)];
+	Cancel returns None.
+	'''
+	_NAME_W = UI.DIALOG.MV_NAME_W
+
+	def __init__(self, font, lib_key, title=None, message=None,
+	             default=(1., 1.), size=(UI.DIALOG.MV_W, UI.DIALOG.MV_H)):
+		if not isinstance(lib_key, str) or not lib_key.startswith(TR_LIB_KEY_PREFIX):
+			raise ValueError("TRMasterStepsDialog: lib_key must start with %r (got %r)"
+			                 % (TR_LIB_KEY_PREFIX, lib_key))
+		self.tr_font = font
+		self.lib_key = lib_key
+		self.default = (float(default[0]), float(default[1]))
+		self.values  = None
+		self._modal_session = None
+
+		try:
+			names = [m.name for m in font.masters]
+		except Exception:
+			names = []
+
+		w, h = size
+		PAD     = UI.DIALOG.MV_PAD
+		LBL_H   = UI.DIALOG.MV_LBL_H
+		BTN_H   = UI.DIALOG.MV_BTN_H
+		BTN_ROW = BTN_H + UI.DIALOG.MV_BTN_GAP
+
+		self.w = vanilla.Window((w, h), title or 'Keyboard steps',
+		                        minSize=(UI.DIALOG.MV_MIN_W, UI.DIALOG.MV_MIN_H))
+		self.w.getNSWindow().setLevel_(NSFloatingWindowLevel)
+		self.w.lbl = vanilla.TextBox((PAD, PAD, -PAD, LBL_H),
+		                             message or 'X and Y step of the arrow keys, per master:')
+
+		self.w.table = vanilla.List(
+			(0, PAD + LBL_H, -0, -(PAD + BTN_ROW * 2)),
+			[],
+			columnDescriptions=[
+				dict(title='Master', key='name', width=self._NAME_W, editable=False),
+				dict(title='X',      key='x',    editable=True),
+				dict(title='Y',      key='y',    editable=True),
+			],
+			editCallback=self._on_cell_edit,
+			showColumnTitles=True,
+			drawFocusRing=False,
+		)
+
+		# Row: X, Y, Set selected, Set all
+		quarter = (w - PAD * 5) // 4
+		y = -(PAD + BTN_ROW * 2)
+		self.w.fld_x = vanilla.EditText((PAD, y, quarter, BTN_H), self._fmt(self.default[0]), placeholder='X')
+		self.w.fld_y = vanilla.EditText((PAD * 2 + quarter, y, quarter, BTN_H), self._fmt(self.default[1]), placeholder='Y')
+		self.w.btn_set_sel = vanilla.Button((PAD * 3 + quarter * 2, y, quarter, BTN_H), 'Set selected',
+		                                    callback=lambda s: self._set_rows(selected=True))
+		self.w.btn_set_all = vanilla.Button((PAD * 4 + quarter * 3, y, quarter, BTN_H), 'Set all',
+		                                    callback=lambda s: self._set_rows(selected=False))
+		y += BTN_ROW
+
+		half = (w - PAD * 3) // 2
+		self.w.btn_cancel = vanilla.Button((PAD, y, half, BTN_H), 'Cancel', callback=self._on_cancel)
+		self.w.btn_ok     = vanilla.Button((PAD * 2 + half, y, half, BTN_H), 'OK', callback=self._on_ok)
+
+		stored = read_master_steps(font, lib_key, self.default)
+		self.w.table.set([{'name': n,
+		                   'x': self._fmt(stored.get(n, self.default)[0]),
+		                   'y': self._fmt(stored.get(n, self.default)[1])} for n in names])
+
+	# Same modal loop as TRMasterValuesDialog (uses self.w / self.values)
+	run_modal   = TRMasterValuesDialog.run_modal
+	_stop_modal = TRMasterValuesDialog._stop_modal
+
+	# - Helpers ---------------------------------------------------------------
+	@staticmethod
+	def _fmt(v):
+		return '{:g}'.format(float(v))
+
+	@staticmethod
+	def _parse(s):
+		try:
+			return float(s)
+		except (TypeError, ValueError):
+			return None
+
+	def _on_cell_edit(self, sender):
+		rows, dirty = sender.get(), False
+		for r in rows:
+			for key, d in (('x', self.default[0]), ('y', self.default[1])):
+				if self._parse(r.get(key)) is None:
+					r[key] = self._fmt(d)
+					dirty = True
+		if dirty:
+			sender.set(rows)
+
+	def _set_rows(self, selected):
+		x, y = self._parse(self.w.fld_x.get()), self._parse(self.w.fld_y.get())
+		rows = self.w.table.get()
+		picked = set(self.w.table.getSelection()) if selected else set(range(len(rows)))
+		for i, r in enumerate(rows):
+			if i in picked:
+				if x is not None:
+					r['x'] = self._fmt(x)
+				if y is not None:
+					r['y'] = self._fmt(y)
+		self.w.table.set(rows)
+
+	def _on_ok(self, sender):
+		values = {}
+		for r in self.w.table.get():
+			x, y = self._parse(r.get('x')), self._parse(r.get('y'))
+			values[r['name']] = (self.default[0] if x is None else x, self.default[1] if y is None else y)
+		try:
+			self.tr_font.userData[self.lib_key] = dict((k, [v[0], v[1]]) for k, v in values.items())
+			self.values = values
+		finally:
+			self._stop_modal()
+			self.w.close()
+
+	def _on_cancel(self, sender):
+		self.values = None
+		self._stop_modal()
+		self.w.close()

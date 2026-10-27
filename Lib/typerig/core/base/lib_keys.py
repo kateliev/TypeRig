@@ -35,3 +35,7 @@ DELTA_LAB_LIB_KEY        = 'com.typerig.delta.italiclab'
 # applies in all.
 NODE_COLLINEAR_LIB_KEY   = 'com.typerig.panel.node.tool.collinear'
 NODE_MONOLINE_LIB_KEY    = 'com.typerig.panel.node.tool.monoline'
+
+# Per-master keyboard nudge steps {master name: [x, y]}: TR Toolbar
+# (Glyphs) keyboard observer, arrow keys move selected nodes by these.
+NODE_KEY_STEPS_LIB_KEY   = 'com.typerig.toolbar.node.keysteps'

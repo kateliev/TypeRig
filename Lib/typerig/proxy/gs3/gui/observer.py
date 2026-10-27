@@ -14,7 +14,7 @@
 #   observer = MyObserver()                      # one per Glyphs session
 #   observer.restore()                           # once: on if it was on at quit
 #   observer.bind_button(btn)                    # button follows the state
-#   btn callback -> observer.toggle(btn)
+#   btn callback -> observer.toggle(btn)       # Option+click: observer.configure()
 #
 # Pointer observers set `event_mask` and implement on_event(event): an
 # AppKit local event monitor runs while the observer is on (one path for
@@ -38,7 +38,7 @@ import weakref
 
 from GlyphsApp import Glyphs
 from AppKit import (NSEvent, NSNotificationCenter, NSApplicationWillTerminateNotification,
-                    NSPointInRect)
+                    NSPointInRect, NSEventModifierFlagOption)
 
 # - Quit watch (one for every observer) ----------------------------------
 _live     = []		# observers created this session
@@ -124,6 +124,12 @@ class TRObserver(object):
 		'''Monitored event; return it to pass it on, None to swallow it.'''
 		return event
 
+	has_options = False		# True: Option+click on the button calls configure()
+
+	def configure(self):
+		'''Options dialog (Option+click on the button).'''
+		pass
+
 	def report(self, e):
 		'''Print an error once (not again until it changes).'''
 		msg = str(e)
@@ -197,5 +203,13 @@ class TRObserver(object):
 		btn.setChecked(self._on)
 
 	def toggle(self, btn):
-		'''Button callback: switch to the button's state.'''
+		'''Button callback: switch to the button's state. Option+click on an
+		observer with options opens them and leaves the state as it was.'''
+		if self.has_options and NSEvent.modifierFlags() & NSEventModifierFlagOption:
+			btn.setChecked(self._on)		# the click already flipped the button
+			try:
+				self.configure()
+			except Exception as e:
+				self.report(e)
+			return
 		self.set_enabled(btn.isChecked())
