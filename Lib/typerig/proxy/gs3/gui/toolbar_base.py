@@ -26,12 +26,19 @@
 # like FL's TRFlowLayout — once, at build time (vanilla cannot reflow
 # live). Every size comes from palette_config.PALETTE; Toolbar code holds
 # no layout numbers. See TypeRig-Glyphs Lib/toolbar_guide.md.
+#
+# Folding: each captioned section gets a disclosure arrow. A section runs
+# from its caption to the next caption; every control on self.group falls
+# into the section that holds its vertical centre, so builders need no
+# fold code. Folding hides the section body, moves later sections up and
+# calls on_height(h) so the host can resize the sidebar section. Folded
+# sections are kept per Toolbar class in NSUserDefaults.
 # -------------------------------------------------------------------------
 
 from __future__ import division, print_function, unicode_literals
 
 import vanilla
-from AppKit import NSColor
+from AppKit import NSColor, NSUserDefaults, NSDisclosureBezelStyle, NSPushOnPushOffButton
 
 from .panel_base     import TRPanelBase
 from .masthead       import TRMasthead
@@ -48,7 +55,20 @@ COLS      = PALETTE.COLS
 SEP       = PALETTE.SEP
 MAST_H    = PALETTE.MAST_H
 ENTRY     = PALETTE.ENTRY
+CAP       = PALETTE.CAPTION
 CELL      = BTN + GAP
+
+
+class _FoldArrow(vanilla.Button):
+	'''Disclosure triangle before a section caption: on = open.'''
+	frameAdjustments = None		# draw exactly posSize
+
+	def __init__(self, posSize, callback):
+		super().__init__(posSize, '', callback=callback)
+		ns = self.getNSButton()
+		ns.setBezelStyle_(NSDisclosureBezelStyle)
+		ns.setButtonType_(NSPushOnPushOffButton)
+		ns.setState_(1)
 
 
 class TRToolbarBase(TRPanelBase):
@@ -56,12 +76,18 @@ class TRToolbarBase(TRPanelBase):
 	build_toolbar(), placing items with flow() / field() / separator().
 
 	show_masthead : False for a Toolbar that needs no scope pills.
+	foldable      : False for no fold arrows on the section captions.
+	on_height     : set by the host; on_height(h) runs after a fold
+	                changes content_h.
 	'''
 	show_masthead = True
+	foldable      = True
+	on_height     = None
 
 	# - Build (called once by TRPanelBase.__init__) -----------------------
 	def build(self):
 		self._y, self._col = 0, 0
+		self._sections, self._section_top = [], None
 		if self.show_masthead:
 			self.group.mast = vanilla.Group((0, 0, -0, MAST_H))
 			self.masthead = TRMasthead(
@@ -75,7 +101,9 @@ class TRToolbarBase(TRPanelBase):
 			self._y = PAD
 		self.build_toolbar()
 		self.newline()
-		return self._y - GAP + PAD		# content height, read by the host
+		self._full_h = self._y - GAP + PAD
+		self._collect_sections()
+		return self._place_sections()		# content height, read by the host
 
 	def build_toolbar(self):
 		'''Place the Toolbar items. Required.'''
@@ -197,6 +225,8 @@ class TRToolbarBase(TRPanelBase):
 		thin line when PALETTE.SEP_LINE is on, then the section caption
 		`title` (see caption()). `key` must be unique.'''
 		self.newline()
+		if title:
+			self._section_top = self._y - GAP		# bottom of the last row
 		if PALETTE.SEP_LINE:
 			y = self._y - GAP + SEP // 2
 			setattr(self.group, 'sep_' + key, vanilla.HorizontalLine((PAD, y, -PAD, 1)))
@@ -207,20 +237,111 @@ class TRToolbarBase(TRPanelBase):
 	def caption(self, key, title):
 		'''Section caption at the start of a new row (PALETTE.CAPTION): small
 		secondary-colour text, stored as self.group.cap_<key>. Use it directly
-		for the first section, which follows the masthead separator.'''
-		cap = PALETTE.CAPTION
-		if not cap.SHOW:
+		for the first section, which follows the masthead separator.
+		With CAP.FOLD a disclosure arrow (self.group.fold_<key>) folds the
+		section that starts here.'''
+		if not CAP.SHOW:
 			return None
 		self.newline()
-		x = PAD + cap.INDENT
-		box = vanilla.TextBox((x, self._y, -PAD, BTN), title, sizeStyle=cap.STYLE)
+		top, self._section_top = self._section_top, None
+		fold = self.foldable and CAP.FOLD
+		x = PAD + CAP.INDENT + (CAP.FOLD_W if fold else 0)
+		box = vanilla.TextBox((x, self._y, -PAD, BTN), title, sizeStyle=CAP.STYLE)
 		ns = box.getNSTextField()
 		ns.setTextColor_(NSColor.secondaryLabelColor())
-		h = cap.H or ns.intrinsicContentSize().height
+		h = CAP.H or ns.intrinsicContentSize().height
 		box.setPosSize((x, self._y, -PAD, h))
 		setattr(self.group, 'cap_' + key, box)
-		self._y += h + cap.GAP
+		if fold:
+			setattr(self.group, 'fold_' + key, _FoldArrow(
+				(PAD + CAP.INDENT, self._y + (h - CAP.FOLD_W) / 2., CAP.FOLD_W, CAP.FOLD_W),
+				callback=lambda s, k=key: self.set_folded(k, not s.getNSButton().state())))
+			self._open_section(key, self._y if top is None else top, self._y + h)
+		self._y += h + CAP.GAP
 		return box
+
+	# - Folding sections --------------------------------------------------
+	def _open_section(self, key, top, cap_bottom):
+		if self._sections:
+			self._sections[-1]['end'] = top
+		self._sections.append(dict(key=key, top=top, cap_bottom=cap_bottom,
+			end=None, folded=False, head=[], body=[], was_hidden=[]))
+
+	def _collect_sections(self):
+		'''Sort every control on self.group into its section by its vertical
+		centre: the caption row is the head (always shown), the rest the body.'''
+		if not self._sections:
+			return
+		self._sections[-1]['end'] = self._y - GAP
+		for obj in list(vars(self.group).values()):
+			if not isinstance(obj, vanilla.VanillaBaseObject):
+				continue
+			pos = obj.getPosSize()
+			if pos[1] < 0 or pos[3] <= 0:
+				continue		# bottom-anchored or stretching: not in the flow
+			c = pos[1] + pos[3] / 2.
+			for s in reversed(self._sections):
+				if c >= s['top']:
+					s['head' if c < s['cap_bottom'] else 'body'].append((obj, tuple(pos)))
+					break
+		folded = self._load_folds()
+		for s in self._sections:
+			if s['key'] in folded:
+				self._fold(s, True)
+
+	def _fold(self, s, folded):
+		s['folded'] = folded
+		if folded:
+			s['was_hidden'] = [obj._nsObject.isHidden() for obj, _ in s['body']]
+			for obj, _ in s['body']:
+				obj.show(False)
+		else:
+			for (obj, _), hidden in zip(s['body'], s['was_hidden']):
+				obj.show(not hidden)
+		arrow = getattr(self.group, 'fold_' + s['key'], None)
+		if arrow is not None:
+			arrow.getNSButton().setState_(0 if folded else 1)
+
+	def _place_sections(self):
+		'''Move each section up by the height folded above it; returns the
+		content height.'''
+		shift = 0
+		for s in self._sections:
+			for obj, (x, y, w, h) in s['head'] + s['body']:
+				obj.setPosSize((x, y - shift, w, h))
+			if s['folded']:
+				shift += s['end'] - s['cap_bottom'] - CAP.FOLD_GAP
+		return self._full_h - shift
+
+	def set_folded(self, key, folded):
+		'''Fold or unfold section `key`, remember it, and tell the host the
+		new height through on_height.'''
+		for s in self._sections:
+			if s['key'] == key:
+				break
+		else:
+			return
+		if s['folded'] != bool(folded):
+			self._fold(s, bool(folded))
+			self._save_folds()
+		self.content_h = self._place_sections()
+		if self.on_height is not None:
+			self.on_height(self.content_h)
+
+	def folded_sections(self):
+		return [s['key'] for s in self._sections if s['folded']]
+
+	def _fold_key(self):
+		return 'TypeRig.Toolbar.%s.folded' % self.__class__.__name__
+
+	def _load_folds(self):
+		try:
+			return set(NSUserDefaults.standardUserDefaults().arrayForKey_(self._fold_key()) or ())
+		except Exception:
+			return set()
+
+	def _save_folds(self):
+		NSUserDefaults.standardUserDefaults().setObject_forKey_(self.folded_sections(), self._fold_key())
 
 	# - npa dispatchers (base .run: scope -> undo -> op -> redraw) --------
 	def run_node(self, op):

@@ -64,8 +64,12 @@ _ENTRY_GS4 = SimpleNamespace(
 #   H      : height in px; None = natural height for STYLE
 #   GAP    : space between the caption and the first row of its section
 #   INDENT : x offset from PAD; negative moves the caption left
-def _caption(show, style, gap, indent=0, h=None):
-	return SimpleNamespace(SHOW=show, STYLE=style, H=h, GAP=gap, INDENT=indent)
+#   FOLD   : disclosure arrow before the caption; folds the section (TRToolbarBase)
+#   FOLD_W : arrow size (square, px); the caption text starts after it
+#   FOLD_GAP : space under the caption of a folded section
+def _caption(show, style, gap, indent=0, h=None, fold=True, fold_w=13, fold_gap=4):
+	return SimpleNamespace(SHOW=show, STYLE=style, H=h, GAP=gap, INDENT=indent,
+	                       FOLD=fold, FOLD_W=fold_w, FOLD_GAP=fold_gap)
 
 _CAPTION_GS3 = _caption(True, 'regular', 8, indent=-4)
 _CAPTION_GS4 = _caption(True, 'regular', 10, indent=-4)
@@ -112,4 +116,72 @@ PALETTE.MIN_H  = PALETTE.MAST_H + 2 * (PALETTE.BTN + PALETTE.GAP)  # masthead + 
 # Masthead: 2 layer pills, then 3 glyph pills pushed to the right edge.
 # TRMasthead adds group_gap ON TOP of the 4 normal gaps between 5 pills.
 PALETTE.MAST_GROUP_GAP = max(0, PALETTE.W - 2 * PALETTE.PAD - 5 * PALETTE.BTN - 4 * PALETTE.GAP)
+
+# - Toast (gui/layer_toast.py) --------------------------------------------
+# Small label shown at the pointer, then faded out; switched from the
+# Toolbar observer row. Colours name NSColor class methods. One set for
+# GS3 + GS4.
+PALETTE.TOAST = SimpleNamespace(
+	OFFSET   = (20, 20),  # right, down from the pointer (pt)
+	HOLD     = 0.8,       # seconds fully visible
+	FADE     = 0.4,       # seconds fade-out
+	FONT_PT  = 12,        # bold system font size
+	PAD_X    = 8,         # label inset, horizontal
+	PAD_Y    = 4,         # label inset, vertical
+	RADIUS   = 6,         # corner radius
+	BG       = 'blackColor',
+	BG_ALPHA = 0.78,
+	FG       = 'systemOrangeColor',
+)
+
+# - Stem probe (gui/stem_probe.py) ----------------------------------------
+# Live stem measurement drawn in the edit view while the pointer is inside
+# the outline: one chord through the pointer along the normal of the
+# nearest outline (core algo/chord_probe.py). Sizes are screen pt (divided
+# by the view scale when drawn). Colours name NSColor class methods. One
+# set for GS3 + GS4.
+PALETTE.PROBE = SimpleNamespace(
+	STEPS    = 36,    # angles scanned over 180 deg (both sides: 72 directions, 5 deg apart)
+	REFINE   = 10,    # golden-section steps after the scan (5 deg -> ~0.04 deg)
+	DECIMALS = 1,     # digits after the point in the label
+	STROKE   = 1.,    # chord line width
+	DOT      = 2.5,   # chord end dot radius
+	FONT_PT  = 10,    # label font size
+	PAD_X    = 4,     # label badge inset, horizontal
+	PAD_Y    = 1,     # label badge inset, vertical
+	RADIUS   = 3,     # label badge corner radius
+	COLOR    = 'systemOrangeColor',  # chord and badge
+	TEXT     = 'whiteColor',         # label text on the badge
+)
+
+# - Node slide (gui/node_slider.py) ---------------------------------------
+# Option-drag slides a node along its incoming segment, Cmd+Option along
+# the outgoing one (core algo/node_slide.py). T is the time on the original
+# segment; beyond 0 / 1 the segment is extended.
+PALETTE.SLIDE = SimpleNamespace(
+	HIT      = 8,     # screen pt: mouse down this close to a selected node grabs it
+	EXTEND   = 1.,    # how far past the far end the node may go, in segment time
+	MARGIN   = .01,   # keeps the node off the segment's other end (no zero-length segment)
+)
+
+# - Node add ghost (gui/node_ghost.py) ------------------------------------
+# Ghost of the node Ctrl+Option+right click inserts: nearest point on the
+# active layer's paths. Screen pt; NSColor class method names.
+PALETTE.GHOST = SimpleNamespace(
+	SNAP     = 12,    # show the ghost when the pointer is this close to a path
+	R        = 4.,    # ghost node radius
+	STROKE   = 1.5,   # ghost outline width
+	ALPHA    = .35,   # ghost fill alpha
+	COLOR    = 'systemOrangeColor',
+)
+
+# - Keyboard nudge (gui/key_nudge.py) -------------------------------------
+# Arrow keys move selected nodes by a per-master X / Y step (font lib,
+# Option+click the button to set). Modifier multipliers as in Glyphs.
+PALETTE.KEYS = SimpleNamespace(
+	DEFAULT   = (1., 1.),   # X / Y step for a master with no entry
+	SHIFT     = 10.,        # Shift + arrow
+	SHIFT_CMD = 100.,       # Shift + Cmd + arrow
+	METHOD    = 'SMART',    # core NodeActions.nodes_move: handles move with their node
+)
 

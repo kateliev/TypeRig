@@ -151,12 +151,16 @@ _BTN_GS3 = SimpleNamespace(
 	ICON_PT  = 22,
 	BEZEL    = 2,    # .flexiblePush (RegularSquare on GS3)
 	ICON_KICK = -0.1,
+	ON_TINT  = (1., 1., 1.),  # sRGB icon colour of a checked toggle; None = AppKit's own.
+	                          # GS3 in a vibrant-light sidebar draws an uncoloured icon
+	                          # invisible on the blue on-state fill (seen 2026-10-27).
 )
 _BTN_GS4 = SimpleNamespace(
 	SIZE     = 22,   # tuned by hand for GS4
 	ICON_PT  = 22,
 	BEZEL    = 16,   # .glass — new in macOS 26
 	ICON_KICK = -0.1,
+	ON_TINT  = None,
 )
 BTN = _BTN_GS3 if HOST_MAJOR == 3 else _BTN_GS4
 

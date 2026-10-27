@@ -12,6 +12,12 @@
 #   dialogs.py      inline layer-picker + master-values dialog
 #   tint_list.py    TRTintList: List2 colour coded by kind (dots + row tint)
 #   thumbnail.py    contours drawn as images + TRThumbGrid picker
+#   observer.py     TRObserver: base for the Toolbar observer row
+#   layer_toast.py  observer: layer name toast at the pointer on layer change
+#   stem_probe.py   observer: live stem width under the pointer
+#   node_slider.py  observer: Option-drag a node along its segment
+#   node_ghost.py   observer: ghost node on the path, Ctrl+Option+right click adds it
+#   key_nudge.py    observer: arrow keys move nodes by per-master X / Y steps
 #   assets/         shared icon font (typerig-icons.ttf)
 #
 # A new TR Glyphs plugin typically only ships:
