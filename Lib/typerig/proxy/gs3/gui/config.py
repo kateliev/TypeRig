@@ -32,6 +32,7 @@ Fields are grouped under sub-namespaces by concern:
     UI.FORM     — label + field grids, check boxes, text buttons
     UI.LIST       — table (vanilla.List) dimensions
     UI.TINTLIST   — colour-coded list: dots + row tint (gui/tint_list.py)
+    UI.TREE       — foldable report tree (gui/tree_view.py)
     UI.THUMB      — outline thumbnails and the thumbnail grid (gui/thumbnail.py)
     UI.STATUS     — status / warning text block
     UI.WIN        — main window dimensions and minimums
@@ -315,6 +316,24 @@ TINTLIST = SimpleNamespace(
 	},
 )
 
+# - Report tree (gui/tree_view.py, TRTreeView) ----------------------------
+# A foldable tree (NSOutlineView) for reports: one root per test, sections,
+# findings. Node text is coloured by its kind; roots are bold. Colours name
+# NSColor class methods; None = the normal label colour.
+TREE = SimpleNamespace(
+	TITLE_W    = 300,    # title column initial width; both columns share the width in this ratio
+	DETAIL_W   = 300,    # detail column initial width
+	TITLE_MIN  = 160,    # title column never narrower
+	DETAIL_MIN = 120,    # detail column never narrower
+	INDENT     = 14,     # indentation per level (pt)
+	EXPAND     = 2,      # levels open after set(): roots and their sections
+	KIND_COLORS = {
+		'warn' : 'systemOrangeColor',     # a finding
+		'ok'   : 'systemGreenColor',      # looked, nothing found
+		'info' : None,                    # numbers, no judgement
+	},
+)
+
 # - Outline thumbnails (gui/thumbnail.py) --------------------------------
 # Contours drawn as images: thumb_image() and the TRThumbGrid picker
 # (Clipboard bank and later part pickers). SIZES are the cell edge in pt;
@@ -423,6 +442,7 @@ UI = SimpleNamespace(
 	FORM     = FORM,
 	LIST     = LIST,
 	TINTLIST = TINTLIST,
+	TREE     = TREE,
 	THUMB    = THUMB,
 	STATUS   = STATUS,
 	WIN      = WIN,

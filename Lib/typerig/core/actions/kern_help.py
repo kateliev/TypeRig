@@ -14,7 +14,7 @@
 
 from __future__ import unicode_literals
 
-__version__ = '0.9.0'
+__version__ = '0.9.1'
 
 HELP_TEXT = '''TR KERN — HELP
 
@@ -167,6 +167,8 @@ To clean up:
 
 Analyze shows problems in the kerning. It does not change the font, and it does not add pending changes. The analyses use the kerning with the pending changes. "Masters" selects one master or all masters.
 
+The report is a tree: one branch for each analysis, then sections, then the findings. Orange — a finding; green — the tool looked and found nothing; normal — numbers only. Click a triangle to open or close a branch. Option-click opens all the branches under it. "Expand all" and "Collapse all" open or close the whole tree. "Copy report" copies the report as text.
+
 The analyses:
 - Health card — for each master: the number of pairs of each kind, the exceptions as a percentage of the group pairs, the group pairs as a percentage of all possible group pairs ("fill"), the smallest, middle and largest value, and the number of pairs with the value 0.
 - Value histogram — how many values are in each range of "Bin" units. The report also shows:
@@ -181,7 +183,7 @@ The analyses:
 To analyse:
 1. Select the analyses. Set the options.
 2. Click Run. Read the report.
-3. Put the text cursor on a line of the report. Click "Show in Pairs" to see its pairs in the Pairs tab, or "Show pair" to see them in the edit tab.
+3. Select one or more findings. Click "Show in Pairs" (or double-click a finding) to see their pairs in the Pairs tab. Click "Show pair" to see them in the edit tab.
 
 
 6. RULES

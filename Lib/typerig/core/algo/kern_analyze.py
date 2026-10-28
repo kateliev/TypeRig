@@ -2,8 +2,10 @@
 # -----------------------------------------------------------
 # TR Kern analytics (Analyze tab, tr-kern analyze): read-only views that
 # show problems in a kerning table. Nothing here writes: an analysis
-# returns a result, report() turns it into lines, and a line may carry a
-# link (a Pairs query and the stored pairs behind it) for the host to show.
+# returns a result, report_tree() turns it into a tree (analysis > section
+# > finding), and a node may carry a link (a Pairs query and the stored
+# pairs behind it) for the host to show. tree_text() renders trees as plain
+# text (tr-kern, Copy report).
 # All values are resolved in the font's own lookup order (glyph + glyph >
 # glyph + group > group + glyph > group + group), as everywhere in TR Kern.
 #
@@ -23,9 +25,9 @@
 #                they are closer to
 #
 #   ANALYSES, options(data), analyze(kset, key, opts) -> result
-#   count(key, result), report(key, result) -> [(line, link or None)]
+#   count(key, result), report_tree(key, result) -> node tree, tree_text(roots)
 #   to_data(result) -> JSON-ready (tuples -> lists, keys -> str)
-#   Link: {'query': Pairs query text, 'pairs': [stored pair]}
+#   Node: {'title', 'detail', 'kind', 'link', 'children'}; link: {'query', 'pairs'}
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2026       (http://www.kateliev.com)
 # (C) TypeRig                      (http://www.typerig.com)
@@ -39,7 +41,7 @@ from __future__ import absolute_import, print_function, division
 
 from typerig.core.algo.kern_model import LEFT, RIGHT, is_group, group_name, pair_kind
 
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 # - Init -------------------------------------------------------------------
 ANALYSES = (	# (key, title)
@@ -406,125 +408,185 @@ def _pct(x):
 	return '—' if x is None else '%d%%' % round(100 * x)
 
 
-def _report_health(result):
-	lines = []
+# - Report tree ---------------------------------------------------------------------
+# A report is a tree of nodes, one root per analysis:
+#   {'title', 'detail', 'kind', 'link', 'children'}
+# title: what was found; detail: where / how much (masters, counts);
+# kind: KIND_WARN (a finding), KIND_OK (looked, nothing found), KIND_INFO
+# (numbers, no judgement); link: None or {'query', 'pairs'} (see link()).
+KIND_WARN, KIND_OK, KIND_INFO = 'warn', 'ok', 'info'
+TREE_LIMIT = 500		# children of one node at most; the rest become one "… n more" node
+
+
+def node(title, detail='', kind=KIND_INFO, link=None, children=None):
+	return {'title': str(title), 'detail': str(detail), 'kind': kind, 'link': link, 'children': list(children or [])}
+
+
+def _capped(children):
+	if len(children) <= TREE_LIMIT:
+		return children
+	return children[:TREE_LIMIT] + [node('… %d more' % (len(children) - TREE_LIMIT))]
+
+
+def _section(title, children, link_=None):
+	'''A group of findings: warn with its count, or ok when empty.'''
+	return node(title, '%d' % len(children), KIND_WARN if children else KIND_OK, link_, _capped(children))
+
+
+def _pair_node(pair, value):
+	return node('%s %s' % pair, '%d' % value, KIND_WARN, link([pair]))
+
+
+def _query(text):
+	return {'query': text, 'pairs': []}
+
+
+def _tree_health(result):
+	out = []
 	for master, h in result.items():
-		lines.append(('  %s: %d pairs, %d exceptions (%s of class pairs), class pairs fill %s of %d group regions'
-		              % (master, h['pairs'], h['exceptions'], _pct(h['ratio']), _pct(h['fill']), h['regions']),
-		              {'query': 'master:%s' % master, 'pairs': []}))
 		kinds = ', '.join('%s %d' % (k, h['kinds'][k]) for k in KINDS)
-		lines.append(('    kinds: %s' % kinds, None))
-		lines.append(('    values: min %d, median %s, max %d, mean |v| %.1f; zero values %d'
-		              % (h['min'], ('%g' % h['median']), h['max'], h['mean_abs'], h['zeros']),
-		              {'query': 'master:%s ==0' % master, 'pairs': []} if h['zeros'] else None))
-	return lines
+		out.append(node(master, '%d pairs' % h['pairs'], KIND_INFO, _query('master:%s' % master), [
+			node('Kinds', kinds),
+			node('Exceptions', '%d  (%s of class pairs)' % (h['exceptions'], _pct(h['ratio'])),
+			     link=_query('master:%s kind:GG,GC,CG' % master) if h['exceptions'] else None),
+			node('Class pair fill', '%s of %d group regions' % (_pct(h['fill']), h['regions'])),
+			node('Values', 'min %d, median %g, max %d, mean |v| %.1f' % (h['min'], h['median'], h['max'], h['mean_abs'])),
+			node('Zero values', '%d' % h['zeros'], KIND_WARN if h['zeros'] else KIND_OK,
+			     _query('master:%s ==0' % master) if h['zeros'] else None),
+		]))
+	return out
 
 
-def _report_histogram(result, opts, limit):
-	lines = []
+def _tree_histogram(result, opts):
 	width = opts['bin']
+	out = []
 	for master, r in result['masters'].items():
-		lines.append(('  %s: %d nonzero values; on the 10 grid %d, on the 5 grid %d, other %d; font grid %d'
-		              % (master, r['count'], r['steps'][10], r['steps'][5], r['steps'][1], r['grid']), None))
+		bins = []
 		if r['bins']:
 			peak = max(r['bins'].values())
 			for low in range(min(r['bins']), max(r['bins']) + width, width):
 				n = r['bins'].get(low, 0)
-				if not n:
-					continue
-				bar = '#' * max(1, int(round(30. * n / peak)))
-				lines.append(('    %5d..%-5d %5d %s' % (low, low + width - 1, n, bar),
-				              {'query': 'master:%s >=%d <%d' % (master, low, low + width), 'pairs': []}))
-		for low, n, med in r['spikes']:
-			lines.append(('    spike %d..%d: %d values (neighbours %g)' % (low, low + width - 1, n, med),
-			              {'query': 'master:%s >=%d <%d' % (master, low, low + width), 'pairs': []}))
-		if r['off_grid']:
-			lines.append(('    off the %d grid: %d (hand edits?)' % (r['grid'], len(r['off_grid'])),
-			              link([p for p, _v in r['off_grid']])))
-			for pair, value in r['off_grid'][:limit]:
-				lines.append(('      %s %s = %d' % (pair[0], pair[1], value), link([pair])))
-			if len(r['off_grid']) > limit:
-				lines.append(('      … %d more' % (len(r['off_grid']) - limit), None))
-		if r['extremes']:
-			lines.append(('    extreme (|v| > %d): %d' % (opts['extreme'], len(r['extremes'])),
-			              {'query': 'master:%s <-%d; master:%s >%d' % (master, opts['extreme'], master, opts['extreme']),
-			               'pairs': [p for p, _v in r['extremes']][:LINK_PAIRS]}))
-			for pair, value in r['extremes'][:limit]:
-				lines.append(('      %s %s = %d' % (pair[0], pair[1], value), link([pair])))
-			if len(r['extremes']) > limit:
-				lines.append(('      … %d more' % (len(r['extremes']) - limit), None))
+				if n:
+					bins.append(node('%d .. %d' % (low, low + width - 1),
+					                 '%5d  %s' % (n, '#' * max(1, int(round(30. * n / peak)))),
+					                 link=_query('master:%s >=%d <%d' % (master, low, low + width))))
+		spikes = [node('%d .. %d' % (low, low + width - 1), '%d values, neighbours %g' % (n, med), KIND_WARN,
+		               _query('master:%s >=%d <%d' % (master, low, low + width)))
+		          for low, n, med in r['spikes']]
+		off = [_pair_node(p, v) for p, v in r['off_grid']]
+		extreme = [_pair_node(p, v) for p, v in r['extremes']]
+		off_title = ('Off the %d grid (hand edits?)' % r['grid'] if r['grid'] > 1
+		             else 'Off the grid (no 10 / 5 grid in this master)')
+		extreme_link = {'query': 'master:%s <-%d; master:%s >%d' % (master, opts['extreme'], master, opts['extreme']),
+		                'pairs': [p for p, _v in r['extremes']][:LINK_PAIRS]}
+		found = len(spikes) + len(off) + len(extreme)
+		out.append(node(master, '%d values; steps of 10: %d, 5: %d, other: %d'
+		                % (r['count'], r['steps'][10], r['steps'][5], r['steps'][1]),
+		                KIND_WARN if found else KIND_OK, None, [
+			node('Distribution', 'bins of %d' % width, KIND_INFO, None, bins),
+			_section('Spikes', spikes),
+			_section(off_title, off, link([p for p, _v in r['off_grid']])),
+			_section('Extreme (|v| > %d)' % opts['extreme'], extreme, extreme_link),
+		]))
 	if result['shape']:
-		lines.append(('  shape (normalised quantiles, distance from the other masters):', None))
-		for master, dist in result['shape'].items():
-			flag = '  <- differs' if master in result['shape_flags'] else ''
-			lines.append(('    %s %d%%%s' % (master, round(dist * 100), flag), None))
-	return lines
+		shapes = [node(m, '%d%%%s' % (round(d * 100), '  differs' if m in result['shape_flags'] else ''),
+		               KIND_WARN if m in result['shape_flags'] else KIND_INFO) for m, d in result['shape'].items()]
+		out.append(node('Shape (tails vs the other masters, % of IQR)', '%d differ' % len(result['shape_flags']),
+		                KIND_WARN if result['shape_flags'] else KIND_OK, None, shapes))
+	return out
 
 
-def _report_pressure(result, limit):
-	lines = []
-	regions, culprits = result['regions'], result['culprits']
-	lines.append(('  regions: %d' % len(regions), None))
-	for master, left, right, taken, total, share, cc, pairs in regions[:limit]:
-		lines.append(('    %s %s  (%s): %d of %d glyph pairs by exceptions (%s), class pair %s'
-		              % (left, right, master, taken, total, _pct(share), '—' if cc is None else cc), link(pairs)))
-	if len(regions) > limit:
-		lines.append(('    … %d more' % (len(regions) - limit), None))
-	lines.append(('  glyphs with many exceptions: %d' % len(culprits), None))
-	for side, glyph, group, partners, n, masters, pairs in culprits[:limit]:
+def _pairs_children(pairs, detail=''):
+	return [node('%s %s' % p, detail, KIND_INFO, link([p])) for p in pairs[:TREE_LIMIT]]
+
+
+def _tree_pressure(result):
+	regions = [node('%s %s' % (left, right), '%d of %d by exceptions (%s), class pair %s  (%s)'
+	                % (taken, total, _pct(share), '—' if cc is None else cc, master), KIND_WARN, link(pairs),
+	                _pairs_children(pairs))
+	           for master, left, right, taken, total, share, cc, pairs in result['regions']]
+	culprits = []
+	for side, glyph, group, partners, n, masters, pairs in result['culprits']:
 		where = '%s|*' % glyph if side == LEFT else '*|%s' % glyph
-		lines.append(('    %s (%s, group %s): exceptions against %d partner(s), %d pair(s) in %s'
-		              % (glyph, side, group, partners, n, ', '.join(masters)),
-		              {'query': where + ' kind:GG,GC,CG', 'pairs': pairs[:LINK_PAIRS]}))
-	if len(culprits) > limit:
-		lines.append(('    … %d more' % (len(culprits) - limit), None))
-	return lines
+		culprits.append(node('%s  (%s side of @%s)' % (glyph, side, group),
+		                     'against %d partners, %d pairs  (%s)' % (partners, n, ', '.join(masters)), KIND_WARN,
+		                     {'query': where + ' kind:GG,GC,CG', 'pairs': pairs[:LINK_PAIRS]}, _pairs_children(pairs)))
+	return [_section('Group regions taken by exceptions', regions),
+	        _section('Glyphs with many exceptions (wrong group?)', culprits)]
 
 
-def _report_shadowed(result, limit):
-	lines = []
-	for master, pair, value, taken, total, state, takers in result[:limit]:
-		lines.append(('  %s %s = %d  (%s): %s, %d of %d glyph pairs taken by %d other pair(s)'
-		              % (pair[0], pair[1], value, master, state, taken, total, len(takers)), link([pair] + takers)))
-	if len(result) > limit:
-		lines.append(('  … %d more' % (len(result) - limit), None))
-	return lines
+def _tree_shadowed(result):
+	by_state = {'shadowed': [], 'fragile': []}
+	for master, pair, value, taken, total, state, takers in result:
+		by_state[state].append(node('%s %s = %d' % (pair[0], pair[1], value),
+		                            '%d of %d glyph pairs taken by %d pair(s)  (%s)' % (taken, total, len(takers), master),
+		                            KIND_WARN, link([pair] + takers), _pairs_children(takers, 'takes over')))
+	return [_section('Shadowed (never applies)', by_state['shadowed']),
+	        _section('Fragile (seldom applies)', by_state['fragile'])]
 
 
-def _report_divergence(result, limit):
-	lines = []
-	for master, side, group, glyph, dist, best, best_dist, diffs in result[:limit]:
+def _tree_divergence(result):
+	out = []
+	for master, side, group, glyph, dist, best, best_dist, diffs in result:
+		where = '%s|*' % glyph if side == LEFT else '*|%s' % glyph
+		def pair(key):
+			return (glyph, key) if side == LEFT else (key, glyph)
 		move = ', closer to @%s (%.0f)' % (best, best_dist) if best else ''
-		where = '%s|*' % glyph if side == LEFT else '*|%s' % glyph
-		proof = []
-		for key, _v, _m in diffs[:5]:
-			proof.append((glyph, key) if side == LEFT else (key, glyph))
-		lines.append(('  %s in @%s (%s, %s): %.0f units from the group median%s'
-		              % (glyph, group, side, master, dist, move), {'query': where, 'pairs': proof}))
-		for key, v, m in diffs[:3]:
-			lines.append(('      vs %s: %d, group median %g' % (key, v, m), None))
-	if len(result) > limit:
-		lines.append(('  … %d more' % (len(result) - limit), None))
-	return lines
+		out.append(node('%s in @%s' % (glyph, group), '%.0f units from the group%s  (%s, %s)' % (dist, move, side, master),
+		                KIND_WARN, {'query': where, 'pairs': [pair(k) for k, _v, _m in diffs[:5]]},
+		                [node('vs %s' % key, '%d, group %g' % (v, m), KIND_INFO, link([pair(key)]))
+		                 for key, v, m in diffs[:20]]))
+	return _capped(out)
 
 
-def report(key, result, opts=None, limit=40):
-	'''[(line, link or None)] for one analysis; the first line is its title and count.'''
+def report_tree(key, result, opts=None):
+	'''The report of one analysis as a tree (see node()); the root is the analysis.'''
 	opts = options(opts)
-	title = dict(ANALYSES)[key]
 	found = count(key, result)
-	lines = [('%s%s' % (title, '' if found is None else ': %d' % found), None)]
 	if key == 'health':
-		lines += _report_health(result)
+		children = _tree_health(result)
 	elif key == 'histogram':
-		lines += _report_histogram(result, opts, limit)
+		children = _tree_histogram(result, opts)
 	elif key == 'pressure':
-		lines += _report_pressure(result, limit)
+		children = _tree_pressure(result)
 	elif key == 'shadowed':
-		lines += _report_shadowed(result, limit)
-	elif key == 'divergence':
-		lines += _report_divergence(result, limit)
-	return lines
+		children = _tree_shadowed(result)
+	else:
+		children = _tree_divergence(result)
+	kind = KIND_INFO if found is None else KIND_WARN if found else KIND_OK
+	return node(dict(ANALYSES)[key], '' if found is None else '%d found' % found, kind, None, children)
+
+
+def walk(nodes, depth=0):
+	'''(depth, node) for every node, depth first.'''
+	for item in nodes:
+		yield depth, item
+		for sub in walk(item['children'], depth + 1):
+			yield sub
+
+
+def tree_text(roots, limit=40, indent='  '):
+	'''Plain text of report trees: each analysis under a rule, a blank line before
+	every section with children, at most `limit` children shown per node.'''
+	lines = []
+	def emit(item, depth):
+		if 0 < depth <= 2 and item['children'] and lines[-1] != '':
+			lines.append('')
+		text = indent * (depth - 1) + item['title'] if depth else item['title'].upper()
+		if item['detail']:
+			text += ('  (%s)' if not depth else ':  %s') % item['detail']
+		lines.append(text)
+		if not depth:
+			lines.append('=' * min(len(text), 72))
+		for sub in item['children'][:limit]:
+			emit(sub, depth + 1)
+		if len(item['children']) > limit:
+			lines.append(indent * depth + '… %d more' % (len(item['children']) - limit))
+	for root in roots:
+		if lines:
+			lines += ['', '']
+		emit(root, 0)
+	return '\n'.join(lines).rstrip() + '\n'
 
 
 def to_data(value):
@@ -536,6 +598,3 @@ def to_data(value):
 		return [to_data(v) for v in items]
 	return value
 
-
-def report_text(lines):
-	return '\n'.join(text for text, _link in lines) + '\n'

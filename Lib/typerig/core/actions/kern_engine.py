@@ -18,8 +18,9 @@
 #           checks to the pending changes. Groups > Auto: groups from
 #           composites and suffixes (kern_groups.auto_groups), pending.
 #   Analyze read-only analyses (core kern_analyze) of the kerning as it will
-#           be (pending included); report lines carry links: a Pairs query
-#           and the pairs behind it (Show in Pairs, Show pair in the edit tab).
+#           be (pending included); the report is a tree (analysis > section >
+#           finding) whose nodes carry links: a Pairs query and the pairs
+#           behind it (Show in Pairs, Show pair in the edit tab).
 #   Rules   analogy rule sets (FL Copy Kerning syntax, core kern_rules) kept
 #           in the font lib; Plan adds them to the pending changes; live
 #           sets re-run after every change of the kerning.
@@ -124,7 +125,7 @@ class KernEngine(object):
 		self.analyze_opts = kan.options()
 		self.analyze_on = {key: True for key, _t in kan.ANALYSES}
 		self.analysis = {}			# {key: result} of the last Run
-		self.analyze_lines = []		# [(line, link or None)] of the report
+		self.analyze_tree = []		# report trees of the last Run, one root per analysis
 		self.analyze_report = ''
 		self.rules = []				# rule sets (kern_rules.rule_set dicts), font lib 'rules'
 		self.rules_report = ''
@@ -1142,14 +1143,12 @@ class KernEngine(object):
 		'''Every checked analysis on the kerning as it will be (pending included). Writes nothing.'''
 		view = self.view_kset()
 		self.analysis = {}
-		self.analyze_lines = []
+		self.analyze_tree = []
 		for key, _title in kan.ANALYSES:
 			if self.analyze_on.get(key):
 				self.analysis[key] = kan.analyze(view, key, self.analyze_opts)
-				if self.analyze_lines:
-					self.analyze_lines.append(('', None))
-				self.analyze_lines += kan.report(key, self.analysis[key], self.analyze_opts)
-		self.analyze_report = kan.report_text(self.analyze_lines) if self.analyze_lines else ''
+				self.analyze_tree.append(kan.report_tree(key, self.analysis[key], self.analyze_opts))
+		self.analyze_report = kan.tree_text(self.analyze_tree) if self.analyze_tree else ''
 		found = sum(kan.count(k, r) or 0 for k, r in self.analysis.items())
 		self._say('Analyze: %d finding(s). Nothing changed.' % found)
 		return self.analysis
@@ -1157,26 +1156,27 @@ class KernEngine(object):
 	def analysis_count(self, key):
 		return kan.count(key, self.analysis[key]) if key in self.analysis else None
 
-	def analyze_link(self, line):
-		'''The link of report line number line (0 based), or None.'''
-		return self.analyze_lines[line][1] if 0 <= line < len(self.analyze_lines) else None
+	@staticmethod
+	def _links(nodes):
+		return [n['link'] for n in (nodes or ()) if n and n.get('link')]
 
-	def show_analyze_query(self, line):
-		'''The Pairs query of a report line. Returns the query text, or None.'''
-		found = self.analyze_link(line)
-		if not found or not found['query']:
-			self._say('This line has no pairs to show.')
+	def show_analyze_query(self, nodes):
+		'''The Pairs query of report nodes (several: joined by ";"). Returns the query text, or None.'''
+		queries = [lk['query'] for lk in self._links(nodes) if lk['query']]
+		if not queries:
+			self._say('Nothing to show: select a finding with pairs.')
 			return None
-		self.set_query(found['query'])
-		return found['query']
+		query = '; '.join(queries)
+		self.set_query(query)
+		return query
 
-	def show_analyze_pairs(self, line):
-		'''The pairs of a report line into the edit tab (groups -> key glyphs).'''
-		found = self.analyze_link(line)
-		if not found or not found['pairs']:
-			self._say('This line has no pairs to show.')
+	def show_analyze_pairs(self, nodes):
+		'''The pairs of report nodes into the edit tab (groups -> key glyphs).'''
+		pairs = [p for lk in self._links(nodes) for p in lk['pairs']]
+		if not pairs:
+			self._say('Nothing to show: select a finding with pairs.')
 			return []
-		return self.show_pairs(found['pairs'])
+		return self.show_pairs(pairs)
 
 	# - Auto groups ---------------------------------------------------------------------------
 	def auto_groups(self, only_ungrouped=True):
