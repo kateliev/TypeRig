@@ -163,7 +163,7 @@ def check_contour_compatibility(source_contours, target_contours):
 
 # - Overlap Extension ------------------
 
-def _extend_pieces_at_cuts(pieces, cuts, overlap):
+def _extend_pieces_at_cuts(pieces, cuts, overlap, snap=5.0):
 	"""Extend each piece past its cut boundaries using segment-direction extrapolation.
 
 	After splitting a contour, each piece has nodes at the cut endpoints.
@@ -176,11 +176,12 @@ def _extend_pieces_at_cuts(pieces, cuts, overlap):
 		pieces:   list of Contour -- the split results (modified in place)
 		cuts:     list of ((x1,y1),(x2,y2)) -- the cuts that produced these pieces
 		overlap:  float -- extension distance in font units
+		snap:     float -- max distance to consider a node "at" a cut endpoint
 	"""
 	if overlap <= 0:
 		return
 
-	_CUT_SNAP = 5.0  # max distance to consider a node "at" a cut endpoint
+	_CUT_SNAP = snap
 
 	for piece in pieces:
 		all_nodes = list(piece.data)
@@ -347,6 +348,199 @@ def apply_cuts_to_layer(result, source_contours, target_contours, overlap=0):
 	from typerig.core.algo.stroke_sep import StrokeSep
 	sep = StrokeSep()
 	return sep.apply_cuts(target_cuts, target_contours, overlap=overlap)
+
+
+# - Node-exact Cross-Master Cuts -------
+# Distance snaps in the cutting engine (slicer 15u, split 2u/10u) can fall
+# on different sides of a threshold in a light and a bold master. To keep
+# masters compatible, every cut endpoint first becomes an on-curve node,
+# decided once on the reference master and inserted identically on every
+# master. The engine then runs with a tight snap on node-exact endpoints.
+
+_T_EPS = 1e-4
+
+def _on_nodes(contour):
+	return [n for n in contour.data if n.is_on]
+
+def _on_ordinal(contour, data_idx):
+	'''On-curve ordinal of the on-curve node at contour.data[data_idx].'''
+	return sum(1 for n in contour.data[:data_idx] if n.is_on)
+
+def plan_cut_nodes(cut_pairs, contours, snap=1.0):
+	'''Decide on the reference contours how each cut endpoint becomes a node.
+
+	An endpoint closer than *snap* units (or _T_EPS in t) to a segment end
+	reuses that on-curve node; otherwise a node is inserted at t. Ordinals
+	count on-curve nodes only, so the plan does not depend on where a
+	contour starts (Glyphs keeps the start node last).
+
+	Args:
+		cut_pairs: list[CutPair] -- from StrokeSep.analyze (reference master)
+		contours:  list[Contour] -- the analysed reference contours
+		snap:      float -- reuse-node distance on the reference master
+
+	Returns:
+		list of ((ci, on_idx, t), (ci, on_idx, t)); t == 0 means the existing
+		on-curve node #on_idx. Degenerate cuts (both ends one node) are dropped.
+	'''
+	plan = []
+	for cut in cut_pairs:
+		ends = []
+		for ep in (cut.a, cut.b):
+			contour = contours[ep.contour_idx]
+			k = _on_ordinal(contour, ep.node_idx)
+			n_on = len(_on_nodes(contour))
+			node = contour.data[ep.node_idx]
+			segment = node.segment
+			t = float(ep.t)
+			pt = segment.solve_point(t)
+			p0, p1 = node, node.next_on
+			if t <= _T_EPS or math.hypot(pt.x - p0.x, pt.y - p0.y) < snap:
+				ends.append((ep.contour_idx, k, 0.))
+			elif t >= 1. - _T_EPS or math.hypot(pt.x - p1.x, pt.y - p1.y) < snap:
+				ends.append((ep.contour_idx, (k + 1) % n_on, 0.))
+			else:
+				ends.append((ep.contour_idx, k, t))
+		if ends[0] != ends[1]:
+			plan.append((ends[0], ends[1]))
+	return plan
+
+def _line_hit(segment, px, py, dx, dy, t_ref):
+	'''Parameter t where the line through (px, py) along (dx, dy) crosses
+	*segment*; the root closest to t_ref, or None.'''
+	if isinstance(segment, Line):
+		ex = segment.p1.x - segment.p0.x
+		ey = segment.p1.y - segment.p0.y
+		denom = ex * dy - ey * dx
+		if abs(denom) < _EPS:
+			return None
+		return ((px - segment.p0.x) * dy - (py - segment.p0.y) * dx) / denom
+
+	if isinstance(segment, CubicBezier):
+		mag = math.hypot(dx, dy)
+		if mag < _EPS:
+			return None
+		reach = 1e4 / mag
+		ray = Line(Point(px - dx * reach, py - dy * reach), Point(px + dx * reach, py + dy * reach))
+		times = segment.intersect_line_on_segment(ray)
+		return min(times, key=lambda t: abs(t - t_ref)) if times else None
+
+	return None
+
+def _solve_master_ts(plan, contours, reference):
+	'''Per-master t for every inserted endpoint.
+
+	The segment is fixed by the plan; t is solved where this master's cut
+	line, from the partner endpoint along the reference cut direction,
+	crosses that segment. So a cut straight on the reference stays straight
+	on every master. Falls back to the reference t when both ends are
+	inserted, when there is no reference, or when the hit leaves (0, 1).
+	'''
+	ts = {}
+	for a, b in plan:
+		for end, partner in ((a, b), (b, a)):
+			ci, k, t = end
+			if t == 0. or end in ts:
+				continue
+			ts[end] = t
+			if reference is None or partner[2] != 0.:
+				continue
+			ref_pt = _on_nodes(reference[ci])[k].segment.solve_point(t)
+			ref_partner = _on_nodes(reference[partner[0]])[partner[1]]
+			dx, dy = ref_pt.x - ref_partner.x, ref_pt.y - ref_partner.y
+			master_partner = _on_nodes(contours[partner[0]])[partner[1]]
+			segment = _on_nodes(contours[ci])[k].segment
+			hit = _line_hit(segment, master_partner.x, master_partner.y, dx, dy, t)
+			if hit is not None and _T_EPS < hit < 1. - _T_EPS:
+				ts[end] = hit
+	return ts
+
+def insert_cut_nodes(plan, contours, reference=None):
+	'''Insert the planned cut nodes into clones of *contours*.
+
+	Per segment the inserts run in descending t, so the left part keeps a
+	reparametrised t' = t / t_prev; segments run in descending ordinal so
+	earlier ordinals stay valid. The original start node is kept.
+
+	Args:
+		plan:      from plan_cut_nodes (reference master)
+		contours:  list[Contour] -- this master's contours
+		reference: list[Contour] -- the reference contours; when given, an
+		           inserted endpoint keeps the reference cut direction on this
+		           master (see _solve_master_ts); else it keeps the reference t.
+
+	Returns:
+		(new_contours, cuts): cloned contours with the nodes inserted, and
+		the plan's cuts as ((x, y), (x, y)) pairs at those exact nodes.
+
+	Raises:
+		ValueError on quadratic (TrueType) contours.
+	'''
+	work = [_fast_clone_contour(c) for c in contours]
+	for c in work:
+		if any(n.type == 'off' for n in c.data):
+			raise ValueError('Quadratic contours are not supported')
+
+	ends = sorted(set(e for pair in plan for e in pair))
+	master_ts = _solve_master_ts(plan, work, reference)
+	located = {}
+
+	# Existing nodes first: their objects survive the inserts below
+	for ci, k, t in ends:
+		if t == 0.:
+			located[(ci, k, t)] = _on_nodes(work[ci])[k]
+
+	by_contour = {}
+	for end in ends:
+		if end[2] != 0.:
+			by_contour.setdefault(end[0], {}).setdefault(end[1], []).append(end)
+
+	for ci, segs in by_contour.items():
+		contour = work[ci]
+		head = contour.data[0]
+
+		# Rotate to an on-curve start so no segment's handles wrap past the end
+		start = next(i for i, n in enumerate(contour.data) if n.is_on)
+		if start:
+			contour.data = contour.data[start:] + contour.data[:start]
+
+		for k in sorted(segs, reverse=True):
+			seg_ends = sorted(segs[k], key=lambda e: e[2], reverse=True)
+			seg_ts = [master_ts[e] for e in seg_ends]
+			# Solved ts must keep the reference order; else use reference ts
+			if any(t0 - t1 < _T_EPS for t0, t1 in zip(seg_ts, seg_ts[1:])):
+				seg_ts = [e[2] for e in seg_ends]
+
+			owner = _on_nodes(contour)[k]
+			t_prev = 1.
+			for end, t in zip(seg_ends, seg_ts):
+				result = owner.insert_after(t / t_prev)
+				located[end] = result if not isinstance(result, tuple) else owner.next_on
+				t_prev = t
+
+		# Rotate back: the original first node leads again
+		if start:
+			i = contour.data.index(head)
+			contour.data = contour.data[i:] + contour.data[:i]
+
+	cuts = []
+	for a, b in plan:
+		na, nb = located[a], located[b]
+		cuts.append(((na.x, na.y), (nb.x, nb.y)))
+	return work, cuts
+
+def contour_signature(contours):
+	'''Structural fingerprint for compatibility: per contour, node types.'''
+	return [tuple(n.type for n in c.data) for c in contours]
+
+def apply_cuts_exact(plan, contours, overlap=0, reference=None):
+	'''Insert planned cut nodes into *contours* and cut them node-exact.
+
+	Returns list[Contour] (inputs are not modified).
+	'''
+	from typerig.core.algo.stroke_sep import StrokeSep
+	work, cuts = insert_cut_nodes(plan, contours, reference=reference)
+	return StrokeSep().apply_cuts(cuts, work, overlap=overlap, exact=True)
 
 
 # - Unified Result ---------------------

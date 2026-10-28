@@ -15,8 +15,10 @@ from __future__ import absolute_import
 from typerig.core.objects.shape import Shape
 from typerig.core.algo.stroke_sep import StrokeSep
 from typerig.core.algo.stroke_sep_common import (
-    apply_cuts_to_layer,
+    apply_cuts_exact,
     check_contour_compatibility,
+    contour_signature,
+    plan_cut_nodes,
 )
 from typerig.core.algo.mat_extract import extract_medial_axis
 from typerig.core.algo.stem_center import StemCenterSnap, StemCenterStatus
@@ -288,93 +290,103 @@ def npa_stem_center(glyph, scope_layers, NodeActions, ContourActions,
 def npa_stroke_separate(glyph, scope_layers, NodeActions, ContourActions,
                         sample_step=20.0, beta_min=1.5, overlap=0.0,
                         debug=False):
-    """Stroke Separate (V3). Eject the analysis layer to pure core, run
-    StrokeSep.analyze, then for each scope layer eject → apply cuts → mount.
+    """Stroke Separate (V3). Analyse the first scope layer once, then cut
+    every scope layer node-exact, all or nothing.
 
-    The first entry in `scope_layers` is the analysis (reference) layer;
-    cuts are derived from its geometry and propagated to all other layers
-    in scope. Selection on the analysis layer (per-contour) drives which
-    contours are analysed; if no selection, all contours are processed.
+    The first entry in `scope_layers` is the analysis (reference) layer.
+    Selection on it (per-contour) drives which contours are cut; with no
+    selection, all contours are. Cut endpoints are planned once on the
+    reference (plan_cut_nodes) and inserted as nodes at the same (contour,
+    segment, t) on every layer, so no distance snap can diverge between
+    masters. Nothing is written unless every layer is compatible before the
+    cut and gives the same structure after it.
+
+    Returns dict: {'status': 'OK' | 'NO_CUTS' | 'INCOMPATIBLE' |
+    'DIVERGED' | 'EMPTY', 'layer': name or None, 'message': str,
+    'cuts': int, 'pieces': int}.
     """
+    def _status(status, layer=None, message='', cuts=0, pieces=0):
+        return {'status': status, 'layer': layer, 'message': message,
+                'cuts': cuts, 'pieces': pieces}
+
     if not scope_layers:
-        return
+        return _status('EMPTY', message='No layers in scope')
 
     analysis_name = scope_layers[0]
     tr_analysis = glyph.layer(analysis_name)
     if tr_analysis is None:
-        return
+        return _status('EMPTY', analysis_name, 'Reference layer not found')
 
     analysis_core = _eject(tr_analysis)
     if analysis_core is None or not analysis_core.shapes:
-        return
+        return _status('EMPTY', analysis_name, 'Reference layer has no paths')
     all_core_contours = analysis_core.shapes[0].contours
     if not all_core_contours:
-        return
+        return _status('EMPTY', analysis_name, 'Reference layer has no paths')
 
     # Selection on analysis layer drives which contours are analysed.
-    sel_cids_analysis = set()
-    for c_idx, contour in enumerate(all_core_contours):
-        for node in contour.data:
-            if node.selected and node.is_on:
-                sel_cids_analysis.add(c_idx)
-                break
-
-    if sel_cids_analysis:
-        sel_cids = sorted(sel_cids_analysis)
-        source_contours = [all_core_contours[i] for i in sel_cids
-                           if i < len(all_core_contours)]
+    sel_cids = sorted(c_idx for c_idx, contour in enumerate(all_core_contours)
+                      if any(n.selected and n.is_on for n in contour.data)) or None
+    if sel_cids is not None:
+        source_contours = [all_core_contours[i] for i in sel_cids]
     else:
-        sel_cids = None
         source_contours = list(all_core_contours)
 
-    if not source_contours:
-        return
+    # Every layer must be compatible before anything is analysed.
+    targets = []
+    for layer_name in scope_layers:
+        tr_layer = glyph.layer(layer_name)
+        layer_core = _eject(tr_layer) if tr_layer is not None else None
+        if layer_core is None or not layer_core.shapes:
+            return _status('INCOMPATIBLE', layer_name, 'Layer has no paths')
+        target_all = layer_core.shapes[0].contours
+        try:
+            check_contour_compatibility(all_core_contours, target_all)
+        except ValueError as error:
+            return _status('INCOMPATIBLE', layer_name, str(error))
+        targets.append((layer_name, tr_layer, layer_core, target_all))
 
     sep = StrokeSep(beta_min=beta_min, sample_step=sample_step, debug=debug)
     result = sep.analyze(source_contours)
+    plan = plan_cut_nodes(result.cuts, source_contours)
+    if not plan:
+        return _status('NO_CUTS', analysis_name, 'No cuts found')
 
-    if not result.cuts:
-        return
-
-    for layer_name in scope_layers:
-        tr_layer = glyph.layer(layer_name)
-        if tr_layer is None:
-            continue
-
-        layer_core = _eject(tr_layer)
-        if layer_core is None or not layer_core.shapes:
-            continue
-        target_all = layer_core.shapes[0].contours
-        if not target_all:
-            continue
-
+    # Cut every layer off-host first; compare structure before writing.
+    outputs, ref_signature = [], None
+    for layer_name, tr_layer, layer_core, target_all in targets:
         if sel_cids is not None:
-            target_contours = [target_all[i] for i in sel_cids
-                               if i < len(target_all)]
+            target_contours = [target_all[i] for i in sel_cids]
         else:
             target_contours = list(target_all)
+        try:
+            separated = apply_cuts_exact(plan, target_contours, overlap=overlap,
+                                         reference=source_contours)
+        except ValueError as error:
+            return _status('INCOMPATIBLE', layer_name, str(error))
 
-        if layer_name == analysis_name:
-            separated = sep.execute(result, source_contours, overlap=overlap)
-        else:
-            try:
-                check_contour_compatibility(source_contours, target_contours)
-            except ValueError:
-                continue
-            separated = apply_cuts_to_layer(
-                result, source_contours, target_contours, overlap=overlap)
+        signature = contour_signature(separated)
+        if ref_signature is None:
+            ref_signature = signature
+        elif signature != ref_signature:
+            return _status('DIVERGED', layer_name,
+                           'Cut result differs from the reference layer '
+                           '({} vs {} pieces)'.format(len(separated), len(ref_signature)),
+                           cuts=len(plan))
+        outputs.append((tr_layer, layer_core, target_all, separated))
 
+    for tr_layer, layer_core, target_all, separated in outputs:
         # Replace source contours with separated; keep untouched ones intact.
         if sel_cids is not None:
             sel_set = set(sel_cids)
-            new_contours = [c for i, c in enumerate(target_all)
-                            if i not in sel_set]
+            new_contours = [c for i, c in enumerate(target_all) if i not in sel_set]
             new_contours.extend(separated)
             layer_core.shapes[0].contours = new_contours
         else:
             layer_core.shapes[0].contours = separated
-
         _mount(tr_layer, layer_core)
+
+    return _status('OK', analysis_name, cuts=len(plan), pieces=len(ref_signature))
 
 
 # ===================================================================

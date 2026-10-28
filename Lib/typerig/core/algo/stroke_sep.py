@@ -525,6 +525,8 @@ def _slice_frame(contour_A, contour_B, cuts, snap=5.0):
 # Main Class
 # ============================================================
 
+_EXACT_SNAP = 0.5
+
 class StrokeSep(object):
 	"""Stroke separator pipeline: MAT analysis + planar slicer execution.
 
@@ -674,7 +676,7 @@ class StrokeSep(object):
 		cuts_to_apply = result.coordinated_cuts if coordinated else result.cuts
 		return self.apply_cuts(cuts_to_apply, contours, overlap=overlap)
 
-	def apply_cuts(self, cuts_to_apply, contours, overlap=0):
+	def apply_cuts(self, cuts_to_apply, contours, overlap=0, exact=False):
 		"""Apply an already-resolved list of cut point-pairs to contours.
 
 		Shared engine used by ``execute`` (active layer) and by
@@ -687,6 +689,8 @@ class StrokeSep(object):
 			cuts_to_apply: list of ((x_a, y_a), (x_b, y_b)) point pairs.
 			contours: list[Contour] -- contours to cut (not mutated).
 			overlap: float -- extension past cut boundaries (font units).
+			exact: endpoints are existing on-curve nodes (insert_cut_nodes);
+				all snaps shrink to _EXACT_SNAP so no master can snap elsewhere.
 
 		Returns:
 			list[Contour] -- new contours produced by the cuts.
@@ -700,7 +704,8 @@ class StrokeSep(object):
 		cross_cuts = []  # (cut, ci_a, ci_b)
 		same_cuts = []
 		
-		_SNAP = 15.0
+		_SNAP = _EXACT_SNAP if exact else 15.0
+		_NEAR = _EXACT_SNAP if exact else 10.0
 		
 		for cut in cuts_to_apply:
 			ci_a = _find_contour_for_point(working, cut[0], _SNAP)
@@ -819,7 +824,7 @@ class StrokeSep(object):
 			for cut in same_cuts:
 				_, _, dist_a = find_parameter_on_contour(contour, cut[0][0], cut[0][1])
 				_, _, dist_b = find_parameter_on_contour(contour, cut[1][0], cut[1][1])
-				if dist_a < 10.0 and dist_b < 10.0:
+				if dist_a < _NEAR and dist_b < _NEAR:
 					applicable_cuts.append(cut)
 			
 			if not applicable_cuts:
@@ -832,7 +837,7 @@ class StrokeSep(object):
 				for c in remaining:
 					_, _, da = find_parameter_on_contour(c, cut[0][0], cut[0][1])
 					_, _, db = find_parameter_on_contour(c, cut[1][0], cut[1][1])
-					if da > 10.0 or db > 10.0:
+					if da > _NEAR or db > _NEAR:
 						new_remaining.append(c)
 						continue
 					result_split = split_contour_at_points(c, cut[0], cut[1])
@@ -854,7 +859,8 @@ class StrokeSep(object):
 			
 			# Step 5: Overlap extension (from V1)
 			if overlap > 0:
-				_extend_pieces_at_cuts(remaining, applicable_cuts, overlap)
+				_extend_pieces_at_cuts(remaining, applicable_cuts, overlap,
+									   snap=_EXACT_SNAP if exact else 5.0)
 			
 			output.extend(remaining)
 		
