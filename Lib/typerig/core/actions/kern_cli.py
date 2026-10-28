@@ -13,6 +13,9 @@
 #           [--round N] [--drop N] [--clamp N] [--dry-run]
 #   tr-kern cleanup FONT [--check NAME ...] [--tolerance N] [--small N] [--spread N]
 #           [--missing fill|copy|nearest|interpolate|remove] [--copy-from M] [--apply]
+#   tr-kern analyze FONT [--analysis NAME ...] [--master M] [--bin N] [--extreme N] [--spike N]
+#           [--shape N] [--pressure N] [--culprit N] [--fragile N] [--divergence N] [--members N]
+#           [--json PATH]   (read only)
 #   tr-kern job FONT FOLDER [--composition JSON | --font-kerning] [--master M]
 #           [--no-groups] [--preview]
 #   tr-kern rules FONT RULES.txt [--no-class] [--master M] [--dry-run]
@@ -39,9 +42,11 @@
 from __future__ import absolute_import, print_function
 
 import argparse
+import json
 import os
 import sys
 
+from typerig.core.algo import kern_analyze as kan
 from typerig.core.algo import kern_cleanup as kc
 from typerig.core.algo import kern_model as km
 from typerig.core.algo import kern_reclass as krc
@@ -149,6 +154,35 @@ def cmd_cleanup(args):
 		return 0
 	engine.apply_pending()
 	_save(doc, engine)
+	return 0
+
+
+def cmd_analyze(args):
+	doc, engine = _open(args.font)
+	keys = [k for k, _t in kan.ANALYSES]
+	if args.analysis:
+		bad = [a for a in args.analysis if a not in keys]
+		if bad:
+			_out('Unknown analysis: %s (analyses: %s)' % (', '.join(bad), ', '.join(keys)), sys.stderr)
+			return 1
+	if args.master and args.master not in engine.masters():
+		_out('Unknown master: %s (masters: %s)' % (args.master, ', '.join(engine.masters())), sys.stderr)
+		return 1
+	# options for this run only: the font lib is not written (analyze is read only)
+	engine.analyze_on = dict((k, not args.analysis or k in args.analysis) for k in keys)
+	opts = dict(engine.analyze_opts)
+	for key in kan.OPTION_DEFAULTS:
+		if getattr(args, key, None) is not None:
+			opts[key] = getattr(args, key)
+	engine.analyze_opts = kan.options(opts)
+	engine.run_analyze()
+	_out(engine.analyze_report)
+	if args.json:
+		data = {'font': os.path.basename(doc.path), 'options': engine.analyze_opts,
+		        'results': dict((k, kan.to_data(r)) for k, r in engine.analysis.items())}
+		with open(args.json, 'w') as f:
+			json.dump(data, f, indent=1)
+		_out('Written: %s' % args.json)
 	return 0
 
 
@@ -379,6 +413,18 @@ def parser():
 	s.add_argument('--copy-from', dest='copy_from')
 	s.add_argument('--apply', action='store_true', help='write the fixes')
 	s.set_defaults(func=cmd_cleanup)
+
+	s = sub.add_parser('analyze', help='read-only analytics: health, histogram, exception pressure, shadowed pairs, '
+	                                   'member divergence')
+	s.add_argument('font')
+	s.add_argument('--analysis', nargs='+', help='analyses to run: %s (default: all)'
+	               % ', '.join(k for k, _t in kan.ANALYSES))
+	s.add_argument('--master', help='one master (default: all)')
+	for key in kan.OPTION_DEFAULTS:
+		if key != 'master':
+			s.add_argument('--' + key, type=int, help='default %s' % kan.OPTION_DEFAULTS[key])
+	s.add_argument('--json', help='also write the results as JSON to this file')
+	s.set_defaults(func=cmd_analyze)
 
 	s = sub.add_parser('job', help='DTL KernMaster job: KRN per master + CLA')
 	s.add_argument('font')

@@ -3,7 +3,7 @@
 TR Kern — UI configuration.
 
 Sizes of the TR Kern window (TypeRig Kern.glyphsPlugin): tabs Pairs,
-Groups, Cleanup, Rules, Strings, Import, Job (blocks | items | preview), Help. Buttons, gaps, entry fields and lists come from config.py
+Groups, Cleanup, Analyze, Rules, Strings, Import, Job (blocks | items | preview), Help. Buttons, gaps, entry fields and lists come from config.py
 (UI), as in TR Panel; only what is particular to this window lives here.
 
 Same rules as config.py: no layout literal in the plugin; add a field here
@@ -64,7 +64,8 @@ COLUMNS = SimpleNamespace(
 	JOB_SPLIT = (.25, .33),  # Job tab: blocks | items | preview (the rest), shares of the tab width
 	GROUPS_SPLIT = .5,  # Groups tab: groups list share (members: the rest)
 	CLEANUP_SPLIT = .5, # Cleanup tab: checks + options share (report: the rest)
-	FOUND   = 52,       # Cleanup list: findings count
+	ANALYZE_SPLIT = .5, # Analyze tab: analyses + options share (report: the rest)
+	FOUND   = 52,       # Cleanup / Analyze lists: findings count
 	SAFE    = 66,       # Cleanup list: keeps rendering / changes it
 	LEADER  = 110,      # Groups list: leader glyph
 	LEAD_MARK = 30,     # Members list: leader mark column
@@ -104,6 +105,13 @@ CLEANUP = SimpleNamespace(
 	LIST_H   = _LIST_HEADER_H + _CLEAN_ROWS * _CHECK_ROW_H + 6,   # the checks list: never lower than this
 	LIST_PAD = 6,       # measured list height: border + a little air
 	ROWS     = 5,       # option rows under the list
+)
+_ANALYZE_ROWS = 5
+ANALYZE = SimpleNamespace(
+	LIST_H   = _LIST_HEADER_H + _ANALYZE_ROWS * _CHECK_ROW_H + 6,   # the analyses list: never lower than this
+	LIST_PAD = 6,       # measured list height: border + a little air
+	ROWS     = 6,       # option rows under the list (master; nine numbers, two per row)
+	LABEL_W  = 76,      # option captions on the number rows ('Extreme:', 'Pressure %:')
 )
 STRINGS = SimpleNamespace(
 	COMBO_W  = 260,     # pattern combo box
@@ -162,6 +170,7 @@ KERN = SimpleNamespace(
 	RULES   = RULES,
 	GROUPS  = GROUPS,
 	CLEANUP = CLEANUP,
+	ANALYZE = ANALYZE,
 	STRINGS = STRINGS,
 	NUDGE   = NUDGE,
 	HELP    = HELP,

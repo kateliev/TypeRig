@@ -17,6 +17,9 @@
 #           (pending included); Plan fixes adds the fixes of the checked
 #           checks to the pending changes. Groups > Auto: groups from
 #           composites and suffixes (kern_groups.auto_groups), pending.
+#   Analyze read-only analyses (core kern_analyze) of the kerning as it will
+#           be (pending included); report lines carry links: a Pairs query
+#           and the pairs behind it (Show in Pairs, Show pair in the edit tab).
 #   Rules   analogy rule sets (FL Copy Kerning syntax, core kern_rules) kept
 #           in the font lib; Plan adds them to the pending changes; live
 #           sets re-run after every change of the kerning.
@@ -48,6 +51,7 @@ import os
 import traceback
 
 from typerig.core.algo import kern_model as km
+from typerig.core.algo import kern_analyze as kan
 from typerig.core.algo import kern_cleanup as kc
 from typerig.core.algo import kern_groups as kg
 from typerig.core.algo import kern_query as kq
@@ -117,6 +121,11 @@ class KernEngine(object):
 		self.clean_on = {key: keeps for key, _t, keeps in kc.CHECKS}	# rendering-safe checks on by default
 		self.findings = {}
 		self.cleanup_report = ''
+		self.analyze_opts = kan.options()
+		self.analyze_on = {key: True for key, _t in kan.ANALYSES}
+		self.analysis = {}			# {key: result} of the last Run
+		self.analyze_lines = []		# [(line, link or None)] of the report
+		self.analyze_report = ''
 		self.rules = []				# rule sets (kern_rules.rule_set dicts), font lib 'rules'
 		self.rules_report = ''
 		self.strings = dict(STRING_DEFAULTS)
@@ -146,6 +155,8 @@ class KernEngine(object):
 		self.strings.update({k: v for k, v in self.lib['strings'].items() if k in STRING_DEFAULTS})
 		self.clean_opts = kc.options(self.lib['cleanup'].get('options'))
 		self.clean_on.update({k: bool(v) for k, v in (self.lib['cleanup'].get('on') or {}).items() if k in self.clean_on})
+		self.analyze_opts = kan.options(self.lib['analyze'].get('options'))
+		self.analyze_on.update({k: bool(v) for k, v in (self.lib['analyze'].get('on') or {}).items() if k in self.analyze_on})
 		self.message = '' if key is not None else 'No font open.'
 		return True
 
@@ -155,6 +166,7 @@ class KernEngine(object):
 		self.lib['rules'] = [dict(r) for r in self.rules]
 		self.lib['strings'] = dict(self.strings)
 		self.lib['cleanup'] = {'options': dict(self.clean_opts), 'on': dict(self.clean_on)}
+		self.lib['analyze'] = {'options': dict(self.analyze_opts), 'on': dict(self.analyze_on)}
 		self.host.save_data(ka.LIB_KEY, self.lib)
 
 	def masters(self):
@@ -1113,6 +1125,58 @@ class KernEngine(object):
 		self.findings = {}
 		self.cleanup_report += '\nFixes planned; click Find again to check the result.\n'
 		return self._add_pending(total, 'Cleanup')
+
+	# - Analyze ---------------------------------------------------------------------------
+	def set_analyze_option(self, key, value):
+		self.analyze_opts = kan.options(dict(self.analyze_opts, **{key: value}))
+		self._save_lib()
+		self._changed()
+
+	def set_analysis(self, key, on):
+		if key in self.analyze_on:
+			self.analyze_on[key] = bool(on)
+			self._save_lib()
+		self._changed()
+
+	def run_analyze(self):
+		'''Every checked analysis on the kerning as it will be (pending included). Writes nothing.'''
+		view = self.view_kset()
+		self.analysis = {}
+		self.analyze_lines = []
+		for key, _title in kan.ANALYSES:
+			if self.analyze_on.get(key):
+				self.analysis[key] = kan.analyze(view, key, self.analyze_opts)
+				if self.analyze_lines:
+					self.analyze_lines.append(('', None))
+				self.analyze_lines += kan.report(key, self.analysis[key], self.analyze_opts)
+		self.analyze_report = kan.report_text(self.analyze_lines) if self.analyze_lines else ''
+		found = sum(kan.count(k, r) or 0 for k, r in self.analysis.items())
+		self._say('Analyze: %d finding(s). Nothing changed.' % found)
+		return self.analysis
+
+	def analysis_count(self, key):
+		return kan.count(key, self.analysis[key]) if key in self.analysis else None
+
+	def analyze_link(self, line):
+		'''The link of report line number line (0 based), or None.'''
+		return self.analyze_lines[line][1] if 0 <= line < len(self.analyze_lines) else None
+
+	def show_analyze_query(self, line):
+		'''The Pairs query of a report line. Returns the query text, or None.'''
+		found = self.analyze_link(line)
+		if not found or not found['query']:
+			self._say('This line has no pairs to show.')
+			return None
+		self.set_query(found['query'])
+		return found['query']
+
+	def show_analyze_pairs(self, line):
+		'''The pairs of a report line into the edit tab (groups -> key glyphs).'''
+		found = self.analyze_link(line)
+		if not found or not found['pairs']:
+			self._say('This line has no pairs to show.')
+			return []
+		return self.show_pairs(found['pairs'])
 
 	# - Auto groups ---------------------------------------------------------------------------
 	def auto_groups(self, only_ungrouped=True):

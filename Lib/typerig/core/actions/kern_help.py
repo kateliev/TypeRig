@@ -14,7 +14,7 @@
 
 from __future__ import unicode_literals
 
-__version__ = '0.8.0'
+__version__ = '0.9.0'
 
 HELP_TEXT = '''TR KERN — HELP
 
@@ -22,6 +22,7 @@ TR Kern manages the kerning of a font. This version has these tools:
 - Pairs shows every pair of every master. You find, edit, change in bulk, copy between masters and lock pairs.
 - Groups edits the kerning groups and their leaders. Optionally, it keeps the spacing as it is.
 - Cleanup finds kerning that you can remove or simplify, and fixes it.
+- Analyze shows problems in the kerning. It does not change the font.
 - Rules copies kerning by analogy, for example from O V to Odieresis V. You keep the rules in the font.
 - Strings makes proof strings and pair lists.
 - Import puts kerning from an external source (an autokerner, DTL KernMaster) into your font. Your kerning groups do not change.
@@ -162,7 +163,28 @@ To clean up:
 3. Click "Plan fixes". Then click Apply.
 
 
-5. RULES
+5. ANALYZE
+
+Analyze shows problems in the kerning. It does not change the font, and it does not add pending changes. The analyses use the kerning with the pending changes. "Masters" selects one master or all masters.
+
+The analyses:
+- Health card — for each master: the number of pairs of each kind, the exceptions as a percentage of the group pairs, the group pairs as a percentage of all possible group pairs ("fill"), the smallest, middle and largest value, and the number of pairs with the value 0.
+- Value histogram — how many values are in each range of "Bin" units. The report also shows:
+  spikes: a range with "Spike ×" times more values than the ranges near it;
+  values off the grid: the font uses steps of 10 or 5, but some values do not (often hand edits in autokerned kerning);
+  extreme values: larger than "Extreme" (plus or minus);
+  shape: a master whose distribution is different from the other masters by more than "Shape %". This needs three masters or more. A master that only kerns tighter or looser has the same shape.
+- Exception pressure — a group pair where many glyph pairs get their value from exceptions, not from the group pair. The report shows group pairs with "Pressure %" or more. It also shows glyphs that have exceptions against "Culprits" or more groups. Such a glyph is often in the wrong group.
+- Shadowed and fragile pairs — a group pair (or glyph + group pair) that more specific pairs replace for all of its glyph pairs ("shadowed": it never applies), or for "Fragile %" of them or more ("fragile"). Cleanup > "Pairs that change nothing" removes the shadowed pairs.
+- Member divergence — a group member whose kerning against the other side is, on average, "Divergence" units or more from the middle value of its group. The report shows the group that the member is closer to, if there is one. Groups with fewer than "Members" glyphs are not checked.
+
+To analyse:
+1. Select the analyses. Set the options.
+2. Click Run. Read the report.
+3. Put the text cursor on a line of the report. Click "Show in Pairs" to see its pairs in the Pairs tab, or "Show pair" to see them in the edit tab.
+
+
+6. RULES
 
 A rule copies the kerning of one pair to other pairs. Write one rule on each line:
   destination pairs = source pair [@adjust]
@@ -187,7 +209,7 @@ To use rules:
 The report under the rules shows mistakes with their line numbers.
 
 
-6. STRINGS
+7. STRINGS
 
 1. Select the pairs:
    - Selected pairs or Shown pairs of the Pairs tab. A group stands for its key glyph.
@@ -198,19 +220,19 @@ The report under the rules shows mistakes with their line numbers.
 4. Click "New tab", or copy the text: /names (for Glyphs and FontLab), plain text (other apps) or KPX lines.
 
 
-7. IMPORT — QUICK START
+8. IMPORT — QUICK START
 
 1. Open the Import tab.
 2. Click "Add…" and select one or more sources: AFM, KRN with values, OTF, TTF or UFO.
 3. Make sure that each source has the correct master. The tool finds the master from the file name.
 4. If the master is wrong, select the source. Then use the "Set master…" menu.
-5. Set the options (section 8). The defaults are correct for a complete autokerner export.
-6. Click Preview. Read the report.
-7. Click Apply. The tool keeps a snapshot first.
-8. Read the self check at the end of the report.
+6. Set the options (section 9). The defaults are correct for a complete autokerner export.
+7. Click Preview. Read the report.
+8. Click Apply. The tool keeps a snapshot first.
+9. Read the self check at the end of the report.
 
 
-8. IMPORT — THE OPTIONS
+9. IMPORT — THE OPTIONS
 
 Class value — how the tool selects the value of a group pair from the values of its glyphs:
 - Key glyph (default): the value of the key glyphs. For @T @o, this is the value of T o. If the source does not have T o, the tool uses Mode for that group pair and tells you.
@@ -255,7 +277,7 @@ Groups never change. The tool uses the groups that are in the font.
 Locked pairs — the tool never changes a locked pair. The report shows them. You lock pairs in the Pairs tab.
 
 
-9. IMPORT — NAMES
+10. IMPORT — NAMES
 
 AFM files from a compiled font often use production names, for example uni0414. The tool finds the font glyph:
 1. the same name,
@@ -264,7 +286,7 @@ AFM files from a compiled font often use production names, for example uni0414. 
 Pairs with a glyph that the tool does not find are not imported. The report shows these glyphs.
 
 
-10. IMPORT — THE REPORT
+11. IMPORT — THE REPORT
 
 Preview shows the plan for each master:
 - added, changed, unchanged and removed pairs,
@@ -273,14 +295,14 @@ Preview shows the plan for each master:
 Apply writes the plan. Then it reads the master again and does a self check. The self check compares each glyph pair with the source. "The master renders the source exactly" means that the import is correct. A locked pair can show as a difference.
 
 
-11. SNAPSHOTS AND RESTORE
+12. SNAPSHOTS AND RESTORE
 
 Before Apply writes (Pairs or Import), the tool saves a snapshot of each master that changes. The snapshot is in a folder next to the font file: <font file>.trkern.
 "Restore last" writes back the kerning from before the last Apply.
 If the font is not saved, there is no folder. Then "Restore last" works only until you close the window.
 
 
-12. JOB — DTL KERNMASTER
+13. JOB — DTL KERNMASTER
 
 The Job tab writes the files that DTL KernMaster needs: one KRN file (the pairs to kern) for each master and one CLA file (the classes). It works like the FontRig Kern Job Composer, and it opens and saves the same composition files (JSON).
 
@@ -293,19 +315,19 @@ To make a job:
 2. Type an item in the "New item" field and press Return. Or copy a list and click Paste ("quoted","names", /slash/names, names, separated by commas, or one name on each line).
 3. Set 1ST and 2ND for each item.
 4. Select the masters. "Use groups" writes a glyph as its group, if it has one.
-5. Click Preview. Read what the files will have: the pairs of each block, the total, the warnings, the classes and the pairs.
-6. Click "Export job" and select a folder.
+6. Click Preview. Read what the files will have: the pairs of each block, the total, the warnings, the classes and the pairs.
+7. Click "Export job" and select a folder.
 To use the pairs that each master has now, select "Font kerning" in the Pairs menu.
 
 Class names have the side at the end: _1 is the left side, _2 is the right side. For example, @T_1 and @o_2.
 
-Leaders — DTL KernMaster kerns a class with its first glyph, the leader. The CLA file puts the leader of each group first. The same leader is the key glyph of the import (section 8), of Explain and of the proof strings. You set the leaders in the Groups tab (section 3). If a group has no leader, it is the member with the same name as the group, else the first member.
+Leaders — DTL KernMaster kerns a class with its first glyph, the leader. The CLA file puts the leader of each group first. The same leader is the key glyph of the import (section 9), of Explain and of the proof strings. You set the leaders in the Groups tab (section 3). If a group has no leader, it is the member with the same name as the group, else the first member.
 
 DTL KernMaster gives back AFM files. Import them in the Import tab. Export job sets the "Strip" text of the import, so that the AFM files find their masters.
 
 
-13. COMMAND LINE (tr-kern)
+14. COMMAND LINE (tr-kern)
 
 TR Kern also works without an editor, on UFO, designspace and .trfont files: the command tr-kern (or python -m typerig.core.actions.kern_cli). It uses the same engine as this window. For a UFO or a designspace it writes only the kerning, the groups and the TR Kern settings; it does not change outlines, font info or features. Each write keeps a snapshot next to the font; "tr-kern restore" brings it back.
-Commands: info, import, cleanup, job, rules, pairs, groups, restore. Type "tr-kern COMMAND -h" for the options of a command. Changes are only planned until you add --apply (import writes unless you add --dry-run).
+Commands: info, import, cleanup, analyze, job, rules, pairs, groups, restore. Type "tr-kern COMMAND -h" for the options of a command. Changes are only planned until you add --apply (import writes unless you add --dry-run).
 '''
