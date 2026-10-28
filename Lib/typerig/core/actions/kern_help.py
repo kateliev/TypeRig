@@ -14,7 +14,7 @@
 
 from __future__ import unicode_literals
 
-__version__ = '0.9.1'
+__version__ = '0.10.0'
 
 HELP_TEXT = '''TR KERN — HELP
 
@@ -165,7 +165,7 @@ To clean up:
 
 5. ANALYZE
 
-Analyze shows problems in the kerning. It does not change the font, and it does not add pending changes. The analyses use the kerning with the pending changes. "Masters" selects one master or all masters.
+Analyze shows problems in the kerning. It does not change the font, and it does not add pending changes. The analyses use the kerning with the pending changes. "Masters" (next to Run) selects one master or all masters.
 
 The report is a tree: one branch for each analysis, then sections, then the findings. Orange — a finding; green — the tool looked and found nothing; normal — numbers only. Click a triangle to open or close a branch. Option-click opens all the branches under it. "Expand all" and "Collapse all" open or close the whole tree. "Copy report" copies the report as text.
 
@@ -179,6 +179,16 @@ The analyses:
 - Exception pressure — a group pair where many glyph pairs get their value from exceptions, not from the group pair. The report shows group pairs with "Pressure %" or more. It also shows glyphs that have exceptions against "Culprits" or more groups. Such a glyph is often in the wrong group.
 - Shadowed and fragile pairs — a group pair (or glyph + group pair) that more specific pairs replace for all of its glyph pairs ("shadowed": it never applies), or for "Fragile %" of them or more ("fragile"). Cleanup > "Pairs that change nothing" removes the shadowed pairs.
 - Member divergence — a group member whose kerning against the other side is, on average, "Divergence" units or more from the middle value of its group. The report shows the group that the member is closer to, if there is one. Groups with fewer than "Members" glyphs are not checked.
+- Rule lint — checks the rule sets of the Rules tab without writing: a pair whose value is more than "Tolerance" units from what its rule gives. The report also shows rules whose source pair is not kerned, and rule errors.
+- Consistency families — pairs that must agree, but differ by more than "Tolerance" units:
+  mirrored punctuation: ( X and X ) for the "Symmetric" characters (also [ ], { }, « », ‹ ›, quotes, / \);
+  small caps and capitals: the small cap pair against the capital pair times the ratio of the master (the middle ratio of the font, where the large capital values count more). One line for each pair of kerning pairs, with the number of glyph pairs. The report also shows capitals that kern where the small caps do not kern at all;
+  lookalikes across scripts: Cyrillic and Greek letters that look like Latin letters (А, О, Α, Ο …) against their Latin pair;
+  tabular figures (.tf, .tosf) with kerning.
+- Kerning scope — pairs that do not apply or should not exist:
+  pairs that never apply: the two sides are of two scripts (Latin against Cyrillic). OpenType finds kerning in one script at a time;
+  small caps against lowercase.
+  For information only (not counted): pairs and groups with glyphs of several scripts (shape groups; Glyphs needs them split for each script), groups with small caps and lowercase, kerned glyphs with no script.
 
 To analyse:
 1. Select the analyses. Set the options.

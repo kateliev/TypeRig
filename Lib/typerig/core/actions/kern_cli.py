@@ -15,6 +15,7 @@
 #           [--missing fill|copy|nearest|interpolate|remove] [--copy-from M] [--apply]
 #   tr-kern analyze FONT [--analysis NAME ...] [--master M] [--bin N] [--extreme N] [--spike N]
 #           [--shape N] [--pressure N] [--culprit N] [--fragile N] [--divergence N] [--members N]
+#           [--tolerance N] [--symmetric CHARS]
 #           [--json PATH]   (read only)
 #   tr-kern job FONT FOLDER [--composition JSON | --font-kerning] [--master M]
 #           [--no-groups] [--preview]
@@ -415,14 +416,15 @@ def parser():
 	s.set_defaults(func=cmd_cleanup)
 
 	s = sub.add_parser('analyze', help='read-only analytics: health, histogram, exception pressure, shadowed pairs, '
-	                                   'member divergence')
+	                                   'member divergence, rule lint, consistency families, kerning scope')
 	s.add_argument('font')
 	s.add_argument('--analysis', nargs='+', help='analyses to run: %s (default: all)'
 	               % ', '.join(k for k, _t in kan.ANALYSES))
 	s.add_argument('--master', help='one master (default: all)')
 	for key in kan.OPTION_DEFAULTS:
 		if key != 'master':
-			s.add_argument('--' + key, type=int, help='default %s' % kan.OPTION_DEFAULTS[key])
+			s.add_argument('--' + key, type=str if key in kan.STR_OPTIONS else int,
+			               help='default %s' % kan.OPTION_DEFAULTS[key])
 	s.add_argument('--json', help='also write the results as JSON to this file')
 	s.set_defaults(func=cmd_analyze)
 

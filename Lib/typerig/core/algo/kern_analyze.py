@@ -23,8 +23,16 @@
 #   divergence   group members whose kerning against the other side differs
 #                from their group's median (badly grouped), with the group
 #                they are closer to
+#   rules        rule lint: the font's rule sets in check mode (a pair that
+#                renders away from what its rule gives)
+#   consistency  pairs that should agree: mirrored punctuation around
+#                symmetric glyphs, small caps vs capitals (by the master's
+#                ratio), Latin vs Cyrillic / Greek lookalikes, tabular figures
+#   scope        pairs across scripts (never apply), groups of several
+#                scripts, small caps against lowercase, glyphs with no script
+# rules / consistency / scope take a host context (see Context).
 #
-#   ANALYSES, options(data), analyze(kset, key, opts) -> result
+#   ANALYSES, options(data), analyze(kset, key, opts, context) -> result
 #   count(key, result), report_tree(key, result) -> node tree, tree_text(roots)
 #   to_data(result) -> JSON-ready (tuples -> lists, keys -> str)
 #   Node: {'title', 'detail', 'kind', 'link', 'children'}; link: {'query', 'pairs'}
@@ -41,7 +49,7 @@ from __future__ import absolute_import, print_function, division
 
 from typerig.core.algo.kern_model import LEFT, RIGHT, is_group, group_name, pair_kind
 
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 
 # - Init -------------------------------------------------------------------
 ANALYSES = (	# (key, title)
@@ -50,6 +58,9 @@ ANALYSES = (	# (key, title)
 	('pressure', 'Exception pressure'),
 	('shadowed', 'Shadowed and fragile pairs'),
 	('divergence', 'Member divergence'),
+	('rules', 'Rule lint'),
+	('consistency', 'Consistency families'),
+	('scope', 'Kerning scope'),
 )
 OPTION_DEFAULTS = {
 	'master': '',		# '' = every master
@@ -62,7 +73,10 @@ OPTION_DEFAULTS = {
 	'fragile': 50,		# shadowed: a pair taken over for at least this % of its glyph pairs is fragile
 	'divergence': 15,	# divergence: mean distance (units) from the group median that flags a member
 	'members': 3,		# divergence: groups with fewer members are not judged
+	'tolerance': 5,		# rules, consistency: pairs that should agree may differ this much (units)
+	'symmetric': 'AHIMOTUVWXYovwx',	# consistency: characters whose two sides mirror each other
 }
+STR_OPTIONS = ('master', 'symmetric')
 KINDS = ('CC', 'CG', 'GC', 'GG')
 SPIKE_MIN = 5			# a spike needs at least this many values
 GRID_SHARE = .8			# the font's grid: the coarsest step (10, 5) at least this share of values sit on
@@ -77,7 +91,7 @@ def options(data=None):
 	out = dict(OPTION_DEFAULTS)
 	out.update({k: v for k, v in (data or {}).items() if k in OPTION_DEFAULTS})
 	for key, default in OPTION_DEFAULTS.items():
-		if key == 'master':
+		if key in STR_OPTIONS:
 			out[key] = str(out[key] or '')
 			continue
 		try:
@@ -102,6 +116,18 @@ def _median(values):
 		return 0
 	mid = n // 2
 	return values[mid] if n % 2 else (values[mid - 1] + values[mid]) / 2.
+
+
+def _weighted_median(samples):
+	'''Median of (value, weight) samples: the value where half of the weight is reached.'''
+	samples = sorted(samples)
+	half = sum(w for _v, w in samples) / 2.
+	run = 0.
+	for value, weight in samples:
+		run += weight
+		if run >= half:
+			return value
+	return samples[-1][0] if samples else 0
 
 
 def _quantile(values, q):
@@ -381,12 +407,266 @@ def divergence(kset, opts=None):
 	return out
 
 
+# - Context (Phase B) -------------------------------------------------------------------
+# Tools 6-8 need more than the kerning: a context dict from the host
+#   'glyphs'   [glyph names]          'char_map' {char: glyph}
+#   'unicodes' {glyph: code}          'scripts'  {glyph: script} (kern_script.glyph_scripts)
+#   'rules'    [rule sets] (kern_rules.rule_set dicts, the font lib)
+# A missing entry makes the tool report less, never fail.
+MIRRORS = (('(', ')'), ('[', ']'), ('{', '}'), ('«', '»'), ('‹', '›'), ('‘', '’'),
+           ('“', '”'), ('/', '\\'))
+SMALLCAP_SUFFIXES = ('sc', 'c2sc')
+TABULAR_SUFFIXES = ('tf', 'tosf')
+CASE_MIN = 5			# small caps: ratio samples needed before pairs are judged
+# Lookalikes across scripts: (Latin, Cyrillic, Greek); None = no lookalike in that script
+LOOKALIKES = (
+	('A', 'А', 'Α'), ('B', 'В', 'Β'), ('C', 'С', None), ('E', 'Е', 'Ε'),
+	('H', 'Н', 'Η'), ('I', 'І', 'Ι'), ('J', 'Ј', None), ('K', 'К', 'Κ'),
+	('M', 'М', 'Μ'), ('N', None, 'Ν'), ('O', 'О', 'Ο'), ('P', 'Р', 'Ρ'),
+	('S', 'Ѕ', None), ('T', 'Т', 'Τ'), ('X', 'Х', 'Χ'), ('Y', 'Ү', 'Υ'),
+	('Z', None, 'Ζ'),
+	('a', 'а', None), ('c', 'с', None), ('e', 'е', None), ('i', 'і', None), ('j', 'ј', None),
+	('o', 'о', 'ο'), ('p', 'р', 'ρ'), ('s', 'ѕ', None), ('x', 'х', None),
+	('y', 'у', None),
+)
+LOOKALIKE_SCRIPTS = ('Latn', 'Cyrl', 'Grek')
+
+
+def _ctx(context):
+	ctx = dict(context or {})
+	for key in ('glyphs', 'rules'):
+		ctx[key] = list(ctx.get(key) or [])
+	for key in ('char_map', 'unicodes', 'scripts'):
+		ctx[key] = dict(ctx.get(key) or {})
+	return ctx
+
+
+def _suffix_parts(glyph):
+	return glyph.split('.')[1:]
+
+
+def _rule_side_text(side):
+	return '*' + side[1] if isinstance(side, tuple) else str(side)
+
+
+# - Rule lint (tool 6) ------------------------------------------------------------------
+def rule_lint(kset, opts=None, context=None):
+	'''Rule sets of the font lib in check mode: where a destination pair renders more than `tolerance`
+	away from what its rule gives. {'findings': [(set, line, master, dst pair, actual, expected, rule text)],
+	'no_source': [(set, line, master, source pair)], 'errors': [(set, line, message)], 'sets': n}.'''
+	from typerig.core.algo import kern_rules as kr
+	opts, ctx = options(opts), _ctx(context)
+	glyph_set = set(ctx['glyphs']) if ctx['glyphs'] else None
+	out = {'findings': [], 'no_source': [], 'errors': [], 'sets': len(ctx['rules'])}
+	for rs in ctx['rules']:
+		name = rs.get('name', '')
+		rules, errors = kr.parse_rules(rs.get('text', ''), ctx['char_map'], glyph_set)
+		out['errors'] += [(name, n, m) for n, m in errors]
+		chosen = rs.get('masters') or ''
+		for master in _masters(kset, opts):
+			if chosen and master != chosen:
+				continue
+			table = kset.pairs[master]
+			for rule in rules:
+				text = '%s = %s%s' % (' '.join('%s|%s' % (_rule_side_text(a), _rule_side_text(b)) for a, b in rule['dst']),
+				                      '%s|%s' % tuple(_rule_side_text(s) for s in rule['src']),
+				                      '' if (rule['k'], rule['c']) == (1., 0.) else ' (adjusted)')
+				if isinstance(rule['src'][0], tuple):
+					writes = kr._wild_writes(kset, master, table, rule, glyph_set)
+				else:
+					a, b = kr._glyph_of(kset, rule['src'][0], LEFT), kr._glyph_of(kset, rule['src'][1], RIGHT)
+					value, key, _level = kset.resolve(master, a, b, table)
+					if key is None:
+						out['no_source'].append((name, rule['line'], master, (a, b)))
+						continue
+					expected = int(round(value * rule['k'] + rule['c']))
+					writes = [(pair, expected) for pair in rule['dst']]
+				for (da, db), expected in writes:
+					ga, gb = kr._glyph_of(kset, da, LEFT), kr._glyph_of(kset, db, RIGHT)
+					actual = kset.resolve(master, ga, gb, table)[0]
+					if abs(actual - expected) > opts['tolerance']:
+						out['findings'].append((name, rule['line'], master, (da, db), actual, expected, text))
+	return out
+
+
+# - Consistency families (tool 7) ----------------------------------------------------------
+def _smallcaps(ctx):
+	'''{small cap glyph: its capital glyph}: x.sc -> the capital of x (by Unicode), X.c2sc -> X.'''
+	out = {}
+	for glyph in ctx['glyphs']:
+		parts = _suffix_parts(glyph)
+		if not any(p in SMALLCAP_SUFFIXES for p in parts):
+			continue
+		base = glyph.split('.')[0]
+		if 'c2sc' in parts:
+			out[glyph] = base
+			continue
+		code = ctx['unicodes'].get(base)
+		if code is None:
+			continue
+		capital = ctx['char_map'].get(chr(code).upper())
+		if capital and capital != base:
+			out[glyph] = capital
+	return out
+
+
+def consistency(kset, opts=None, context=None):
+	'''Pairs that should agree but do not (more than `tolerance` apart), per master:
+	'mirror'    [(master, (open, X), v1, (X, close), v2)] for the symmetric glyphs (option `symmetric`)
+	'case'      [(master, small cap key pair, value, capital key pair, capital value, expected, glyph pairs, sample
+	            glyph pair)], one per region (the pairs that decide the values); expected = the master's
+	            small cap / capital ratio (median of the regions, weighted by the capital value) x the capital
+	            value; 'ratios' {master: ratio or None}
+	'case_missing' [(master, capital key pair, value, glyph pairs, sample)]: capitals kern, small caps not at all
+	'case_own'  {master: n}: small cap pairs kerned where the capitals are not (not judged; information)
+	'lookalike' [(master, script, (L1, L2), latin value, (S1, S2), value)] Latin vs Cyrillic / Greek lookalikes
+	'tabular'   [(master, pair, value)] stored nonzero pairs that reach a tabular figure (.tf, .tosf)'''
+	opts, ctx = options(opts), _ctx(context)
+	tol = opts['tolerance']
+	cm = ctx['char_map']
+	out = {'mirror': [], 'case': [], 'case_missing': [], 'lookalike': [], 'tabular': [], 'ratios': {}, 'case_own': {}}
+	masters = _masters(kset, opts)
+	def val(master, a, b):
+		return kset.resolve(master, a, b)[0]
+	# mirror
+	symmetric = [cm[c] for c in opts['symmetric'] if c.strip() and c in cm]
+	brackets = [(cm[o], cm[c]) for o, c in MIRRORS if o in cm and c in cm]
+	for master in masters:
+		for o, c in brackets:
+			for x in symmetric:
+				for p1, p2 in (((o, x), (x, c)), ((x, o), (c, x))):
+					v1, v2 = val(master, *p1), val(master, *p2)
+					if abs(v1 - v2) > tol:
+						out['mirror'].append((master, p1, v1, p2, v2))
+	# small caps vs capitals: one finding per (small cap key, capital key) region, not per glyph pair
+	smallcaps = _smallcaps(ctx)
+	sc = sorted(smallcaps)
+	for master in masters:
+		regions, missing, unpaired = {}, {}, set()
+		for s1 in sc:
+			for s2 in sc:
+				b1, b2 = smallcaps[s1], smallcaps[s2]
+				vs, key_s, _l = kset.resolve(master, s1, s2)
+				vb, key_b, _l = kset.resolve(master, b1, b2)
+				if not (vs or vb):
+					continue
+				if key_s is None:		# the small caps are not kerned at all here
+					missing.setdefault(key_b, [vb, []])[1].append((s1, s2))
+					continue
+				if key_b is None:		# small caps kerned on their own: nothing to compare with
+					unpaired.add(key_s)
+					continue
+				regions.setdefault((key_s, key_b), [vs, vb, []])[2].append((s1, s2))
+		# one sample per region, weighted by the capital value: small values give noisy ratios (5 / 1)
+		samples = [(vs / float(vb), abs(vb)) for vs, vb, _c in regions.values() if vs and vb and (vs > 0) == (vb > 0)]
+		ratio = _weighted_median(samples) if len(samples) >= CASE_MIN else None
+		out['ratios'][master] = ratio
+		out['case_own'][master] = len(unpaired)
+		for key_b, (vb, cells) in sorted(missing.items()):
+			out['case_missing'].append((master, key_b, vb, len(cells), cells[0]))
+		if ratio is None:
+			continue
+		for (key_s, key_b), (vs, vb, cells) in sorted(regions.items()):
+			expected = int(round(vb * ratio))
+			if abs(vs - expected) > tol:
+				out['case'].append((master, key_s, vs, key_b, vb, expected, len(cells), cells[0]))
+	out['case'].sort(key=lambda r: (-abs(r[2] - r[5]), -r[6], r[0]))		# largest differences first
+	# lookalikes across scripts
+	rows = []
+	for chars in LOOKALIKES:
+		row = dict((s, cm.get(ch)) for s, ch in zip(LOOKALIKE_SCRIPTS, chars) if ch)
+		if row.get('Latn'):
+			rows.append(row)
+	for master in masters:
+		for r1 in rows:
+			for r2 in rows:
+				latin = (r1['Latn'], r2['Latn'])
+				vl = None
+				for script in LOOKALIKE_SCRIPTS[1:]:
+					if not (r1.get(script) and r2.get(script)):
+						continue
+					if vl is None:
+						vl = val(master, *latin)
+					pair = (r1[script], r2[script])
+					vs = val(master, *pair)
+					if abs(vl - vs) > tol:
+						out['lookalike'].append((master, script, latin, vl, pair, vs))
+	# tabular figures
+	tabular = set(g for g in ctx['glyphs'] if any(p in TABULAR_SUFFIXES for p in _suffix_parts(g)))
+	if tabular:
+		for master in masters:
+			for pair, value in sorted(kset.pairs[master].items()):
+				if value and (tabular.intersection(kset.members(pair[0], LEFT))
+				              or tabular.intersection(kset.members(pair[1], RIGHT))):
+					out['tabular'].append((master, pair, value))
+	return out
+
+
+# - Scope (tool 8) ----------------------------------------------------------------------
+def scope(kset, opts=None, context=None):
+	'''Pairs outside the font's kerning scope:
+	'cross'     [(pair, cross cells, cells, left scripts, right scripts, {master: value})]: glyph pairs of two
+	            scripts (OpenType looks kerning up per script: they never apply; Glyphs does not export them).
+	            cross == cells: the pair never applies (a finding); fewer: a group of several scripts (shape
+	            group, information: Glyphs needs it split per script)
+	'mixed'     [(side, group, {script: members})]: groups with members of several scripts (shape groups:
+	            Glyphs needs them split per script)
+	'sc_lower'  [(pair, sc x lowercase cells, cells, {master: value})]: small caps against lowercase; all cells:
+	            a finding, fewer: groups that mix small caps and lowercase (information)
+	'unknown'   [glyph]: kerned glyphs with no script (unencoded, no base)'''
+	from typerig.core.algo.kern_script import side_scripts, UNKNOWN
+	opts, ctx = options(opts), _ctx(context)
+	scripts = ctx['scripts']
+	out = {'cross': [], 'mixed': [], 'sc_lower': [], 'unknown': []}
+	masters = _masters(kset, opts)
+	values = {}
+	for master in masters:
+		for pair, value in kset.pairs[master].items():
+			values.setdefault(pair, {})[master] = value
+	smallcaps = set(_smallcaps(ctx)) | set(g for g in ctx['glyphs'] if any(p in SMALLCAP_SUFFIXES for p in _suffix_parts(g)))
+	lower = set()
+	for glyph, code in ctx['unicodes'].items():
+		try:
+			if chr(code).islower() and glyph not in smallcaps:
+				lower.add(glyph)
+		except (ValueError, OverflowError, TypeError):
+			pass
+	kerned = set()
+	for pair in sorted(values):
+		lm, rm = kset.members(pair[0], LEFT), kset.members(pair[1], RIGHT)
+		kerned.update(lm)
+		kerned.update(rm)
+		if scripts:
+			ls, rs = side_scripts(lm, scripts), side_scripts(rm, scripts)
+			same = sum(n * rs.get(s, 0) for s, n in ls.items())
+			cross = sum(ls.values()) * sum(rs.values()) - same
+			if cross:
+				out['cross'].append((pair, cross, len(lm) * len(rm), sorted(ls), sorted(rs), values[pair]))
+		cells = (len(smallcaps.intersection(lm)) * len(lower.intersection(rm))
+		         + len(lower.intersection(lm)) * len(smallcaps.intersection(rm)))
+		if cells and any(values[pair].values()):
+			out['sc_lower'].append((pair, cells, len(lm) * len(rm), values[pair]))
+	if scripts:
+		for side in (LEFT, RIGHT):
+			for name, members in sorted(kset.groups[side].items()):
+				counts = side_scripts(members, scripts)
+				if len(counts) > 1:
+					out['mixed'].append((side, name, counts))
+		out['unknown'] = sorted(g for g in kerned if scripts.get(g, UNKNOWN) == UNKNOWN and not is_group(g))
+	out['cross'].sort(key=lambda r: (r[1] < r[2], -r[1], r[0]))
+	return out
+
+
 # - Run / report -----------------------------------------------------------------------
 _RUN = {'health': health, 'histogram': histogram, 'pressure': pressure, 'shadowed': shadowed,
         'divergence': divergence}
+_RUN_CONTEXT = {'rules': rule_lint, 'consistency': consistency, 'scope': scope}	# need the host context
+CONTEXT_ANALYSES = tuple(_RUN_CONTEXT)
 
 
-def analyze(kset, key, opts=None):
+def analyze(kset, key, opts=None, context=None):
+	if key in _RUN_CONTEXT:
+		return _RUN_CONTEXT[key](kset, opts, context)
 	if key not in _RUN:
 		raise ValueError('Unknown analysis: %s' % key)
 	return _RUN[key](kset, opts)
@@ -401,6 +681,13 @@ def count(key, result):
 		        + len(result['shape_flags']))
 	if key == 'pressure':
 		return len(result['regions']) + len(result['culprits'])
+	if key == 'rules':
+		return len(result['findings']) + len(result['no_source']) + len(result['errors'])
+	if key == 'consistency':
+		return sum(len(result[k]) for k in ('mirror', 'case', 'case_missing', 'lookalike', 'tabular'))
+	if key == 'scope':		# partial ones come from groups of several scripts / cases: information
+		return (sum(1 for r in result['cross'] if r[1] == r[2])
+		        + sum(1 for r in result['sc_lower'] if r[1] == r[2]))
 	return len(result)
 
 
@@ -539,6 +826,77 @@ def _tree_divergence(result):
 	return _capped(out)
 
 
+def _values_text(values):
+	return ', '.join('%s %d' % mv for mv in values.items())
+
+
+def _tree_rules(result):
+	if not result['sets']:
+		return [node('No rule sets in the font', 'make them in the Rules tab', KIND_INFO)]
+	by_set = {}
+	for name, line, master, pair, actual, expected, text in result['findings']:
+		by_set.setdefault(name, []).append(node('%s %s' % pair, '%d, rule gives %d  (line %d: %s; %s)'
+		                                        % (actual, expected, line, text, master), KIND_WARN, link([pair])))
+	out = [_section('Set "%s"' % name, items) for name, items in sorted(by_set.items())]
+	if not out:
+		out.append(node('Every destination pair agrees with its rule', '%d set(s)' % result['sets'], KIND_OK))
+	out.append(_section('Rules whose source pair is not kerned', [
+		node('%s %s' % pair, 'set "%s", line %d  (%s)' % (name, line, master), KIND_WARN, link([pair]))
+		for name, line, master, pair in result['no_source']]))
+	out.append(_section('Rule errors', [node('Set "%s", line %d' % (name, line), message, KIND_WARN)
+	                                    for name, line, message in result['errors']]))
+	return out
+
+
+def _tree_consistency(result):
+	mirror = [node('%s %s  vs  %s %s' % (p1 + p2), '%d vs %d  (%s)' % (v1, v2, master), KIND_WARN, link([p1, p2]))
+	          for master, p1, v1, p2, v2 in result['mirror']]
+	case = [node('%s %s' % key_s, '%d, expected %d (capitals %s %s = %d); %d glyph pair(s), e.g. %s %s  (%s)'
+	             % (vs, expected, key_b[0], key_b[1], vb, n, sample[0], sample[1], master), KIND_WARN, link([key_s, key_b]))
+	        for master, key_s, vs, key_b, vb, expected, n, sample in result['case']]
+	missing = [node('%s %s' % key_b, 'capitals %d, small caps not kerned; %d glyph pair(s), e.g. %s %s  (%s)'
+	                % (vb, n, sample[0], sample[1], master), KIND_WARN, link([key_b, sample]))
+	           for master, key_b, vb, n, sample in result['case_missing']]
+	ratios = ', '.join('%s %s' % (m, '—' if r is None else '%.2f' % r) for m, r in result['ratios'].items())
+	look = [node('%s %s  vs  %s %s' % (latin + pair), '%d vs %d  (%s, %s)' % (vl, vs, script, master), KIND_WARN,
+	             link([latin, pair])) for master, script, latin, vl, pair, vs in result['lookalike']]
+	tab = [node('%s %s' % pair, '%d  (%s)' % (value, master), KIND_WARN, link([pair]))
+	       for master, pair, value in result['tabular']]
+	case_node = _section('Small caps vs capitals', case)
+	own = sum(result['case_own'].values())
+	case_node['detail'] = '%d  (ratio %s%s)' % (len(case), ratios or '—',
+	                                            '; %d small cap pairs kerned where capitals are not: not judged' % own if own else '')
+	return [_section('Mirrored punctuation (symmetric glyphs)', mirror), case_node,
+	        _section('Small caps not kerned where capitals are', missing),
+	        _section('Lookalikes across scripts (vs Latin)', look), _section('Tabular figures with kerning', tab)]
+
+
+def _tree_scope(result):
+	from typerig.core.algo.kern_script import SCRIPT_NAMES
+	def names(codes):
+		return '/'.join(SCRIPT_NAMES.get(c, c) for c in codes)
+	never = [node('%s %s' % pair, '%d glyph pairs, %s | %s  (%s)' % (total, names(ls), names(rs), _values_text(values)),
+	              KIND_WARN, link([pair])) for pair, n, total, ls, rs, values in result['cross'] if n == total]
+	partly = [node('%s %s' % pair, '%d of %d glyph pairs across scripts (%s | %s)' % (n, total, names(ls), names(rs)),
+	               KIND_INFO, link([pair])) for pair, n, total, ls, rs, _values in result['cross'] if n < total]
+	mixed = [node('@%s  (%s)' % (name, side), ', '.join('%s %d' % (SCRIPT_NAMES.get(s, s), n) for s, n in sorted(counts.items())),
+	              KIND_INFO, {'query': 'in:@%s' % name, 'pairs': []}) for side, name, counts in result['mixed']]
+	sc_lower = [node('%s %s' % pair, '%d glyph pairs  (%s)' % (cells, _values_text(values)), KIND_WARN, link([pair]))
+	            for pair, cells, total, values in result['sc_lower'] if cells == total]
+	sc_mixed = [node('%s %s' % pair, '%d of %d glyph pairs' % (cells, total), KIND_INFO, link([pair]))
+	            for pair, cells, total, _values in result['sc_lower'] if cells < total]
+	unknown = [node(g, 'no Unicode, no base glyph', KIND_INFO) for g in result['unknown']]
+	mixed_node = node('Groups with several scripts (shape groups)', '%d  (Glyphs: split per script)' % len(mixed),
+	                  KIND_INFO, None, _capped(mixed))
+	unknown_node = node('Kerned glyphs with no script', '%d' % len(unknown), KIND_INFO, None, _capped(unknown))
+	return [_section('Pairs that never apply (sides of two scripts)', never),
+	        node('Pairs partly across scripts (groups of several scripts)', '%d' % len(partly), KIND_INFO, None, _capped(partly)),
+	        mixed_node,
+	        _section('Small caps against lowercase', sc_lower),
+	        node('Small caps partly against lowercase (mixed groups)', '%d' % len(sc_mixed), KIND_INFO, None, _capped(sc_mixed)),
+	        unknown_node]
+
+
 def report_tree(key, result, opts=None):
 	'''The report of one analysis as a tree (see node()); the root is the analysis.'''
 	opts = options(opts)
@@ -551,6 +909,12 @@ def report_tree(key, result, opts=None):
 		children = _tree_pressure(result)
 	elif key == 'shadowed':
 		children = _tree_shadowed(result)
+	elif key == 'rules':
+		children = _tree_rules(result)
+	elif key == 'consistency':
+		children = _tree_consistency(result)
+	elif key == 'scope':
+		children = _tree_scope(result)
 	else:
 		children = _tree_divergence(result)
 	kind = KIND_INFO if found is None else KIND_WARN if found else KIND_OK

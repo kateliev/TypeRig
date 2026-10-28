@@ -54,6 +54,7 @@ import traceback
 from typerig.core.algo import kern_model as km
 from typerig.core.algo import kern_analyze as kan
 from typerig.core.algo import kern_cleanup as kc
+from typerig.core.algo import kern_script as kscr
 from typerig.core.algo import kern_groups as kg
 from typerig.core.algo import kern_query as kq
 from typerig.core.algo import kern_reclass as krc
@@ -127,6 +128,7 @@ class KernEngine(object):
 		self.analysis = {}			# {key: result} of the last Run
 		self.analyze_tree = []		# report trees of the last Run, one root per analysis
 		self.analyze_report = ''
+		self._scripts = None		# {glyph: script}, read on demand (Analyze scope / consistency)
 		self.rules = []				# rule sets (kern_rules.rule_set dicts), font lib 'rules'
 		self.rules_report = ''
 		self.strings = dict(STRING_DEFAULTS)
@@ -1144,14 +1146,34 @@ class KernEngine(object):
 		view = self.view_kset()
 		self.analysis = {}
 		self.analyze_tree = []
+		context = self.analyze_context() if any(self.analyze_on.get(k) for k in kan.CONTEXT_ANALYSES) else None
 		for key, _title in kan.ANALYSES:
 			if self.analyze_on.get(key):
-				self.analysis[key] = kan.analyze(view, key, self.analyze_opts)
+				self.analysis[key] = kan.analyze(view, key, self.analyze_opts, context)
 				self.analyze_tree.append(kan.report_tree(key, self.analysis[key], self.analyze_opts))
 		self.analyze_report = kan.tree_text(self.analyze_tree) if self.analyze_tree else ''
 		found = sum(kan.count(k, r) or 0 for k, r in self.analysis.items())
 		self._say('Analyze: %d finding(s). Nothing changed.' % found)
 		return self.analysis
+
+	def glyph_scripts(self):
+		'''{glyph: script} of the font (core kern_script), read once per font.'''
+		if self._scripts is None:
+			names, _prod, unicodes = self.host.name_tables()
+			codes = {}
+			for code, glyph in unicodes.items():
+				codes.setdefault(glyph, code)
+			self._scripts = kscr.glyph_scripts(names, codes, self.host.components())
+		return self._scripts
+
+	def analyze_context(self):
+		'''What rule lint, consistency and scope need beyond the kerning.'''
+		_names, _prod, unicodes = self.host.name_tables()
+		codes = {}
+		for code, glyph in unicodes.items():
+			codes.setdefault(glyph, code)
+		return {'glyphs': self.glyph_names(), 'char_map': self.char_map(), 'unicodes': codes,
+		        'scripts': self.glyph_scripts(), 'rules': [dict(r) for r in self.rules]}
 
 	def analysis_count(self, key):
 		return kan.count(key, self.analysis[key]) if key in self.analysis else None

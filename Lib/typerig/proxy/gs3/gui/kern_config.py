@@ -106,12 +106,14 @@ CLEANUP = SimpleNamespace(
 	LIST_PAD = 6,       # measured list height: border + a little air
 	ROWS     = 5,       # option rows under the list
 )
-_ANALYZE_ROWS = 5
+_ANALYZE_ROWS, _ANALYZE_MIN_ROWS = 8, 5
 ANALYZE = SimpleNamespace(
-	LIST_H   = _LIST_HEADER_H + _ANALYZE_ROWS * _CHECK_ROW_H + 6,   # the analyses list: never lower than this
-	LIST_PAD = 6,       # measured list height: border + a little air
-	ROWS     = 6,       # option rows under the list (master; nine numbers, two per row)
+	LIST_H   = _LIST_HEADER_H + _ANALYZE_ROWS * _CHECK_ROW_H + 6,       # analyses list at the default window: all of them
+	LIST_MIN_H = _LIST_HEADER_H + _ANALYZE_MIN_ROWS * _CHECK_ROW_H + 6,   # analyses list at the smallest window
+	                    # (it stretches with the window and scrolls below this)
+	ROWS     = 6,       # option rows above the bar (ten numbers, two per row; symmetric); Masters is in the bar
 	LABEL_W  = 76,      # option captions on the number rows ('Extreme:', 'Pressure %:')
+	TEXT_W   = 240,     # 'Symmetric:' characters field
 )
 STRINGS = SimpleNamespace(
 	COMBO_W  = 260,     # pattern combo box
