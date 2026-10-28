@@ -77,6 +77,7 @@ class KernEngine(object):
 	def __init__(self, host, on_change=None):
 		self.host = host
 		self.on_change = on_change
+		self.on_explain = None		# set: explain_pair calls it instead of on_change (only the explain text changed)
 		self.font_key = None
 		self.message = ''
 		self._fresh()
@@ -101,6 +102,7 @@ class KernEngine(object):
 		self._rows = None
 		self._shown = None
 		self._view = None			# kerning with the pending changes on top (explain)
+		self._grid_cache = None		# (shown, masters, grid_items) — same list until the rows change
 		self._char_map = None
 		self._names = None
 		self._sets = None			# host glyph sets (*Uppercase ...), read on demand
@@ -579,10 +581,16 @@ class KernEngine(object):
 		self.set_query(kq.set_widget_terms(self.query_text, kind, missing))
 
 	def grid_items(self):
-		'''Rows for the grid: kind (tint), left, right, type, one value per master, spread.'''
+		'''Rows for the grid: kind (tint), left, right, type, one value per master, spread.
+		The same list comes back until the shown rows change, so a host can
+		compare with `is` instead of comparing every row.'''
 		masters = self.pairs_kset().masters
+		shown = self.shown()
+		cached = self._grid_cache
+		if cached is not None and cached[0] is shown and cached[1] == masters:
+			return cached[2]
 		items = []
-		for row in self.shown():
+		for row in shown:
 			item = {'kind': 'locked' if row['locked'] else 'pending' if row['pending'] else row['kind'],
 			        'left': row['pair'][0], 'right': row['pair'][1], 'type': row['kind']}
 			vals = []
@@ -596,6 +604,7 @@ class KernEngine(object):
 					vals.append(value)
 			item['spread'] = str(max(vals) - min(vals)) if len(vals) > 1 else ''
 			items.append(item)
+		self._grid_cache = (shown, list(masters), items)
 		return items
 
 	def shown_pairs(self, indices=None):
@@ -704,8 +713,12 @@ class KernEngine(object):
 		self._say('%s %d pair(s).' % ('Locked' if on else 'Unlocked', abs(len(locks) - before)))
 
 	def explain_pair(self, pair):
+		fresh = self.kset is not None		# else this reads the font: rows change too
 		self.explain = self._explain(*kq.row_glyphs(self.pairs_kset(), pair))
-		self._changed()
+		if fresh and self.on_explain is not None:
+			self.on_explain()
+		else:
+			self._changed()
 
 	# - Names ----------------------------------------------------------------------------
 	def glyph_names(self):

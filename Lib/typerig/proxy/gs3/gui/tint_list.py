@@ -309,8 +309,11 @@ class TRTintList(vanilla.List2):
 
 	def row_tint(self, row):
 		'''Row background for a displayed row (used by the table delegate).'''
-		items = self._dataSourceAndDelegate.arrangedItems()
-		color = self._colors.get(self.kind(items[row])) if 0 <= row < len(items) else None
+		# One item, not arrangedItems(): that builds a list of every item, per
+		# drawn row (40k pairs in TR Kern: 74 ms a row, 2026-10-27)
+		dsd = self._dataSourceAndDelegate
+		item = dsd._getItemForRow(row) if 0 <= row < len(dsd.arrangedIndexes()) else None
+		color = self._colors.get(self.kind(item)) if item is not None else None
 		if color is None or self._tint <= 0:
 			return AppKit.NSColor.clearColor()
 		return color.colorWithAlphaComponent_(self._tint)
@@ -382,22 +385,35 @@ class TRTintList(vanilla.List2):
 		# Not getSelectedItems(): vanilla's List2 compares item indexes with row
 		# indexes there, so on a sorted list it returns the wrong items (the
 		# wrong row's dot filled, 2026-10-18). getSelectedIndexes maps rows right.
-		items = self.get()
+		# The data source's own list, not get(): that copies every item per click
+		items = self._dataSourceAndDelegate.items() if self._itemsWereDict else self.get()
 		self._selected = {id(items[i]) for i in self.getSelectedIndexes()}
 		self._refresh_dots()
 		if self._user_selection is not None:
 			self._user_selection(self)
 
+	def setSelectedIndexes(self, indexes):
+		'''Unsorted: item index = row index, select directly (vanilla maps
+		every item to its row first).'''
+		tableView = self.getNSTableView()
+		if tableView.sortDescriptors():
+			return super(TRTintList, self).setSelectedIndexes(indexes)
+		rows = AppKit.NSMutableIndexSet.indexSet()
+		for index in indexes:
+			rows.addIndex_(index)
+		tableView.selectRowIndexes_byExtendingSelection_(rows, False)
+
 	def _refresh_dots(self):
-		'''Reload the dot column only (keeps selection and row views).'''
+		'''Reload the dot column of the rows that have a view (keeps selection
+		and row views). Rows without one get their dot when they are drawn.'''
 		tableView = self.getNSTableView()
 		column = tableView.columnWithIdentifier_(DOT_ID)
-		rows = tableView.numberOfRows()
-		if column < 0 or rows == 0:
+		if column < 0 or tableView.numberOfRows() == 0:
 			return
-		tableView.reloadDataForRowIndexes_columnIndexes_(
-			AppKit.NSIndexSet.indexSetWithIndexesInRange_((0, rows)),
-			AppKit.NSIndexSet.indexSetWithIndex_(column))
+		rows = AppKit.NSMutableIndexSet.indexSet()
+		tableView.enumerateAvailableRowViewsUsingBlock_(lambda rowView, row: row >= 0 and rows.addIndex_(row))
+		if rows.count():
+			tableView.reloadDataForRowIndexes_columnIndexes_(rows, AppKit.NSIndexSet.indexSetWithIndex_(column))
 
 	def _refresh_rows(self):
 		'''Re-tint the row views on screen; new ones are tinted by the delegate.'''
