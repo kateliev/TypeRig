@@ -58,6 +58,7 @@ from typerig.core.actions import kern_actions as ka
 from typerig.core.fileio import cla, krn
 
 PENDING_MARK = '\u2022'		# grid: a value that is pending (not written yet)
+PATCH_MAX = 2000			# pairs one change may patch in place; more: rebuild every row
 STRING_SOURCES = (('selected', 'Selected pairs (Pairs tab)'), ('shown', 'Shown pairs (Pairs tab)'),
                   ('master', 'All pairs of the master'), ('ab', 'A \u00d7 B'))
 STRING_DEFAULTS = {'source': 'selected', 'master': '', 'a': '', 'b': '', 'suffix_a': '', 'suffix_b': '',
@@ -103,6 +104,9 @@ class KernEngine(object):
 		self._shown = None
 		self._view = None			# kerning with the pending changes on top (explain)
 		self._grid_cache = None		# (shown, masters, grid_items) — same list until the rows change
+		self.grid_patched = set()	# grid_items indexes changed in place (take_grid_patched)
+		self._row_index = None		# (rows, {pair: row}) for patching
+		self._shown_index = None	# (shown, {id(row): index in shown})
 		self._char_map = None
 		self._names = None
 		self._sets = None			# host glyph sets (*Uppercase ...), read on demand
@@ -589,23 +593,85 @@ class KernEngine(object):
 		cached = self._grid_cache
 		if cached is not None and cached[0] is shown and cached[1] == masters:
 			return cached[2]
-		items = []
-		for row in shown:
-			item = {'kind': 'locked' if row['locked'] else 'pending' if row['pending'] else row['kind'],
-			        'left': row['pair'][0], 'right': row['pair'][1], 'type': row['kind']}
-			vals = []
-			for i, master in enumerate(masters):
-				value = row['values'].get(master)
-				text = '' if value is None else str(value)
-				if master in row['pending']:
-					text += PENDING_MARK
-				item['m%d' % i] = text
-				if value is not None:
-					vals.append(value)
-			item['spread'] = str(max(vals) - min(vals)) if len(vals) > 1 else ''
-			items.append(item)
+		items = [self._grid_item(row, masters) for row in shown]
 		self._grid_cache = (shown, list(masters), items)
+		self.grid_patched = set()		# indexes into the old list
 		return items
+
+	@staticmethod
+	def _grid_item(row, masters):
+		item = {'kind': 'locked' if row['locked'] else 'pending' if row['pending'] else row['kind'],
+		        'left': row['pair'][0], 'right': row['pair'][1], 'type': row['kind']}
+		vals = []
+		for i, master in enumerate(masters):
+			value = row['values'].get(master)
+			text = '' if value is None else str(value)
+			if master in row['pending']:
+				text += PENDING_MARK
+			item['m%d' % i] = text
+			if value is not None:
+				vals.append(value)
+		item['spread'] = str(max(vals) - min(vals)) if len(vals) > 1 else ''
+		return item
+
+	def take_grid_patched(self):
+		'''Indexes of grid_items() rows changed in place since the last call (same list).'''
+		patched, self.grid_patched = sorted(self.grid_patched), set()
+		return patched
+
+	def _patch(self, cs):
+		'''The pending changes grew by cs: rebuild only the rows it touched and
+		apply it to the pending view, when that gives what a full rebuild
+		gives; else drop them. Group changes re-key pairs: always a rebuild.'''
+		if cs.groups[km.LEFT] or cs.groups[km.RIGHT]:
+			self._rows = self._shown = self._view = None
+			return
+		if self._view is not None:
+			km.apply(self._view, cs)		# == copy + apply(pending): later wins per (master, pair)
+		pairs = set()
+		for entry in cs.pairs.values():
+			pairs.update(entry['set'])
+			pairs.update(entry['remove'])
+		if not self._patch_pairs(pairs):
+			self._rows = self._shown = None
+
+	def _patch_pairs(self, pairs):
+		'''Rebuild the rows of these pairs in place (the grid items of shown
+		rows too, their indexes into grid_patched). False: a row would appear
+		or go, or too many pairs — rebuild every row instead. A patched row
+		stays shown even if it no longer passes the query (no rows jumping
+		away while nudging); the next search filters again.'''
+		rows = self._rows
+		if rows is None:
+			return True		# nothing built yet
+		if len(pairs) > PATCH_MAX:
+			return False
+		if self._row_index is None or self._row_index[0] is not rows:
+			self._row_index = (rows, {row['pair']: row for row in rows})
+		index = self._row_index[1]
+		fresh = {}
+		for pair in pairs:
+			row = kq.grid_row(self.kset, pair, self.pending)
+			if (row is None) != (pair not in index):
+				return False
+			if row is not None:
+				fresh[pair] = row
+		for pair, row in fresh.items():
+			index[pair].update(row)
+		cached, shown = self._grid_cache, self._shown
+		if cached is None or shown is None or cached[0] is not shown:
+			return True
+		if self._shown_index is None or self._shown_index[0] is not shown:
+			self._shown_index = (shown, {id(row): i for i, row in enumerate(shown)})
+		where = self._shown_index[1]
+		for pair in fresh:
+			i = where.get(id(index[pair]))
+			if i is not None:
+				item = cached[2][i]
+				item.clear()		# in place: the host's list may hold this dict
+				item.update(self._grid_item(index[pair], cached[1]))
+				self.grid_patched.add(i)
+		return True
 
 	def shown_pairs(self, indices=None):
 		shown = self.shown()
@@ -615,7 +681,7 @@ class KernEngine(object):
 
 	def _add_pending(self, cs, what, live=True):
 		ka.merge_changes(self.pending, cs)
-		self._rows = self._shown = self._view = None
+		self._patch(cs)
 		changed = cs.count('set') + cs.count('remove') + len(cs.groups[km.LEFT]) + len(cs.groups[km.RIGHT])
 		text = '%s: %d change(s) pending.' % (what, changed)
 		if cs.locked:
@@ -639,7 +705,8 @@ class KernEngine(object):
 			try:
 				value = float(text)
 			except ValueError:
-				self._rows = self._shown = None
+				if not self._patch_pairs({tuple(pair)}):		# shows the value again instead of the typed text
+					self._rows = self._shown = None
 				self._say('Not a number: %s' % text)
 				return 0
 			cs = ka.bulk_plan(self.pairs_kset(), [(master, pair)], 'set', value, base=self.pending)
@@ -796,7 +863,7 @@ class KernEngine(object):
 		if cs.is_empty():
 			return 0
 		ka.merge_changes(self.pending, cs)
-		self._rows = self._shown = self._view = None
+		self._patch(cs)
 		return cs.count('set') + cs.count('remove')
 
 	def load_rules_file(self, path):

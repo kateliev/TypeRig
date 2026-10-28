@@ -403,6 +403,28 @@ class TRTintList(vanilla.List2):
 			rows.addIndex_(index)
 		tableView.selectRowIndexes_byExtendingSelection_(rows, False)
 
+	def reloadItems(self, indexes):
+		'''Redraw the rows of these items (item indexes, as get()) after the
+		items changed in place: cells, dot and tint. No re-sort, no set().'''
+		tableView = self.getNSTableView()
+		arranged = self._dataSourceAndDelegate.arrangedIndexes()
+		if tableView.sortDescriptors():
+			where = {index: row for row, index in enumerate(arranged)}
+			rows = [where[i] for i in indexes if i in where]
+		else:
+			rows = [i for i in indexes if 0 <= i < len(arranged)]
+		if not rows:
+			return
+		row_set = AppKit.NSMutableIndexSet.indexSet()
+		for row in rows:
+			row_set.addIndex_(row)
+		tableView.reloadDataForRowIndexes_columnIndexes_(
+			row_set, AppKit.NSIndexSet.indexSetWithIndexesInRange_((0, tableView.numberOfColumns())))
+		for row in rows:
+			view = tableView.rowViewAtRow_makeIfNecessary_(row, False)
+			if view is not None:
+				view.setBackgroundColor_(self.row_tint(row))
+
 	def _refresh_dots(self):
 		'''Reload the dot column of the rows that have a view (keeps selection
 		and row views). Rows without one get their dot when they are drawn.'''

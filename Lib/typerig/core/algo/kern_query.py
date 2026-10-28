@@ -82,6 +82,29 @@ def grid_rows(kset, pending=None):
 	return rows
 
 
+def grid_row(kset, pair, pending=None):
+	'''The grid_rows row of one pair (None: grid_rows has no row for it).'''
+	values, marks, listed = {}, {}, False
+	for master in kset.masters:
+		values[master] = kset.pairs.get(master, {}).get(pair)
+	for table in kset.pairs.values():
+		if pair in table:
+			listed = True
+			break
+	if pending is not None:
+		for master, entry in pending.pairs.items():
+			if pair in entry['set']:
+				marks[master] = entry['set'][pair]
+				listed = True
+			elif pair in entry['remove']:
+				marks[master] = None
+	values.update(marks)
+	if not listed or (not any(v is not None for v in values.values()) and not marks):
+		return None
+	return {'pair': pair, 'kind': pair_kind(pair), 'values': values,
+	        'locked': pair in kset.locks, 'pending': set(marks)}
+
+
 # - Query ------------------------------------------------------------------
 class Query(object):
 	'''A parsed query. clauses: [[term, ...], ...]; explain: (a, b) or None.'''
