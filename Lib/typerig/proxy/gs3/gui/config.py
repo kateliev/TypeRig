@@ -349,6 +349,7 @@ THUMB.TONES = {
 STATUS = SimpleNamespace(
 	H          = 34,       # two-line status / warning text under a panel
 	SIZE_STYLE = 'small',  # NSControlSize for status labels
+	REPORT_H   = 110,      # scrolling read-only report field under a panel's last button row
 )
 
 # - Main window -----------------------------------------------------------
