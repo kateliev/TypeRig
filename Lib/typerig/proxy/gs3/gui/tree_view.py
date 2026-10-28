@@ -12,7 +12,8 @@
 #
 # Nodes are dicts: 'title' (first column, with the disclosure triangle),
 # 'detail' (second column), 'kind' (colour of the title: UI.TREE.KIND_COLORS),
-# 'children' (list of nodes); other keys are kept for the caller
+# 'children' (list of nodes); other keys are kept for the caller; a badge
+# function adds a mark after the title
 # (getSelected returns the node dicts). Roots are bold. set() opens the
 # first UI.TREE.EXPAND levels; Option-click on a triangle opens a whole
 # branch (AppKit). Children are wrapped on first display, so a large tree
@@ -43,7 +44,7 @@ def _ns_color(color):
 # - ObjC classes ------------------------------------------------------------
 # Defined once per process and reused on a module reload (see tint_list.py):
 # bump _VERSION whenever their methods change.
-_VERSION = 1
+_VERSION = 2
 
 
 def _children(self, item):
@@ -71,7 +72,14 @@ def _expandable(self, outline, item):
 
 
 def _value(self, outline, column, item):
-	return item._tr_node.get(str(column.identifier()), '')
+	ident = str(column.identifier())
+	text = item._tr_node.get(ident, '')
+	tree = self._tr_tree()
+	if ident == 'title' and tree is not None and tree._badge is not None:
+		badge = tree._badge(item._tr_node)
+		if badge:
+			text = '%s%s' % (text, badge)
+	return text
 
 
 def _will_display(self, outline, cell, column, item):
@@ -139,8 +147,11 @@ class TRTreeView(vanilla.ScrollView):
 		selectionCallback    : f(sender) when the selection changes
 		doubleClickCallback  : f(sender) on a double click on a row
 		colors               : {kind: NSColor name | NSColor | None}; UI.TREE.KIND_COLORS
+		badge                : f(node) -> text appended to the title (e.g. a mark on rows that can be fixed)
 	'''
-	def __init__(self, posSize, columns=COLUMNS, selectionCallback=None, doubleClickCallback=None, colors=None):
+	def __init__(self, posSize, columns=COLUMNS, selectionCallback=None, doubleClickCallback=None, colors=None,
+	             badge=None):
+		self._badge = badge
 		self._roots = []
 		self._nodes = []
 		self._selection_callback = selectionCallback

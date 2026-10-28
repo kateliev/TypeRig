@@ -20,7 +20,9 @@
 #   Analyze read-only analyses (core kern_analyze) of the kerning as it will
 #           be (pending included); the report is a tree (analysis > section >
 #           finding) whose nodes carry links: a Pairs query and the pairs
-#           behind it (Show in Pairs, Show pair in the edit tab).
+#           behind it (Show in Pairs, Show pair in the edit tab). Fix: the
+#           fixes of selected findings (with the user's choices) become
+#           pending changes; the analyses run again on them.
 #   Rules   analogy rule sets (FL Copy Kerning syntax, core kern_rules) kept
 #           in the font lib; Plan adds them to the pending changes; live
 #           sets re-run after every change of the kerning.
@@ -129,6 +131,7 @@ class KernEngine(object):
 		self.analyze_tree = []		# report trees of the last Run, one root per analysis
 		self.analyze_report = ''
 		self._scripts = None		# {glyph: script}, read on demand (Analyze scope / consistency)
+		self.analyze_fix_log = []	# log of the last Fix
 		self.rules = []				# rule sets (kern_rules.rule_set dicts), font lib 'rules'
 		self.rules_report = ''
 		self.strings = dict(STRING_DEFAULTS)
@@ -1174,6 +1177,41 @@ class KernEngine(object):
 			codes.setdefault(glyph, code)
 		return {'glyphs': self.glyph_names(), 'char_map': self.char_map(), 'unicodes': codes,
 		        'scripts': self.glyph_scripts(), 'rules': [dict(r) for r in self.rules]}
+
+	def analyze_fixes(self, nodes):
+		'''(fix items, summary) of selected report nodes (see kern_analyze.fix_summary).'''
+		items = kan.fix_items(nodes)
+		return items, kan.fix_summary(items)
+
+	def plan_analyze_fixes(self, nodes, choices=None):
+		'''(ChangeSet, log, cost) for the fixes of selected report nodes; nothing pending yet.
+		cost: {'set', 'remove', 'exceptions': glyph + glyph pairs among the new values}.'''
+		items = kan.fix_items(nodes)
+		cs, log = kan.plan_fixes(self.view_kset(), items, choices)
+		table = self.view_kset().pairs
+		gg = sum(1 for m, entry in cs.pairs.items() for p in entry['set']
+		         if km.pair_kind(p) == 'GG' and p not in table.get(m, {}))
+		return cs, log, {'set': cs.count('set'), 'remove': cs.count('remove'), 'exceptions': gg}
+
+	def add_analyze_fixes(self, cs, log=()):
+		'''Planned fixes into the pending changes, then Run again (the fixed rows go). Returns the change count.'''
+		self.analyze_fix_log = list(log)
+		if cs.is_empty():
+			self._say('Fix: nothing to change.')
+			return 0
+		changed = self._add_pending(cs, 'Analyze fixes')
+		message = self.message
+		self.run_analyze()
+		self._say('%s Analyses run again on the pending kerning; Apply writes it.' % message)
+		return changed
+
+	def fix_analyze(self, nodes, choices=None):
+		'''plan_analyze_fixes + add_analyze_fixes (no questions: the command line, tests).'''
+		if not kan.fix_items(nodes):
+			self._say('Nothing to fix: select findings that can be fixed.')
+			return 0
+		cs, log, _cost = self.plan_analyze_fixes(nodes, choices)
+		return self.add_analyze_fixes(cs, log)
 
 	def analysis_count(self, key):
 		return kan.count(key, self.analysis[key]) if key in self.analysis else None

@@ -14,7 +14,7 @@
 
 from __future__ import unicode_literals
 
-__version__ = '0.10.0'
+__version__ = '0.11.0'
 
 HELP_TEXT = '''TR KERN — HELP
 
@@ -165,9 +165,9 @@ To clean up:
 
 5. ANALYZE
 
-Analyze shows problems in the kerning. It does not change the font, and it does not add pending changes. The analyses use the kerning with the pending changes. "Masters" (next to Run) selects one master or all masters.
+Analyze shows problems in the kerning. It does not change the font, and it does not add pending changes. The analyses use the kerning with the pending changes. "In:" (next to Run) selects one master or all masters.
 
-The report is a tree: one branch for each analysis, then sections, then the findings. Orange — a finding; green — the tool looked and found nothing; normal — numbers only. Click a triangle to open or close a branch. Option-click opens all the branches under it. "Expand all" and "Collapse all" open or close the whole tree. "Copy report" copies the report as text.
+The report is a tree: one branch for each analysis, then sections, then the findings. Orange — a finding; green — the tool looked and found nothing; normal — numbers only. Click a triangle to open or close a branch. Option-click opens all the branches under it. 
 
 The analyses:
 - Health card — for each master: the number of pairs of each kind, the exceptions as a percentage of the group pairs, the group pairs as a percentage of all possible group pairs ("fill"), the smallest, middle and largest value, and the number of pairs with the value 0.
@@ -194,6 +194,18 @@ To analyse:
 1. Select the analyses. Set the options.
 2. Click Run. Read the report.
 3. Select one or more findings. Click "Show in Pairs" (or double-click a finding) to see their pairs in the Pairs tab. Click "Show pair" to see them in the edit tab.
+
+To fix findings:
+A finding with "• fix" after its name has a fix. Pairs that never apply, small caps against lowercase and shadowed pairs are removed. Rule lint writes the value of the rule. Mirrored punctuation, small caps and lookalikes get the value of their partner. Tabular figures lose their kerning. Exception pressure, divergence and the histogram have no fix: they need your judgement.
+1. Select the findings. To fix all findings of a section or of an analysis, select the section or the analysis.
+2. Click "Fix selected…". A dialog shows what will change and asks:
+   Mirrored punctuation — left side wins, right side wins, or the median of the two;
+   Small caps — ratio × capitals (default), or the same as the capitals;
+   Where to write — only the glyph pairs of the finding (default: no other glyph pair changes; exceptions where needed), or at the kerning pair that decides it (its whole group changes).
+3. Click "Plan fixes". If the fixes add many glyph + glyph exceptions, a second dialog tells you before anything changes. This occurs when the glyphs share kerning groups with glyphs that must not change, for example small caps in the lowercase groups. Then select "at the kerning pair", or give these glyphs their own groups in the Groups tab.
+4. The fixes are pending. The analyses run again, so the fixed findings go from the report. Click Apply to write them, or Discard. Restore last undoes an Apply. Locked pairs do not change.
+
+The menu next to "In:" expands or collapses the report, or copies it as text.
 
 
 6. RULES

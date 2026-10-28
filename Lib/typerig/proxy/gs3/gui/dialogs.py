@@ -2,6 +2,10 @@
 # -------------------------------------------------------------------------
 # TypeRig Panel — dialogs
 #
+# ask_choices(): modal alert with one popup per choice (a deliberate,
+# confirmed choice before an operation, e.g. TR Kern Analyze > Fix). It is
+# an NSAlert, not a second vanilla window (Memory/feedback_vanilla_pyobjc_crashes).
+#
 # TRLayerSelectDialog: vanilla port of FontLab's TRLayerSelectNEW.
 # Modeless, always-on-top, single-instance picker bound to the masthead's
 # "Selected layers" pill. Mutates the controller's selected_layer_names
@@ -1146,3 +1150,38 @@ class TRMasterStepsDialog(object):
 		self.values = None
 		self._stop_modal()
 		self.w.close()
+
+
+# - Choice alert ------------------------------------------------------------------
+def ask_choices(message, info, choices, ok_title='OK', cancel_title='Cancel'):
+	"""Modal alert: a message, an informative text and one popup per choice.
+	choices: [(key, caption, [(value, title), ...], default value)].
+	Returns {key: value} on OK, None on Cancel. No vanilla window is made."""
+	from AppKit import NSAlert, NSView, NSTextField, NSPopUpButton, NSAlertFirstButtonReturn
+	D = UI.DIALOG
+	step = D.CH_LABEL_H + D.CH_POPUP_H + D.CH_GAP
+	height = max(0, len(choices) * step - D.CH_GAP)
+	view = NSView.alloc().initWithFrame_(((0, 0), (D.CH_W, height)))
+	popups = []
+	for i, (key, caption, options, default) in enumerate(choices):
+		top = height - i * step		# AppKit y grows upwards
+		label = NSTextField.labelWithString_(caption)
+		label.setFrame_(((0, top - D.CH_LABEL_H), (D.CH_W, D.CH_LABEL_H)))
+		view.addSubview_(label)
+		popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
+			((0, top - D.CH_LABEL_H - D.CH_POPUP_H), (D.CH_W, D.CH_POPUP_H)), False)
+		popup.addItemsWithTitles_([title for _v, title in options])
+		values = [v for v, _t in options]
+		popup.selectItemAtIndex_(values.index(default) if default in values else 0)
+		view.addSubview_(popup)
+		popups.append((key, values, popup))
+	alert = NSAlert.alloc().init()
+	alert.setMessageText_(message)
+	alert.setInformativeText_(info)
+	if choices:
+		alert.setAccessoryView_(view)
+	alert.addButtonWithTitle_(ok_title)
+	alert.addButtonWithTitle_(cancel_title)
+	if alert.runModal() != NSAlertFirstButtonReturn:
+		return None
+	return dict((key, values[popup.indexOfSelectedItem()]) for key, values, popup in popups)

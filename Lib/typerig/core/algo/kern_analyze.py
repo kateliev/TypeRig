@@ -35,7 +35,9 @@
 #   ANALYSES, options(data), analyze(kset, key, opts, context) -> result
 #   count(key, result), report_tree(key, result) -> node tree, tree_text(roots)
 #   to_data(result) -> JSON-ready (tuples -> lists, keys -> str)
-#   Node: {'title', 'detail', 'kind', 'link', 'children'}; link: {'query', 'pairs'}
+#   Node: {'title', 'detail', 'kind', 'link', 'children', 'fix'}; link: {'query', 'pairs'}
+#   fix_items(nodes), fix_summary(items), plan_fixes(kset, items, choices) -> (ChangeSet, log)
+#   (the analyses never write; a fix is a separate, explicit step that only plans changes)
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2026       (http://www.kateliev.com)
 # (C) TypeRig                      (http://www.typerig.com)
@@ -49,7 +51,7 @@ from __future__ import absolute_import, print_function, division
 
 from typerig.core.algo.kern_model import LEFT, RIGHT, is_group, group_name, pair_kind
 
-__version__ = '0.3.0'
+__version__ = '0.4.0'
 
 # - Init -------------------------------------------------------------------
 ANALYSES = (	# (key, title)
@@ -413,6 +415,7 @@ def divergence(kset, opts=None):
 #   'unicodes' {glyph: code}          'scripts'  {glyph: script} (kern_script.glyph_scripts)
 #   'rules'    [rule sets] (kern_rules.rule_set dicts, the font lib)
 # A missing entry makes the tool report less, never fail.
+_NEUTRAL = ('Zyyy', 'Zinh', 'Zzzz')		# kern_script.NEUTRAL (kern with every script)
 MIRRORS = (('(', ')'), ('[', ']'), ('{', '}'), ('«', '»'), ('‹', '›'), ('‘', '’'),
            ('“', '”'), ('/', '\\'))
 SMALLCAP_SUFFIXES = ('sc', 'c2sc')
@@ -453,11 +456,13 @@ def _rule_side_text(side):
 def rule_lint(kset, opts=None, context=None):
 	'''Rule sets of the font lib in check mode: where a destination pair renders more than `tolerance`
 	away from what its rule gives. {'findings': [(set, line, master, dst pair, actual, expected, rule text)],
-	'no_source': [(set, line, master, source pair)], 'errors': [(set, line, message)], 'sets': n}.'''
+	'no_source': [(set, line, master, source pair)], 'errors': [(set, line, message)], 'sets': n,
+	'class': {set: class mode}}.'''
 	from typerig.core.algo import kern_rules as kr
 	opts, ctx = options(opts), _ctx(context)
 	glyph_set = set(ctx['glyphs']) if ctx['glyphs'] else None
-	out = {'findings': [], 'no_source': [], 'errors': [], 'sets': len(ctx['rules'])}
+	out = {'findings': [], 'no_source': [], 'errors': [], 'sets': len(ctx['rules']),
+	       'class': dict((rs.get('name', ''), bool(rs.get('class', True))) for rs in ctx['rules'])}
 	for rs in ctx['rules']:
 		name = rs.get('name', '')
 		rules, errors = kr.parse_rules(rs.get('text', ''), ctx['char_map'], glyph_set)
@@ -516,8 +521,9 @@ def consistency(kset, opts=None, context=None):
 	'case'      [(master, small cap key pair, value, capital key pair, capital value, expected, glyph pairs, sample
 	            glyph pair)], one per region (the pairs that decide the values); expected = the master's
 	            small cap / capital ratio (median of the regions, weighted by the capital value) x the capital
-	            value; 'ratios' {master: ratio or None}
-	'case_missing' [(master, capital key pair, value, glyph pairs, sample)]: capitals kern, small caps not at all
+	            value; the last item is the region's small cap glyph pairs; 'ratios' {master: ratio or None}
+	'case_missing' [(master, capital key pair, value, glyph pairs, [small cap glyph pairs])]: capitals kern,
+	            small caps not at all
 	'case_own'  {master: n}: small cap pairs kerned where the capitals are not (not judged; information)
 	'lookalike' [(master, script, (L1, L2), latin value, (S1, S2), value)] Latin vs Cyrillic / Greek lookalikes
 	'tabular'   [(master, pair, value)] stored nonzero pairs that reach a tabular figure (.tf, .tosf)'''
@@ -541,11 +547,17 @@ def consistency(kset, opts=None, context=None):
 	# small caps vs capitals: one finding per (small cap key, capital key) region, not per glyph pair
 	smallcaps = _smallcaps(ctx)
 	sc = sorted(smallcaps)
+	scripts = ctx['scripts']
+	def one_script(a, b):		# pairs of two scripts never apply: not compared, never fixed
+		sa, sb = scripts.get(a), scripts.get(b)
+		return not (sa and sb and sa != sb and sa not in _NEUTRAL and sb not in _NEUTRAL)
 	for master in masters:
 		regions, missing, unpaired = {}, {}, set()
 		for s1 in sc:
 			for s2 in sc:
 				b1, b2 = smallcaps[s1], smallcaps[s2]
+				if not (one_script(s1, s2) and one_script(b1, b2)):
+					continue
 				vs, key_s, _l = kset.resolve(master, s1, s2)
 				vb, key_b, _l = kset.resolve(master, b1, b2)
 				if not (vs or vb):
@@ -563,13 +575,13 @@ def consistency(kset, opts=None, context=None):
 		out['ratios'][master] = ratio
 		out['case_own'][master] = len(unpaired)
 		for key_b, (vb, cells) in sorted(missing.items()):
-			out['case_missing'].append((master, key_b, vb, len(cells), cells[0]))
+			out['case_missing'].append((master, key_b, vb, len(cells), cells))
 		if ratio is None:
 			continue
 		for (key_s, key_b), (vs, vb, cells) in sorted(regions.items()):
 			expected = int(round(vb * ratio))
 			if abs(vs - expected) > tol:
-				out['case'].append((master, key_s, vs, key_b, vb, expected, len(cells), cells[0]))
+				out['case'].append((master, key_s, vs, key_b, vb, expected, len(cells), cells))
 	out['case'].sort(key=lambda r: (-abs(r[2] - r[5]), -r[6], r[0]))		# largest differences first
 	# lookalikes across scripts
 	rows = []
@@ -593,6 +605,7 @@ def consistency(kset, opts=None, context=None):
 						out['lookalike'].append((master, script, latin, vl, pair, vs))
 	# tabular figures
 	tabular = set(g for g in ctx['glyphs'] if any(p in TABULAR_SUFFIXES for p in _suffix_parts(g)))
+	out['tabular_glyphs'] = sorted(tabular)
 	if tabular:
 		for master in masters:
 			for pair, value in sorted(kset.pairs[master].items()):
@@ -691,6 +704,178 @@ def count(key, result):
 	return len(result)
 
 
+# - Fixes -----------------------------------------------------------------------------
+# A finding that can be fixed carries a fix item on its report node; the
+# host collects the items of the selected nodes (fix_items), asks the user
+# the choices that fix_summary names, and plan_fixes turns them into one
+# ChangeSet (pending; nothing is written here). Items:
+#   {'type': 'remove', 'pairs': [(master, pair)]}
+#   {'type': 'set', 'master', 'pair', 'value', 'class'}        rule lint: as Rules writes it
+#   {'type': 'cells', 'master', 'family', 'variants': {choice: [([glyph pairs], value)]}}
+#                                                               glyph pairs that must render value
+#   {'type': 'tabular', 'master', 'pair', 'glyphs'}             tabular figures: no kerning
+# Choices (FIX_CHOICES): mirror = left | right | median, case = ratio | capital,
+# where = exact (only the finding's glyph pairs; exceptions where a kerning
+# pair reaches more) | pair (at the kerning pair that decides it: its whole
+# group changes).
+FIX_CHOICES = {
+	'mirror': (('left', 'Left side wins: ( X is copied to X )'), ('right', 'Right side wins: X ) is copied to ( X'),
+	           ('median', 'Median: both get the middle value')),
+	'case':   (('ratio', 'Ratio x capitals (the master\'s small cap ratio)'), ('capital', 'Same as the capitals')),
+	'where':  (('exact', 'Only the glyph pairs of the finding (exceptions where needed)'),
+	           ('pair', 'At the kerning pair that decides it (its whole group changes)')),
+}
+FIX_DEFAULTS = {'mirror': 'left', 'case': 'ratio', 'where': 'exact'}
+FIX_TITLES = {'remove': 'Remove pairs', 'set': 'Rule values', 'mirror': 'Mirrored punctuation',
+              'case': 'Small caps', 'lookalike': 'Lookalikes (Latin value)', 'tabular': 'Tabular figures (no kerning)'}
+
+
+def fix_remove(pairs):
+	return {'type': 'remove', 'pairs': [(m, tuple(p)) for m, p in pairs]}
+
+
+def fix_cells(master, variants, family):
+	return {'type': 'cells', 'master': master, 'family': family,
+	        'variants': dict((k, [([tuple(c) for c in cells], int(v)) for cells, v in items]) for k, items in variants.items())}
+
+
+def fix_items(nodes):
+	'''The fix items of report nodes: a node with a fix gives it, a node without one gives its children's
+	(selecting a section or an analysis fixes all of it). No item twice.'''
+	out, seen = [], set()
+	def collect(item):
+		if item.get('fix') is not None:
+			if id(item['fix']) not in seen:
+				seen.add(id(item['fix']))
+				out.append(item['fix'])
+			return
+		for sub in item.get('children') or ():
+			collect(sub)
+	for item in nodes or ():
+		collect(item)
+	return out
+
+
+def fix_family(item):
+	return item['family'] if item['type'] == 'cells' else item['type']
+
+
+def fix_summary(items):
+	'''{'counts': {family: n}, 'choices': [choice keys to ask]} for a list of fix items.'''
+	counts = {}
+	for item in items:
+		counts[fix_family(item)] = counts.get(fix_family(item), 0) + 1
+	choices = [key for key in ('mirror', 'case') if key in counts]
+	if any(item['type'] == 'cells' for item in items):
+		choices.append('where')
+	return {'counts': counts, 'choices': choices}
+
+
+def fix_choices(data=None):
+	out = dict(FIX_DEFAULTS)
+	for key, value in (data or {}).items():
+		if key in FIX_CHOICES and value in dict(FIX_CHOICES[key]):
+			out[key] = value
+	return out
+
+
+def _write_cells(work, master, cells, value, where, cs):
+	'''Make glyph pairs render value in work (and record it in cs). exact: the most general pair (group +
+	group, glyph + group, group + glyph) whose glyph pairs are all in cells, else a glyph + glyph exception,
+	so no other glyph pair changes; pair: the deciding
+	pair (or the group pair when nothing decides) is set. Returns the pairs that a lock refused.'''
+	table = work.table(master)
+	target = set(cells)
+	plan = {}
+	for a, b in cells:
+		if kset_value(work, master, a, b) == value:
+			continue
+		if where == 'pair':
+			key = work.resolve(master, a, b, table)[1] or (work.side_key(a, LEFT), work.side_key(b, RIGHT))
+			plan[key] = value
+		else:		# the most general level whose glyph pairs are all in target: CC, GC, CG (GG below)
+			la, rb = work.side_key(a, LEFT), work.side_key(b, RIGHT)
+			for key in ((la, rb), (a, rb), (la, b)):
+				if key in plan:
+					break
+				if key != (a, b) and set(_cells(work, key)) <= target:
+					plan[key] = value
+					break
+	refused = []
+	for key, v in plan.items():
+		if cs.set(master, key, v, work.locks):
+			table[key] = v
+		else:
+			refused.append(key)
+	for a, b in cells:		# whatever a more specific pair still decides: an exception
+		if kset_value(work, master, a, b) != value and (a, b) not in refused:
+			if cs.set(master, (a, b), value, work.locks):
+				table[(a, b)] = value
+			else:
+				refused.append((a, b))
+	return refused
+
+
+def kset_value(kset, master, a, b):
+	return kset.resolve(master, a, b)[0]
+
+
+def plan_fixes(kset, items, choices=None):
+	'''(ChangeSet, log lines) for fix items on kset (not changed). Locked pairs are refused and logged.'''
+	from typerig.core.algo.kern_model import ChangeSet
+	choices = fix_choices(choices)
+	work = kset.copy()
+	cs = ChangeSet('analyze fixes')
+	done, refused = {}, []
+	for item in items:
+		family = fix_family(item)
+		if item['type'] == 'remove':
+			for master, pair in item['pairs']:
+				if pair in work.pairs.get(master, {}):
+					if cs.remove(master, pair, work.locks):
+						del work.pairs[master][pair]
+					else:
+						refused.append((master, pair))
+		elif item['type'] == 'set':
+			master, (da, db) = item['master'], item['pair']
+			a = da if (is_group(da) or not item.get('class', True)) else work.side_key(da, LEFT)
+			b = db if (is_group(db) or not item.get('class', True)) else work.side_key(db, RIGHT)
+			if cs.set(master, (a, b), item['value'], work.locks):
+				work.table(master)[(a, b)] = item['value']
+			else:
+				refused.append((master, (a, b)))
+			# a more specific pair may still decide the rule's glyph pair: make it render the value
+			ga = work.leader(group_name(da), LEFT) if is_group(da) else da
+			gb = work.leader(group_name(db), RIGHT) if is_group(db) else db
+			if ga and gb:
+				refused += [(master, p) for p in _write_cells(work, master, [(ga, gb)], item['value'], 'exact', cs)]
+		elif item['type'] == 'tabular':
+			master, pair = item['master'], item['pair']
+			tabular = set(item.get('glyphs') or ())
+			cells = _cells(work, pair)
+			if cells and all(a in tabular or b in tabular for a, b in cells):
+				if cs.remove(master, pair, work.locks):
+					del work.pairs[master][pair]
+				else:
+					refused.append((master, pair))
+			else:		# the pair also kerns other glyphs: zero exceptions for the tabular ones
+				zero = [(a, b) for a, b in cells if a in tabular or b in tabular]
+				refused += [(master, p) for p in _write_cells(work, master, zero, 0, 'exact', cs)]
+		else:
+			variants = item['variants']
+			choice = choices.get(family) if family in ('mirror', 'case') else None
+			for cells, value in variants.get(choice, variants.get(None, [])):
+				refused += [(item['master'], p) for p in _write_cells(work, item['master'], cells, value,
+				                                                       choices['where'], cs)]
+		done[family] = done.get(family, 0) + 1
+	log = ['%s: %d' % (FIX_TITLES.get(f, f), n) for f, n in sorted(done.items())]
+	log.append('%d pair(s) to set, %d to remove' % (cs.count('set'), cs.count('remove')))
+	if refused:
+		log.append('Locked, not changed: %s' % ', '.join('%s %s (%s)' % (p[0], p[1], m) for m, p in refused[:20]))
+	cs.log += log
+	return cs, log
+
+
 def _pct(x):
 	return '—' if x is None else '%d%%' % round(100 * x)
 
@@ -700,13 +885,15 @@ def _pct(x):
 #   {'title', 'detail', 'kind', 'link', 'children'}
 # title: what was found; detail: where / how much (masters, counts);
 # kind: KIND_WARN (a finding), KIND_OK (looked, nothing found), KIND_INFO
-# (numbers, no judgement); link: None or {'query', 'pairs'} (see link()).
+# (numbers, no judgement); link: None or {'query', 'pairs'} (see link());
+# fix: None or a fix item (see Fixes) that plan_fixes() turns into changes.
 KIND_WARN, KIND_OK, KIND_INFO = 'warn', 'ok', 'info'
 TREE_LIMIT = 500		# children of one node at most; the rest become one "… n more" node
 
 
-def node(title, detail='', kind=KIND_INFO, link=None, children=None):
-	return {'title': str(title), 'detail': str(detail), 'kind': kind, 'link': link, 'children': list(children or [])}
+def node(title, detail='', kind=KIND_INFO, link=None, children=None, fix=None):
+	return {'title': str(title), 'detail': str(detail), 'kind': kind, 'link': link, 'children': list(children or []),
+	        'fix': fix}
 
 
 def _capped(children):
@@ -807,7 +994,8 @@ def _tree_shadowed(result):
 	for master, pair, value, taken, total, state, takers in result:
 		by_state[state].append(node('%s %s = %d' % (pair[0], pair[1], value),
 		                            '%d of %d glyph pairs taken by %d pair(s)  (%s)' % (taken, total, len(takers), master),
-		                            KIND_WARN, link([pair] + takers), _pairs_children(takers, 'takes over')))
+		                            KIND_WARN, link([pair] + takers), _pairs_children(takers, 'takes over'),
+		                            fix_remove([(master, pair)]) if state == 'shadowed' else None))
 	return [_section('Shadowed (never applies)', by_state['shadowed']),
 	        _section('Fragile (seldom applies)', by_state['fragile'])]
 
@@ -836,7 +1024,9 @@ def _tree_rules(result):
 	by_set = {}
 	for name, line, master, pair, actual, expected, text in result['findings']:
 		by_set.setdefault(name, []).append(node('%s %s' % pair, '%d, rule gives %d  (line %d: %s; %s)'
-		                                        % (actual, expected, line, text, master), KIND_WARN, link([pair])))
+		                                        % (actual, expected, line, text, master), KIND_WARN, link([pair]),
+		                                        fix={'type': 'set', 'master': master, 'pair': pair, 'value': expected,
+		                                             'class': result.get('class', {}).get(name, True)}))
 	out = [_section('Set "%s"' % name, items) for name, items in sorted(by_set.items())]
 	if not out:
 		out.append(node('Every destination pair agrees with its rule', '%d set(s)' % result['sets'], KIND_OK))
@@ -849,18 +1039,27 @@ def _tree_rules(result):
 
 
 def _tree_consistency(result):
-	mirror = [node('%s %s  vs  %s %s' % (p1 + p2), '%d vs %d  (%s)' % (v1, v2, master), KIND_WARN, link([p1, p2]))
+	mirror = [node('%s %s  vs  %s %s' % (p1 + p2), '%d vs %d  (%s)' % (v1, v2, master), KIND_WARN, link([p1, p2]),
+	               fix=fix_cells(master, {'left': [([p2], v1)], 'right': [([p1], v2)],
+	                                      'median': [([p1, p2], int(round((v1 + v2) / 2.)))]}, 'mirror'))
 	          for master, p1, v1, p2, v2 in result['mirror']]
 	case = [node('%s %s' % key_s, '%d, expected %d (capitals %s %s = %d); %d glyph pair(s), e.g. %s %s  (%s)'
-	             % (vs, expected, key_b[0], key_b[1], vb, n, sample[0], sample[1], master), KIND_WARN, link([key_s, key_b]))
-	        for master, key_s, vs, key_b, vb, expected, n, sample in result['case']]
+	             % (vs, expected, key_b[0], key_b[1], vb, n, cells[0][0], cells[0][1], master), KIND_WARN, link([key_s, key_b]),
+	             fix=fix_cells(master, {'ratio': [(cells, expected)], 'capital': [(cells, vb)]}, 'case'))
+	        for master, key_s, vs, key_b, vb, expected, n, cells in result['case']]
+	def ratio_value(master, vb):
+		ratio = result['ratios'].get(master)
+		return int(round(vb * (1. if ratio is None else ratio)))
 	missing = [node('%s %s' % key_b, 'capitals %d, small caps not kerned; %d glyph pair(s), e.g. %s %s  (%s)'
-	                % (vb, n, sample[0], sample[1], master), KIND_WARN, link([key_b, sample]))
-	           for master, key_b, vb, n, sample in result['case_missing']]
+	                % (vb, n, cells[0][0], cells[0][1], master), KIND_WARN, link([key_b, cells[0]]),
+	                fix=fix_cells(master, {'ratio': [(cells, ratio_value(master, vb))], 'capital': [(cells, vb)]}, 'case'))
+	           for master, key_b, vb, n, cells in result['case_missing']]
 	ratios = ', '.join('%s %s' % (m, '—' if r is None else '%.2f' % r) for m, r in result['ratios'].items())
 	look = [node('%s %s  vs  %s %s' % (latin + pair), '%d vs %d  (%s, %s)' % (vl, vs, script, master), KIND_WARN,
-	             link([latin, pair])) for master, script, latin, vl, pair, vs in result['lookalike']]
-	tab = [node('%s %s' % pair, '%d  (%s)' % (value, master), KIND_WARN, link([pair]))
+	             link([latin, pair]), fix=fix_cells(master, {None: [([pair], vl)]}, 'lookalike'))
+	        for master, script, latin, vl, pair, vs in result['lookalike']]
+	tab = [node('%s %s' % pair, '%d  (%s)' % (value, master), KIND_WARN, link([pair]),
+	            fix={'type': 'tabular', 'master': master, 'pair': pair, 'glyphs': result.get('tabular_glyphs', [])})
 	       for master, pair, value in result['tabular']]
 	case_node = _section('Small caps vs capitals', case)
 	own = sum(result['case_own'].values())
@@ -876,12 +1075,14 @@ def _tree_scope(result):
 	def names(codes):
 		return '/'.join(SCRIPT_NAMES.get(c, c) for c in codes)
 	never = [node('%s %s' % pair, '%d glyph pairs, %s | %s  (%s)' % (total, names(ls), names(rs), _values_text(values)),
-	              KIND_WARN, link([pair])) for pair, n, total, ls, rs, values in result['cross'] if n == total]
+	              KIND_WARN, link([pair]), fix=fix_remove([(m, pair) for m in values]))
+	         for pair, n, total, ls, rs, values in result['cross'] if n == total]
 	partly = [node('%s %s' % pair, '%d of %d glyph pairs across scripts (%s | %s)' % (n, total, names(ls), names(rs)),
 	               KIND_INFO, link([pair])) for pair, n, total, ls, rs, _values in result['cross'] if n < total]
 	mixed = [node('@%s  (%s)' % (name, side), ', '.join('%s %d' % (SCRIPT_NAMES.get(s, s), n) for s, n in sorted(counts.items())),
 	              KIND_INFO, {'query': 'in:@%s' % name, 'pairs': []}) for side, name, counts in result['mixed']]
-	sc_lower = [node('%s %s' % pair, '%d glyph pairs  (%s)' % (cells, _values_text(values)), KIND_WARN, link([pair]))
+	sc_lower = [node('%s %s' % pair, '%d glyph pairs  (%s)' % (cells, _values_text(values)), KIND_WARN, link([pair]),
+	                 fix=fix_remove([(m, pair) for m in values]))
 	            for pair, cells, total, values in result['sc_lower'] if cells == total]
 	sc_mixed = [node('%s %s' % pair, '%d of %d glyph pairs' % (cells, total), KIND_INFO, link([pair]))
 	            for pair, cells, total, _values in result['sc_lower'] if cells < total]

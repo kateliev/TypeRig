@@ -114,6 +114,9 @@ ANALYZE = SimpleNamespace(
 	ROWS     = 6,       # option rows above the bar (ten numbers, two per row; symmetric); Masters is in the bar
 	LABEL_W  = 76,      # option captions on the number rows ('Extreme:', 'Pressure %:')
 	TEXT_W   = 240,     # 'Symmetric:' characters field
+	ACTION_W = 44,      # report menu (expand / collapse / copy) next to Masters
+	FIX_BADGE = '  \u2022 fix',  # mark after the title of a finding that can be fixed
+	FIX_WARN = 200,     # Fix: more new glyph + glyph exceptions than this -> a second dialog says so first
 )
 STRINGS = SimpleNamespace(
 	COMBO_W  = 260,     # pattern combo box

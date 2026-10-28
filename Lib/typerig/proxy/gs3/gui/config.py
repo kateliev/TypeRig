@@ -403,6 +403,11 @@ DIALOG = SimpleNamespace(
 	LP_H       = 520,
 	LP_MIN_W   = 260,
 	LP_MIN_H   = 320,
+	# ask_choices: modal alert with popups (one per choice)
+	CH_W       = 400,    # accessory width (popups take it)
+	CH_LABEL_H = 17,     # caption above each popup
+	CH_POPUP_H = 26,     # popup height
+	CH_GAP     = 10,     # space between two choices
 	# TRMasterValuesDialog (its own slightly roomier spacing)
 	MV_PAD     = 10,
 	MV_LBL_H   = 36,
