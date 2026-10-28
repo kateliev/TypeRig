@@ -210,8 +210,8 @@ class CoreFontKernHost(object):
 	def open_tab(self, text):
 		self.tabs.append(text)
 
-	def show_pair(self, left, right):
-		self.tabs.append('/%s/%s' % (left, right))
+	def show_pairs(self, pairs):
+		self.tabs.append('\n'.join('/%s/%s' % p for p in pairs))
 
 	def redraw(self):
 		pass

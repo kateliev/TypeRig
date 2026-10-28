@@ -939,17 +939,23 @@ class KernEngine(object):
 		self.set_query('%s|%s; ?%s|%s' % (pair + pair))
 		return pair
 
-	def show_pair(self, pair):
-		'''The opposite of show_current_pair: the glyph pair standing for a
-		stored pair (groups -> key glyphs) goes into the active edit tab,
-		the text cursor between the two. Returns the glyph pair.'''
-		if not pair:
-			self._say('No pair: select a row in the Pairs tab.')
-			return None
-		glyph_pair = kst.table_pairs(self.view_kset(), None, [tuple(pair)])[0]
-		self.host.show_pair(*glyph_pair)
-		self._say('Shown in the edit tab: %s %s' % glyph_pair)
-		return glyph_pair
+	def show_pairs(self, pairs):
+		'''The opposite of show_current_pair: the glyph pairs standing for
+		stored pairs (groups -> key glyphs, in the given order, no duplicates)
+		go into the active edit tab, one per line, the text cursor between
+		the first two. Returns the glyph pairs.'''
+		pairs = [tuple(p) for p in (pairs or ())]
+		if not pairs:
+			self._say('No pair: select rows in the Pairs tab.')
+			return []
+		glyph_pairs = []
+		for pair in pairs:		# table_pairs sorts: one at a time keeps the row order
+			glyph_pair = kst.table_pairs(self.view_kset(), None, [pair])[0]
+			if glyph_pair not in glyph_pairs:
+				glyph_pairs.append(glyph_pair)
+		self.host.show_pairs(glyph_pairs)
+		self._say('Shown in the edit tab: %s' % ', '.join('%s %s' % p for p in glyph_pairs))
+		return glyph_pairs
 
 	# - Groups ----------------------------------------------------------------------------
 	def set_group_side(self, side):

@@ -320,13 +320,14 @@ class GlyphsKernHost(object):
 		if font is not None and text:
 			font.newTab(text)
 
-	def show_pair(self, left, right):
-		'''The pair as the text of the active edit tab (a new tab when none),
-		the text cursor between the two glyphs.'''
+	def show_pairs(self, pairs):
+		'''The (left, right) glyph pairs as the text of the active edit tab
+		(a new tab when none), one per line, the text cursor between the
+		first two glyphs.'''
 		font = self._font()
-		if font is None:
+		if font is None or not pairs:
 			return
-		text = '/%s/%s' % (left, right)
+		text = '\n'.join('/%s/%s' % p for p in pairs)
 		tab = getattr(font, 'currentTab', None)
 		if tab is None:
 			tab = font.newTab(text)
