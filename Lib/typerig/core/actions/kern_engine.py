@@ -939,6 +939,18 @@ class KernEngine(object):
 		self.set_query('%s|%s; ?%s|%s' % (pair + pair))
 		return pair
 
+	def show_pair(self, pair):
+		'''The opposite of show_current_pair: the glyph pair standing for a
+		stored pair (groups -> key glyphs) goes into the active edit tab,
+		the text cursor between the two. Returns the glyph pair.'''
+		if not pair:
+			self._say('No pair: select a row in the Pairs tab.')
+			return None
+		glyph_pair = kst.table_pairs(self.view_kset(), None, [tuple(pair)])[0]
+		self.host.show_pair(*glyph_pair)
+		self._say('Shown in the edit tab: %s %s' % glyph_pair)
+		return glyph_pair
+
 	# - Groups ----------------------------------------------------------------------------
 	def set_group_side(self, side):
 		if side in km.SIDES:

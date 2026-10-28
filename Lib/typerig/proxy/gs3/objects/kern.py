@@ -320,6 +320,24 @@ class GlyphsKernHost(object):
 		if font is not None and text:
 			font.newTab(text)
 
+	def show_pair(self, left, right):
+		'''The pair as the text of the active edit tab (a new tab when none),
+		the text cursor between the two glyphs.'''
+		font = self._font()
+		if font is None:
+			return
+		text = '/%s/%s' % (left, right)
+		tab = getattr(font, 'currentTab', None)
+		if tab is None:
+			tab = font.newTab(text)
+		else:
+			tab.text = text
+		try:
+			tab.textCursor = 1
+			tab.textRange = 0
+		except Exception:
+			pass
+
 	def redraw(self):
 		try:
 			from GlyphsApp import Glyphs
