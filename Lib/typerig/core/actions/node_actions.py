@@ -144,7 +144,9 @@ def _start_node_in_range(contour, node_a, node_b):
 	node_a to node_b (exclusive of both endpoints). Returns True when the
 	start node would be removed by _remove_inclusive_range_forward(node_a.next, node_b).
 	'''
-	start_node = contour.nodes[contour.start_index]
+	# - contour.data, not contour.nodes: on a proxy contour .nodes rebuilds the
+	#   wrappers, orphaning node_a / node_b (ValueError on their .next)
+	start_node = contour.data[contour.start_index]
 	cursor = node_a.next
 	guard = 10000
 
@@ -284,7 +286,7 @@ def _get_corner_rebuild(on_nodes):
 	#   Removing or restructuring the start node can crash the host app.
 	contour = first_on.contour
 	if contour is not None:
-		start_node = contour.nodes[contour.start_index]
+		start_node = contour.data[contour.start_index]	# - .nodes would orphan the selection on proxies
 		span = _corner_span_nodes(first_on, last_on)
 		if span is not None and start_node in span:
 			print('WARNING:\tRebuild corner refused: contour start node is inside the selection! Move the start point first.')
@@ -596,7 +598,10 @@ class NodeActions(object):
 		Returns:
 			bool: True if the corner was rebuilt.
 		'''
-		selected_nodes = [contour.nodes[nid] for nid in node_indices]
+		# - Read .nodes once: on a proxy contour every access rebuilds the
+		#   wrappers, so per-index reads would leave all but the last orphaned
+		nodes = contour.nodes
+		selected_nodes = [nodes[nid] for nid in node_indices]
 		on_nodes = [n for n in selected_nodes if n.is_on]
 
 		if len(on_nodes) < 2:
@@ -1025,9 +1030,15 @@ class NodeActions(object):
 			return None
 
 		# Try the perpendicular butt cut first (handles italic caps).
-		result = NodeActions.cap_butt(contour, node_a.idx, node_b.idx, side='auto')
+		idx_a, idx_b = node_a.idx, node_b.idx
+		result = NodeActions.cap_butt(contour, idx_a, idx_b, side='auto')
 		if result is not None:
 			return result
+
+		# - cap_butt re-read contour.nodes, which on a proxy contour rebuilds the
+		#   wrappers and orphans node_a / node_b. A refusal leaves the contour as
+		#   it was, so the indices still hold
+		node_a, node_b = contour.data[idx_a], contour.data[idx_b]
 
 		# Fallback: cap is already perpendicular to the stem (or the geometry is
 		# degenerate). Just remove the interior and keep A, B as the flat-cap corners.
