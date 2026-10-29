@@ -17,7 +17,21 @@ from typerig.core.objects.cubicbezier import CubicBezier
 from typerig.core.objects.line import Line
 
 # - Init ------------------------------------------------------------------------
-__version__ = '1.0'
+__version__ = '1.1'
+
+# - Helpers ---------------------------------------------------------------------
+def _segment_starts(contour, node_indices):
+	'''On-curve nodes at node_indices, each the start of the segment it acts
+	on. Last in contour order first, so edits to one segment leave the ones
+	still to come where they were.
+
+	Which segments are picked is the caller's rule (npa: both ends selected,
+	or Alt: every selected node). Nodes are resolved in one read of
+	contour.nodes: on a proxy contour every read rebuilds the wrappers and
+	orphans references taken before it.
+	'''
+	nodes = contour.nodes
+	return [nodes[i] for i in sorted(set(node_indices), reverse=True) if nodes[i].is_on]
 
 # - Actions ---------------------------------------------------------------------
 class CurveActions(object):
@@ -30,36 +44,30 @@ class CurveActions(object):
 	# -- Segment conversion tools -----------------------------------------------
 	@staticmethod
 	def segment_convert_to_line(contour, node_indices):
-		'''Convert curve segments to line segments at the given on-curve
-		node indices. Removes the off-curve handles between consecutive
-		on-curve nodes.
+		'''Convert curve segments to line segments. Removes the off-curve
+		handles between each given on-curve node and the next one.
 
 		Arguments:
 			contour (Contour): The contour to operate on.
 			node_indices (list[int]): Indices of on-curve nodes whose
-				incoming segments will be converted to lines.
+				outgoing segments will be converted to lines.
 
 		Returns:
 			bool: True if at least one segment was converted.
 		'''
 		converted = False
 
-		for nid in sorted(node_indices, reverse=True):
-			node = contour.nodes[nid]
+		for node in _segment_starts(contour, node_indices):
+			next_on = node.next_on
 
-			if not node.is_on:
+			if next_on is None:
 				continue
 
-			prev_on = node.prev_on
-
-			if prev_on is None:
-				continue
-
-			# - Collect off-curve nodes between prev_on and node
+			# - Collect off-curve nodes between node and next_on
 			to_remove = []
-			cursor = prev_on.next
+			cursor = node.next
 
-			while cursor is not None and cursor is not node:
+			while cursor is not None and cursor is not next_on:
 				if not cursor.is_on:
 					to_remove.append(cursor)
 				cursor = cursor.next
@@ -73,29 +81,24 @@ class CurveActions(object):
 
 	@staticmethod
 	def segment_convert_to_curve(contour, node_indices):
-		'''Convert line segments to curve segments at the given on-curve
-		node indices. Inserts two off-curve handles between consecutive
-		on-curve nodes at 1/3 and 2/3 of the line.
+		'''Convert line segments to curve segments. Inserts two off-curve
+		handles at 1/3 and 2/3 of the line between each given on-curve node
+		and the next one.
 
 		Arguments:
 			contour (Contour): The contour to operate on.
 			node_indices (list[int]): Indices of on-curve nodes whose
-				incoming segments will be converted to curves.
+				outgoing segments will be converted to curves.
 
 		Returns:
 			bool: True if at least one segment was converted.
 		'''
 		converted = False
 
-		for nid in sorted(node_indices, reverse=True):
-			node = contour.nodes[nid]
+		for prev_on in _segment_starts(contour, node_indices):
+			node = prev_on.next_on
 
-			if not node.is_on:
-				continue
-
-			prev_on = node.prev_on
-
-			if prev_on is None:
+			if node is None:
 				continue
 
 			# - Check that segment is currently a line (no off-curves between)
@@ -138,8 +141,7 @@ class CurveActions(object):
 		Arguments:
 			contour (Contour): The contour to operate on.
 			node_indices (list[int]): Indices of on-curve nodes whose
-				outgoing segments will be optimized. Both endpoints of
-				a segment must be in the selection for it to be processed.
+				outgoing segments will be optimized.
 			method (str): Optimization method. One of:
 				'tunni' - Eduardo Tunni's proportional handle method.
 				'hobby' - John Hobby's mock-curvature smoothness.
@@ -153,32 +155,11 @@ class CurveActions(object):
 			bool: True if at least one segment was optimized.
 		'''
 		optimized = False
-		selected_set = set(node_indices)
 
-		for nid in node_indices:
-			node = contour.nodes[nid]
-
-			if not node.is_on:
-				continue
-
+		for node in _segment_starts(contour, node_indices):
 			segment = node.segment
 
 			if not isinstance(segment, CubicBezier):
-				continue
-
-			# - Check that the other endpoint is also selected
-			next_on = node.next_on
-
-			if next_on is None:
-				continue
-
-			# Use next_on.idx (atom index via self.parent.data) instead of
-			# contour.nodes.index(next_on): calling contour.nodes again rebuilds
-			# the proxy list as a fresh set of wrapper objects, making the old
-			# next_on reference unfindable (ValueError for proxy contours).
-			next_on_index = next_on.idx
-
-			if next_on_index not in selected_set:
 				continue
 
 			# - Get segment nodes for coordinate update

@@ -523,8 +523,10 @@ def npa_move(glyph, scope_layers, NodeActions, dx, dy, method, angle=0., slope=N
 # CurveActions lives in typerig/core/actions/curve_actions.py.
 # ===================================================================
 
-def npa_segment_convert(glyph, scope_layers, NodeActions, CurveActions, to_curve=True):
-    """Convert selected segments between line and curve.
+def npa_segment_convert(glyph, scope_layers, NodeActions, CurveActions, to_curve=True,
+                        select_one_node=False):
+    """Convert selected segments between line and curve (same selection
+    rule as npa_insert).
 
     Args:
         to_curve (bool): True converts line→curve; False converts curve→line.
@@ -532,7 +534,7 @@ def npa_segment_convert(glyph, scope_layers, NodeActions, CurveActions, to_curve
     for lyr in _iter_scope(glyph, scope_layers):
         for s in lyr.shapes:
             for c in s.contours:
-                idx = _selected_indices(c)
+                idx = _selected_segment_starts(c, select_one_node)
                 if idx:
                     if to_curve:
                         CurveActions.segment_convert_to_curve(c, idx)
@@ -541,7 +543,8 @@ def npa_segment_convert(glyph, scope_layers, NodeActions, CurveActions, to_curve
 
 
 def npa_curve_optimize(glyph, scope_layers, NodeActions, CurveActions,
-                       method='tunni', curvature=(1., 1.), proportion=(0.3, 0.3)):
+                       method='tunni', curvature=(1., 1.), proportion=(0.3, 0.3),
+                       select_one_node=False):
     """Optimize selected curve segments.
 
     Args:
@@ -549,22 +552,22 @@ def npa_curve_optimize(glyph, scope_layers, NodeActions, CurveActions,
         curvature (tuple): (alpha, beta) for Hobby method.
         proportion (tuple): (p0_ratio, p1_ratio) for proportional method.
 
-    Note:
-        Both endpoints of a segment must be selected for that segment to be
-        processed (CurveActions.curve_optimize enforces this internally).
+    Same selection rule as npa_insert: both ends of a segment selected,
+    or with select_one_node (Alt) the outgoing segment of every selected node.
     """
     for lyr in _iter_scope(glyph, scope_layers):
         for s in lyr.shapes:
             for c in s.contours:
-                idx = _selected_indices(c)
+                idx = _selected_segment_starts(c, select_one_node)
                 if idx:
                     CurveActions.curve_optimize(c, idx, method=method,
                                                 curvature=curvature,
                                                 proportion=proportion)
 
 
-def npa_hobby_copy(glyph, scope_layers, NodeActions, CurveActions):
-    """Copy Hobby curvature from the first selected curve segment on each scope layer.
+def npa_hobby_copy(glyph, scope_layers, NodeActions, CurveActions, select_one_node=False):
+    """Copy Hobby curvature from the first selected curve segment on each scope layer
+    (same selection rule as npa_insert).
 
     Stores the result in the module-level _hobby_bank dict keyed by layer name.
     Returns the bank so the caller can inspect it (e.g. to toggle a button state).
@@ -582,7 +585,7 @@ def npa_hobby_copy(glyph, scope_layers, NodeActions, CurveActions):
             for c in s.contours:
                 if found:
                     break
-                for i in _selected_indices(c):
+                for i in _selected_segment_starts(c, select_one_node):
                     cv = CurveActions.hobby_curvature_get(c, i)
                     if cv is not None:
                         _hobby_bank[name] = cv
@@ -591,8 +594,10 @@ def npa_hobby_copy(glyph, scope_layers, NodeActions, CurveActions):
     return _hobby_bank
 
 
-def npa_hobby_paste(glyph, scope_layers, NodeActions, CurveActions, swap=False):
-    """Apply stored Hobby curvature to all selected curve segments across scope layers.
+def npa_hobby_paste(glyph, scope_layers, NodeActions, CurveActions, swap=False,
+                    select_one_node=False):
+    """Apply stored Hobby curvature to all selected curve segments across scope layers
+    (same selection rule as npa_insert).
 
     Uses the curvature stored per layer by the most recent npa_hobby_copy call.
     If a layer has no stored value, it is skipped.
@@ -611,7 +616,7 @@ def npa_hobby_paste(glyph, scope_layers, NodeActions, CurveActions, swap=False):
             continue
         for s in lyr.shapes:
             for c in s.contours:
-                for i in _selected_indices(c):
+                for i in _selected_segment_starts(c, select_one_node):
                     CurveActions.hobby_curvature_apply(c, i, cv)
 
 
