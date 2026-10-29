@@ -1300,7 +1300,9 @@ class NodeActions(object):
 				If False, only the on-curve coordinate moves ("dumb shift").
 			keep_relations (bool): If True, treat selection as a rigid group: compute
 				one delta from group anchor to target and shift every node uniformly,
-				preserving relative offsets between selected nodes.
+				preserving relative offsets between selected nodes. With a target the
+				anchor is the bounding-box side the mode names (L / R / T / B, centre
+				for C / E and the rest); without one it is the selection's mean.
 			lerp_shift (bool): If True, use Interpolated Nudge (Node.lerp_shift) instead
 				of direct relocation. Mutually exclusive with intercept and extrapolate.
 			intercept (bool): If True, for vertical modes (T/B/E) project each node's
@@ -1401,9 +1403,18 @@ class NodeActions(object):
 					return False  # keep_relations not meaningful for projection modes
 				ax, ay = probe_target.x, probe_target.y
 
-			# Group anchor: mean of selection (matches container.alignTo semantics).
-			gx = sum(n.x for n in nodes) / len(nodes)
-			gy = sum(n.y for n in nodes) / len(nodes)
+			if ext_target is not None:
+				# - Locked to a target: the side of the selection's bounding box
+				#   the mode names goes onto it (L left, R right, T top, B bottom,
+				#   C / E centre), so the group keeps its proportions
+				xs = [n.x for n in nodes]
+				ys = [n.y for n in nodes]
+				gx = {'L': min(xs), 'R': max(xs)}.get(mode, (min(xs) + max(xs)) / 2.)
+				gy = {'B': min(ys), 'T': max(ys)}.get(mode, (min(ys) + max(ys)) / 2.)
+			else:
+				# Group anchor: mean of selection (matches container.alignTo semantics).
+				gx = sum(n.x for n in nodes) / len(nodes)
+				gy = sum(n.y for n in nodes) / len(nodes)
 			dx = (ax - gx) if control[0] else 0.
 			dy = (ay - gy) if control[1] else 0.
 

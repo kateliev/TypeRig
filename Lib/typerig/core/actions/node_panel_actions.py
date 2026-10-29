@@ -422,7 +422,7 @@ def npa_target_set(glyph, scope_layers, NodeActions, safe_distance=0):
     """Store a per-layer align target from the current selection.
 
     For each scope layer: one selected node -> that node's coordinates on
-    the layer; several -> the centroid of the layer's selection. So the
+    the layer; several -> the centre of the selection's bounding box. So the
     target follows the node across masters (FL popup-node-align target_set).
     Optional safe_distance is added to both X and Y (pull back from target
     on each axis). Returns True if any layer got a target.
@@ -440,8 +440,10 @@ def npa_target_set(glyph, scope_layers, NodeActions, safe_distance=0):
         if len(sel) == 1:
             tx, ty = sel[0].x, sel[0].y
         else:
-            tx = sum(n.x for n in sel) / len(sel)
-            ty = sum(n.y for n in sel) / len(sel)
+            xs = [n.x for n in sel]
+            ys = [n.y for n in sel]
+            tx = (min(xs) + max(xs)) / 2.
+            ty = (min(ys) + max(ys)) / 2.
         _align_targets[name] = Point(tx + safe_distance, ty + safe_distance)
     return bool(_align_targets)
 
