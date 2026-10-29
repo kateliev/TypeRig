@@ -408,6 +408,7 @@ DIALOG = SimpleNamespace(
 	CH_LABEL_H = 17,     # caption above each popup
 	CH_POPUP_H = 26,     # popup height
 	CH_GAP     = 10,     # space between two choices
+	CH_FIELD_W = 90,     # ask_values: number field width (caption takes the rest)
 	# TRMasterValuesDialog (its own slightly roomier spacing)
 	MV_PAD     = 10,
 	MV_LBL_H   = 36,

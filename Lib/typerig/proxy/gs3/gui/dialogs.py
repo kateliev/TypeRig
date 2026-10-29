@@ -5,6 +5,8 @@
 # ask_choices(): modal alert with one popup per choice (a deliberate,
 # confirmed choice before an operation, e.g. TR Kern Analyze > Fix). It is
 # an NSAlert, not a second vanilla window (Memory/feedback_vanilla_pyobjc_crashes).
+# ask_values(): the same alert with one number field per value (FL TRNSpinDLG,
+# e.g. Hobby curvature at P0 / P1).
 #
 # TRLayerSelectDialog: vanilla port of FontLab's TRLayerSelectNEW.
 # Modeless, always-on-top, single-instance picker bound to the masthead's
@@ -1185,3 +1187,44 @@ def ask_choices(message, info, choices, ok_title='OK', cancel_title='Cancel'):
 	if alert.runModal() != NSAlertFirstButtonReturn:
 		return None
 	return dict((key, values[popup.indexOfSelectedItem()]) for key, values, popup in popups)
+
+
+def ask_values(message, info, fields, ok_title='OK', cancel_title='Cancel'):
+	"""Modal alert: a message, an informative text and one number field per value.
+	fields: [(key, caption, default, (min, max))]. A value that does not parse
+	falls back to its default; one outside the range is clamped.
+	Returns {key: float} on OK, None on Cancel. No vanilla window is made."""
+	from AppKit import NSAlert, NSView, NSTextField, NSAlertFirstButtonReturn
+	D = UI.DIALOG
+	step = D.CH_POPUP_H + D.CH_GAP
+	height = max(0, len(fields) * step - D.CH_GAP)
+	view = NSView.alloc().initWithFrame_(((0, 0), (D.CH_W, height)))
+	inputs = []
+	for i, (key, caption, default, limits) in enumerate(fields):
+		top = height - i * step		# AppKit y grows upwards
+		label = NSTextField.labelWithString_(caption)
+		label.setFrame_(((0, top - D.CH_POPUP_H), (D.CH_W - D.CH_FIELD_W, D.CH_POPUP_H)))
+		view.addSubview_(label)
+		field = NSTextField.alloc().initWithFrame_(
+			((D.CH_W - D.CH_FIELD_W, top - D.CH_POPUP_H), (D.CH_FIELD_W, D.CH_POPUP_H)))
+		field.setStringValue_('{:g}'.format(float(default)))
+		view.addSubview_(field)
+		inputs.append((key, float(default), limits, field))
+	alert = NSAlert.alloc().init()
+	alert.setMessageText_(message)
+	alert.setInformativeText_(info)
+	if fields:
+		alert.setAccessoryView_(view)
+		alert.window().setInitialFirstResponder_(inputs[0][3])
+	alert.addButtonWithTitle_(ok_title)
+	alert.addButtonWithTitle_(cancel_title)
+	if alert.runModal() != NSAlertFirstButtonReturn:
+		return None
+	values = {}
+	for key, default, (lo, hi), field in inputs:
+		try:
+			value = float(str(field.stringValue()).replace(',', '.'))
+		except ValueError:
+			value = default
+		values[key] = min(max(value, lo), hi)
+	return values
