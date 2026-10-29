@@ -20,7 +20,7 @@ from typerig.proxy.fl.objects.node import eNode
 from typerig.core.func.utils import isMultiInstance
 
 # - Init -----------------------------------
-__version__ = '0.3.95'
+__version__ = '0.3.96'
 
 # - Keep compatibility for basestring checks
 try:
@@ -54,11 +54,15 @@ class eCurveEx(object):
 			self.fl = None			
 			self.nodes = argv
 		
+		# - NOTE: Geometry is read from the nodes, not from self.CurveEx. getSegment()
+		# - looks the segment up by parametric time, which can name a neighbouring
+		# - segment (open contours in particular), and the solvers would then write
+		# - that segment's points into these nodes.
 		if len(self.nodes) == 4:
 			self.n0, self.n1, self.n2, self.n3 = [eNode(node) for node in self.nodes]
 			if self.fl is None: self.fl = self.CurveEx = self.n0.getSegment()
 
-			self.curve = Curve(self.CurveEx)
+			self.curve = Curve(self.n0.fl, self.n1.fl, self.n2.fl, self.n3.fl)
 			self.line = Line(self.n0.asCoord(), self.n3.asCoord())
 			self.isCurve = True
 
@@ -66,7 +70,7 @@ class eCurveEx(object):
 			self.n0, self.n1 = [eNode(node) for node in self.nodes]
 			if self.fl is None: self.fl = self.CurveEx = self.n0.getSegment()
 			self.curve = None
-			self.line = Line(self.CurveEx)
+			self.line = Line(self.n0.asCoord(), self.n1.asCoord())
 			self.isCurve = False
 
 		self.contour = self.n0.contour
@@ -85,9 +89,9 @@ class eCurveEx(object):
 			node.x, node.y = newLoc.tuple
 
 	def updateCurve(self):
-		if isCurve:	
+		if self.isCurve:
 			self.CurveEx = self.n0.getSegment()
-			self.curve = Curve(self.CurveEx)
+			self.curve = Curve(self.n0.fl, self.n1.fl, self.n2.fl, self.n3.fl)
 
 	# - Curve optimization ----------------------------
 	def eqTunni(self, apply=True):

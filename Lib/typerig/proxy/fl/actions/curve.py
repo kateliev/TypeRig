@@ -20,6 +20,7 @@ from typerig.proxy.fl.objects.node import eNode
 from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.objects.curve import eCurveEx
 from typerig.proxy.fl.objects.contour import pContour
+from typerig.proxy.fl.actions.node import get_segment_starting_at
 
 from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
@@ -30,7 +31,7 @@ from typerig.core.base.message import *
 import typerig.proxy.fl.gui.dialogs as TRDialogs
 
 # - Init -------------------------
-__version__ = '2.72'
+__version__ = '2.73'
 active_workspace = pWorkspace()
 
 # - Keep compatibility for basestring checks
@@ -38,6 +39,30 @@ try:
 	basestring
 except NameError:
 	basestring = (str, bytes)
+
+# - Helpers --------------------------------------------------------
+def get_selected_curves(glyph, layer):
+	'''Cubic segments on layer with both on-curve ends selected, as eCurveEx.
+
+	Segments are found by walking the ring from each selected node, not by
+	parametric time (see get_segment_ending_at in actions.node). An open
+	contour has no segment after its last node, so that node starts none.
+	'''
+	selection = glyph.selectedNodes(layer, filterOn=True)
+	curves = []
+
+	for node in selection:
+		contour = node.contour
+
+		if not contour.closed and node.index == len(contour.nodes()) - 1:
+			continue
+
+		segment_nodes = get_segment_starting_at(eNode(node))
+
+		if segment_nodes is not None and len(segment_nodes) == 4 and segment_nodes[3] in selection:
+			curves.append(eCurveEx(segment_nodes))
+
+	return curves
 
 # - Actions --------------------------------------------------------
 class TRCurveActionCollector(object):
@@ -103,23 +128,16 @@ class TRCurveActionCollector(object):
 			wLayers = glyph._prepareLayers(pLayers)
 
 			for layer in wLayers:
-				selection = glyph.selectedNodes(layer, filterOn=True)
-				
-				for node in selection:
-					work_node = eNode(node)
-					work_segment = eCurveEx(work_node.getSegmentNodes())
-					
-					if len(work_segment.nodes) == 4:
-						if work_segment.n0.fl in selection and work_segment.n3.fl in selection:
-							if method_name == 'tunni':
-								work_segment.eqTunni()
+				for work_segment in get_selected_curves(glyph, layer):
+					if method_name == 'tunni':
+						work_segment.eqTunni()
 
-							elif method_name == 'hobby':
-								curvature = (float(p0_value), float(p1_value))
-								work_segment.eqHobbySpline(curvature)
+					elif method_name == 'hobby':
+						curvature = (float(p0_value), float(p1_value))
+						work_segment.eqHobbySpline(curvature)
 
-							elif method_name == 'proportional':
-								work_segment.eqProportionalHandles((p0_value, p1_value))
+					elif method_name == 'proportional':
+						work_segment.eqProportionalHandles((p0_value, p1_value))
 
 				glyph.update(layer)
 
@@ -161,8 +179,10 @@ class TRCurveActionCollector(object):
 		hobby_tension_dict = {}
 		
 		for layer in wLayers:
-			selSegment = eCurveEx(eNode(glyph.selectedNodes(layer)[0]).getSegmentNodes())
-			hobby_tension_dict[layer] = selSegment.curve.solve_hobby_curvature()
+			layer_curves = get_selected_curves(glyph, layer)
+
+			if len(layer_curves):
+				hobby_tension_dict[layer] = layer_curves[0].curve.solve_hobby_curvature()
 		
 		return hobby_tension_dict
 	
@@ -178,23 +198,16 @@ class TRCurveActionCollector(object):
 			wLayers = glyph._prepareLayers(pLayers)
 
 			for layer in wLayers:
-				selection = glyph.selectedNodes(layer, filterOn=True)
-				
-				for node in selection:
-					work_node = eNode(node)
-					work_segment = eCurveEx(work_node.getSegmentNodes())
-					
-					if len(work_segment.nodes) == 4:
-						if work_segment.n0.fl in selection and work_segment.n3.fl in selection:
-							if method_name == 'hobby':
-								if layer in method_dict and len(method_dict[layer]) == 2:
-									curvature = method_dict[layer] if not swap_values else (method_dict[layer][1], method_dict[layer][0])
-									work_segment.eqHobbySpline(curvature)
+				for work_segment in get_selected_curves(glyph, layer):
+					if method_name == 'hobby':
+						if layer in method_dict and len(method_dict[layer]) == 2:
+							curvature = method_dict[layer] if not swap_values else (method_dict[layer][1], method_dict[layer][0])
+							work_segment.eqHobbySpline(curvature)
 
-							elif method_name == 'proportional':
-								if layer in method_dict and len(method_dict[layer]) == 2:
-									tension = method_dict[layer] if not swap_values else (method_dict[layer][1], method_dict[layer][0])
-									work_segment.eqProportionalHandles(tension)
+					elif method_name == 'proportional':
+						if layer in method_dict and len(method_dict[layer]) == 2:
+							tension = method_dict[layer] if not swap_values else (method_dict[layer][1], method_dict[layer][0])
+							work_segment.eqProportionalHandles(tension)
 
 				glyph.update(layer)
 
@@ -212,31 +225,13 @@ class TRCurveActionCollector(object):
 		# - Process
 		for glyph in process_glyphs:	
 			wLayers = glyph._prepareLayers(pLayers)
-			active_layer_selection = glyph.selectedNodes(None, filterOn=True)
+			base_curves = get_selected_curves(glyph, None)
 			undo_msg = 'Copy curve tension'
-			
+
 			for layer in wLayers:
-				node_skip_list = []
-				node_selection = glyph.selectedNodes(layer, filterOn=True)
-				
-				for index, node in enumerate(node_selection):
-					if node in node_skip_list: continue
-
-					work_node = eNode(node)
-					base_node = eNode(active_layer_selection[index])
-
-					work_segment_nodes = work_node.getSegmentNodes()
-					base_segment_nodes = base_node.getSegmentNodes()
-
-					work_segment = eCurveEx(work_segment_nodes)
-					base_segment = eCurveEx(base_segment_nodes)
-					
-					if len(work_segment.nodes) == 4:
-						node_skip_list += list(work_segment_nodes)
-						
-						if work_segment.n0.fl in node_selection and work_segment.n3.fl in node_selection:
-							base_tension = base_segment.curve.solve_hobby_curvature()
-							work_segment.eqHobbySpline(base_tension)
+				for work_segment, base_segment in zip(get_selected_curves(glyph, layer), base_curves):
+					base_tension = base_segment.curve.solve_hobby_curvature()
+					work_segment.eqHobbySpline(base_tension)
 
 				glyph.update(layer)
 
