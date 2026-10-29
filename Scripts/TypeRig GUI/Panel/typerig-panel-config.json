@@ -36,6 +36,10 @@
         false
     ],
     [
+        "ElementNew",
+        true
+    ],
+    [
         "Glyph",
         false
     ],
