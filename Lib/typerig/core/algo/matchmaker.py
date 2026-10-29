@@ -102,6 +102,43 @@ def intrinsic(contour):
 	return L, theta
 
 
+def directions(contour):
+	'''Absolute directions of a closed contour's on-curve polygon.
+
+	The intrinsic encoding is rotation invariant, so on a round outline
+	(every turn alike) it cannot tell WHERE an insertion belongs: an O with
+	4 nodes matched to one with 8 bunched both extra nodes on one arc.
+	Masters are never rotated against each other, so absolute direction
+	is a safe extra signal.
+
+	Returns:
+		(V, E): two lists of length m, in radians. E[i] is the direction of
+		the polygon edge from on-curve i to i+1; V[i] the polygon tangent at
+		on-curve i (bisector of E[i-1] and E[i]). A zero-length edge
+		(stacked nodes) borrows the next non-zero edge's direction.
+	'''
+	pts = [nd.point for nd in contour.nodes if nd.is_on]
+	m = len(pts)
+	raw = []
+	for i in range(m):
+		a, b = pts[i], pts[(i + 1) % m]
+		dx, dy = b.x - a.x, b.y - a.y
+		raw.append(math.atan2(dy, dx) if (dx or dy) else None)
+
+	E = []
+	for i in range(m):
+		k = next((raw[(i + s) % m] for s in range(m) if raw[(i + s) % m] is not None), 0.0)
+		E.append(k)
+
+	V = [E[i - 1] + _angle_diff(E[i], E[i - 1]) / 2.0 for i in range(m)]
+	return V, E
+
+
+def _angle_diff(a, b):
+	'''Signed a - b wrapped into (-pi, pi].'''
+	return math.atan2(math.sin(a - b), math.cos(a - b))
+
+
 # - Stage 2: DP matcher -----------------
 # Back-trace codes. Keep as module constants so callers can read the
 # back-trace matrix without magic numbers.
@@ -110,7 +147,8 @@ BT_INSERT_A = 1   # insert a new on-curve on A, consume B[j-1]
 BT_INSERT_B = 2   # insert a new on-curve on B, consume A[i-1]
 
 
-def dp_match(L_a, theta_a, L_b, theta_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0):
+def dp_match(L_a, theta_a, L_b, theta_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0,
+             dir_a=None, dir_b=None, k_d=0.0, pin_start=False):
 	'''Dynamic-programming Sederberg-Greenwood matcher for a FIXED start-
 	point alignment (no cyclic search yet).
 
@@ -130,6 +168,13 @@ def dp_match(L_a, theta_a, L_b, theta_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0):
 		k_b          : bend weight (units of 1 / radian^2).
 		c_ins_scale  : multiplier on insertion cost. > 1 discourages
 		               insertions; < 1 encourages them.
+		dir_a, dir_b : optional (V, E) from directions(); with k_d > 0 a
+		               pair also costs k_d * (V_a - V_b)^2 and an insertion
+		               k_d * (E - V)^2 (direction of the edge it lands on
+		               vs the vertex it absorbs).
+		k_d          : direction weight (units of 1 / radian^2).
+		pin_start    : the path must open with PAIR(A[0], B[0]) (no
+		               insertion before the starts).
 
 	Returns:
 		(C, B, total_cost): C is (m+1)x(n+1) cost table, B is same-shape
@@ -148,15 +193,35 @@ def dp_match(L_a, theta_a, L_b, theta_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0):
 	B = [[-1] * (n + 1) for _ in range(m + 1)]
 	C[0][0] = 0.0
 
+	use_dir = k_d > 0. and dir_a is not None and dir_b is not None
+	if use_dir:
+		(Va, Ea), (Vb, Eb) = dir_a, dir_b
+
+	def d_pair(i, j):		# A[i-1] with B[j-1]
+		if not use_dir:
+			return 0.
+		return k_d * _angle_diff(Va[i - 1], Vb[j - 1]) ** 2
+
+	def d_ins_a(i, j):		# new vertex on A edge i-1 absorbs B[j-1]
+		if not use_dir:
+			return 0.
+		return k_d * _angle_diff(Ea[(i - 1) % m], Vb[j - 1]) ** 2
+
+	def d_ins_b(i, j):		# new vertex on B edge j-1 absorbs A[i-1]
+		if not use_dir:
+			return 0.
+		return k_d * _angle_diff(Eb[(j - 1) % n], Va[i - 1]) ** 2
+
 	# Boundary: column 0 -- only BT_INSERT_B moves are available
-	# (each step consumes one A vertex by inserting on B).
-	for i in range(1, m + 1):
-		C[i][0] = C[i - 1][0] + c_ins_scale * k_b * theta_a[i - 1] * theta_a[i - 1]
+	# (each step consumes one A vertex by inserting on B). Pinned starts
+	# leave both boundaries unreachable: the first move must be the pair.
+	for i in range(1, m + 1 if not pin_start else 1):
+		C[i][0] = C[i - 1][0] + c_ins_scale * k_b * theta_a[i - 1] * theta_a[i - 1] + d_ins_b(i, 0)
 		B[i][0] = BT_INSERT_B
 
 	# Boundary: row 0 -- only BT_INSERT_A moves.
-	for j in range(1, n + 1):
-		C[0][j] = C[0][j - 1] + c_ins_scale * k_b * theta_b[j - 1] * theta_b[j - 1]
+	for j in range(1, n + 1 if not pin_start else 1):
+		C[0][j] = C[0][j - 1] + c_ins_scale * k_b * theta_b[j - 1] * theta_b[j - 1] + d_ins_a(0, j)
 		B[0][j] = BT_INSERT_A
 
 	# Interior.
@@ -164,10 +229,10 @@ def dp_match(L_a, theta_a, L_b, theta_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0):
 		for j in range(1, n + 1):
 			dL = L_a[i - 1] - L_b[j - 1]
 			dth = theta_a[i - 1] - theta_b[j - 1]
-			w_pair = k_s * dL * dL + k_b * dth * dth
+			w_pair = k_s * dL * dL + k_b * dth * dth + d_pair(i, j)
 
-			w_ins_a = c_ins_scale * k_b * theta_b[j - 1] * theta_b[j - 1]
-			w_ins_b = c_ins_scale * k_b * theta_a[i - 1] * theta_a[i - 1]
+			w_ins_a = c_ins_scale * k_b * theta_b[j - 1] * theta_b[j - 1] + d_ins_a(i, j)
+			w_ins_b = c_ins_scale * k_b * theta_a[i - 1] * theta_a[i - 1] + d_ins_b(i, j)
 
 			cand = (
 				(C[i - 1][j - 1] + w_pair, BT_PAIR),
@@ -229,11 +294,15 @@ def _rotate(seq, k):
 	return seq[k:] + seq[:k]
 
 
-def dp_match_cyclic(L_a, theta_a, L_b, theta_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0):
+def dp_match_cyclic(L_a, theta_a, L_b, theta_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0,
+                    prefer=None, tie_tol=1e-6, dir_a=None, dir_b=None, k_d=0.0):
 	'''Closed-contour matcher: brute-force the best cyclic shift of B.
 
 	For each shift s in [0, n), rotate B's intrinsic sequences left by s
 	and run the fixed-start DP. Return the shift with minimum total cost.
+	prefer (callable shift -> key): breaks ties among shifts whose cost
+	is within tie_tol * (1 + min cost) of the minimum (lowest key wins).
+	dir_a, dir_b, k_d: direction term, see dp_match (B's rotates with s).
 
 	Complexity: O(n * m * n). For typical glyphs (n, m < 100) this runs
 	well under a millisecond in pure Python. Replace with extremum-
@@ -248,14 +317,25 @@ def dp_match_cyclic(L_a, theta_a, L_b, theta_b, k_s=1.0, k_b=1.0, c_ins_scale=1.
 	'''
 	n = len(L_b)
 	best = None
+	ties = []
 
 	for s in range(n):
 		L_b_s = _rotate(L_b, s)
 		T_b_s = _rotate(theta_b, s)
+		dir_b_s = (_rotate(dir_b[0], s), _rotate(dir_b[1], s)) if dir_b is not None else None
 		C, B, total = dp_match(L_a, theta_a, L_b_s, T_b_s, k_s=k_s, k_b=k_b,
-		                       c_ins_scale=c_ins_scale)
-		if best is None or total < best[3]:
+		                       c_ins_scale=c_ins_scale, dir_a=dir_a, dir_b=dir_b_s, k_d=k_d)
+		if prefer is not None:
+			ties.append((s, C, B, total))
+		elif best is None or total < best[3]:
 			best = (s, C, B, total)
+
+	if prefer is not None:
+		# Symmetric outlines (squares, rectangles) tie on several shifts:
+		# the intrinsic encoding cannot tell them apart, geometry can.
+		low = min(t[3] for t in ties)
+		tol = tie_tol * (1. + abs(low))
+		best = min((t for t in ties if t[3] <= low + tol), key=lambda t: (prefer(t[0]), t[0]))
 
 	return best
 
@@ -266,7 +346,7 @@ def _on_curve_indices(contour):
 	return [idx for idx, nd in enumerate(contour.nodes) if nd.is_on]
 
 
-def _plan_insertions(path, m, n):
+def _plan_insertions(path, m, n, L_a=None, L_b=None):
 	'''Walk a DP back-trace and return two insertion plans.
 
 	Each plan entry is (source_onc_idx, [t_0, t_1, ...]) describing how many
@@ -274,52 +354,92 @@ def _plan_insertions(path, m, n):
 	index source_onc_idx, and the fractional placements (in (0, 1)) along
 	that segment.
 
-	Placement is uniform inside a run (k-th of K insertions goes at
-	t = k / (K + 1)). The Hard-Parts doc also mentions arc-length-
-	proportional placement as a refinement; uniform is simpler and still
-	produces a valid point-compatible pair.
+	Placement: with the other side's edge lengths (L_b for insertions on A,
+	L_a for insertions on B) the K insertions on a segment follow the
+	vertices they absorb, proportional to the other side's polygon length
+	over the same stretch. Without them (or on degenerate lengths) they are
+	uniform: k-th of K at t = k / (K + 1).
 	'''
-	# Group consecutive INSERT_A (or INSERT_B) ops that fall on the same
-	# A-segment (or B-segment). An A-segment ends whenever the path
-	# advances A: that is at PAIR or INSERT_B.
-	plan_a = {}   # source_onc_idx_in_A -> [count]
-	plan_b = {}
+	# Each insertion lands on the segment that starts at the last on-curve
+	# its side consumed BEFORE it in path order, so both sides list their
+	# nodes in path order and on-curve k of A pairs with on-curve k of B.
+	# (Flushing a mixed INSERT_A / INSERT_B run at the next PAIR put the
+	# B insertions after B's consumed vertices: pairs slipped by one.)
+	# Insertions before a side's first vertex wrap onto its closing
+	# segment; see _lead_insertions for the start fix.
+	absorbed_a = {}   # source_onc_idx_in_A -> [B indices absorbed]
+	absorbed_b = {}
 
-	buf_a = 0
-	buf_b = 0
 	a_cursor = 0   # index of next A on-curve to consume
 	b_cursor = 0
 
-	def _flush(side, buf, cursor, size, plan):
-		if buf == 0:
-			return
-		src = (cursor - 1) % size
-		# Uniform distribution of `buf` insertions inside one segment.
-		ts = [k / float(buf + 1) for k in range(1, buf + 1)]
-		plan.setdefault(src, []).extend(ts)
-
 	for (_, _, op) in path:
 		if op == BT_PAIR:
-			_flush('a', buf_a, a_cursor, m, plan_a)
-			_flush('b', buf_b, b_cursor, n, plan_b)
-			buf_a = 0
-			buf_b = 0
 			a_cursor += 1
 			b_cursor += 1
 
 		elif op == BT_INSERT_A:
-			buf_a += 1
+			absorbed_a.setdefault((a_cursor - 1) % m, []).append(b_cursor % n)
 			b_cursor += 1
 
 		elif op == BT_INSERT_B:
-			buf_b += 1
+			absorbed_b.setdefault((b_cursor - 1) % n, []).append(a_cursor % m)
 			a_cursor += 1
 
-	# Any leftover buffer belongs to the closing segment (wraps to index 0).
-	_flush('a', buf_a, a_cursor, m, plan_a)
-	_flush('b', buf_b, b_cursor, n, plan_b)
+	return _place(absorbed_a, L_b, n), _place(absorbed_b, L_a, m)
 
-	return plan_a, plan_b
+
+def _place(absorbed, L_other, size):
+	'''{src: [absorbed vertex indices on the other side]} -> {src: [t...]}.'''
+	plan = {}
+	for src, js in absorbed.items():
+		K = len(js)
+		ts = [k / float(K + 1) for k in range(1, K + 1)]
+		if L_other is not None:
+			# Absorbed vertices run consecutively on the other side (the wrap
+			# segment lists them leading-first: start where the run begins).
+			first = next(j for j in js if (j - 1) % size not in js)
+			chain = [(first - 1 + k) % size for k in range(K + 1)]	# edges spanned
+			lengths = [L_other[e] for e in chain]
+			total = sum(lengths)
+			if total > 0.:
+				acc, prop = 0., []
+				for e in lengths[:-1]:
+					acc += e
+					prop.append(acc / total)
+				if all(1e-3 < t < 1. - 1e-3 for t in prop) and \
+				   all(t1 - t0 > 1e-3 for t0, t1 in zip(prop, prop[1:])):
+					ts = prop
+		plan[src] = ts
+	return plan
+
+
+def _rel_on_points(contour):
+	'''On-curve points normalised to the contour's own on-curve bbox.'''
+	pts = [(nd.x, nd.y) for nd in contour.nodes if nd.is_on]
+	xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+	w, h = (max(xs) - min(xs)) or 1., (max(ys) - min(ys)) or 1.
+	return [((x - min(xs)) / w, (y - min(ys)) / h) for x, y in pts]
+
+
+def _lead_insertions(path):
+	'''Insertions made before a side consumes its first vertex: (A, B).
+
+	They wrap onto that side's closing segment, so they end up LAST in its
+	on-curve list although they come first in path order. The start must
+	move onto the first of them to keep on-curve k of A paired with
+	on-curve k of B.
+	'''
+	lead_a = lead_b = 0
+	seen_a = seen_b = False
+	for (_, _, op) in path:
+		if op == BT_INSERT_A and not seen_a:
+			lead_a += 1
+		if op == BT_INSERT_B and not seen_b:
+			lead_b += 1
+		seen_a = seen_a or op in (BT_PAIR, BT_INSERT_B)
+		seen_b = seen_b or op in (BT_PAIR, BT_INSERT_A)
+	return lead_a, lead_b
 
 
 def _apply_insertion_plan(contour, plan):
@@ -506,7 +626,7 @@ def canonicalize_contour_order(contours, corner=Corner.TOP_LEFT):
 
 def apply_match(contour_a, contour_b,
                 k_s=1.0, k_b=1.0, c_ins_scale=1.0,
-                align_start='respect'):
+                align_start='respect', k_d=None):
 	'''Mutate *copies* of contour_a / contour_b so they become point-
 	compatible under the Sederberg-Greenwood energy.
 
@@ -524,6 +644,7 @@ def apply_match(contour_a, contour_b,
 			'canonical' — run canonicalize_start(BOTTOM_LEFT) on clones of
 			              both A and B before DP, then shift_b = 0.
 			'auto'      — cyclic DP picks the cheapest shift (legacy).
+		k_d: direction weight (see dp_match); None = k_b. 0 = intrinsic only.
 
 	Returns:
 		(new_a, new_b, cost, meta) where meta contains 'shift_b',
@@ -553,20 +674,38 @@ def apply_match(contour_a, contour_b,
 	# original contour_b is untouched (we already cloned).
 	reversed_b = False
 	if bool(new_a.clockwise) != bool(new_b.clockwise):
+		# Contour.reverse makes the old LAST on-curve the start; put the
+		# start back where it was, or 'respect' pairs one node off.
+		start = next(nd for nd in new_b.nodes if nd.is_on)
 		new_b.reverse()
+		new_b.set_start(next(k for k, nd in enumerate(new_b.nodes) if nd is start))
 		reversed_b = True
 
 	La, Ta = intrinsic(new_a)
 	Lb, Tb = intrinsic(new_b)
 	m, n = len(La), len(Lb)
+	k_d = k_b if k_d is None else k_d
+	Da, Db = directions(new_a), directions(new_b)
+	if align_start == 'respect':
+		# The designer declares the starts paired: measure B's directions
+		# in that frame (no-op when the starts already agree).
+		off = _angle_diff(Da[0][0], Db[0][0])
+		Db = ([v + off for v in Db[0]], [e + off for e in Db[1]])
 
 	if align_start == 'auto':
+		# Ties: the B on-curve nearest A's start (bbox-relative) wins.
+		rel_a, rel_b = _rel_on_points(new_a), _rel_on_points(new_b)
+		prefer = lambda s: math.hypot(rel_b[s][0] - rel_a[0][0], rel_b[s][1] - rel_a[0][1])
 		shift_b, _C, B_tbl, cost = dp_match_cyclic(
-			La, Ta, Lb, Tb, k_s=k_s, k_b=k_b, c_ins_scale=c_ins_scale)
+			La, Ta, Lb, Tb, k_s=k_s, k_b=k_b, c_ins_scale=c_ins_scale, prefer=prefer,
+			dir_a=Da, dir_b=Db, k_d=k_d)
 	else:
-		# 'respect' and 'canonical' both pin shift=0.
+		# 'respect' and 'canonical' both pin shift=0; 'respect' also pairs
+		# the two starts (else the direction term pads misaligned starts
+		# with insertions on both sides instead of the designer's pairing).
 		_C, B_tbl, cost = dp_match(
-			La, Ta, Lb, Tb, k_s=k_s, k_b=k_b, c_ins_scale=c_ins_scale)
+			La, Ta, Lb, Tb, k_s=k_s, k_b=k_b, c_ins_scale=c_ins_scale,
+			dir_a=Da, dir_b=Db, k_d=k_d, pin_start=align_start == 'respect')
 		shift_b = 0
 
 	path = backtrace(B_tbl, m, n)
@@ -576,7 +715,7 @@ def apply_match(contour_a, contour_b,
 		on_idx_b = _on_curve_indices(new_b)
 		new_b.set_start(on_idx_b[shift_b])
 
-	plan_a, plan_b = _plan_insertions(path, m, n)
+	plan_a, plan_b = _plan_insertions(path, m, n, L_a=La, L_b=_rotate(Lb, shift_b))
 	_apply_insertion_plan(new_a, plan_a)
 	_apply_insertion_plan(new_b, plan_b)
 
@@ -585,6 +724,13 @@ def apply_match(contour_a, contour_b,
 	oc_b = sum(1 for nd in new_b.nodes if nd.is_on)
 	assert oc_a == oc_b, \
 		'post-apply on-curve mismatch: A={} B={}'.format(oc_a, oc_b)
+
+	# Leading insertions sit last in the on-curve list: start on the first.
+	lead_a, lead_b = _lead_insertions(path)
+	if lead_a:
+		new_a.set_start(_on_curve_indices(new_a)[oc_a - lead_a])
+	if lead_b:
+		new_b.set_start(_on_curve_indices(new_b)[oc_b - lead_b])
 
 	# Rule 4: reconcile segment types (line ↔ cubic) between paired segments.
 	promoted_a, promoted_b = _reconcile_segment_types(new_a, new_b)
@@ -705,7 +851,7 @@ def pair_contours(contours_a, contours_b, pair_mode='respect'):
 
 def apply_match_glyph(contours_a, contours_b,
                       k_s=1.0, k_b=1.0, c_ins_scale=1.0,
-                      align_start='respect', pair_mode='respect'):
+                      align_start='respect', pair_mode='respect', k_d=None):
 	'''Stage 5: run apply_match per paired contour.
 
 	Args:
@@ -740,7 +886,7 @@ def apply_match_glyph(contours_a, contours_b,
 		na, nb, cost, m = apply_match(
 			contours_a[i], contours_b[j],
 			k_s=k_s, k_b=k_b, c_ins_scale=c_ins_scale,
-			align_start=align_start)
+			align_start=align_start, k_d=k_d)
 		new_a_list[k] = na
 		new_b_list[k] = nb
 		per_contour.append(m)
@@ -1451,7 +1597,12 @@ def _test_apply_rectangle_vs_pentagon():
 	a = Contour(nodes_a, closed=True)
 	b = Contour(nodes_b, closed=True)
 
-	na, nb, cost, meta = apply_match(a, b, k_s=1.0 / 40000.0, k_b=1.0)
+	# Intrinsic only: 'respect' pins rect BL to the pentagon top, which the
+	# direction term (rightly) refuses to pair; auto with it finds 1 insert.
+	na, nb, cost, meta = apply_match(a, b, k_s=1.0 / 40000.0, k_b=1.0, k_d=0.)
+	_, _, _, meta_d = apply_match(a, b, k_s=1.0 / 40000.0, k_b=1.0, align_start='auto')
+	assert (meta_d['n_insert_a'], meta_d['n_insert_b']) == (1, 0), \
+		'auto + direction: inserts {}/{}'.format(meta_d['n_insert_a'], meta_d['n_insert_b'])
 
 	oca, ocb = _on_count(na), _on_count(nb)
 	assert oca == ocb, 'count mismatch {} vs {}'.format(oca, ocb)
@@ -1532,9 +1683,9 @@ def _test_apply_winding_normalised():
 	coords = [(0.0, 0.0), (300.0, 20.0), (260.0, 180.0), (40.0, 140.0)]
 	a = Contour([Node(x, y) for x, y in coords], closed=True)
 
-	# Same shape traversed backwards (CW). Build from fresh Node objects
-	# so the two contours don't share node parents.
-	b = Contour([Node(x, y) for x, y in reversed(coords)], closed=True)
+	# Same shape traversed backwards (CW) from the same start node. Build
+	# from fresh Node objects so the two contours don't share node parents.
+	b = Contour([Node(x, y) for x, y in coords[:1] + coords[:0:-1]], closed=True)
 
 	assert bool(a.clockwise) != bool(b.clockwise), \
 		'test setup: winding should differ (a.cw={} b.cw={})'.format(a.clockwise, b.clockwise)
@@ -2027,6 +2178,119 @@ def _run_stage7_tests():
 	print('Stage 7: all tests passed.')
 
 
+# - Stage 8 tests: on-curve k of A pairs with on-curve k of B -------
+def _path_tokens(path):
+	'''Per path op, the vertex each side lists: original index or None
+	for an insertion.'''
+	ta = [None if op == BT_INSERT_A else i for i, _, op in path]
+	tb = [None if op == BT_INSERT_B else j for _, j, op in path]
+	return ta, tb
+
+
+def _result_tokens(contour, original):
+	'''On-curves of a matched contour as original indices (None = inserted).'''
+	pts = [(round(nd.x, 6), round(nd.y, 6)) for nd in original.nodes if nd.is_on]
+	return [pts.index(p) if p in pts else None
+	        for p in ((round(nd.x, 6), round(nd.y, 6)) for nd in contour.nodes if nd.is_on)]
+
+
+def _test_insertions_follow_path_order():
+	'''Mixed INSERT_A / INSERT_B runs and leading insertions must keep the
+	path order on both sides (they slipped the pairing by one).'''
+	ops = [BT_INSERT_B, BT_INSERT_A, BT_PAIR, BT_INSERT_B, BT_INSERT_A, BT_PAIR, BT_PAIR]
+	# Path as backtrace emits it: (A index, B index, op); only order matters.
+	path, i, j = [], 0, 0
+	for op in ops:
+		path.append((i, j, op))
+		i += op != BT_INSERT_A
+		j += op != BT_INSERT_B
+	m, n = i, j		# 5 on-curves each side
+	a = _rect_contour(0, 0, 400, 300)
+	a.nodes[0].insert_after(.5)
+	b = _rect_contour(0, 0, 400, 300)
+	b.nodes[1].insert_after(.5)
+	plan_a, plan_b = _plan_insertions(path, m, n)
+	new_a, new_b = a.clone(), b.clone()
+	_apply_insertion_plan(new_a, plan_a)
+	_apply_insertion_plan(new_b, plan_b)
+	lead_a, lead_b = _lead_insertions(path)
+	oc = len(path)
+	if lead_a:
+		new_a.set_start(_on_curve_indices(new_a)[oc - lead_a])
+	if lead_b:
+		new_b.set_start(_on_curve_indices(new_b)[oc - lead_b])
+	ta, tb = _path_tokens(path)
+	assert _result_tokens(new_a, a) == ta, 'A: {} != {}'.format(_result_tokens(new_a, a), ta)
+	assert _result_tokens(new_b, b) == tb, 'B: {} != {}'.format(_result_tokens(new_b, b), tb)
+	print('  mixed + leading insert runs keep path order [OK]')
+
+
+def _test_reversed_b_keeps_start():
+	'''B drawn the other way round from the same start: 'respect' pairs the
+	starts (Contour.reverse alone moved B's start one node).'''
+	a = _rect_contour(0, 0, 300, 100, ccw=True)
+	b = _rect_contour(0, 0, 300, 100, ccw=False)
+	na, nb, cost, meta = apply_match(a, b, k_s=1e-6, k_b=1.0, align_start='respect')
+	assert meta['reversed_b']
+	assert [(n.x, n.y) for n in na.nodes] == [(n.x, n.y) for n in nb.nodes], 'start slipped'
+	print('  reversed B keeps its start [OK]')
+
+
+def _test_auto_symmetric_tie_by_geometry():
+	'''Rectangles tie on shifts 0 and 2: auto picks the geometric match.'''
+	a = Contour([Node(x, y) for x, y in ((0, 0), (0, 100), (300, 100), (300, 0))], closed=True)
+	b = Contour([Node(x, y) for x, y in ((300, 100), (300, 0), (0, 0), (0, 100))], closed=True)
+	na, nb, cost, meta = apply_match(a, b, k_s=1e-6, k_b=1.0, align_start='auto')
+	assert [(n.x, n.y) for n in na.nodes] == [(n.x, n.y) for n in nb.nodes], \
+		'tie broken by noise: shift {}'.format(meta['shift_b'])
+	print('  auto: symmetric tie broken by geometry [OK]')
+
+
+def _ring_contour(n, r, sq=1.0):
+	'''Circle of n cubic arcs (CCW), start at angle 0.'''
+	nodes = []
+	for i in range(n):
+		a0, a1 = 2 * math.pi * i / n, 2 * math.pi * (i + 1) / n
+		h = 4. / 3. * math.tan((a1 - a0) / 4.) * r
+		nodes.append(Node(r * math.cos(a0), r * math.sin(a0) * sq))
+		nodes.append(Node(r * math.cos(a0) - h * math.sin(a0), (r * math.sin(a0) + h * math.cos(a0)) * sq, type='curve'))
+		nodes.append(Node(r * math.cos(a1) + h * math.sin(a1), (r * math.sin(a1) - h * math.cos(a1)) * sq, type='curve'))
+	return Contour(nodes, closed=True)
+
+
+def _test_ring_insertions_spread():
+	'''O with 4 nodes vs O with 8: one insertion per quarter arc, each near
+	its partner (the intrinsic cost alone bunched two on one arc).'''
+	a, b = _ring_contour(4, 250.), _ring_contour(8, 270., sq=.9)
+	for mode in ('respect', 'auto'):
+		na, nb, cost, meta = apply_match(a, b, k_s=1e-6, k_b=1.0, align_start=mode)
+		ang = lambda c, sq: [math.degrees(math.atan2(nd.y / sq, nd.x)) % 360. for nd in c.nodes if nd.is_on]
+		da = [abs((x - y + 180.) % 360. - 180.) for x, y in zip(ang(na, 1.), ang(nb, .9))]
+		assert meta['n_insert_a'] == 4 and max(da) < 5., '{}: angles off by {}'.format(mode, max(da))
+	print('  ring 4 vs 8: insertions spread one per arc [OK]')
+
+
+def _test_respect_misaligned_starts_no_padding():
+	'''Starts on different corners under 'respect': the declared pairing,
+	not extra nodes padding both sides.'''
+	a = Contour([Node(x, y) for x, y in ((0, 0), (0, 100), (300, 100), (300, 0))], closed=True)
+	b = Contour([Node(x, y) for x, y in ((300, 100), (300, 0), (0, 0), (0, 100))], closed=True)
+	na, nb, cost, meta = apply_match(a, b, k_s=1e-6, k_b=1.0, align_start='respect')
+	assert (meta['n_insert_a'], meta['n_insert_b']) == (0, 0), \
+		'padded: {}/{}'.format(meta['n_insert_a'], meta['n_insert_b'])
+	print('  respect: misaligned starts paired as declared, no padding [OK]')
+
+
+def _run_stage8_tests():
+	print('Stage 8 - pairing order:')
+	_test_insertions_follow_path_order()
+	_test_reversed_b_keeps_start()
+	_test_auto_symmetric_tie_by_geometry()
+	_test_ring_insertions_spread()
+	_test_respect_misaligned_starts_no_padding()
+	print('Stage 8: all tests passed.')
+
+
 if __name__ == '__main__':
 	_run_stage1_tests()
 	print('')
@@ -2041,3 +2305,5 @@ if __name__ == '__main__':
 	_run_stage6_tests()
 	print('')
 	_run_stage7_tests()
+	print("")
+	_run_stage8_tests()

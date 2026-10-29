@@ -360,6 +360,25 @@ def _detach_layer(lyr):
     return lyr.eject() if hasattr(lyr, 'eject') else lyr.clone()
 
 
+def _host_start_last(lyr):
+    """True when the host keeps a closed contour's start node LAST (GS3:
+    nodes[0] is the node after the start). Core matchmaker works start
+    first (core / FL), so its output written as is lands the start one
+    node early on such hosts."""
+    for c in getattr(lyr, 'contours', []):
+        n = len(c.nodes)
+        if c.closed and n > 1:
+            return getattr(c, 'start_index', 0) == n - 1
+    return False
+
+
+def _rotate_start(contours, to_first):
+    """Move closed contours' start node first (to_first) or back last."""
+    for c in contours:
+        if c.closed and len(c.data) > 1:
+            c.data = c.data[-1:] + c.data[:-1] if to_first else c.data[1:] + c.data[:1]
+
+
 def _attach_layer(lyr, core_layer):
     if hasattr(lyr, 'mount'):
         lyr.mount(core_layer)
@@ -394,6 +413,11 @@ def npa_layer_matchmaker(glyph, scope_layers, LayerActions, source,
 
     core_src, core_tgt = _detach_layer(tr_src), _detach_layer(tr_tgt)
     ca, cb = list(core_src.contours), list(core_tgt.contours)
+    last_src, last_tgt = _host_start_last(tr_src), _host_start_last(tr_tgt)
+    if last_src:
+        _rotate_start(ca, True)
+    if last_tgt:
+        _rotate_start(cb, True)
     em = float(upm or 1000.)
     k_s, k_b = 1. / (em * em), 1.
     head = 'Matchmaker: %s <-> %s' % (source, target)
@@ -433,6 +457,10 @@ def npa_layer_matchmaker(glyph, scope_layers, LayerActions, source,
         lines.append('  (dry run: nothing written)')
         return True, lines
 
+    if last_src:
+        _rotate_start(new_a, False)
+    if last_tgt:
+        _rotate_start(new_b, False)
     _attach_layer(tr_src, _rebuild_layer(core_src, new_a))
     _attach_layer(tr_tgt, _rebuild_layer(core_tgt, new_b))
     return True, lines
