@@ -103,35 +103,98 @@ def intrinsic(contour):
 
 
 def directions(contour):
-	'''Absolute directions of a closed contour's on-curve polygon.
+	'''Absolute tangent directions of a contour at its on-curves and
+	segment middles.
 
-	The intrinsic encoding is rotation invariant, so on a round outline
-	(every turn alike) it cannot tell WHERE an insertion belongs: an O with
-	4 nodes matched to one with 8 bunched both extra nodes on one arc.
-	Masters are never rotated against each other, so absolute direction
-	is a safe extra signal.
+	The intrinsic encoding is rotation invariant and sees only the
+	on-curve polygon, so on a round outline it cannot tell WHERE an
+	insertion belongs (an O with 4 nodes vs one with 8 bunched both extra
+	nodes on one arc), and a corner drawn as one curve looks like a 45 deg
+	bend at its ends. True tangents fix both: a smooth node at the end of
+	a straight stroke points along the stroke on every master. Masters are
+	never rotated against each other, so absolute direction is safe.
 
 	Returns:
-		(V, E): two lists of length m, in radians. E[i] is the direction of
-		the polygon edge from on-curve i to i+1; V[i] the polygon tangent at
-		on-curve i (bisector of E[i-1] and E[i]). A zero-length edge
-		(stacked nodes) borrows the next non-zero edge's direction.
+		(V, E): two lists of length m, in radians. V[i] is the tangent at
+		on-curve i (bisector of its in and out tangents, taken from its
+		handles; open ends use their one side). E[i] is the tangent at the
+		middle of the segment from on-curve i to i+1 (an insertion lands
+		there); on an open contour the missing wrap segment copies E[m-2].
 	'''
-	pts = [nd.point for nd in contour.nodes if nd.is_on]
-	m = len(pts)
-	raw = []
-	for i in range(m):
-		a, b = pts[i], pts[(i + 1) % m]
-		dx, dy = b.x - a.x, b.y - a.y
-		raw.append(math.atan2(dy, dx) if (dx or dy) else None)
+	nodes = contour.nodes
+	N = len(nodes)
+	closed = contour.closed
+	on_idx = [k for k, nd in enumerate(nodes) if nd.is_on]
+	m = len(on_idx)
+
+	V = [t_in + _angle_diff(t_out, t_in) / 2. for t_in, t_out in _tangents(contour)]
 
 	E = []
 	for i in range(m):
-		k = next((raw[(i + s) % m] for s in range(m) if raw[(i + s) % m] is not None), 0.0)
-		E.append(k)
-
-	V = [E[i - 1] + _angle_diff(E[i], E[i - 1]) / 2.0 for i in range(m)]
+		k0 = on_idx[i]
+		if not closed and i == m - 1:
+			E.append(E[-1] if E else V[i])
+			continue
+		k1 = on_idx[(i + 1) % m]
+		seg = [nodes[(k0 + s) % N].point for s in range(((k1 - k0) % N or N) + 1)]
+		if len(seg) == 4:		# cubic: B'(0.5) ~ p3 + p2 - p1 - p0
+			dx = seg[3].x + seg[2].x - seg[1].x - seg[0].x
+			dy = seg[3].y + seg[2].y - seg[1].y - seg[0].y
+		else:					# line (or other): chord
+			dx, dy = seg[-1].x - seg[0].x, seg[-1].y - seg[0].y
+		E.append(math.atan2(dy, dx) if (dx or dy) else V[i])
 	return V, E
+
+
+def _tangents(contour):
+	'''(in, out) tangent directions at each on-curve, in radians, from the
+	nearest node that is not stacked on it (its handle, else the next
+	on-curve). An open end, or a fully stacked node, copies the other side
+	(0 if neither exists).'''
+	nodes = contour.nodes
+	N = len(nodes)
+	closed = contour.closed
+
+	def heading(a, b):
+		dx, dy = b.x - a.x, b.y - a.y
+		return math.atan2(dy, dx) if (dx or dy) else None
+
+	def walk(k, step):
+		p = nodes[k].point
+		for s in range(1, N):
+			j = k + step * s
+			if not closed and not 0 <= j < N:
+				return None
+			q = nodes[j % N].point
+			if (q.x, q.y) != (p.x, p.y):
+				return q
+		return None
+
+	out = []
+	for k, nd in enumerate(nodes):
+		if not nd.is_on:
+			continue
+		p = nd.point
+		q_out, q_in = walk(k, 1), walk(k, -1)
+		t_out = heading(p, q_out) if q_out is not None else None
+		t_in = heading(q_in, p) if q_in is not None else None
+		if t_out is None:
+			t_out = t_in
+		if t_in is None:
+			t_in = t_out
+		if t_in is None:
+			t_in = t_out = 0.
+		out.append((t_in, t_out))
+	return out
+
+
+def turns(contour):
+	'''Signed turn at each on-curve between its true in and out tangents:
+	0 at a smooth node, the corner angle at a corner. On straight-line
+	contours this equals intrinsic()'s theta; on curves the polygon theta
+	misreads a corner drawn as one curve (45 deg at its smooth ends), so
+	apply_match bends with this instead.'''
+	return [_angle_diff(t_out, t_in) for t_in, t_out in _tangents(contour)]
 
 
 def _angle_diff(a, b):
@@ -148,7 +211,8 @@ BT_INSERT_B = 2   # insert a new on-curve on B, consume A[i-1]
 
 
 def dp_match(L_a, theta_a, L_b, theta_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0,
-             dir_a=None, dir_b=None, k_d=0.0, pin_start=False):
+             dir_a=None, dir_b=None, k_d=0.0, pin_start=False, pin_end=False,
+             c_node=0.0):
 	'''Dynamic-programming Sederberg-Greenwood matcher for a FIXED start-
 	point alignment (no cyclic search yet).
 
@@ -175,6 +239,12 @@ def dp_match(L_a, theta_a, L_b, theta_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0,
 		k_d          : direction weight (units of 1 / radian^2).
 		pin_start    : the path must open with PAIR(A[0], B[0]) (no
 		               insertion before the starts).
+		pin_end      : the path must close with PAIR(A[m-1], B[n-1]) (open
+		               contours: nothing may land on the missing wrap edge).
+		c_node       : flat cost per inserted node. Every solution pays it
+		               |m - n| times; it only weighs against inserting on
+		               both sides where a pair would do (smooth nodes turn
+		               0, so their insertion is otherwise free).
 
 	Returns:
 		(C, B, total_cost): C is (m+1)x(n+1) cost table, B is same-shape
@@ -216,12 +286,12 @@ def dp_match(L_a, theta_a, L_b, theta_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0,
 	# (each step consumes one A vertex by inserting on B). Pinned starts
 	# leave both boundaries unreachable: the first move must be the pair.
 	for i in range(1, m + 1 if not pin_start else 1):
-		C[i][0] = C[i - 1][0] + c_ins_scale * k_b * theta_a[i - 1] * theta_a[i - 1] + d_ins_b(i, 0)
+		C[i][0] = C[i - 1][0] + c_ins_scale * k_b * theta_a[i - 1] * theta_a[i - 1] + d_ins_b(i, 0) + c_node
 		B[i][0] = BT_INSERT_B
 
 	# Boundary: row 0 -- only BT_INSERT_A moves.
 	for j in range(1, n + 1 if not pin_start else 1):
-		C[0][j] = C[0][j - 1] + c_ins_scale * k_b * theta_b[j - 1] * theta_b[j - 1] + d_ins_a(0, j)
+		C[0][j] = C[0][j - 1] + c_ins_scale * k_b * theta_b[j - 1] * theta_b[j - 1] + d_ins_a(0, j) + c_node
 		B[0][j] = BT_INSERT_A
 
 	# Interior.
@@ -231,8 +301,8 @@ def dp_match(L_a, theta_a, L_b, theta_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0,
 			dth = theta_a[i - 1] - theta_b[j - 1]
 			w_pair = k_s * dL * dL + k_b * dth * dth + d_pair(i, j)
 
-			w_ins_a = c_ins_scale * k_b * theta_b[j - 1] * theta_b[j - 1] + d_ins_a(i, j)
-			w_ins_b = c_ins_scale * k_b * theta_a[i - 1] * theta_a[i - 1] + d_ins_b(i, j)
+			w_ins_a = c_ins_scale * k_b * theta_b[j - 1] * theta_b[j - 1] + d_ins_a(i, j) + c_node
+			w_ins_b = c_ins_scale * k_b * theta_a[i - 1] * theta_a[i - 1] + d_ins_b(i, j) + c_node
 
 			cand = (
 				(C[i - 1][j - 1] + w_pair, BT_PAIR),
@@ -242,6 +312,9 @@ def dp_match(L_a, theta_a, L_b, theta_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0,
 			best_cost, best_op = min(cand, key=lambda t: t[0])
 			C[i][j] = best_cost
 			B[i][j] = best_op
+
+			if pin_end and i == m and j == n:
+				C[i][j], B[i][j] = cand[0]
 
 	return C, B, C[m][n]
 
@@ -295,7 +368,7 @@ def _rotate(seq, k):
 
 
 def dp_match_cyclic(L_a, theta_a, L_b, theta_b, k_s=1.0, k_b=1.0, c_ins_scale=1.0,
-                    prefer=None, tie_tol=1e-6, dir_a=None, dir_b=None, k_d=0.0):
+                    prefer=None, tie_tol=1e-6, dir_a=None, dir_b=None, k_d=0.0, c_node=0.0):
 	'''Closed-contour matcher: brute-force the best cyclic shift of B.
 
 	For each shift s in [0, n), rotate B's intrinsic sequences left by s
@@ -303,6 +376,7 @@ def dp_match_cyclic(L_a, theta_a, L_b, theta_b, k_s=1.0, k_b=1.0, c_ins_scale=1.
 	prefer (callable shift -> key): breaks ties among shifts whose cost
 	is within tie_tol * (1 + min cost) of the minimum (lowest key wins).
 	dir_a, dir_b, k_d: direction term, see dp_match (B's rotates with s).
+	c_node: flat cost per inserted node, see dp_match.
 
 	Complexity: O(n * m * n). For typical glyphs (n, m < 100) this runs
 	well under a millisecond in pure Python. Replace with extremum-
@@ -324,7 +398,8 @@ def dp_match_cyclic(L_a, theta_a, L_b, theta_b, k_s=1.0, k_b=1.0, c_ins_scale=1.
 		T_b_s = _rotate(theta_b, s)
 		dir_b_s = (_rotate(dir_b[0], s), _rotate(dir_b[1], s)) if dir_b is not None else None
 		C, B, total = dp_match(L_a, theta_a, L_b_s, T_b_s, k_s=k_s, k_b=k_b,
-		                       c_ins_scale=c_ins_scale, dir_a=dir_a, dir_b=dir_b_s, k_d=k_d)
+		                       c_ins_scale=c_ins_scale, dir_a=dir_a, dir_b=dir_b_s, k_d=k_d,
+		                       c_node=c_node)
 		if prefer is not None:
 			ties.append((s, C, B, total))
 		elif best is None or total < best[3]:
@@ -626,7 +701,7 @@ def canonicalize_contour_order(contours, corner=Corner.TOP_LEFT):
 
 def apply_match(contour_a, contour_b,
                 k_s=1.0, k_b=1.0, c_ins_scale=1.0,
-                align_start='respect', k_d=None):
+                align_start='respect', k_d=None, c_node=None):
 	'''Mutate *copies* of contour_a / contour_b so they become point-
 	compatible under the Sederberg-Greenwood energy.
 
@@ -645,6 +720,8 @@ def apply_match(contour_a, contour_b,
 			              both A and B before DP, then shift_b = 0.
 			'auto'      — cyclic DP picks the cheapest shift (legacy).
 		k_d: direction weight (see dp_match); None = k_b. 0 = intrinsic only.
+		c_node: flat cost per inserted node (see dp_match); None = k_b *
+			(pi/8)^2, a 22.5 deg mismatch. Bends use true tangents (turns()).
 
 	Returns:
 		(new_a, new_b, cost, meta) where meta contains 'shift_b',
@@ -660,8 +737,14 @@ def apply_match(contour_a, contour_b,
 			"align_start must be one of 'respect','canonical','auto'; got {!r}".format(
 				align_start))
 
+	# Open contours: ends are fixed (first pairs first, last pairs last).
+	# No start rotation, no wrap edge, reversal decided by the ends.
+	is_open = not (contour_a.closed and contour_b.closed)
+	if is_open and (contour_a.closed or contour_b.closed):
+		raise ValueError('apply_match: open contour vs closed contour')
+
 	# Canonicalize THEN clone by using canonicalize_start (which clones).
-	if align_start == 'canonical':
+	if align_start == 'canonical' and not is_open:
 		new_a = canonicalize_start(contour_a, corner=Corner.BOTTOM_LEFT)
 		new_b = canonicalize_start(contour_b, corner=Corner.BOTTOM_LEFT)
 	else:
@@ -673,7 +756,13 @@ def apply_match(contour_a, contour_b,
 	# insertions. Reverse new_b's copy to match A's orientation. The
 	# original contour_b is untouched (we already cloned).
 	reversed_b = False
-	if bool(new_a.clockwise) != bool(new_b.clockwise):
+	if is_open:
+		ra, rb = _rel_on_points(new_a), _rel_on_points(new_b)
+		d = lambda p, q: math.hypot(p[0] - q[0], p[1] - q[1])
+		if d(ra[0], rb[-1]) + d(ra[-1], rb[0]) < d(ra[0], rb[0]) + d(ra[-1], rb[-1]):
+			new_b.reverse()		# open: the old end becomes the start, as it should
+			reversed_b = True
+	elif bool(new_a.clockwise) != bool(new_b.clockwise):
 		# Contour.reverse makes the old LAST on-curve the start; put the
 		# start back where it was, or 'respect' pairs one node off.
 		start = next(nd for nd in new_b.nodes if nd.is_on)
@@ -681,31 +770,37 @@ def apply_match(contour_a, contour_b,
 		new_b.set_start(next(k for k, nd in enumerate(new_b.nodes) if nd is start))
 		reversed_b = True
 
-	La, Ta = intrinsic(new_a)
-	Lb, Tb = intrinsic(new_b)
+	La, _ = intrinsic(new_a)
+	Lb, _ = intrinsic(new_b)
+	Ta, Tb = turns(new_a), turns(new_b)
 	m, n = len(La), len(Lb)
 	k_d = k_b if k_d is None else k_d
+	c_node = k_b * (math.pi / 8.) ** 2 if c_node is None else c_node
 	Da, Db = directions(new_a), directions(new_b)
-	if align_start == 'respect':
+	if is_open:
+		for L, T in ((La, Ta), (Lb, Tb)):
+			L[-1], T[0], T[-1] = 0., 0., 0.		# no wrap edge, ends do not turn
+	elif align_start == 'respect':
 		# The designer declares the starts paired: measure B's directions
 		# in that frame (no-op when the starts already agree).
 		off = _angle_diff(Da[0][0], Db[0][0])
 		Db = ([v + off for v in Db[0]], [e + off for e in Db[1]])
 
-	if align_start == 'auto':
+	if align_start == 'auto' and not is_open:
 		# Ties: the B on-curve nearest A's start (bbox-relative) wins.
 		rel_a, rel_b = _rel_on_points(new_a), _rel_on_points(new_b)
 		prefer = lambda s: math.hypot(rel_b[s][0] - rel_a[0][0], rel_b[s][1] - rel_a[0][1])
 		shift_b, _C, B_tbl, cost = dp_match_cyclic(
 			La, Ta, Lb, Tb, k_s=k_s, k_b=k_b, c_ins_scale=c_ins_scale, prefer=prefer,
-			dir_a=Da, dir_b=Db, k_d=k_d)
+			dir_a=Da, dir_b=Db, k_d=k_d, c_node=c_node)
 	else:
 		# 'respect' and 'canonical' both pin shift=0; 'respect' also pairs
 		# the two starts (else the direction term pads misaligned starts
 		# with insertions on both sides instead of the designer's pairing).
 		_C, B_tbl, cost = dp_match(
 			La, Ta, Lb, Tb, k_s=k_s, k_b=k_b, c_ins_scale=c_ins_scale,
-			dir_a=Da, dir_b=Db, k_d=k_d, pin_start=align_start == 'respect')
+			dir_a=Da, dir_b=Db, k_d=k_d, pin_start=is_open or align_start == 'respect',
+			pin_end=is_open, c_node=c_node)
 		shift_b = 0
 
 	path = backtrace(B_tbl, m, n)
@@ -2281,6 +2376,55 @@ def _test_respect_misaligned_starts_no_padding():
 	print('  respect: misaligned starts paired as declared, no padding [OK]')
 
 
+# devices_2 (Material Symbols, Apache-2.0): 20pt draws each rounded
+# corner as 1 curve, Regular as 3. Start first; 'c' = off-curve.
+_DEVICES_2 = {
+	'Regular': (
+		(False, '460,200 312,200 245,200c 211,200c 186,213 163,225c 145,243c 133,266 120,291c 120,325c '
+		        '120,392 120,568 120,635c 120,669c 133,694 145,717c 163,735c 186,747 211,760c 245,760c '
+		        '312,760 648,760 715,760c 749,760c 774,747'),
+		(True, '728,200 752,200 797,200c 819,200c 836,209 851,216c 864,229c 871,244 880,261c 880,283c '
+		       '880,328 880,512 880,557c 880,579c 871,596 864,611c 851,624c 836,631 819,640c 797,640c '
+		       '752,640 728,640 683,640c 661,640c 644,631 629,624c 616,611c 609,596 600,579c 600,557c '
+		       '600,512 600,328 600,283c 600,261c 609,244 616,229c 629,216c 644,209 661,200c 683,200c')),
+	'20pt': (
+		(False, '492,228 252,228 186,228c 132,282c 132,348 132,612 132,678c 186,732c 252,732 708,732 '
+		        '727,732c 745,728c 760,720'),
+		(True, '660,240 756,240 796,240c 828,272c 828,312 828,552 828,592c 796,624c 756,624 660,624 '
+		       '620,624c 588,592c 588,552 588,312 588,272c 620,240c')),
+}
+
+
+def _fixture_contour(closed, spec):
+	nodes = []
+	for tok in spec.split():
+		curve = tok.endswith('c')
+		x, y = tok.rstrip('c').split(',')
+		nodes.append(Node(float(x), float(y), type='curve' if curve else 'on'))
+	return Contour(nodes, closed=closed)
+
+
+def _test_corner_one_vs_three_curves():
+	'''devices_2 20pt -> Regular, open and closed path: every original
+	20pt node pairs with the Regular node of the same tangent, and nothing
+	is inserted on Regular. The polygon bend paired a one-curve corner's
+	ends with Regular's inner corner nodes and inserted on the straights
+	(on the open path also on Regular: smooth nodes made insertion free).'''
+	for k in (0, 1):
+		ref = _fixture_contour(*_DEVICES_2['Regular'][k])
+		act = _fixture_contour(*_DEVICES_2['20pt'][k])
+		for mode in ('respect', 'auto'):
+			na, nb, cost, meta = apply_match(ref, act, k_s=1. / 960 ** 2, k_b=1.0, align_start=mode)
+			assert meta['n_insert_a'] == 0, \
+				'path {} {}: {} inserted on Regular'.format(k, mode, meta['n_insert_a'])
+			orig = set((nd.x, nd.y) for nd in act.nodes if nd.is_on)
+			Va, Vb = directions(na)[0], directions(nb)[0]
+			off = [abs(math.degrees(_angle_diff(x, y))) for x, y, nd in
+			       zip(Va, Vb, [nd for nd in nb.nodes if nd.is_on]) if (nd.x, nd.y) in orig]
+			assert max(off) < 10., 'path {} {}: a 20pt node paired {:.0f} deg off'.format(k, mode, max(off))
+	print('  devices_2 20pt -> Regular: corners pair end to end, open + closed [OK]')
+
+
 def _run_stage8_tests():
 	print('Stage 8 - pairing order:')
 	_test_insertions_follow_path_order()
@@ -2288,6 +2432,7 @@ def _run_stage8_tests():
 	_test_auto_symmetric_tie_by_geometry()
 	_test_ring_insertions_spread()
 	_test_respect_misaligned_starts_no_padding()
+	_test_corner_one_vs_three_curves()
 	print('Stage 8: all tests passed.')
 
 

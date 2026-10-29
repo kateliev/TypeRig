@@ -403,6 +403,10 @@ def npa_layer_matchmaker(glyph, scope_layers, LayerActions, source,
     (core.algo.matchmaker). contour_mode matches only the contours with a
     selection on source. dry_run reports without writing.
 
+    The picked layer is the reference (matchmaker A): it keeps its contour
+    order, starts and directions; the active layer is the one reordered,
+    reversed or rotated. Either side may still get nodes inserted.
+
     Returns (ok, report_lines)."""
     from typerig.core.algo.matchmaker import apply_match, apply_match_glyph
 
@@ -434,24 +438,25 @@ def npa_layer_matchmaker(glyph, scope_layers, LayerActions, source,
         new_a, new_b, total = list(ca), list(cb), 0.
         lines = [head + ' [contours %s, start %s]' % (sel_ids, align_start)]
         for i in sel_ids:
-            na, nb, cost, meta = apply_match(ca[i], cb[i], k_s=k_s, k_b=k_b, align_start=align_start)
+            nb, na, cost, meta = apply_match(cb[i], ca[i], k_s=k_s, k_b=k_b, align_start=align_start)
             new_a[i], new_b[i] = na, nb
             total += cost
             lines.append('  contour %d: cost=%.4f inserts=%d/%d promotions=%d/%d' % (
-                i, cost, meta['n_insert_a'], meta['n_insert_b'],
-                meta['n_promoted_a'], meta['n_promoted_b']))
+                i, cost, meta['n_insert_b'], meta['n_insert_a'],
+                meta['n_promoted_b'], meta['n_promoted_a']))
         lines.append('  total cost = %.4f' % total)
     else:
         if len(ca) != len(cb):
             return False, [head, 'Contour count mismatch: %d / %d.' % (len(ca), len(cb))]
         if any(_on_count(c) < 3 for c in ca + cb):
             return False, [head, 'Degenerate contours (<3 on-curves).']
-        new_a, new_b, total, meta = apply_match_glyph(
-            ca, cb, k_s=k_s, k_b=k_b, align_start=align_start, pair_mode=pair_mode)
+        new_b, new_a, total, meta = apply_match_glyph(
+            cb, ca, k_s=k_s, k_b=k_b, align_start=align_start, pair_mode=pair_mode)
         lines = [head + ' [start %s, order %s]' % (align_start, pair_mode),
                  '  cost=%.4f inserts=%d/%d promotions=%d/%d pairs=%s' % (
-                     total, meta['total_insert_a'], meta['total_insert_b'],
-                     meta['total_promoted_a'], meta['total_promoted_b'], meta['pairs'])]
+                     total, meta['total_insert_b'], meta['total_insert_a'],
+                     meta['total_promoted_b'], meta['total_promoted_a'],
+                     [(j, i) for i, j in meta['pairs']])]
 
     if dry_run:
         lines.append('  (dry run: nothing written)')
