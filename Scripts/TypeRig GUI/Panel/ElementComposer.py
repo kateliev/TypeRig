@@ -1,25 +1,26 @@
-#FLM: TR: Elements
+#FLM: TR: Element Composer
 # -----------------------------------------------------------
-# (C) Vassil Kateliev, 2018-2021	(http://www.kateliev.com)
+# (C) Vassil Kateliev, 2018-2026	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
 
+# Element composition: insert, replace and swap named elements across glyphs.
+# Element management (merge, split, group, ungroup all, arrange, align, transform,
+# round, style, rename, link, unlink...) lives in the ElementNew panel.
+
 # - Dependencies -------------------------
 from __future__ import absolute_import, print_function
 import os
-from math import radians
-from collections import OrderedDict
 
 import fontlab as fl6
 import fontgate as fgt
 
 from typerig.proxy.fl.objects.base import Coord
-from typerig.proxy.fl.objects.font import pFont, pFontMetrics
+from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import pGlyph, eGlyph
-from typerig.proxy.fl.objects.shape import pShape, eShape
 from typerig.core.base.message import *
 
 from PythonQt import QtCore
@@ -31,7 +32,7 @@ global pLayers
 global pMode
 pLayers = None
 pMode = 0
-app_name, app_version = 'TypeRig | Elements', '1.28'
+app_name, app_version = 'TypeRig | Element Composer', '2.1'
 
 # - Syntax -------------------------------
 syn_comment = '#'
@@ -98,33 +99,6 @@ _find_element_&_replace_element_ <> !glyph
 Will find element _find_element_ in current active glyph (or multiple glyphs) and replace it with _replace_element_
 '''
 
-# - Sub-widgets --------------------
-class MLineEdit(QtGui.QLineEdit):
-	# - Custom QLine Edit extending the contextual menu with FL6 metric expressions
-	def __init__(self, *args, **kwargs):
-		super(MLineEdit, self).__init__(*args, **kwargs)
-		self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-		self.customContextMenuRequested.connect(self.__contextMenu)
-
-	def __contextMenu(self):
-		self._normalMenu = self.createStandardContextMenu()
-		self._addCustomMenuItems(self._normalMenu)
-		self._normalMenu.exec_(QtGui.QCursor.pos())
-
-	def smartSetText(self, prefix):
-		currentText = self.text
-		if currentText[0] != '.' and currentText[0] != '_': currentText = '.' + currentText
-		self.setText(prefix + currentText)
-
-	def _addCustomMenuItems(self, menu):
-		menu.addSeparator()
-		menu.addAction(u'{Glyph Name}', lambda: self.setText(eGlyph().name))
-		menu.addAction(u'_part', lambda: self.smartSetText('_part'))
-		menu.addAction(u'_UC', lambda: self.smartSetText('_UC'))
-		menu.addAction(u'_LC', lambda: self.smartSetText('_LC'))
-		menu.addAction(u'_LAT', lambda: self.smartSetText('_LAT'))
-		menu.addAction(u'_CYR', lambda: self.smartSetText('_CYR'))
-
 class TRPlainTextEdit(QtGui.QPlainTextEdit):
 	# - Custom QLine Edit extending the contextual menu with FL6 metric expressions
 	def __init__(self, *args, **kwargs):
@@ -167,57 +141,19 @@ class TRPlainTextEdit(QtGui.QPlainTextEdit):
 		self.insertPlainText(' '.join(selection))
 		
 class basicOps(QtGui.QGridLayout):
-	# - Basic Node operations
+	# - Basic element operations not covered by the ElementNew panel
 	def __init__(self):
 		super(basicOps, self).__init__()
 
 		# - Widgets
-		self.edt_shapeName = MLineEdit()
-		self.edt_shapeName.setPlaceholderText('Element name')
-
-		self.btn_setShapeName = QtGui.QPushButton('&Set Name')
-		self.btn_unlinkShape = QtGui.QPushButton('&Unlink References')
 		self.btn_delShape = QtGui.QPushButton('&Remove')
-		self.btn_resetShape = QtGui.QPushButton('Reset &transform')
 		self.btn_reorderShape = QtGui.QPushButton('&Auto Reorder Layer')
-		self.btn_roundShape = QtGui.QPushButton('R&ound transform')
-		self.btn_ungroupAllShapes = QtGui.QPushButton('Un&group All')
 
-		self.btn_setShapeName.clicked.connect(self.shape_setname)
-		self.btn_unlinkShape.clicked.connect(self.shape_unlink)
 		self.btn_delShape.clicked.connect(self.shape_delete)
-		self.btn_resetShape.clicked.connect(self.shape_resetTransform)
-		self.btn_roundShape.clicked.connect(self.shape_roundTransform)
 		self.btn_reorderShape.clicked.connect(self.shape_autoReorder)
-		self.btn_ungroupAllShapes.clicked.connect(self.shape_ungroupAll)
 
-		self.addWidget(self.edt_shapeName, 			0, 0, 1, 6)
-		self.addWidget(self.btn_setShapeName, 		1, 0, 1, 3)
-		self.addWidget(self.btn_unlinkShape, 		1, 3, 1, 3)
-		self.addWidget(self.btn_delShape, 			2, 0, 1, 3)
-		self.addWidget(self.btn_resetShape, 		2, 3, 1, 3)
-		
-		self.addWidget(self.btn_reorderShape, 		3, 0, 1, 6)
-		self.addWidget(self.btn_roundShape, 		4, 0, 1, 3)
-		self.addWidget(self.btn_ungroupAllShapes, 	4, 3, 1, 3)
-
-	def reset_fileds(self):
-		self.edt_shapeName.clear()
-
-	def shape_resetTransform(self):
-		process_glyphs = getProcessGlyphs(pMode)
-
-		for glyph in process_glyphs:
-			process_layers = glyph._prepareLayers(pLayers)
-
-			for layer in process_layers:
-				wShape = pShape(glyph.selectedAtShapes(index=False, layer=layer, deep=False)[0][0])
-				wShape.reset_transform()
-
-			glyph.update()
-			glyph.updateObject(glyph.fl, 'Reset Element transformation data @ %s.' %'; '.join(process_layers))
-
-		self.reset_fileds()
+		self.addWidget(self.btn_delShape, 			0, 0, 1, 3)
+		self.addWidget(self.btn_reorderShape, 		0, 3, 1, 3)
 
 	def shape_autoReorder(self):
 		process_glyphs = getProcessGlyphs(pMode)
@@ -231,54 +167,6 @@ class basicOps(QtGui.QGridLayout):
 			glyph.update()
 			glyph.updateObject(glyph.fl, 'Auto Shape Order @ %s.' %'; '.join(process_layers))
 
-	def shape_ungroupAll(self):
-		process_glyphs = getProcessGlyphs(pMode)
-
-		for glyph in process_glyphs:
-			process_layers = glyph._prepareLayers(pLayers)
-
-			for layer in process_layers:
-				glyph.ungroup_all_shapes(layer)
-
-			glyph.update()
-			glyph.updateObject(glyph.fl, 'Ungroup all Shapes @ %s.' %'; '.join(process_layers))
-
-	def shape_roundTransform(self):
-		process_glyphs = getProcessGlyphs(pMode)
-
-		for glyph in process_glyphs:
-			process_layers = glyph._prepareLayers(pLayers)
-
-			for layer in process_layers:
-				selected_shapes = glyph.selectedAtShapes(index=False, layer=layer, deep=False)
-				
-				if len(selected_shapes):
-					wShape = eShape(selected_shapes[0][0])
-					wShape.round()
-				else:
-					for s in glyph.shapes(layer, extend=eShape):
-						s.round()				
-
-			glyph.update()
-			glyph.updateObject(glyph.fl, 'Round Element transformation data @ %s.' %'; '.join(process_layers))
-
-		self.reset_fileds()
-
-	def shape_setname(self):
-		process_glyphs = getProcessGlyphs(pMode)
-
-		for glyph in process_glyphs:
-			process_layers = glyph._prepareLayers(pLayers)
-
-			for layer in process_layers:
-				wShape = pShape(glyph.selectedAtShapes(index=False, layer=layer, deep=False)[0][0])
-				wShape.setName(self.edt_shapeName.text)
-
-			glyph.update()
-			glyph.updateObject(glyph.fl, 'Set Element Name @ %s.' %'; '.join(process_layers))
-
-		self.reset_fileds()
-
 	def shape_delete(self):
 		process_glyphs = getProcessGlyphs(pMode)
 
@@ -291,164 +179,6 @@ class basicOps(QtGui.QGridLayout):
 
 			glyph.update()
 			glyph.updateObject(glyph.fl, 'Remove Element @ %s.' %'; '.join(process_layers))
-
-	def shape_unlink(self):
-		process_glyphs = getProcessGlyphs(pMode)
-
-		for glyph in process_glyphs:
-			process_layers = glyph._prepareLayers(pLayers)
-			process_shapes = {layer:glyph.selectedAtShapes(index=False, layer=layer, deep=False)[0][0] for layer in process_layers}
-				
-			for layer, shape in process_shapes.items():
-				glyph.addShape(shape, layer, clone=True)
-				glyph.layer(layer).removeShape(shape)
-
-			glyph.update()
-			glyph.updateObject(glyph.fl, 'Unlink Element @ %s.' %'; '.join(process_layers))
-
-class alignShapes(QtGui.QGridLayout):
-	# - Align Contours
-	def __init__(self):
-		super(alignShapes, self).__init__()
-				
-		# - Init
-		self.align_x = OrderedDict([('Left','L'), ('Right','R'), ('Center','C'), ('Keep','K')])
-		self.align_y = OrderedDict([('Top','T'), ('Bottom','B'), ('Center','E'), ('Keep','X')])
-		self.align_mode = OrderedDict([	('Layer','CL'), 
-										('Base to X-Height','CMX'),
-										('Base to Caps','CMC'),
-										('Base Ascender','CMA'),
-										('Descender to Base','CMD'),
-										('Shape to Shape','CC'), 
-										('Shape to Shape (REV)','RC')])
-		
-		# !!! To be implemented
-		#self.align_mode = OrderedDict([('Layer','CL'), ('Shape to Shape','CC'), ('Shape to Shape (REV)','RC'), ('Shape to Node','CN'),('Node to Node','NN')])
-
-		# - Widgets
-		self.cmb_align_x = QtGui.QComboBox()
-		self.cmb_align_y = QtGui.QComboBox()
-		self.cmb_align_mode = QtGui.QComboBox()
-		self.cmb_align_x.addItems(list(self.align_x.keys()))
-		self.cmb_align_y.addItems(list(self.align_y.keys()))
-		self.cmb_align_mode.addItems(list(self.align_mode.keys()))
-
-		self.cmb_align_x.setToolTip('Horizontal Alignment')
-		self.cmb_align_y.setToolTip('Vertical Alignment')
-		self.cmb_align_mode.setToolTip('Alignment Mode')
-
-		self.btn_align = QtGui.QPushButton('Align')
-		self.btn_align.clicked.connect(self.alignShapes)
-
-		self.addWidget(self.cmb_align_mode, 	0, 0, 1, 2)
-		self.addWidget(self.cmb_align_x, 		0, 2, 1, 1)
-		self.addWidget(self.cmb_align_y, 		0, 3, 1, 1)
-		self.addWidget(self.btn_align, 			1, 0, 1, 4)
-
-	def alignShapes(self):
-		# - Helpers
-		def getShapeBounds(work_shapes):
-			tmp_bounds = [shape.bounds() for shape in work_shapes]
-			shape_min_X, shape_min_Y, shape_max_X, shape_max_Y = map(set, zip(*tmp_bounds))
-			return (min(shape_min_X), min(shape_min_Y), max(shape_max_X), max(shape_max_Y))
-
-		def getAlignDict(bounds_tuple):
-			align_dict = {	'L': bounds_tuple[0], 
-							'R': bounds_tuple[2],
-							'C': bounds_tuple[2]/2,
-							'B': bounds_tuple[1], 
-							'T': bounds_tuple[3], 
-							'E': bounds_tuple[3]/2
-						}
-
-			return align_dict
-
-		# - Init
-		user_mode =  self.align_mode[self.cmb_align_mode.currentText]
-		user_x = self.align_x[self.cmb_align_x.currentText]
-		user_y = self.align_y[self.cmb_align_y.currentText]
-		keep_x, keep_y = True, True	
-
-		if user_x == 'K': keep_x = False; user_x = 'L'
-		if user_y == 'X': keep_y = False; user_y = 'B'		
-		
-		process_glyphs = getProcessGlyphs(pMode)
-
-		# - Process
-		for glyph in process_glyphs:
-			selection = glyph.selectedAtShapes(deep=False)
-			wLayers = glyph._prepareLayers(pLayers)
-
-			for layerName in wLayers:
-				glyph_shapes = glyph.shapes(layerName, extend=eShape)
-				work_shapes = [glyph_shapes[index] for index in list(set([item[0] for item in selection]))]
-				
-				if user_mode =='CC': # Align shapes to shapes
-					if 1 < len(work_shapes) < 3:
-						sh1, sh2 = work_shapes
-						sh1.alignTo(sh2, user_x + user_y, (keep_x, keep_y))
-
-					elif len(work_shapes) > 2:
-						shape_bounds = getShapeBounds(work_shapes)
-						align_type = getAlignDict(shape_bounds)
-						target = Coord(align_type[user_x], align_type[user_y])
-
-						for shape in work_shapes:
-							shape.alignTo(target, user_x + user_y, (keep_x, keep_y))
-					
-				elif user_mode == 'RC': # Align shapes to shapes in reverse order
-					if 1 < len(work_shapes) < 3:
-						sh1, sh2 = work_shapes
-						sh2.alignTo(sh1, user_x + user_y, (keep_x, keep_y))
-
-					elif len(work_shapes) > 2:
-						shape_bounds = getShapeBounds(work_shapes)
-						align_type = getAlignDict(shape_bounds)
-						target = Coord(align_type[user_x], align_type[user_y])
-
-						for shape in reversed(work_shapes):
-							shape.alignTo(target, user_x + user_y, (keep_x, keep_y))	
-
-				# !!! To be implemented
-				elif user_mode == 'CN': # Align shape to node
-					pass
-
-				elif user_mode == 'NN': # Align a node on shape to node on another
-					pass
-
-				else:
-					metrics = pFontMetrics(glyph.package)
-					max_layer_y = max([metrics.getXHeight(layerName), metrics.getCapsHeight(layerName), metrics.getAscender(layerName)])
-					min_layer_y = min([0, metrics.getDescender(layerName)])
-					layer_bounds = QtCore.QRect(0, 0, glyph.getAdvance(layerName), abs(max_layer_y) + abs(min_layer_y))
-					
-					if user_mode == 'CL': # Align all shapes in given Layer
-						shape_bounds = (layer_bounds.x(), layer_bounds.y(), layer_bounds.x() + layer_bounds.width(), layer_bounds.y() + layer_bounds.height())
-					
-					elif user_mode == 'CMX': # Align all shapes to X height
-						height = metrics.getXHeight(layerName)
-						shape_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
-
-					elif user_mode == 'CMC': # Align all shapes to Caps height
-						height = metrics.getCapsHeight(layerName)
-						shape_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
-
-					elif user_mode == 'CMA': # Align all shapes to Ascender height
-						height = metrics.getAscender(layerName)
-						shape_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
-
-					elif user_mode == 'CMD': # Align all shapes to Ascender height
-						height = metrics.getDescender(layerName)
-						shape_bounds = (layer_bounds.x(), 0., layer_bounds.x() + layer_bounds.width(), height)
-
-					align_type = getAlignDict(shape_bounds)
-					target = Coord(align_type[user_x], align_type[user_y])
-
-					for shape in glyph_shapes:
-						shape.alignTo(target, user_x + user_y, (keep_x, keep_y))	
-
-			glyph.update()
-			glyph.updateObject(glyph.fl, 'Glyph: %s;\tAction: Align Shapes @ %s.' %(glyph.name, '; '.join(wLayers)))
 
 class glyphComposer(QtGui.QGridLayout):
 	def __init__(self, parent):
@@ -785,99 +515,6 @@ class glyphComposer(QtGui.QGridLayout):
 			# - Report and finish
 			#output(0, app_name, 'Glyphs processed: %s' %' '.join(dst_store))
 				
-class shapeMovement(QtGui.QVBoxLayout):
-	def __init__(self):
-		super(shapeMovement, self).__init__()
-
-		# - Init
-		self.methodList = ['Shift', 'Scale', 'Shear']
-		
-		# - Methods
-		self.cmb_methodSelector = QtGui.QComboBox()
-		self.cmb_methodSelector.addItems(self.methodList)
-		self.cmb_methodSelector.setToolTip('Select transformation method')
-		
-		# - Arrow buttons
-		self.btn_up = QtGui.QPushButton('Up')
-		self.btn_down = QtGui.QPushButton('Down')
-		self.btn_left = QtGui.QPushButton('Left')
-		self.btn_right = QtGui.QPushButton('Right')
-		
-		self.btn_up.setMinimumWidth(80)
-		self.btn_down.setMinimumWidth(80)
-		self.btn_left.setMinimumWidth(80)
-		self.btn_right.setMinimumWidth(80)
-
-		self.btn_up.clicked.connect(self.onUp)
-		self.btn_down.clicked.connect(self.onDown)
-		self.btn_left.clicked.connect(self.onLeft)
-		self.btn_right.clicked.connect(self.onRight)
-		
-		self.edt_offX = QtGui.QLineEdit('1.0')
-		self.edt_offY = QtGui.QLineEdit('1.0')
-		self.edt_offX.setToolTip('X offset')
-		self.edt_offY.setToolTip('Y offset')
-
-		# - Layout
-		self.lay_btn = QtGui.QGridLayout()
-
-		self.lay_btn.addWidget(self.cmb_methodSelector, 0, 0, 1, 6)
-		self.lay_btn.addWidget(QtGui.QLabel('X:'), 		1, 0, 1, 1)
-		self.lay_btn.addWidget(self.edt_offX, 			1, 1, 1, 1)
-		self.lay_btn.addWidget(self.btn_up, 			1, 2, 1, 2)
-		self.lay_btn.addWidget(QtGui.QLabel('Y:'), 		1, 4, 1, 1)
-		self.lay_btn.addWidget(self.edt_offY, 			1, 5, 1, 1)
-		self.lay_btn.addWidget(self.btn_left, 			2, 0, 1, 2)
-		self.lay_btn.addWidget(self.btn_down, 			2, 2, 1, 2)
-		self.lay_btn.addWidget(self.btn_right, 			2, 4, 1, 2)
-
-		self.addLayout(self.lay_btn)
-
-	def moveElement(self, offset_x, offset_y, method):
-		# - Init
-		glyph = eGlyph()
-		font = pFont()
-		
-		process_glyphs = getProcessGlyphs(pMode)
-
-		for glyph in process_glyphs:
-			wLayers = glyph._prepareLayers(pLayers)
-
-			for layer in wLayers:
-				selected_shapes = glyph.selectedAtShapes(index=False, layer=layer, deep=False)
-								
-				for shape, contour, node in selected_shapes:
-					wShape = pShape(shape)
-					if method =='Shift':
-						wShape.shift(offset_x, offset_y)
-
-					elif method == 'Scale':
-						wShape.scale(1. + offset_x/100., 1. + offset_y/100.)
-
-					elif method == 'Shear':
-						wShape.shear(radians(offset_x), radians(offset_y))				
-
-			glyph.update()
-			glyph.updateObject(glyph.fl, 'Element: %s @ %s.' %(method, '; '.join(wLayers)))
-		
-		# - Set Undo
-		#glyph.updateObject(glyph.activeLayer(), '%s @ %s.' %(method, glyph.activeLayer().name), verbose=False)
-
-		# - Finish it
-		glyph.update()
-
-	def onUp(self):
-		self.moveElement(.0, float(self.edt_offY.text), method=str(self.cmb_methodSelector.currentText))
-
-	def onDown(self):
-		self.moveElement(.0, -float(self.edt_offY.text), method=str(self.cmb_methodSelector.currentText))
-			
-	def onLeft(self):
-		self.moveElement(-float(self.edt_offX.text), .0, method=str(self.cmb_methodSelector.currentText))
-			
-	def onRight(self):
-		self.moveElement(float(self.edt_offX.text), .0, method=str(self.cmb_methodSelector.currentText))
-
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
 	def __init__(self):
@@ -885,32 +522,12 @@ class tool_tab(QtGui.QWidget):
 
 		# - Init
 		layoutV = QtGui.QVBoxLayout()
-		self.KeyboardOverride = False
 		
 		# - Build		
 		layoutV.addWidget(QtGui.QLabel('Basic Operations:'))
 		layoutV.addLayout(basicOps())
 		layoutV.addLayout(glyphComposer(self))
-
 		layoutV.addStretch()
-		layoutV.addWidget(QtGui.QLabel('Align Elements:'))
-		self.alignShapes = alignShapes()
-		layoutV.addLayout(self.alignShapes)
-
-		layoutV.addStretch()
-		layoutV.addWidget(QtGui.QLabel('Transformation:'))
-		self.shapeMovement = shapeMovement()
-		layoutV.addLayout(self.shapeMovement)  
-		
-		# - Capture Kyaboard
-		self.btn_capture = QtGui.QPushButton('Capture Keyboard')
-
-		self.btn_capture.setCheckable(True)
-		self.btn_capture.setToolTip('Click here to capture keyboard arrows input.\nNote:\n+10 SHIFT\n+100 CTRL\n Exit ESC')
-		self.btn_capture.setStatusTip(self.btn_capture.toolTip)
-		self.btn_capture.clicked.connect(lambda: self.captureKeyaboard())
-
-		layoutV.addWidget(self.btn_capture)
 
 		# - Build ---------------------------
 		self.setLayout(layoutV)
@@ -918,59 +535,6 @@ class tool_tab(QtGui.QWidget):
 		# !!! Hotfix FL7 7355 
 		self.setMinimumSize(300,self.sizeHint.height())
 
-	def keyPressEvent(self, eventQKeyEvent):
-		if self.KeyboardOverride:	
-			key = eventQKeyEvent.key()
-			modifier = int(eventQKeyEvent.modifiers())
-			addon = .0
-			
-			if key == QtCore.Qt.Key_Escape:
-				#self.close()
-				self.releaseKeyboard()
-				self.KeyboardOverride = False
-				self.btn_capture.setChecked(False)
-				self.btn_capture.setText('Capture Keyboard')
-				
-			# - Keyboard listener
-			# -- Modifier addon
-			if modifier == QtCore.Qt.ShiftModifier:
-				addon = 10.0
-			elif modifier == QtCore.Qt.ControlModifier:
-				addon = 100.0
-			else:
-				addon = .0
-			
-			# -- Standard movement keys	
-			if key == QtCore.Qt.Key_Up:
-				shiftXY = (.0, float(self.shapeMovement.edt_offY.text) + addon)
-			
-			elif key == QtCore.Qt.Key_Down:
-				shiftXY = (.0, -float(self.shapeMovement.edt_offY.text) - addon)
-			
-			elif key == QtCore.Qt.Key_Left:
-				shiftXY = (-float(self.shapeMovement.edt_offX.text) - addon, .0)
-			
-			elif key == QtCore.Qt.Key_Right:
-				shiftXY = (float(self.shapeMovement.edt_offX.text) + addon, .0)
-			
-			else:
-				shiftXY = (.0,.0)
-			
-			# - Move
-			self.shapeMovement.moveElement(*shiftXY, method=str(self.shapeMovement.cmb_methodSelector.currentText))
-
-	def captureKeyaboard(self):
-		if not self.KeyboardOverride:
-			self.KeyboardOverride = True
-			self.btn_capture.setChecked(True)
-			self.btn_capture.setText('Keyboard Capture Active. [ESC] Exit')
-			self.grabKeyboard()
-		else:
-			self.KeyboardOverride = False
-			self.btn_capture.setChecked(False)
-			self.btn_capture.setText('Capture Keyboard')
-			self.releaseKeyboard()
-	
 # - Test ----------------------
 if __name__ == '__main__':
 	test = tool_tab()

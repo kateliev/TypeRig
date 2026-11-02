@@ -23,7 +23,7 @@ global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Elements New', '0.2'
+app_name, app_version = 'TypeRig | Elements New', '0.3'
 
 brush_weight_presets = ['10', '20', '30', '40', '50', '60', '80', '100', '120', '160']
 
@@ -85,6 +85,8 @@ class TRElementBasics(QtGui.QWidget):
 				lambda: TRElementActionCollector.element_ungroup(pMode, pLayers, not get_modifier())), 5, 2, 1, 2)
 		lay_merge.addWidget(text_button('From selection', 'New group from selection:\nselected contours leave their elements, keeping each source\'s style and transform,\nand are grouped together.',
 				lambda: TRElementActionCollector.element_group_contours(pMode, pLayers)), 5, 4, 1, 2)
+		lay_merge.addWidget(text_button('Ungroup all', 'Full ungroup: dissolve every group on the layer, nested groups included.\nMouse Left + Alt: Eject members without applying the group transform.',
+				lambda: TRElementActionCollector.element_ungroup_all(pMode, pLayers, not get_modifier())), 6, 0, 1, 6)
 
 		box_merge.setLayout(lay_merge)
 		self.lay_main.addWidget(box_merge)
@@ -249,20 +251,25 @@ class TRElementBasics(QtGui.QWidget):
 
 		lay_manage.addWidget(text_button('Duplicate', 'Duplicate touched elements as independent copies right above them.',
 				lambda: TRElementActionCollector.element_duplicate(pMode, pLayers)), 2, 0, 1, 2)
+		lay_manage.addWidget(text_button('Link', 'Link touched elements: they become references of the topmost one\nand share its contours. Each lands centred where the replaced one was.\nMouse Left + Alt: link to the bottommost one.',
+				lambda: TRElementActionCollector.element_link(pMode, pLayers, get_modifier())), 2, 2, 1, 2)
 		lay_manage.addWidget(text_button('Unlink', 'Replace shared (referenced) elements with independent copies.\nNeeded before moving contours in or out of them.',
-				lambda: TRElementActionCollector.element_unlink(pMode, pLayers)), 2, 2, 1, 2)
-		lay_manage.addWidget(text_button('Select all', 'Select every node of the touched elements.',
-				lambda: TRElementActionCollector.element_select_whole()), 2, 4, 1, 2)
+				lambda: TRElementActionCollector.element_unlink(pMode, pLayers)), 2, 4, 1, 2)
 
 		lay_manage.addWidget(text_button('Apply TX', 'Apply the element transform onto its contours and reset it.',
 				lambda: TRElementActionCollector.element_bake_transform(pMode, pLayers)), 3, 0, 1, 2)
 		lay_manage.addWidget(text_button('Reset TX', 'Reset the element transform, contours stay as they are.',
 				lambda: TRElementActionCollector.element_reset_transform(pMode, pLayers)), 3, 2, 1, 2)
+		lay_manage.addWidget(text_button('Round TX', 'Round element transforms: scale and skew to 0.01, offset to whole units.\nWith nothing selected every element on the layer is rounded.',
+				lambda: TRElementActionCollector.element_round_transform(pMode, pLayers)), 3, 4, 1, 2)
+
+		lay_manage.addWidget(text_button('Select all', 'Select every node of the touched elements.',
+				lambda: TRElementActionCollector.element_select_whole()), 4, 0, 1, 3)
 		lay_manage.addWidget(text_button('Clean', 'Remove empty elements.',
-				lambda: TRElementActionCollector.element_clean_empty(pMode, pLayers)), 3, 4, 1, 2)
+				lambda: TRElementActionCollector.element_clean_empty(pMode, pLayers)), 4, 3, 1, 3)
 
 		lay_manage.addWidget(text_button('Report element stack', 'Print the element stack of the active layer, front to back, to the Output panel.\nTouched elements are marked with *.',
-				lambda: TRElementActionCollector.element_report()), 4, 0, 1, 6)
+				lambda: TRElementActionCollector.element_report()), 5, 0, 1, 6)
 
 		box_manage.setLayout(lay_manage)
 		self.lay_main.addWidget(box_manage)

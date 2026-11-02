@@ -194,6 +194,28 @@ def _group(layer, shapes):
 	container.update()
 	return container
 
+def _ungroup(layer, group, sid, apply_transform=True):
+	'''Dissolve a group at stack index sid, its members take its place.'''
+	if not len(group.includesList): return
+
+	members = group.ejectTo(False, apply_transform)
+	layer.removeShape(group)
+
+	for offset, member in enumerate(members):
+		layer.insertShape(sid + offset, member)
+
+def _round_affine(affine, linear_digits=2):
+	'''Linear part to given decimals, translation to whole units.'''
+	m11, m12, m21, m22, dx, dy = affine
+	return tuple([round(value, linear_digits) for value in (m11, m12, m21, m22)] + [float(round(dx)), float(round(dy))])
+
+def _round_shape(shape):
+	_set_shape_affine(shape, _round_affine(_shape_affine(shape)))
+	shape.update()
+
+	for include in shape.includesList:
+		_round_shape(include)
+
 def _move_affine(source, target):
 	'''Remap contours from source element space into target element space. None if target is singular.'''
 	target_inverse = eo.invert(_shape_affine(target))
@@ -396,16 +418,32 @@ class TRElementActionCollector(object):
 				if layer_shapes is None: continue
 
 				for sid in reversed(list(selection.keys())):
-					group = layer_shapes[sid]
-					if not len(group.includesList): continue
-
-					members = group.ejectTo(False, apply_transform)
-					layer.removeShape(group)
-
-					for offset, member in enumerate(members):
-						layer.insertShape(sid + offset, member)
+					_ungroup(layer, layer_shapes[sid], sid, apply_transform)
 
 			_finish(glyph, work_layers, 'Ungroup elements')
+
+		active_workspace.getCanvas(True).refreshAll()
+
+	@staticmethod
+	def element_ungroup_all(pMode:int, pLayers:tuple, apply_transform:bool=True):
+		'''Full ungroup: dissolve every group on the layer, nested groups included.'''
+		process_glyphs = getProcessGlyphs(pMode)
+
+		for glyph in process_glyphs:
+			work_layers = glyph._prepareLayers(pLayers)
+
+			for layer_name in work_layers:
+				layer = glyph.layer(layer_name)
+
+				for safety in range(1000): # Each pass dissolves one level of nesting
+					layer_shapes = layer.shapes
+					groups = [(sid, shape) for sid, shape in enumerate(layer_shapes) if len(shape.includesList)]
+					if not len(groups): break
+
+					for sid, group in reversed(groups):
+						_ungroup(layer, group, sid, apply_transform)
+
+			_finish(glyph, work_layers, 'Ungroup all elements')
 
 		active_workspace.getCanvas(True).refreshAll()
 
@@ -617,6 +655,27 @@ class TRElementActionCollector(object):
 
 		active_workspace.getCanvas(True).refreshAll()
 
+	@staticmethod
+	def element_round_transform(pMode:int, pLayers:tuple):
+		'''Round element transforms: scale/skew to 0.01, offset to whole units, group members included.
+		With nothing selected every element on the layer is rounded.'''
+		process_glyphs = getProcessGlyphs(pMode)
+
+		for glyph in process_glyphs:
+			selection = _get_selection(glyph)
+			work_layers = glyph._prepareLayers(pLayers)
+
+			for layer_name in work_layers:
+				layer, layer_shapes = _layer_shapes(glyph, layer_name, selection)
+				if layer_shapes is None: continue
+
+				for sid in (selection.keys() if len(selection) else range(len(layer_shapes))):
+					_round_shape(layer_shapes[sid])
+
+			_finish(glyph, work_layers, 'Round element transform')
+
+		active_workspace.getCanvas(True).refreshAll()
+
 	# - Style -------------------------------------------------
 	@staticmethod
 	def element_style_copy(pMode:int, pLayers:tuple):
@@ -772,6 +831,50 @@ class TRElementActionCollector(object):
 					layer.removeShape(shape)
 
 			_finish(glyph, work_layers, 'Unlink elements')
+
+		active_workspace.getCanvas(True).refreshAll()
+
+	@staticmethod
+	def element_link(pMode:int, pLayers:tuple, from_bottom:bool=False):
+		'''Link: the selected elements become references of the topmost (or bottommost) one,
+		so they share its contours. Each reference lands centred on the element it replaces
+		and keeps that element's transform. The reverse of Unlink.'''
+		process_glyphs = getProcessGlyphs(pMode)
+
+		for glyph in process_glyphs:
+			selection = _get_selection(glyph)
+			if len(selection) < 2: continue
+
+			work_layers = glyph._prepareLayers(pLayers)
+			sids = list(selection.keys())
+			key_sid = sids[0] if from_bottom else sids[-1]
+
+			for layer_name in work_layers:
+				layer, layer_shapes = _layer_shapes(glyph, layer_name, selection)
+				if layer_shapes is None: continue
+
+				key_shape = layer_shapes[key_sid]
+
+				for sid in reversed(sids):
+					if sid == key_sid: continue
+
+					old_shape = layer_shapes[sid]
+					old_bounds = _shape_bounds(old_shape)
+
+					new_shape = layer.insertShape(sid, fl6.flShape(key_shape.shapeData))
+					if new_shape is None: continue
+
+					new_shape.transform = old_shape.transform
+					new_bounds = _shape_bounds(new_shape)
+
+					if old_bounds is not None and new_bounds is not None:
+						shift = (eo.bounds_anchor(old_bounds, 'C') - eo.bounds_anchor(new_bounds, 'C'),
+								 eo.bounds_anchor(old_bounds, 'E') - eo.bounds_anchor(new_bounds, 'E'))
+						_set_shape_affine(new_shape, eo.compose(_shape_affine(new_shape), eo.translate(*shift)))
+
+					layer.removeShape(old_shape)
+
+			_finish(glyph, work_layers, 'Link elements')
 
 		active_workspace.getCanvas(True).refreshAll()
 
