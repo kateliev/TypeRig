@@ -35,12 +35,21 @@
 # element space, so stems across elements would be measured wrong.
 # Apply the transforms first (Elements New > Apply TX).
 #
+# Show on canvas: TRStemSnapCanvas draws the analysis of the active layer
+# on the glyph itself (like Delta's Live Edit): stems / strokes to snap in
+# red with "measured -> target", optionally the ones on target (green)
+# and outside every band (grey). It follows the panel options, the glyph
+# and layer, outside edits (re-analysed once the edit settles) and the
+# selection when "Selected stems / contours" is on. Icons: close,
+# re-analyse, show all, select, snap.
+#
 # NOTE: single glyph mode. The panel works on the current glyph only,
 # whatever the masthead glyph mode (window / selection). Multi-glyph
 # processing is planned for a later update.
 
 # - Dependencies -----------------
 from __future__ import absolute_import, print_function
+import math
 import time
 import traceback
 
@@ -52,6 +61,9 @@ from typerig.proxy.fl.objects.glyph import eGlyph
 from typerig.proxy.fl.objects.font import ps_master_stems
 from typerig.proxy.fl.application.app import pWorkspace
 from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
+from typerig.proxy.fl.gui import canvas_overlay as co
+from typerig.proxy.fl.gui import overlay_math as om
+from typerig.proxy.fl.gui.canvas_controls import CanvasIconStrip
 from typerig.proxy.tr.objects.contour import trContour, _build_fl_contour
 from typerig.proxy.tr.objects.shape import _build_fl_shape
 
@@ -65,7 +77,7 @@ global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Stem Snap', '0.1'
+app_name, app_version = 'TypeRig | Stem Snap', '0.2'
 
 DEFAULT_TOL = 5.		# capture band, units (or %)
 DIAGONAL_TYPES = (StrokeType.PIE, StrokeType.NA, StrokeType.DIAGONAL, StrokeType.DOT)
@@ -153,15 +165,17 @@ def _transformed(shape, eps=1e-9):
 	return any(abs(a - b) > eps for a, b in zip((t.m11(), t.m12(), t.m21(), t.m22(), t.dx(), t.dy()), (1., 0., 0., 1., 0., 0.)))
 
 def _italic_angle(package, layer):
-	'''Italic angle of the master a layer belongs to; the current master
-	for layers that are not masters. The current master is restored.'''
+	'''Italic angle (degrees, + leans right, as core stem_snap expects) of
+	the master a layer belongs to; the current master for layers that are
+	not masters. FontLab stores a right lean as a negative angle (as Delta
+	does, the sign is flipped). The current master is restored.'''
 	back_master = package.master
 
 	if layer != back_master and layer in list(package.masters):
 		package.setMaster(layer)
 
 	try:
-		return float(package.italicAngle_value or 0.)
+		return -float(package.italicAngle_value or 0.)
 	finally:
 		if package.master != back_master: package.setMaster(back_master)
 
@@ -184,6 +198,12 @@ class TRStemSnapPanel(QtGui.QWidget):
 		self.fields = {}		# key -> QLineEdit
 		self.checks = {}		# key -> (QCheckBox, default)
 		self.popups = {}		# key -> (QComboBox, [(title, value)], default)
+
+		# - Canvas (Show on canvas)
+		self.live_tool = None	# TRStemSnapCanvas while it is on
+		self._live_key = None	# key of the cached analysis
+		self._live_st = None	# cached live_state() result
+		self._live_rev = 0		# bumped by live_invalidate()
 
 		# - Layout
 		self.lay_main = QtGui.QVBoxLayout()
@@ -320,8 +340,16 @@ class TRStemSnapPanel(QtGui.QWidget):
 				lambda: self.on_select()), 1, 2, 1, 2)
 		lay.addWidget(text_button('Defaults', 'Reset all options to their defaults.',
 				lambda: self.on_reset()), 1, 4, 1, 2)
+		self.btn_canvas = QtGui.QPushButton('Show on canvas')
+		self.btn_canvas.setCheckable(True)
+		self.btn_canvas.setToolTip('Draw the stems / strokes of the active layer on the glyph canvas:\n'
+				'red: to snap (measured -> target); show all adds green: on target, grey: outside every band.\n'
+				'Follows the options, glyph, layer and edits.')
+		self.btn_canvas.clicked.connect(lambda: self.live_edit())
+		lay.addWidget(self.btn_canvas, 2, 0, 1, 6)
+
 		lay.addWidget(text_button('Snap', 'Snap captured stems / strokes to their targets on every layer in scope.',
-				lambda: self.on_snap(True)), 2, 0, 1, 6)
+				lambda: self.on_snap(True)), 3, 0, 1, 6)
 
 		box.setLayout(lay)
 		self.lay_main.addWidget(box)
@@ -393,6 +421,17 @@ class TRStemSnapPanel(QtGui.QWidget):
 				al.add(key, WidthTarget(value, band, band))
 		return al
 
+	def italic(self, package, layer):
+		'''Italic angle passed to core for this layer (0 with "Italic angle" off).'''
+		return _italic_angle(package, layer) if self.checked('italic') else 0.
+
+	def options_signature(self):
+		'''Cheap signature of every option (the canvas re-analyses when it changes).'''
+		return (self.cmb_method.currentIndex, float(self.spn_tol.value),
+				tuple(sorted((key, edt.text) for key, edt in self.fields.items())),
+				tuple(sorted((key, chk.isChecked()) for key, (chk, _) in self.checks.items())),
+				tuple(sorted((key, cmb.currentIndex) for key, (cmb, _, _) in self.popups.items())))
+
 	# - Messages ----------------------------------------
 	def say(self, *lines):
 		for line in lines:
@@ -406,12 +445,13 @@ class TRStemSnapPanel(QtGui.QWidget):
 		names = glyph._prepareLayers(pLayers, compatible=False) if pLayers is not None else [active]
 		return [active] + sorted(name for name in names if name != active)
 
-	def collect(self, glyph):
+	def collect(self, glyph, names=None):
 		'''([_LayerItem], [notes]) plus the selection on the active layer:
-		(set of (contour, node), set of contour indices).'''
+		(set of (contour, node), set of contour indices). names: layers to
+		read (default: the masthead layers, active first).'''
 		items, notes = [], []
 
-		for name in self.layer_names(glyph):
+		for name in (names if names is not None else self.layer_names(glyph)):
 			fl_layer = glyph.layer(name)
 			if fl_layer is None:
 				continue
@@ -465,6 +505,9 @@ class TRStemSnapPanel(QtGui.QWidget):
 			output(2, app_name, 'Failed:')
 			print(traceback.format_exc())
 			self.say('Glyph "{}": failed, see the Output panel.'.format(glyph.name))
+
+		if self.live_on():
+			self.live_tool.panel_wrote()
 
 	def snap(self, glyph, apply, select):
 		items, notes, sel_nodes, sel_contours = self.collect(glyph)
@@ -543,7 +586,7 @@ class TRStemSnapPanel(QtGui.QWidget):
 		self.say(*lines)
 
 	# -- Stems
-	def snap_stems(self, glyph, package, item, v, h, sel_nodes, apply):
+	def snap_stems(self, glyph, package, item, v, h, sel_nodes, apply, verbose=True):
 		detector = StemDetector(mode=self.choice('detect'),
 								topology=Topology.STRICT if self.checked('strict') else Topology.PERMISSIVE)
 
@@ -552,13 +595,13 @@ class TRStemSnapPanel(QtGui.QWidget):
 							axis=self.choice('axis'),
 							anchor=self.choice('anchor'),
 							scope=self.choice('cascade'),
-							italic_angle=_italic_angle(package, item.name) if self.checked('italic') else 0.,
+							italic_angle=self.italic(package, item.name),
 							selected=sel_nodes if self.checked('selected') else None,
 							round_ints=self.checked('round'),
 							pin_extremes=self.checked('pin'),
 							apply=apply)
 
-		for k in report.captured:
+		for k in (report.captured if verbose else []):
 			c = k.source
 			print('    {} {:>7.2f} -> {:g} ({:+.2f})  faces {:.1f} / {:.1f}  contours {} / {}'.format(
 				k.key, k.measured, k.target.value, k.delta,
@@ -572,7 +615,7 @@ class TRStemSnapPanel(QtGui.QWidget):
 		return line, len(report.moved), (item.contours, None, False, report)
 
 	# -- Strokes
-	def snap_strokes(self, glyph, item, v, h, d, sel_contours, apply):
+	def snap_strokes(self, glyph, item, v, h, d, sel_contours, apply, verbose=True):
 		keyed = {StrokeType.VERTICAL: v, StrokeType.HORIZONTAL: h}
 		keyed.update({t: d for t in DIAGONAL_TYPES})
 
@@ -584,11 +627,11 @@ class TRStemSnapPanel(QtGui.QWidget):
 							  round_ints=self.checked('s_round'),
 							  apply=apply)
 
-		for m in report.measurements:
+		for m in (report.measurements if verbose else []):
 			print('    {:<10} axis {:5.1f} deg  width min/med/max {:.1f} / {:.1f} / {:.1f}'.format(
 				m.stroke_type, m.axis_angle_deg, m.width_min, m.width_median, m.width_max))
 
-		for k in report.captured:
+		for k in (report.captured if verbose else []):
 			print('    {:<10} {:>7.2f} -> {:g} ({:+.2f})'.format(k.key, k.measured, k.target.value, k.delta))
 
 		on_target = len(report.captured) - len(report.moved)
@@ -667,6 +710,403 @@ class TRStemSnapPanel(QtGui.QWidget):
 				fl_nodes = item.fl_contours[ci].nodes()
 				if ni < len(fl_nodes):
 					fl_nodes[ni].selected = True
+
+	# - Canvas (Show on canvas) -------------------------
+	# The canvas asks live_state() for the analysis of the layer it shows.
+	# It is a dry run of the same Stems / Strokes code as Analyze, cached
+	# until the target, an option, the selection (when used) or the
+	# outline changes (live_invalidate). Nothing here writes the glyph.
+	def live_on(self):
+		return self.live_tool is not None and self.live_tool.alive
+
+	def live_edit(self):
+		'''Show on canvas button: start or stop the canvas overlay.'''
+		if self.btn_canvas.isChecked():
+			self.live_invalidate()
+			self.live_tool = TRStemSnapCanvas.start(self)
+		else:
+			self.live_tool = None
+			TRStemSnapCanvas.stop()
+
+	def live_closed(self):
+		'''Close icon on the canvas.'''
+		self.btn_canvas.setChecked(False)
+		self.live_edit()
+
+	def live_invalidate(self):
+		'''The outline changed: analyse again on the next live_state().'''
+		self._live_rev += 1
+
+	def live_uses_selection(self):
+		return self.checked('selected' if self.method() == 'stems' else 's_selected')
+
+	def live_state(self, target, selection=None):
+		'''Analysis of the canvas layer, or None without a target.
+		Args:
+			target (tuple): (glyph name, layer name) shown on the canvas
+			selection: selection signature (used only when an option needs it)
+		Returns:
+			dict: target, method, problem (str or None), notes, slant (radians,
+			+ leans right), items (see live_stem_items / live_stroke_items) and
+			counts (to snap, on target, outside).
+		'''
+		if target is None:
+			return None
+
+		key = (target, self.options_signature(), self._live_rev, selection if self.live_uses_selection() else None)
+		if key != self._live_key:
+			self._live_key = key
+			try:
+				self._live_st = self.live_analyze(target)
+			except Exception:
+				print(traceback.format_exc())
+				self._live_st = self.live_result(target, problem='analysis failed, see the Output panel')
+
+		return self._live_st
+
+	def live_result(self, target, problem=None, notes=(), slant=0., items=()):
+		items = list(items)
+		counts = tuple(sum(1 for item in items if item['status'] == status) for status in ('snap', 'ok', 'out'))
+		return {'target': target, 'method': self.method(), 'problem': problem, 'notes': list(notes),
+				'slant': slant, 'items': items, 'counts': counts}
+
+	def live_analyze(self, target):
+		glyph = eGlyph()
+		if (glyph.name, glyph.layer().name) != tuple(target):
+			return self.live_result(target, problem='the panel sees glyph "{}"'.format(glyph.name))
+
+		active = target[1]
+		layers, notes, sel_nodes, sel_contours = self.collect(glyph, [active])
+		if not layers or not layers[0].contours:
+			return self.live_result(target, problem=notes[0] if notes else 'no contours on this layer', notes=notes[1:])
+
+		item, package = layers[0], glyph.package
+		v, h, d = self.targets(package, active)
+		stems = self.method() == 'stems'
+
+		if not (v or h or (d and not stems)):
+			return self.live_result(target, problem='no targets: set master stems or type values', notes=notes)
+
+		if stems and self.checked('selected') and not sel_nodes:
+			return self.live_result(target, problem='select a node on the stems to check', notes=notes)
+
+		if not stems and self.checked('s_selected') and not sel_contours:
+			return self.live_result(target, problem='select a node on the strokes to check', notes=notes)
+
+		if stems:
+			result = self.snap_stems(glyph, package, item, v, h, sel_nodes, False, verbose=False)[2]
+			return self.live_result(target, notes=notes, slant=math.radians(self.italic(package, active)),
+									items=self.live_stem_items(result[3]))
+
+		result = self.snap_strokes(glyph, item, v, h, d, sel_contours, False, verbose=False)[2]
+		return self.live_result(target, notes=notes, items=self.live_stroke_items(result[3]))
+
+	@staticmethod
+	def live_stem_items(report):
+		'''One dict per detected stem, in deslanted font units: axis, lo / hi
+		(face coordinates), span (overlap of the faces along the stem),
+		width, target (or None), delta, status ('snap' / 'ok' / 'out').'''
+		captured = dict((id(v.source), v) for v in report.captured)
+		moved = set(id(v.source) for v in report.moved)
+		items = []
+
+		for c in report.candidates:
+			v = captured.get(id(c))
+			lo, hi = sorted((c.edge_a.coord, c.edge_b.coord))
+			span = (max(c.edge_a.span[0], c.edge_b.span[0]), min(c.edge_a.span[1], c.edge_b.span[1]))
+			items.append({'kind': 'stem', 'axis': c.axis, 'lo': lo, 'hi': hi, 'span': span,
+						  'width': c.measured_width, 'target': v.target.value if v is not None else None,
+						  'delta': v.delta if v is not None else 0.,
+						  'status': 'snap' if id(c) in moved else 'ok' if v is not None else 'out'})
+		return items
+
+	def live_stroke_items(self, report):
+		'''One dict per measured stroke: contour (core), type, width (the
+		matched one), target (or None), delta, status.'''
+		captured = dict((id(v.source), v) for v in report.captured)
+		moved = set(id(v.source) for v in report.moved)
+		match = self.choice('match')
+		items = []
+
+		for m in report.measurements:
+			v = captured.get(id(m))
+			width = v.measured if v is not None else {'min': m.width_min, 'max': m.width_max}.get(match, m.width_median)
+			items.append({'kind': 'stroke', 'contour': m.stroke, 'type': m.stroke_type, 'width': width,
+						  'target': v.target.value if v is not None else None, 'delta': v.delta if v is not None else 0.,
+						  'status': 'snap' if id(m) in moved else 'ok' if v is not None else 'out'})
+		return items
+
+# - Canvas -----------------------------
+STATUS_OK_COLOR = QtGui.QColor(40, 170, 90)		# green: on target
+
+class TRStemSnapCanvas(co.CanvasOverlay):
+	'''Stem Snap analysis drawn on the glyph canvas, driven by TRStemSnapPanel.
+
+	Stems     band between the two faces over their common span (a
+	          parallelogram in italic); curve extrema get a short band
+	Strokes   the stroke contour, filled
+	Colors    red: to snap, label "measured -> target"; with Show all
+	          also green: on target, grey dashed: outside every band
+	Icons     close, re-analyse, show all, select, snap; with the banner
+	          they sit LIFT_UNITS above the glyph's top left and follow it
+
+	Outside edits are re-analysed once the outline settles (mouse up and
+	SETTLE seconds without change); the bands are hidden meanwhile.
+	'''
+	NAME = 'tr_stem_snap'
+	POLL_INTERVAL = .15			# seconds between panel / selection checks
+	SETTLE = .25				# seconds an outside edit must rest before re-analysis
+	MIN_SPAN_PX = 14.			# shortest band on screen (curve extrema)
+	LIFT_UNITS = 100.			# icon strip + banner: this far above the glyph's top left (font units)
+	STRIP_ORIGIN = (16., 16.)	# icon strip on an empty layer: top left of the viewport
+
+	def __init__(self, panel):
+		co.CanvasOverlay.__init__(self)
+		self.panel = panel
+		self.st = None				# panel.live_state()
+		self.show_all = False
+		self._dirty_at = None		# time of the last outside edit not yet analysed
+		self._sel_sig = None
+		self._poll = om.Throttle(self.POLL_INTERVAL)
+
+		self.strip = CanvasIconStrip(self, self._strip_origin, [
+			('close', None, 'Close: stop showing Stem Snap on the canvas', self._close, True),
+			('refresh', 'refresh', 'Analyse the layer again', self._reanalyse, True),
+			('all', 'search', 'Show all: also stems on target (green) and outside every band (grey)',
+			 self._toggle_all, True, lambda: self.show_all),
+			('select', 'selection_basic', 'Select what a snap would move (active layer)', lambda: self._run('on_select'), True),
+			('snap', 'action_play', 'Snap: as the panel Snap button (every layer in scope)', lambda: self._run('on_snap', True), True),
+		])
+		self.handles = list(self.strip.handles)
+
+	# - Panel link ----------------------
+	def _call(self, name, *args):
+		try:
+			return getattr(self.panel, name)(*args)
+		except Exception:
+			co._log.exception('{}.{}'.format(self.NAME, name))
+			return None
+
+	def _panel_alive(self):
+		try:
+			co.qv(self.panel, 'objectName')
+			return True
+		except Exception:
+			return False
+
+	def _refresh(self):
+		st = self._call('live_state', self.target, self._sel_sig)
+		if st is not self.st:
+			self.st = st
+			self.request_repaint()
+
+	def panel_wrote(self):
+		'''Called by the panel after Snap / Select: our own edit, analyse now.'''
+		try:
+			self.accept_geometry()
+			self._dirty_at = None
+			self._sel_sig = self._selection_signature()
+			self._call('live_invalidate')
+			self._refresh()
+			self.request_repaint()
+		except Exception:
+			co._log.exception('{}.panel_wrote'.format(self.NAME))
+
+	def _selection_signature(self):
+		'''Cheap selection signature of the active layer (see TRDeltaCanvas):
+		per contour with a selection, its index, count and selected bounds.'''
+		layer = self.fl_layer
+		if layer is None: return None
+		try:
+			sig = []
+			for index, contour in enumerate(layer.getContours() or []):
+				selected = contour.getSelectedNodes()
+				if not selected: continue
+				r = contour.getSelectedBoundingBox()
+				sig.append((index, len(selected)) + om.round_sig((r.x(), r.y(), r.width(), r.height()), 1))
+			return tuple(sig)
+		except Exception:
+			co._log.exception('{}.selection_signature'.format(self.NAME))
+			return None
+
+	@staticmethod
+	def _mouse_down():
+		buttons = co.qv(QtGui.QApplication, 'mouseButtons')
+		try:
+			return bool(int(buttons) & int(QtCore.Qt.LeftButton))
+		except TypeError:
+			return bool(buttons & QtCore.Qt.LeftButton)
+
+	def _ready(self):
+		return self.st is not None and self.st['target'] == self.target and self._dirty_at is None
+
+	def _glyph_corner(self):
+		'''Top left (xmin, ymax) of the active layer's bounds in font units, or None if empty.'''
+		if self.fl_layer is None: return None
+		try:
+			r = co.qv(self.fl_layer, 'boundingBox')
+		except Exception:
+			return None
+		if r.width() <= 0 and r.height() <= 0: return None
+		return (float(r.x()), float(r.y() + r.height()))
+
+	def _strip_origin(self, mapping):
+		'''Close icon slot: LIFT_UNITS above the glyph's top left, its left
+		edge on the glyph's left; the strip extends right, the banner after it.'''
+		corner = self._glyph_corner()
+		if corner is None:
+			return self.STRIP_ORIGIN + (1., True)
+		x, y = mapping.to_view_xy(corner[0], corner[1] + self.LIFT_UNITS)
+		return (x + CanvasIconStrip.RADIUS, y, 1., True)
+
+	# - Overlay hooks -------------------
+	def on_attach(self):
+		self._sel_sig = self._selection_signature()
+		self._refresh()
+
+	def on_target_changed(self, mapping):
+		self._dirty_at = None
+		self._sel_sig = self._selection_signature()
+		self._refresh()
+		self.request_repaint()
+
+	def on_geometry_changed(self):
+		self._dirty_at = time.time()		# edited outside: wait for it to settle
+		self.request_repaint()
+
+	def on_tick(self):
+		if not self._panel_alive():
+			type(self).stop()				# the panel is gone
+			return
+
+		if self._dirty_at is not None:
+			if time.time() - self._dirty_at < self.SETTLE or self._mouse_down(): return
+			self._dirty_at = None
+			self._call('live_invalidate')
+			self._refresh()
+			self.request_repaint()
+			return
+
+		if self._poll.ready():
+			self._sel_sig = self._selection_signature()
+			self._refresh()					# options, selection (cached in the panel)
+
+	def on_handle_click(self, handle, drag):
+		self.strip.click(handle)
+
+	# - Strip actions -------------------
+	def _close(self):
+		if self._panel_alive():
+			self.panel.live_closed()
+		else:
+			type(self).stop()
+
+	def _reanalyse(self):
+		self._dirty_at = None
+		self._call('live_invalidate')
+		self._refresh()
+		self.request_repaint()
+
+	def _toggle_all(self):
+		self.show_all = not self.show_all
+		self.request_repaint()
+
+	def _run(self, name, *args):
+		'''Panel action from the canvas; the panel calls panel_wrote() after.'''
+		self._call(name, *args)
+
+	# - Painting ------------------------
+	def _status_colors(self, status):
+		'''(pen, brush) for a status.'''
+		c = self.colors
+		if status == 'snap':
+			return co.cosmetic_pen(c['error'], 1.5), co.solid_brush(c['error'], 70)
+		if status == 'ok':
+			return co.cosmetic_pen(STATUS_OK_COLOR, 1.), co.solid_brush(STATUS_OK_COLOR, 35)
+		return co.cosmetic_pen(c['muted'], 1., QtCore.Qt.DashLine), co.no_brush()
+
+	def _stem_corners(self, item, mapping):
+		'''Band corners in font units (re-slanted). A span shorter than
+		MIN_SPAN_PX on screen (curve extrema, faces that barely overlap)
+		is widened about its middle.'''
+		s0, s1 = item['span']
+		least = mapping.len_to_font(self.MIN_SPAN_PX)
+		if s1 - s0 < least:
+			mid = (s0 + s1) * .5
+			s0, s1 = mid - least * .5, mid + least * .5
+
+		lo, hi, a = item['lo'], item['hi'], self.st['slant']
+		if item['axis'] == Axis.V:
+			corners = ((lo, s0), (hi, s0), (hi, s1), (lo, s1))
+		else:
+			corners = ((s0, lo), (s1, lo), (s1, hi), (s0, hi))
+		return [om.reslant(x, y, a) for x, y in corners]
+
+	def _label_text(self, item):
+		if item['status'] == 'snap':
+			return '{} → {}'.format(_fmt(item['width']), _fmt(item['target']))
+		return _fmt(item['width'])
+
+	def _banner(self):
+		st = self.st
+		if st is None:
+			return 'open a glyph', True
+		if self._dirty_at is not None:
+			return 'outline changed, analysing when it settles', False
+		if st['problem']:
+			return st['problem'], True
+
+		what = 'stem(s)' if st['method'] == 'stems' else 'stroke(s)'
+		snap, ok, out = st['counts']
+		text = '{} | {}: {} {} to snap, {} on target, {} outside bands'.format(st['target'][0], st['target'][1], snap, what, ok, out)
+		if abs(st['slant']) > 1e-9:
+			text += '   italic {:g}°'.format(round(math.degrees(st['slant']), 1))
+		return text, False
+
+	def paint_overlay(self, p, mapping):
+		c = self.colors
+
+		# - Banner right of the icon strip; notes as a second line
+		text, problem = self._banner()
+		ox, oy = self._strip_origin(mapping)[:2]
+		x = ox + self.strip.width(True) - 4.
+		rect = self.draw_label(p, QtCore.QPointF(x, oy), '{}: {}'.format(app_name, text), 'LM',
+							   color=c['error'] if problem else None, offset=0.)
+		if self.st is not None and self.st['notes'] and self.st['target'] == self.target:
+			self.draw_label(p, QtCore.QPointF(rect.left(), rect.bottom()), '   '.join(self.st['notes']), 'TL',
+							color=c['error'], offset=4.)
+
+		if not self._ready():
+			return
+
+		# - Bands: outside first, to-snap last (on top)
+		order = {'out': 0, 'ok': 1, 'snap': 2}
+		shown = [item for item in self.st['items'] if self.show_all or item['status'] == 'snap']
+
+		for item in sorted(shown, key=lambda item: order[item['status']]):
+			pen, brush = self._status_colors(item['status'])
+
+			if item['kind'] == 'stem':
+				corners = self._stem_corners(item, mapping)
+				path = QtGui.QPainterPath()
+				path.moveTo(*corners[0])
+				for point in corners[1:]:
+					path.lineTo(*point)
+				path.closeSubpath()
+				center = (sum(x for x, y in corners) * .25, sum(y for x, y in corners) * .25)
+			else:
+				path = self.core_layer_to_path(item['contour'])
+				r = path.boundingRect()
+				center = (r.center().x(), r.center().y())
+
+			self.draw_font_path(p, path, pen, brush)
+
+			if item['status'] != 'out':
+				self.draw_label(p, mapping.to_view(*center), self._label_text(item), 'C',
+								color=c['error'] if item['status'] == 'snap' else STATUS_OK_COLOR, offset=0.)
+
+	def paint_handle(self, p, handle, x, y, hot):
+		return self.strip.paint(p, handle, x, y, hot)
 
 # - Tabs -------------------------------
 class tool_tab(QtGui.QWidget):
