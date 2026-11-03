@@ -74,5 +74,9 @@
     [
         "Stats",
         false
+    ],
+    [
+        "StemSnap",
+        true
     ]
 ]

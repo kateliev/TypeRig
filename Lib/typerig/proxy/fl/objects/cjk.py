@@ -38,7 +38,7 @@ import json
 import fontlab as fl6
 from PythonQt import QtCore, QtGui
 
-from typerig.proxy.fl.objects.font import pFont
+from typerig.proxy.fl.objects.font import pFont, ps_master_stems
 from typerig.proxy.fl.objects.glyph import pGlyph
 from typerig.proxy.fl.objects.node import eNodesContainer
 
@@ -541,28 +541,16 @@ def read_std_stems_by_layer(pg, layers, lib_key=STD_STEMS_LIB_KEY):
 		if out:
 			return out
 
-	# 2. Per-master ps_stemsV / ps_stemsH via setMaster (restore afterwards)
-	try:
-		saved_master = pkg.master
-	except Exception:
-		saved_master = None
-
+	# 2. Per-master ps_stemsV / ps_stemsH (ps_master_stems restores the master)
 	out = {}
 	for name in layers:
 		try:
-			pkg.setMaster(name)
-			stems = [(float(s.value), 'V') for s in (pkg.ps_stemsV or [])] \
-				  + [(float(s.value), 'H') for s in (pkg.ps_stemsH or [])]
-			if stems:
-				out[name] = stems
+			stems_v, stems_h = ps_master_stems(pkg, name)
 		except Exception:
 			continue
-
-	if saved_master is not None:
-		try:
-			pkg.setMaster(saved_master)
-		except Exception:
-			pass
+		stems = [(v, 'V') for v in stems_v] + [(v, 'H') for v in stems_h]
+		if stems:
+			out[name] = stems
 	return out
 
 

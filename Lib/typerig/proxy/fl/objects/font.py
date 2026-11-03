@@ -32,6 +32,31 @@ try:
 except NameError:
 	basestring = (str, bytes)
 
+# - Functions -----------------------------
+def ps_master_stems(package, layer=None):
+	'''PostScript standard stems of a master (Font Info > Hinting).
+	Args:
+		package (flPackage): The font
+		layer (str): Master name. None: the current master
+	Returns:
+		tuple(list[float], list[float]): (vertical, horizontal) stem values.
+		Both empty if layer is not a master (masks, brace layers...).
+	'''
+	back_master = package.master
+
+	if layer is not None and layer != back_master:
+		if layer not in list(package.masters):
+			return [], []
+		package.setMaster(layer)
+
+	try:
+		stems_v = [float(stem.value) for stem in (package.ps_stemsV or []) if float(stem.value) > 0]
+		stems_h = [float(stem.value) for stem in (package.ps_stemsH or []) if float(stem.value) > 0]
+	finally:
+		if package.master != back_master: package.setMaster(back_master)
+
+	return stems_v, stems_h
+
 # - Classes -------------------------------
 class pFontMetrics(object):
 	'''
@@ -456,6 +481,10 @@ class pFont(object):
 				self.fl.ps_stemsV = self.fl.ps_stemsV + [new_stem]
 
 		return new_stem
+
+	def getMasterStems(self, layer=None):
+		'''PostScript standard stems of a master as (vertical, horizontal) value lists. See ps_master_stems.'''
+		return ps_master_stems(self.fl, layer)
 
 	def resetStems(self, stems_horizontal=False, type_TT=False):
 		if type_TT:
