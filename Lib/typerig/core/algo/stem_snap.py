@@ -571,7 +571,7 @@ class StemFixer(object):
 
 		return plan
 
-	def plan_cascade(self, violations, contours, scope=Cascade.FAMILY, keep=(), pin_extremes=True, eps=1e-6):
+	def plan_cascade(self, violations, contours, scope=Cascade.FAMILY, keep=(), pin_extremes=True, whole=False, eps=1e-6):
 		'''IUP plan along each axis: stem faces are knots, everything else is
 		interpolated between them (TrueType IUP on one axis).
 
@@ -592,6 +592,12 @@ class StemFixer(object):
 		put unless it is a stem face (baseline, cap height, the side of a
 		glyph beyond its last stem): the counters absorb the change.
 		False: parts beyond the outermost stems move with them.
+
+		whole: the outline will be rounded to integers afterwards. A
+		'center' correction of a whole number of units is then split into
+		whole units, (-(d // 2), d - d // 2): for an odd d the centre
+		shifts half a unit up / right. Half-unit moves would round back
+		(half to even) and leave the stem untouched or a unit off target.
 
 		scope picks the contours a stem acts on (see Cascade): the two
 		face contours, their containment family (outer + counters, default)
@@ -660,6 +666,9 @@ class StemFixer(object):
 					d_lo, d_hi = 0.0, d
 				elif self.anchor == 'upper':
 					d_lo, d_hi = -d, 0.0
+				elif whole and abs(d - round(d)) <= eps:
+					half = float(int(round(d)) // 2)
+					d_lo, d_hi = -half, round(d) - half
 				else:
 					d_lo, d_hi = -0.5 * d, 0.5 * d
 
@@ -856,7 +865,7 @@ def snap_stems(contours, allowlist, detector=None, axis=None,
 			        and not any(a == c.axis and c.edge_a.coord < hi and lo < c.edge_b.coord
 			                    for a, lo, hi in spans)]
 			report.plan = StemFixer(anchor=anchor).plan_cascade(
-				report.moved, contours, scope=scope, keep=keep, pin_extremes=pin_extremes)
+				report.moved, contours, scope=scope, keep=keep, pin_extremes=pin_extremes, whole=round_ints)
 		if apply and len(report.plan):
 			StemFixer(anchor=anchor).apply(report.plan, contours)
 			report.applied = True
@@ -1469,6 +1478,26 @@ def _test_round_ints():
 	snap_stems(cs, al, axis=Axis.V, anchor='center', round_ints=True)
 	assert all(nd.x == int(nd.x) for nd in cs[0].nodes)
 	print('  round_ints: moved nodes on integers [OK]')
+
+	# Center + round lands exactly on target for odd and even corrections
+	# (half-unit moves used to round back: 30 -> 29 stayed 30, 80 -> 77 gave 76)
+	for x0, w, target in ((0, 30, 29), (1, 30, 29), (0, 28, 29), (10, 82, 81), (0, 80, 77), (0, 80, 83), (3, 84, 80)):
+		cs = [_make_rect_contour(x0, 0, w, 600)]
+		al = WidthAllowlist({Axis.V: [WidthTarget(target, 5, 5)]})
+		snap_stems(cs, al, axis=Axis.V, anchor='center', round_ints=True)
+		xs = sorted(set(nd.x for nd in cs[0].nodes))
+		assert xs[1] - xs[0] == target, (x0, w, target, xs)
+		assert abs((xs[0] + xs[1]) * .5 - (x0 + w * .5)) <= .5, (x0, w, target, xs)
+
+	# Same for a slanted stem (deslanted width, slanted integer nodes)
+	t = math.tan(math.radians(12.))
+	cs = [Contour([Node(x + round(y * t), y) for x, y in ((0, 0), (31, 0), (31, 600), (0, 600))], closed=True)]
+	snap_stems(cs, WidthAllowlist({Axis.V: [WidthTarget(28, 5, 5)]}), axis=Axis.V, anchor='center',
+	           italic_angle=math.degrees(math.atan(round(600 * t) / 600.)), round_ints=True)
+	bottom = sorted(nd.x for nd in cs[0].nodes if nd.y == 0)
+	top = sorted(nd.x for nd in cs[0].nodes if nd.y == 600)
+	assert bottom[1] - bottom[0] == 28 and top[1] - top[0] == 28, (bottom, top)
+	print('  round_ints + center: odd / even corrections land on target, centre within 0.5 [OK]')
 
 
 def _ellipse(cx, cy, rx, ry, ccw=True, k=0.5523):
