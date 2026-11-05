@@ -802,7 +802,7 @@ def _measure_box(delta, stem, scale, italic_rad, extrapolate):
 	return max(xs) - min(xs), max(ys) - min(ys)
 
 
-def _solve_scale(delta, stem, scale, dims, italic_rad, extrapolate, tol=0.01, steps=16):
+def _solve_scale(delta, stem, scale, dims, italic_rad, extrapolate, tol=0.01, steps=16, measure=None):
 	'''Scale factors (sx, sy) that make the point box of delta hit dims.
 
 	scale: (sx, sy) start; an axis whose dims entry is None keeps its value
@@ -810,12 +810,16 @@ def _solve_scale(delta, stem, scale, dims, italic_rad, extrapolate, tol=0.01, st
 	With compensation 0 the box is affine in each scale, so a secant on the
 	measured box converges in one or two steps; the fixed axis is held at
 	its own value while solving, so an italic shear (x depends on y) is
-	part of the measure. Returns ((sx, sy), converged, (res_w, res_h)).
+	part of the measure. measure: (delta, stem, scale, italic_rad,
+	extrapolate) -> (x, y), default _measure_box; the Delta Machine
+	calculator (delta_calc_actions) measures a signed distance. Returns
+	((sx, sy), converged, (res_w, res_h)).
 	'''
+	measure = measure or _measure_box
 	s = [float(scale[0]), float(scale[1])]
 	solve = [i for i in (0, 1) if dims[i] is not None]
 	prev_s = prev_m = None
-	m = _measure_box(delta, stem, tuple(s), italic_rad, extrapolate)
+	m = measure(delta, stem, tuple(s), italic_rad, extrapolate)
 	for _ in range(steps):
 		if all(abs(m[i] - dims[i]) <= tol for i in solve):
 			break
@@ -828,8 +832,10 @@ def _solve_scale(delta, stem, scale, dims, italic_rad, extrapolate, tol=0.01, st
 				new[i] = s[i] - (m[i] - dims[i]) / slope
 			elif m[i]:
 				new[i] = s[i] * dims[i] / m[i]		# proportional seed
+			else:
+				new[i] = s[i] + 0.1					# zero measure: step off it to get a slope
 		prev_s, prev_m, s = s, m, new
-		m = _measure_box(delta, stem, tuple(s), italic_rad, extrapolate)
+		m = measure(delta, stem, tuple(s), italic_rad, extrapolate)
 	res = tuple(abs(m[i] - dims[i]) if dims[i] is not None else 0. for i in (0, 1))
 	return (s[0], s[1]), all(r <= max(tol, 0.5) for r in res), res
 

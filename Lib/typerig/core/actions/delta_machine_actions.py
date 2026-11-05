@@ -40,7 +40,8 @@ from typerig.core.actions import designspace_actions as dsa
 TOOL       = 'TypeRig Delta Machine'
 VERSION    = '0.6'
 FORMAT     = 5				# 5 (v0.6): axes hold inputs only; 'targets' at document level, each row names its 'axis'
-							# (inheritable); 4 axes with targets read as rows of that axis.
+							# (inheritable); 4 axes with targets read as rows of that axis. Optional target
+							# 'ksx' (Kern %, 2026-11-05; missing: automatic, an override row inherits it)
 							# 4 (v0.5): target 'groups' (list, '*' = all), 'id', 'parent', 'inherit'; 3 'group' reads
 							# as a one-group row. 3 (v0.4): flag_* are Glyphs label colour indexes (1 / 2: RGBA ->
 							# nearest label); optional target 'msx'. 2 (v0.3): advanced.italic_fix. 1 reads as 3 (fix off)
@@ -49,11 +50,12 @@ SELECTION  = ''				# group of a row that works on the selected glyphs
 SELECTION_LABEL = 'Selection'
 ALL_GROUPS = '*'			# in a row's groups: every group of the document (also ones added later)
 ALL_GROUPS_LABEL = 'All groups'
-INHERIT_KEYS = ('axis', 'vstem', 'hstem', 'width', 'height', 'origin', 'anchors', 'metrics', 'msx', 'kerning')
+INHERIT_KEYS = ('axis', 'vstem', 'hstem', 'width', 'height', 'origin', 'anchors', 'metrics', 'msx', 'kerning', 'ksx')
 INHERIT_MARK = '\u200b'		# leads a table cell value inherited from the general row (shown grey)
 OVERRIDE_MARK = '\u21b3'	# Layer cell of an override row (its layer is the general row's)
 UNITS      = ('%', 'u')		# percent of the base input, font units
 METRICS_SCALE_OFF = '—'		# Met. W cell of a row with Met. off (shown grey, not editable)
+KERN_SCALE_OFF = METRICS_SCALE_OFF	# Kern % cell of a row with Kern off
 ORIGINS    = ('BS', 'BL', 'BM', 'BR', 'LM', 'CE', 'RM', 'TL', 'TM', 'TR')
 ORIGIN_LABELS = (		# (code, label) — the per-row Origin popup
 	('BS', 'Baseline'), ('BL', 'Bottom left'), ('BM', 'Bottom middle'), ('BR', 'Bottom right'),
@@ -123,6 +125,7 @@ TARGET_DEFAULTS = {
 	'origin': 'BS',				# transform origin of the row (BS = baseline, 0 / 0)
 	'anchors': True, 'metrics': True, 'kerning': False,
 	'msx': None,				# metrics scale, percent (Met. W); None = the metrics follow the outline
+	'ksx': None,				# kerning scale, percent (Kern %); None = automatic (delta_kerning_actions.side_factor)
 }
 
 
@@ -180,6 +183,19 @@ def parse_metrics_scale(value):
 def format_metrics_scale(msx):
 	'''percent | None -> '90 %' / ''.'''
 	return '' if msx is None else '{:g} %'.format(msx)
+
+
+def parse_kern_scale(value):
+	'''Kern % cell -> (ok, percent | None). '' / None -> (True, None): the
+	kerning factor is automatic (outline width, loosened by Met. W). '80',
+	'80 %' -> (True, 80.): the pairs are the inputs' values interpolated at
+	the row's V stem, times 80 %, whatever Width or Met. W say.'''
+	return parse_metrics_scale(value)
+
+
+def format_kern_scale(ksx):
+	'''percent | None -> '80 %' / ''.'''
+	return format_metrics_scale(ksx)
 
 
 def row_label(row):
@@ -256,6 +272,10 @@ def norm_target(row, origin='BS'):
 			out[key] = row[key]
 	ok, msx = parse_metrics_scale(row.get('msx'))		# older documents: none -> None
 	out['msx'] = msx if ok else None
+	ok, ksx = parse_kern_scale(row.get('ksx'))
+	out['ksx'] = ksx if ok else None
+	if out['parent'] and 'ksx' not in row and 'ksx' not in out['inherit']:
+		out['inherit'].append('ksx')		# saved before Kern %: an override row inherits it
 	return out
 
 
@@ -583,6 +603,8 @@ def machine_validate(doc):
 					errors.append('Axis "%s" / %s: %s must be > 0.' % (ax['name'], t['layer'], key))
 			if t.get('msx') is not None and t['msx'] <= 0:
 				errors.append('Axis "%s" / %s: metrics scale must be > 0.' % (ax['name'], t['layer']))
+			if t.get('ksx') is not None and t['ksx'] <= 0:
+				errors.append('Axis "%s" / %s: kerning scale must be > 0.' % (ax['name'], t['layer']))
 	return [e for i, e in enumerate(errors) if e not in errors[:i]]	# one per expanded group otherwise
 
 
@@ -875,13 +897,19 @@ def machine_log(doc, run):
 			                                    '; own: ' + ', '.join(k for k in INHERIT_KEYS if k not in t['inherit'])
 			                                    if len(t['inherit']) < len(INHERIT_KEYS) else '; all inherited')
 			t = resolve(t, parent)
-		out.append('  %s: axis %s, V %g, H %g, width %s, height %s, origin %s%s%s' % (
+		if not t.get('kerning'):
+			kern = ''
+		elif t.get('ksx') is not None:
+			kern = ', kerning %s' % format_kern_scale(t['ksx'])
+		else:
+			kern = ', kerning'
+		out.append('  %s: axis %s, V %g, H %g, width %s, height %s, origin %s%s%s%s' % (
 			label, t['axis'] or '(none)', _num(t['vstem'], 0.), _num(t['hstem'], 0.),
 			format_dimension(t['width']), format_dimension(t['height']),
 			dict(ORIGIN_LABELS).get(t.get('origin', 'BS'), t.get('origin', 'BS')),
 			'' if t['anchors'] else ', no anchors',
 			', metrics %s' % format_metrics_scale(t['msx']) if t['metrics'] and t.get('msx') is not None
-			else '' if t['metrics'] else ', no metrics'))
+			else '' if t['metrics'] else ', no metrics', kern))
 
 	out += ['', 'Jobs']
 	for i, job in enumerate(run.get('jobs', [])):

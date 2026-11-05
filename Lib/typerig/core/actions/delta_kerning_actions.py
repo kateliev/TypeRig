@@ -8,8 +8,10 @@
 Kerning rides the same axis as the outlines. Per pair and per baked side:
 the inputs' values are interpolated at the side's V stem on the side's
 axis (piecewise linear, as the Delta engine reads the stems; a pair missing
-in an input counts as 0), then scaled by the mean of the two sides' width
-factors (the row's Met. W when set, else its outline width scale):
+in an input counts as 0), then scaled by the mean of the two sides'
+factors (side_factor: the row's Kern % when set by hand, else the outline
+width scale, and a Met. W looser than the outline loosens the pair in
+inverse ratio, a tighter one tightens it):
 
 	k = mean(k_left_axis(t_left), k_right_axis(t_right)) * (f_left + f_right) / 2
 
@@ -60,13 +62,11 @@ def group_key(name):
 
 
 # - Factors ----------------------------------------------------------------
-def side_factor(row, solved=None, scales=None):
-	'''Width factor of a glyph baked on a resolved target row (1. = 100 %):
-	the row's Met. W when set (spacing follows it), else the scale solved
-	on the group's reference glyph, else the glyph's own solved scale
-	(units row, core bake entry 'scales'), else the row's width percent.'''
-	if row.get('msx') is not None:
-		return float(row['msx']) / 100.
+def outline_factor(row, solved=None, scales=None):
+	'''Horizontal scale of the outline of a glyph baked on a resolved target
+	row (1. = 100 %): the scale solved on the group's reference glyph, else
+	the glyph's own solved scale (units row, core bake entry 'scales'),
+	else the row's width percent, else 1.'''
 	if solved is not None:
 		return float(solved[0]) / 100.
 	if scales:
@@ -75,6 +75,30 @@ def side_factor(row, solved=None, scales=None):
 	if width.get('unit', '%') == '%':
 		return float(width.get('value', 100.)) / 100.
 	return 1.
+
+
+def side_factor(row, solved=None, scales=None, msx=None):
+	'''Kerning factor of a glyph baked on a resolved target row (1. = 100 %).
+
+	The row's Kern % ('ksx', set by hand) wins: f = ksx / 100, whatever
+	Width or Met. W say. Else the factor is automatic:
+
+	The kerning follows the outline (outline_factor). msx: the Met. W
+	percent the bake really applied (None: Met. off, not set, or refused
+	by the bake; the row's own 'msx' is not read). Spacing looser than the
+	outline loosens the kerning in inverse ratio, tighter spacing tightens
+	it (user 2026-11-05: more spacing must not tighten the pairs):
+
+		f = s_outline * s_outline / s_metrics
+
+	Met. W 120 % on a 100 % outline: f = 0.833, a -60 pair becomes -50.
+	Met. W equal to the outline scale: f = s_outline (no change).'''
+	if row.get('ksx') is not None and float(row['ksx']) > 0:
+		return float(row['ksx']) / 100.
+	f = outline_factor(row, solved, scales)
+	if msx is None or float(msx) <= 0:
+		return f
+	return f * f / (float(msx) / 100.)
 
 
 def spot(row, axis, factor):

@@ -24,7 +24,7 @@ from .config import HOST_MAJOR, _LIST_ROW_H, _LIST_HEADER_H
 # Resizable both ways: the lists stretch, the columns keep COLUMNS.SPLIT.
 # The default height comes from the tab content at LIST.ROWS rows.
 _WIN_GS3 = SimpleNamespace(
-	W           = 1400,   # default window width: the targets table fits without scrolling (Layer ~150 px; 1340 before Met. W)
+	W           = 1450,   # default window width: the targets table fits without scrolling (Layer ~150 px; 1340 before Met. W, 1400 before Kern %)
 	MIN_W       = 1100,   # the service row and the left column's button bar do not reflow
 	TABS_TOP    = 8,      # tab view inset from the window top
 	TABS_CHROME = 30,     # tab view height beyond its item view (tab bar + frame; macOS 26)
@@ -34,7 +34,7 @@ _WIN_GS3 = SimpleNamespace(
 	PROGRESS_GAP = 6,     # progress bar to status line
 )
 _WIN_GS4 = SimpleNamespace(
-	W           = 1400,
+	W           = 1450,
 	MIN_W       = 1100,
 	TABS_TOP    = 10,
 	TABS_CHROME = 30,
@@ -67,6 +67,7 @@ COLUMNS = SimpleNamespace(
 	GROUP   = 100,      # Group name (targets)
 	CHECK   = 38,       # Anchors / Metrics / Kerning check boxes
 	MSX     = 48,       # Met. W: metrics scale ('90 %', '—' while Met. is off)
+	KSX     = 50,       # Kern %: kerning scale ('80 %', '—' while Kern is off)
 	RESULT  = 64,       # last bake of a row: '12/14 +3c'
 	ORIGIN  = 108,      # transform origin popup of a row ('Bottom middle')
 	LAYER_MIN = 100,    # target layer name: never narrower (the table scrolls instead)
@@ -127,6 +128,20 @@ HELP = SimpleNamespace(
 	PAD = 10,           # text inset inside the scroll view (both axes)
 )
 
+# - Calculator dialog (Targets tab, %) --------------------------------------
+# Modal window: Axis, Target, per master Input value / Desired value -> Percent.
+CALC = SimpleNamespace(
+	W        = 520,     # window width
+	H        = 360,     # window height
+	MIN_W    = 480,
+	MIN_H    = 300,
+	LABEL_W  = 60,      # caption column before a popup ("Axis", "Target")
+	VALUE_W  = 120,     # list: Input value / Desired value columns (Master takes the rest)
+	INFO_H   = 58,      # result text, three lines (percent, at the target, Set in row status)
+	BTN_W    = 100,     # Set in row / Copy % / Close
+	CELL_POPUP = SimpleNamespace(STYLE='regular', W=100, H=None),	# Set in row: Met. W / Width / Height
+)
+
 # - Colours ----------------------------------------------------------------
 # NSColor class-method names (follow light / dark mode). Groups get the
 # next colour of GROUP_COLORS when they are made; the colour is stored in
@@ -165,5 +180,6 @@ MACHINE = SimpleNamespace(
 	SERVICE  = SERVICE,
 	ADVANCED = ADVANCED,
 	HELP     = HELP,
+	CALC     = CALC,
 	COLORS   = COLORS,
 )
