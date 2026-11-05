@@ -1,3 +1,7 @@
+---
+this_file: README.md
+---
+
 # TypeRig
 
 A Python framework for font design and engineering. Started as a personal toolkit for working inside FontLab, grew over the years into a standalone geometry and interpolation core with a bunch of GUI tools on top.
@@ -67,6 +71,8 @@ The main interface is a dockable panel that loads sub-panels as tabs. Layer sele
 **CopyKerning** — Kern pair copying between glyphs and layers with class-aware support. Source pair lookup with expression adjustment. Group kerning mode with automatic class resolution.
 
 **CleanKerning** — Kerning table cleanup utilities.
+
+**Cleanup** — FontLab/PythonQt panel for core outline cleanup. Analyze reports node counts and deviation without writing outlines; Show Locks selects retained nodes on the active layer of the current glyph. Fix Degeneracies removes outline debris, while Clean & Simplify also refits curves within a tolerance. Glyph and layer scope follow the masthead; cleaning can synchronize compatible layers or process each layer separately. Output curves can be cubic, quadratic or unchanged in kind. Groups, components and shared elements are excluded. These are source observations; native behavior remains unverified.
 
 ### TypeRig Manager (`typerig-manager.py`)
 
@@ -197,3 +203,49 @@ No warranties. By using this you agree that you use it at your own risk.
 © Vassil Kateliev — [kateliev.com](http://www.kateliev.com) | Karandash Type Foundry — [karandash.eu](http://www.karandash.eu)
 
 [typerig.com](http://www.typerig.com)
+
+
+## Development and acceptance
+
+A Python library for font geometry, interpolation and editor tools.
+
+`Lib/typerig/` contains the package, `Scripts/` contains host tools,
+`Docs/` contains reference material and `tests/` contains automated tests.
+
+## Checks
+
+The current observed source base is `960d25f99a022faaa5ca85e691363148be90d3b4`.
+It contains eight newer source commits than canonical `46a0f0b`.
+The earlier handoff observed `e3f06f5` at a seven-commit offset;
+the additional commit adds the Cleanup panel and enables it in configuration.
+Earlier canonical test receipts do not qualify this newer source.
+The exact CI recipe is in [.github/workflows/check.yml](.github/workflows/check.yml).
+It tests Python 3.11 on Linux, macOS and Windows. From an isolated checkout:
+
+```sh
+PYTHONPATH=Lib PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run --no-project --python 3.11 --with pytest --with pytest-cov --with gitnextver==1.0.4 --with packaging --with twine --with hatch-vcs --with hatchling --with fonttools python -m pytest -p pytest_cov -q tests Lib/typerig/core/algo/test_cjk.py Lib/typerig/core/algo/test_outline_cleanup.py --cov=release --cov=publish --cov=_release --cov=_github --cov=_artifacts --cov-report=term-missing --cov-fail-under=80
+PYTHONPATH=Lib uv run --no-project --python 3.11 --with fonttools python Lib/typerig/core/objects/test_objects.py
+PYTHONPATH=Lib uv run --no-project --python 3.11 python Lib/typerig/core/actions/test_actions.py
+uv run release.py --help
+uv run publish.py --help
+```
+
+These commands were inspected for this documentation variant, not executed.
+Read [RELEASING.md](RELEASING.md) and [PYPI.md](PYPI.md) before release work.
+The check workflow runs for `master` pushes and pull requests targeting `master`.
+Release workflows have separate version-tag or explicit-dispatch triggers.
+
+Pages is configured as legacy `master:/`. The six root guides are in its
+publishing source, so their integration changes the site payload. Before
+default delivery, bind the new exact integration SHA to independent review,
+graph analysis, ordinary checks/hooks and the applicable D29 decision.
+Retain actual triggered CI/Pages and required publication/browser proof
+for that SHA. The successful `960d25f` baseline does not qualify it.
+
+Preserve Vassil Kateliev’s authorship and MPL-2.0 terms in LICENSE.
+The geometry core runs outside FontLab. Host proxies and Scripts require
+the corresponding host. Do not load an alternate Qt binding into FontLab.
+
+Read [AGENTS.md](AGENTS.md) for the review and delivery workflow.
+Track future work in [PLAN.md](PLAN.md) and [TODO.md](TODO.md).
+Issue 123 remains paused. Source, native, installed and release results remain separate.
