@@ -12,6 +12,10 @@
         false
     ],
     [
+        "Cleanup",
+        true
+    ],
+    [
         "Clipboard",
         true
     ],
