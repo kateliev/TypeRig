@@ -151,25 +151,25 @@ class TRExternalToolBar(QtGui.QToolBar):
 		self.btn_contour_sort_y.setToolTip("Reorder contours from top to bottom")
 		self.btn_contour_sort_y.setFont(TRToolFont)
 		self.addAction(self.btn_contour_sort_y)
-		self.btn_contour_sort_y.triggered.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (True, None), False))
+		self.btn_contour_sort_y.triggered.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (None, True), True))
 
 		self.btn_contour_sort_x = QtGui.QAction("contour_sort_x", self.grp_contour_actions)
 		self.btn_contour_sort_x.setToolTip("Reorder contours from left to right")
 		self.btn_contour_sort_x.setFont(TRToolFont)
 		self.addAction(self.btn_contour_sort_x)
-		self.btn_contour_sort_x.triggered.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (None, True), False))
+		self.btn_contour_sort_x.triggered.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (True, None), False))
 
 		self.btn_contour_sort_y_rev = QtGui.QAction("contour_sort_y_rev", self.grp_contour_actions)
 		self.btn_contour_sort_y_rev.setToolTip("Reorder contours from bottom to top")
 		self.btn_contour_sort_y_rev.setFont(TRToolFont)
 		self.addAction(self.btn_contour_sort_y_rev)
-		self.btn_contour_sort_y_rev.triggered.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (True, None), True))
+		self.btn_contour_sort_y_rev.triggered.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (None, True), False))
 
 		self.btn_contour_sort_x_rev = QtGui.QAction("contour_sort_x_rev", self.grp_contour_actions)
 		self.btn_contour_sort_x_rev.setToolTip("Reorder contours from right to left")
 		self.btn_contour_sort_x_rev.setFont(TRToolFont)
 		self.addAction(self.btn_contour_sort_x_rev)
-		self.btn_contour_sort_x_rev.triggered.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (None, True), True))
+		self.btn_contour_sort_x_rev.triggered.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (True, None), True))
 
 
 

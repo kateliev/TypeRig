@@ -335,22 +335,22 @@ class TRToolbarPanel(QtGui.QDialog):
 		tooltip_button = 'Reorder contours from top to bottom'
 		self.btn_contour_sort_y = CustomPushButton('contour_sort_y', tooltip=tooltip_button, obj_name='btn_panel')
 		self.lay_main.addWidget(self.btn_contour_sort_y)
-		self.btn_contour_sort_y.clicked.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (True, None), False))
+		self.btn_contour_sort_y.clicked.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (None, True), True))
 
 		tooltip_button = 'Reorder contours from left to right'
 		self.btn_contour_sort_x = CustomPushButton('contour_sort_x', tooltip=tooltip_button, obj_name='btn_panel')
 		self.lay_main.addWidget(self.btn_contour_sort_x)
-		self.btn_contour_sort_x.clicked.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (None, True), False))
+		self.btn_contour_sort_x.clicked.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (True, None), False))
 
 		tooltip_button = 'Reorder contours from bottom to top'
 		self.btn_contour_sort_y_rev = CustomPushButton('contour_sort_y_rev', tooltip=tooltip_button, obj_name='btn_panel')
 		self.lay_main.addWidget(self.btn_contour_sort_y_rev)
-		self.btn_contour_sort_y_rev.clicked.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (True, None), True))
+		self.btn_contour_sort_y_rev.clicked.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (None, True), False))
 
 		tooltip_button = 'Reorder contours from right to left'
 		self.btn_contour_sort_x_rev = CustomPushButton('contour_sort_x_rev', tooltip=tooltip_button, obj_name='btn_panel')
 		self.lay_main.addWidget(self.btn_contour_sort_x_rev)
-		self.btn_contour_sort_x_rev.clicked.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (None, True), True))
+		self.btn_contour_sort_x_rev.clicked.connect(lambda: TRContourActionCollector.contour_set_order(pMode, pLayers, (True, None), True))
 
 	def _build_align_tools(self):
 		'''Build node alignment tools'''
