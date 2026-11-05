@@ -1,4 +1,4 @@
-#FLM: TR: Elements New
+#FLM: TR: Element
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2018-2026 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
@@ -15,7 +15,8 @@ from PythonQt import QtCore, QtGui
 
 from typerig.core.base.message import *
 from typerig.proxy.fl.actions.element import TRElementActionCollector
-from typerig.proxy.fl.gui.widgets import getTRIconFontPath, TRTransformCtrl, CustomPushButton, TRFlowLayout
+from typerig.core.algo import element_ops as eo
+from typerig.proxy.fl.gui.widgets import getTRIconFontPath, TRTransformCtrl, CustomPushButton, TRFlowLayout, TRCollapsibleBox
 from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 
 # - Init -------------------------------
@@ -23,7 +24,7 @@ global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Elements New', '0.3'
+app_name, app_version = 'TypeRig | Element', '1.0'
 
 brush_weight_presets = ['10', '20', '30', '40', '50', '60', '80', '100', '120', '160']
 
@@ -108,6 +109,25 @@ class TRElementBasics(QtGui.QWidget):
 		lay_arrange.addWidget(text_button('To back', 'Send touched elements to the back.',
 				lambda: TRElementActionCollector.element_reorder(pMode, pLayers, 'back')), 2, 3, 1, 3)
 
+		# -- Auto arrange: every layer sorted on its own geometry, to match the masters
+		lay_sort = TRFlowLayout(spacing=10)
+		tooltip_layers = '\nEvery layer is sorted on its own, so the same element lands\nat the same index in every master: use it to match masters.\nThe whole layer is sorted; read front first, like the Elements list.'
+
+		for icon_name, sort_mode, tooltip_button in [
+				('contour_sort_y', eo.ARRANGE_TOP, 'Arrange elements from top to bottom'),
+				('contour_sort_y_rev', eo.ARRANGE_BOTTOM, 'Arrange elements from bottom to top'),
+				('contour_sort_x', eo.ARRANGE_LEFT, 'Arrange elements from left to right'),
+				('contour_sort_x_rev', eo.ARRANGE_RIGHT, 'Arrange elements from right to left'),
+				('contour_sort_auto', eo.ARRANGE_READING, 'Arrange elements in reading order:\nrows from top to bottom, each row from left to right'),
+				('bbox', eo.ARRANGE_AREA, 'Arrange elements by size: largest at the back, smallest at the front')]:
+
+			button = CustomPushButton(icon_name, tooltip=tooltip_button + tooltip_layers, obj_name='btn_panel')
+			button.clicked.connect(lambda checked=False, mode=sort_mode: TRElementActionCollector.element_arrange(pMode, pLayers, mode))
+			lay_sort.addWidget(button)
+
+		lay_arrange.addWidget(QtGui.QLabel('Auto arrange:'), 3, 0, 1, 6)
+		lay_arrange.addLayout(lay_sort, 4, 0, 1, 6)
+
 		box_arrange.setLayout(lay_arrange)
 		self.lay_main.addWidget(box_arrange)
 
@@ -177,8 +197,7 @@ class TRElementBasics(QtGui.QWidget):
 		self.lay_main.addWidget(self.ctrl_transform)
 
 		# - Style ------------------------------------------------------------
-		box_style = QtGui.QGroupBox()
-		box_style.setObjectName('box_group')
+		box_style = TRCollapsibleBox('Properties')
 		lay_style = QtGui.QGridLayout()
 
 		self.chk_fill = QtGui.QCheckBox('Fill')
@@ -195,7 +214,6 @@ class TRElementBasics(QtGui.QWidget):
 			check.setChecked(True)
 			lay_style.addWidget(check, 1, column, 1, 1)
 
-		lay_style.addWidget(QtGui.QLabel('Properties:'), 0, 0, 1, 4)
 		lay_style.addWidget(text_button('Copy', 'Copy properties of the topmost touched element.',
 				lambda: self.style_copy()), 2, 0, 1, 1)
 		lay_style.addWidget(text_button('Paste', 'Paste copied properties onto touched elements.',
@@ -203,12 +221,11 @@ class TRElementBasics(QtGui.QWidget):
 		lay_style.addWidget(text_button('Match', 'Give all touched elements the properties of the topmost one.\nMouse Left + Alt: of the bottommost one.',
 				lambda: TRElementActionCollector.element_style_match(pMode, pLayers, get_modifier(), self.style_parts())), 2, 2, 1, 2)
 
-		box_style.setLayout(lay_style)
+		box_style.setContentLayout(lay_style)
 		self.lay_main.addWidget(box_style)
 
 		# - Brush --------------------------------------------------------------
-		box_brush = QtGui.QGroupBox()
-		box_brush.setObjectName('box_group')
+		box_brush = TRCollapsibleBox('Brush weight')
 		lay_brush = QtGui.QGridLayout()
 
 		self.cmb_brush_weight = QtGui.QComboBox()
@@ -221,7 +238,6 @@ class TRElementBasics(QtGui.QWidget):
 		self.spb_brush_step.setValue(5.)
 		self.spb_brush_step.setToolTip('Step for decrease / increase.')
 
-		lay_brush.addWidget(QtGui.QLabel('Brush weight:'), 0, 0, 1, 6)
 		lay_brush.addWidget(self.cmb_brush_weight, 1, 0, 1, 2)
 		lay_brush.addWidget(text_button('Set', 'Set the brush weight of touched elements on all processed layers.',
 				lambda: self.brush_weight_set()), 1, 2, 1, 2)
@@ -233,18 +249,16 @@ class TRElementBasics(QtGui.QWidget):
 		lay_brush.addWidget(text_button('+', 'Increase the brush weight of touched elements by step.\nEach layer keeps its own weight, only the step is added.',
 				lambda: TRElementActionCollector.element_stroke_width(pMode, pLayers, self.spb_brush_step.value, True)), 2, 4, 1, 2)
 
-		box_brush.setLayout(lay_brush)
+		box_brush.setContentLayout(lay_brush)
 		self.lay_main.addWidget(box_brush)
 
 		# - Manage -----------------------------------------------------------
-		box_manage = QtGui.QGroupBox()
-		box_manage.setObjectName('box_group')
+		box_manage = TRCollapsibleBox('Manage')
 		lay_manage = QtGui.QGridLayout()
 
 		self.edt_name = QtGui.QLineEdit()
 		self.edt_name.setPlaceholderText('Element name')
 
-		lay_manage.addWidget(QtGui.QLabel('Manage:'), 0, 0, 1, 6)
 		lay_manage.addWidget(self.edt_name, 1, 0, 1, 4)
 		lay_manage.addWidget(text_button('Rename', 'Name touched elements. Several get numbered: name.1, name.2 ...',
 				lambda: TRElementActionCollector.element_rename(pMode, pLayers, self.edt_name.text)), 1, 4, 1, 2)
@@ -271,7 +285,7 @@ class TRElementBasics(QtGui.QWidget):
 		lay_manage.addWidget(text_button('Report element stack', 'Print the element stack of the active layer, front to back, to the Output panel.\nTouched elements are marked with *.',
 				lambda: TRElementActionCollector.element_report()), 5, 0, 1, 6)
 
-		box_manage.setLayout(lay_manage)
+		box_manage.setContentLayout(lay_manage)
 		self.lay_main.addWidget(box_manage)
 
 		# - Finish it ---------------------------------------------------------

@@ -476,6 +476,33 @@ class TRElementActionCollector(object):
 
 		active_workspace.getCanvas(True).refreshAll()
 
+	@staticmethod
+	def element_arrange(pMode:int, pLayers:tuple, mode:str=eo.ARRANGE_READING):
+		'''Auto arrange the element stack by position, reading like FontLab's Elements list (front first).
+		Mode: top, bottom, left, right, reading (rows top to bottom, left to right), area (largest to the back).
+
+		Meant for matching masters: every layer is sorted on its own geometry, so the same element
+		ends at the same index in every master even when the masters disagree now. Always the whole
+		layer, incompatible layers included (that is the point).'''
+		process_glyphs = getProcessGlyphs(pMode)
+
+		for glyph in process_glyphs:
+			work_layers = glyph._prepareLayers(pLayers, False)
+
+			for layer_name in work_layers:
+				layer = glyph.layer(layer_name)
+				layer_shapes = layer.shapes
+				if len(layer_shapes) < 2: continue
+
+				bounds_list = [_shape_bounds(shape) or (0., 0., 0., 0.) for shape in layer_shapes]
+				slots = list(range(len(layer_shapes)))
+				new_order = eo.reorder_sequence(len(layer_shapes), slots, eo.arrange_sequence(bounds_list, mode))
+				layer.reorderShapes([layer_shapes[index].id for index in new_order])
+
+			_finish(glyph, work_layers, 'Arrange elements: {}'.format(mode))
+
+		active_workspace.getCanvas(True).refreshAll()
+
 	# - Align and transform ---------------------------------
 	@staticmethod
 	def element_align(pMode:int, pLayers:tuple, align_mode:str, align_x:str=None, align_y:str=None, reverse:bool=False):

@@ -32,12 +32,12 @@
         true
     ],
     [
-        "ElementComposer",
-        false
+        "Element",
+        true
     ],
     [
-        "ElementNew",
-        true
+        "ElementComposer",
+        false
     ],
     [
         "Glyph",

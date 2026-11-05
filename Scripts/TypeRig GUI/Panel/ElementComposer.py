@@ -9,7 +9,7 @@
 
 # Element composition: insert, replace and swap named elements across glyphs.
 # Element management (merge, split, group, ungroup all, arrange, align, transform,
-# round, style, rename, link, unlink...) lives in the ElementNew panel.
+# round, style, rename, link, unlink...) lives in the Element panel.
 
 # - Dependencies -------------------------
 from __future__ import absolute_import, print_function
@@ -141,7 +141,7 @@ class TRPlainTextEdit(QtGui.QPlainTextEdit):
 		self.insertPlainText(' '.join(selection))
 		
 class basicOps(QtGui.QGridLayout):
-	# - Basic element operations not covered by the ElementNew panel
+	# - Basic element operations not covered by the Element panel
 	def __init__(self):
 		super(basicOps, self).__init__()
 

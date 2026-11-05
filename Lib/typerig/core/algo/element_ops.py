@@ -9,7 +9,8 @@
 #
 #   compose, invert, translate, scale_about, map_point, map_bounds
 #   union_bounds, align_shifts, distribute_shifts	(bounds math)
-#   reorder_up/down/front/back/reverse				(z-order permutations)
+#   reorder_up/down/front/back/reverse/sequence	(z-order permutations)
+#   arrange_sequence, reading_rows				(auto arrange by position)
 #   point_in_polygon, polygon_area, group_islands	(outer + counters)
 #
 # No FontLab, no Qt. The FL glue lives in proxy/fl/actions/element.py
@@ -24,7 +25,7 @@
 
 from __future__ import absolute_import, print_function, division
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 
 # - Affine -------------------------------------------------
 IDENTITY = (1., 0., 0., 1., 0., 0.)
@@ -166,6 +167,73 @@ def reorder_reverse(count, selected):
 		order[slot] = index
 
 	return order
+
+def reorder_sequence(count, slots, sequence, front_first=True):
+	'''Put the items of sequence into the given stack slots.
+	Args:
+		count (int): stack size
+		slots (list(int)): stack indices to fill, the same items as sequence
+		sequence (list(int)): item indices first to last
+		front_first (bool): the first item goes to the frontmost slot (reads like FontLab's Elements list)
+	'''
+	order = list(range(count))
+	placed = list(reversed(sequence)) if front_first else list(sequence)
+
+	for slot, index in zip(sorted(slots), placed):
+		order[slot] = index
+
+	return order
+
+# - Auto arrange -----------------------------------------
+ARRANGE_TOP = 'top'			# top to bottom
+ARRANGE_BOTTOM = 'bottom'	# bottom to top
+ARRANGE_LEFT = 'left'		# left to right
+ARRANGE_RIGHT = 'right'		# right to left
+ARRANGE_READING = 'reading'	# rows top to bottom, each row left to right
+ARRANGE_AREA = 'area'		# smallest first: in the stack the largest ends at the back
+
+def _center(bounds):
+	return ((bounds[0] + bounds[2])/2., (bounds[1] + bounds[3])/2.)
+
+def _area(bounds):
+	return (bounds[2] - bounds[0])*(bounds[3] - bounds[1])
+
+def reading_rows(bounds_list, indices=None):
+	'''Group items into rows, top row first, each row left to right.
+	An item joins the first row whose band (the vertical extent of the row's first,
+	topmost item) holds its centre; otherwise it starts a new row.'''
+	if indices is None: indices = list(range(len(bounds_list)))
+	rows = []
+
+	for index in sorted(indices, key=lambda i: (-bounds_list[i][3], _center(bounds_list[i])[0])):
+		cy = _center(bounds_list[index])[1]
+
+		for row in rows:
+			band = bounds_list[row[0]]
+			if band[1] <= cy <= band[3]:
+				row.append(index)
+				break
+		else:
+			rows.append([index])
+
+	return [sorted(row, key=lambda i: _center(bounds_list[i])[0]) for row in rows]
+
+def arrange_sequence(bounds_list, mode, indices=None):
+	'''Item indices first to last for an auto arrange mode. Positions are bounds centres,
+	ties break on the other axis (top/bottom by x, left/right by y from the top).'''
+	if indices is None: indices = list(range(len(bounds_list)))
+	center = lambda i: _center(bounds_list[i])
+
+	if mode == ARRANGE_READING:
+		return [index for row in reading_rows(bounds_list, indices) for index in row]
+
+	keys = {ARRANGE_TOP: 	lambda i: (-center(i)[1], center(i)[0]),
+			ARRANGE_BOTTOM: lambda i: (center(i)[1], center(i)[0]),
+			ARRANGE_LEFT: 	lambda i: (center(i)[0], -center(i)[1]),
+			ARRANGE_RIGHT: 	lambda i: (-center(i)[0], -center(i)[1]),
+			ARRANGE_AREA: 	lambda i: (_area(bounds_list[i]), -center(i)[1], center(i)[0])}
+
+	return sorted(indices, key=keys[mode])
 
 # - Islands ----------------------------------------------
 def point_in_polygon(x, y, polygon):

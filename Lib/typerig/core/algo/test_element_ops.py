@@ -93,6 +93,38 @@ def test_reverse_selected_only():
 	assert eo.reorder_reverse(5, [0, 2, 4]) == [4, 1, 2, 3, 0]
 
 
+def test_sequence_front_first():
+	# Items 3 and 1 into slots 1 and 3: first item (3) goes to the front slot (3)
+	assert eo.reorder_sequence(5, [1, 3], [3, 1]) == [0, 1, 2, 3, 4]
+	assert eo.reorder_sequence(5, [1, 3], [1, 3]) == [0, 3, 2, 1, 4]
+	assert eo.reorder_sequence(3, [0, 1, 2], [0, 1, 2], front_first=False) == [0, 1, 2]
+
+
+# - Auto arrange ---------------------------------------------------------
+#   grid:  A B      (top row)
+#          C   D    (bottom row, D slightly higher but still in the row band)
+_grid = [(0, 100, 40, 140), (60, 100, 100, 140), (0, 0, 40, 40), (120, 10, 160, 50)]
+
+def test_arrange_directions():
+	assert eo.arrange_sequence(_grid, eo.ARRANGE_TOP) == [0, 1, 3, 2]
+	assert eo.arrange_sequence(_grid, eo.ARRANGE_BOTTOM) == [2, 3, 0, 1]
+	assert eo.arrange_sequence(_grid, eo.ARRANGE_LEFT) == [0, 2, 1, 3]
+	assert eo.arrange_sequence(_grid, eo.ARRANGE_RIGHT) == [3, 1, 0, 2]
+
+def test_arrange_reading_rows():
+	assert eo.reading_rows(_grid) == [[0, 1], [2, 3]]
+	assert eo.arrange_sequence(_grid, eo.ARRANGE_READING) == [0, 1, 2, 3]
+
+def test_arrange_reading_subset():
+	assert eo.arrange_sequence(_grid, eo.ARRANGE_READING, [3, 0, 2]) == [0, 2, 3]
+
+def test_arrange_area_largest_to_back():
+	boxes = [(0, 0, 10, 10), (0, 0, 100, 100), (0, 0, 50, 50)]
+	sequence = eo.arrange_sequence(boxes, eo.ARRANGE_AREA)
+	assert sequence == [0, 2, 1]
+	assert eo.reorder_sequence(3, [0, 1, 2], sequence) == [1, 2, 0]	# back to front: big, mid, small
+
+
 # - Islands --------------------------------------------------------------
 def test_point_in_polygon():
 	assert eo.point_in_polygon(5, 5, _square(0, 0, 10, 10))
