@@ -9,8 +9,8 @@ dynamic = ["version"]
 description = "TypeRig font geometry, interpolation, and host integration library"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MPL-2.0"
-license-files = ["LICENSE"]
+license = "AGPL-3.0-only"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{name = "Vassil Kateliev"}]
 dependencies = ["fonttools>=4"]
 
@@ -37,7 +37,7 @@ exclude = ["**/__pycache__", "**/*.pyc", "**/.DS_Store", "**/.claude"]
 packages = ["Lib/typerig"]
 
 [tool.hatch.build.targets.sdist]
-only-include = ["Lib/typerig", "pyproject.toml", "README.md", "LICENSE", "DEPENDENCIES.md", "RELEASING.md", "PYPI.md", "release.py", "publish.py", "_release.py", "_github.py", "_artifacts.py", "tests"]
+only-include = ["Lib/typerig", "pyproject.toml", "README.md", "LICENSE", "NOTICE", "DEPENDENCIES.md", "RELEASING.md", "PYPI.md", "release.py", "publish.py", "_release.py", "_github.py", "_artifacts.py", "tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

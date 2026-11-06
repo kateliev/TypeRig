@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 # Regenerates the remove-overlap fixtures for test_outline_cleanup.py.
 # Dev tool only: needs skia-pathops (pip install skia-pathops).
 # Glyphs are built from overlapping strokes and unioned, so the JSON

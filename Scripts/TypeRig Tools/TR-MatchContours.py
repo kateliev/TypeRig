@@ -1,4 +1,5 @@
 #FLM: TypeRig: Match Contours
+# SPDX-License-Identifier: AGPL-3.0-only
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2022 		(http://www.kateliev.com)
 # (C) TypeRig 						(http://www.typerig.com)

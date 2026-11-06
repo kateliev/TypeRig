@@ -1,4 +1,5 @@
 # this_file: tests/test_boundaries.py
+# SPDX-License-Identifier: AGPL-3.0-only
 """Preflight and native Git ref checks against isolated repositories."""
 
 import json

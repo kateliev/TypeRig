@@ -192,6 +192,14 @@ The core package also runs in the browser via Pyodide. The **TR Glyph Viewer** (
 
 ## License
 
+TypeRig is licensed under the **GNU Affero General Public License, version 3** (`AGPL-3.0-only`), with an additional permission for running it inside FontLab and Glyphs. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+In short: you may use TypeRig freely, including for commercial font work. Fonts and other files you make with it are yours and are not covered by this license. If you distribute software that includes TypeRig, that software must be released under the AGPL with its full source code; if you modify TypeRig and let others use it over a network, you must offer them its source code.
+
+Releases up to and including 3.0.0 were published under the Mozilla Public License 2.0; copies received under that license remain under it.
+
+**Text and data mining.** The rightholders expressly reserve the use of this repository for text and data mining, including training AI models, under Article 4(3) of Directive (EU) 2019/790. See section 5 of [NOTICE](NOTICE).
+
 No warranties. By using this you agree that you use it at your own risk.
 
 © Vassil Kateliev — [kateliev.com](http://www.kateliev.com) | Karandash Type Foundry — [karandash.eu](http://www.karandash.eu)

@@ -1,4 +1,5 @@
 # this_file: _artifacts.py
+# SPDX-License-Identifier: AGPL-3.0-only
 """Build and inspect immutable, tag-derived TypeRig distribution artifacts."""
 
 import sys

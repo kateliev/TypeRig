@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 # MODULE: TypeRig / Core / Actions / Delta Kerning
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2020-2026	(http://www.kateliev.com)

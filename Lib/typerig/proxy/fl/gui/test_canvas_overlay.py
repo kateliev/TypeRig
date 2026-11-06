@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 # MODULE: TypeRig / Proxy / FontLab / GUI / Canvas Overlay - tests
 # -----------------------------------------------------------
 # Headless tests for canvas_overlay.py and overlay_math.py - no

@@ -1,4 +1,5 @@
 # this_file: tests/conftest.py
+# SPDX-License-Identifier: AGPL-3.0-only
 """Shared owned, local-only Git fixtures."""
 
 import pytest

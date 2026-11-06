@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 # Targeted verification of the S1 bug fixes
 import sys, math
 sys.path.insert(0, r'D:\Remote\GitHub\TypeRig\Lib')

@@ -1,4 +1,5 @@
 # this_file: _github.py
+# SPDX-License-Identifier: AGPL-3.0-only
 """Resumable GitHub release assets without replacing any published bytes."""
 
 import hashlib
