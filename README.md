@@ -4,9 +4,26 @@ A Python framework for font design and engineering. Started as a personal toolki
 
 TypeRig has objects for manipulating font outlines — points, nodes, contours, shapes, layers and glyphs — plus math helpers for interpolation, adaptive scaling and curve processing. A proxy layer wraps FontLab internals so the same code works both standalone and inside the host app. On top of that sits a collection of GUI panels, toolbars, and dialog tools that cover most of what I need in a daily font production workflow. Experimental, evolving, and perpetually work-in-progress.
 
+## Status
+
+TypeRig is used every day in real font production, and it changes about as often. That has a cost: there are bugs, some tools fail on input they were not written for, and behaviour can change between commits. Work on copies of your fonts and save often.
+
+- **Tested:** the core has standalone tests (objects, actions, outline cleanup, CJK, element operations) that CI runs on Python 3.11 under Linux, macOS and Windows.
+- **Tested by hand only:** the FontLab and Glyphs tools. Several recent panels (Cleanup, Stem Snap, Magic Scale, the new Element panel) have seen little use inside FontLab so far.
+- **Undo:** not every tool records its changes correctly for the host's Undo. A known case: Element → Flip leaves the element flipped after Undo.
+- **Hosts:** FontLab 8 is the main target. TypeRig also runs in FontLab 9, but has not been tested there systematically. The Glyphs side targets Glyphs 3 and 4.
+
+Bug reports are welcome on [GitHub Issues](https://github.com/kateliev/TypeRig/issues).
+
 ## Install the Python library
 
-From a local checkout (Python 3.10 or newer):
+From PyPI (Python 3.10 or newer):
+
+```sh
+python -m pip install typerig
+```
+
+Or from a local checkout:
 
 ```sh
 python -m pip install .
@@ -46,7 +63,7 @@ The main interface is a dockable panel that loads sub-panels as tabs. Layer sele
 
 **Delta** — The adaptive scaling (delta machine) panel. Virtual axis setup with stem values per master layer. Target layer generation with configurable horizontal/vertical stems, width, and height. Supports extrapolation, intensity control, italic-angle compensation, and multiple transform origins. Axis configurations can be saved/loaded from Font Lib or external JSON files. Integrates with the core delta-scaling engine based on Tim Ahrens' methodology.
 
-**Element** — Shape (element) manipulation: naming, unlinking references, deletion, transform reset, transform rounding, auto-reorder by position, ungroup-all. Shape insertion and replacement from font-wide element library. Shape alignment to other shapes, to layer bounds, and to font metrics. An expression-based element composition system with a scripting syntax supporting coordinate placement by node tags, anchor names, bbox positions, per-layer overrides, and element swapping.
+**Element** — Element (shape) management, rewritten in autumn 2026. Merge selected contours into a new, the top or the bottom element; separate by ejecting contours, by islands or one element per contour; group, ungroup, group from selection. Stacking order: forward, backward, reverse, to front, to back, and auto arrange by position, reading order or size, optionally to match the order of the other masters. Align and distribute to the touched elements, a key element, the layer or font metrics; flip; transform with a chosen origin. Copy, paste and match fill, stroke, opacity and style; set or pick brush weight. Rename, duplicate, link and unlink, apply, reset or round element transforms, clean empty elements. Geometry in `core.algo.element_ops`. The older naming and composition tools moved to ElementComposer.
 
 **Clipboard** — Multi-master aware contour clipboard using core-object storage. Copy full contours or partial selections. Paste with configurable transform (translate, scale, rotate, skew), delta machine size fit and transform origin. Supports reversed and partial paste modes as well as drawing and connecting multiple (selected in UI) segments. Save/load clipboard contents to XML files for cross-session and cross-font workflows.
 
@@ -72,7 +89,7 @@ The main interface is a dockable panel that loads sub-panels as tabs. Layer sele
 
 **Cleanup** — Outline cleanup: remove redundant nodes and debris. Analyze reports node counts and deviation without touching the outlines, Fix Degeneracies drops the debris, Clean & Simplify also refits curves within a tolerance, and Show Locks selects the nodes that would be kept. Layers follow the masthead and can be cleaned in sync or one by one; output curves stay cubic, convert to quadratic, or keep whatever kind they had. Groups, components and shared elements are skipped. Geometry in `core.algo.outline_cleanup`.
 
-**StemSnap** — Find stems or strokes whose width is close to one of the master's standard stems and snap them onto it; anything outside the capture band is left alone. Two methods: node-level H/V stems, where corrections cascade IUP-style over the stem's contour family so nothing tears, and whole-contour strokes measured on the medial axis at any angle, with optional MAT stroke separation first. Targets come from each master's PostScript stems or a typed list, tolerance in units or percent. Geometry in `core.algo.stem_snap` and `stroke_snap`.
+**StemSnap** — Find stems or strokes whose width is close to one of the master's standard stems and snap them onto it; anything outside the capture band is left alone. Two methods: node-level H/V stems, where corrections cascade IUP-style over the stem's contour family so nothing tears, and whole-contour strokes measured on the medial axis at any angle, with optional MAT stroke separation first. Targets come from each master's PostScript stems or a typed list, tolerance in units or percent. Show on canvas marks the stems that would be snapped before anything changes. Single glyph at a time for now. Geometry in `core.algo.stem_snap` and `stroke_snap`.
 
 **MagicScale** — Stem-preserving 1D warp, per axis: the stems keep their thickness and the whitespace absorbs the change, redistributed by counter (中宫) and gravity (重心). Live editing writes into the glyph's own nodes like the Delta panel, with Reset and Apply. Geometry in `core.algo.magic_scale`.
 
@@ -175,7 +192,7 @@ Pure Python, runs anywhere — CPython, Pyodide in a browser, whatever. The geom
 
 - `math` — linear interpolation, rational fractions, randomisation, SLERP for angles, directional interpolation, Hobby velocity, matrix solvers.
 - `transform` — delta machine, adaptive scaling (extending on Tim Ahrens), directional adaptive scaling, stem compensation, italic-angle correction, per-contour angle adjustment and utilities.
-- `geometry` — CCW test, collinearity, intersection routines.
+- `geometry` — CCW test, collinearity, intersection routines; squircle corners (forward construction, fitting the smoothing of a drawn corner, and the outer/inner sides of a stroked skeleton corner).
 - `utils` — type-checking helpers.
 
 **`core.fileio`** — serialisation:
@@ -249,6 +266,8 @@ Depends on FontLab (`fontlab`, `fontgate`, `PythonQt`). Proxy objects, GUI bits,
 
 - `pWorkspace` — workspace proxy for canvas access, text block/glyph queries, active kern pair retrieval, and frame creation.
 - `pItems` — item notification helpers for undo.
+
+**`proxy.fl.devtools`** — for testing TypeRig inside a running FontLab, by hand from the Macro panel or by a coding agent: press TypeRig Panel controls, click and drag on the glyph canvas, take screenshots, snapshot and diff glyph data, read the History panel, and reload TypeRig code without restarting FontLab. Nothing in TypeRig imports it. Canvas input moves the real mouse pointer, so leave the mouse alone while it runs.
 - `automat` — runs FontLab's own UI actions from script.
 
 **`proxy.fl.pens`** — pen protocol adapters (`abstractPen`, `outlinePen`) for feeding FL outlines through pen-based code.
