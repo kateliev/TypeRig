@@ -127,7 +127,7 @@ TARGET_DEFAULTS = {
 	'origin': 'BS',				# transform origin of the row (BS = baseline, 0 / 0)
 	'anchors': True, 'metrics': True, 'kerning': False,
 	'msx': None,				# metrics scale, percent (Met. W); None = the metrics follow the outline
-	'ksx': None,				# kerning scale, percent (Kern %); None = automatic (delta_kerning_actions.side_factor)
+	'ksx': None,				# kerning spacing, percent (Kern %, read like Met. W: bigger = looser pairs); None = Met. W (delta_kerning_actions.side_factor)
 }
 
 
