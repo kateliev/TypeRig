@@ -69,8 +69,9 @@ def calc_axes(doc):
 
 def calc_rows(doc):
 	'''Target rows of a document, resolved (override rows with their
-	inherited cells): [{'label', 'axis', 'vstem', 'hstem'}]. label: as the
-	bake report names a row.'''
+	inherited cells): [{'label', 'axis', 'vstem', 'hstem', 'sx'}]. label: as
+	the bake report names a row; sx: the Width as a scale (1. = 100 %), None
+	for a Width in units.'''
 	rows = doc.get('targets', [])
 	by_id = dict((r.get('id'), r) for r in rows if r.get('id'))
 	out = []
@@ -82,8 +83,10 @@ def calc_rows(doc):
 			label = r.get('layer', '')
 		if dma.is_override(row):
 			label = dma.OVERRIDE_MARK + ' ' + label
+		width = r.get('width') or {}
+		sx = _num(width.get('value'), 100.) / 100. if width.get('unit', '%') == '%' else None
 		out.append({'label': label, 'axis': r.get('axis', ''),
-		            'vstem': _num(r.get('vstem'), 0.), 'hstem': _num(r.get('hstem'), 0.)})
+		            'vstem': _num(r.get('vstem'), 0.), 'hstem': _num(r.get('hstem'), 0.), 'sx': sx})
 	return out
 
 
@@ -155,16 +158,26 @@ def dm_percent(inputs, values, stem, output, direction='h', extrapolate=True):
 	return out
 
 
-def affine_percent(inputs, values, stem, output, direction='h', extrapolate=True):
+def affine_percent(inputs, values, stem, output, direction='h', extrapolate=True, sx=None):
 	'''Percent for an affine value (the Delta Machine's sidebearings with
 	Advanced > Delta metrics off): the value interpolated at stem times the
 	percent, so percent = output / value at stem. Same dict as dm_percent
-	('affine': True); no percent when the value at stem is 0.'''
+	('affine': True); no percent when the value at stem is 0.
+
+	A negative value at stem (an overhang, 'negative': True) follows the
+	kerning rule in the bake: output = value * sx * sx / m, so
+	m = sx * sx * value / output. It needs the row's Width (sx, 1. = 100 %)
+	and a negative output; else no percent.'''
 	_check(inputs, values)
 	at100 = dm_value(inputs, values, stem, 100., direction, extrapolate)
 	output = float(output)
-	plain = output / at100 * 100. if at100 else None
-	out = {'at100': at100, 'plain': plain, 'fixed': plain is None, 'affine': True}
+	if at100 > 0.:
+		plain = output / at100 * 100.
+	elif at100 < 0. and sx and output < 0.:
+		plain = sx * sx * at100 / output * 100.
+	else:
+		plain = None
+	out = {'at100': at100, 'plain': plain, 'fixed': plain is None, 'affine': True, 'negative': at100 < 0.}
 	if plain is None:
 		out.update(percent=None, result=at100, residual=abs(output - at100), converged=abs(output - at100) <= TOL)
 	else:
@@ -172,17 +185,20 @@ def affine_percent(inputs, values, stem, output, direction='h', extrapolate=True
 	return out
 
 
-def dm_percent_desired(inputs, values, desired, stem, direction='h', extrapolate=True, affine=False):
+def dm_percent_desired(inputs, values, desired, stem, direction='h', extrapolate=True, affine=False, sx=None):
 	'''Percent that turns the input values into the desired values, at the
 	target stem: the desired values are interpolated at stem (as the Delta
 	Machine interpolates at 100 %), the percent is solved for that value
 	(dm_percent; affine: affine_percent, the plain ratio, for a Met. W
-	with affine metrics). values / desired: one per input, units.
+	with affine metrics; sx: the row's Width, for a negative value).
+	values / desired: one per input, units.
 
 	Returns the dm_percent dict and 'wanted' (the desired value at stem).'''
 	_check(inputs, desired)
 	wanted = dm_value(inputs, desired, stem, 100., direction, extrapolate)
-	solve = affine_percent if affine else dm_percent
-	out = solve(inputs, values, stem, wanted, direction, extrapolate)
+	if affine:
+		out = affine_percent(inputs, values, stem, wanted, direction, extrapolate, sx)
+	else:
+		out = dm_percent(inputs, values, stem, wanted, direction, extrapolate)
 	out['wanted'] = wanted
 	return out

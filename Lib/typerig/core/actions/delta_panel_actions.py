@@ -734,6 +734,17 @@ def _place_in_metrics(layer, ghost, slope):
 	_place_sidebearings(layer, lsb_m, rsb_m, slope)
 
 
+def _affine_side(value, m, sx):
+	'''Affine metrics: a sidebearing times the metrics scale m. A negative
+	one (an overhang) is shape and spacing at once, like a negative kern
+	built into the glyph: it follows the outline and loosens in inverse
+	ratio to the spacing, the kerning rule: value * sx * sx / m (m = sx:
+	value * sx). More Met. W never tightens a side.'''
+	if value >= 0.:
+		return value * m
+	return value * sx * sx / m if m > 0. else value * sx
+
+
 def _place_sidebearings(layer, lsb, rsb, slope):
 	'''Shift layer (outline + anchors) so its LSB is lsb, and set its
 	advance so its RSB is rsb. Measured as italic_sidebearings (de-slanted
@@ -759,8 +770,12 @@ def _bake_target_stems(base_layer, vaxis, target, italic_rad,
 	- 'affine' (Delta Machine default, 2026-11-06): the sidebearings of
 	  the glyph interpolated at the target stems (DM at 100 %: a plain
 	  interpolation, no scale, no extrapolation inside the inputs) times
-	  m = msx / 100 when set, else sx. LSB' = m * LSB, RSB' = m * RSB,
-	  the outline at (sx, sy) is placed between them, advance =
+	  m = msx / 100 when set, else sx. LSB' = m * LSB, RSB' = m * RSB;
+	  a negative sidebearing (an overhang: shape and spacing, like a
+	  negative kern) follows the kerning rule instead: sx * sx / m * LSB
+	  (user 2026-11-06, Snaga Banner /a RSB -20, Width 58, Met. W 131 %
+	  was -26, tighter; now -5).
+	  The outline at (sx, sy) is placed between them, advance =
 	  LSB' + outline width + RSB'. Predictable: the same ratio for every
 	  glyph, whatever the inputs do.
 	- 'delta' / missing (legacy): with 'msx' the sidebearings come from a
@@ -814,7 +829,7 @@ def _bake_target_stems(base_layer, vaxis, target, italic_rad,
 		source = _scale_layer(base_layer, vaxis, stem, (1., scale[1]), italic_rad, extrapolate)
 		m = msx / 100. if msx is not None else scale[0]
 		lsb_s, rsb_s = source.italic_sidebearings(slope)
-		_place_sidebearings(new_layer, m * lsb_s, m * rsb_s, slope)
+		_place_sidebearings(new_layer, _affine_side(lsb_s, m, scale[0]), _affine_side(rsb_s, m, scale[0]), slope)
 	elif msx is not None:
 		ghost_report = {}
 		ghost = _scale_layer(base_layer, vaxis, stem, (msx / 100., scale[1]),
