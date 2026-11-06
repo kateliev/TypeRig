@@ -109,6 +109,8 @@ ADVANCED_DEFAULTS = {
 	'italic_fix': dict(ITALIC_FIX_DEFAULTS),
 	'kern_groups': 'mean',		# kerning, group whose members differ: mean | key | refuse (delta_kerning_actions)
 	'kern_sides': 'complete',	# kerning, pair side with no baked glyph: complete | skip | keep
+	'delta_metrics': False,		# metrics + kerning: False = affine (interpolated LSB / RSB / kern x percent,
+								# default 2026-11-06); True = legacy Delta metrics (Met. W ghost bake, kern f*f/msx)
 	'notes': '',
 }
 FLAG_KEYS = {status: 'flag_' + status for status in STATUSES}
@@ -525,6 +527,7 @@ def machine_normalize(raw):
 		doc['advanced'][key] = norm_label(doc['advanced'][key], ADVANCED_DEFAULTS[key])
 	doc['advanced']['flag'] = bool(doc['advanced']['flag'])
 	doc['advanced']['log'] = bool(doc['advanced']['log'])
+	doc['advanced']['delta_metrics'] = bool(doc['advanced']['delta_metrics'])	# older setups: off (affine)
 	doc['advanced']['log_dir'] = str(doc['advanced']['log_dir'] or '')
 	if doc['advanced']['kern_groups'] not in KERN_GROUP_RULES:
 		doc['advanced']['kern_groups'] = ADVANCED_DEFAULTS['kern_groups']
@@ -771,9 +774,15 @@ def core_setup(doc, picks, solved=None, italic_angle=0.):
 		             'targets': [target_to_core(ax['targets'][i], solved.get((a, i))) for i in rows]})
 	opts = doc.get('options', OPTION_DEFAULTS)
 	options = {'origin': opts.get('origin', 'BS'), 'extrapolate': bool(opts.get('extrapolate', True)),
-	           'metrics': True, 'anchors': True, 'italic_angle': float(italic_angle)}
+	           'metrics': True, 'anchors': True, 'italic_angle': float(italic_angle),
+	           'delta_metrics': delta_metrics(doc)}
 	options.update(italic_fix(doc))
 	return {'axes': axes, 'options': options}
+
+
+def delta_metrics(doc):
+	'''True: legacy Delta metrics (Advanced > Delta metrics); False: affine.'''
+	return bool((doc.get('advanced') or {}).get('delta_metrics', ADVANCED_DEFAULTS['delta_metrics']))
 
 
 def italic_fix(doc):
@@ -800,7 +809,7 @@ def ref_setup(doc, ref, italic_angle=0.):
 		doc = machine_expand(doc)
 	ax = doc['axes'][ref['axis']]
 	options = {'extrapolate': bool(doc.get('options', OPTION_DEFAULTS).get('extrapolate', True)),
-	           'italic_angle': float(italic_angle)}
+	           'italic_angle': float(italic_angle), 'delta_metrics': delta_metrics(doc)}
 	options.update(italic_fix(doc))
 	return {'axes': [{'name': ax['name'], 'inputs': ax['inputs'],
 	                  'targets': [target_to_core(ax['targets'][ref['row']])]}],
@@ -878,6 +887,8 @@ def machine_log(doc, run):
 	out.append('Options:  extrapolate %s, selected only %s' % (
 		'on' if opts.get('extrapolate', True) else 'off', 'on' if opts.get('selection_only') else 'off'))
 	out.append('Italic:   %s' % italic_summary(doc))
+	out.append('Metrics:  %s' % ('Delta metrics (legacy: Met. W ghost bake)' if delta_metrics(doc)
+	                             else 'affine (interpolated sidebearings and kerning x percent)'))
 	adv = doc.get('advanced') or {}
 	out.append('Kerning:  groups %s, unbaked sides %s (LTR)' % (
 		adv.get('kern_groups', 'mean'), adv.get('kern_sides', 'complete')))

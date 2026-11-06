@@ -31,6 +31,11 @@ Desired values per input (a client's sidebearings for each master): the
 wanted value on the target is the desired values interpolated at the target
 stem (the same DeltaScale at 100 %), then solved as above.
 
+Affine metrics (Delta Machine default since 2026-11-06, Advanced > Delta
+metrics off): a Met. W percent multiplies the sidebearings interpolated at
+the target stem, so its percent is the plain ratio (affine_percent).
+Width / Height stay Delta Machine percents.
+
 Host neutral; nothing is written anywhere.
 '''
 
@@ -150,15 +155,34 @@ def dm_percent(inputs, values, stem, output, direction='h', extrapolate=True):
 	return out
 
 
-def dm_percent_desired(inputs, values, desired, stem, direction='h', extrapolate=True):
+def affine_percent(inputs, values, stem, output, direction='h', extrapolate=True):
+	'''Percent for an affine value (the Delta Machine's sidebearings with
+	Advanced > Delta metrics off): the value interpolated at stem times the
+	percent, so percent = output / value at stem. Same dict as dm_percent
+	('affine': True); no percent when the value at stem is 0.'''
+	_check(inputs, values)
+	at100 = dm_value(inputs, values, stem, 100., direction, extrapolate)
+	output = float(output)
+	plain = output / at100 * 100. if at100 else None
+	out = {'at100': at100, 'plain': plain, 'fixed': plain is None, 'affine': True}
+	if plain is None:
+		out.update(percent=None, result=at100, residual=abs(output - at100), converged=abs(output - at100) <= TOL)
+	else:
+		out.update(percent=plain, result=output, residual=0., converged=True)
+	return out
+
+
+def dm_percent_desired(inputs, values, desired, stem, direction='h', extrapolate=True, affine=False):
 	'''Percent that turns the input values into the desired values, at the
 	target stem: the desired values are interpolated at stem (as the Delta
 	Machine interpolates at 100 %), the percent is solved for that value
-	(dm_percent). values / desired: one per input, units.
+	(dm_percent; affine: affine_percent, the plain ratio, for a Met. W
+	with affine metrics). values / desired: one per input, units.
 
 	Returns the dm_percent dict and 'wanted' (the desired value at stem).'''
 	_check(inputs, desired)
 	wanted = dm_value(inputs, desired, stem, 100., direction, extrapolate)
-	out = dm_percent(inputs, values, stem, wanted, direction, extrapolate)
+	solve = affine_percent if affine else dm_percent
+	out = solve(inputs, values, stem, wanted, direction, extrapolate)
 	out['wanted'] = wanted
 	return out

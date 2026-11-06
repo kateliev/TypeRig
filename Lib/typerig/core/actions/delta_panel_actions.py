@@ -28,7 +28,9 @@
 #                   # and 'msx': metrics scale in percent (None / missing:
 #                   # the metrics follow the outline). The sidebearings
 #                   # come from a DM bake at (msx, sy), the outline is
-#                   # placed in them; the origin then works on Y only
+#                   # placed in them (option 'delta_metrics' False: the
+#                   # interpolated sidebearings times msx, affine). With metrics on (msx or not) the
+#                   # origin works on Y only: X comes from the metrics
 #                   # stems-mode target
 #                   {'mode': 'stems', 'name': str,
 #                    'vstem': float, 'hstem': float,
@@ -729,9 +731,16 @@ def _place_in_metrics(layer, ghost, slope):
 	Both are measured the same way (italic_sidebearings, de-slanted by
 	slope); the pivot cancels out, so none is needed.'''
 	lsb_m, rsb_m = ghost.italic_sidebearings(slope)
-	lsb, _rsb = layer.italic_sidebearings(slope)
-	layer.shift(lsb_m - lsb, 0.)
-	layer.ADV += rsb_m - layer.italic_sidebearings(slope)[1]
+	_place_sidebearings(layer, lsb_m, rsb_m, slope)
+
+
+def _place_sidebearings(layer, lsb, rsb, slope):
+	'''Shift layer (outline + anchors) so its LSB is lsb, and set its
+	advance so its RSB is rsb. Measured as italic_sidebearings (de-slanted
+	by slope); the pivot cancels out.'''
+	cur_lsb, _rsb = layer.italic_sidebearings(slope)
+	layer.shift(lsb - cur_lsb, 0.)
+	layer.ADV += rsb - layer.italic_sidebearings(slope)[1]
 
 
 def _bake_target_stems(base_layer, vaxis, target, italic_rad,
@@ -745,13 +754,30 @@ def _bake_target_stems(base_layer, vaxis, target, italic_rad,
 	'keep_extremes' / 'keep_tension' / 'balanced'). report: optional dict,
 	gets the summed lock_directions report.
 
-	Metrics scale: a target with 'msx' (percent, needs 'metric_array' in
-	vaxis) gets its sidebearings from a "ghost" bake at (msx, sy), same
-	stems (same interpolation time) and same sy as the outline; the
-	outline at (sx, sy) is placed in them (_place_in_metrics). The origin
-	then works on the vertical only. Never scale LSB / RSB numerically
-	next to a DM outline: DM is not affine, so the error differs per
-	glyph (TypeRig-Glyphs Handouts/delta_metrics_scale_handout.md).
+	Metrics model (target 'metrics_model', npa_delta_bake sets it from the
+	option 'delta_metrics'):
+	- 'affine' (Delta Machine default, 2026-11-06): the sidebearings of
+	  the glyph interpolated at the target stems (DM at 100 %: a plain
+	  interpolation, no scale, no extrapolation inside the inputs) times
+	  m = msx / 100 when set, else sx. LSB' = m * LSB, RSB' = m * RSB,
+	  the outline at (sx, sy) is placed between them, advance =
+	  LSB' + outline width + RSB'. Predictable: the same ratio for every
+	  glyph, whatever the inputs do.
+	- 'delta' / missing (legacy): with 'msx' the sidebearings come from a
+	  "ghost" DM bake at (msx, sy), same stems and sy as the outline
+	  (_place_in_metrics); without it the advance is DM-scaled with the
+	  outline. Above 100 % the ghost extrapolates past the target stem
+	  and magnifies the inputs' sidebearing differences.
+
+	Metrics on (target 'metrics' is True, or 'msx' set; Delta Live passes
+	neither and keeps the origin on both axes):
+	the origin works on the vertical only. The advance is DM-scaled
+	about x = 0, so a horizontal origin shift of the outline alone would
+	move what one sidebearing loses into the other (right LSB, wrong
+	RSB). Metrics off: the layer keeps its own advance and the origin
+	places the outline in it on both axes. Affine vs Delta metrics:
+	TypeRig-Glyphs Handouts/delta_metrics_scale_handout.md (§9: the user
+	chose predictable affine spacing over the per-glyph DM model).
 	measure_slope: de-slant slope of the sidebearing measure (default
 	italic_rad).
 	'''
@@ -761,6 +787,12 @@ def _bake_target_stems(base_layer, vaxis, target, italic_rad,
 	msx = _to_float(target.get('msx'))
 	if 'metric_array' not in vaxis:
 		msx = None
+	# X from the metrics only when the caller says they are written
+	# (npa_delta_bake sets 'metrics' per row). Delta Live passes no key:
+	# its frame handles need the origin on both axes.
+	metrics_on = msx is not None or ('metric_array' in vaxis and target.get('metrics') is True)
+	affine = metrics_on and target.get('metrics_model') == 'affine'
+	slope = italic_rad if measure_slope is None else measure_slope
 
 	new_layer = _scale_layer(base_layer, vaxis, stem, scale, italic_rad, extrapolate, lock, report)
 
@@ -773,12 +805,17 @@ def _bake_target_stems(base_layer, vaxis, target, italic_rad,
 			dx, dy = sx0 - dx0, sy0 - dy0
 		except Exception:
 			pass
-	if msx is not None:
-		dx = 0.								# horizontal: from the metrics
+	if metrics_on:
+		dx = 0.								# horizontal: from the metrics (LSB and RSB both DM)
 	if dx or dy:
 		new_layer.shift(dx, dy)
 
-	if msx is not None:
+	if affine:
+		source = _scale_layer(base_layer, vaxis, stem, (1., scale[1]), italic_rad, extrapolate)
+		m = msx / 100. if msx is not None else scale[0]
+		lsb_s, rsb_s = source.italic_sidebearings(slope)
+		_place_sidebearings(new_layer, m * lsb_s, m * rsb_s, slope)
+	elif msx is not None:
 		ghost_report = {}
 		ghost = _scale_layer(base_layer, vaxis, stem, (msx / 100., scale[1]),
 		                     italic_rad, extrapolate, lock, ghost_report)
@@ -787,7 +824,7 @@ def _bake_target_stems(base_layer, vaxis, target, italic_rad,
 			report['fix_failed'] = report.get('fix_failed', 0) + ghost_report.get('fix_failed', 0)
 		if dy:
 			ghost.shift(0., dy)
-		_place_in_metrics(new_layer, ghost, italic_rad if measure_slope is None else measure_slope)
+		_place_in_metrics(new_layer, ghost, slope)
 
 	return new_layer
 
@@ -911,6 +948,12 @@ DELTA_OPTION_DEFAULTS = {
 	'lock_tol': LOCK_TOLERANCE,		# units
 	'tension_scale': TENSION_SCALE,
 	'tension_on_rebuilt': TENSION_ON_REBUILT,
+	# Metrics model of the bake (2026-11-06): True = Delta metrics (legacy:
+	# advance / Met. W ghost driven by the Delta Machine), False = affine
+	# sidebearings (interpolated at the target stems times the percent).
+	# Core default True: TR Panel / FL / Live keep what they did; the Delta
+	# Machine passes False unless Advanced > Delta metrics is on.
+	'delta_metrics': True,
 }
 
 # Italic fix fields for the hosts' option forms (Delta Machine Advanced,
@@ -1342,6 +1385,9 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 				if why or not metrics_on:		# metrics off: the row keeps its own metrics
 					msx = None
 				target = dict(target, msx=msx)
+			target = dict(target, metrics=bool(metrics_on),	# bake: X origin only with metrics off
+			              metrics_model='delta' if opts.get('delta_metrics', DELTA_OPTION_DEFAULTS['delta_metrics'])
+			              else 'affine')
 			try:
 				if mode == 'stems':
 					new_layer = _bake_target_stems(
