@@ -887,7 +887,7 @@ def machine_log(doc, run):
 	out.append('Options:  extrapolate %s, selected only %s' % (
 		'on' if opts.get('extrapolate', True) else 'off', 'on' if opts.get('selection_only') else 'off'))
 	out.append('Italic:   %s' % italic_summary(doc))
-	out.append('Metrics:  %s' % ('Delta metrics (legacy: Met. W ghost bake)' if delta_metrics(doc)
+	out.append('Metrics:  %s' % ('Delta metrics (Met. W ghost bake)' if delta_metrics(doc)
 	                             else 'affine (interpolated sidebearings and kerning x percent)'))
 	adv = doc.get('advanced') or {}
 	out.append('Kerning:  groups %s, unbaked sides %s (LTR)' % (
