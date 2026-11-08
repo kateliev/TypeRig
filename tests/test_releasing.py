@@ -1,4 +1,5 @@
 # this_file: tests/test_releasing.py
+# SPDX-License-Identifier: AGPL-3.0-only
 """Release boundaries tested with owned Git fixtures and fake remote services."""
 
 import subprocess

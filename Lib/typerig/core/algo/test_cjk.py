@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 # MODULE: TypeRig / Core / Algo / CJK — pure-math tests
 # -----------------------------------------------------------
 # Stand-alone tests for cjk.py — no FontLab, no Qt needed.

@@ -1,4 +1,5 @@
 #FLM: TR: Glyph
+# SPDX-License-Identifier: AGPL-3.0-only
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2019-2025 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)

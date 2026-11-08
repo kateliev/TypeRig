@@ -1,4 +1,5 @@
 # encoding: utf-8
+# SPDX-License-Identifier: AGPL-3.0-only
 # -------------------------------------------------------------------------
 # TypeRig Glyphs — editable List2 cells without Auto Layout
 #

@@ -4,6 +4,7 @@
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
+# SPDX-License-Identifier: AGPL-3.0-only
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
@@ -12,7 +13,7 @@
 import math
 
 # - Init --------------------------------
-__version__ = '0.28.0'
+__version__ = '0.29.0'
 
 # - Functions ---------------------------
 # -- Point ------------------------------
@@ -294,6 +295,79 @@ def squircle_corner(vertex, prev_unit, next_unit, reach, smoothing, radius=None)
 	arc_h1 = (arc_out[0] + fwd_b[0] * k, arc_out[1] + fwd_b[1] * k)
 
 	return [point_a, p1_in, p2_in, arc_in, arc_h0, arc_h1, arc_out, p2_out, p1_out, point_b]
+
+def squircle_sample_chain(points, steps=12):
+	'''Sample a chain of cubic segments [on, off, off, on, off, off, on, ...] into a
+	flat list of (x, y) points, steps subdivisions per segment. Companion to
+	squircle_corner for measuring a drawn corner against a candidate squircle.'''
+	out = []
+	for i in range(0, len(points) - 1, 3):
+		p0, p1, p2, p3 = points[i:i + 4]
+		for k in range(steps + 1):
+			t = float(k) / steps; mt = 1. - t
+			a, b, c, d = mt * mt * mt, 3. * mt * mt * t, 3. * mt * t * t, t * t * t
+			out.append((a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0],
+						a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1]))
+	return out
+
+def squircle_fit_smoothing(points, vertex, prev_unit, next_unit, reach):
+	'''Inverse of squircle_corner: find the smoothing whose squircle (at the given reach)
+	best matches a drawn corner [A, c, c, arc_in, c, c, arc_out, c, c, B].
+
+	Args:
+		points -> list(tuple(x, y)): the drawn corner's 10 points;
+		vertex, prev_unit, next_unit, reach -> as squircle_corner.
+
+	Returns:
+		tuple(smoothing, rms_error): the best-fit smoothing (0.0 - 1.0) and the RMS
+		deviation (design units) of that fit.
+	'''
+	target = squircle_sample_chain(points, 12)
+
+	def error(s):
+		cand = squircle_corner(vertex, prev_unit, next_unit, reach, s)
+		if cand is None: return float('inf')
+		cand = squircle_sample_chain(cand, 24)
+		return math.sqrt(sum(min((p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 for q in cand) for p in target) / len(target))
+
+	# - Coarse grid, then golden-section refinement around the best cell
+	grid = [i / 20. for i in range(21)]
+	errs = [error(s) for s in grid]
+	best = errs.index(min(errs))
+	lo, hi = grid[max(0, best - 1)], grid[min(20, best + 1)]
+	g = (math.sqrt(5.) - 1.) / 2.
+	a, b = hi - g * (hi - lo), lo + g * (hi - lo)
+	ea, eb = error(a), error(b)
+	for _ in range(30):
+		if ea < eb: hi, b, eb = b, a, ea; a = hi - g * (hi - lo); ea = error(a)
+		else: lo, a, ea = a, b, eb; b = lo + g * (hi - lo); eb = error(b)
+	s = (lo + hi) / 2.
+	return s, error(s)
+
+def squircle_stroke_side(outer_reach, stroke, smoothing, half_angle, side):
+	'''Reach and arc radius for one side of a single stroked skeleton squircle corner.
+
+	The outer and inner sides share one skeleton (same arc centre and sweep); offsetting
+	the skeleton edges by half the stroke moves each tangent point by
+	half_stroke / tan(half_angle). Feed the result to squircle_corner (reach + explicit
+	radius) to build that side so outer and inner on-curve nodes share normals.
+
+	Args:
+		outer_reach -> float: reach of the OUTER side (vertex -> where the edge ends);
+		stroke -> float: distance between the outer and inner sides (0 = standalone);
+		smoothing -> float: corner smoothing 0.0 - 1.0;
+		half_angle -> float: half the interior corner angle (radians);
+		side -> int: +1 outer, -1 inner.
+
+	Returns:
+		tuple(reach, radius) for the requested side.
+	'''
+	half_tan = math.tan(half_angle)
+	half_stroke = stroke / 2.
+	skeleton_reach = outer_reach - half_stroke / half_tan
+	skeleton_radius = skeleton_reach / (1. + smoothing) * half_tan
+	return (skeleton_reach + side * half_stroke / half_tan,
+			skeleton_radius + side * half_stroke)
 
 # - Angle/Connection --------------------------------
 def checkSmooth(firstAngle, lastAngle, error=4):

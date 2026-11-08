@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 # TEST: TypeRig GS3 Proxy — run in Glyphs 3 Macro Panel
 # Open a glyph in the Edit View before running.
 # -----------------------------------------------------------

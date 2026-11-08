@@ -1,4 +1,5 @@
 #!/usr/bin/env -S uv run --script
+# SPDX-License-Identifier: AGPL-3.0-only
 # /// script
 # requires-python = ">=3.11"
 # dependencies = ["fire>=0.7,<1", "packaging>=24", "twine>=6"]

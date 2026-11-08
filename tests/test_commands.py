@@ -1,4 +1,5 @@
 # this_file: tests/test_commands.py
+# SPDX-License-Identifier: AGPL-3.0-only
 """Full CLI orchestration with real local tags, no public remote writes."""
 
 import json

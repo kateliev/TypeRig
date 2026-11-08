@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 # MODULE: TypeRig / Core / Actions / Kern Help
 # -----------------------------------------------------------
 # TR Kern — Help tab text, the same on every host (Glyphs, FontLab,

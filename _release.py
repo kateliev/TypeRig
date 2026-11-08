@@ -1,4 +1,5 @@
 # this_file: _release.py
+# SPDX-License-Identifier: AGPL-3.0-only
 """Shared release boundaries. No Git or network operations run on import."""
 
 import os

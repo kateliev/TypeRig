@@ -1,4 +1,5 @@
 #FLM: TR: Delta
+# SPDX-License-Identifier: AGPL-3.0-only
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2020-2023 	(http://www.kateliev.com)
 # (C) TypeRig 						(http://www.typerig.com)

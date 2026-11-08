@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 # MODULE: Typerig / Proxy / FontLab / Actions / Layer
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2018-2022 	(http://www.kateliev.com)

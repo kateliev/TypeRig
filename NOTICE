@@ -1,0 +1,68 @@
+TypeRig
+Copyright (C) 2017-2026 Vassil Kateliev and Karandash Type Foundry,
+and contributors.
+www.typerig.com
+
+
+1. License
+----------
+
+TypeRig is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License, version 3 only
+(SPDX: AGPL-3.0-only), as published by the Free Software Foundation, with
+the additional permission in section 2 below.
+
+TypeRig is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public
+License in the file LICENSE for more details.
+
+
+2. Additional permission for FontLab and Glyphs
+-----------------------------------------------
+(Additional permission under GNU AGPL version 3 section 7)
+
+If you modify TypeRig, or any covered work, by linking or combining it
+with FontLab or Glyphs (any version, including their Python environments
+and the modules they provide, such as fontlab, fontgate, PythonQt and
+GlyphsApp), or a modified version of those programs, containing parts
+covered by the terms of their licenses, the licensors of TypeRig grant
+you additional permission to convey the resulting work. Corresponding
+Source for a non-source form of such a combination shall include the
+source code for the parts of TypeRig used as well as that of the covered
+work, but need not include the source code of FontLab or Glyphs.
+
+
+3. Fonts and other files you make
+---------------------------------
+
+Fonts, glyph outlines, kerning, metrics and other files that you create
+or edit with TypeRig are yours. This license covers TypeRig itself, not
+what you make with it.
+
+
+4. Earlier versions
+-------------------
+
+TypeRig up to and including release 3.0.0, and the public repository up
+to and including commit 960d25f (5 November 2026), were published under
+the Mozilla Public License 2.0. Copies received under that license
+remain under it. Later versions are licensed as described above.
+
+
+5. Reservation of rights: text and data mining
+----------------------------------------------
+
+In accordance with Article 4(3) of Directive (EU) 2019/790 on copyright
+and related rights in the Digital Single Market, and with the national
+laws that implement it, the rightholders expressly reserve the use of
+this work for text and data mining. This covers the source code,
+documentation and all other content of this repository and its
+releases, including their use to train, fine-tune, evaluate or otherwise
+develop machine learning or artificial intelligence models, and to build
+datasets for those purposes.
+
+This reservation removes the statutory text and data mining exception
+only. It does not restrict any right granted by the license above; any
+such use is permitted only to the extent that license allows it, and
+under its conditions.

@@ -3,6 +3,7 @@
 # (C) Adam Twardoch, 2019
 # --------------------------------------------------
 # www.typerig.com
+# SPDX-License-Identifier: AGPL-3.0-only
 
 # No warranties. By using this you agree
 # that you use it at your own risk!

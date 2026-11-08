@@ -1,4 +1,5 @@
 # this_file: tests/test_packaging.py
+# SPDX-License-Identifier: AGPL-3.0-only
 """Real builds and pip installs, from owned repository copies only."""
 
 import io
@@ -29,6 +30,7 @@ def package_repo(repo):
         "pyproject.toml",
         "README.md",
         "LICENSE",
+        "NOTICE",
         "DEPENDENCIES.md",
         "RELEASING.md",
         "PYPI.md",

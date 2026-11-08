@@ -528,8 +528,8 @@ footer a { color: var(--text-secondary); }
 		<p class="sub">
 			Objects for manipulating font outlines &mdash; points, nodes, contours, shapes,
 			layers and glyphs &mdash; plus math helpers for interpolation, adaptive scaling
-			and curve processing. A proxy layer wraps FontLab internals so the same code
-			works both standalone and inside the host app. Experimental, evolving, and
+			and curve processing. Proxy layers wrap FontLab and Glyphs internals so the same
+			code works both standalone and inside the host app. Experimental, evolving, and
 			perpetually work-in-progress.
 		</p>
 		<div class="hero-actions">
@@ -548,9 +548,43 @@ footer a { color: var(--text-secondary); }
 		</div>
 		<div class="badges">
 			<span class="badge"><span class="dot py"></span>Python</span>
-			<span class="badge"><span class="dot js"></span>JavaScript</span>
 			<span class="badge"><span class="dot"></span>FontLab 8</span>
+			<span class="badge"><span class="dot"></span>Glyphs 3</span>
+			<span class="badge"><span class="dot"></span>AGPL-3.0</span>
 		</div>
+	</div>
+</section>
+
+<!-- Status -->
+<section class="section" id="status">
+	<div class="wrap">
+		<div class="section-label">Status</div>
+		<p class="section-desc" style="margin-bottom:24px">
+			TypeRig is used every day in real font production, and it changes about as often.
+			That has a cost: there are bugs, some tools fail on input they were not written for,
+			and behaviour can change between commits. Work on copies of your fonts and save often.
+		</p>
+		<div class="grid-2">
+			<div class="cell">
+				<h3>Tested</h3>
+				<p>The core has standalone tests (objects, actions, outline cleanup, CJK, element operations), run by CI on Python 3.11 under Linux, macOS and Windows.</p>
+			</div>
+			<div class="cell">
+				<h3>Tested by hand only</h3>
+				<p>The FontLab and Glyphs tools. Recent panels &mdash; Cleanup, Stem Snap, Magic Scale, the new Element panel &mdash; have seen little use inside FontLab so far.</p>
+			</div>
+			<div class="cell">
+				<h3>Undo</h3>
+				<p>Not every tool records its changes correctly for the host's Undo. A known case: Element &rarr; Flip leaves the element flipped after Undo.</p>
+			</div>
+			<div class="cell">
+				<h3>Hosts</h3>
+				<p>FontLab 8 is the main target. TypeRig also runs in FontLab 9, but has not been tested there systematically. The Glyphs side targets Glyphs 3 and 4.</p>
+			</div>
+		</div>
+		<p class="section-desc" style="margin-top:24px">
+			Bug reports are welcome on <a href="https://github.com/kateliev/TypeRig/issues" target="_blank" rel="noopener">GitHub Issues</a>.
+		</p>
 	</div>
 </section>
 
@@ -618,8 +652,32 @@ footer a { color: var(--text-secondary); }
 					<span class="toggle-arrow">&#9654;</span>
 					<span class="panel-name">Element</span>
 				</div>
-				<div class="panel-brief">Shape manipulation, element library insertion, alignment, and expression-based composition system.</div>
-				<div class="panel-detail">Naming, unlinking references, deletion, transform reset/rounding, auto-reorder, ungroup-all. Shape insertion and replacement from font-wide element library. Alignment to other shapes, layer bounds, font metrics. Expression-based composition with scripting syntax: coordinate placement by node tags, anchor names, bbox positions, per-layer overrides, element swapping.</div>
+				<div class="panel-brief">Element management, rewritten in autumn 2026: merge, separate, group, arrange, align, transform, style.</div>
+				<div class="panel-detail">Merge selected contours into a new, the top or the bottom element; separate by ejecting contours, by islands or one element per contour; group, ungroup, group from selection. Stacking order: forward, backward, reverse, to front, to back, and auto arrange by position, reading order or size, optionally to match the other masters. Align and distribute to the touched elements, a key element, the layer or font metrics; flip; transform with a chosen origin. Copy, paste and match fill, stroke, opacity and style; brush weight. Rename, duplicate, link/unlink, apply/reset/round element transforms, clean empty elements. The older naming and composition tools moved to ElementComposer.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Cleanup</span>
+				</div>
+				<div class="panel-brief">Outline cleanup: remove redundant nodes and debris, refit curves within a tolerance.</div>
+				<div class="panel-detail">Analyze reports node counts and deviation without touching the outlines. Fix Degeneracies drops the debris; Clean &amp; Simplify also refits curves within a tolerance; Show Locks selects the nodes that would be kept. Layers can be cleaned in sync or one by one; output stays cubic, converts to quadratic, or keeps what it had. Groups, components and shared elements are skipped. Ported from the Glyphs side; lightly tested in FontLab.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">StemSnap</span>
+				</div>
+				<div class="panel-brief">Snap stems or strokes that are close to a standard stem onto it; leave the rest alone.</div>
+				<div class="panel-detail">Node-level H/V stems, with corrections cascading over the stem's contour family, or whole-contour strokes measured on the medial axis at any angle. Targets from each master's PostScript stems or a typed list; tolerance in units or percent. Show on canvas marks the stems that would be snapped before anything changes. Single glyph at a time for now. Ported from the Glyphs side; lightly tested in FontLab.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">MagicScale</span>
+				</div>
+				<div class="panel-brief">Stem-preserving 1D warp per axis: stems keep their thickness, the whitespace absorbs the change.</div>
+				<div class="panel-detail">The change is redistributed by counter (中宫) and gravity (重心). Live editing writes into the glyph's own nodes, like the Delta panel, with Reset and Apply.</div>
 			</div>
 			<div class="panel-item">
 				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
@@ -669,7 +727,19 @@ footer a { color: var(--text-secondary); }
 				<div class="panel-brief">Automated metric assignment, kern pair copying with class-aware support, kerning table cleanup.</div>
 				<div class="panel-detail">AutoMetrics: automated metric assignment tools. CopyKerning: kern pair copying between glyphs and layers, source pair lookup with expression adjustment, group kerning with automatic class resolution. CleanKerning: kerning table cleanup utilities.</div>
 			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">ElementComposer &middot; Symbol Explorer &middot; Delta New</span>
+				</div>
+				<div class="panel-brief">Named-element insertion and composition, plus two experimental panels that are off by default.</div>
+				<div class="panel-detail">ElementComposer: insert, replace and swap named elements across glyphs, with the expression-based composition syntax. Symbol Explorer (experimental): search a symbol set by tag and category with previews. Delta New (experimental): the canvas-driven rewrite of the Delta panel.</div>
+			</div>
 		</div>
+		<p class="section-desc" style="margin-top:12px">
+			Which tabs load is set in <code>Panel/typerig-panel-config.json</code>. The shipped default enables Node, Contour,
+			Clipboard, Layer, Element, Delta, Cleanup, StemSnap and MagicScale.
+		</p>
 
 		<!-- Manager -->
 		<div class="sub-label">TypeRig Manager<code>typerig-manager.py</code></div>
@@ -682,6 +752,14 @@ footer a { color: var(--text-secondary); }
 				<div class="panel-brief">Multi-master font metrics editor with table-based interface. Font zone management with JSON import/export.</div>
 				<div class="panel-detail">Table-based interface for all vertical metrics across all master layers. Add, remove, import/export zones as JSON. Zone creation from metric references.</div>
 			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Kerning &middot; KernGroups &middot; Impex</span>
+				</div>
+				<div class="panel-brief">Font-wide kerning table, kern class editor, batch import/export actions.</div>
+				<div class="panel-detail">Kerning: browse, filter and edit pairs across masters in a table. KernGroups: build, rename and merge classes, set key glyphs, import/export class sets as JSON. Impex: a table of import/export actions run in batch over the font; currently ships AFM kerning.</div>
+			</div>
 		</div>
 
 		<!-- Toolbars -->
@@ -690,10 +768,10 @@ footer a { color: var(--text-secondary); }
 			<div class="panel-item">
 				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
 					<span class="toggle-arrow">&#9654;</span>
-					<span class="panel-name">Node &middot; Node Align &middot; Node Slope &middot; Contour</span>
+					<span class="panel-name">Node &middot; Node Align &middot; Node Slope &middot; Contour &middot; Curve</span>
 				</div>
-				<div class="panel-brief">Dockable toolbars for node operations, alignment, slope tools, and contour booleans.</div>
-				<div class="panel-detail">Node: insertion, removal, extreme insertion, start-point, corner operations. Node Align: alignment to min/max, user targets, font metrics with intercept and smart-align. Node Slope: copy/paste with italic angle, min/max pivot with horizontal flip. Contour: boolean operations, closing, reversing, winding correction. MacOS Panel (toolbar-mac.py): unified flow-layout panel consolidating all toolbar functionality where QToolBar doesn't work.</div>
+				<div class="panel-brief">Dockable toolbars for node operations, alignment, slope tools, contour booleans and curve tools.</div>
+				<div class="panel-detail">Node: insertion, removal, extreme insertion, start-point, corner operations. Node Align: alignment to min/max, user targets, font metrics with intercept and smart-align. Node Slope: copy/paste with italic angle, min/max pivot with horizontal flip. Contour: boolean operations, closing, reversing, winding correction. Curve: line/curve conversion, Tunni and Hobby optimization, proportional handles, Hobby tension push. MacOS Panel (toolbar-mac.py): unified flow-layout panel consolidating all toolbar functionality where QToolBar doesn't work.</div>
 			</div>
 		</div>
 
@@ -761,7 +839,33 @@ footer a { color: var(--text-secondary); }
 					<span class="panel-file">TR-ExportGlyph.py</span>
 				</div>
 				<div class="panel-brief">Export individual glyphs as .trglyph XML files via the core serialization system and proxy-to-core eject.</div>
-				<div class="panel-detail">Lossless round-trip export using the eject mechanism to produce pure core objects serialized to XML.</div>
+				<div class="panel-detail">Round-trip export using the eject mechanism to produce pure core objects serialized to XML.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Import Glyph &middot; Font IO</span>
+					<span class="panel-file">TR-ImportGlyph.py &middot; TR-ExportFont.py</span>
+				</div>
+				<div class="panel-brief">Read .trglyph files back into glyphs; write and read whole fonts as .trfont.</div>
+				<div class="panel-detail">Import Glyph reads a .trglyph file back into a glyph, layer by layer. Font IO is a whole-font .trfont write/read round-trip from FontLab over the folder-level serialization in core.fileio.trfont.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">Copy Layers &middot; Copy Anchors &middot; Rename Anchors</span>
+				</div>
+				<div class="panel-brief">Copy selected layers or anchors between two open fonts; batch anchor renaming across masters.</div>
+				<div class="panel-detail">TR-CopyLayers.py, TR-CopyAnchors.py and TR-RenameAnchors.py.</div>
+			</div>
+			<div class="panel-item">
+				<div class="panel-head" onclick="this.parentElement.classList.toggle('open')">
+					<span class="toggle-arrow">&#9654;</span>
+					<span class="panel-name">trconvert</span>
+					<span class="panel-file">trconvert.py</span>
+				</div>
+				<div class="panel-brief">Not a FontLab tool: a command-line converter between .trfont and UFO 3.</div>
+				<div class="panel-detail">ufo2tr, tr2ufo and roundtrip. Needs fontTools. roundtrip runs both directions on a temporary copy and reports PASS/FAIL with a structural diff.</div>
 			</div>
 		</div>
 	</div>
@@ -772,14 +876,15 @@ footer a { color: var(--text-secondary); }
 	<div class="wrap">
 		<div class="section-label">Architecture</div>
 		<p class="section-desc">
-			Two packages, connected by a proxy layer.
+			A host-independent core, connected to the font editors by proxy layers.
 		</p>
 
 		<!-- Core -->
 		<div class="sub-label">Core<code>typerig.core</code></div>
 		<p class="section-desc" style="margin-bottom:16px">
-			No external dependencies. Pure Python, runs anywhere &mdash;
-			CPython, Pyodide in a browser, whatever.
+			Pure Python, runs anywhere &mdash; CPython, Pyodide in a browser, whatever.
+			Geometry, interpolation and algorithms need no third-party packages;
+			fontTools is used for UFO, designspace and compiled-font I/O.
 		</p>
 
 		<div class="mod-list">
@@ -789,11 +894,19 @@ footer a { color: var(--text-secondary); }
 			</div>
 			<div class="mod-item">
 				<span class="mod-name">core.func</span>
-				<span class="mod-desc">math &mdash; lerp, SLERP, rational fractions, directional interpolation, Hobby velocity, matrix solvers. transform &mdash; delta machine, adaptive scaling (extending Tim Ahrens), directional adaptive scaling, stem compensation, italic-angle correction, per-contour angle adjustment. geometry &mdash; CCW, collinearity, intersection. utils &mdash; type-checking helpers.</span>
+				<span class="mod-desc">math &mdash; lerp, SLERP, rational fractions, directional interpolation, Hobby velocity, matrix solvers. transform &mdash; delta machine, adaptive scaling (extending Tim Ahrens), directional adaptive scaling, stem compensation, italic-angle correction, per-contour angle adjustment. geometry &mdash; CCW, collinearity, intersection, squircle corners. utils &mdash; type-checking helpers.</span>
 			</div>
 			<div class="mod-item">
 				<span class="mod-name">core.fileio</span>
-				<span class="mod-desc">xmlio &mdash; XML round-trip engine with class registry, compact attribute encoding, lib-attribute support. Powers the .trfont experimental format. svg &mdash; SVG path filtering and pen-based import. nam &mdash; FontLab .nam parser. textproto &mdash; Google protobuf .textproto parser.</span>
+				<span class="mod-desc">xmlio and trfont &mdash; the experimental .trfont format. ufo and designspace &mdash; .trfont &harr; UFO 3 and .designspace. afm, krn, cla, flc, otkern, kerndoc &mdash; kerning and class interchange, including kerning read from compiled fonts. svgio, nam, textproto &mdash; SVG import and encoding files.</span>
+			</div>
+			<div class="mod-item">
+				<span class="mod-name">core.algo</span>
+				<span class="mod-desc">Pure algorithms on core objects, testable outside any editor: outline cleanup, stem and stroke snapping, medial axis and stroke separation, magic scale, matchmaker (point-compatible matching), design transfer between masters, TR Kern analysis and cleanup, CJK measurement, element operations, curve intersection.</span>
+			</div>
+			<div class="mod-item">
+				<span class="mod-name">core.actions</span>
+				<span class="mod-desc">Host-independent tool logic shared by panels, command line and tests: node, contour, curve, layer, cut, clipboard and delta actions, and the TR Kern engine with its <code>tr-kern</code> command line for UFO, designspace and .trfont files.</span>
 			</div>
 		</div>
 
@@ -810,15 +923,19 @@ footer a { color: var(--text-secondary); }
 			</div>
 			<div class="mod-item">
 				<span class="mod-name">proxy.fl.actions</span>
-				<span class="mod-desc">Action collectors separating tool logic from GUI: TRNodeActionCollector, TRCurveActionCollector, TRContourActionCollector, TRDrawActionCollector, TRLayerActionCollector.</span>
+				<span class="mod-desc">Action collectors separating tool logic from GUI: node, curve, contour, draw, layer, element and cut (stroke separation across masters).</span>
 			</div>
 			<div class="mod-item">
 				<span class="mod-name">proxy.fl.gui</span>
-				<span class="mod-desc">Widgets (buttons, flow layout, tab widgets, table views, sliders, transform controls, delta layer tree, icon font loader), dialogs (layer chooser with search/filter, quick input), stylesheets with auto dark/light detection, canvas drawing utilities (TRDrawIcon, contour/node rendering).</span>
+				<span class="mod-desc">Widgets (buttons, flow layout, tab widgets, table views, sliders, transform controls, delta layer tree, icon font loader), dialogs (layer chooser with search/filter, quick input), stylesheets with auto dark/light detection, canvas drawing utilities, and a reusable base for tools that draw on and take mouse input from the glyph canvas.</span>
 			</div>
 			<div class="mod-item">
 				<span class="mod-name">proxy.fl.application</span>
 				<span class="mod-desc">pWorkspace (canvas access, text block queries, active kern pair, frame creation), pItems (undo notification helpers).</span>
+			</div>
+			<div class="mod-item">
+				<span class="mod-name">proxy.fl.devtools</span>
+				<span class="mod-desc">For testing TypeRig inside a running FontLab, by hand or by a coding agent: press panel controls, click and drag on the canvas, take screenshots, snapshot and diff glyph data, read the History panel, reload TypeRig code without a restart. Not imported by anything else.</span>
 			</div>
 		</div>
 
@@ -845,6 +962,15 @@ footer a { color: var(--text-secondary); }
 				<p>Reads/writes to mapped names go straight to the host. Everything else follows the normal core path.</p>
 			</div>
 		</div>
+
+		<!-- Proxy GS3 -->
+		<div class="sub-label">Proxy &mdash; Glyphs 3<code>typerig.proxy.gs3</code></div>
+		<p class="section-desc">
+			A second host proxy, for Glyphs 3 and 4: objects wrapping Glyphs' own classes so the core
+			algorithms run unchanged, and a small panel toolkit over vanilla with the same glyph/layer
+			scope controls as the FontLab panel. Cleanup, Stem Snap and TR Kern were written once in the
+			core and shelled for both hosts. Install with <code>install.glyphs.py</code>.
+		</p>
 	</div>
 </section>
 
@@ -853,13 +979,13 @@ footer a { color: var(--text-secondary); }
 	<div class="wrap">
 		<div class="section-label">Web</div>
 		<p class="section-desc" style="margin-bottom:24px">
-			The core package also runs in the browser via Pyodide. The TR Glyph Viewer
-			loads modules from GitHub at runtime, stubs the FL-dependent parts,
-			and gives you a live Python editor on a canvas. Still rough around the edges.
+			The core package also runs in the browser via Pyodide. The browser work moved to
+			FontRig in March 2026; this repository keeps only the core it imports.
+			Still rough around the edges.
 		</p>
 		<div class="grid-2">
-			<a class="link-card" href="Web/GlyphViewer/" target="_blank" rel="noopener">
-				<span class="link-title">TR Glyph Viewer &rarr;</span>
+			<a class="link-card" href="https://kateliev.github.io/FontRig/editor/index.html" target="_blank" rel="noopener">
+				<span class="link-title">FontRig: Editor &rarr;</span>
 				<span class="link-desc">Glyph viewer with a Python editor in the browser. Experimental.</span>
 			</a>
 			<div class="cell">
@@ -874,10 +1000,13 @@ footer a { color: var(--text-secondary); }
 <section class="section" id="quickstart">
 	<div class="wrap">
 		<div class="section-label">Quick Start</div>
-		<div class="code-block"><span class="comment"># Clone the repository</span>
+		<div class="code-block"><span class="comment"># Install the library from PyPI (Python 3.10+)</span>
+python -m pip install typerig
+
+<span class="comment"># Or clone the repository; the FontLab and Glyphs tools come with their installers</span>
 git clone https://github.com/kateliev/TypeRig.git
 
-<span class="comment"># Core objects — pure Python, no dependencies</span>
+<span class="comment"># Core objects — pure Python</span>
 <span class="kw">from</span> <span class="cls">typerig.core.objects</span> <span class="kw">import</span> Node, Contour, Shape, Layer, Glyph
 
 <span class="comment"># Transform functions</span>
@@ -897,9 +1026,9 @@ git clone https://github.com/kateliev/TypeRig.git
 				<span class="link-title">GitHub Repository</span>
 				<span class="link-desc">Source code, issues, and releases.</span>
 			</a>
-			<a class="link-card" href="Web/GlyphViewer/" target="_blank" rel="noopener">
-				<span class="link-title">TR Glyph Viewer</span>
-				<span class="link-desc">Browser-based glyph viewer with Python scripting. Experimental.</span>
+			<a class="link-card" href="https://github.com/kateliev/FontRig" target="_blank" rel="noopener">
+				<span class="link-title">FontRig</span>
+				<span class="link-desc">The browser side: TypeRig core in Pyodide. Experimental.</span>
 			</a>
 			<a class="link-card" href="https://www.typerig.com" target="_blank" rel="noopener">
 				<span class="link-title">typerig.com</span>
@@ -916,6 +1045,7 @@ git clone https://github.com/kateliev/TypeRig.git
 <!-- Footer -->
 <footer>
 	<div class="wrap">
+		<p>Licensed under the <a href="https://github.com/kateliev/TypeRig/blob/master/LICENSE">GNU AGPL v3</a>, with an additional permission for FontLab and Glyphs. Fonts you make with TypeRig are yours. See <a href="https://github.com/kateliev/TypeRig/blob/master/NOTICE">NOTICE</a>.</p>
 		<p>No warranties. By using this you agree that you use it at your own risk.</p>
 		<p>&copy; <a href="https://www.kateliev.com">Vassil Kateliev</a> &middot; <a href="https://www.karandash.eu">Karandash Type Foundry</a> &middot; <a href="https://www.typerig.com">typerig.com</a></p>
 	</div>

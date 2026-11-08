@@ -1,4 +1,5 @@
 #FLM: TR: Stem Snap
+# SPDX-License-Identifier: AGPL-3.0-only
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2026 	(http://www.kateliev.com)
 # (C) TypeRig 					(http://www.typerig.com)

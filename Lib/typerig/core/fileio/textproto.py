@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 # MODULE: Typerig / IO / Protobuff Parser (Objects)
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2020-2024 	(http://www.kateliev.com)

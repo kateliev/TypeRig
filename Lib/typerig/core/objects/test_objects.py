@@ -4,6 +4,7 @@
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
 #------------------------------------------------------------
 # www.typerig.com
+# SPDX-License-Identifier: AGPL-3.0-only
 
 # Flat, dependency-free regression suite for core objects and func.
 # Run with: python test_objects.py

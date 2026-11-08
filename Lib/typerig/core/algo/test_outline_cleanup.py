@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 # MODULE: TypeRig / Core / Algo / Outline Cleanup — tests
 # -----------------------------------------------------------
 # Stand-alone tests for outline_cleanup*.py — no FontLab needed.

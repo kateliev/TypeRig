@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 # MODULE: TypeRig / Core / Algo / Element Ops — pure-math tests
 # -----------------------------------------------------------
 # Stand-alone tests for element_ops.py — no FontLab, no Qt needed.

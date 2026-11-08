@@ -1,4 +1,5 @@
 # this_file: tests/test_github.py
+# SPDX-License-Identifier: AGPL-3.0-only
 """Idempotency and partial-failure cases for the GitHub service boundary."""
 
 import json

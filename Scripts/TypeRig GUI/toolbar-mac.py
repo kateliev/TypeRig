@@ -3,6 +3,7 @@
 # (C) Vassil Kateliev, 2018-2026  	(http://www.kateliev.com)
 #------------------------------------------------------------
 # www.typerig.com
+# SPDX-License-Identifier: AGPL-3.0-only
 
 # No warranties. By using this you agree
 # that you use it at your own risk!
