@@ -68,9 +68,14 @@ class Topology(object):
 	                  (mutual-nearest + span overlap). Useful when you
 	                  want to measure inter-stroke gaps as if they were
 	                  stems.
+	INK             : STRICT plus sibling counters of one outer: the wall
+	                  between two holes is ink, so the inner bars of a
+	                  window (日 田) count as stems. Sibling outers and
+	                  islands inside a hole stay rejected: white between.
 	'''
 	STRICT     = 'strict'
 	PERMISSIVE = 'permissive'
+	INK        = 'ink'
 
 
 # - Cascade scope enum ------------------
@@ -92,6 +97,7 @@ class Cascade(object):
 _DEFAULT_TANGENT_DEG       = 3.0    # tangent must be within this of the axis
 _DEFAULT_COINCIDENT_TOL    = 1.0    # coord clustering tolerance (font units)
 _DEFAULT_SPAN_OVERLAP_FRAC = 0.05   # required perpendicular overlap (fraction of min span)
+_DEFAULT_ALIGN_TOL         = 0.5    # faces this close before a fix count as aligned (font units)
 
 
 # - Internal helpers --------------------
@@ -124,9 +130,10 @@ def _incoming_dir(node):
 	return (node.x - prv.x, node.y - prv.y)
 
 
-def _build_topology_matrix(contours):
+def _build_topology_matrix(contours, sibling_counters=False):
 	'''Returns a function ok(i, j) that tells whether the contour pair
-	(i, j) qualifies as a stem-relationship topology under STRICT mode.
+	(i, j) qualifies as a stem-relationship topology under STRICT mode,
+	or under INK mode with sibling_counters=True.
 
 	Containment is computed once with a layered geometric test (bbox +
 	area-ratio + point-in-polygon). Result cached in a 2D array.
@@ -140,10 +147,18 @@ def _build_topology_matrix(contours):
 				continue
 			contains[i][j] = _contour_strictly_contains(contours[i], contours[j])
 
+	# Nesting depth and direct parent: odd depth = hole.
+	depth = [sum(1 for k in range(n) if contains[k][i]) for i in range(n)]
+	parent = [next((k for k in range(n) if contains[k][i] and depth[k] == depth[i] - 1), -1)
+	          for i in range(n)]
+
 	def ok(i, j):
 		if i == j:
 			return True
-		return contains[i][j] or contains[j][i]
+		if contains[i][j] or contains[j][i]:
+			return True
+		return (sibling_counters and depth[i] == depth[j] and depth[i] % 2 == 1
+		        and parent[i] == parent[j])
 	return ok
 
 
@@ -270,8 +285,8 @@ class StemDetector(object):
 		else:
 			raise ValueError('unknown detector mode: {!r}'.format(self.mode))
 
-		if self.topology == Topology.STRICT:
-			topo_ok = _build_topology_matrix(contours)
+		if self.topology in (Topology.STRICT, Topology.INK):
+			topo_ok = _build_topology_matrix(contours, sibling_counters=self.topology == Topology.INK)
 		else:
 			topo_ok = lambda i, j: True
 		return self._pair_edges(edges, topo_ok)
@@ -572,7 +587,8 @@ class StemFixer(object):
 
 		return plan
 
-	def plan_cascade(self, violations, contours, scope=Cascade.FAMILY, keep=(), pin_extremes=True, whole=False, eps=1e-6):
+	def plan_cascade(self, violations, contours, scope=Cascade.FAMILY, keep=(), pin_extremes=True, whole=False,
+	                 protect_aligned=False, align_tol=_DEFAULT_ALIGN_TOL, eps=1e-6):
 		'''IUP plan along each axis: stem faces are knots, everything else is
 		interpolated between them (TrueType IUP on one axis).
 
@@ -600,6 +616,17 @@ class StemFixer(object):
 		shifts half a unit up / right. Half-unit moves would round back
 		(half to even) and leave the stem untouched or a unit off target.
 
+		protect_aligned: with anchor 'center', a face already level with
+		something the correction does not carry along stays put and the
+		other face takes the whole correction, so aligned strokes do not
+		drift apart. "Something" is an edge facing the same way (top with
+		top) on a contour outside the stem's group, or a face of another
+		stem. A level edge that also touches the face along its length
+		outranks one elsewhere in the glyph; the better aligned face stays.
+		With both faces equally aligned the stem is centred as usual.
+		plan.meta lists the stems: 'aligned_kept' and 'aligned_both'.
+		Explicit 'lower' / 'upper' anchors are not changed.
+
 		scope picks the contours a stem acts on (see Cascade): the two
 		face contours, their containment family (outer + counters, default)
 		or the whole layer. Each group gets its own map, built from the
@@ -608,6 +635,8 @@ class StemFixer(object):
 		Duplicate candidates (same axis, faces and contour set) count once.
 		'''
 		plan = StemCorrectionPlan()
+		plan.meta.update(aligned_kept=[], aligned_both=[])
+		protect = protect_aligned and self.anchor == 'center'
 		family = contour_families(contours) if scope == Cascade.FAMILY else None
 
 		def group_of(ci):
@@ -646,11 +675,31 @@ class StemFixer(object):
 					out.append([c, None, [v]])
 			return [(c, sum(vs) / len(vs)) for c, _, vs in out]
 
+		def stem_key(cand):
+			return (round(cand.edge_a.coord, 3), round(cand.edge_b.coord, 3))
+
 		for axis in (Axis.V, Axis.H):
 			raw = {}		# group -> [(coord, value)]
 			face = {}		# (ci, ni) -> value
 			touched = {}	# group -> members
 			seen = set()
+
+			edges = StemDetector()._edges_extrema(contours, axis) if protect else ()
+			stem_faces = [(edge, stem_key(c)) for c in [v.source for v in violations] + list(keep)
+			              if c.axis == axis for edge in (c.edge_a, c.edge_b)] if protect else ()
+
+			def alignment(face, cand, members):
+				'''How firmly a face is aligned with an edge the correction
+				leaves behind or a face of another stem: 0 not aligned,
+				1 level and facing the same way, 2 also touching along it.'''
+				others = [e for e in edges if e.contour_idx not in members]
+				others += [e for e, owner in stem_faces if owner != stem_key(cand)]
+				level = [e for e in others if abs(e.coord - face.coord) <= align_tol
+				         and (e.tangent_sign == face.tangent_sign or 0 in (e.tangent_sign, face.tangent_sign))]
+				if not level:
+					return 0
+				touching = any(min(e.span[1], face.span[1]) - max(e.span[0], face.span[0]) >= -align_tol for e in level)
+				return 2 if touching else 1
 
 			for v in violations:
 				cand = v.source
@@ -663,9 +712,19 @@ class StemFixer(object):
 					continue
 				seen.add(key)
 
-				if self.anchor == 'lower':
+				anchor = self.anchor
+				if protect:
+					low = alignment(cand.edge_a, cand, members)
+					high = alignment(cand.edge_b, cand, members)
+					if low != high:
+						plan.meta['aligned_kept'].append(cand)
+						anchor = 'lower' if low > high else 'upper'
+					elif low:
+						plan.meta['aligned_both'].append(cand)
+
+				if anchor == 'lower':
 					d_lo, d_hi = 0.0, d
-				elif self.anchor == 'upper':
+				elif anchor == 'upper':
 					d_lo, d_hi = -d, 0.0
 				elif whole and abs(d - round(d)) <= eps:
 					half = float(int(round(d)) // 2)
@@ -797,13 +856,15 @@ class StemSnapReport(object):
 	plan        -- the StemCorrectionPlan (empty on a dry run with
 	               nothing to do).
 	applied     -- True when the contours were changed.
+	groups      -- [StemGroup] from equalize_stems(); empty for snap_stems().
 	'''
-	__slots__ = ('candidates', 'captured', 'moved', 'out_of_band', 'plan', 'applied')
+	__slots__ = ('candidates', 'captured', 'moved', 'out_of_band', 'plan', 'applied', 'groups')
 
 	def __init__(self):
 		self.candidates, self.captured, self.moved, self.out_of_band = [], [], [], []
 		self.plan = StemCorrectionPlan()
 		self.applied = False
+		self.groups = []
 
 	def nodes(self, which='moved'):
 		'''(contour_idx, node_idx) of the face nodes of `which` stems.'''
@@ -816,11 +877,12 @@ class StemSnapReport(object):
 
 def snap_stems(contours, allowlist, detector=None, axis=None,
                anchor='center', scope=Cascade.FAMILY, italic_angle=0.0,
-               selected=None, round_ints=False, pin_extremes=True, apply=True):
+               selected=None, round_ints=False, pin_extremes=True, apply=True,
+               auditor=None, protect_aligned=True):
 	'''Detect, audit and snap axis-aligned stems in one call.
 
 	contours     -- list[Contour]; changed IN PLACE when apply is True.
-	allowlist    -- WidthAllowlist keyed Axis.V / Axis.H.
+	allowlist    -- WidthAllowlist keyed Axis.V / Axis.H (None with auditor).
 	detector     -- StemDetector (default: extrema mode, strict topology).
 	axis         -- Axis.V / Axis.H / None (both).
 	anchor       -- 'lower' / 'upper' / 'center' (see StemFixer.plan_cascade).
@@ -836,10 +898,15 @@ def snap_stems(contours, allowlist, detector=None, axis=None,
 	pin_extremes -- keep glyph extremes that are not stem faces in place
 	                (see StemFixer.plan_cascade).
 	apply        -- False = dry run; contours keep their coordinates.
+	auditor      -- object with audit(candidates) -> [StemViolation] used
+	                instead of StemAuditor(allowlist); see StemEqualizer.
+	protect_aligned -- with anchor 'center', faces level with another part
+	                stay put (see StemFixer.plan_cascade).
 
 	Returns a StemSnapReport.
 	'''
 	det = detector if detector is not None else StemDetector()
+	audit = auditor if auditor is not None else StemAuditor(allowlist)
 	slope = math.tan(math.radians(italic_angle)) if italic_angle else 0.0
 	report = StemSnapReport()
 
@@ -853,7 +920,8 @@ def snap_stems(contours, allowlist, detector=None, axis=None,
 			         if any((e.contour_idx, i) in selected
 			                for e in (c.edge_a, c.edge_b) for i in e.node_indices)]
 		report.candidates = cands
-		report.captured = StemAuditor(allowlist).audit(cands)
+		report.captured = audit.audit(cands)
+		report.groups = list(getattr(audit, 'groups', ()))
 		report.moved = [v for v in report.captured if v.delta != 0.0]
 		claimed = set(id(v.source) for v in report.captured)
 		report.out_of_band = [c for c in cands if id(c) not in claimed]
@@ -866,7 +934,8 @@ def snap_stems(contours, allowlist, detector=None, axis=None,
 			        and not any(a == c.axis and c.edge_a.coord < hi and lo < c.edge_b.coord
 			                    for a, lo, hi in spans)]
 			report.plan = StemFixer(anchor=anchor).plan_cascade(
-				report.moved, contours, scope=scope, keep=keep, pin_extremes=pin_extremes, whole=round_ints)
+				report.moved, contours, scope=scope, keep=keep, pin_extremes=pin_extremes, whole=round_ints,
+				protect_aligned=protect_aligned)
 		if apply and len(report.plan):
 			StemFixer(anchor=anchor).apply(report.plan, contours)
 			report.applied = True
@@ -879,6 +948,213 @@ def snap_stems(contours, allowlist, detector=None, axis=None,
 			nd.x, nd.y = float(round(nd.x)), float(round(nd.y))
 
 	return report
+
+
+# =====================================================================
+# - Uncommon stems: equalize an element's stems among themselves -------
+# =====================================================================
+DEFAULT_EQUALIZE_STEP = 10.0     # percent of the thinner neighbour
+DEFAULT_EQUALIZE_ASPECT = 2.0    # width / common face length above this is not a stem
+
+
+def group_widths(values, step=DEFAULT_EQUALIZE_STEP, percent=True, key=None):
+	'''Split values into groups of similar stem width, thinnest group first.
+
+	Walking up the sorted widths, a value joins the current group when it
+	is within `step` of its thinner neighbour and within 2 * step of the
+	group's thinnest member (no chaining up a long ladder of small gaps).
+	Otherwise it starts a new group: the "step" between deliberate weights.
+
+	percent -- step is a percentage of the thinner width, else font units.
+	key     -- width of an item, when values are not plain numbers.
+
+	[105, 115, 115, 125] -> one group; [95, 105, 115] -> [95], [105, 115];
+	[60, 65, 70, 105, 115] -> [60, 65, 70], [105, 115] (step 10 %).
+	'''
+	width = key if key is not None else (lambda item: item)
+	reach = (lambda w: w * step / 100.0) if percent else (lambda w: step)
+	eps = 1e-6
+	groups = []
+	for item in sorted(values, key=width):
+		w = width(item)
+		if groups:
+			last = groups[-1]
+			if (w - width(last[-1]) <= reach(width(last[-1])) + eps
+			    and w - width(last[0]) <= 2.0 * reach(width(last[0])) + eps):
+				last.append(item)
+				continue
+		groups.append([item])
+	return groups
+
+
+def common_width(widths, allowlist=None, key=None):
+	'''(value, source) for one group of stem widths. The result is a
+	standard stem or a width already in the group, never a value in between.
+
+	The group's own width is the single most frequent one (whole units,
+	seen at least twice), else the median. Then, first match wins:
+	  'standard' -- it falls in a standard stem's band: that stem.
+	  'dominant' -- the most frequent width.
+	  'median'   -- the median, when it is one of the widths.
+	  'member'   -- the median fell between two widths: the width nearest a
+	                standard stem of this axis; without any, nearest the
+	                median; ties go to the thinner (less black).
+	  'single'   -- a stem alone in its group, kept.
+
+	allowlist, key -- the WidthAllowlist and its key (Axis.V / Axis.H).
+	'''
+	counts = {}
+	for w in widths:
+		k = int(round(w))
+		counts[k] = counts.get(k, 0) + 1
+	top = max(counts.values())
+	leaders = [k for k, c in counts.items() if c == top]
+	dominant = top > 1 and len(leaders) == 1
+	value = float(leaders[0]) if dominant else float(_median(widths))
+
+	if allowlist is not None:
+		res = allowlist.capture(key, value)
+		if res is not None:
+			return res[0].value, 'standard'
+
+	if len(widths) == 1:
+		return value, 'single'
+	if dominant:
+		return value, 'dominant'
+	if any(abs(w - value) <= 1e-6 for w in widths):
+		return value, 'median'
+
+	def off_standard(w):
+		near = allowlist.nearest(key, w) if allowlist is not None else None
+		return abs(w - near) if near is not None else 0.0
+
+	return float(min(widths, key=lambda w: (off_standard(w), abs(w - value), w))), 'member'
+
+
+class StemGroup(object):
+	'''Stems of one axis and pool that equalize to one width.
+
+	axis -- Axis.V / Axis.H; pool -- index in equalize_stems(pools=...);
+	target -- the common width; source -- how it was chosen (see
+	common_width); stems -- [StemCandidate].
+	'''
+	__slots__ = ('axis', 'pool', 'target', 'source', 'stems')
+
+	def __init__(self, axis, pool, target, source, stems):
+		self.axis, self.pool, self.target, self.source, self.stems = axis, pool, target, source, stems
+
+	@property
+	def widths(self):
+		return [c.measured_width for c in self.stems]
+
+	def __repr__(self):
+		return 'StemGroup({}, pool={}, target={:g}, {}, widths={})'.format(
+			self.axis, self.pool, self.target, self.source, [round(w, 2) for w in self.widths])
+
+
+class StemEqualizer(object):
+	'''Auditor for snap_stems(): stems are grouped among themselves and each
+	group lands on one width. V and H are never mixed. Each group of similar
+	widths (group_widths) gets its common width (common_width): a standard
+	stem from `allowlist` when one is in reach, else a width from the group.
+
+	Candidates that are not stems are left out: a bar's two ends pair up as
+	a "stem" as wide as the bar is long, so a width above max_aspect times
+	the length the faces share is rejected. Curve extrema have no length
+	and always pass. With standard stems for the axis, a width above the
+	heaviest one's band is rejected too: wide blocks and counters that are
+	long enough to pass the first test. Thinner than the thinnest standard
+	stays a stem: that is a deliberately light inner stem.
+
+	pools -- optional list of contour-index collections equalized apart
+	(one per element); None puts every stem in one pool.
+	'''
+	def __init__(self, allowlist=None, step=DEFAULT_EQUALIZE_STEP, percent=True, pools=None,
+	             max_aspect=DEFAULT_EQUALIZE_ASPECT, round_ints=False):
+		self.allowlist = allowlist
+		self.step = float(step)
+		self.percent = bool(percent)
+		self.max_aspect = float(max_aspect)
+		self.round_ints = bool(round_ints)
+		self.pool_of = {}
+		for index, members in enumerate(pools or ()):
+			for ci in members:
+				self.pool_of[ci] = index
+		self.groups = []
+
+	def is_stem(self, cand):
+		targets = self.allowlist.targets_by_key.get(cand.axis) if self.allowlist is not None else None
+		if targets and cand.measured_width > max(t.value + t.tol_plus for t in targets):
+			return False
+		a, b = cand.edge_a.span, cand.edge_b.span
+		if min(a[1] - a[0], b[1] - b[0]) <= 0.0:
+			return True
+		return cand.measured_width <= (min(a[1], b[1]) - max(a[0], b[0])) * self.max_aspect
+
+	def audit(self, candidates):
+		self.groups = []
+		pools = {}
+		for cand in candidates:
+			if self.is_stem(cand):
+				pools.setdefault((self.pool_of.get(cand.edge_a.contour_idx, 0), cand.axis), []).append(cand)
+
+		violations = []
+		for pool, axis in sorted(pools):
+			for stems in group_widths(pools[(pool, axis)], self.step, self.percent,
+			                          key=lambda c: c.measured_width):
+				target, source = common_width([c.measured_width for c in stems], self.allowlist, axis)
+				if self.round_ints and source != 'single':
+					target = float(round(target))
+				self.groups.append(StemGroup(axis, pool, target, source, stems))
+				for cand in stems:
+					violations.append(StemViolation(key=axis, measured=cand.measured_width,
+					                                target=WidthTarget(target),
+					                                delta=target - cand.measured_width, source=cand))
+		return violations
+
+
+def equalize_stems(contours, allowlist=None, step=DEFAULT_EQUALIZE_STEP, percent=True, pools=None,
+                   max_aspect=DEFAULT_EQUALIZE_ASPECT, detector=None, axis=None,
+                   anchor='center', scope=Cascade.FAMILY, italic_angle=0.0,
+                   selected=None, round_ints=False, pin_extremes=True, apply=True,
+                   protect_aligned=True):
+	'''Uncommon stems: make the stems of an element equal among themselves
+	and land them on the font's standard stems. V and H stems are handled
+	apart; within an axis, stems further apart than `step` stay in separate
+	groups, so a deliberately lighter inner stem is not forced onto the
+	outer frame.
+
+	contours  -- list[Contour]; changed IN PLACE when apply is True. Pass
+	             only the element's contours (e.g. a pasted part), or use
+	             `selected` / `pools` to work on a part of a layer.
+	allowlist -- WidthAllowlist of standard stems keyed Axis.V / Axis.H;
+	             its bands decide what a group's width may snap to. A group
+	             no standard stem reaches lands on one of its own widths
+	             (see common_width), also when allowlist is None.
+	step, percent -- see group_widths.
+	pools, max_aspect -- see StemEqualizer.
+	detector -- default: extrema mode, Topology.INK (inner bars count).
+	The other arguments are those of snap_stems().
+
+	Returns a StemSnapReport; report.groups holds the [StemGroup].
+	'''
+	return snap_stems(contours, None,
+	                  detector=detector if detector is not None else StemDetector(topology=Topology.INK),
+	                  axis=axis, anchor=anchor, scope=scope, italic_angle=italic_angle,
+	                  selected=selected, round_ints=round_ints, pin_extremes=pin_extremes, apply=apply,
+	                  protect_aligned=protect_aligned,
+	                  auditor=StemEqualizer(allowlist=allowlist, step=step, percent=percent, pools=pools,
+	                                        max_aspect=max_aspect, round_ints=round_ints))
+
+
+def family_selection(contours, indices):
+	'''`selected` argument for snap_stems() / equalize_stems() from contour
+	indices: every node of those contours and of their outer / counters.
+	Together they are the element, and an inner bar lies between two
+	counters. Indices that do not exist are ignored.'''
+	family = contour_families(contours)
+	picked = set(ci for start in indices if start in family for ci in family[start])
+	return set((ci, ni) for ci in picked for ni in range(len(contours[ci].nodes)))
 
 
 # =====================================================================
@@ -1586,6 +1862,270 @@ def _run_stage8_tests():
 	print('Stage 8: all tests passed.')
 
 
+# --- Stage 9: uncommon stems (equalize_stems) ---
+
+def _make_window(left, right, inners, bar=60, cell=150, height=600):
+	'''One-row window: outer rect + CW counters. V stems, left to right:
+	left, inners..., right; top and bottom bars are `bar` thick.'''
+	width = left + right + sum(inners) + cell * (len(inners) + 1)
+	out = [_make_rect_contour(0, 0, width, height)]
+	x = left
+	for inner in list(inners) + [None]:
+		out.append(_make_cw_rect_contour(x, bar, cell, height - 2 * bar))
+		x += cell + (inner or 0)
+	return out
+
+
+def _ink_widths(contours, axis):
+	cands = StemDetector(topology=Topology.INK).detect(contours, axis=axis)
+	return sorted(round(c.measured_width, 3) for c in cands)
+
+
+def _test_group_widths_examples():
+	assert group_widths([105, 115, 115, 125]) == [[105, 115, 115, 125]]
+	assert group_widths([95, 105, 115]) == [[95], [105, 115]]
+	assert group_widths([75, 105, 115]) == [[75], [105, 115]]
+	assert group_widths([60, 65, 70, 105, 115]) == [[60, 65, 70], [105, 115]]
+	assert group_widths([100, 109, 118, 127, 136]) == [[100, 109, 118], [127, 136]], 'no chaining'
+	assert group_widths([100, 112], step=12, percent=False) == [[100, 112]]
+	print('  group_widths: the brief\'s four sets; ladder does not chain [OK]')
+
+
+def _standards(v=(), h=(), band=5):
+	return WidthAllowlist({Axis.V: [WidthTarget(x, band, band) for x in v],
+	                       Axis.H: [WidthTarget(x, band, band) for x in h]})
+
+
+def _test_common_width():
+	assert common_width([105, 115, 115, 125]) == (115.0, 'dominant')
+	assert common_width([60, 65, 70]) == (65.0, 'median')
+	assert common_width([95]) == (95.0, 'single')
+	assert common_width([105, 115]) == (105.0, 'member'), 'no invented 110'
+	assert common_width([105, 105, 115, 115])[1] == 'member', 'tie is no dominant'
+	print('  common_width: dominant, else median, never a value between widths [OK]')
+
+
+def _test_common_width_standards():
+	def pick(widths, *stems):
+		return common_width(widths, _standards(v=stems), Axis.V)
+	assert pick([105, 115], 110) == (110.0, 'standard')
+	assert pick([130, 135], 135) == (135.0, 'standard')
+	assert pick([130, 135], 130) == (130.0, 'standard')
+	assert pick([130, 135], 130, 135) == (130.0, 'standard'), 'tie: earlier stem'
+	assert pick([130, 135], 120, 139) == (135.0, 'member'), 'nearest a standard'
+	assert pick([130, 135], 120, 150) == (130.0, 'member'), 'nearest a standard'
+	assert pick([130, 135]) == (130.0, 'member'), 'no standards: thinner'
+	assert pick([105, 115, 115, 125], 112) == (112.0, 'standard'), 'standard beats dominant'
+	assert pick([115, 115], 200) == (115.0, 'dominant')
+	assert pick([78], 80) == (80.0, 'standard'), 'single in band lands too'
+	assert pick([95], 110) == (95.0, 'single'), 'single out of band kept'
+	h_only = common_width([130, 135], _standards(h=[132]), Axis.V)
+	assert h_only == (130.0, 'member'), 'H standards do not apply to V'
+	print('  common_width: lands on standards; 130 135 never 132 [OK]')
+
+
+def _test_topology_ink_finds_inner_stems():
+	cs = _make_window(105, 115, [75])
+	assert _ink_widths(cs, Axis.V) == [75.0, 105.0, 115.0], _ink_widths(cs, Axis.V)
+	strict = StemDetector(topology=Topology.STRICT).detect(cs, axis=Axis.V)
+	assert 75.0 not in [round(c.measured_width, 3) for c in strict]
+	a, b = _make_rect_contour(0, 0, 60, 600), _make_rect_contour(90, 0, 60, 600)
+	assert _ink_widths([a, b], Axis.V) == [60.0, 60.0], 'gap between outers is not ink'
+	print('  INK: wall between sibling counters is a stem, gap between outers is not [OK]')
+
+
+def _test_equalize_dominant():
+	cs = _make_window(105, 125, [115, 115])
+	report = equalize_stems(cs, round_ints=True)
+	assert _ink_widths(cs, Axis.V) == [115.0] * 4, _ink_widths(cs, Axis.V)
+	assert [g.source for g in report.groups if g.axis == Axis.V] == ['dominant']
+	print('  105 115 115 125 -> all 115 (dominant) [OK]')
+
+
+def _test_equalize_keeps_lighter_inner():
+	for inner in (95, 75):
+		cs = _make_window(105, 115, [inner])
+		equalize_stems(cs, _standards(v=[110]), round_ints=True)
+		assert _ink_widths(cs, Axis.V) == [float(inner), 110.0, 110.0], _ink_widths(cs, Axis.V)
+	print('  frame 105 115 -> standard 110, inner 95 / 75 kept [OK]')
+
+
+def _test_equalize_grid_two_groups():
+	cs = _make_window(105, 115, [65, 70, 60])
+	equalize_stems(cs, _standards(v=[110]), round_ints=True)
+	assert _ink_widths(cs, Axis.V) == [65.0, 65.0, 65.0, 110.0, 110.0], _ink_widths(cs, Axis.V)
+	print('  grid: frame -> standard 110, inner 65 70 60 -> 65 [OK]')
+
+
+def _test_equalize_lands_on_a_real_stem():
+	cs = _make_window(130, 135, [75])
+	equalize_stems(cs, _standards(v=[135]), round_ints=True)
+	assert _ink_widths(cs, Axis.V) == [75.0, 135.0, 135.0], _ink_widths(cs, Axis.V)
+	cs = _make_window(130, 135, [75])
+	equalize_stems(cs, round_ints=True)
+	assert _ink_widths(cs, Axis.V) == [75.0, 130.0, 130.0], _ink_widths(cs, Axis.V)
+	print('  130 135 -> the standard, or one of the two; never 132 [OK]')
+
+
+def _test_equalize_axes_apart():
+	cs = _make_window(105, 115, [75], bar=40)
+	report = equalize_stems(cs, round_ints=True)
+	assert set(_ink_widths(cs, Axis.H)) == {40.0}, _ink_widths(cs, Axis.H)
+	assert all(g.target != 40.0 for g in report.groups if g.axis == Axis.V)
+	cs = _make_window(105, 115, [75])
+	equalize_stems(cs, axis=Axis.H, round_ints=True)
+	assert _ink_widths(cs, Axis.V) == [75.0, 105.0, 115.0], 'axis=H must not touch V'
+	print('  V and H never mix; axis filter respected [OK]')
+
+
+def _test_equalize_ignores_bar_length():
+	cs = [_make_rect_contour(0, 0, 400, 30), _make_rect_contour(0, 100, 410, 30)]
+	report = equalize_stems(cs, round_ints=True)
+	assert not report.moved, report.moved
+	assert sorted(max(nd.x for nd in c.nodes) for c in cs) == [400.0, 410.0]
+	blocks = [_make_rect_contour(0, 0, 200, 600), _make_rect_contour(400, 0, 201, 600)]
+	report = equalize_stems(blocks, _standards(v=[110, 150]), round_ints=True)
+	assert not report.moved and len(report.out_of_band) >= 2, report.groups
+	thin = [_make_rect_contour(0, 0, 60, 600), _make_rect_contour(400, 0, 62, 600)]
+	report = equalize_stems(thin, _standards(v=[110, 150]), round_ints=True)
+	assert report.moved, 'thinner than every standard is still a stem'
+	print('  bar lengths and blocks above the heaviest standard are not stems [OK]')
+
+
+def _test_equalize_pools():
+	def bars():
+		return [_make_rect_contour(0, 0, 100, 600), _make_rect_contour(300, 0, 104, 600)]
+	cs = bars()
+	equalize_stems(cs, round_ints=True)
+	assert _ink_widths(cs, Axis.V) == [100.0, 100.0], _ink_widths(cs, Axis.V)
+	cs = bars()
+	report = equalize_stems(cs, pools=[[0], [1]], round_ints=True)
+	assert not report.moved and _ink_widths(cs, Axis.V) == [100.0, 104.0]
+	print('  pools: elements equalize apart [OK]')
+
+
+def _test_family_selection():
+	window = _make_window(105, 115, [75])
+	other = _make_rect_contour(1000, 0, 100, 600)
+	cs = window + [other]
+	picked = family_selection(cs, [0, 99])
+	assert set(ci for ci, _ in picked) == {0, 1, 2}, picked
+	assert len(picked) == 12
+	report = equalize_stems(cs, _standards(v=[110]), selected=family_selection(cs, [1]), axis=Axis.V, apply=False)
+	assert all(c.edge_a.contour_idx != 3 for c in report.candidates)
+	print('  family_selection: a contour brings its outer and counters, nothing else [OK]')
+
+
+def _test_equalize_dry_run():
+	cs = _make_window(105, 115, [75])
+	report = equalize_stems(cs, _standards(v=[110]), apply=False)
+	assert len(report.moved) == 2 and not report.applied
+	assert _ink_widths(cs, Axis.V) == [75.0, 105.0, 115.0]
+	print('  dry run reports, changes nothing [OK]')
+
+
+def _tops(contours):
+	return [max(nd.y for nd in c.nodes) for c in contours]
+
+
+def _bottoms(contours):
+	return [min(nd.y for nd in c.nodes) for c in contours]
+
+
+def _test_aligned_top_stays():
+	'''The uni80EF case: a 134 bar and a tall stem share the top line at 821.'''
+	def part():
+		return [_make_rect_contour(137, 687, 238, 134), _make_rect_contour(69, -95, 135, 916)]
+	cs = part()
+	report = snap_stems(cs, _standards(h=[130]), axis=Axis.H, round_ints=True)
+	assert _tops(cs) == [821.0, 821.0] and _bottoms(cs) == [691.0, -95.0], (_tops(cs), _bottoms(cs))
+	assert len(report.plan.meta['aligned_kept']) == 1
+	cs = part()
+	snap_stems(cs, _standards(h=[130]), axis=Axis.H, round_ints=True, protect_aligned=False)
+	assert _tops(cs) == [819.0, 821.0], 'without it the top drifts: {}'.format(_tops(cs))
+	print('  aligned top stays, the other face takes the correction [OK]')
+
+
+def _test_aligned_not_fooled_by_far_edges():
+	'''uni80EF again, with what broke it: far away, a TOP face level with the
+	bar's BOTTOM (opposite facing), then a far BOTTOM face (same facing).'''
+	def part(far):
+		return [_make_rect_contour(137, 686, 238, 135), _make_rect_contour(69, -95, 135, 916), far]
+	cs = part(_make_rect_contour(676, 381, 130, 305))		# top at 686
+	report = snap_stems(cs, _standards(h=[130]), axis=Axis.H, round_ints=True)
+	assert (_tops(cs)[0], _bottoms(cs)[0]) == (821.0, 691.0), (_tops(cs), _bottoms(cs))
+	assert len(report.plan.meta['aligned_kept']) == 1 and not report.plan.meta['aligned_both']
+	cs = part(_make_rect_contour(676, 686, 130, 305))		# bottom at 686
+	report = snap_stems(cs, _standards(h=[130]), axis=Axis.H, round_ints=True)
+	assert (_tops(cs)[0], _bottoms(cs)[0]) == (821.0, 691.0), (_tops(cs), _bottoms(cs))
+	print('  opposite-facing edge ignored; touching alignment beats a far one [OK]')
+
+
+def _test_aligned_bottom_stays():
+	cs = [_make_rect_contour(137, 0, 238, 134), _make_rect_contour(69, 0, 135, 900)]
+	snap_stems(cs, _standards(h=[130]), axis=Axis.H, round_ints=True)
+	assert _bottoms(cs) == [0.0, 0.0] and _tops(cs) == [130.0, 900.0], (_bottoms(cs), _tops(cs))
+	print('  aligned bottom stays [OK]')
+
+
+def _test_aligned_different_corrections():
+	'''Two bars, tops level, different corrections: the tops must stay level.'''
+	cs = [_make_rect_contour(0, 500, 200, 134), _make_rect_contour(300, 502, 200, 132)]
+	equalize_stems(cs, _standards(h=[130]), axis=Axis.H, round_ints=True)
+	assert _tops(cs) == [634.0, 634.0], _tops(cs)
+	assert sorted(_bottoms(cs)) == [504.0, 504.0], _bottoms(cs)
+	print('  level tops with different corrections stay level [OK]')
+
+
+def _test_aligned_both_faces_centred():
+	cs = [_make_rect_contour(0, 500, 200, 134), _make_rect_contour(300, 500, 200, 134)]
+	report = snap_stems(cs, _standards(h=[130]), axis=Axis.H, round_ints=True)
+	assert _tops(cs) == [632.0, 632.0] and _bottoms(cs) == [502.0, 502.0], (_tops(cs), _bottoms(cs))
+	assert len(report.plan.meta['aligned_both']) == 2
+	print('  both faces aligned: centred and reported [OK]')
+
+
+def _test_aligned_window_not_fooled():
+	'''Counters of one window share the wall line: that is not an alignment.'''
+	cs = _make_window(105, 115, [75])
+	report = equalize_stems(cs, _standards(v=[110]), axis=Axis.V, round_ints=True)
+	assert not report.plan.meta['aligned_kept'], report.plan.meta
+	assert min(nd.x for nd in cs[0].nodes) == -2.0
+	print('  window walls stay centred [OK]')
+
+
+def _test_aligned_explicit_anchor():
+	cs = [_make_rect_contour(137, 687, 238, 134), _make_rect_contour(69, -95, 135, 916)]
+	snap_stems(cs, _standards(h=[130]), axis=Axis.H, anchor='lower', round_ints=True)
+	assert _tops(cs) == [817.0, 821.0], _tops(cs)
+	print('  explicit anchor is respected [OK]')
+
+
+def _run_stage9_tests():
+	print('Stage 9 - uncommon stems:')
+	_test_group_widths_examples()
+	_test_common_width()
+	_test_common_width_standards()
+	_test_topology_ink_finds_inner_stems()
+	_test_equalize_dominant()
+	_test_equalize_keeps_lighter_inner()
+	_test_equalize_grid_two_groups()
+	_test_equalize_lands_on_a_real_stem()
+	_test_equalize_axes_apart()
+	_test_equalize_ignores_bar_length()
+	_test_equalize_pools()
+	_test_family_selection()
+	_test_equalize_dry_run()
+	_test_aligned_top_stays()
+	_test_aligned_not_fooled_by_far_edges()
+	_test_aligned_bottom_stays()
+	_test_aligned_different_corrections()
+	_test_aligned_both_faces_centred()
+	_test_aligned_window_not_fooled()
+	_test_aligned_explicit_anchor()
+	print('Stage 9: all tests passed.')
+
+
 if __name__ == '__main__':
 	_run_stage1_tests()
 	print()
@@ -1602,5 +2142,7 @@ if __name__ == '__main__':
 	_run_stage7_tests()
 	print()
 	_run_stage8_tests()
+	print()
+	_run_stage9_tests()
 	print()
 	print('stem_snap: ALL STAGES PASSED')

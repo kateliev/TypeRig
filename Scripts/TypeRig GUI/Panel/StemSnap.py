@@ -15,7 +15,15 @@
 # the FontLab shell. Port of the TypeRig-Glyphs panel (v0.1), which
 # replaced the BlackOps dev/Stemsnap test dialogs.
 #
-# Two methods:
+# Three methods:
+#   Uncommon stems - makes the stems of an element equal among themselves
+#             (dominant width, else the median), V and H apart, and lands
+#             them on the targets (a standard stem within Tolerance). With
+#             none in reach they land on a width of the group, never on a
+#             value in between. Stems further apart than the Step stay
+#             separate groups, so a deliberately lighter inner stem keeps
+#             its weight. Same options and cascade as Stems. Core:
+#             equalize_stems().
 #   Stems   - node-level H/V stems (extrema or coincident faces). Exact:
 #             the faces land on the target. Corrections cascade IUP-style
 #             over the stem's contour family, so nothing tears.
@@ -70,7 +78,8 @@ from typerig.proxy.tr.objects.shape import _build_fl_shape
 
 from typerig.core.objects.shape import Shape
 from typerig.core.algo._width_audit import WidthTarget, WidthAllowlist
-from typerig.core.algo.stem_snap import snap_stems, StemDetector, Axis, DetectMode, Topology, Cascade
+from typerig.core.algo.stem_snap import (snap_stems, equalize_stems, family_selection, StemDetector,
+										 Axis, DetectMode, Topology, Cascade, DEFAULT_EQUALIZE_STEP)
 from typerig.core.algo.stroke_snap import snap_strokes, StrokeType
 
 # - Init -------------------------------
@@ -78,7 +87,7 @@ global pLayers
 global pMode
 pLayers = (True, False, False, False)
 pMode = 0
-app_name, app_version = 'TypeRig | Stem Snap', '0.2'
+app_name, app_version = 'TypeRig | Stem Snap', '0.3'
 
 DEFAULT_TOL = 5.		# capture band, units (or %)
 DIAGONAL_TYPES = (StrokeType.PIE, StrokeType.NA, StrokeType.DIAGONAL, StrokeType.DOT)
@@ -87,7 +96,14 @@ DIAGONAL_TYPES = (StrokeType.PIE, StrokeType.NA, StrokeType.DIAGONAL, StrokeType
 METHODS = [
 	('Stems: H/V nodes (exact)',     'stems'),
 	('Strokes: contour width (MAT)', 'strokes'),
+	('Uncommon stems: equalize',     'uncommon'),
 ]
+
+UNCOMMON_POPUPS = (
+	('scope', 'Work on:', [('Selected contours', 'selected'), ('Each element apart', 'element'), ('Whole layer', 'layer')], 0,
+	 'Which stems are compared with each other.\nSelected contours: contours with a selected node, plus their outer / counters.\n'
+	 'Each element apart: one common width per element.\nWhole layer: all stems together.'),
+)
 
 STEM_POPUPS = (
 	('axis', 'Axis:', [('Vertical + horizontal', None), ('Vertical stems', Axis.V), ('Horizontal stems', Axis.H)], 0,
@@ -110,6 +126,8 @@ STEM_CHECKS = (
 	('pin',      'Keep extremes',   True,  'Glyph extremes that are not stem faces stay put (baseline, cap height,\n'
 	                                       'the side beyond the last stem): the counters absorb the change.\n'
 	                                       'Unchecked: parts beyond a stem move with it.'),
+	('aligned',  'Keep aligned',    True,  'Center anchor only: a stem face level with another part stays put and the\n'
+	                                       'other face takes the whole correction, so aligned strokes do not drift apart.'),
 )
 
 STROKE_POPUPS = (
@@ -147,6 +165,15 @@ def _parse_list(text):
 		if value > 0:
 			out.append(value)
 	return out
+
+def _aligned_note(report):
+	'''Report suffix: how many moved stems the "Keep aligned" option affected.'''
+	meta = report.plan.meta
+	kept, both = len(meta.get('aligned_kept', ())), len(meta.get('aligned_both', ()))
+	parts = []
+	if kept: parts.append('{} kept an aligned face'.format(kept))
+	if both: parts.append('{} centred, both faces aligned'.format(both))
+	return '; ' + ', '.join(parts) if parts else ''
 
 def text_button(caption, tooltip, action):
 	button = QtGui.QPushButton(caption)
@@ -210,6 +237,7 @@ class TRStemSnapPanel(QtGui.QWidget):
 		self.lay_main = QtGui.QVBoxLayout()
 		self.__build_targets()
 		self.__build_method()
+		self.__build_uncommon()
 		self.__build_actions()
 
 		self.txt_report = QtGui.QTextEdit()
@@ -329,6 +357,29 @@ class TRStemSnapPanel(QtGui.QWidget):
 		box.setLayout(lay)
 		self.lay_main.addWidget(box)
 
+	def __build_uncommon(self):
+		box = self.box_uncommon = QtGui.QGroupBox()
+		box.setObjectName('box_group')
+		lay = QtGui.QGridLayout()
+
+		row = self.__popup_rows(lay, 0, UNCOMMON_POPUPS)
+
+		self.spn_step = QtGui.QDoubleSpinBox()
+		self.spn_step.setRange(0., 1000.)
+		self.spn_step.setDecimals(1)
+		self.spn_step.setValue(DEFAULT_EQUALIZE_STEP)
+		self.spn_step.setToolTip('Largest difference between neighbouring stem widths in one group.\n'
+				'Wider apart: separate groups, each equalized on its own (a light inner\n'
+				'stem keeps its weight). A stem alone in its group is not changed.')
+
+		lay.addWidget(QtGui.QLabel('Step:'), row, 0, 1, 2)
+		lay.addWidget(self.spn_step, row, 2, 1, 2)
+		lay.addWidget(self.__check('step_percent', 'Percent', True,
+				'Step is a percentage of the thinner of two neighbouring stems\n(scales from light to bold). Off: font units.'), row, 4, 1, 2)
+
+		box.setLayout(lay)
+		self.lay_main.addWidget(box)
+
 	def __build_actions(self):
 		box = QtGui.QGroupBox()
 		box.setObjectName('box_group')
@@ -349,8 +400,9 @@ class TRStemSnapPanel(QtGui.QWidget):
 		self.btn_canvas.clicked.connect(lambda: self.live_edit())
 		lay.addWidget(self.btn_canvas, 2, 0, 1, 6)
 
-		lay.addWidget(text_button('Snap', 'Snap captured stems / strokes to their targets on every layer in scope.',
-				lambda: self.on_snap(True)), 3, 0, 1, 6)
+		self.btn_snap = text_button('Snap', 'Snap captured stems / strokes to their targets on every layer in scope.',
+				lambda: self.on_snap(True))
+		lay.addWidget(self.btn_snap, 3, 0, 1, 6)
 
 		box.setLayout(lay)
 		self.lay_main.addWidget(box)
@@ -360,7 +412,15 @@ class TRStemSnapPanel(QtGui.QWidget):
 		return METHODS[self.cmb_method.currentIndex][1]
 
 	def on_method(self):
-		self.stk_options.setCurrentIndex(0 if self.method() == 'stems' else 1)
+		'''Show the options of the method. Uncommon stems share the Stems page,
+		minus the options that the Work on popup replaces.'''
+		method = self.method()
+		uncommon = method == 'uncommon'
+		self.stk_options.setCurrentIndex(1 if method == 'strokes' else 0)
+		self.box_uncommon.setVisible(uncommon)
+		self.btn_snap.setText('Equalize' if uncommon else 'Snap')
+		for key in ('strict', 'selected'):
+			self.checks[key][0].setEnabled(not uncommon)
 
 	def choice(self, key):
 		cmb, items, default = self.popups[key]
@@ -395,6 +455,7 @@ class TRStemSnapPanel(QtGui.QWidget):
 		for edt in self.fields.values():
 			edt.setText('')
 		self.spn_tol.setValue(DEFAULT_TOL)
+		self.spn_step.setValue(DEFAULT_EQUALIZE_STEP)
 		for chk, value in self.checks.values():
 			chk.setChecked(value)
 		for cmb, items, default in self.popups.values():
@@ -428,7 +489,7 @@ class TRStemSnapPanel(QtGui.QWidget):
 
 	def options_signature(self):
 		'''Cheap signature of every option (the canvas re-analyses when it changes).'''
-		return (self.cmb_method.currentIndex, float(self.spn_tol.value),
+		return (self.cmb_method.currentIndex, float(self.spn_tol.value), float(self.spn_step.value),
 				tuple(sorted((key, edt.text) for key, edt in self.fields.items())),
 				tuple(sorted((key, chk.isChecked()) for key, (chk, _) in self.checks.items())),
 				tuple(sorted((key, cmb.currentIndex) for key, (cmb, _, _) in self.popups.items())))
@@ -525,8 +586,14 @@ class TRStemSnapPanel(QtGui.QWidget):
 			self.say(*lines)
 			return
 
-		stems = self.method() == 'stems'
-		if stems and self.checked('selected') and not sel_nodes:
+		uncommon = self.method() == 'uncommon'
+		stems = self.method() != 'strokes'
+		if uncommon:
+			if self.choice('scope') == 'selected' and not sel_contours:
+				self.say('Glyph "{}": select a node on the contours to equalize.'.format(glyph.name))
+				return
+
+		elif stems and self.checked('selected') and not sel_nodes:
 			self.say('Glyph "{}": select a node on the stems to snap.'.format(glyph.name))
 			return
 
@@ -542,12 +609,14 @@ class TRStemSnapPanel(QtGui.QWidget):
 
 		for item in items:
 			v, h, d = self.targets(package, item.name)
-			if not (v or h or (d and not stems)):
+			if not uncommon and not (v or h or (d and not stems)):
 				no_targets.append(item.name)
 				continue
 
 			try:
-				if stems:
+				if uncommon:
+					line, moved, write = self.equalize_stems(glyph, package, item, v, h, sel_contours, apply)
+				elif stems:
 					line, moved, write = self.snap_stems(glyph, package, item, v, h, sel_nodes, apply)
 				else:
 					line, moved, write = self.snap_strokes(glyph, item, v, h, d, sel_contours, apply)
@@ -570,8 +639,9 @@ class TRStemSnapPanel(QtGui.QWidget):
 			lines.append('No targets for {}: set master stems or type values.'.format(', '.join(no_targets)))
 
 		what = 'stem(s)' if stems else 'stroke(s)'
+		verb, done = ('equalize', 'Equalized') if uncommon else ('snap', 'Snapped')
 		if select:
-			lines.append('Selected {} {} to snap on "{}".'.format(total, what, active))
+			lines.append('Selected {} {} to {} on "{}".'.format(total, what, verb, active))
 			pWorkspace().getCanvas(True).refreshAll()
 
 		elif apply:
@@ -579,12 +649,62 @@ class TRStemSnapPanel(QtGui.QWidget):
 				for name in written:
 					glyph.update(name)
 				glyph.updateObject(glyph.fl, '{} | {} @ {}'.format(app_name, glyph.name, '; '.join(written)), False)
-			lines.append('Snapped {} {} ({:.2f}s).'.format(total, what, time.time() - started))
+			lines.append('{} {} {} ({:.2f}s).'.format(done, total, what, time.time() - started))
 
 		else:
-			lines.append('Analyze: {} {} to snap; nothing changed ({:.2f}s).'.format(total, what, time.time() - started))
+			lines.append('Analyze: {} {} to {}; nothing changed ({:.2f}s).'.format(total, what, verb, time.time() - started))
 
 		self.say(*lines)
+
+	# -- Uncommon stems
+	def equalize_scope(self, item, sel_contours):
+		'''(selected nodes or None, pools or None) for the "Work on" option.'''
+		scope = self.choice('scope')
+
+		if scope == 'selected':
+			return family_selection(item.contours, sel_contours), None
+
+		if scope == 'element':
+			pools, first = [], 0
+			for shape in item.shapes:
+				count = len(shape.contours)
+				pools.append(range(first, first + count))
+				first += count
+			return None, pools
+
+		return None, None
+
+	def equalize_stems(self, glyph, package, item, v, h, sel_contours, apply, verbose=True):
+		selected, pools = self.equalize_scope(item, sel_contours)
+
+		report = equalize_stems(item.contours, self.allowlist({Axis.V: v, Axis.H: h}),
+								step=float(self.spn_step.value),
+								percent=self.checked('step_percent'),
+								pools=pools,
+								detector=StemDetector(mode=self.choice('detect'), topology=Topology.INK),
+								axis=self.choice('axis'),
+								anchor=self.choice('anchor'),
+								scope=self.choice('cascade'),
+								italic_angle=self.italic(package, item.name),
+								selected=selected,
+								round_ints=self.checked('round'),
+								pin_extremes=self.checked('pin'),
+								protect_aligned=self.checked('aligned'),
+								apply=apply)
+
+		for g in (report.groups if verbose else []):
+			print('    {} {:>7g}  {:<8}  from {}'.format(g.axis, g.target, g.source,
+				', '.join(_fmt(w) for w in sorted(g.widths))))
+
+		summary = ' | '.join('{} {}'.format(axis, ', '.join('{}x{}'.format(len(g.stems), _fmt(g.target))
+							 for g in report.groups if g.axis == axis))
+							 for axis in (Axis.V, Axis.H) if any(g.axis == axis for g in report.groups))
+
+		line = '{} | {}: {} stem(s): {} to equalize, {} unchanged, {} not stems; {}'.format(
+			glyph.name, item.name, len(report.captured), len(report.moved),
+			len(report.captured) - len(report.moved), len(report.out_of_band), summary or 'no groups') + _aligned_note(report)
+
+		return line, len(report.moved), (item.contours, None, False, report)
 
 	# -- Stems
 	def snap_stems(self, glyph, package, item, v, h, sel_nodes, apply, verbose=True):
@@ -600,6 +720,7 @@ class TRStemSnapPanel(QtGui.QWidget):
 							selected=sel_nodes if self.checked('selected') else None,
 							round_ints=self.checked('round'),
 							pin_extremes=self.checked('pin'),
+							protect_aligned=self.checked('aligned'),
 							apply=apply)
 
 		for k in (report.captured if verbose else []):
@@ -610,7 +731,7 @@ class TRStemSnapPanel(QtGui.QWidget):
 
 		on_target = len(report.captured) - len(report.moved)
 		line = '{} | {}: {} stem(s): {} to snap, {} on target, {} outside bands'.format(
-			glyph.name, item.name, len(report.candidates), len(report.moved), on_target, len(report.out_of_band))
+			glyph.name, item.name, len(report.candidates), len(report.moved), on_target, len(report.out_of_band)) + _aligned_note(report)
 
 		# write: (contours, only these indices or None = all, separated); select reads report.nodes()
 		return line, len(report.moved), (item.contours, None, False, report)
@@ -699,7 +820,7 @@ class TRStemSnapPanel(QtGui.QWidget):
 			for node in fl_contour.nodes():
 				node.selected = False
 
-		if self.method() == 'stems':
+		if self.method() != 'strokes':
 			picked = report.nodes('moved')
 		else:
 			if separated:
@@ -739,6 +860,8 @@ class TRStemSnapPanel(QtGui.QWidget):
 		self._live_rev += 1
 
 	def live_uses_selection(self):
+		if self.method() == 'uncommon':
+			return self.choice('scope') == 'selected'
 		return self.checked('selected' if self.method() == 'stems' else 's_selected')
 
 	def live_state(self, target, selection=None):
@@ -782,6 +905,16 @@ class TRStemSnapPanel(QtGui.QWidget):
 			return self.live_result(target, problem=notes[0] if notes else 'no contours on this layer', notes=notes[1:])
 
 		item, package = layers[0], glyph.package
+
+		if self.method() == 'uncommon':
+			if self.choice('scope') == 'selected' and not sel_contours:
+				return self.live_result(target, problem='select a node on the contours to check', notes=notes)
+
+			v, h, _ = self.targets(package, active)
+			result = self.equalize_stems(glyph, package, item, v, h, sel_contours, False, verbose=False)[2]
+			return self.live_result(target, notes=notes, slant=math.radians(self.italic(package, active)),
+									items=self.live_stem_items(result[3]))
+
 		v, h, d = self.targets(package, active)
 		stems = self.method() == 'stems'
 
@@ -1057,9 +1190,12 @@ class TRStemSnapCanvas(co.CanvasOverlay):
 		if st['problem']:
 			return st['problem'], True
 
-		what = 'stem(s)' if st['method'] == 'stems' else 'stroke(s)'
+		what = 'stem(s)' if st['method'] != 'strokes' else 'stroke(s)'
 		snap, ok, out = st['counts']
-		text = '{} | {}: {} {} to snap, {} on target, {} outside bands'.format(st['target'][0], st['target'][1], snap, what, ok, out)
+		if st['method'] == 'uncommon':
+			text = '{} | {}: {} {} to equalize, {} unchanged, {} not stems'.format(st['target'][0], st['target'][1], snap, what, ok, out)
+		else:
+			text = '{} | {}: {} {} to snap, {} on target, {} outside bands'.format(st['target'][0], st['target'][1], snap, what, ok, out)
 		if abs(st['slant']) > 1e-9:
 			text += '   italic {:g}°'.format(round(math.degrees(st['slant']), 1))
 		return text, False
