@@ -16,7 +16,7 @@
 # Usage:
 #	def build(panel):
 #		page = QtGui.QWidget()
-#		buttons = [...]  # child widgets of <page>; property 'trGroupStart' / 'trSectionStart' = extra gap
+#		buttons = [...]  # child widgets of <page>, flowed one after the other in this order
 #		return page, buttons, refs  # refs: objects that must stay alive (QActions, QToolBars...)
 #
 #	TRNativePanel(7210, 'TypeRig Toolbar', build).open()
@@ -40,7 +40,7 @@ from PythonQt import QtCore
 from typerig.proxy.fl.gui import QtGui
 
 # - Init ----------------------------------
-__version__ = '1.0'
+__version__ = '1.1'
 
 MAC_SYMBOL = '_ZN10MainWindow19registerCustomPanelEP12YPanelWidget'
 WIN_SYMBOL = '?registerCustomPanel@MainWindow@@QEAAXPEAVYPanelWidget@@@Z' # Expected MSVC name, UNVERIFIED
@@ -124,8 +124,6 @@ class TRToolbarScroll(QtGui.QScrollArea):
 	'''
 	margin = 4
 	gap = 2
-	group_gap = 10 # Extra gap in front of the first widget of a group (property 'trGroupStart')
-	section_gap = 18 # Extra gap in front of the first widget of a section (property 'trSectionStart')
 	tick = 40 # ms
 	settle_ticks = 2
 
@@ -172,11 +170,7 @@ class TRToolbarScroll(QtGui.QScrollArea):
 			size = button.sizeHint
 			size_along, size_across = (size.height(), size.width()) if vertical else (size.width(), size.height())
 
-			extra = 0
-			if pos > 0:
-				if button.property('trSectionStart'): extra = self.section_gap
-				elif button.property('trGroupStart'): extra = self.group_gap
-			start = pos + gap + extra if pos > 0 else 0
+			start = pos + gap if pos > 0 else 0
 
 			if pos > 0 and start + size_along > limit:
 				across += line + gap
@@ -293,7 +287,7 @@ class TRNativePanel(object):
 
 	content_builder(panel) -> (page, buttons, refs)
 		page	: QWidget that owns the widgets
-		buttons	: widgets to flow, in order; property 'trGroupStart' / 'trSectionStart' adds a gap before it
+		buttons	: widgets to flow, in order, one after the other (no separators)
 		refs	: objects to keep alive (QActions, hidden QToolBars, dialogs...)
 	'''
 	def __init__(self, panel_id, title, content_builder, object_name='TR_TOOLBAR_PANEL', legacy_names=('TR_TOOLBAR_DOCK_PANEL',)):

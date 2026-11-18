@@ -25,11 +25,10 @@ from typerig.proxy.fl.gui.dialogs import TRLayerSelectNEW
 from typerig.proxy.fl.gui.toolbar_actions import TRToolbarState, TRToolbarActions, guarded
 
 # - Init ----------------------------------
-__version__ = '1.0'
+__version__ = '1.1'
 
 # One button: token = icon font ligature name (an unknown token renders as literal text)
 Button = namedtuple('Button', 'token tip callback checkable name exclusive checked')
-Field = namedtuple('Field', 'name default tip')
 
 def B(token, tip, callback=None, checkable=False, name=None, exclusive=None, checked=False):
 	'''callback None = disabled placeholder cell'''
@@ -38,7 +37,7 @@ def B(token, tip, callback=None, checkable=False, name=None, exclusive=None, che
 # - Button table --------------------------
 def toolbar_sections(act):
 	'''The toolbar in Glyphs order: a tuple of (key, caption, groups). Each group is one flow() call of the
-	Glyphs palette (a row / a cluster), tuple order = button order. A Field entry is a one-cell text field.
+	Glyphs palette (a row / a cluster), tuple order = button order.
 
 	Foldable sections are NOT built (the keys + captions below are the fold targets). The Glyphs palette
 	can also cut sections down through toolbar-sections.json ([["node", true], ["align", false], ...];
@@ -47,19 +46,6 @@ def toolbar_sections(act):
 	alt_one = '\n+Alt: one selected node is enough'
 
 	return (
-		# SECTION 'observers' - Glyphs-only sidebar helpers (never folds). GLYPHS-ONLY: they are built on
-		# Glyphs observers and FontLab has no equivalent hook (canvas_overlay needs one tool per helper).
-		# Disabled placeholder cells - owner decision pending. See FL-toolbar-parity.md.
-		('observers', None, (
-			(
-				B('visible', 'Layer toast (Glyphs only: not available in FontLab)', None, True),
-				B('stem_vertical_alt', 'Stem probe (Glyphs only: not available in FontLab)', None, True),
-				B('interpolate', 'Node slide (Glyphs only: not available in FontLab)', None, True),
-				B('node_add', 'Node add ghost (Glyphs only: not available in FontLab)', None, True),
-				B('keyboard_arows', 'Key nudge (Glyphs only: not available in FontLab)', None, True),
-			),
-		)),
-
 		# SECTION 'node' - Nodes & Corners (fold target)
 		('node', 'Nodes & Corners', (
 			(
@@ -71,12 +57,11 @@ def toolbar_sections(act):
 				B('node_round', 'Round selected nodes to integer coordinates\nClick: ceil. +Alt: floor. +Shift: round all nodes', act.node_round),
 			),
 			(
-				B('corner_mitre', 'Corner mitre (size: corner field)\n+Ctrl: FL dialog', act.corner_mitre),
-				B('corner_round', 'Corner round (size: corner field)\n+Ctrl: FL dialog', act.corner_round),
-				B('corner_loop', 'Corner loop (overlap: corner field)\n+Ctrl: FL dialog', act.corner_loop),
+				B('corner_mitre', 'Corner mitre (asks for the size)', act.corner_mitre),
+				B('corner_round', 'Corner round (asks for the size)', act.corner_round),
+				B('corner_loop', 'Corner loop (asks for the overlap)', act.corner_loop),
 				B('corner_trap', 'Create ink trap\n+Alt: non-smooth basic trap', act.corner_trap),
 				B('corner_rebuild', 'Rebuild corner', act.corner_rebuild),
-				Field('fld_corner', '20', 'Corner size: mitre / round size, loop overlap'),
 			),
 		)),
 
@@ -189,8 +174,7 @@ def toolbar_sections(act):
 				B('auto_stem_overlap', 'Auto overlap align\nSelect 4 nodes (2 neighbor pairs) at a cut junction.', act.align_auto),
 				B('node_middle_top', 'Stem-Center Snap\nSnap selection to the centerline of the perpendicular stem.\nAxis auto from selection bbox.\nShift: force horizontal motion (V-stem).\nAlt: force vertical motion (H-stem).', act.stem_center),
 				B('node_target', 'Pick target node for loop extension.\nSelect 1 on-curve node, then toggle on.\nToggle off to clear target.', act.loop_target_toggle, True, name='loop_target'),
-				B('corner_loop', 'Corner Loop\nNo target: loop by the corner field size.\nWith target: extend corner toward stored target position.', act.cut_corner_loop, name='cut_corner_loop'),
-				Field('fld_loop_safe', '5', 'Safe distance: pull back from target by this amount on each axis.'),
+				B('corner_loop', 'Corner Loop\nNo target: loop by the overlap you give.\nWith target: extend corner toward stored target position (asks the safe distance).', act.cut_corner_loop, name='cut_corner_loop'),
 			),
 			( # FL only
 				B('cutter_auto', 'Stroke Separate (V3)\nSplit stroke glyph into components via MAT analysis.\nApplies to active layer; propagates cuts to all masters. (FL only)', act.stroke_separate),
@@ -243,14 +227,6 @@ def make_button(page, spec, font):
 	if spec.callback is None: button.setEnabled(False)
 	else: button.clicked.connect(guarded(spec.callback, spec.name))
 	return button
-
-def make_field(page, spec):
-	edit = QtGui.QLineEdit(page)
-	edit.setText(spec.default)
-	edit.setToolTip(spec.tip)
-	edit.setFixedWidth(44)
-	edit.setAlignment(QtCore.Qt.AlignCenter)
-	return edit
 
 class TRToolbarMasthead(object):
 	'''Layer scope (Active / Masters / Selected + layer dialog) and glyph scope (active glyph / glyph window /
@@ -311,34 +287,26 @@ class TRToolbarBuilder(object):
 		act = self.actions
 		act.widgets.clear()
 
-		def add(widget, group_start, section_start):
-			if group_start: widget.setProperty('trGroupStart', True)
-			if section_start: widget.setProperty('trSectionStart', True)
-			buttons.append(widget)
-
 		# - Masthead (layer scope, glyph scope)
 		masthead = TRToolbarMasthead(self.state, page, font)
 		refs.append(masthead)
-		for group in (masthead.layers, masthead.glyphs):
-			for index, widget in enumerate(group): add(widget, index == 0, False)
+		buttons.extend(masthead.layers + masthead.glyphs)
 
 		# - Sections
 		for key, caption, section_groups in toolbar_sections(act):
-			for group_index, group in enumerate(section_groups):
-				for index, spec in enumerate(group):
-					if isinstance(spec, Field):
-						widget = make_field(page, spec)
-					else:
-						widget = make_button(page, spec, font)
-						if spec.exclusive:
-							if spec.exclusive not in groups:
-								groups[spec.exclusive] = QtGui.QButtonGroup(page)
-								groups[spec.exclusive].setExclusive(True)
-								refs.append(groups[spec.exclusive])
-							groups[spec.exclusive].addButton(widget)
+			for group in section_groups:
+				for spec in group:
+					widget = make_button(page, spec, font)
+
+					if spec.exclusive:
+						if spec.exclusive not in groups:
+							groups[spec.exclusive] = QtGui.QButtonGroup(page)
+							groups[spec.exclusive].setExclusive(True)
+							refs.append(groups[spec.exclusive])
+						groups[spec.exclusive].addButton(widget)
 
 					act.widgets[spec.name] = widget
-					add(widget, index == 0, group_index == 0 and index == 0)
+					buttons.append(widget)
 
 		refs.append(act)
 		return page, buttons, refs

@@ -256,7 +256,7 @@ from typerig.proxy.fl.gui.native_panel import TRNativePanel
 
 def build(panel):                       # content_builder
 	page = QtGui.QWidget()              # owns the widgets
-	buttons = [...]                     # widgets to flow, in order; property 'trGroupStart' / 'trSectionStart' = extra gap
+	buttons = [...]                     # widgets to flow, in order, one after the other (no separators)
 	return page, buttons, refs          # refs: QActions, dialogs, button groups... kept alive
 
 panel = TRNativePanel(7210, 'TypeRig Toolbar', build)    # object_name / legacy_names optional

@@ -32,10 +32,10 @@ from typerig.proxy.fl.actions.mat_extract import TRMatExtractActionCollector
 
 from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.widgets import getProcessGlyphs
-from typerig.proxy.fl.gui.dialogs import TRMasterValuesDLG
+from typerig.proxy.fl.gui.dialogs import TRMasterValuesDLG, TR1SpinDLG
 
 # - Init ----------------------------------
-__version__ = '1.0'
+__version__ = '1.1'
 tool_name = 'TypeRig Toolbar'
 
 # - Helpers -------------------------------
@@ -84,7 +84,8 @@ class TRToolbarActions(object):
 	'''Everything the toolbar buttons do. Every method is a no-argument callback; scope comes from the state.'''
 	def __init__(self, state):
 		self.state = state
-		self.widgets = {} # button / field name -> widget (filled by the builder)
+		self.widgets = {} # button name -> widget (filled by the builder)
+		self.safe_distance = 5. # Last value given for the loop-to-target safe distance
 
 		# - Data banks for copy / paste operations
 		self.ext_target = {} # Align target: layer -> node
@@ -111,14 +112,6 @@ class TRToolbarActions(object):
 		widget = self.widgets.get(name)
 		if widget is not None: widget.setChecked(False)
 
-	def field(self, name, default):
-		'''Float value of a toolbar field'''
-		widget = self.widgets.get(name)
-		try:
-			return float(widget.text) if widget is not None else default
-		except (TypeError, ValueError):
-			return default
-
 	# - Nodes --------------------------------
 	def node_insert(self, time):
 		mods = Modifiers()
@@ -138,18 +131,15 @@ class TRToolbarActions(object):
 	def node_smooth(self, set_smooth):
 		TRNodeActionCollector.node_smooth(self.mode, self.layers, set_smooth)
 
-	# - Corners (size from the corner field; Ctrl = FL dialog) ---
+	# - Corners (values come from the FL popup dialogs) ---
 	def corner_mitre(self):
-		if Modifiers().ctrl: TRNodeActionCollector.corner_mitre_dlg(self.mode, self.layers)
-		else: TRNodeActionCollector.corner_mitre(self.mode, self.layers, self.field('fld_corner', 20.))
+		TRNodeActionCollector.corner_mitre_dlg(self.mode, self.layers)
 
 	def corner_round(self):
-		if Modifiers().ctrl: TRNodeActionCollector.corner_round_dlg(self.mode, self.layers)
-		else: TRNodeActionCollector.corner_round(self.mode, self.layers, self.field('fld_corner', 20.))
+		TRNodeActionCollector.corner_round_dlg(self.mode, self.layers)
 
 	def corner_loop(self):
-		if Modifiers().ctrl: TRNodeActionCollector.corner_loop_dlg(self.mode, self.layers)
-		else: TRNodeActionCollector.corner_loop(self.mode, self.layers, self.field('fld_corner', 20.))
+		TRNodeActionCollector.corner_loop_dlg(self.mode, self.layers)
 
 	def corner_trap(self):
 		smooth = not Modifiers().alt # Alt: non-smooth basic trap
@@ -274,11 +264,15 @@ class TRToolbarActions(object):
 			self.uncheck('loop_target')
 
 	def cut_corner_loop(self):
-		'''Corner loop: with a target extend toward the stored position, without it use the corner field'''
+		'''Corner loop: with a target extend toward the stored position (asks the safe distance), without it
+		use the FL overlap dialog'''
 		if not (self.checked('loop_target') and self.loop_target):
 			return self.corner_loop()
 
-		safe_distance = self.field('fld_loop_safe', 5.)
+		dlg = TR1SpinDLG('Loop to Target', 'Safe distance: pull back from the target by this amount on each axis.', 'Distance:', (0., 100., self.safe_distance, 1.))
+		if dlg.values is None: return # Cancel aborts the action
+		safe_distance = self.safe_distance = dlg.values
+
 
 		for glyph in getProcessGlyphs(self.mode):
 			wLayers = glyph._prepareLayers(self.layers)

@@ -24,18 +24,11 @@ Icon tokens: every token below was checked against the ligature table (GSUB) of
 | masthead | `select_glyph` | Font window selection | — | `pMode = 2` | T | FL-ONLY |
 | masthead | `window` | Toggle window title | — | dropped (meaningless in a panel) | T/M | dropped |
 
-## Observers row (Glyphs-only sidebar helpers)
+## Observers row (Glyphs-only sidebar helpers) - REMOVED
 
-| Section | Token | Tooltip | Glyphs call | FL equivalent | Old | Status |
-|---|---|---|---|---|---|---|
-| observers | `visible` | Layer toast | `layer_toast.observer.toggle` | none (needs a canvas hook per helper) | - | GLYPHS-ONLY (built on Glyphs observers; FL needs a new `canvas_overlay` tool) |
-| observers | `stem_vertical_alt` | Stem probe | `stem_probe.observer` | none | - | GLYPHS-ONLY (same) |
-| observers | `interpolate` | Node slide | `node_slider.observer` | none | - | GLYPHS-ONLY (same) |
-| observers | `node_add` | Node add ghost | `node_ghost.observer` | none (FL: `node_add` insert dialog on Ctrl+click of mid-insert) | - | GLYPHS-ONLY (same) |
-| observers | `keyboard_arows` | Key nudge | `key_nudge.observer` | none | - | GLYPHS-ONLY (same) |
-| observers | blank cells | placeholders | `flow(... '')` | disabled blank cells | - | GLYPHS-ONLY |
-
-Built as **disabled placeholder cells** (`# GLYPHS-ONLY`), owner decides.
+`visible` (layer toast), `stem_vertical_alt` (stem probe), `interpolate` (node slide), `node_add` (node ghost),
+`keyboard_arows` (key nudge) and the blank cells are built on Glyphs observers and have no FontLab equivalent.
+Owner decision: they are **not in the FL toolbar** (no placeholders). Status: GLYPHS-ONLY, dropped.
 
 ## `node` — Nodes & Corners
 
@@ -47,12 +40,12 @@ Built as **disabled placeholder cells** (`# GLYPHS-ONLY`), owner decides.
 | node | `node_add_extreme_alt` | Add nodes at extremes | `npa_insert_at_extremes` | `node_insert_extreme` (no Alt mode in FL: tooltip differs) | T/M | OK |
 | node | `node_remove` | Remove selected nodes | `npa_remove` | `node_remove` | T/M | OK |
 | node | `node_round` | Round to integer | `npa_round_coordinates` | `node_round(…, alt=floor, shift=all)` (FL semantics kept, tooltip differs) | T/M | OK |
-| node | `corner_mitre` | Corner mitre (field) | `npa_corner_mitre(size)` | `corner_mitre(…, field)`; Ctrl = `corner_mitre_dlg` | T/M | OK |
-| node | `corner_round` | Corner round (field) | `npa_corner_round(size)` | `corner_round(…, field)`; Ctrl = `corner_round_dlg` | T/M | OK |
-| node | `corner_loop` | Corner loop (field) | `npa_corner_loop(size)` | `corner_loop(…, field)`; Ctrl = `corner_loop_dlg` | T/M | OK |
+| node | `corner_mitre` | Corner mitre | `npa_corner_mitre(size)` | `corner_mitre_dlg` (popup asks the size) | T/M | OK |
+| node | `corner_round` | Corner round | `npa_corner_round(size)` | `corner_round_dlg` (popup) | T/M | OK |
+| node | `corner_loop` | Corner loop | `npa_corner_loop(size)` | `corner_loop_dlg` (popup) | T/M | OK |
 | node | `corner_trap` | Ink trap | `npa_corner_trap` | `corner_trap_dlg(…, smooth = not Alt)` (FL always asks incision/depth/trap) | T/M | OK |
 | node | `corner_rebuild` | Rebuild corner | `npa_corner_rebuild` | `corner_rebuild` | T/M | OK |
-| node | `fld_corner` (20) | Corner size field | field | `TRToolbarField` (float) | - | OK |
+| node | `fld_corner` | Corner size field | field | removed: the popup dialogs ask | - | GLYPHS-ONLY (dropped) |
 
 ## `align` — Align
 
@@ -121,8 +114,8 @@ Built as **disabled placeholder cells** (`# GLYPHS-ONLY`), owner decides.
 | cut | `auto_stem_overlap` | Auto overlap align (4 nodes) | `npa_contour_auto_align` | `TRCutActionCollector.align_auto` (extracted) | C | OK |
 | cut | `node_middle_top` | Stem-center snap (Shift V / Alt H) | `npa_stem_center` | `TRStemCenterActionCollector.snap_stem_center(…, force_axis)` | C | OK |
 | cut | `node_target` (`loop_target`) | Pick loop target (toggle) | `npa_loop_target_set/clear` | `target_set` of popup (per-layer node position) | C | OK |
-| cut | `corner_loop` | Corner loop (with target) | `npa_corner_loop(_to_target)` | with target: `eNode.cornerLoopToTargets(x, y, safe)`; without: `corner_loop(…, field)` (Ctrl = dialog) | C | OK |
-| cut | `fld_loop_safe` (5) | Safe distance field | field | `TRToolbarField` | C | OK |
+| cut | `corner_loop` | Corner loop (with target) | `npa_corner_loop(_to_target)` | with target: popup asks the safe distance, then `eNode.cornerLoopToTargets(x, y, safe)`; without: `corner_loop_dlg` | C | OK |
+| cut | `fld_loop_safe` | Safe distance field | field | removed: `TR1SpinDLG` popup (remembers the last value) | C | GLYPHS-ONLY (dropped) |
 | cut | `cutter_auto` | Stroke Separate V3 | — (Glyphs: not ported) | `TRCutActionCollector.stroke_separate_v3` | C | FL-ONLY |
 | cut | `centerline` | Medial Axis Extract | — (not ported) | `TRMatExtractActionCollector.extract_medial_axis` | C | FL-ONLY |
 
@@ -150,7 +143,8 @@ Built as **disabled placeholder cells** (`# GLYPHS-ONLY`), owner decides.
 | slope | `slope_paste_min/_max/_min_flip/_max_flip` | Paste slope | `npa_slope_paste` | `slope_paste(…, bank, (max, flip))` | T | OK |
 
 ## Decisions recorded
-- Corner buttons use the corner field (as Glyphs); the FL dialogs stay on **Ctrl+click** of the same button.
+- No value entry fields: every value comes from the FL popup dialogs (corner size, loop overlap, loop safe distance).
 - Insert buttons: Ctrl+click opens the FL `node_insert_dlg` (time slider).
+- No observers row, no separators or gaps: the icons flow one after the other.
 - FL `node_round` / `corner_trap` modifier semantics are kept; tooltips reflect FL, not Glyphs.
 - Not built: foldable sections (keys/captions kept as comments), `toolbar-sections.json` cut-down.
