@@ -73,10 +73,48 @@ def register_native_panel(main_window, panel):
 	register(get_pointer(main_window), get_pointer(panel))
 
 def find_panel_action(main_window):
+	'''Find the Window > Panels > Custom Panels action created by registerCustomPanel.
+	FontLab 9 tags it with a "fontlab.commandId" property, FontLab 8 does not. Both store the panel id
+	as action data, so that is used as the common key.'''
 	command_id = 'Window.Panels.Custom.' + panel_title
-	for action in main_window.findChildren(QtGui.QAction):
-		if action.property('fontlab.commandId') == command_id:
-			return action
+
+	def scan():
+		by_data = None
+		for action in main_window.findChildren(QtGui.QAction):
+			if action.property('fontlab.commandId') == command_id:
+				return action
+			if by_data is None and action.data() == panel_id:
+				by_data = action
+		return by_data
+
+	action = scan()
+	if action is not None: return action
+
+	# The menu may be populated lazily: let FontLab build it by showing the menus for a moment
+	try:
+		menu = [a for a in main_window.menuBar().actions() if a.text.replace('&', '') == 'Window'][0].menu()
+		for _ in range(3):
+			menu.popup(QtCore.QPoint(-4000, -4000))
+			QtGui.QApplication.processEvents()
+			menu.hide()
+			subs = [a.menu() for a in menu.actions() if a.menu() is not None]
+			for sub in subs:
+				sub.popup(QtCore.QPoint(-4000, -4000))
+				QtGui.QApplication.processEvents()
+				sub.hide()
+	except Exception:
+		pass
+
+	return scan()
+
+def describe_actions(main_window):
+	'''Diagnostics for a failed lookup'''
+	candidates = [a for a in main_window.findChildren(QtGui.QAction) if a.data() == panel_id]
+	custom = main_window.findChild(QtGui.QMenu, 'menuCustomPanels')
+	return 'actions with data={}: {} | menuCustomPanels: {}'.format(
+		panel_id,
+		[(a.text, a.objectName) for a in candidates],
+		[(a.text, a.data()) for a in custom.actions()] if custom is not None else 'not found')
 
 def find_ancestor(widget, class_name):
 	while widget is not None and type(widget).__name__ != class_name:
@@ -423,4 +461,4 @@ else:
 				QtGui.QApplication.processEvents()
 				size_and_place(state)
 		else:
-			print('{} {}: Panel registered but menu action not found.'.format(tool_name, tool_version))
+			print('{} {}: Panel registered but menu action not found. {}'.format(tool_name, tool_version, describe_actions(main_window)))
