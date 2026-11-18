@@ -1,6 +1,6 @@
 # FontLab native panels from Python — what we learned
 
-Distilled from building `typerig-toolbar-dock.py` (commits `13d9ea0`, `3baba32`, `3da456b`,
+Distilled from building the first dock-toolbar script (since replaced by `typerig.proxy.fl.gui.native_panel`; commits `13d9ea0`, `3baba32`, `3da456b`,
 `1f82921`, Nov 2026). Everything here was verified live in **FontLab 9** (through the FL MCP
 `run_python`) and **FontLab 8.4.2** (through log files, see §9). Both ship Python 3.11 and
 Qt 5.15 (FL9: 5.15.19, FL8: 5.15.15) with PythonQt 3.2, so the Python side is identical; only
@@ -68,7 +68,7 @@ Finding the action (it is created by `registerCustomPanel`, text is empty):
 | 8 and 9 | `action.data() == PANEL_ID` (both versions `setData(panel id)`). **Use this as the common key.** |
 
 `mainWindow.findChildren(QAction)` finds it immediately; no menu popup is needed (a menu-refresh
-fallback is in `typerig-toolbar-dock.py`, it was never required).
+fallback is in `native_panel.TRNativePanel.find_action`, it was never required).
 
 Triggering the action a second time while the panel is open is a harmless no-op.
 
@@ -246,3 +246,42 @@ found the FL8 dock-height behaviour in two rounds.
 4. Why the top edge once refused a drop (a drop target was shown but nothing docked); it worked
    later after the panel height was corrected, cause not proven.
 5. Startup: how to run the script automatically (FL startup script / Scripts autorun).
+
+---
+
+## 12. The public API (`typerig.proxy.fl.gui.native_panel`, v1.0)
+
+```python
+from typerig.proxy.fl.gui.native_panel import TRNativePanel
+
+def build(panel):                       # content_builder
+	page = QtGui.QWidget()              # owns the widgets
+	buttons = [...]                     # widgets to flow, in order; property 'trGroupStart' / 'trSectionStart' = extra gap
+	return page, buttons, refs          # refs: QActions, dialogs, button groups... kept alive
+
+panel = TRNativePanel(7210, 'TypeRig Toolbar', build)    # object_name / legacy_names optional
+panel.open()      # create / reuse / adopt, (re)build the content, let FontLab open it. True when showing
+panel.rebuild()   # swap the content only (new scroll area, old one parked)
+panel.scroll, panel.panel, panel.state, panel.mode      # 'native' | 'toolbar'
+```
+
+* `TRToolbarScroll` is the flow engine (hysteresis 0.8 / 1.25, 2 x 40 ms debounce, `maximumViewportSize()`,
+  dock-shape orientation, `fill_dock` for FontLab 8). `fit_count` counts layout passes (diagnostics).
+* State lives in the module (`_STATE`, `_GRAVEYARD`). When it is gone (module purged) `open()` **adopts** the
+  already registered panel: it looks for a `YPanelWidget` with the object name (or a legacy name), parks every
+  stale scroll area in it, and reuses it. Verified live: reload of the module, one panel, one menu entry.
+* Windows: `resolve_register()` only returns a callable when the MSVC symbol resolves in the main module;
+  otherwise `open()` builds a `QToolBar` in `app.main` (**UNVERIFIED**, see section 11).
+
+### New pitfalls found while building the unified toolbar
+
+* A freshly created `QScrollArea` reports a default viewport (about 640x480) until FontLab lays it out: the first
+  `fit()` of a reused panel wraps at that stale size. The poll timer re-fits as soon as the real size is known
+  (about 2 ticks); do not treat the first layout as final.
+* `maximumViewportSize()`, `sizeHint` of a `QToolButton` and similar are *methods or properties inconsistently* in
+  PythonQt: `scroll.maximumViewportSize()` needs the call, `button.sizeHint` and `edit.text` do not.
+* `run_python` over the MCP gives every call a fresh namespace: keep a test harness in a file and `exec()` it.
+* Test through `fl6.CurrentGlyph` monkeypatching only if you restore it afterwards (it is a global of the
+  running FontLab); the same for `pWorkspace.getCanvas` (returns `None` without a glyph window).
+* The layer-selection dialog (`TRLayerSelectNEW`) calls `parent.layers_refresh()` on every edit: whatever is
+  passed as its parent needs that method. `getTable()` returns a *list of layer names*, a valid `pLayers`.

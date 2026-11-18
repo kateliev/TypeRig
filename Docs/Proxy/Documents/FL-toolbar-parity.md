@@ -6,7 +6,7 @@ Source of truth: `TypeRig-Glyphs/Plugins/TypeRig Toolbar.glyphsPalette/Contents/
 
 Legend — `OK` same function in FL; `FL-ONLY` exists in FL, not in Glyphs (kept: superset);
 `GLYPHS-ONLY` not ported, reason given. **Old** = was in the old FL toolbars
-(`T` toolbar package, `M` toolbar-mac, `P` Panel/Node, `C` popup-contour-cut, `-` nowhere).
+(`T` toolbar package, `M` floating toolbar, `P` Panel/Node, `C` popup-contour-cut, `-` nowhere).
 FL calls use `(pMode, pLayers)` unless noted; `eG` = `eGlyph()`.
 
 Icon tokens: every token below was checked against the ligature table (GSUB) of

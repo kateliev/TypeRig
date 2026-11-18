@@ -109,21 +109,13 @@ A separate dialog for font-level operations:
 
 **Impex** — A table of import/export actions (type, action, options) run in batch over the font. Currently ships the AFM kerning action (`ImpexActions/afm.py`).
 
-### Toolbars
+### Toolbar
 
-Dockable toolbars for quick access to common operations:
+**TypeRig Toolbar** (`typerig-toolbar.py`) — One native FontLab panel (Window > Panels > Custom Panels) for macOS and Windows, FontLab 8 and 9. It drags and docks on every edge, tabs with other panels and reflows its buttons: rows when wide, columns when docked left or right.
 
-**Node Toolbar** — Node insertion, removal, extreme insertion, start-point management, and corner operations (mitre, round, loop, trap, rebuild) as toolbar buttons.
+Contents follow the TypeRig Glyphs palette, in the same order: nodes and corners, align (shift options, edge / center / outline / neighbour / metric alignment, per-master targets), curves (conversion, Tunni, Hobby and handle proportions, Hobby copy / paste), contours (close, winding, start node, order), booleans, cut (slice, auto overlap align, stem-center snap, corner loop to target), end caps, collinear and monoline (per-master snap targets), and slope copy / paste. A masthead sets the scope for every action: layers Active / Masters / Selected (with a layer dialog) and glyph active glyph / glyph window / font window selection.
 
-**Node Align Toolbar** — Node alignment to min/max coordinates, user-set targets, and font metrics (ascender, caps, x-height, baseline, descender, measurement line) with intercept, dimension-preserving, and smart-align options.
-
-**Node Slope Toolbar** — Slope copy/paste with italic angle support. Paste to min/max pivot with optional horizontal flip.
-
-**Contour Toolbar** — Contour boolean operations, closing, reversing, and winding correction as toolbar buttons.
-
-**Curve Toolbar** — Line-to-curve and curve-to-line conversion, Tunni and Hobby optimization (dialog, or fixed 1.0 / 0.95 / 0.90 presets), proportional handles (dialog, or 0.5 / 0.3 / 0) and Hobby tension push.
-
-**MacOS Panel** (`toolbar-mac.py`) — A unified panel-based interface that consolidates node, alignment, slope, corner, contour, and curve tools into a single flow layout. This exists because `QToolBar` widgets don't function properly in MacOS FontLab, so all toolbar functionality is reimplemented as a panel with `TRFlowLayout`.
+On macOS FontLab the main window is hidden, so Qt toolbars cannot dock there; the panel is therefore registered as a custom FontLab panel (`typerig.proxy.fl.gui.native_panel`, see `Docs/Proxy/Documents/FL-native-panels.md`). On Windows the same content is used; if FontLab does not export the panel registration it falls back to a regular docked toolbar.
 
 ### Standalone Tools
 
