@@ -133,7 +133,7 @@ Owner decision: slice, cut + auto overlap align, auto overlap align, stem-center
 |---|---|---|---|---|---|---|
 | slope | `slope_copy` | Copy slope | `npa_slope_copy` | `slope_copy(eG, pLayers)` → bank (old toggle becomes a plain button) | T | OK |
 | slope | `slope_italic` | Italic angle as slope | `npa_slope_from_angle` | `slope_italic(eG, pLayers)` → bank | T | OK |
-| slope | `slope_paste_min/_max/_min_flip/_max_flip` | Paste slope | `npa_slope_paste` | `slope_paste(…, bank, (max, flip))` | T | OK |
+| slope | `slope_paste_min` / `slope_paste_min_flip` (Alt = pivot on the highest node, i.e. the Glyphs `_max` / `_max_flip`) | Paste slope | `npa_slope_paste` | `slope_paste(…, bank, (alt, flip))` | T | OK |
 
 ## Decisions recorded
 - No value entry fields: every value comes from the FL popup dialogs (corner size, loop overlap).

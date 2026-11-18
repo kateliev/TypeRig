@@ -25,7 +25,7 @@ from typerig.proxy.fl.gui.dialogs import TRLayerSelectNEW
 from typerig.proxy.fl.gui.toolbar_actions import TRToolbarState, TRToolbarActions, guarded
 
 # - Init ----------------------------------
-__version__ = '1.3'
+__version__ = '1.4'
 
 # One button: token = icon font ligature name (an unknown token renders as literal text)
 Button = namedtuple('Button', 'token tip callback checkable name exclusive checked')
@@ -186,10 +186,8 @@ def toolbar_sections(act):
 			(
 				B('slope_copy', 'Copy slope between selected nodes', act.slope_copy),
 				B('slope_italic', "Use the master's italic angle as slope", act.slope_italic),
-				B('slope_paste_min', 'Paste slope to selected nodes pivoting around the one with lowest vertical coordinates', partial(act.slope_paste, False, False)),
-				B('slope_paste_max', 'Paste slope to selected nodes pivoting around the one with highest vertical coordinates', partial(act.slope_paste, True, False)),
-				B('slope_paste_min_flip', 'Paste horizontally flipped slope pivoting around the lowest node', partial(act.slope_paste, False, True)),
-				B('slope_paste_max_flip', 'Paste horizontally flipped slope pivoting around the highest node', partial(act.slope_paste, True, True)),
+				B('slope_paste_min', 'Paste slope to selected nodes pivoting around the one with lowest vertical coordinates\n+Alt: pivot around the highest node', partial(act.slope_paste, False)),
+				B('slope_paste_min_flip', 'Paste horizontally flipped slope pivoting around the lowest node\n+Alt: pivot around the highest node', partial(act.slope_paste, True)),
 			),
 		)),
 	)

@@ -30,7 +30,7 @@ from typerig.proxy.fl.gui import QtGui
 from typerig.proxy.fl.gui.dialogs import TRMasterValuesDLG
 
 # - Init ----------------------------------
-__version__ = '1.2'
+__version__ = '1.3'
 tool_name = 'TypeRig Toolbar'
 
 # - Helpers -------------------------------
@@ -280,5 +280,6 @@ class TRToolbarActions(object):
 	def slope_italic(self):
 		self.slope_bank = TRNodeActionCollector.slope_italic(eGlyph(), self.layers)
 
-	def slope_paste(self, pivot_max, flip):
+	def slope_paste(self, flip):
+		pivot_max = Modifiers().alt # Alt swaps the pivot: highest instead of lowest node
 		TRNodeActionCollector.slope_paste(self.mode, self.layers, self.slope_bank, (pivot_max, flip))
