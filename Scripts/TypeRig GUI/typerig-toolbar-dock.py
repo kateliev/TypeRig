@@ -38,7 +38,7 @@ import fontlab as fl6
 from PythonQt import QtCore
 
 from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import getTRIconFont, TRFlowLayout
+from typerig.proxy.fl.gui.widgets import getTRIconFont
 from typerig.proxy.fl.gui.dialogs import TRLayerSelectNEW
 
 import Toolbar
@@ -175,102 +175,172 @@ class TRToolbarController(QtGui.QToolBar):
 			exec('Toolbar.{}.pLayers = {}'.format(toolbar_name, pLayers))
 
 class TRToolbarScroll(QtGui.QScrollArea):
-	'''Scroll area that lays the toolbars out horizontally (wide panel: docked top/bottom or floating)
-	or vertically (tall panel: docked left/right) following the shape of the panel.'''
+	'''Scroll area that flows the toolbar BUTTONS (not whole toolbars) as rows when the panel is wide
+	(docked top/bottom or floating) or as columns when it is tall (docked left/right).
+
+	Layout rules that avoid flicker:
+	- Sizes are taken from maximumViewportSize() (ignores scrollbars) and room for a scrollbar is
+	  reserved explicitly, so a scrollbar appearing can not trigger another layout pass.
+	- Orientation uses hysteresis, so a panel near square does not flip back and forth.
+	- A new size is applied only after it stayed the same for a few ticks (dragging/docking in FontLab
+	  passes through many transient sizes).
+	'''
+	margin = 4
+	gap = 2
+	group_gap = 10 # Extra gap in front of the first button of every toolbar
+	tick = 40 # ms
+	settle_ticks = 2
+
 	def __init__(self, *args, **kwargs):
 		super(TRToolbarScroll, self).__init__(*args, **kwargs)
 		self.setFrameShape(QtGui.QFrame.NoFrame)
 		self.setWidgetResizable(False)
-		# The size of the panel is decided by FontLab / the user, never by the content of the scroll area
-		self.setSizePolicy(QtGui.QSizePolicy.Ignored, QtGui.QSizePolicy.Ignored)
 		self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
 		self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-		self.page_layout = None
-		self.bars = []
+		# The size of the panel is decided by FontLab / the user, never by the content of the scroll area
+		self.setSizePolicy(QtGui.QSizePolicy.Ignored, QtGui.QSizePolicy.Ignored)
+
+		self.page = None
+		self.buttons = []
+		self.vertical = False
 		self.fitting = False
-		self.last_size = None
+		self.seen_size = None
+		self.applied_size = None
+		self.stable = 0
 
 		self.timer = QtCore.QTimer(self)
-		self.timer.setInterval(120)
+		self.timer.setInterval(self.tick)
 		self.timer.timeout.connect(self.watch_size)
 		self.timer.start()
 
-	def set_page(self, page, page_layout, bars):
-		self.page_layout = page_layout
-		self.bars = bars
+	def set_page(self, page, buttons):
+		self.page = page
+		self.buttons = buttons
 		self.setWidget(page) # Replaces (and deletes) the previous page
+		self.applied_size = None
 		self.fit()
 
-	def is_vertical(self):
-		view = self.viewport().size
-		return view.width() < view.height()
+	# - Layout --------------------------------
+	def flow(self, limit, vertical, apply):
+		'''Flow the buttons along one axis wrapping at <limit> (width for rows, height for columns).
+		Returns the size of the content including margins.'''
+		margin, gap = self.margin, self.gap
+		pos, across, line, used = 0, 0, 0, 0
+
+		for button in self.buttons:
+			size = button.sizeHint
+			size_along, size_across = (size.height(), size.width()) if vertical else (size.width(), size.height())
+			extra = self.group_gap if (pos > 0 and button.property('trGroupStart')) else 0
+			start = pos + gap + extra if pos > 0 else 0
+
+			if pos > 0 and start + size_along > limit:
+				across += line + gap
+				line, start = 0, 0
+
+			if apply:
+				button.resize(size)
+				button.move(margin + across, margin + start) if vertical else button.move(margin + start, margin + across)
+
+			pos = start + size_along
+			line = max(line, size_across)
+			used = max(used, pos)
+
+		along_total, across_total = used + 2 * margin, across + line + 2 * margin
+		return (across_total, along_total) if vertical else (along_total, across_total)
+
+	def content_height(self, width):
+		'''Height needed by a horizontal layout at <width> (used to size a newly opened panel)'''
+		return self.flow(width - 2 * self.margin, False, False)[1]
 
 	def fit(self):
-		if self.page_layout is None or self.fitting: return
+		if self.page is None or self.fitting: return
 		self.fitting = True
+		self.page.setUpdatesEnabled(False)
 
 		try:
-			layout, page = self.page_layout, self.widget()
-			margins = layout.contentsMargins()
-			view = self.viewport().size
-			orientation = QtCore.Qt.Vertical if self.is_vertical() else QtCore.Qt.Horizontal
+			view = self.maximumViewportSize() # Size WITHOUT scrollbars
+			view_w, view_h = view.width(), view.height()
+			if view_w < 1 or view_h < 1: return
 
-			if layout.orientation != orientation:
-				layout.orientation = orientation
-				for bar in self.bars: bar.setOrientation(orientation)
-				layout.invalidate()
+			# Hysteresis: tall -> wide needs clearly wide, wide -> tall needs clearly tall
+			self.vertical = not (view_w > view_h * 1.25) if self.vertical else (view_w < view_h * 0.8)
+			m2 = 2 * self.margin
 
-			if orientation == QtCore.Qt.Horizontal:
-				width = view.width()
-				height = layout.heightForWidth(width - margins.left() - margins.right()) + margins.top() + margins.bottom()
-
-				if height > view.height(): # Vertical scrollbar will appear
-					width -= self.verticalScrollBar().width
-					height = layout.heightForWidth(width - margins.left() - margins.right()) + margins.top() + margins.bottom()
-
-				page.resize(max(width, 1), max(height, 1))
+			if not self.vertical:
+				limit = view_w - m2
+				width, height = self.flow(limit, False, False)
+				if height > view_h: # Vertical scrollbar needed: reserve its width
+					limit = view_w - self.verticalScrollBar().sizeHint.width() - m2
+				self.flow(limit, False, True)
+				width, height = self.flow(limit, False, False)
+				self.page.resize(max(limit + m2, 1), max(height, 1))
 
 			else:
-				# TRFlowLayout.widthForHeight returns wrong values in vertical mode: measure the placed items instead
-				height = view.height()
-				layout.setGeometry(QtCore.QRect(margins.left(), margins.top(), 1, height - margins.top() - margins.bottom()))
-				width = max([layout.itemAt(i).geometry().right() for i in range(layout.count())] + [0]) + 1 + margins.right()
-				page.resize(max(width, 1), max(height, 1))
+				limit = view_h - m2
+				width, height = self.flow(limit, True, False)
+				if width > view_w: # Horizontal scrollbar needed: reserve its height
+					limit = view_h - self.horizontalScrollBar().sizeHint.height() - m2
+				self.flow(limit, True, True)
+				width, height = self.flow(limit, True, False)
+				self.page.resize(max(width, 1), max(limit + m2, 1))
+
+			self.applied_size = (view_w, view_h)
 
 		finally:
+			self.page.setUpdatesEnabled(True)
 			self.fitting = False
 
 	def watch_size(self):
-		# Virtual overrides (resizeEvent/event) are not callable through super() in PythonQt: poll the size instead
-		size = self.viewport().size
-		key = (size.width(), size.height())
-		if key != self.last_size:
-			self.last_size = key
-			self.fit()
+		# Virtual overrides (resizeEvent/event) are not callable through super() in PythonQt: poll instead
+		view = self.maximumViewportSize()
+		size = (view.width(), view.height())
+
+		if size != self.seen_size:
+			self.seen_size = size
+			self.stable = 0
+
+		elif size != self.applied_size:
+			self.stable += 1
+			if self.stable >= self.settle_ticks: self.fit()
+
+def action_button(page, action, group_start):
+	'''Button that mirrors a toolbar action (icon font, checked state, tooltip, enabled state)'''
+	button = QtGui.QToolButton(page)
+	button.setDefaultAction(action)
+	button.setAutoRaise(True)
+	button.setFocusPolicy(QtCore.Qt.NoFocus)
+	button.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+	button.setFont(action.font)
+	button.setProperty('trGroupStart', group_start)
+	return button
 
 def build_toolbar_page():
-	'''All toolbars on one flowing page. Returns (page, references to keep alive); refs[0] is the layout'''
+	'''Controller + all toolbars. The QToolBars stay hidden and only own the actions; their actions are
+	shown as individual buttons so the panel can reflow them freely. Returns (page, refs, buttons)'''
 	page = QtGui.QWidget()
-	page_layout = TRFlowLayout(spacing=4)
-	page_layout.setContentsMargins(6, 4, 6, 4)
-	page.setLayout(page_layout)
+	refs, buttons = [], []
 
-	toolbar_control = TRToolbarController()
-	toolbar_control.setParent(page)
-	page_layout.addWidget(toolbar_control)
-	refs = [page_layout, toolbar_control]
+	toolbars = [TRToolbarController()]
 
 	# -- Import external toolbars
 	# --- Load all toolbars from Toolbar directory as modules. Check __init__.py
 	# --- <dirName>.modules tabs/modules manifest in list format
 	for toolbar_name in Toolbar.modules:
 		if ignore_toolbar not in toolbar_name:
-			new_toolbar = eval('Toolbar.{}.TRExternalToolBar()'.format(toolbar_name))
-			new_toolbar.setParent(page)
-			page_layout.addWidget(new_toolbar)
-			refs.append(new_toolbar)
+			toolbars.append(eval('Toolbar.{}.TRExternalToolBar()'.format(toolbar_name)))
 
-	return page, refs
+	for toolbar in toolbars:
+		toolbar.setParent(page)
+		toolbar.hide()
+		refs.append(toolbar)
+
+		first = True
+		for action in toolbar.actions():
+			if action.isSeparator(): continue
+			buttons.append(action_button(page, action, first))
+			first = False
+
+	return page, refs, buttons
 
 def create_native_panel(main_window):
 	'''Create, fill and register the panel. Returns state dict'''
@@ -305,16 +375,14 @@ def renew_scroll(state):
 
 def size_and_place(state):
 	'''FontLab opens custom panels at minimum size (50x69). Resize the YPanel itself (not the YDock)'''
-	panel, page = state['panel'], state['scroll'].widget()
-	state['scroll'].fit() # Start horizontal: measure the wide layout
+	panel, scroll = state['panel'], state['scroll']
 	yp_panel = find_ancestor(panel, 'YPanel')
 	yp_dock = find_ancestor(panel, 'YDock')
 	if yp_panel is None or yp_dock is None: return
 
 	screen = QtGui.QApplication.desktop().availableGeometry()
 	width = min(screen.width() - 120, 1700)
-	margins = page.layout().contentsMargins()
-	height = page.layout().heightForWidth(width - margins.left() - margins.right()) + margins.top() + margins.bottom() + panel_header
+	height = scroll.content_height(width) + panel_header
 
 	yp_panel.resize(width, height)
 	yp_dock.setGeometry(screen.x() + 60, screen.y() + 60, width, height)
@@ -340,8 +408,8 @@ else:
 	if state is not None:
 		# -- (Re)build toolbar content
 		if not is_new: renew_scroll(state)
-		page, refs = build_toolbar_page()
-		state['scroll'].set_page(page, refs[0], [r for r in refs[1:] if isinstance(r, QtGui.QToolBar)])
+		page, refs, buttons = build_toolbar_page()
+		state['scroll'].set_page(page, buttons)
 		state['refs'] = refs
 
 		# -- Let FontLab open the panel. Its slot only handles senders named 'QAction'
