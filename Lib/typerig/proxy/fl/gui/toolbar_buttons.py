@@ -25,7 +25,7 @@ from typerig.proxy.fl.gui.dialogs import TRLayerSelectNEW
 from typerig.proxy.fl.gui.toolbar_actions import TRToolbarState, TRToolbarActions, guarded
 
 # - Init ----------------------------------
-__version__ = '1.2'
+__version__ = '1.3'
 
 # One button: token = icon font ligature name (an unknown token renders as literal text)
 Button = namedtuple('Button', 'token tip callback checkable name exclusive checked')
@@ -74,6 +74,8 @@ def toolbar_sections(act):
 				B('shift_interpolate', 'Interpolated shift (Interpolated Nudge)', act.noop, True),
 				B('shift_intercept', 'Intercept vertical position', act.noop, True),
 				B('extrapolate', 'Extrapolate: slide on-curve nodes along their curve', act.noop, True),
+				B('node_target', 'Pick align target per master: 1 node = that node, several = center of selection; align actions then use it', act.target_toggle, True),
+				B('node_target_collapse', 'Collapse all selected nodes to target', act.target_collapse),
 			),
 			(
 				B('node_align_left', 'Align selected nodes left', partial(act.align, 'L')),
@@ -98,10 +100,6 @@ def toolbar_sections(act):
 				B('dimension_baseline', 'Align selected nodes to Font metrics: Baseline', partial(act.align, 'FontMetrics_4')),
 				B('dimension_descender', 'Align selected nodes to Font metrics: Descender', partial(act.align, 'FontMetrics_2')),
 				B('dimension_guide', 'Align selected nodes to Measurement line (FL only)', partial(act.align, 'FontMetrics_5')),
-				B('node_target', 'Pick align target per master: 1 node = that node, several = center of selection; align actions then use it', act.target_toggle, True),
-			),
-			(
-				B('node_target_collapse', 'Collapse all selected nodes to target', act.target_collapse),
 			),
 		)),
 

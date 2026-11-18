@@ -138,6 +138,7 @@ Owner decision: slice, cut + auto overlap align, auto overlap align, stem-center
 ## Decisions recorded
 - No value entry fields: every value comes from the FL popup dialogs (corner size, loop overlap).
 - No Cut section (slice ... medial axis extract).
+- Align: `node_target` and `node_target_collapse` sit right after `extrapolate` (owner order, differs from Glyphs).
 - Insert buttons: Ctrl+click opens the FL `node_insert_dlg` (time slider).
 - No observers row, no separators or gaps: the icons flow one after the other.
 - FL `node_round` / `corner_trap` modifier semantics are kept; tooltips reflect FL, not Glyphs.
