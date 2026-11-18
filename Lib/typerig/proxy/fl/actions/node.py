@@ -911,12 +911,26 @@ class TRNodeActionCollector(object):
 			solve_slice(t).second -> [B(t), new_bcp1, new_bcp2, p3]
 			'''
 			use_prev = False
-			seg = node.getSegmentNodes()
-			prev_seg = node.getPrevOn(False).getSegmentNodes()
 
-			# Linear segment
+			# - Open contour ends have no outgoing (last node) or incoming (first node)
+			# segment: prevNode()/nextNode() return None there, and segment lookups
+			# may fail, so every neighbour access is guarded and a missing side
+			# is treated as "no segment on that side".
+			def _safe_segment(getter):
+				try:
+					result = getter()
+				except (AttributeError, TypeError, IndexError):
+					return None
+				return result if result is not None else ()
+
+			seg = _safe_segment(lambda: node.getSegmentNodes()) if node.fl.nextNode() is not None else ()
+			prev_seg = _safe_segment(lambda: node.getPrevOn(False).getSegmentNodes()) if node.fl.prevNode() is not None else ()
+			seg = seg or ()
+			prev_seg = prev_seg or ()
+
+			# Linear segment (or isolated end with no cubic neighbour)
 			if len(seg) < 4 and len(prev_seg) < 4:
-					return
+				return
 
 			if len(seg) < 4 and len(prev_seg) == 4:
 				# Cubic segment
