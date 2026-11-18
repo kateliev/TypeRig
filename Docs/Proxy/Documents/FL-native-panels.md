@@ -229,17 +229,8 @@ found the FL8 dock-height behaviour in two rounds.
 
 ## 11. Open questions
 
-1. **Windows**: not tested (no Windows FontLab available to the agent). `registerCustomPanel` is a C++
-   symbol; on macOS it resolves with `ctypes.CDLL(None)` by its Itanium-mangled name. On Windows the name is
-   MSVC-mangled and the symbol may not be exported at all (exports are explicit on PE).
-   * Step 1 (is it exported?): **probe prepared, NOT yet run** - `Docs/Proxy/Probes/win-panel-probe.py`
-     (read-only: `GetProcAddress` for the expected name `?registerCustomPanel@MainWindow@@QEAAXPEAVYPanelWidget@@@Z`
-     plus a parse of the main module's PE export table; logs to `%USERPROFILE%\typerig-win-probe.log`).
-   * Step 2 (if exported): `native_panel.resolve_register()` already contains the recipe (`CFUNCTYPE(None, c_void_p,
-     c_void_p)` on the resolved address; x64 has one calling convention). It only runs when the symbol resolves.
-     **UNVERIFIED.**
-   * Step 3 (if not exported): `TRNativePanel` falls back to the same content in a plain `QToolBar` docked in
-     `app.main` (what the old script did on Windows). Owner decision pending on the probe result.
+1. **Windows**: ~~open~~ **ANSWERED, see section 13.** A native custom panel is impossible: FontLab.exe
+   exports no symbols at all. The same content goes into a `QDockWidget` instead.
 2. Persistence: does FontLab restore a custom panel's dock position after a restart? (**UNVERIFIED**;
    the panel has to be recreated by running the script after each start.)
 3. The `ResizePolicy` enum meaning and whether it makes a panel stretch in FL8.
@@ -262,7 +253,7 @@ def build(panel):                       # content_builder
 panel = TRNativePanel(7210, 'TypeRig Toolbar', build)    # object_name / legacy_names optional
 panel.open()      # create / reuse / adopt, (re)build the content, let FontLab open it. True when showing
 panel.rebuild()   # swap the content only (new scroll area, old one parked)
-panel.scroll, panel.panel, panel.state, panel.mode      # 'native' | 'toolbar'
+panel.scroll, panel.panel, panel.state, panel.mode      # 'native' (macOS) | 'dock' (Windows)
 ```
 
 * `TRToolbarScroll` is the flow engine (hysteresis 0.8 / 1.25, 2 x 40 ms debounce, `maximumViewportSize()`,
@@ -271,7 +262,7 @@ panel.scroll, panel.panel, panel.state, panel.mode      # 'native' | 'toolbar'
   already registered panel: it looks for a `YPanelWidget` with the object name (or a legacy name), parks every
   stale scroll area in it, and reuses it. Verified live: reload of the module, one panel, one menu entry.
 * Windows: `resolve_register()` only returns a callable when the MSVC symbol resolves in the main module;
-  otherwise `open()` builds a `QToolBar` in `app.main` (**UNVERIFIED**, see section 11).
+  it never does (section 13), so `open()` builds a `QDockWidget` on `app.main` instead.
 
 ### New pitfalls found while building the unified toolbar
 
@@ -285,3 +276,71 @@ panel.scroll, panel.panel, panel.state, panel.mode      # 'native' | 'toolbar'
   running FontLab); the same for `pWorkspace.getCanvas` (returns `None` without a glyph window).
 * The layer-selection dialog (`TRLayerSelectNEW`) calls `parent.layers_refresh()` on every edit: whatever is
   passed as its parent needs that method. `getTable()` returns a *list of layer names*, a valid `pLayers`.
+
+---
+
+## 13. Windows: measured, and what we do instead (FontLab 9 / Windows 10, Nov 2026)
+
+Measured in the running application through the FontLab MCP bridge, not guessed:
+
+1. `GetProcAddress(GetModuleHandle(NULL), "?registerCustomPanel@MainWindow@@QEAAXPEAVYPanelWidget@@@Z")`
+   returns `NULL`.
+2. Parsing the PE export directory of the main module: **FontLab.exe exports 0 symbols.** No mangling
+   variant can help - there is no export table to look in.
+3. All 152 loaded modules were scanned for an export containing `CustomPanel` or `MainWindow@@`: the only
+   hits are in `Qt5Widgets.dll` (`QMainWindow::addDockWidget` and friends). FontLab's own classes live in
+   the executable and are not exported.
+4. The Python side offers no replacement: `fl6.CreatePanel(id, title)` builds a `YPanelWidget` but nothing
+   registers it; `MainWindow.showPanel(id, True)` on an unregistered id does nothing; `menuCustomPanels`
+   stays empty; `YPanelManager` has no registration slot (PythonQt lists every slot, and there is none).
+   `YPanel` (the dock host) is not constructible from Python.
+
+**Conclusion**: a native FontLab panel can not be created on Windows. Do not spend more time on it; re-run
+the three probes above when a new FontLab build ships.
+
+**What the TypeRig Toolbar does instead**: on Windows the script does not build a panel at all. It renders
+the *same button table* (`toolbar_buttons.toolbar_sections()`) as plain `QToolBars` with `QActions` -
+`typerig.proxy.fl.gui.toolbar_bars.TRToolbarBars`, the way TypeRig toolbars worked before 3.0, which
+Windows handles natively and which users liked:
+
+* One bar per section plus the scope masthead, created in table order, so the icon order matches macOS.
+* Qt does the hard parts for free: dock in all four toolbar areas, turn vertical when docked left / right,
+  float, and move what does not fit into the `>>` overflow menu.
+* `pack_rows()` inserts toolbar breaks so the top-area bars fill as many rows as they need instead of
+  being squeezed into one (Qt never wraps a toolbar area by itself). Bars the user moved to another edge
+  are left where they are.
+* Re-running the script keeps the bars and swaps only their actions, so the arrangement survives and the
+  callbacks are always the freshly imported code. Old actions are parked, never deleted.
+* The platform gate is in the script (`Scripts/TypeRig GUI/typerig-toolbar.py`), one `system() == 'Windows'`.
+
+**`TRNativePanel` still has a Windows fallback** - mode `'dock'`, the content in a real `QDockWidget` on
+`fl6.MainWindow()` (which *is* a `QMainWindow`; its central widget is FontLab's `YFrameWindow`, so the dock
+surrounds FontLab's own dock system). The toolbar no longer uses it, but it is there for any other panel
+that wants one, and it gives everything the native panel gives except tabbing with FontLab's own Y panels:
+
+* `addDockWidget(Qt.TopDockWidgetArea, dock)` on creation; the user can drag it to all four edges or float it.
+* Resizing works through the normal dock separator, and the content reflows (the poll timer sees the new
+  viewport). The scroll area keeps `QSizePolicy.Ignored` so the content never dictates the dock size, plus a
+  48x40 minimum so Qt can not collapse the dock to nothing.
+* Orientation no longer has to be guessed: `MainWindow.dockWidgetArea(dock)` gives the area, and
+  `TRNativePanel.orientation_hint()` turns left/right into columns and top/bottom into rows. Floating falls
+  back to the shape heuristic with hysteresis.
+* `after_fit()` sizes the dock to the content **once per dock area** with `MainWindow.resizeDocks()`
+  (height when docked top/bottom, width when left/right), so the panel opens showing every button and a size
+  the user drags afterwards is left alone. Floating resets the mark, so re-docking fits again.
+* `adopt_dock()` reuses the dock of an earlier run (by object name, and only when it still belongs to this
+  main window - an orphan from a previous experiment is left to rot). A dock the user closed with the X is
+  shown again by the next run.
+* `retire_toolbar()` removes the `QToolBar` that TypeRig <= 3.0 docked on Windows, so an updated script does
+  not come up underneath it.
+
+Pitfalls measured here:
+
+* `resizeDocks()` only takes effect after the event loop runs: read the geometry back on a later tick, not
+  in the same statement.
+* `QDockWidget.setWidget()` keeps the old widget as a child: park it *and* `setParent(None)`, or the stale
+  content stays alive behind the new one.
+* Deleting a dock widget destroys its children, and an in-flight `QApplication.allWidgets()` iteration then
+  raises on the destroyed objects. Park, never delete (same rule as section 8).
+* A `QDockWidget` created from Python keeps `MainWindow` as its parent even while floating, so the parent
+  check in `adopt_dock()` is safe for floating panels.

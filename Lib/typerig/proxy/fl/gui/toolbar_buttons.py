@@ -2,6 +2,11 @@
 # NOTE	: The declarative button table of the unified TypeRig Toolbar + the widget builder.
 #	  Order and grouping follow the Glyphs sidebar palette (TypeRig-Glyphs tr_toolbar.py).
 #	  Parity with Glyphs: Docs/Proxy/Documents/FL-toolbar-parity.md
+#
+#	  toolbar_sections() is THE button table: one definition, two renderers.
+#	  - TRToolbarBuilder (here)          : QToolButtons on a page, flowed by the native panel (macOS)
+#	  - TRToolbarBars (toolbar_bars.py)  : QActions on native QToolBars (Windows)
+#	  Both render the same table in the same order, so a button added here shows up in both.
 # -----------------------------------------------------------
 # (C) Vassil Kateliev, 2018-2026 	(http://www.kateliev.com)
 # (C) Karandash Type Foundry 		(http://www.karandash.eu)
@@ -208,34 +213,46 @@ def make_button(page, spec, font):
 	else: button.clicked.connect(guarded(spec.callback, spec.name))
 	return button
 
+def make_button_group(owner):
+	'''Exclusive group of tool buttons. Returns (group, add) - see TRToolbarMasthead'''
+	group = QtGui.QButtonGroup(owner)
+	group.setExclusive(True)
+	return group, group.addButton
+
 class TRToolbarMasthead(object):
 	'''Layer scope (Active / Masters / Selected + layer dialog) and glyph scope (active glyph / glyph window /
-	font window selection) - the full TypeRig FL controller. Writes into the shared TRToolbarState.'''
+	font window selection) - the full TypeRig FL controller. Writes into the shared TRToolbarState.
+
+	The cells are built by the renderer, so the same masthead serves both UIs:
+		cell_factory(owner, spec, font) -> one cell (a QToolButton here, a QAction on Windows)
+		group_factory(owner)            -> (exclusive group, add(cell))
+	'''
 	layer_buttons = (('layer_active', 'Active layer', 'active'), ('layer_master', 'Master layers', 'masters'), ('select_option', 'Select layers', 'selected'))
 	glyph_buttons = (('glyph_active', 'Active Glyph', 0), ('select_window', 'Glyph window', 1), ('select_glyph', 'Font window selection', 2))
 
-	def __init__(self, state, page, font):
+	def __init__(self, state, owner, font, cell_factory=None, group_factory=None):
 		self.state = state
 		self.refs = []
+		self.cell_factory = cell_factory or make_button
+		self.group_factory = group_factory or make_button_group
 		self.dlg_layer = TRLayerSelectNEW(self, state.mode) # The dialog calls self.layers_refresh() on edits
 		self.dlg_layer.hide()
 		state.dlg_layer = self.dlg_layer
 
-		self.layers = self.make_group(page, font, self.layer_buttons, state.layer_scope, self.set_layer_scope)
-		self.glyphs = self.make_group(page, font, self.glyph_buttons, state.mode, self.set_glyph_mode)
+		self.layers = self.build_group(owner, font, self.layer_buttons, state.layer_scope, self.set_layer_scope)
+		self.glyphs = self.build_group(owner, font, self.glyph_buttons, state.mode, self.set_glyph_mode)
 
-	def make_group(self, page, font, entries, current, handler):
-		group = QtGui.QButtonGroup(page)
-		group.setExclusive(True)
-		buttons = []
+	def build_group(self, owner, font, entries, current, handler):
+		group, add = self.group_factory(owner)
+		cells = []
 
 		for token, tip, value in entries:
-			button = make_button(page, B(token, tip, partial(handler, value), True, checked=(value == current)), font)
-			group.addButton(button)
-			buttons.append(button)
+			cell = self.cell_factory(owner, B(token, tip, partial(handler, value), True, checked=(value == current)), font)
+			add(cell)
+			cells.append(cell)
 
 		self.refs.append(group)
-		return buttons
+		return cells
 
 	def set_layer_scope(self, scope):
 		self.state.layer_scope = scope
