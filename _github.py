@@ -5,9 +5,13 @@
 import hashlib
 import json
 import tempfile
+import time
 from pathlib import Path
 
 from _release import ROOT, run
+
+# The releases listing can lag behind a creation that already succeeded.
+SETTLE = (2, 4, 6, 8, 10)
 
 
 def info(repo: str, tag: str, *, root: Path = ROOT) -> dict | None:
@@ -36,6 +40,17 @@ def info(repo: str, tag: str, *, root: Path = ROOT) -> dict | None:
     if len(found) > 1:
         raise RuntimeError(f"Several GitHub releases use {tag}; delete the extras")
     return found[0] if found else None
+
+
+def settled(repo: str, tag: str, root: Path, delays: tuple[int, ...] = ()) -> dict | None:
+    """Reread the listing, waiting out its delay after a creation that worked."""
+    release = info(repo, tag, root=root)
+    for delay in delays:
+        if release is not None:
+            break
+        time.sleep(delay)
+        release = info(repo, tag, root=root)
+    return release
 
 
 def download(repo: str, tag: str, name: str, directory: Path, root: Path) -> Path:
@@ -102,9 +117,15 @@ def ensure_release(repo: str, tag: str, paths: list[Path], root: Path) -> str:
             cwd=root,
             check=False,
         )
-        release = info(repo, tag, root=root)
+        # A created release that the listing has not caught up with is not a
+        # failure; only wait for one when the command itself reported success.
+        release = settled(repo, tag, root, SETTLE if not result.returncode else ())
         if release is None:
-            raise RuntimeError(f"GitHub release creation failed: {result.stderr}")
+            reported = (result.stderr or result.stdout).strip()
+            raise RuntimeError(
+                "GitHub release creation failed: "
+                f"{reported or f'gh exited {result.returncode} without output'}"
+            )
     if release.get("prerelease"):
         raise RuntimeError("A stable tag must not have a prerelease GitHub release")
     assets = {a["name"]: a for a in release["assets"]}

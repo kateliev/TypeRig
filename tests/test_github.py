@@ -161,3 +161,28 @@ def test_prerelease_cannot_be_published_as_stable(service, tmp_path):
     state["release"] = {"prerelease": True}
     with pytest.raises(RuntimeError, match="prerelease"):
         github.ensure_release("owner/repo", "v2.1.0", paths, tmp_path)
+
+
+def test_slow_listing_after_successful_creation_is_not_a_failure(
+    service, tmp_path, monkeypatch
+):
+    state, paths = service
+    monkeypatch.setattr(github.time, "sleep", lambda seconds: None)
+    listing, reads = github.info, []
+
+    def lagging(repo, tag, *, root=github.ROOT):
+        reads.append(tag)
+        return None if len(reads) <= 2 else listing(repo, tag, root=root)
+
+    monkeypatch.setattr(github, "info", lagging)
+    github.ensure_release("owner/repo", "v2.1.0", paths, tmp_path)
+    assert len(reads) > 2 and not state["release"]["draft"]
+
+
+def test_silent_creation_failure_names_the_exit_code(monkeypatch, tmp_path):
+    monkeypatch.setattr(github, "info", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        github, "run", lambda *a, **kw: subprocess.CompletedProcess(a, 1, "", "")
+    )
+    with pytest.raises(RuntimeError, match="gh exited 1 without output"):
+        github.ensure_release("owner/repo", "v2.1.0", [], tmp_path)

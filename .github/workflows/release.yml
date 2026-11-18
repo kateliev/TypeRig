@@ -1,5 +1,6 @@
 # this_file: .github/workflows/release.yml
 name: Release and publish
+run-name: Release ${{ inputs.tag || github.ref_name }}
 
 on:
   push:
