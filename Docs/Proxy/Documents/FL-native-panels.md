@@ -229,10 +229,17 @@ found the FL8 dock-height behaviour in two rounds.
 
 ## 11. Open questions
 
-1. **Windows**: not tested. `registerCustomPanel` is a C++ symbol; on macOS it resolves with
-   `ctypes.CDLL(None)` by its Itanium-mangled name. On Windows the name is MSVC-mangled and the
-   symbol may not be exported at all (exports are explicit on PE). Needs a probe on a Windows FontLab
-   (see handout T1, stage 1). On Windows a regular `QToolBar` in `app.main` already docks.
+1. **Windows**: not tested (no Windows FontLab available to the agent). `registerCustomPanel` is a C++
+   symbol; on macOS it resolves with `ctypes.CDLL(None)` by its Itanium-mangled name. On Windows the name is
+   MSVC-mangled and the symbol may not be exported at all (exports are explicit on PE).
+   * Step 1 (is it exported?): **probe prepared, NOT yet run** - `Docs/Proxy/Probes/win-panel-probe.py`
+     (read-only: `GetProcAddress` for the expected name `?registerCustomPanel@MainWindow@@QEAAXPEAVYPanelWidget@@@Z`
+     plus a parse of the main module's PE export table; logs to `%USERPROFILE%\typerig-win-probe.log`).
+   * Step 2 (if exported): `native_panel.resolve_register()` already contains the recipe (`CFUNCTYPE(None, c_void_p,
+     c_void_p)` on the resolved address; x64 has one calling convention). It only runs when the symbol resolves.
+     **UNVERIFIED.**
+   * Step 3 (if not exported): `TRNativePanel` falls back to the same content in a plain `QToolBar` docked in
+     `app.main` (what the old script did on Windows). Owner decision pending on the probe result.
 2. Persistence: does FontLab restore a custom panel's dock position after a restart? (**UNVERIFIED**;
    the panel has to be recreated by running the script after each start.)
 3. The `ResizePolicy` enum meaning and whether it makes a panel stretch in FL8.
