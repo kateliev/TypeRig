@@ -21,21 +21,16 @@ from typerig.core.base.lib_keys import NODE_COLLINEAR_LIB_KEY, NODE_MONOLINE_LIB
 
 from typerig.proxy.fl.objects.font import pFont
 from typerig.proxy.fl.objects.glyph import eGlyph
-from typerig.proxy.fl.objects.node import eNode
 
 from typerig.proxy.fl.actions.node import TRNodeActionCollector
 from typerig.proxy.fl.actions.curve import TRCurveActionCollector
 from typerig.proxy.fl.actions.contour import TRContourActionCollector
-from typerig.proxy.fl.actions.cut import TRCutActionCollector
-from typerig.proxy.fl.actions.stem_center import TRStemCenterActionCollector
-from typerig.proxy.fl.actions.mat_extract import TRMatExtractActionCollector
 
 from typerig.proxy.fl.gui import QtGui
-from typerig.proxy.fl.gui.widgets import getProcessGlyphs
-from typerig.proxy.fl.gui.dialogs import TRMasterValuesDLG, TR1SpinDLG
+from typerig.proxy.fl.gui.dialogs import TRMasterValuesDLG
 
 # - Init ----------------------------------
-__version__ = '1.1'
+__version__ = '1.2'
 tool_name = 'TypeRig Toolbar'
 
 # - Helpers -------------------------------
@@ -85,11 +80,9 @@ class TRToolbarActions(object):
 	def __init__(self, state):
 		self.state = state
 		self.widgets = {} # button name -> widget (filled by the builder)
-		self.safe_distance = 5. # Last value given for the loop-to-target safe distance
 
 		# - Data banks for copy / paste operations
 		self.ext_target = {} # Align target: layer -> node
-		self.loop_target = {} # Loop target: layer -> (x, y)
 		self.slope_bank = {}
 		self.curve_bank = {}
 
@@ -233,64 +226,6 @@ class TRToolbarActions(object):
 
 	def contour_bool(self, operation):
 		TRContourActionCollector.contour_bool(self.mode, self.layers, operation, Modifiers().alt) # Alt: reverse order
-
-	# - Cut ----------------------------------
-	def contour_cut(self):
-		TRContourActionCollector.contour_slice(self.mode, self.layers, Modifiers().alt) # Alt: overlap
-
-	def cut_align_auto(self):
-		TRCutActionCollector.cut_align_auto(self.mode, self.layers, Modifiers().alt)
-
-	def align_auto(self):
-		TRCutActionCollector.align_auto(self.mode, self.layers)
-
-	def stem_center(self):
-		mods = Modifiers()
-		force_axis = 'V' if mods.shift else ('H' if mods.alt else None) # Shift: V-stem, Alt: H-stem
-		TRStemCenterActionCollector.snap_stem_center(self.mode, self.layers, force_axis=force_axis)
-
-	def loop_target_toggle(self):
-		'''Store (select 1 on-curve node, toggle on) / clear the per-master loop target position'''
-		self.loop_target = {}
-		if not self.checked('loop_target'): return
-
-		glyph = eGlyph()
-		for layer in glyph._prepareLayers(self.layers):
-			selection = glyph.selectedNodes(layer, filterOn=True)
-			if len(selection): self.loop_target[layer] = (selection[0].x, selection[0].y)
-
-		if not self.loop_target:
-			print('{}: No node selected for the loop target.'.format(tool_name))
-			self.uncheck('loop_target')
-
-	def cut_corner_loop(self):
-		'''Corner loop: with a target extend toward the stored position (asks the safe distance), without it
-		use the FL overlap dialog'''
-		if not (self.checked('loop_target') and self.loop_target):
-			return self.corner_loop()
-
-		dlg = TR1SpinDLG('Loop to Target', 'Safe distance: pull back from the target by this amount on each axis.', 'Distance:', (0., 100., self.safe_distance, 1.))
-		if dlg.values is None: return # Cancel aborts the action
-		safe_distance = self.safe_distance = dlg.values
-
-
-		for glyph in getProcessGlyphs(self.mode):
-			wLayers = glyph._prepareLayers(self.layers)
-
-			for layer in wLayers:
-				if layer not in self.loop_target: continue
-				target_x, target_y = self.loop_target[layer]
-
-				for node in reversed(glyph.selectedNodes(layer, filterOn=True, extend=eNode)):
-					node.cornerLoopToTargets(target_x, target_y, safe_distance)
-
-			glyph.updateObject(glyph.fl, '{};\tLoop to Target @ {}.'.format(glyph.name, '; '.join(wLayers)))
-
-	def stroke_separate(self):
-		TRCutActionCollector.stroke_separate_v3(self.mode, self.layers)
-
-	def medial_axis(self):
-		TRMatExtractActionCollector.extract_medial_axis(self.mode)
 
 	# - End caps -----------------------------
 	def cap_normal(self):

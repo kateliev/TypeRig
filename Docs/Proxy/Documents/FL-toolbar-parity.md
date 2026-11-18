@@ -105,19 +105,12 @@ Owner decision: they are **not in the FL toolbar** (no placeholders). Status: GL
 |---|---|---|---|---|---|---|
 | bool | `contour_union/_subtract/_intersect/_difference` | Boolean add/subtract/intersect/exclude (Alt: reverse) | `npa_contour_bool` | `contour_bool(…, 'add'/'subtract'/'intersect'/'exclude', alt)` | T | OK |
 
-## `cut` — Cut
+## `cut` — Cut - REMOVED
 
-| Section | Token | Tooltip (Glyphs) | Glyphs call | FL equivalent | Old | Status |
-|---|---|---|---|---|---|---|
-| cut | `contour_cut` | Slice (Alt: overlap) | `npa_contour_slice` | `contour_slice(…, expanded=alt)` | C | OK |
-| cut | `cut_stem_overlap` | Cut + auto overlap align | `npa_contour_slice_align` | `TRCutActionCollector.cut_align_auto` (extracted from popup-contour-cut) | C | OK |
-| cut | `auto_stem_overlap` | Auto overlap align (4 nodes) | `npa_contour_auto_align` | `TRCutActionCollector.align_auto` (extracted) | C | OK |
-| cut | `node_middle_top` | Stem-center snap (Shift V / Alt H) | `npa_stem_center` | `TRStemCenterActionCollector.snap_stem_center(…, force_axis)` | C | OK |
-| cut | `node_target` (`loop_target`) | Pick loop target (toggle) | `npa_loop_target_set/clear` | `target_set` of popup (per-layer node position) | C | OK |
-| cut | `corner_loop` | Corner loop (with target) | `npa_corner_loop(_to_target)` | with target: popup asks the safe distance, then `eNode.cornerLoopToTargets(x, y, safe)`; without: `corner_loop_dlg` | C | OK |
-| cut | `fld_loop_safe` | Safe distance field | field | removed: `TR1SpinDLG` popup (remembers the last value) | C | GLYPHS-ONLY (dropped) |
-| cut | `cutter_auto` | Stroke Separate V3 | — (Glyphs: not ported) | `TRCutActionCollector.stroke_separate_v3` | C | FL-ONLY |
-| cut | `centerline` | Medial Axis Extract | — (not ported) | `TRMatExtractActionCollector.extract_medial_axis` | C | FL-ONLY |
+Owner decision: slice, cut + auto overlap align, auto overlap align, stem-center snap, loop target, corner loop
+(with target), stroke separate and medial axis extract are **not in the FL toolbar**. Status: dropped
+(`contour_cut`, `cut_stem_overlap`, `auto_stem_overlap`, `node_middle_top`, `node_target`/`loop_target`,
+`corner_loop` (cut), `fld_loop_safe`, `cutter_auto`, `centerline`). They stay available in the Popup Contour Cut script.
 
 ## `cap` — End Caps
 
@@ -143,7 +136,8 @@ Owner decision: they are **not in the FL toolbar** (no placeholders). Status: GL
 | slope | `slope_paste_min/_max/_min_flip/_max_flip` | Paste slope | `npa_slope_paste` | `slope_paste(…, bank, (max, flip))` | T | OK |
 
 ## Decisions recorded
-- No value entry fields: every value comes from the FL popup dialogs (corner size, loop overlap, loop safe distance).
+- No value entry fields: every value comes from the FL popup dialogs (corner size, loop overlap).
+- No Cut section (slice ... medial axis extract).
 - Insert buttons: Ctrl+click opens the FL `node_insert_dlg` (time slider).
 - No observers row, no separators or gaps: the icons flow one after the other.
 - FL `node_round` / `corner_trap` modifier semantics are kept; tooltips reflect FL, not Glyphs.

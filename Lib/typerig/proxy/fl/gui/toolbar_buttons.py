@@ -25,7 +25,7 @@ from typerig.proxy.fl.gui.dialogs import TRLayerSelectNEW
 from typerig.proxy.fl.gui.toolbar_actions import TRToolbarState, TRToolbarActions, guarded
 
 # - Init ----------------------------------
-__version__ = '1.1'
+__version__ = '1.2'
 
 # One button: token = icon font ligature name (an unknown token renders as literal text)
 Button = namedtuple('Button', 'token tip callback checkable name exclusive checked')
@@ -163,22 +163,6 @@ def toolbar_sections(act):
 				B('contour_subtract', 'Boolean Subtract selected contours\nAlt: Reverse order', partial(act.contour_bool, 'subtract')),
 				B('contour_intersect', 'Boolean Intersect selected contours\nAlt: Reverse order', partial(act.contour_bool, 'intersect')),
 				B('contour_difference', 'Boolean Exclude selected contours\nAlt: Reverse order', partial(act.contour_bool, 'exclude')),
-			),
-		)),
-
-		# SECTION 'cut' - Cut (fold target)
-		('cut', 'Cut', (
-			(
-				B('contour_cut', 'Slice selected contours\nAlt: Overlap', act.contour_cut),
-				B('cut_stem_overlap', 'Cut contour, then auto overlap align both neighbor pairs\nat the cut junction.\nAlt: Overlap', act.cut_align_auto),
-				B('auto_stem_overlap', 'Auto overlap align\nSelect 4 nodes (2 neighbor pairs) at a cut junction.', act.align_auto),
-				B('node_middle_top', 'Stem-Center Snap\nSnap selection to the centerline of the perpendicular stem.\nAxis auto from selection bbox.\nShift: force horizontal motion (V-stem).\nAlt: force vertical motion (H-stem).', act.stem_center),
-				B('node_target', 'Pick target node for loop extension.\nSelect 1 on-curve node, then toggle on.\nToggle off to clear target.', act.loop_target_toggle, True, name='loop_target'),
-				B('corner_loop', 'Corner Loop\nNo target: loop by the overlap you give.\nWith target: extend corner toward stored target position (asks the safe distance).', act.cut_corner_loop, name='cut_corner_loop'),
-			),
-			( # FL only
-				B('cutter_auto', 'Stroke Separate (V3)\nSplit stroke glyph into components via MAT analysis.\nApplies to active layer; propagates cuts to all masters. (FL only)', act.stroke_separate),
-				B('centerline', 'Medial Axis Extract\nEmit a clean medial-axis skeleton as a new shape on the active layer. (FL only)', act.medial_axis),
 			),
 		)),
 
