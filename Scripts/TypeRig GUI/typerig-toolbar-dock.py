@@ -244,6 +244,7 @@ class TRToolbarScroll(QtGui.QScrollArea):
 		self.fitting = False
 		self.seen_size = None
 		self.applied_size = None
+		self.filled_for = None
 		self.stable = 0
 
 		self.timer = QtCore.QTimer(self)
@@ -290,6 +291,31 @@ class TRToolbarScroll(QtGui.QScrollArea):
 		'''Height needed by a horizontal layout at <width> (used to size a newly opened panel)'''
 		return self.flow(width - 2 * self.margin, False, False)[1]
 
+	def dock_context(self):
+		'''Returns (YDock, YPanel, number of panels in the dock). FontLab 8 keeps a docked panel at its old
+		height inside a full height dock, so the dock tells more about where the panel was docked.'''
+		widget, yp_panel, yp_dock = self, None, None
+		while widget is not None:
+			if type(widget).__name__ == 'YPanel' and yp_panel is None: yp_panel = widget
+			if type(widget).__name__ == 'YDock': yp_dock = widget; break
+			widget = widget.parent()
+
+		count = len([c for c in yp_dock.children() if type(c).__name__ == 'YPanel']) if yp_dock is not None else 0
+		return yp_dock, yp_panel, count
+
+	def state_key(self):
+		view = self.maximumViewportSize()
+		dock = self.dock_context()[0]
+		dock_w, dock_h = (dock.geometry.width(), dock.geometry.height()) if dock is not None else (0, 0)
+		return (view.width(), view.height(), dock_w, dock_h)
+
+	def fill_dock(self, dock, panel):
+		'''Stretch a lone panel to the full height of its (tall) dock'''
+		if dock is None or panel is None: return
+		dock_h, panel_h = dock.geometry.height(), panel.geometry.height()
+		if dock_h - panel_h > 60:
+			panel.resize(panel.geometry.width(), dock_h - panel.geometry.y() - 6)
+
 	def fit(self):
 		if self.page is None or self.fitting: return
 		self.fitting = True
@@ -300,8 +326,22 @@ class TRToolbarScroll(QtGui.QScrollArea):
 			view_w, view_h = view.width(), view.height()
 			if view_w < 1 or view_h < 1: return
 
+			# Orientation follows the larger of panel and dock: a docked dock is tall even if the panel is not.
+			dock, panel, panel_count = self.dock_context()
+			shape_w = max(view_w, dock.geometry.width() if dock is not None else 0)
+			shape_h = max(view_h, dock.geometry.height() if dock is not None else 0)
+
 			# Hysteresis: tall -> wide needs clearly wide, wide -> tall needs clearly tall
-			self.vertical = not (view_w > view_h * 1.25) if self.vertical else (view_w < view_h * 0.8)
+			was_vertical = self.vertical
+			self.vertical = not (shape_w > shape_h * 1.25) if self.vertical else (shape_w < shape_h * 0.8)
+
+			# Vertical dock with a short, lone panel (FontLab 8): let the panel use the whole dock height
+			if self.vertical and panel_count == 1 and (not was_vertical or self.filled_for != (shape_w, shape_h)):
+				self.filled_for = (shape_w, shape_h)
+				self.fill_dock(dock, panel)
+				view = self.maximumViewportSize()
+				view_w, view_h = view.width(), view.height()
+
 			m2 = 2 * self.margin
 
 			if not self.vertical:
@@ -322,7 +362,7 @@ class TRToolbarScroll(QtGui.QScrollArea):
 				width, height = self.flow(limit, True, False)
 				self.page.resize(max(width, 1), max(limit + m2, 1))
 
-			self.applied_size = (view_w, view_h)
+			self.applied_size = self.state_key()
 
 		finally:
 			self.page.setUpdatesEnabled(True)
@@ -330,8 +370,7 @@ class TRToolbarScroll(QtGui.QScrollArea):
 
 	def watch_size(self):
 		# Virtual overrides (resizeEvent/event) are not callable through super() in PythonQt: poll instead
-		view = self.maximumViewportSize()
-		size = (view.width(), view.height())
+		size = self.state_key()
 
 		if size != self.seen_size:
 			self.seen_size = size
