@@ -28,7 +28,7 @@ from typerig.proxy.fl.gui.styles import css_tr_button, css_tr_button_dark
 from typerig.core.base.message import *
 
 # - Init --------------------------
-tool_version = '1.5'
+tool_version = '1.6'
 tool_name = 'TR Popup Contour Cut'
 
 TRToolFont_path = getTRIconFontPath()
@@ -46,43 +46,6 @@ def get_modifier(keyboard_modifier=QtCore.Qt.AltModifier):
 	modifiers = QtGui.QApplication.keyboardModifiers()
 	return modifiers == keyboard_modifier
 
-def group_nodes_by_neighbors(nodes):
-	'''Group nodes into pairs of neighbors using eNode wrapper'''
-	if len(nodes) < 4:
-		return [], []
-	
-	pairs = []
-	used = set()
-	
-	for i, node in enumerate(nodes):
-		if i in used:
-			continue
-		
-		# Wrap in eNode for neighbor detection
-		en = eNode(node)
-		
-		# Find the neighbor of this node among remaining nodes
-		for j, other in enumerate(nodes):
-			if j in used or i == j:
-				continue
-			
-			# Check if nodes are neighbors using eNode methods
-			next_on = en.getNextOn(False)
-			prev_on = en.getPrevOn(False)
-			
-			if (next_on is not None and next_on.fl == other) or \
-			   (prev_on is not None and prev_on.fl == other):
-				pairs.append((node, other))
-				used.add(i)
-				used.add(j)
-				break
-	
-	# Return two pairs (or as many as we found)
-	if len(pairs) >= 2:
-		return list(pairs[0]), list(pairs[1])
-	elif len(pairs) == 1:
-		return list(pairs[0]), []
-	return [], []
 
 # -- Main Widget --------------------------
 class TRPopupContourCut(QtGui.QWidget):
@@ -248,150 +211,14 @@ class TRPopupContourCut(QtGui.QWidget):
 		TRContourActionCollector.contour_slice(pMode, pLayers, get_modifier())
 		self.close()
 
-	def _align_pair(self, nodes, mode):
-		'''Align a pair of nodes based on mode (T=top, B=bottom, C=center)'''
-		if len(nodes) != 2:
-			return
-		
-		n1, n2 = nodes
-		
-		if mode == 'T':
-			# Align both to top (max Y)
-			target_y = max(n1.y, n2.y)
-			n1.y = target_y
-			n2.y = target_y
-		
-		elif mode == 'B':
-			# Align both to bottom (min Y)
-			target_y = min(n1.y, n2.y)
-			n1.y = target_y
-			n2.y = target_y
-		
-		elif mode == 'C':
-			# Align both to vertical center
-			target_x = (n1.x + n2.x) / 2.0
-			n1.x = target_x
-			n2.x = target_x
-
-	def _auto_align_mode(self, pair):
-		'''Detect the correct alignment mode for a node pair at a cut junction.
-
-		Uses the direction of the segment leaving each junction node into the
-		contour interior (away from the other pair node) as the signal:
-
-		  - Interior segments predominantly horizontal -> arm side -> 'C'
-		  - Interior segments predominantly vertical   -> stem side:
-		      Both interior neighbours above the pair  -> bottom L-junction -> 'B'
-		      Both interior neighbours below the pair  -> top L-junction    -> 'T'
-		      Interior neighbours on opposite sides    -> T-junction        -> 'C'
-
-		Arguments:
-			pair (list): Two FL on-curve node objects that are neighbors.
-
-		Returns:
-			str: 'C', 'T', or 'B'.
-		'''
-		n1, n2 = pair
-		total_dx    = 0.0
-		total_dy    = 0.0
-		interior_ys = []
-
-		for node, other in ((n1, n2), (n2, n1)):
-			en      = eNode(node)
-			next_on = en.getNextOn(False)
-			prev_on = en.getPrevOn(False)
-
-			# Pick the neighbour that is NOT the other pair node
-			interior = None
-			if next_on is not None and next_on.fl != other:
-				interior = next_on.fl
-			elif prev_on is not None and prev_on.fl != other:
-				interior = prev_on.fl
-
-			if interior is None:
-				continue
-
-			total_dx += abs(interior.x - node.x)
-			total_dy += abs(interior.y - node.y)
-			interior_ys.append(interior.y)
-
-		# Horizontal interior segments -> arm side -> center X
-		if not interior_ys or total_dx >= total_dy:
-			return 'C'
-
-		# Vertical interior segments -> stem side
-		# L-junction: both interior neighbours on the same side of the pair
-		# T-junction: interior neighbours on opposite sides -> no vertical snap
-		avg_y_pair = (n1.y + n2.y) / 2.0
-
-		if all(y > avg_y_pair for y in interior_ys):
-			return 'B'   # all interior above -> junction is at the bottom
-		elif all(y < avg_y_pair for y in interior_ys):
-			return 'T'   # all interior below -> junction is at the top
-		else:
-			return 'C'   # T-junction: interior nodes on both sides, no snap
-
 	def do_align_auto(self):
-		'''Auto overlap align: classify and align two neighbor-pairs at a cut junction.
-
-		Select 4 on-curve nodes (2 pairs) across two contours at a cut boundary,
-		then run this tool.  Each pair is aligned independently based on its
-		parent contour's aspect ratio — no cut is performed.
-		'''
-		glyph   = eGlyph()
-		wLayers = glyph._prepareLayers(pLayers)
-
-		for layer in wLayers:
-			selection = glyph.selectedNodes(layer)
-
-			if len(selection) < 4:
-				continue
-
-			pair_first, pair_second = group_nodes_by_neighbors(selection)
-
-			if len(pair_first) == 2:
-				self._align_pair(pair_first,  self._auto_align_mode(pair_first))
-
-			if len(pair_second) == 2:
-				self._align_pair(pair_second, self._auto_align_mode(pair_second))
-
-		glyph.update()
-		glyph.updateObject(glyph.fl, 'Glyph: {}; Auto Overlap Align; Layers: {}'.format(
-			glyph.name, '; '.join(wLayers)))
+		'''Auto overlap align (shared implementation: TRCutActionCollector.align_auto)'''
+		TRCutActionCollector.align_auto(pMode, pLayers)
 		self.close()
 
 	def do_cut_align_auto(self):
-		'''Execute cut, then auto-align the resulting neighbor pairs.
-
-		Combines ``do_cut`` and ``do_align_auto`` into one step: slice the
-		contour at the selected nodes, then classify and align the two
-		neighbor pairs at the resulting cut junction via the same
-		orientation-aware logic used by the standalone auto-align tool.
-		'''
-		# - Perform the cut
-		TRContourActionCollector.contour_slice(pMode, pLayers, get_modifier())
-
-		# - Re-acquire the glyph after the cut and auto-align the pairs
-		glyph   = eGlyph()
-		wLayers = glyph._prepareLayers(pLayers)
-
-		for layer in wLayers:
-			selection = glyph.selectedNodes(layer)
-
-			if len(selection) < 4:
-				continue
-
-			pair_first, pair_second = group_nodes_by_neighbors(selection)
-
-			if len(pair_first) == 2:
-				self._align_pair(pair_first,  self._auto_align_mode(pair_first))
-
-			if len(pair_second) == 2:
-				self._align_pair(pair_second, self._auto_align_mode(pair_second))
-
-		glyph.update()
-		glyph.updateObject(glyph.fl, 'Glyph: {}; Cut + Auto Align; Layers: {}'.format(
-			glyph.name, '; '.join(wLayers)))
+		'''Cut, then auto-align the resulting neighbor pairs (TRCutActionCollector.cut_align_auto)'''
+		TRCutActionCollector.cut_align_auto(pMode, pLayers, get_modifier())
 		self.close()
 
 	def do_stem_center(self):
