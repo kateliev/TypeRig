@@ -145,27 +145,26 @@ font = TrFontIO.new('/path/to/NewFont.trfont', 'My Family', 'Regular')
 
 ---
 
-## FontLab Proxy (trFontFile)
+## FontLab Proxy (trFontProxy)
 
-`trFontFile` wraps an `flPackage` and provides the bridge from a live FontLab session to `.trfont` and back.
+`trFontProxy` (`typerig.proxy.tr.objects.font`) wraps an `flPackage` and is the only bridge from a live FontLab session to `.trfont` and back.
 
 ```python
-from typerig.proxy.tr.objects.trfontfile import trFontFile
+from typerig.proxy.tr.objects.font import trFontProxy
 
-tr = trFontFile()                                    # CurrentFont()
-font = tr.eject()                                    # → pure FontFile, no FL dependency
-font.save('/path/to/MyFont.trfont')
+tr = trFontProxy()                                   # CurrentFont()
+font = tr.eject()                                    # → pure core Font, no FL dependency
+font = tr.save('/path/to/MyFont.trfont', verbose=True)   # eject + TrFontIO.write
 
-# Or in one call:
-font = tr.save('/path/to/MyFont.trfont', verbose=True)
-
-# Geometry changes back into FL:
-tr.inject(font, verbose=True)
+font = trFontProxy.load_raw('/path/to/MyFont.trfont')    # TrFontIO.read, no FL needed
+tr.mount(font, verbose=True)                         # push a core Font into the live font
 ```
 
-`eject()` walks all FL layers via the existing `trGlyph → trLayer → trShape → trContour → trNode` proxy chain to produce a fully self-contained `Font` object. `inject()` is the reverse: it finds each glyph in the live session by name and mounts modified layers back using the existing proxy `.mount()` infrastructure.
+`eject()` walks all FL layers via the `trGlyph → trLayer → trShape → trContour → trNode` proxy chain to produce a self-contained `Font`. `mount()` is the reverse: it finds or creates each glyph by name, adds missing layers, and mounts each layer through the proxy `.mount()` chain. Features and groups are mounted at the font level.
 
-FL axes, masters, and instances are extracted from `flPackage.axes` / `.masters` / `.instances` with a graceful fallback for single-master fonts that have no explicit designspace definition.
+The FontLab round trip (VFC → .trfont → VFC) is being brought up in stages; status, known gaps and the audit harness are in `Docs/Core/Handouts/HANDOUT-trfont-roundtrip.md`.
+
+The older `trFontFile` proxy (`trfontfile_proxy.py`) was removed in 2026-11: it imported names that no longer exist. `core/objects/fontfile.py` (`FontFile`) stays as a thin dict-like compatibility wrapper over `Font` + `TrFontIO`; new code should use `Font` directly.
 
 ---
 
@@ -188,6 +187,6 @@ FL axes, masters, and instances are extracted from `flPackage.axes` / `.masters`
 - `groups.xml` — glyph groups and class tags (file pointer registered, no backing code yet)
 - Exporter: `Font → UFO + designspace` for build pipeline handoff
 - Exporter: `Font → Glyphs.app` (.glyphs)
-- Full `trFontFile.inject()` test coverage across masters in FontLab
+- Full `trFontProxy` round-trip coverage across masters in FontLab (see the round-trip handout)
 - Manifest search path UI in tooling
 - Kerning: class-based pair resolution helper

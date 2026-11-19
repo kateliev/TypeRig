@@ -51,7 +51,6 @@ from typerig.core.objects.kern import Kerning
 from typerig.core.objects.groups import Groups
 from typerig.core.objects.glyph import Glyph
 
-from fontTools.ufoLib.filenames import userNameToFileName
 
 # - Init --------------------------------
 __version__ = '0.1.0'
@@ -71,6 +70,48 @@ TRFONT_FORMAT_VERSION_MINOR = 0
 TRFONT_CREATOR              = 'com.typerig'
 
 # - Helpers -----------------------------
+# Glyph name -> file name, UFO 3 "user name to file name" convention.
+# Local copy on purpose: FontLab's bundled Python has no fontTools, and this
+# module must import inside FontLab. Output matches
+# fontTools.ufoLib.filenames.userNameToFileName (checked in test_trfont.py
+# when fontTools is available).
+_ILLEGAL_CHARS = set('"*+/:<>?[\\]|') | set(chr(i) for i in range(0, 32)) | {chr(0x7F)}
+_RESERVED_NAMES = set('con prn aux clock$ nul a:-z: com1 lpt1 lpt2 lpt3 com2 com3 com4'.split(' '))
+_MAX_FILE_NAME = 255
+
+def user_name_to_file_name(user_name, existing=(), prefix='', suffix=''):
+	'''Mangle a glyph name into a file name that is safe on case-insensitive
+	file systems (NTFS, APFS) and Windows reserved names.
+
+	existing: lower-cased file names already taken (case-folded clash check).
+	'''
+	if not prefix and user_name[:1] == '.':
+		user_name = '_' + user_name[1:]
+
+	chars = []
+	for ch in user_name:
+		if ch in _ILLEGAL_CHARS:
+			ch = '_'
+		elif ch != ch.lower():
+			ch += '_'
+		chars.append(ch)
+	user_name = ''.join(chars)
+
+	slice_length = _MAX_FILE_NAME - len(prefix) - len(suffix)
+	user_name = user_name[:slice_length]
+	user_name = '.'.join(('_' + part) if part.lower() in _RESERVED_NAMES else part
+	                     for part in user_name.split('.'))
+
+	full_name = prefix + user_name + suffix
+	if full_name.lower() in existing:
+		# Clash: insert a 15-digit counter (fontTools handleClash1)
+		stem = user_name[:slice_length - 15]
+		for counter in range(1, 10**15):
+			full_name = '{}{}{:015d}{}'.format(prefix, stem, counter, suffix)
+			if full_name.lower() not in existing:
+				break
+	return full_name
+
 def _pretty_xml(element):
 	'''Return indented XML string from an Element.'''
 	raw = ET.tostring(element, encoding='unicode')
@@ -83,6 +124,12 @@ def _write_xml(path, element):
 	content = '<?xml version="1.0" encoding="UTF-8"?>\n' + _pretty_xml(element)
 	with open(path, 'w', encoding='utf-8') as fh:
 		fh.write(content)
+
+def _portable(path):
+	'''Manifest paths are stored with "/" on every OS. Packages written on
+	Windows before 2026-11 carry backslash separators; normalize them on
+	read so a .trfont made on Windows still loads on macOS (and vice versa).'''
+	return path.replace('\\', '/') if path else path
 
 def _read_xml(path):
 	if not os.path.isfile(path):
@@ -125,7 +172,7 @@ class GlyphEntry(object):
 	def from_element(cls, elem):
 		return cls(
 			name  = elem.get('name', ''),
-			path  = elem.get('src',  ''),
+			path  = _portable(elem.get('src', '')),
 			alias = elem.get('alias', None),
 		)
 
@@ -222,7 +269,7 @@ class GlyphManifest(object):
 		root = _read_xml(path)
 		if root is None:
 			return cls()
-		search_paths = [e.get('value', '') for e in root.findall('./search/path')]
+		search_paths = [_portable(e.get('value', '')) for e in root.findall('./search/path')]
 		entries = [GlyphEntry.from_element(e) for e in root.findall('glyph')]
 		return cls(entries=entries, search_paths=search_paths)
 
@@ -273,8 +320,14 @@ class TrFontIO(object):
 		meta_elem.set('format-version-minor', str(TRFONT_FORMAT_VERSION_MINOR))
 		_write_xml(os.path.join(path, FILE_META), meta_elem)
 
-		# Write font.xml — the font descriptor (no glyphs embedded)
+		# Write font.xml — the font descriptor (no glyphs embedded).
+		# Features are dropped from it: in a .trfont folder features.fea is the
+		# single source of truth. Font.to_XML() keeps <features> for the
+		# single-file / in-memory case, and older packages that still carry
+		# <features> in font.xml read fine (features.fea wins on read).
 		font_elem = font._to_xml_element()
+		for features_elem in font_elem.findall('features'):
+			font_elem.remove(features_elem)
 		_write_xml(os.path.join(path, FILE_FONT), font_elem)
 
 		# Write features.fea sibling file (UFO-style; opaque OpenType source)
@@ -317,14 +370,14 @@ class TrFontIO(object):
 				# (NTFS, APFS default) and Windows-reserved-name aware.
 				# Without this, 'A' and 'a' both map to the same path and
 				# the second write silently clobbers the first.
-				filename = userNameToFileName(
+				filename = user_name_to_file_name(
 					name, existing=seen_lower, suffix=TRGLYPH_EXT,
 				)
 				seen_lower.add(filename.lower())
-				rel_path = os.path.join(GLYPHS_DIR, filename)
+				rel_path = GLYPHS_DIR + '/' + filename		# portable: "/" on every OS
 
 				if embed_glyphs:
-					abs_path = os.path.join(path, rel_path)
+					abs_path = os.path.join(path, GLYPHS_DIR, filename)
 					xml_str  = glyph.to_XML()
 					with open(abs_path, 'w', encoding='utf-8') as fh:
 						fh.write(xml_str)
