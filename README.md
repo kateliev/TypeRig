@@ -137,7 +137,7 @@ Separate dialog tools for specific tasks:
 
 **Import Glyph** (`TR-ImportGlyph.py`) — The other direction: read a `.trglyph` file back into a glyph, layer by layer.
 
-**Font IO** (`TR-ExportFont.py`) — Whole-font `.trfont` write/read round-trip from FontLab, over the folder-level serialization in `core.fileio.trfont`.
+**Font IO** (`TR-ExportFont.py`) — Save the current font as `.trfont`, open a `.trfont` as a new FontLab font (axes, masters, metrics, info, glyphs, linked elements, classes, features, kerning), inspect one, or update the current font's glyphs from one. Built on `proxy.tr.objects.font.trFontProxy`; the round trip is audited in `Docs/Core/Handouts/HANDOUT-trfont-roundtrip.md`.
 
 **Copy Layers** (`TR-CopyLayers.py`) — Copy selected layers between two open fonts.
 

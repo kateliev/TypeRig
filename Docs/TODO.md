@@ -10,3 +10,4 @@ One line per item; details live in the linked handout. Remove a line when done.
 ## To do
 
 - **trFont round trip** — Stage C.4 (FontLab components, needs a test font) and Stage Z (Glyphs, on the Mac). → `Docs/Core/Handouts/HANDOUT-trfont-roundtrip.md`
+- **TR: Font IO** (`Scripts/TypeRig Tools/TR-ExportFont.py`) — rebuilt 1.0 on the round-trip bridge; Export / Inspect / Open as new font tested on BasilMM in FL 9.0.9809; *Update current* (mount into an existing font) not tested.
