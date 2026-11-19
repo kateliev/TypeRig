@@ -112,11 +112,15 @@ ADVANCED_DEFAULTS = {
 	'kern_sides': 'complete',	# kerning, pair side with no baked glyph: complete | skip | keep
 	'delta_metrics': False,		# metrics + kerning: False = affine (interpolated LSB / RSB / kern x percent,
 								# default 2026-11-06); True = legacy Delta metrics (Met. W ghost bake, kern f*f/msx)
+	'metrics_base': 'input',	# affine Met. W / Kern % base: input = the axis input nearest the row's V stem
+								# (one ratio to that master on every glyph, 2026-11-19); stems = interpolated at the row's stems
 	'notes': '',
 }
 FLAG_KEYS = {status: 'flag_' + status for status in STATUSES}
 KERN_GROUP_RULES = ('mean', 'key', 'refuse')		# labels: delta_kerning_actions.GROUP_RULES
-KERN_SIDE_RULES = ('complete', 'skip', 'keep')		# labels: delta_kerning_actions.SIDE_RULES
+KERN_SIDE_RULES = ('complete', 'skip', 'keep')
+METRICS_BASES = ('input', 'stems')				# advanced.metrics_base (delta_panel_actions.metrics_stem)
+METRICS_BASE_LABELS = (('input', 'Nearest input'), ('stems', 'Row stems (interpolated)'))		# labels: delta_kerning_actions.SIDE_RULES
 
 TARGET_DEFAULTS = {
 	'layer': '', 'axis': '',	# axis: name of the axis the row is computed from
@@ -529,6 +533,8 @@ def machine_normalize(raw):
 	doc['advanced']['flag'] = bool(doc['advanced']['flag'])
 	doc['advanced']['log'] = bool(doc['advanced']['log'])
 	doc['advanced']['delta_metrics'] = bool(doc['advanced']['delta_metrics'])	# older setups: off (affine)
+	if doc['advanced']['metrics_base'] not in METRICS_BASES:
+		doc['advanced']['metrics_base'] = ADVANCED_DEFAULTS['metrics_base']
 	doc['advanced']['log_dir'] = str(doc['advanced']['log_dir'] or '')
 	if doc['advanced']['kern_groups'] not in KERN_GROUP_RULES:
 		doc['advanced']['kern_groups'] = ADVANCED_DEFAULTS['kern_groups']
@@ -777,8 +783,26 @@ def core_setup(doc, picks, solved=None, italic_angle=0.):
 	options = {'origin': opts.get('origin', 'BS'), 'extrapolate': bool(opts.get('extrapolate', True)),
 	           'metrics': True, 'anchors': True, 'italic_angle': float(italic_angle),
 	           'delta_metrics': delta_metrics(doc)}
+	options.update(metrics_options(doc))
 	options.update(italic_fix(doc))
 	return {'axes': axes, 'options': options}
+
+
+def metrics_base(doc):
+	'''advanced.metrics_base: 'input' (nearest axis input) or 'stems'.'''
+	base = (doc.get('advanced') or {}).get('metrics_base', ADVANCED_DEFAULTS['metrics_base'])
+	return base if base in METRICS_BASES else ADVANCED_DEFAULTS['metrics_base']
+
+
+def metrics_options(doc):
+	'''Core options of the affine metrics: base and whole-unit placement.'''
+	return {'metrics_base': metrics_base(doc), 'metrics_round': True}
+
+
+def metrics_base_stem(doc, inputs, vstem, hstem=0.):
+	'''Stems the affine Met. W / Kern % multiply at, for a row on an axis
+	with these inputs ([{'vstem', 'hstem'}]): delta_panel_actions.metrics_stem.'''
+	return dpa.metrics_stem(inputs, (vstem, hstem), metrics_base(doc))
 
 
 def delta_metrics(doc):
@@ -811,6 +835,7 @@ def ref_setup(doc, ref, italic_angle=0.):
 	ax = doc['axes'][ref['axis']]
 	options = {'extrapolate': bool(doc.get('options', OPTION_DEFAULTS).get('extrapolate', True)),
 	           'italic_angle': float(italic_angle), 'delta_metrics': delta_metrics(doc)}
+	options.update(metrics_options(doc))
 	options.update(italic_fix(doc))
 	return {'axes': [{'name': ax['name'], 'inputs': ax['inputs'],
 	                  'targets': [target_to_core(ax['targets'][ref['row']])]}],
@@ -889,7 +914,8 @@ def machine_log(doc, run):
 		'on' if opts.get('extrapolate', True) else 'off', 'on' if opts.get('selection_only') else 'off'))
 	out.append('Italic:   %s' % italic_summary(doc))
 	out.append('Metrics:  %s' % ('Delta metrics (Met. W ghost bake)' if delta_metrics(doc)
-	                             else 'affine (interpolated sidebearings and kerning x percent)'))
+	                             else 'affine (sidebearings and kerning x percent, base: %s)'
+	                             % dict(METRICS_BASE_LABELS)[metrics_base(doc)].lower()))
 	adv = doc.get('advanced') or {}
 	out.append('Kerning:  groups %s, unbaked sides %s (LTR)' % (
 		adv.get('kern_groups', 'mean'), adv.get('kern_sides', 'complete')))

@@ -746,6 +746,49 @@ def _affine_side(value, m, sx):
 	return value * sx * sx / m if m > 0. else value * sx
 
 
+def metrics_stem(inputs, stem, base):
+	'''Stems the affine metrics are measured at. base 'input': the stems of
+	the input nearest stem[0] (V stem; the first on a tie); 'stems' or no
+	inputs: stem. inputs: [(vstem, hstem)] or [{'vstem', 'hstem'}].'''
+	if base != 'input' or not inputs:
+		return (float(stem[0]), float(stem[1]))
+	pairs = [(float(r['vstem']), float(r['hstem'])) if isinstance(r, dict) else (float(r[0]), float(r[1]))
+	         for r in inputs]
+	return min(pairs, key=lambda p: abs(p[0] - float(stem[0])))
+
+
+def _metrics_layer(input_layers, vstem, base):
+	'''Base 'input': the input layer nearest vstem (first on a tie), read
+	as it is: the bake at an input's own stem is not always that input
+	exactly. None for base 'stems'.'''
+	if base != 'input' or not input_layers:
+		return None
+	return min(input_layers, key=lambda l: abs(float(l.stems[0]) - float(vstem)))
+
+
+def _round_half_up(value):
+	return math.floor(value + 0.5)
+
+
+def _round_outline(layer):
+	'''Nodes to whole units (half up), as the host's grid will.'''
+	for node in layer.nodes:
+		node.x = _round_half_up(node.x)
+		node.y = _round_half_up(node.y)
+
+
+def _place_sidebearings_rounded(layer, lsb, rsb, slope):
+	'''_place_sidebearings in whole units: the outline is rounded first,
+	shifted by a whole number and the advance is a whole number, so each
+	sidebearing lands within 0.5 u of round(lsb) / round(rsb) and nothing
+	is rounded again by the host. Equal targets stay equal.'''
+	_round_outline(layer)
+	cur_lsb, _rsb = layer.italic_sidebearings(slope)
+	layer.shift(_round_half_up(_round_half_up(lsb) - cur_lsb), 0.)
+	cur_lsb, cur_rsb = layer.italic_sidebearings(slope)
+	layer.ADV = _round_half_up(layer.ADV + _round_half_up(rsb) - cur_rsb)
+
+
 def _place_sidebearings(layer, lsb, rsb, slope):
 	'''Shift layer (outline + anchors) so its LSB is lsb, and set its
 	advance so its RSB is rsb. Measured as italic_sidebearings (de-slanted
@@ -770,7 +813,11 @@ def _bake_target_stems(base_layer, vaxis, target, italic_rad,
 	option 'delta_metrics'):
 	- 'affine' (Delta Machine default, 2026-11-06): the sidebearings of
 	  the glyph interpolated at the target stems (DM at 100 %: a plain
-	  interpolation, no scale, no extrapolation inside the inputs) times
+	  interpolation, no scale, no extrapolation inside the inputs; target
+	  'metrics_stem' moves that base, npa_delta_bake sets it from option
+	  'metrics_base': 'input' = the nearest input layer itself (target
+	  'metrics_layer'), so Met. W is one
+	  ratio to that master on every glyph) times
 	  m = msx / 100 when set, else sx. LSB' = m * LSB, RSB' = m * RSB;
 	  a negative sidebearing (an overhang: shape and spacing, like a
 	  negative kern) follows the kerning rule instead: sx * sx / m * LSB
@@ -827,10 +874,20 @@ def _bake_target_stems(base_layer, vaxis, target, italic_rad,
 		new_layer.shift(dx, dy)
 
 	if affine:
-		source = _scale_layer(base_layer, vaxis, stem, (1., scale[1]), italic_rad, extrapolate)
+		source = target.get('metrics_layer')		# base 'input': the nearest input itself, no interpolation
+		if source is not None:
+			if scale[1] != 1. and slope:			# the de-slanted measure depends on y: same sy as the outline
+				source = source.clone()
+				for node in source.nodes:
+					node.y *= scale[1]
+		else:
+			m_stem = target.get('metrics_stem') or stem
+			source = _scale_layer(base_layer, vaxis, (float(m_stem[0]), float(m_stem[1])), (1., scale[1]),
+			                      italic_rad, extrapolate)
 		m = msx / 100. if msx is not None else scale[0]
 		lsb_s, rsb_s = source.italic_sidebearings(slope)
-		_place_sidebearings(new_layer, _affine_side(lsb_s, m, scale[0]), _affine_side(rsb_s, m, scale[0]), slope)
+		place = _place_sidebearings_rounded if target.get('metrics_round') else _place_sidebearings
+		place(new_layer, _affine_side(lsb_s, m, scale[0]), _affine_side(rsb_s, m, scale[0]), slope)
 	elif msx is not None:
 		ghost_report = {}
 		ghost = _scale_layer(base_layer, vaxis, stem, (msx / 100., scale[1]),
@@ -970,7 +1027,17 @@ DELTA_OPTION_DEFAULTS = {
 	# Core default True: TR Panel / FL / Live keep what they did; the Delta
 	# Machine passes False unless Advanced > Delta metrics is on.
 	'delta_metrics': True,
+	# Affine metrics base (2026-11-19): what Met. W multiplies.
+	# 'stems' = the glyph interpolated at the row's stems; 'input' = the axis
+	# input nearest the row's V stem (one ratio to that master on every
+	# glyph). Core default 'stems'; the Delta Machine passes its Advanced value.
+	'metrics_base': 'stems',
+	# Affine metrics: round the outline and place it with whole units, so
+	# each sidebearing is within 0.5 u of base x Met. W (Glyphs rounds
+	# nodes and width anyway; rounding twice gave up to 1 u).
+	'metrics_round': False,
 }
+METRICS_BASES = ('input', 'stems')
 
 # Italic fix fields for the hosts' option forms (Delta Machine Advanced,
 # Delta Italic Lab): (option key, title, tooltip). Order = form order.
@@ -1403,7 +1470,13 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 				target = dict(target, msx=msx)
 			target = dict(target, metrics=bool(metrics_on),	# bake: X origin only with metrics off
 			              metrics_model='delta' if opts.get('delta_metrics', DELTA_OPTION_DEFAULTS['delta_metrics'])
-			              else 'affine')
+			              else 'affine',
+			              metrics_stem=metrics_stem([l.stems for l in input_layers],
+			                                        (target.get('vstem', 0.), target.get('hstem', 0.)),
+			                                        opts.get('metrics_base', DELTA_OPTION_DEFAULTS['metrics_base'])),
+			              metrics_layer=_metrics_layer(input_layers, target.get('vstem', 0.),
+			                                           opts.get('metrics_base', DELTA_OPTION_DEFAULTS['metrics_base'])),
+			              metrics_round=bool(opts.get('metrics_round', DELTA_OPTION_DEFAULTS['metrics_round'])))
 			try:
 				if mode == 'stems':
 					new_layer = _bake_target_stems(
@@ -1429,6 +1502,8 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 
 			if msx is not None:
 				entry['msx'] = msx
+			if metrics_on and target['metrics_model'] == 'affine':
+				entry['metrics_stem'] = list(target['metrics_stem'])	# the base Met. W multiplied
 			t_viable = [a for a in viable
 			            if not (a == 'metric_array' and not metrics_on)
 			            and not (a == 'anchor_array' and not target.get('anchors', opts.get('anchors', True)))]
