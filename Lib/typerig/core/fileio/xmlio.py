@@ -45,6 +45,11 @@ class XMLSerializable:
 	XML_TEXT_CHILDREN = {}  # e.g., {'note': 'note'} - child element with text content (UFO model)
 	XML_LIB_ATTRS = []  # e.g., ['closed', 'clockwise'] - plist lib section
 	XML_ATTR_DEFAULTS = {}  # e.g., {'closed': False} - skip when value matches default
+	# Attributes read back verbatim as str, never type-guessed. Names are
+	# free text: a glyph called 'infinity', 'nan', '1' or 'no' must not come
+	# back as a float, int or bool (the round trip of a real font hit
+	# 'infinity' -> inf, 2026-11-19).
+	XML_STR_ATTRS = ('name', 'identifier', 'component', 'mark', 'kind', 'layer_name')
 	
 	def to_XML(self, exclude_attrs=[]):
 		'''Convert object to XML string
@@ -129,8 +134,11 @@ class XMLSerializable:
 		for attr_name in cls.XML_ATTRS:
 			value = element.get(attr_name)
 			if value is not None:
-				# Type conversion - _convert_xml_attr handles Transform matrix() strings
-				attrs[attr_name] = _convert_xml_attr(value)
+				if attr_name in cls.XML_STR_ATTRS:
+					attrs[attr_name] = value
+				else:
+					# Type conversion - _convert_xml_attr handles Transform matrix() strings
+					attrs[attr_name] = _convert_xml_attr(value)
 		
 		# Parse child elements
 		for child_tag, attr_name in cls.XML_CHILDREN.items():
@@ -206,9 +214,11 @@ def _convert_xml_attr(value):
 	except ValueError:
 		pass
 	
-	# Try float
+	# Try float (finite only: 'inf', 'infinity', 'nan' stay strings)
 	try:
-		return float(value)
+		number = float(value)
+		if number == number and number not in (float('inf'), float('-inf')):
+			return number
 	except ValueError:
 		pass
 	

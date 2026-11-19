@@ -1,6 +1,6 @@
 # HANDOUT — trFont round trip: VFC → .trfont → VFC
 
-**Status:** Stage 0 DONE. Stage A: eject side DONE (0 diffs on a 40-glyph sample); `create_font` (mount into a new font) crashed FontLab on its first run, cause not yet found. See §7 for the exact next action.
+**Status:** Stage 0 DONE. **Stage A DONE (2026-11-19): full-font gate met** — BasilMM (754 glyphs, 2 masters) → .trfont → new FontLab font → save .vfc → reopen: 4 diffs, all null contours in the source font. Stage B written, not yet run. See §7 for the next action.
 **Owner:** Vassil Kateliev. **Repo:** TypeRig (master).
 **Goal:** a FontLab `.vfc` can be ejected to `.trfont` and mounted back into a new
 FontLab font with no loss on a declared field set — then the same for Glyphs.
@@ -429,7 +429,7 @@ Rounding and normalization rules live in the harness, in one place, commented.
       eject must not invent the core default `'1.0'`.
 - [x] A.5 Rewrite `_fl_metrics`: per master via `setMaster` + `*_value`; restore
       the original current master in a `finally`.
-- [~] A.6 `trFontProxy.create_font(core_font)` → a **new** flPackage: axes,
+- [x] A.6 `trFontProxy.create_font(core_font)` → a **new** flPackage: axes,
       `addMaster` + `setLocation` + per-master metrics, `addInstance`, glyph
       order, then `mount`. Needed because `mount()` only updates a live font and
       a round trip must produce a fresh VFC.
@@ -447,7 +447,7 @@ Rounding and normalization rules live in the harness, in one place, commented.
       radians. Fix the extraction and the UFO mapping (x / y / angle, None for
       axis-aligned); mount must invert it. BasilMM layer guides come in
       duplicate pairs: check whether that is the font or the API.
-- [ ] A.8 Mount-side parity check for layer identity: FL master name == layer
+- [x] A.8 Mount-side parity check for layer identity: FL master name == layer
       name is the format's contract (`Master.layer_name`). Verify it holds for
       service/mask layers too, or exclude them explicitly.
 - **Implementation notes (2026-11-19)**
@@ -490,6 +490,48 @@ Rounding and normalization rules live in the harness, in one place, commented.
     `%LOCALAPPDATA%\FontLab\fontlab9\crash-reports\`.
   - Live reload in FontLab: use `audit.reload_typerig()`. Reloading `xmlio`
     alone empties its class registry and reads come back with no layers.
+- **Gate result (2026-11-19): MET.** Full BasilMM font after save + close +
+  reopen: `compare.json` = 754 glyphs, **4 diff lines**, all
+  `shapes[i].contours: length 1 != 0` in `eogonek`, `Uogonek`,
+  `ogoneksmall`, `uogonek.sc` (Light). The source font holds a **null
+  contour** there (FontLab returns `None` in `flShape.contours`); it cannot be
+  rebuilt and is reported by the eject (`eject <glyph>: null contour
+  skipped`). Timings: eject + write 8 s, read 2 s, `create_font` 25 s.
+- **How to run it** (no 5-second limit; nothing opened through MCP):
+  1. FontLab open on the source. `"FontLab 9.exe" build.vfpy` where
+     `build.vfpy` = `from typerig.proxy.tr import roundtrip;
+     roundtrip.build(work_dir, source_path=...)` → `build.json`.
+  2. Save the new font as `<work_dir>/rt.vfc` (MCP `save_font`), close it.
+  3. `"FontLab 9.exe" <work_dir>/rt.vfc` and answer *Duplicate Element
+     Names* with **Keep As Is** (expected until Stage C: element links are
+     not restored yet). A helper that answers FontLab dialogs by UI
+     Automation (crash report → Later, duplicates → Keep As Is) was used;
+     it lives outside the repo.
+  4. `"FontLab 9.exe" compare.vfpy` (`roundtrip.compare(work_dir,
+     source_path=...)`) → `compare.json`.
+- **Bugs found by the full-font run (all fixed):**
+  - `create_font` crash: new glyphs are built like FontLab's tutorial
+    (layers first, `addGlyph`, `findName`), Python handles kept alive.
+  - FontLab-side persistence: node smooth flags and node names must be set
+    on **live** nodes (after `addShape`); setting smooth there re-aligns
+    handles (`uni044B.sc` moved 66 → 67), so coordinates are written back
+    afterwards. Naming / OS2 / hhea values need the package fields
+    (`tfn tsn psn sgn ffn`, `weight_value`, `width_value`,
+    `underline*_value`), the `fg.info.dict` items written one by one, and
+    `fg.info` through both `flPackage.info` and `fg.info`, all after the
+    design space is set up.
+  - Glyph order: the new font's starter `.notdef` was updated in place and
+    stayed first; starters are now removed before mounting.
+  - **Core:** `xmlio` type-guessed every attribute, so the glyph
+    `infinity` read back as `float('inf')` (and `nan`, `1`, `no` would
+    break too). Name-like attributes are now string-only and non-finite
+    floats are never produced. Node names are now part of the format.
+  - The eject no longer drops a failing glyph silently; failures are in
+    `trFontProxy.problems`.
+- **Known, not carried (Stage A):** element links (Stage C); FontLab-generated
+  `#` layers; guide-to-metric bindings; the `fg.info.dict` flags read back
+  False after reopen even though the values they govern persist (assigning a
+  whole dict group back crashes FontLab; item writes are used).
 - **Gate:** BasilMM → `.trfont` → new VFC → **save, close, reopen** → `diff`
   empty on the **stage a** field set. An in-memory dump is not enough: fontport
   found `fg.info` writes that read back fine and are lost on reopen (§3.12). Record the VFC file size delta and the glyph/master counts in the ledger.
@@ -620,7 +662,7 @@ Listed so nothing is dropped silently. None of it blocks A–C.
 | Glyph hints, links, TT programs | `flLayer` hints | Stage E. |
 | Smart corners / node extras | `node.py` `XML_LIB_ATTRS` has `g2`, `transform` commented out | Stage E; re-enable deliberately, it affects every node. |
 | Metric expressions (lsb/rsb/advance formulas) | `flLayer` / `flGlyph` | Stage E — real design data, currently flattened to numbers. |
-| Mask and service layers | `flGlyph.layers` (the eject walks **all** layers) | Decide in A.8: carry or exclude explicitly. |
+| Mask and service layers | `flGlyph.layers` | A.8 decided: layers whose name starts with `#` (FontLab-generated, e.g. `#instance`) are not carried; FontLab rebuilds them and adds its own guides on reopen. Other service/mask layers are carried. |
 | Glyph tags, OpenType tags | `flGlyph` | Stage E. |
 | Font-level guides | `fg.guides` | Stage E. |
 | `fg.lib`, `fg.tables`, `fg.hinting` | fontgate | Pass through `Font.lib` when cheap. |
@@ -639,3 +681,4 @@ Format: `YYYY-MM-DD | machine | what changed | next action`
 - `2026-11-19 | same | Stage A: eject side done (A.0-A.5, A.7, A.9, A.10). eject_report on 40 BasilMM glyphs: 829 -> 0 diff lines. create_font written (A.6); its first run crashed FontLab 9 and FL came back up only as a "FontLab Crash Report" window, left for the user to answer. | 1) Answer the FontLab crash dialog, reopen D:\Playground\Basil-Rev-2Wt.vfc. 2) In FL: audit.reload_typerig(); run create_font on ~5 glyphs with step_log=<file>; the last line of the log names the crashing step. 3) Fix, then the 40-glyph gate, then the full font.`
 - `2026-11-19 | same | Stage B glue written (kern_map.py + tests 14/14, _fl_kerning/_kerning_into_fl, audit stage-b kerning in FL-native form); NOT run in FontLab. Stage C.1 proposal written: link elements by name per master layer, no format change. FontLab still on its crash-report window. | Same as previous line (crash dialog, step_log run), then Stage B probe of fg.groups / fg.features, then owner decision on C.1.`
 - `2026-11-19 | same | Read the FontLab Adam suite (fontport guides, python-docs, remopy, instamix): §3.12. Code: kerning now via documented fgKerning.set(); features write refuses a tagless trailing `feature` (documented native heap over-read). Plan: Stage A gate now requires save + reopen; features mount is the top crash suspect. Installed FL 9.0.9809, beta is 9813. | Crash dialog still open. Then: step-log run of create_font with include_features=False, then True.`
+- `2026-11-19 | same | STAGE A DONE. Full-font gate after save+reopen: 754 glyphs, 4 diffs = null contours in the source. Driver proxy/tr/roundtrip.py (build/compare as FontLab scripts, no MCP time limit). Fixed: create_font crash (glyph handles), live-node smooth/names + coordinate restore, package naming fields + info.dict + double info write after design space, starter glyph order, xmlio type-guessing of names (infinity -> inf), silent glyph drops in eject. | Stage B: run kerning/groups in FontLab; probe fg.features via fontpr.get_font_info; add groups/features to the FL dump; then the stage-b gate.`

@@ -129,6 +129,8 @@ def build_font():
 	# Case-colliding name with 'A' (filename mangling) and an empty glyph.
 	a = Glyph([_layer('Light', 500, []), _layer('Bold', 540, [])], name='a', unicodes=[0x61])
 	space = Glyph([_layer('Light', 250, []), _layer('Bold', 260, [])], name='space', unicodes=[0x20])
+	# Names that a type-guessing XML reader would turn into float/int/bool
+	tricky = [Glyph([_layer('Light', 500, []), _layer('Bold', 500, [])], name=n) for n in ('infinity', 'nan', 'no', '1')]
 
 	encoding = Encoding()
 	for g in (A, acute, Aacute, o, a, space):
@@ -148,7 +150,7 @@ def build_font():
 	            'postscriptBlueScale': 0.048, 'openTypeHheaAscender': 926.0,
 	            'openTypeOS2VendorID': 'KRND', 'postscriptIsFixedPitch': False}
 
-	font = Font([A, acute, Aacute, o, a, space],
+	font = Font([A, acute, Aacute, o, a, space] + tricky,
 		info      = info,
 		metrics   = FontMetrics(1000, 674, -174, 450, 674, 200),
 		axes      = [Axis('weight', 'wght', 0, 0, 1000, short_name='wt',
@@ -214,6 +216,9 @@ try:
 		manifest = fh.read()
 	check('manifest paths use "/" (portable Windows <-> macOS)', '\\' not in manifest)
 	check('metainfo.xml written', os.path.isfile(os.path.join(path_1, FILE_META)))
+	check('glyph names read back as str (infinity, nan, no, 1)',
+		all(isinstance(g.name, str) for g in back.glyphs) and back.glyph('infinity') is not None,
+		[repr(g.name) for g in back.glyphs if not isinstance(g.name, str)])
 	check('case-colliding names "A"/"a" get distinct files',
 		len(os.listdir(os.path.join(path_1, 'glyphs'))) == len(src))
 

@@ -186,7 +186,9 @@ def _dump_layer(layer):
 			# The element name lives on shapeData; flShape.name is usually ''.
 			'name':      _str(data.name if data is not None else shape.name),
 			'transform': _qtransform(shape.transform),
-			'contours':  [{
+			# A None contour is a source-data defect FontLab can return; it is
+			# recorded (not skipped) so the gate shows it.
+			'contours':  [{'closed': None, 'nodes': 'NULL CONTOUR'} if contour is None else {
 				'closed': bool(contour.closed),
 				'nodes':  [(_num(n.x), _num(n.y), _str(n.type), bool(n.smooth), _str(n.name)) for n in contour.nodes()],
 			} for contour in shape.contours],

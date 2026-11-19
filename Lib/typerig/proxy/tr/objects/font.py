@@ -885,6 +885,16 @@ class trFontProxy(object):
 	def _build_groups(self):
 		return _fl_groups(self.fg)
 
+	def _null_contours(self, fg_glyph):
+		'''[(layer name, shape index)] of shapes holding a None contour.'''
+		found = []
+		fl_glyph = self.host.findName(fg_glyph.name)
+		for layer in (fl_glyph.layers if fl_glyph is not None else []):
+			for i, shape in enumerate(layer.shapes):
+				if any(c is None for c in shape.contours):
+					found.append((str(layer.name), i))
+		return found
+
 	def _eject_glyph(self, fg_glyph):
 		tr_g = trGlyph(fg_glyph, self.fg)
 		return tr_g.eject()
@@ -941,10 +951,14 @@ class trFontProxy(object):
 		for name in names:
 			fg_glyph = self.fg[name]
 			if fg_glyph is None:
+				self.problems.append('eject {}: glyph not found'.format(name))
 				if verbose:
 					print('  SKIP: glyph not found — {}'.format(name))
 				continue
 
+			nulls = self._null_contours(fg_glyph)
+			if nulls:
+				self.problems.append('eject {}: null contour skipped in {}'.format(name, nulls))
 			try:
 				core_glyph = self._eject_glyph(fg_glyph)
 				font.append(core_glyph)
@@ -953,6 +967,8 @@ class trFontProxy(object):
 					print('  ejected: {} ({} layers)'.format(name, len(core_glyph.layers)))
 
 			except Exception as e:
+				# Recorded, not swallowed: a dropped glyph is a silent loss.
+				self.problems.append('eject {}: {}: {}'.format(name, type(e).__name__, e))
 				if verbose:
 					print('  ERROR ejecting {}: {}'.format(name, e))
 
@@ -1145,15 +1161,17 @@ class trFontProxy(object):
 		step('info')
 		_info_into_fl(package.fgPackage, font.info, problems, step=step, fl_package=package)
 
-		starters = [g.name for g in package.fgPackage.glyphs]
+		# Starter glyphs of a new font (.notdef) go BEFORE the mount, so every
+		# glyph is created in core order. Updating the starter in place kept
+		# it at index 0 and shifted the whole glyph order (full-font gate,
+		# 2026-11-19).
+		for name in [g.name for g in package.fgPackage.glyphs]:
+			step('remove starter glyph {}'.format(name))
+			package.fgPackage.removeGlyph(name)
+
 		step('mount {} glyphs'.format(len(font)))
 		proxy.mount(font, include_features=include_features, include_groups=include_groups,
 		            include_kerning=include_kerning, verbose=verbose, step=step)
-
-		for name in starters:
-			if font.glyph(name) is None:
-				step('remove starter glyph {}'.format(name))
-				package.fgPackage.removeGlyph(name)
 
 		# Same notify bracket fontport uses after font-info writes.
 		step('notify')

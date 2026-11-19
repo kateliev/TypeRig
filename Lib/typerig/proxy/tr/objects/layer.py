@@ -130,14 +130,21 @@ class trLayer(Layer):
 		# - Node smooth flags and names on the LIVE nodes. Set on detached
 		#   flNodes before flContour() they read back True in memory but are
 		#   not stored on save (verified via .vfj, FL 9.0.9809, 2026-11-19).
+		#   Setting smooth on a live node makes FontLab re-align its handles
+		#   (uni044B.sc Bold: a handle moved 66 -> 67), so the coordinates are
+		#   written back afterwards: the source geometry wins.
 		for fl_shape, core_shape in zip(self.host.shapes, core_layer.shapes):
 			for fl_contour, core_contour in zip(fl_shape.contours, core_shape.contours):
-				for fl_node, core_node in zip(fl_contour.nodes(), core_contour.nodes):
+				fl_nodes = fl_contour.nodes()
+				for fl_node, core_node in zip(fl_nodes, core_contour.nodes):
 					if core_node.smooth:
 						fl_node.smooth = True
 					name = getattr(core_node, 'name', '')
 					if name:
 						fl_node.name = name
+				for fl_node, core_node in zip(fl_nodes, core_contour.nodes):
+					fl_node.x = float(core_node.x)
+					fl_node.y = float(core_node.y)
 
 		while len(self.host.anchors):
 			self.host.removeAnchor(self.host.anchors[0])

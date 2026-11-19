@@ -90,7 +90,8 @@ class trShape(Shape):
 	# - Initialize ------------------------------
 	def __init__(self, shape, **kwargs):
 		self.host = shape
-		super(trShape, self).__init__(self.host.contours, default_factory=trContour, proxy=True, **kwargs)
+		# None contours (damaged FL data) are not wrapped; see eject().
+		super(trShape, self).__init__([c for c in self.host.contours if c is not None], default_factory=trContour, proxy=True, **kwargs)
 
 	# - Internals ------------------------------
 	def __getattribute__(self, name):
@@ -151,7 +152,10 @@ class trShape(Shape):
 		'''Detach from host: return a pure core Shape with current FL values.
 		The returned Shape has no FL bindings and can be freely manipulated.
 		'''
-		core_contours = [trContour(c).eject() for c in self.host.contours]
+		# FontLab can hand back None for a damaged contour (BasilMM:
+		# eogonek/Light). Skip it rather than lose the whole glyph; the
+		# font-level eject reports it (trFontProxy._null_contours).
+		core_contours = [trContour(c).eject() for c in self.host.contours if c is not None]
 		return Shape(core_contours,
 		             name=_element_name(self.host),
 		             transform=_qt_to_transform(self.host.transform))
@@ -181,7 +185,7 @@ class trShape(Shape):
 			self.host.transform = _transform_to_qt(transform)
 
 		# - Rebuild proxy data
-		self.data = [trContour(c, parent=self) for c in self.host.contours]
+		self.data = [trContour(c, parent=self) for c in self.host.contours if c is not None]
 
 		# - Sync parent layer host if available
 		if self.parent is not None and hasattr(self.parent, '_sync_host'):
