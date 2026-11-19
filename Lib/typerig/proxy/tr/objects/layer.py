@@ -17,13 +17,38 @@ import fontlab as fl6
 import fontgate as fgt
 import PythonQt as pqt
 
-from typerig.proxy.tr.objects.shape import trShape, _build_fl_shape
+from typerig.proxy.tr.objects.shape import trShape, _build_fl_shape, _transform_to_qt
 from typerig.proxy.tr.objects.anchor import trAnchor, _build_fl_anchor
 from typerig.proxy.tr.objects.guideline import _build_fl_guideline, _fl_to_guideline
 from typerig.core.objects.layer import Layer
 
 # - Init --------------------------------
 __version__ = '0.1.1'
+
+# - Element references -------------------
+def _outline_key(core_shape):
+	'''Comparable outline of a core Shape (element space, no transform).'''
+	return tuple(
+		(bool(c.closed), tuple((float(n.x), float(n.y), str(n.type), bool(n.smooth)) for n in c.nodes))
+		for c in core_shape.contours)
+
+def _add_element_reference(fl_layer, fl_shape, transform):
+	'''Add a reference to an existing (live) element: the new shape shares
+	its flShapeData. Returns the new flShape.
+
+	FontLab 9.0.9809: fl6.flShape(<flShapeData>) no longer works ("Error
+	creating object of type flShapeBuilder"); flLayer.addShape(<existing
+	flShape>) shares the data, but a single add does not register in
+	referenceCount and a later removal under-counts it. Adding twice and
+	removing the first registers correctly — the trick ElementComposer
+	("Insert") has used since FL6.
+	'''
+	temp = fl_layer.addShape(fl_shape)
+	new = fl_layer.addShape(fl_shape)
+	fl_layer.removeShape(temp)
+	if transform is not None:
+		new.transform = _transform_to_qt(transform)
+	return new
 
 # - Classes -----------------------------
 class trLayer(Layer):
@@ -104,7 +129,7 @@ class trLayer(Layer):
 			guidelines=core_guidelines,
 		)
 
-	def mount(self, core_layer):
+	def mount(self, core_layer, elements=None):
 		'''Write core Layer data back into the FL host.
 		Rebuilds all FL shapes from core data and updates metrics.
 
@@ -122,10 +147,25 @@ class trLayer(Layer):
 		for shape in list(self.host.shapes):
 			self.host.removeShape(shape)
 
-		# - Build and add new shapes from core data
+		# - Build and add new shapes from core data.
+		#   elements (dict or None): shared registry {(layer name, element
+		#   name): (live flShape, outline key)} across the glyphs of one
+		#   mount. A named shape whose outline equals an already mounted
+		#   element of the same name on the same layer is LINKED to it (one
+		#   shared flShapeData), not rebuilt — the .trfont element model
+		#   (handout Stage C.1): the element name on every use is the link.
 		for core_shape in core_layer.shapes:
+			key = (str(self.host.name), str(core_shape.name)) if (elements is not None and core_shape.name) else None
+			outline = _outline_key(core_shape) if key else None
+
+			if key in (elements or {}) and elements[key][1] == outline:
+				_add_element_reference(self.host, elements[key][0], core_shape.transform)
+				continue
+
 			fl_shape = _build_fl_shape(core_shape)
 			self.host.addShape(fl_shape)
+			if key and key not in elements:
+				elements[key] = (self.host.shapes[-1], outline)
 
 		# - Node smooth flags and names on the LIVE nodes. Set on detached
 		#   flNodes before flContour() they read back True in memory but are

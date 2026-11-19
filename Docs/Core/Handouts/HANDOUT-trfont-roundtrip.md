@@ -1,6 +1,6 @@
 # HANDOUT — trFont round trip: VFC → .trfont → VFC
 
-**Status:** Stage 0, **A, B DONE; C met on BasilMM via FontLab's on-open Clean Up; D DONE (handout in Typerig-Glyphs) (2026-11-19)**. Stage Z (Glyphs) is next and runs on the Mac. See §7.
+**Status:** Stage 0, **A, B, C DONE; D DONE (2026-11-19)**. Full BasilMM round trip after save + reopen: 4 diffs (null contours in the source) on every stage incl. element links, rebuilt in Python (no FontLab Clean Up). C.4 (FL components) and Stage Z (Glyphs, Mac) remain. See §7.
 **Owner:** Vassil Kateliev. **Repo:** TypeRig (master).
 **Goal:** a FontLab `.vfc` can be ejected to `.trfont` and mounted back into a new
 FontLab font with no loss on a declared field set — then the same for Glyphs.
@@ -625,8 +625,24 @@ Rounding and normalization rules live in the harness, in one place, commented.
     TypeRig's Element panel *Link* uses** (`proxy/fl/actions/element.py`
     `element_link`), so that tool very likely fails on this build too —
     check it; re-test both on FL 9.1 (build 9813).
-  - Until a Python route exists, Stage C = rebuild → save → reopen with
-    **Clean Up** → save. Caveat of Clean Up: it renames same-named elements
+  - **UPDATE, same day: Python route found and in use.** `flLayer.addShape(
+    <existing flShape>)` shares the element (same `shapeData.id`) — the route
+    TypeRig's ElementComposer *Insert* has always used, with its "add twice,
+    remove the first" trick. `create_font` now links same-named,
+    same-outline shapes per master layer (registry in `trFontProxy.mount`,
+    `trLayer.mount(elements=...)`, `_add_element_reference`). **Gate met
+    without Clean Up:** full font, save + reopen, no *Duplicate Element
+    Names* dialog, stage-c diff = the 4 source null contours.
+  - `referenceCount` quirk: in a freshly built font the count is right (3 uses
+    → 3) and deleting one use keeps the shared outline in the others. Adding
+    into a font loaded from disk showed counts that lag by one (first add +0);
+    after save + reopen the counts are recomputed.
+  - Element panel **Link** (`proxy/fl/actions/element.py`) now inserts the
+    reference with the same trick via `insertShape` (`_insert_reference`);
+    helper verified in FL 9.0.9809 (shared data, right stack index); the
+    panel button itself not clicked yet. `contour.py:258` still uses
+    `fl6.flShape(<fgShape>)` — check it on FL9.
+  - Old route kept for reference: rebuild → save → reopen with **Clean Up**. Caveat of Clean Up: it renames same-named elements
     whose outlines differ, which would change element names; BasilMM has
     none (every same-named use is one shared element in the source).
   - C.4 (FontLab's real components, `flLayer.components`) is still open: it
@@ -737,3 +753,4 @@ Format: `YYYY-MM-DD | machine | what changed | next action`
 - `2026-11-19 | same | STAGE B DONE. Full-font stage-b gate after save+reopen: 4 diffs (null contours). compile_features dry run: GDEF/GPOS/GSUB SHA-256 identical to source. Kerning classes via addGroup(kernMode=), pairs via set((name,mode),(name,mode)), OT classes via fg.groups.fromDict(fgGroup), features via fontpr openTypeFeatures + header-based split, GDEF via otGlyphClass/otMarkClass in Glyph.lib. | Stage C: element links (C.1 proposal; FontLab's own "Clean Up" on open does the same merge).`
 - `2026-11-19 | same | STAGE C met on BasilMM via FontLab's on-open Clean Up: stage-c gate (element links per master) = 4 diffs (null contours), 119 linked elements per master identical to source. No Python linking route on FL 9.0.9809 (flShape(flShapeData) fails - TypeRig Element Link likely broken on this build). | Owner: confirm C.1 (no format change). Then Stage D handout; C.4 needs a font with FL components; re-test linking on FL 9.1 beta 9813.`
 - `2026-11-19 | same | STAGE D DONE: Typerig-Glyphs/Handouts/trfont_glyphs_roundtrip_handout.md (+ Memory/project_trfont_glyphs.md there). Code read of proxy/gs3 found: outline-shape transforms ignored on mount (same bug as A.0), node names dropped, no guides/note/lib on eject, no font bridge. | Mac: Stage Z.0 (gs3 gaps), Z.1 font bridge, Z.2 Glyphs dumper. Windows/FL: C.4 needs a font with FL components; re-test element linking on FL 9.1 (9813); check TypeRig Element Link on 9.0.9809.`
+- `2026-11-19 | same | STAGE C DONE in Python: create_font links same-named/same-outline elements per master via layer.addShape(existing shape) (ElementComposer's route); full-font gate after save+reopen = 4 diffs, no Duplicate Element Names dialog. Element panel Link fixed for FL9 (_insert_reference). | Click-test Element Link in the panel; check contour.py flShape(fgShape) on FL9; C.4 needs a font with FL components; Stage Z on the Mac.`

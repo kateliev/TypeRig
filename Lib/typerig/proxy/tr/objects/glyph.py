@@ -201,7 +201,7 @@ class trGlyph(Glyph):
 			guidelines=[],
 		)
 
-	def mount(self, core_glyph, layer_names=None, step=None):
+	def mount(self, core_glyph, layer_names=None, step=None, elements=None):
 		'''Push core Glyph metadata + geometry back into the FL host.
 
 		Mounts each matching layer's shapes / anchors / guidelines via
@@ -243,7 +243,7 @@ class trGlyph(Glyph):
 			if step is not None:
 				step('  layer {}'.format(layer_name))
 			try:
-				trLayer(fl_layer).mount(core_layer)
+				trLayer(fl_layer).mount(core_layer, elements=elements)
 			finally:
 				core_layer.guidelines = original
 

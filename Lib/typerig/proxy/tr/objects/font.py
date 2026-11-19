@@ -931,7 +931,7 @@ class trFontProxy(object):
 		return TrFontIO.read(path)
 
 	# -- Mount --------------------------
-	def mount(self, font, include_features=True, include_groups=True, include_kerning=True, verbose=False, step=None):
+	def mount(self, font, include_features=True, include_groups=True, include_kerning=True, verbose=False, step=None, link_elements=True):
 		'''Push a core Font back into the live FL session.
 
 		Mounts geometry + metadata for every glyph, and (optionally) features
@@ -944,6 +944,10 @@ class trFontProxy(object):
 			include_groups (bool)   : inject groups + kerning classes
 			verbose (bool)          : print per-glyph progress
 		'''
+		# Element registry shared by all glyphs: same-named, same-outline
+		# shapes on a layer become one shared FontLab element (Stage C).
+		elements = {} if link_elements else None
+
 		for glyph_name in font.glyph_names:
 			core_glyph = font[glyph_name]
 			if core_glyph is None:
@@ -975,7 +979,7 @@ class trFontProxy(object):
 
 			sub('mount layers')
 			try:
-				tr_glyph.mount(core_glyph, step=sub)
+				tr_glyph.mount(core_glyph, step=sub, elements=elements)
 				# Push the edited fl objects down to the stored glyph data.
 				# Without it, node smooth flags read back fine in memory but
 				# were lost on save + reopen (2026-11-19).

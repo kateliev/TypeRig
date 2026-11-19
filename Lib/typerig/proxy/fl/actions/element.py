@@ -121,6 +121,23 @@ def _refuse(glyph, selection):
 
 	return False
 
+def _insert_reference(layer, index, key_shape):
+	'''Insert at `index` a new element that shares key_shape's flShapeData
+	(a reference), and return it.
+
+	FontLab 9.0.9809 no longer builds a shape from shape data:
+	fl6.flShape(<flShapeData>) raises "Error creating object of type
+	flShapeBuilder" (it worked FL6-FL8). Inserting the existing flShape
+	shares its data instead. It is inserted twice and the first copy is
+	removed: the trick ElementComposer has used since FL6 to get a proper
+	reference rather than a half-registered one.
+	'''
+	temp = layer.insertShape(index, key_shape)
+	new_shape = layer.insertShape(index, key_shape)
+	if temp is not None:
+		layer.removeShape(temp)
+	return new_shape
+
 def _layer_shapes(glyph, layer_name, selection):
 	layer = glyph.layer(layer_name)
 	layer_shapes = layer.shapes
@@ -889,7 +906,7 @@ class TRElementActionCollector(object):
 					old_shape = layer_shapes[sid]
 					old_bounds = _shape_bounds(old_shape)
 
-					new_shape = layer.insertShape(sid, fl6.flShape(key_shape.shapeData))
+					new_shape = _insert_reference(layer, sid, key_shape)
 					if new_shape is None: continue
 
 					new_shape.transform = old_shape.transform
