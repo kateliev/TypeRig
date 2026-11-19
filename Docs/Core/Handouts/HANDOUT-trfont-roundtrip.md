@@ -1,6 +1,6 @@
 # HANDOUT — trFont round trip: VFC → .trfont → VFC
 
-**Status:** Stage 0, **A, B DONE; C met on BasilMM via FontLab's own on-open Clean Up (2026-11-19)**: element links come back identical (119 linked elements per master). No pure-Python link route on FL 9.0.9809 yet. Stage D (Glyphs handout) next. See §7.
+**Status:** Stage 0, **A, B DONE; C met on BasilMM via FontLab's on-open Clean Up; D DONE (handout in Typerig-Glyphs) (2026-11-19)**. Stage Z (Glyphs) is next and runs on the Mac. See §7.
 **Owner:** Vassil Kateliev. **Repo:** TypeRig (master).
 **Goal:** a FontLab `.vfc` can be ejected to `.trfont` and mounted back into a new
 FontLab font with no loss on a declared field set — then the same for Glyphs.
@@ -678,7 +678,7 @@ Rounding and normalization rules live in the harness, in one place, commented.
 
 ### Stage D — Glyphs round trip handout
 
-- [ ] D.1 Write `Typerig-Glyphs/Handouts/trfont_glyphs_roundtrip_handout.md`
+- [x] D.1 Write `Typerig-Glyphs/Handouts/trfont_glyphs_roundtrip_handout.md`
       (that is where Glyphs-port handouts live, shared with the Mac).
       Cover the mapping and every mismatch:
       - `GSFont` / `GSFontMaster` / `GSAxis` / `GSInstance` ↔ `Font` / `Master` /
@@ -694,7 +694,7 @@ Rounding and normalization rules live in the harness, in one place, commented.
         FEA blob — state the lossy direction.
       - Per-master metrics map cleanly (Glyphs has them per master already).
       - Anchors, guides, glyph colour/mark, `userData` ↔ `lib`.
-- [ ] D.2 List what cannot cross, with a reason per item.
+- [x] D.2 List what cannot cross, with a reason per item (handout §4, to be filled during Z.3).
 
 ### Stage Z — FontLab → Glyphs → FontLab
 
@@ -736,3 +736,4 @@ Format: `YYYY-MM-DD | machine | what changed | next action`
 - `2026-11-19 | same | STAGE A DONE. Full-font gate after save+reopen: 754 glyphs, 4 diffs = null contours in the source. Driver proxy/tr/roundtrip.py (build/compare as FontLab scripts, no MCP time limit). Fixed: create_font crash (glyph handles), live-node smooth/names + coordinate restore, package naming fields + info.dict + double info write after design space, starter glyph order, xmlio type-guessing of names (infinity -> inf), silent glyph drops in eject. | Stage B: run kerning/groups in FontLab; probe fg.features via fontpr.get_font_info; add groups/features to the FL dump; then the stage-b gate.`
 - `2026-11-19 | same | STAGE B DONE. Full-font stage-b gate after save+reopen: 4 diffs (null contours). compile_features dry run: GDEF/GPOS/GSUB SHA-256 identical to source. Kerning classes via addGroup(kernMode=), pairs via set((name,mode),(name,mode)), OT classes via fg.groups.fromDict(fgGroup), features via fontpr openTypeFeatures + header-based split, GDEF via otGlyphClass/otMarkClass in Glyph.lib. | Stage C: element links (C.1 proposal; FontLab's own "Clean Up" on open does the same merge).`
 - `2026-11-19 | same | STAGE C met on BasilMM via FontLab's on-open Clean Up: stage-c gate (element links per master) = 4 diffs (null contours), 119 linked elements per master identical to source. No Python linking route on FL 9.0.9809 (flShape(flShapeData) fails - TypeRig Element Link likely broken on this build). | Owner: confirm C.1 (no format change). Then Stage D handout; C.4 needs a font with FL components; re-test linking on FL 9.1 beta 9813.`
+- `2026-11-19 | same | STAGE D DONE: Typerig-Glyphs/Handouts/trfont_glyphs_roundtrip_handout.md (+ Memory/project_trfont_glyphs.md there). Code read of proxy/gs3 found: outline-shape transforms ignored on mount (same bug as A.0), node names dropped, no guides/note/lib on eject, no font bridge. | Mac: Stage Z.0 (gs3 gaps), Z.1 font bridge, Z.2 Glyphs dumper. Windows/FL: C.4 needs a font with FL components; re-test element linking on FL 9.1 (9813); check TypeRig Element Link on 9.0.9809.`
