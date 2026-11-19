@@ -120,7 +120,7 @@ FLAG_KEYS = {status: 'flag_' + status for status in STATUSES}
 KERN_GROUP_RULES = ('mean', 'key', 'refuse')		# labels: delta_kerning_actions.GROUP_RULES
 KERN_SIDE_RULES = ('complete', 'skip', 'keep')
 METRICS_BASES = ('input', 'stems')				# advanced.metrics_base (delta_panel_actions.metrics_stem)
-METRICS_BASE_LABELS = (('input', 'Nearest input'), ('stems', 'Row stems (interpolated)'))		# labels: delta_kerning_actions.SIDE_RULES
+METRICS_BASE_LABELS = (('input', 'Closest Master'), ('stems', 'Interpolation'))	# Advanced > Scale sidebearings (Met. W)
 
 TARGET_DEFAULTS = {
 	'layer': '', 'axis': '',	# axis: name of the axis the row is computed from
@@ -914,7 +914,7 @@ def machine_log(doc, run):
 		'on' if opts.get('extrapolate', True) else 'off', 'on' if opts.get('selection_only') else 'off'))
 	out.append('Italic:   %s' % italic_summary(doc))
 	out.append('Metrics:  %s' % ('Delta metrics (Met. W ghost bake)' if delta_metrics(doc)
-	                             else 'affine (sidebearings and kerning x percent, base: %s)'
+	                             else 'affine (sidebearings and kerning x percent of: %s)'
 	                             % dict(METRICS_BASE_LABELS)[metrics_base(doc)].lower()))
 	adv = doc.get('advanced') or {}
 	out.append('Kerning:  groups %s, unbaked sides %s (LTR)' % (
