@@ -11,12 +11,14 @@
 
 # - Dependencies ------------------------
 
+import json
 from xml.etree import ElementTree as ET
 
 from typerig.core.objects.atom import Member, Container
 from typerig.core.objects.glyph import Glyph
 
 from typerig.core.objects.axis import Axis
+from typerig.core.objects.metrics import FontMetrics		# re-exported: `from font import FontMetrics` keeps working
 from typerig.core.objects.master import Master, Masters
 from typerig.core.objects.instance import Instance, Instances
 from typerig.core.objects.kern import Kerning
@@ -158,13 +160,19 @@ class FontInfo(Member, XMLSerializable):
 			meta.set('key',   xml_key)
 			meta.set('value', str(val))
 
-		# Arbitrary lib entries
+		# Arbitrary lib entries. Strings are written as-is; anything else
+		# (numbers, bools, lists such as openTypeOS2Panose) as JSON with
+		# type="json", so it reads back with its type.
 		if self.lib:
 			lib_elem = ET.SubElement(elem, 'lib')
-			for key, val in self.lib.items():
+			for key, val in sorted(self.lib.items()):
 				entry = ET.SubElement(lib_elem, 'entry')
-				entry.set('key',   str(key))
-				entry.set('value', str(val))
+				entry.set('key', str(key))
+				if isinstance(val, str):
+					entry.set('value', val)
+				else:
+					entry.set('value', json.dumps(val))
+					entry.set('type', 'json')
 
 		return elem
 
@@ -194,93 +202,15 @@ class FontInfo(Member, XMLSerializable):
 		lib_elem = element.find('lib')
 		if lib_elem is not None:
 			for entry in lib_elem.findall('entry'):
-				lib[entry.get('key', '')] = entry.get('value', '')
+				raw = entry.get('value', '')
+				lib[entry.get('key', '')] = json.loads(raw) if entry.get('type') == 'json' else raw
 		kwargs['lib'] = lib
 
+		# A file without a version has no version: do not invent '1.0'
+		# (that default is for FontInfo() built in code).
+		kwargs.setdefault('version', '')
+
 		return cls(**kwargs)
-
-
-@register_xml_class
-class FontMetrics(Member, XMLSerializable):
-	'''Font-level vertical metrics.
-
-	Stores the primary vertical metrics used across all masters.
-	Individual masters can override specific values where the design
-	requires it (e.g. a bold master with a slightly taller ascender).
-
-	Constructor:
-		FontMetrics(upm, ascender, descender, x_height, cap_height, line_gap)
-
-	Attributes:
-		upm (int)        : units per em
-		ascender (int)   : ascender value
-		descender (int)  : descender value (negative)
-		x_height (int)   : x-height value
-		cap_height (int) : cap-height value
-		line_gap (int)   : recommended line gap
-	'''
-	__slots__ = ('upm', 'ascender', 'descender', 'x_height', 'cap_height', 'line_gap')
-
-	XML_TAG = 'metrics'
-	XML_ATTRS = ['upm', 'ascender', 'descender', 'x-height', 'cap-height', 'line-gap']
-	XML_CHILDREN = {}
-	XML_LIB_ATTRS = []
-
-	def __init__(self, *args, **kwargs):
-		super(FontMetrics, self).__init__(*args, **kwargs)
-
-		if len(args) >= 1: kwargs.setdefault('upm',		   args[0])
-		if len(args) >= 2: kwargs.setdefault('ascender',   args[1])
-		if len(args) >= 3: kwargs.setdefault('descender',  args[2])
-		if len(args) >= 4: kwargs.setdefault('x_height',   args[3])
-		if len(args) >= 5: kwargs.setdefault('cap_height', args[4])
-		if len(args) >= 6: kwargs.setdefault('line_gap',   args[5])
-
-		self.upm 		= int(kwargs.pop('upm',		    1000))
-		self.ascender 	= int(kwargs.pop('ascender',    800))
-		self.descender 	= int(kwargs.pop('descender',   -200))
-		self.x_height 	= int(kwargs.pop('x_height',    500))
-		self.cap_height = int(kwargs.pop('cap_height',  700))
-		self.line_gap 	= int(kwargs.pop('line_gap',    0))
-
-	# -- Internals ----------------------
-	def __repr__(self):
-		return '<{}: UPM={} Asc={} Desc={}>'.format(
-			self.__class__.__name__, self.upm, self.ascender, self.descender)
-
-	# -- Serialization override ---------
-	# XML uses hyphenated attribute names; Python uses underscores.
-
-	def _to_xml_element(self, exclude_attrs=[]):
-		elem = ET.Element(self.XML_TAG)
-		elem.set('upm',		    str(self.upm))
-		elem.set('ascender',    str(self.ascender))
-		elem.set('descender',   str(self.descender))
-		elem.set('x-height',    str(self.x_height))
-		elem.set('cap-height',  str(self.cap_height))
-		elem.set('line-gap',    str(self.line_gap))
-		return elem
-
-	@classmethod
-	def from_XML(cls, element):
-		if isinstance(element, str):
-			element = ET.fromstring(element)
-
-		if element is None:
-			return cls()
-
-		def _int(attr, default):
-			val = element.get(attr)
-			return int(val) if val is not None else default
-
-		return cls(
-			upm 		= _int('upm', 		 1000),
-			ascender 	= _int('ascender',   800),
-			descender 	= _int('descender',  -200),
-			x_height 	= _int('x-height',   500),
-			cap_height 	= _int('cap-height', 700),
-			line_gap 	= _int('line-gap',   0),
-		)
 
 
 @register_xml_class

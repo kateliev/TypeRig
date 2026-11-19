@@ -25,6 +25,8 @@
 # - Dependencies ------------------------
 from __future__ import print_function
 
+import math
+
 import fontlab as fl6
 import PythonQt as pqt
 
@@ -33,26 +35,26 @@ from typerig.core.objects.guideline import Guideline
 # - Init --------------------------------
 __version__ = '0.1.0'
 
-# FL snap-flag constants by kind. Names mirror what TypeRig's older code
-# used in proxy/fl/objects/glyph.py _guide_types.
-_SNAP_VERTICAL   = 'vertical'
-_SNAP_HORIZONTAL = 'horizontal'
-_SNAP_VECTOR     = 'vector'
+# FL snapFlags bit values, measured on FL9 (2026-11): a vertical guide in a
+# real VFC carries 0x4080, a horizontal one 0x2080, a fresh flGuideLine
+# 0x1080. 0x0080 is common to all; the high bit names the kind. (Older code
+# assigned the strings 'vertical'/'horizontal'/'vector' to this int property.)
+_SNAP_BASE       = 0x0080
+_SNAP_VECTOR     = 0x1000
+_SNAP_HORIZONTAL = 0x2000
+_SNAP_VERTICAL   = 0x4000
+
+# Below this (degrees) an angle counts as exactly horizontal / vertical.
+_ANGLE_EPS = 1e-6
 
 
-def _snap_flags_for_angle(angle):
-	'''Pick a FL snapFlags string based on the guideline angle.
-
-	UFO angle conventions: 0 = vertical, 90 = horizontal, anything else = vector.
-	'''
-	if angle is None:
-		return _SNAP_VECTOR
-	a = angle % 180
-	if abs(a) < 1e-6:
-		return _SNAP_VERTICAL
-	if abs(a - 90) < 1e-6:
-		return _SNAP_HORIZONTAL
-	return _SNAP_VECTOR
+def _snap_flags_for(guide):
+	'''FL snapFlags for a core Guideline (UFO semantics).'''
+	if guide.x is not None and guide.y is None:
+		return _SNAP_BASE | _SNAP_VERTICAL
+	if guide.y is not None and guide.x is None:
+		return _SNAP_BASE | _SNAP_HORIZONTAL
+	return _SNAP_BASE | _SNAP_VECTOR
 
 
 def _color_to_qcolor(color):
@@ -82,39 +84,32 @@ def _qcolor_to_ufo(qcolor):
 	return '{:.3f},{:.3f},{:.3f},{:.3f}'.format(r, g, b, a)
 
 
+def _guide_line(guide):
+	'''Two font-space points on the line of a core Guideline (UFO semantics):
+	x only -> vertical through x; y only -> horizontal through y;
+	x, y, angle -> through (x, y) at `angle` degrees counter-clockwise.'''
+	if guide.x is not None and guide.y is None:
+		x = float(guide.x)
+		return (x, 0.0), (x, 100.0)
+	if guide.y is not None and guide.x is None:
+		y = float(guide.y)
+		return (0.0, y), (100.0, y)
+	x = float(guide.x or 0.0)
+	y = float(guide.y or 0.0)
+	a = math.radians(float(guide.angle or 0.0))
+	return (x, y), (x + 100.0 * math.cos(a), y + 100.0 * math.sin(a))
+
+
 def _build_fl_guideline(guide):
 	'''Build an flGuideLine from a core Guideline.
 
-	UFO → FL vector trick: build a QLineF from (x, y) to the origin, then
-	rotate the line so its angle matches the UFO convention. snapFlags is
-	derived from the angle so the guide snaps correctly in FL's editor.
+	flGuideLine(QLineF) takes the line in font coordinates (verified FL9:
+	extLinef reads back the same two points, angle in radians, CCW).
 	'''
-	x = guide.x if guide.x is not None else 0.0
-	y = guide.y if guide.y is not None else 0.0
-	angle = guide.angle if guide.angle is not None else 0.0
-
-	# UFO: only x → vertical at x (line goes (x, 0) → (x, 1) effectively)
-	# UFO: only y → horizontal at y
-	# UFO: both → angled line through (x, y) at `angle` degrees
-	if guide.x is not None and guide.y is None:
-		# Vertical: implicit angle 90 in QLineF terms (since FL uses 90-angle)
-		position = pqt.QtCore.QPointF(x, 0)
-		vector = pqt.QtCore.QLineF(position, pqt.QtCore.QPointF(0, 0))
-		vector.setAngle(90 - 0)        # vertical in UFO = angle 0
-	elif guide.y is not None and guide.x is None:
-		position = pqt.QtCore.QPointF(0, y)
-		vector = pqt.QtCore.QLineF(position, pqt.QtCore.QPointF(0, 0))
-		vector.setAngle(90 - 90)       # horizontal in UFO = angle 90
-	else:
-		position = pqt.QtCore.QPointF(x, y)
-		vector = pqt.QtCore.QLineF(position, pqt.QtCore.QPointF(0, 0))
-		vector.setAngle(90 - angle)
-
-	fl_guide = fl6.flGuideLine(vector)
-	fl_guide.snapFlags = _snap_flags_for_angle(
-		0 if (guide.x is not None and guide.y is None)
-		else (90 if (guide.y is not None and guide.x is None) else angle)
-	)
+	(x1, y1), (x2, y2) = _guide_line(guide)
+	line = pqt.QtCore.QLineF(pqt.QtCore.QPointF(x1, y1), pqt.QtCore.QPointF(x2, y2))
+	fl_guide = fl6.flGuideLine(line)
+	fl_guide.snapFlags = _snap_flags_for(guide)
 
 	if guide.name:
 		fl_guide.name = str(guide.name)
@@ -129,58 +124,29 @@ def _build_fl_guideline(guide):
 def _fl_to_guideline(fl_guide):
 	'''Read a core Guideline out of an flGuideLine.
 
-	FL exposes guides as vector lines; we recover the UFO (x, y, angle) form
-	from the QLineF position + angle, and use snapFlags as a hint for the
-	axis-aligned cases.
+	The line is flGuideLine.extLinef (a QLineF in font coordinates). Do not
+	use .vector (a direction, as an flNode) or .center (a reference point
+	that can be off the line for guides offset from a metric: center y=654,
+	extPosition 20, line at y=674 in BasilMM).
 	'''
-	# Pull position and angle. flGuideLine exposes the underlying QLineF
-	# either as .vector (recent FL) or via .position / .angle accessors.
-	x = y = angle_deg = None
+	line = fl_guide.extLinef
+	p1, p2 = line.p1(), line.p2()
+	x1, y1 = float(p1.x()), float(p1.y())
+	angle = math.degrees(math.atan2(float(p2.y()) - y1, float(p2.x()) - x1)) % 180.0
 
-	try:
-		line = fl_guide.vector
-		p1 = line.p1()
-		x_pos, y_pos = float(p1.x()), float(p1.y())
-		# QLineF.angle() returns 0-360 with 0 = +x axis, ccw. FL's
-		# guideline angle convention is (90 - QLineF.angle()) inverted.
-		fl_angle = float(line.angle())
-		angle_deg = (90.0 - fl_angle) % 360.0
-		if angle_deg > 180:
-			angle_deg -= 180
-	except AttributeError:
-		# Fallback: try direct attribute access
-		try:
-			pos = fl_guide.position
-			x_pos = float(pos.x())
-			y_pos = float(pos.y())
-		except AttributeError:
-			x_pos = y_pos = 0.0
-		try:
-			angle_deg = float(fl_guide.angle)
-		except AttributeError:
-			angle_deg = 0.0
-
-	# Reduce to the UFO axis-aligned forms where possible
-	snap = str(getattr(fl_guide, 'snapFlags', '') or '')
-
-	if _SNAP_VERTICAL in snap or abs(angle_deg) < 1e-6 or abs(angle_deg - 180) < 1e-6:
-		x = x_pos
-		y = None
-		angle = None
-	elif _SNAP_HORIZONTAL in snap or abs(angle_deg - 90) < 1e-6:
-		x = None
-		y = y_pos
-		angle = None
+	if abs(angle - 90.0) < _ANGLE_EPS:
+		x, y, angle = x1, None, None			# vertical
+	elif angle < _ANGLE_EPS or abs(angle - 180.0) < _ANGLE_EPS:
+		x, y, angle = None, y1, None			# horizontal
 	else:
-		x = x_pos
-		y = y_pos
-		angle = angle_deg
+		x, y = x1, y1
 
 	name = getattr(fl_guide, 'name', '') or None
 
 	color = None
 	try:
-		color = _qcolor_to_ufo(fl_guide.color)
+		if fl_guide.hasColor:
+			color = _qcolor_to_ufo(fl_guide.color)
 	except (AttributeError, TypeError):
 		pass
 

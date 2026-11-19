@@ -20,9 +20,10 @@ import PythonQt as pqt
 from typerig.proxy.tr.objects.node import trNode
 from typerig.proxy.tr.objects.contour import trContour, _build_fl_contour
 from typerig.core.objects.shape import Shape
+from typerig.core.objects.transform import Transform
 
 # - Init --------------------------------
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 
 # - Keep compatibility for basestring checks
 try:
@@ -31,13 +32,43 @@ except NameError:
 	basestring = (str, bytes)
 
 # - Helpers ------------------------------
+# FontLab model (verified FL9, 2026-11): flShape.contours are in ELEMENT
+# space and the placement lives only in flShape.transform. The element
+# name lives on flShape.shapeData.name; flShape.name is normally ''.
+# QTransform(m11, m12, m21, m22, dx, dy) has the same slot order as core
+# Transform(xx, xy, yx, yy, dx, dy): x' = m11*x + m21*y + dx.
+
+def _qt_to_transform(qt):
+	'''QTransform -> core Transform.'''
+	return Transform(qt.m11(), qt.m12(), qt.m21(), qt.m22(), qt.dx(), qt.dy())
+
+def _transform_to_qt(transform):
+	'''core Transform (or any 6-sequence) -> QTransform.'''
+	return pqt.QtGui.QTransform(*[float(transform[i]) for i in range(6)])
+
+def _element_name(fl_shape):
+	'''Element name of an flShape: shapeData.name, else flShape.name.'''
+	data = fl_shape.shapeData
+	return (data.name if data is not None else '') or fl_shape.name or ''
+
+def _set_element_name(fl_shape, name):
+	if fl_shape.shapeData is not None:
+		fl_shape.shapeData.name = name
+	else:
+		fl_shape.name = name
+
 def _build_fl_shape(core_shape):
-	'''Build an flShape from a core Shape.'''
+	'''Build an flShape from a core Shape: contours (element space), element
+	name and placement transform.'''
 	fl_shape = fl6.flShape()
 	fl_shape.contours = [_build_fl_contour(c) for c in core_shape.contours]
 
-	if hasattr(core_shape, 'name') and core_shape.name:
-		fl_shape.name = core_shape.name
+	if getattr(core_shape, 'name', None):
+		_set_element_name(fl_shape, core_shape.name)
+
+	transform = getattr(core_shape, 'transform', None)
+	if transform is not None:
+		fl_shape.transform = _transform_to_qt(transform)
 
 	return fl_shape
 
@@ -121,7 +152,9 @@ class trShape(Shape):
 		The returned Shape has no FL bindings and can be freely manipulated.
 		'''
 		core_contours = [trContour(c).eject() for c in self.host.contours]
-		return Shape(core_contours, name=self.name)
+		return Shape(core_contours,
+		             name=_element_name(self.host),
+		             transform=_qt_to_transform(self.host.transform))
 
 	def mount(self, core_shape):
 		'''Write core Shape data back into the FL host.
@@ -139,9 +172,13 @@ class trShape(Shape):
 		# - Replace host contours
 		self.host.contours = fl_contours
 
-		# - Copy shape name
-		if hasattr(core_shape, 'name') and core_shape.name:
-			self.host.name = core_shape.name
+		# - Element name and placement
+		if getattr(core_shape, 'name', None):
+			_set_element_name(self.host, core_shape.name)
+
+		transform = getattr(core_shape, 'transform', None)
+		if transform is not None:
+			self.host.transform = _transform_to_qt(transform)
 
 		# - Rebuild proxy data
 		self.data = [trContour(c, parent=self) for c in self.host.contours]

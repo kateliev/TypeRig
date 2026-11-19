@@ -15,6 +15,7 @@ from xml.etree import ElementTree as ET
 
 from typerig.core.objects.atom import Member, Container
 from typerig.core.fileio.xmlio import XMLSerializable, register_xml_class, _convert_xml_attr
+from typerig.core.objects.metrics import FontMetrics
 
 # - Init --------------------------------
 __version__ = '0.2.0'
@@ -58,7 +59,7 @@ class Master(Member, XMLSerializable):
 		location (dict)  : {axis_name: value, ...}
 		is_default (bool): fallback master for sparse glyphs
 	'''
-	__slots__ = ('name', 'layer_name', 'location', 'is_default', 'identifier', 'parent', 'lib')
+	__slots__ = ('name', 'layer_name', 'location', 'is_default', 'metrics', 'identifier', 'parent', 'lib')
 
 	XML_TAG = 'master'
 	# location and is_default are handled in custom _to_xml_element / from_XML
@@ -77,6 +78,9 @@ class Master(Member, XMLSerializable):
 		self.layer_name  = kwargs.pop('layer_name',  self.name)
 		self.location 	 = kwargs.pop('location',	 {})
 		self.is_default  = kwargs.pop('is_default',  False)
+		# Per-master vertical metrics (FontMetrics) or None = use Font.metrics.
+		# FontLab keeps ascender/descender/x-height/... per master.
+		self.metrics 	 = kwargs.pop('metrics',	 None)
 
 	# -- Internals ----------------------
 	def __repr__(self):
@@ -105,6 +109,9 @@ class Master(Member, XMLSerializable):
 		if self.location:
 			elem.append(_location_to_element(self.location))
 
+		if self.metrics is not None:
+			elem.append(self.metrics._to_xml_element())
+
 		return elem
 
 	@classmethod
@@ -118,6 +125,7 @@ class Master(Member, XMLSerializable):
 			layer_name 	= element.get('layer', 		element.get('name', '')),
 			is_default 	= element.get('default', 'false').lower() == 'true',
 			location 	= _location_from_element(element),
+			metrics 	= FontMetrics.from_XML(element.find('metrics')) if element.find('metrics') is not None else None,
 		)
 
 

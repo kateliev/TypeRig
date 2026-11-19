@@ -1,6 +1,6 @@
 # HANDOUT — trFont round trip: VFC → .trfont → VFC
 
-**Status:** Stage 0 DONE (2026-11-19). Stage A in progress. See §7 for the exact next action.
+**Status:** Stage 0 DONE. Stage A: eject side DONE (0 diffs on a 40-glyph sample); `create_font` (mount into a new font) crashed FontLab on its first run, cause not yet found. See §7 for the exact next action.
 **Owner:** Vassil Kateliev. **Repo:** TypeRig (master).
 **Goal:** a FontLab `.vfc` can be ejected to `.trfont` and mounted back into a new
 FontLab font with no loss on a declared field set — then the same for Glyphs.
@@ -340,48 +340,48 @@ Rounding and normalization rules live in the harness, in one place, commented.
 
 ### Stage A — outlines, metadata, axis setup
 
-- [ ] A.0 **Carry `Shape.transform`** (§3.5) — the most urgent item. In
+- [x] A.0 **Carry `Shape.transform`** (§3.5) — the most urgent item. In
       `trShape.eject()`, read `host.transform` (QTransform `m11 m12 m21 m22 dx dy`)
       into the core `Transform`. In `_build_fl_shape()` / `trShape.mount()`, set it
       back. Check the core `Transform` element order against QTransform before you
       write any code. Gate: `Aacute`'s acute node ejects at element space
       `(107, 550)` with transform `(308, 190)`, and it mounts back to the same
       place.
-- [ ] A.1 `Axis`: add `short_name`, `design_min`, `design_default`, `design_max`,
+- [x] A.1 `Axis`: add `short_name`, `design_min`, `design_default`, `design_max`,
       optional `<map>` of (user, design) pairs. Serialize; core round trip test.
-- [ ] A.2 Per-master metrics: `Master.metrics` (a `FontMetrics`). `Font.metrics`
+- [x] A.2 Per-master metrics: `Master.metrics` (a `FontMetrics`). `Font.metrics`
       becomes the default master's metrics; `upm` stays font-level. XML:
       `<master name="Bold"><location .../><metrics .../></master>`. Bump
       `TRFONT_FORMAT_VERSION_MINOR`; keep reading old packages.
-- [ ] A.3 Rewrite `_fl_axes`: master names are strings; locations via
+- [x] A.3 Rewrite `_fl_axes`: master names are strings; locations via
       `f.location(name)[axis.shortName]`; default from `f.defaultMaster`;
       instances from `flInstance` (`name`, `location`, `weight`, `width`).
       Keep locations keyed by **axis name**: that is the existing format
       contract (`trfont.md`) and the designspace convention. An earlier draft
       of this plan said "tag", which would have been a silent format change.
       Map name ↔ shortName only at the FL boundary.
-- [ ] A.4 Rewrite `_fl_info` onto `fg.info` (mapping: `audit.INFO_MAP`, already
+- [x] A.4 Rewrite `_fl_info` onto `fg.info` (mapping: `audit.INFO_MAP`, already
       verified against FL9). Unmapped UFO keys → `FontInfo.lib`. `FontInfo.lib`
       stores values as `str()` today, so list fields (Panose, unicode ranges)
       need typed lib values first. Version is composed from
       `versionMajor`/`versionMinor` (`1.002`). BasilMM has both `None`, so the
       eject must not invent the core default `'1.0'`.
-- [ ] A.5 Rewrite `_fl_metrics`: per master via `setMaster` + `*_value`; restore
+- [x] A.5 Rewrite `_fl_metrics`: per master via `setMaster` + `*_value`; restore
       the original current master in a `finally`.
-- [ ] A.6 `trFontProxy.create_font(core_font)` → a **new** flPackage: axes,
+- [~] A.6 `trFontProxy.create_font(core_font)` → a **new** flPackage: axes,
       `addMaster` + `setLocation` + per-master metrics, `addInstance`, glyph
       order, then `mount`. Needed because `mount()` only updates a live font and
       a round trip must produce a fresh VFC.
-- [ ] A.7 Stage A does **not** decompose. Each shape is written as its own outline
+- [x] A.7 Stage A does **not** decompose. Each shape is written as its own outline
       (element space) plus its transform (A.0), and the element name goes in
       `Shape.name`. The outlines are duplicated per use and the link between
       uses is lost until Stage C. Placement is correct. Stamp
       `elements="unlinked"` into `metainfo.xml` so a Stage-C reader can tell an
       A-era package apart.
-- [ ] A.9 Glyph mark: FL `mark 0` means "no mark", but `trGlyph.mark` returns
+- [x] A.9 Glyph mark: FL `mark 0` means "no mark", but `trGlyph.mark` returns
       `hue_to_hex(0)` = `#ff0000`, so every unmarked glyph ejects red (37 of 40
       in the baseline). Map 0 ↔ `None` both ways.
-- [ ] A.10 Guides: `flGuideLine.vector` is an **flNode** (the position), not a
+- [x] A.10 Guides: `flGuideLine.vector` is an **flNode** (the position), not a
       QLineF, so `_fl_to_guideline` takes its fallback path. FL `angle` is in
       radians. Fix the extraction and the UFO mapping (x / y / angle, None for
       axis-aligned); mount must invert it. BasilMM layer guides come in
@@ -389,6 +389,46 @@ Rounding and normalization rules live in the harness, in one place, commented.
 - [ ] A.8 Mount-side parity check for layer identity: FL master name == layer
       name is the format's contract (`Master.layer_name`). Verify it holds for
       service/mask layers too, or exclude them explicitly.
+- **Implementation notes (2026-11-19)**
+  - A.0/A.7: `proxy/tr/objects/shape.py` reads/writes `flShape.transform` and the
+    element name on `shapeData.name`. QTransform `(m11, m12, m21, m22, dx, dy)` has
+    the same slot order as core `Transform`.
+  - A.1/A.2: `FontMetrics` moved to `core/objects/metrics.py` (re-exported from
+    `font.py`) so `Master.metrics` can use it. Metrics keep fractions
+    (`_intish`). `Axis` gained `short_name`, `design_minimum/default/maximum`,
+    `map`; numbers are written without a trailing `.0` so write/read/write is
+    byte-stable (the idempotence check caught `0` vs `0.0`).
+  - A.3–A.5: `_fl_axes`, `_fl_info`, `_fl_metrics` rewritten from the verified API.
+    Every non-mapped `fg.info` field goes to `FontInfo.lib` (typed: lists and
+    numbers are stored as JSON with `type="json"`). Skipped on purpose:
+    `versionMajor/Minor` (→ `version`), `unitsPerEm` (→ upm), `ascender`,
+    `descender`, `xHeight`, `capHeight` (per master), `openTypeHeadModified`
+    (FontLab rewrites it on save). A file without a version now reads as `''`,
+    not an invented `'1.0'`.
+  - A.9: FL `mark 0` ↔ `None` both ways; mount always writes the mark.
+  - A.10: guides are read from `flGuideLine.extLinef` (font space) and built
+    with `flGuideLine(QLineF)`. snapFlags are ints: `0x4080` vertical,
+    `0x2080` horizontal, `0x1080` angled (the old code assigned strings). Both
+    audit dumps use `canonical_guide`, so FL and core compare without
+    convention noise. Some FL guides are offset from a metric
+    (`center y=654`, `extPosition 20`, line at 674); only the line is carried,
+    the metric binding is deferred (§6).
+  - A.6 write path, verified piece by piece on a scratch font: new font =
+    `fl6.flPackage()` + `flWorkspace.instance().addPackage(pkg)`; UPM through
+    `fg.info.unitsPerEm` (`flPackage.upm` is read-only); `flAxis()` +
+    `addAxis` (**`designDef` defaults to the midpoint, always write it**);
+    `renameMaster`, `addMaster(name, False, pkg, src, False, False, flLocation)`,
+    `setLocation(flLocation, name)`, `defaultMaster = name`; per-master
+    metrics through `setMaster` + `*_value`; `flInstance()` + `addInstance`;
+    `fg.info` list fields (Panose) are writable.
+  - **The first `create_font` run on 40 BasilMM glyphs crashed FontLab 9.**
+    Not yet localized. Suspects: the bulk `fg.info` lib writes, or the
+    per-glyph mount into the new package. `create_font(step_log=path)` now
+    writes and fsyncs one line per step (per info field, per glyph) before
+    running it; the last line names the culprit. Minidumps were left in
+    `%LOCALAPPDATA%\FontLab\fontlab9\crash-reports\`.
+  - Live reload in FontLab: use `audit.reload_typerig()`. Reloading `xmlio`
+    alone empties its class registry and reads come back with no layers.
 - **Gate:** BasilMM → `.trfont` → new VFC; `diff` empty on the **stage a** field
   set. Record the VFC file size delta and the glyph/master counts in the ledger.
 
@@ -488,3 +528,4 @@ Format: `YYYY-MM-DD | machine | what changed | next action`
 - `2026-11-19 | win/D:\Remote\GitHub\TypeRig | Plan written. FL9 probed against BasilMM: _fl_info, _fl_metrics and the master loop all confirmed broken (§3.1–3.4); FL composites confirmed to be element references, not components (§3.5). No code changed. | Start Stage 0.1 — delete trfontfile_proxy.py, then 0.2 test_trfont.py.`
 - `2026-11-19 | same | Re-verification pass found and fixed three wrong claims: (1) shape transforms are dropped by trShape.eject/_build_fl_shape, so 345/754 glyphs eject misplaced (new §3.5, task A.0); (2) refCnt is not a sharing signal, use shapeData.name (§3.6, C.2); (3) BasilMM IS kerned via flPackage.kerning(master), so B.5 is gone. Added §3.8 (match layers by name). | Unchanged: Stage 0.1, then A.0 first in Stage A.`
 - `2026-11-19 | same | Stage 0 DONE. trfontfile_proxy.py deleted; test_trfont.py + trfont_audit.py + proxy/tr/audit.py added; trfont.py: fontTools dependency removed (FL could not import it), portable "/" manifest paths, features.fea single source. Baseline eject_report recorded under the Stage 0 gate. | Stage A, starting with A.0 (transform), A.7 (element name), A.9 (mark).`
+- `2026-11-19 | same | Stage A: eject side done (A.0-A.5, A.7, A.9, A.10). eject_report on 40 BasilMM glyphs: 829 -> 0 diff lines. create_font written (A.6); its first run crashed FontLab 9 and FL came back up only as a "FontLab Crash Report" window, left for the user to answer. | 1) Answer the FontLab crash dialog, reopen D:\Playground\Basil-Rev-2Wt.vfc. 2) In FL: audit.reload_typerig(); run create_font on ~5 glyphs with step_log=<file>; the last line of the log names the crashing step. 3) Fix, then the 40-glyph gate, then the full font.`

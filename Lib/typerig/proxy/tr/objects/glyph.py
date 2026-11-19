@@ -84,11 +84,16 @@ class trGlyph(Glyph):
 	# - Properties --------------------------
 	@property
 	def mark(self):
-		return hue_to_hex(self.host.mark)
+		# FL: mark is an int hue and 0 means "no mark". Without this guard
+		# every unmarked glyph ejected as hue_to_hex(0) == '#ff0000'.
+		hue = self.host.mark
+		return hue_to_hex(hue) if hue else None
 
 	@mark.setter
 	def mark(self, value):
-		if isinstance(value, int):
+		if value is None or value == '':
+			self.host.mark = 0
+		elif isinstance(value, int):
 			self.host.mark = value
 		elif is_hex(value):
 			self.host.mark = hex_to_hue(value)
@@ -231,5 +236,5 @@ class trGlyph(Glyph):
 			# in the (rare) case the core glyph was constructed without any.
 			self.unicodes = list(core_glyph.unicodes)
 
-		if getattr(core_glyph, 'mark', None) is not None:
-			self.mark = core_glyph.mark
+		# Always written: an unmarked core glyph (None) clears the FL mark.
+		self.mark = getattr(core_glyph, 'mark', None)

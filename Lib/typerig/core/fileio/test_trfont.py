@@ -143,14 +143,23 @@ def build_font():
 
 	info = FontInfo('Synth', 'Light', designer='TR Test', copyright='(C) nobody',
 	                version='1.002', weight_class=300, italic_angle=0)
+	# Extra font-info fields (UFO names) with their real types, as FL hands them over
+	info.lib = {'openTypeOS2Panose': [2, 0, 5, 3, 0, 0, 0, 0, 0, 0], 'openTypeOS2Selection': [7],
+	            'postscriptBlueScale': 0.048, 'openTypeHheaAscender': 926.0,
+	            'openTypeOS2VendorID': 'KRND', 'postscriptIsFixedPitch': False}
 
 	font = Font([A, acute, Aacute, o, a, space],
 		info      = info,
 		metrics   = FontMetrics(1000, 674, -174, 450, 674, 200),
-		axes      = [Axis('weight', 'wght', 0, 0, 1000), Axis('width', 'wdth', 75, 100, 100)],
+		axes      = [Axis('weight', 'wght', 0, 0, 1000, short_name='wt',
+		                  design_minimum=20, design_default=20, design_maximum=180,
+		                  map=[(0, 20), (500, 90), (1000, 180)]),
+		             Axis('width', 'wdth', 75, 100, 100)],
 		masters   = Masters([
-			Master('Light', 'Light', {'weight': 0, 'width': 100}, is_default=True),
-			Master('Bold',  'Bold',  {'weight': 1000, 'width': 100}),
+			Master('Light', 'Light', {'weight': 0, 'width': 100}, is_default=True,
+			       metrics=FontMetrics(1000, 674, -174, 450, 674, 200)),
+			Master('Bold',  'Bold',  {'weight': 1000, 'width': 100},
+			       metrics=FontMetrics(1000, 674, -184, 477.5, 674, 200)),
 		]),
 		instances = Instances([
 			Instance('Light',  location={'weight': 0,   'width': 100}),

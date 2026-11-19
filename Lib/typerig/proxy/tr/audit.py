@@ -24,8 +24,8 @@
 #   DIAGNOSTIC  dump_fl(source VFC)  vs dump_font(core Font read from .trfont)
 #               localizes a loss to the eject direction. Two fields use FL
 #               conventions here and may differ for that reason alone:
-#               guide angles (FL `angle`), and info fields that the core
-#               FontInfo does not carry yet.
+#               info fields that the core FontInfo does not carry yet.
+#               Guides use one canonical form on both sides (canonical_guide).
 #
 # Usage inside FontLab (Python console, or the fontlab MCP run_python —
 # mind its ~5 s per call: dump a subset with glyph_names=, or write files):
@@ -43,7 +43,8 @@ import fontlab as fl6
 
 from typerig.core.func.string import hue_to_hex
 from typerig.core.fileio.trfont_audit import (
-	_num, _str, _newlines, _stage_at_least, diff, dump_font,
+	_num, _str, _newlines, _stage_at_least, diff, dump_font, canonical_guide,
+	dump_axis, dump_metrics, dump_value,
 )
 
 # - Init --------------------------------
@@ -77,7 +78,55 @@ INFO_MAP = {
 	'underline_thickness':  'postscriptUnderlineThickness',
 	'postscript_font_name': 'postscriptFontName',
 }
+# fg.info fields that are compared elsewhere or are volatile (own copy of
+# the bridge's skip list, on purpose): version* -> info.version,
+# unitsPerEm -> upm, ascender/descender/xHeight/capHeight -> per-master
+# metrics, openTypeHeadModified -> rewritten by FontLab on every save.
+_INFO_EXTRA_SKIP = {'versionMajor', 'versionMinor', 'unitsPerEm', 'ascender', 'descender',
+                    'xHeight', 'capHeight', 'openTypeHeadModified', 'dict'}
+
+def _dump_info_extra(info):
+	mapped = set(INFO_MAP.values())
+	out = {}
+	for name in sorted(dir(info)):
+		if name.startswith('_') or name in mapped or name in _INFO_EXTRA_SKIP:
+			continue
+		value = getattr(info, name, None)
+		if callable(value) or value is None:
+			continue
+		out[name] = dump_value(value)
+	return out
+
 _NUMERIC_INFO = {'year', 'weight_class', 'width_class', 'italic_angle', 'underline_position', 'underline_thickness'}
+
+# - Live reload (FontLab session) -------
+# xmlio keeps a class registry that the core object modules fill at import.
+# Reloading xmlio alone empties it and every <layer>/<shape>/... child is
+# then silently skipped on read. Reload in this order instead.
+RELOAD_ORDER = [
+	'typerig.core.fileio.xmlio',
+	'typerig.core.objects.node', 'typerig.core.objects.contour', 'typerig.core.objects.shape',
+	'typerig.core.objects.anchor', 'typerig.core.objects.guideline', 'typerig.core.objects.layer',
+	'typerig.core.objects.glyph', 'typerig.core.objects.metrics', 'typerig.core.objects.axis',
+	'typerig.core.objects.master', 'typerig.core.objects.instance', 'typerig.core.objects.encoding',
+	'typerig.core.objects.kern', 'typerig.core.objects.groups', 'typerig.core.objects.font',
+	'typerig.core.fileio.trfont', 'typerig.core.fileio.trfont_audit',
+	'typerig.proxy.tr.objects.guideline', 'typerig.proxy.tr.objects.node',
+	'typerig.proxy.tr.objects.contour', 'typerig.proxy.tr.objects.shape',
+	'typerig.proxy.tr.objects.anchor', 'typerig.proxy.tr.objects.layer',
+	'typerig.proxy.tr.objects.glyph', 'typerig.proxy.tr.objects.font',
+	'typerig.proxy.tr.audit',
+]
+
+def reload_typerig():
+	'''Reload the trfont stack in dependency order (after editing the repo
+	while FontLab is running). Re-import audit afterwards to get the new one.'''
+	import sys, importlib
+	for name in RELOAD_ORDER:
+		if name in sys.modules:
+			importlib.reload(sys.modules[name])
+		else:
+			importlib.import_module(name)
 
 # - Helpers -----------------------------
 def _package(package=None):
@@ -112,6 +161,9 @@ def _mark(hue):
 	'''FL glyph mark is an int hue; 0 means "no mark".'''
 	return '' if not hue else hue_to_hex(hue)
 
+def _qline(line):
+	return ((float(line.p1().x()), float(line.p1().y())), (float(line.p2().x()), float(line.p2().y())))
+
 def _kern_side(obj):
 	'''fgKerningObject -> "glyph" or "@group" (FL's own naming, not UFO's).'''
 	name = _str(getattr(obj, 'id', obj))
@@ -135,19 +187,34 @@ def _dump_layer(layer):
 		'width':   _num(layer.advanceWidth),
 		'height':  _num(layer.advanceHeight),
 		'anchors': sorted((_str(a.name), _num(a.point.x()), _num(a.point.y())) for a in layer.anchors),
-		# FL convention: position from .vector (an flNode), angle from .angle
-		'guides':  sorted((_num(g.vector.x), _num(g.vector.y), _num(g.angle), _str(g.name)) for g in layer.guidelines),
+		# The line is extLinef (font space). Not .vector (a direction) and not
+		# .center (can sit off the line for metric-offset guides).
+		'guides':  sorted((canonical_guide(line=_qline(g.extLinef), name=g.name) for g in layer.guidelines), key=repr),
 		'shapes':  shapes,
 	}
 
+class _Metrics(object):
+	'''Read the current master's vertical metrics off an flPackage.'''
+	def __init__(self, package):
+		self.ascender   = package.ascender_value
+		self.descender  = package.descender_value
+		self.x_height   = package.xHeight_value
+		self.cap_height = package.capsHeight_value
+		self.line_gap   = package.lineGap_value
+
 def _master_metrics(package, master):
-	return {
-		'ascender':   _num(package.ascender_value),
-		'descender':  _num(package.descender_value),
-		'x_height':   _num(package.xHeight_value),
-		'cap_height': _num(package.capsHeight_value),
-		'line_gap':   _num(package.lineGap_value),
-	}
+	return dump_metrics(_Metrics(package))
+
+def _axis_map(axis):
+	'''flAxis.map -> [(user, design), ...]. None/empty in BasilMM; the
+	shape of a populated map is unverified (Stage A note).'''
+	m = axis.map
+	if not m:
+		return []
+	try:
+		return [(float(u), float(d)) for u, d in m]
+	except (TypeError, ValueError):
+		return [('unparsed', str(m))]
 
 # - Dump --------------------------------
 def dump_fl(package=None, stage='a', glyph_names=None, problems=None):
@@ -159,9 +226,8 @@ def dump_fl(package=None, stage='a', glyph_names=None, problems=None):
 		glyph_names  : subset to dump (glyph_order still lists every glyph)
 		problems     : optional list; API surprises are appended, not raised
 
-	Font-level 'metrics' are the default master's (matches core Font.metrics
-	until per-master metrics land in Stage A.2); every master record also
-	carries its own metrics under 'metrics' for the A.2 comparison.
+	Font-level 'metrics' are the default master's; every master record
+	carries its own metrics (FL keeps them per master).
 	'''
 	package = _package(package)
 	problems = problems if problems is not None else []
@@ -188,13 +254,14 @@ def dump_fl(package=None, stage='a', glyph_names=None, problems=None):
 		'upm':     _num(package.upm),
 		'metrics': per_master.get(default_master, {}),
 		'info':    _dump_info(fg.info, problems),
-		'axes': [{
-			'name': _str(a.name), 'tag': _str(a.tag),
-			'minimum': _num(a.minimal), 'default': _num(a.default), 'maximum': _num(a.maximum),
-		} for a in axes],
+		'info_extra': _dump_info_extra(fg.info),
+		'axes': [dump_axis(a.name, a.tag, a.shortName, a.minimal, a.default, a.maximum,
+		                   a.designMin, a.designDef, a.designMax, _axis_map(a))
+		         for a in axes],
 		'masters': [{
 			'name': name, 'layer': name, 'default': name == default_master,
 			'location': location(package.location(name)),
+			'metrics': per_master.get(name, {}),
 		} for name in master_names],
 		'instances': [{
 			'name': _str(i.name), 'location': location(i.location),
@@ -202,8 +269,6 @@ def dump_fl(package=None, stage='a', glyph_names=None, problems=None):
 		'glyph_order': [g.name for g in fg.glyphs],
 		'glyphs': {},
 	}
-	# Extra, FL-only: per-master metrics (compared once Stage A.2 lands)
-	out['master_metrics'] = per_master
 
 	wanted = set(glyph_names) if glyph_names is not None else None
 	for fg_glyph in fg.glyphs:
@@ -261,7 +326,6 @@ def eject_report(work_dir, package=None, stage='a', glyph_names=None, limit=200)
 	package = _package(package)
 	problems = []
 	fl_dump = dump_fl(package, stage, glyph_names, problems)
-	fl_dump.pop('master_metrics', None)
 
 	path = os.path.join(work_dir, 'eject.trfont')
 	trFontProxy(package).save(path, glyph_names=glyph_names)

@@ -67,6 +67,65 @@ def _transform(t):
 		return (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
 	return tuple(_num(t[i]) for i in range(6))
 
+def canonical_guide(x=None, y=None, angle=None, line=None, name=''):
+	'''One comparable form for a guide, from UFO fields or from a line.
+
+	UFO: x only = vertical, y only = horizontal, else (x, y, angle) degrees
+	counter-clockwise. line = ((x1, y1), (x2, y2)) in font space (FL).
+	Returns ('v', x, name) | ('h', y, name) | ('a', fx, fy, angle, name),
+	where (fx, fy) is the foot of the perpendicular from the origin, so any
+	two points on the same line give the same record.
+	'''
+	import math
+	if line is not None:
+		(x1, y1), (x2, y2) = line
+		a = math.degrees(math.atan2(y2 - y1, x2 - x1)) % 180.0
+		x, y, angle = x1, y1, a
+	elif x is not None and y is None:
+		return ('v', _num(x), _str(name))
+	elif y is not None and x is None:
+		return ('h', _num(y), _str(name))
+	else:
+		x, y, angle = float(x or 0.0), float(y or 0.0), float(angle or 0.0) % 180.0
+
+	if abs(angle - 90.0) < 1e-6:
+		return ('v', _num(x), _str(name))
+	if angle < 1e-6 or abs(angle - 180.0) < 1e-6:
+		return ('h', _num(y), _str(name))
+	r = math.radians(angle)
+	dx, dy = math.cos(r), math.sin(r)
+	t = x * dx + y * dy
+	return ('a', _num(x - t * dx), _num(y - t * dy), _num(angle), _str(name))
+
+def dump_value(value):
+	'''Normalize a free-form value (info extras): numbers rounded, lists kept.'''
+	if isinstance(value, bool) or value is None:
+		return value
+	if isinstance(value, (int, float)):
+		return _num(value)
+	if isinstance(value, (list, tuple)):
+		return [dump_value(v) for v in value]
+	return _str(value)
+
+def dump_metrics(m):
+	'''Vertical metrics record (upm is font-level and dumped separately).'''
+	return {
+		'ascender': _num(m.ascender), 'descender': _num(m.descender),
+		'x_height': _num(m.x_height), 'cap_height': _num(m.cap_height),
+		'line_gap': _num(m.line_gap),
+	}
+
+def dump_axis(name, tag, short_name, minimum, default, maximum,
+              design_minimum=None, design_default=None, design_maximum=None, axis_map=None):
+	'''Axis record. A design value left unset means "same as user space".'''
+	pick = lambda design, user: _num(user if design is None else design)
+	return {
+		'name': _str(name), 'tag': _str(tag), 'short_name': _str(short_name),
+		'minimum': _num(minimum), 'default': _num(default), 'maximum': _num(maximum),
+		'design': (pick(design_minimum, minimum), pick(design_default, default), pick(design_maximum, maximum)),
+		'map': [(_num(u), _num(d)) for u, d in (axis_map or [])],
+	}
+
 def _stage_at_least(stage, minimum):
 	return STAGES.index(stage) >= STAGES.index(minimum)
 
@@ -82,8 +141,7 @@ def _dump_layer(layer):
 		'width':   _num(layer.advance_width),
 		'height':  _num(layer.advance_height),
 		'anchors': sorted((_str(a.name), _num(a.x), _num(a.y)) for a in layer.anchors),
-		# UFO guides leave x or y as None (axis-aligned): sort by repr, not by value
-		'guides':  sorted(((_num(g.x), _num(g.y), _num(g.angle), _str(g.name)) for g in (layer.guidelines or [])), key=repr),
+		'guides':  sorted((canonical_guide(g.x, g.y, g.angle, name=g.name) for g in (layer.guidelines or [])), key=repr),
 		'shapes':  [{
 			'name':      _str(s.name),
 			'transform': _transform(getattr(s, 'transform', None)),
@@ -103,19 +161,20 @@ def dump_font(font, stage='a'):
 	m = font.metrics
 	out = {
 		'upm': _num(m.upm),
-		'metrics': {
-			'ascender': _num(m.ascender), 'descender': _num(m.descender),
-			'x_height': _num(m.x_height), 'cap_height': _num(m.cap_height),
-			'line_gap': _num(m.line_gap),
-		},
+		'metrics': dump_metrics(m),
 		'info': _dump_info(font.info),
-		'axes': [{
-			'name': _str(a.name), 'tag': _str(a.tag),
-			'minimum': _num(a.minimum), 'default': _num(a.default), 'maximum': _num(a.maximum),
-		} for a in font.axes],
+		# every other font-info field (UFO names), carried in FontInfo.lib
+		'info_extra': {str(k): dump_value(v) for k, v in sorted((getattr(font.info, 'lib', None) or {}).items())},
+		'axes': [dump_axis(
+			a.name, a.tag, getattr(a, 'short_name', ''), a.minimum, a.default, a.maximum,
+			getattr(a, 'design_minimum', None), getattr(a, 'design_default', None),
+			getattr(a, 'design_maximum', None), getattr(a, 'map', None))
+			for a in font.axes],
 		'masters': [{
 			'name': _str(ms.name), 'layer': _str(ms.layer_name),
 			'default': bool(ms.is_default), 'location': _location(ms.location),
+			# effective metrics: the master's own, else the font's
+			'metrics': dump_metrics(getattr(ms, 'metrics', None) or m),
 		} for ms in font.masters.data],
 		'instances': [{
 			'name': _str(i.name), 'location': _location(i.location),

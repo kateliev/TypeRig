@@ -31,6 +31,8 @@
 # - Dependencies ------------------------
 from __future__ import print_function
 
+import os
+
 import fontlab as fl6
 import fontgate as fgt
 
@@ -53,56 +55,150 @@ from typerig.core.fileio.trfont import TrFontIO
 __version__ = '0.3.0'
 
 # - Helpers -----------------------------
+# FontInfo attribute -> fg.info attribute (UFO fontinfo names), verified on
+# FL9 (2026-11). NOTE: fgFont itself has none of these; they all live on
+# fg.info. proxy/tr/audit.py keeps its own copy on purpose (the audit must
+# not share code paths with the bridge it checks).
+FL_INFO_MAP = {
+	'family_name':          'familyName',
+	'style_name':           'styleName',
+	'year':                 'year',
+	'note':                 'note',
+	'designer':             'openTypeNameDesigner',
+	'designer_url':         'openTypeNameDesignerURL',
+	'manufacturer':         'openTypeNameManufacturer',
+	'manufacturer_url':     'openTypeNameManufacturerURL',
+	'copyright':            'copyright',
+	'trademark':            'trademark',
+	'description':          'openTypeNameDescription',
+	'license':              'openTypeNameLicense',
+	'license_url':          'openTypeNameLicenseURL',
+	'unique_id':            'openTypeNameUniqueID',
+	'vendor_id':            'openTypeOS2VendorID',
+	'weight_class':         'openTypeOS2WeightClass',
+	'width_class':          'openTypeOS2WidthClass',
+	'italic_angle':         'italicAngle',
+	'underline_position':   'postscriptUnderlinePosition',
+	'underline_thickness':  'postscriptUnderlineThickness',
+	'postscript_font_name': 'postscriptFontName',
+}
+
+# fg.info fields NOT carried in FontInfo.lib:
+#   version*        -> composed into FontInfo.version
+#   unitsPerEm      -> FontMetrics.upm
+#   ascender, descender, xHeight, capHeight -> per-master metrics (A.2);
+#                      fg.info only mirrors the key master
+#   openTypeHeadModified -> rewritten by FontLab on every save
+FL_INFO_SKIP = {'versionMajor', 'versionMinor', 'unitsPerEm',
+                'ascender', 'descender', 'xHeight', 'capHeight',
+                'openTypeHeadModified', 'dict'}
+
+def fl_info_fields(info):
+	'''All plain fg.info fields: {ufo_name: value}. Idiom from spike 0.4:
+	dir(fg.info) minus private names, `dict` and callables.'''
+	out = {}
+	for name in dir(info):
+		if name.startswith('_') or name == 'dict':
+			continue
+		value = getattr(info, name, None)
+		if callable(value):
+			continue
+		out[name] = value
+	return out
+
 def _fl_info(fg_font):
-	'''Extract font info from fgFont → FontInfo (UFO-aligned fields).'''
-	def gs(attr):
-		return getattr(fg_font, attr, '') or ''
+	'''fg.info -> FontInfo. Mapped fields go to FontInfo attributes; every
+	other non-empty fg.info field goes to FontInfo.lib under its UFO name.'''
+	fields = fl_info_fields(fg_font.info)
+	mapped = set(FL_INFO_MAP.values())
 
-	def gn(attr):
-		'''Get numeric or None; FL often returns 0 for "unset" so we keep 0
-		unless the attribute is missing entirely.'''
-		val = getattr(fg_font, attr, None)
-		return val if val is not None else None
+	kwargs = {}
+	for attr, ufo in FL_INFO_MAP.items():
+		value = fields.get(ufo)
+		if value is not None:
+			kwargs[attr] = value
 
-	info = FontInfo(
-		family_name = gs('familyName'),
-		style_name  = gs('styleName'),
-	)
-	info.version              = gs('version')
-	info.year                 = gn('year')
-	info.note                 = gs('note')
-	info.designer             = gs('designer')
-	info.designer_url         = gs('designerURL')
-	info.manufacturer         = gs('manufacturer')
-	info.manufacturer_url     = gs('manufacturerURL')
-	info.copyright            = gs('copyright')
-	info.trademark            = gs('trademark')
-	info.description          = gs('description')
-	info.license              = gs('license')
-	info.license_url          = gs('licenseURL')
-	info.unique_id            = gs('uniqueID')
-	info.vendor_id            = gs('vendorID')
-	info.weight_class         = gn('weightClass')
-	info.width_class          = gn('widthClass')
-	info.italic_angle         = gn('italicAngle_value') if hasattr(fg_font, 'italicAngle_value') else gn('italicAngle')
-	info.underline_position   = gn('underlinePosition_value') if hasattr(fg_font, 'underlinePosition_value') else gn('underlinePosition')
-	info.underline_thickness  = gn('underlineThickness_value') if hasattr(fg_font, 'underlineThickness_value') else gn('underlineThickness')
-	info.postscript_font_name = gs('postscriptFontName') or gs('fontName')
+	major, minor = fields.get('versionMajor'), fields.get('versionMinor')
+	kwargs['version'] = '{}.{:03d}'.format(int(major), int(minor or 0)) if major is not None else ''
 
+	info = FontInfo(**kwargs)
+	info.lib = {name: value for name, value in sorted(fields.items())
+	            if name not in mapped and name not in FL_INFO_SKIP and value is not None}
 	return info
 
-def _fl_metrics(fg_font):
-	'''Extract vertical metrics from fgFont → FontMetrics.'''
-	get = lambda attr, default: getattr(fg_font, attr, default) or default
+def _info_into_fl(fg_font, info, problems=None, step=None):
+	'''FontInfo -> fg.info (inverse of _fl_info). Problems are collected,
+	not raised: one unwritable field must not abort a font build.'''
+	problems = problems if problems is not None else []
+	target = fg_font.info
 
-	return FontMetrics(
-		upm 		= get('upm', 		1000),
-		ascender 	= get('ascender', 	800),
-		descender 	= get('descender', 	-200),
-		x_height 	= get('xHeight', 	500),
-		cap_height 	= get('capHeight', 	700),
-		line_gap 	= get('lineGap', 	0),
-	)
+	def put(name, value):
+		if step is not None:
+			step('  info.{}'.format(name))
+		try:
+			setattr(target, name, value)
+		except Exception as e:
+			problems.append('fg.info.{} <- {!r}: {}'.format(name, value, e))
+
+	for attr, ufo in FL_INFO_MAP.items():
+		value = getattr(info, attr, None)
+		if value is None or value == '':
+			continue
+		put(ufo, value)
+
+	version = getattr(info, 'version', '') or ''
+	if version:
+		major, _, minor = str(version).partition('.')
+		try:
+			put('versionMajor', int(major))
+			put('versionMinor', int(minor or 0))
+		except ValueError:
+			problems.append('version {!r} is not "major.minor"'.format(version))
+
+	for name, value in (getattr(info, 'lib', None) or {}).items():
+		if name in FL_INFO_SKIP:
+			continue
+		put(name, value)
+	return problems
+
+class _FLMetricsReader(object):
+	def __init__(self, package):
+		self.ascender   = package.ascender_value
+		self.descender  = package.descender_value
+		self.x_height   = package.xHeight_value
+		self.cap_height = package.capsHeight_value
+		self.line_gap   = package.lineGap_value
+
+def _fl_master_metrics(fl_package, upm):
+	'''{master name: FontMetrics}. FL keeps vertical metrics per master and
+	exposes them only for the current master (setMaster + *_value); the
+	current master is always restored.'''
+	out = {}
+	current = fl_package.master
+	try:
+		for name in [str(m) for m in fl_package.masters]:
+			fl_package.setMaster(name)
+			r = _FLMetricsReader(fl_package)
+			out[name] = FontMetrics(upm, r.ascender, r.descender, r.x_height, r.cap_height, r.line_gap)
+	finally:
+		if current:
+			fl_package.setMaster(current)
+	return out
+
+def _fl_metrics(fl_package):
+	'''Font-level FontMetrics = the default master's metrics (+ upm).'''
+	upm = fl_package.upm
+	per_master = _fl_master_metrics(fl_package, upm)
+	default = str(fl_package.defaultMaster) if per_master else None
+	return per_master.get(default) or FontMetrics(upm)
+
+def _metrics_into_fl(fl_package, master_name, metrics):
+	fl_package.setMaster(master_name)
+	fl_package.ascender_value   = metrics.ascender
+	fl_package.descender_value  = metrics.descender
+	fl_package.xHeight_value    = metrics.x_height
+	fl_package.capsHeight_value = metrics.cap_height
+	fl_package.lineGap_value    = metrics.line_gap
 
 def _fl_groups(fg_font):
 	'''Extract fgGroups → UFO-style Groups.
@@ -340,84 +436,125 @@ def _fl_features(fg_font):
 
 	return '\n\n'.join(parts)
 
+def _axis_map(fl_axis):
+	'''flAxis.map -> [(user, design), ...]. Empty in BasilMM; the shape of
+	a populated map is unverified (handout, Stage A notes).'''
+	m = fl_axis.map
+	if not m:
+		return []
+	return [(float(u), float(d)) for u, d in m]
+
+def _fl_location(fl_location, axes):
+	'''flLocation -> {axis name: value}. flLocation has no introspection
+	API in PythonQt; it subscripts by axis shortName (verified FL9).'''
+	out = {}
+	for axis in axes:
+		value = fl_location[axis.shortName]
+		if value is not None:
+			out[str(axis.name)] = float(value)
+	return out
+
+def _to_fl_location(location, axes):
+	'''{axis name: value} -> flLocation keyed by axis shortName.'''
+	short = {str(a.name): str(a.short_name or a.name) for a in axes}
+	return fl6.flLocation({short.get(name, name): float(value) for name, value in location.items()})
+
 def _fl_axes(fl_package):
 	'''Build (axes_list, Masters, Instances) from an flPackage.
 
-	FL's master concept maps directly to Master.layer_name — in FL the
-	master name IS the layer name inside every glyph.
-
-	Returns tuple: (axes_list, Masters, Instances)
+	Verified FL9 facts this relies on (handout §3.2-3.4):
+	  - flPackage.masters is a list of master NAMES (str);
+	  - locations come from flPackage.location(name) / flInstance.location;
+	  - flAxis range is minimal/default/maximum (+ designMin/Def/Max);
+	  - the default master is flPackage.defaultMaster, not index 0;
+	  - FL master name == glyph layer name (Master.layer_name contract).
 	'''
-	axes_list = []
-	masters   = Masters()
-	instances = Instances()
+	fl_axes = list(fl_package.axes)
+	axes_list = [Axis(
+		name    = str(ax.name),
+		tag     = str(ax.tag),
+		minimum = float(ax.minimal),
+		default = float(ax.default),
+		maximum = float(ax.maximum),
+		short_name     = str(ax.shortName),
+		design_minimum = float(ax.designMin),
+		design_default = float(ax.designDef),
+		design_maximum = float(ax.designMax),
+		map            = _axis_map(ax),
+	) for ax in fl_axes]
 
-	# -- Axes
-	try:
-		for ax in fl_package.axes:
-			axes_list.append(Axis(
-				name    = ax.name,
-				tag     = ax.tag if hasattr(ax, 'tag') and ax.tag else ax.name[:4].upper(),
-				minimum = float(ax.minimum) if hasattr(ax, 'minimum') else 0.,
-				default = float(ax.default)  if hasattr(ax, 'default')  else 0.,
-				maximum = float(ax.maximum)  if hasattr(ax, 'maximum')  else 1000.,
-			))
-	except (AttributeError, TypeError):
-		pass
+	names = [str(m) for m in fl_package.masters]
+	default = str(fl_package.defaultMaster) if names else None
+	per_master = _fl_master_metrics(fl_package, fl_package.upm)
 
-	# -- Masters
-	try:
-		for i, master in enumerate(fl_package.masters):
-			loc = {}
-			if hasattr(master, 'location') and master.location:
-				try:
-					loc = {k: float(v) for k, v in dict(master.location).items()}
-				except Exception:
-					pass
+	masters = Masters([Master(
+		name       = name,
+		layer_name = name,
+		location   = _fl_location(fl_package.location(name), fl_axes),
+		is_default = (name == default),
+		metrics    = per_master.get(name),
+	) for name in names])
 
-			masters.append(Master(
-				name 	   = master.name,
-				layer_name = master.name,	# FL convention: master name == layer name
-				location   = loc,
-				is_default = (i == 0),		# first master is default
-			))
-
-	except (AttributeError, TypeError):
-		# Single-master fallback: derive layer name from first glyph's first layer
-		try:
-			first_g = next(iter(fl_package.fgPackage.glyphs), None)
-			if first_g and first_g.layers:
-				layer_name = first_g.layers[0].name
-			else:
-				layer_name = 'Regular'
-		except Exception:
-			layer_name = 'Regular'
-
-		masters.append(Master(
-			name 	   = layer_name,
-			layer_name = layer_name,
-			is_default = True,
-		))
-
-	# -- Instances
-	try:
-		for inst in fl_package.instances:
-			loc = {}
-			if hasattr(inst, 'location') and inst.location:
-				try:
-					loc = {k: float(v) for k, v in dict(inst.location).items()}
-				except Exception:
-					pass
-
-			instances.append(Instance(
-				name 	 = inst.name,
-				location = loc,
-			))
-
-	except (AttributeError, TypeError):
-		pass
+	instances = Instances([Instance(
+		name     = str(inst.name),
+		location = _fl_location(inst.location, fl_axes),
+	) for inst in fl_package.instances])
 
 	return axes_list, masters, instances
+
+def _design_space_into_fl(fl_package, font, problems=None):
+	'''Axes, masters (names, locations, default, metrics) and instances of a
+	core Font -> a fresh flPackage (one master, no axes: what flPackage()
+	gives). Masters are created in core order.'''
+	problems = problems if problems is not None else []
+
+	# - Axes. designDef defaults to the axis midpoint in FL, so the design
+	#   range is always written explicitly.
+	for axis in font.axes:
+		ax = fl6.flAxis()
+		ax.name = axis.name
+		ax.tag = axis.tag
+		ax.shortName = axis.short_name or axis.tag or axis.name[:2]
+		ax.minimal = axis.minimum
+		ax.default = axis.default
+		ax.maximum = axis.maximum
+		ax.designMin = axis.minimum if axis.design_minimum is None else axis.design_minimum
+		ax.designDef = axis.default if axis.design_default is None else axis.design_default
+		ax.designMax = axis.maximum if axis.design_maximum is None else axis.design_maximum
+		if axis.map:
+			problems.append('axis {}: map not written (FL map format unverified)'.format(axis.name))
+		fl_package.addAxis(ax)
+
+	# - Masters: rename the initial master to the first core master, add the rest
+	masters = list(font.masters.data)
+	if not masters:
+		return problems
+
+	first = str(fl_package.masters[0])
+	if first != masters[0].name:
+		fl_package.renameMaster(first, masters[0].name)
+	fl_package.setLocation(_to_fl_location(masters[0].location, font.axes), masters[0].name)
+
+	for master in masters[1:]:
+		fl_package.addMaster(master.name, False, fl_package, masters[0].name, False, False,
+		                     _to_fl_location(master.location, font.axes))
+
+	default = font.default_master_name()
+	if default:
+		fl_package.defaultMaster = default
+
+	for master in masters:
+		_metrics_into_fl(fl_package, master.name, master.metrics or font.metrics)
+	fl_package.setMaster(default or masters[0].name)
+
+	# - Instances
+	for instance in font.instances.data:
+		inst = fl6.flInstance()
+		inst.name = instance.name
+		inst.location = _to_fl_location(instance.location, font.axes)
+		fl_package.addInstance(inst)
+
+	return problems
 
 def _fl_encoding(fg_font):
 	'''Extract unicode assignments from fgFont.glyphs → Encoding.'''
@@ -462,7 +599,7 @@ class trFontProxy(object):
 
 	def __repr__(self):
 		try:
-			name = self.host.fgPackage.familyName or '<unnamed>'
+			name = self.host.fgPackage.info.familyName or '<unnamed>'
 		except Exception:
 			name = '<unknown>'
 		return '<trFontProxy: "{}">'.format(name)
@@ -559,7 +696,7 @@ class trFontProxy(object):
 		return _fl_info(self.fg)
 
 	def _build_metrics(self):
-		return _fl_metrics(self.fg)
+		return _fl_metrics(self.host)
 
 	def _build_axes(self):
 		return _fl_axes(self.host)	# returns (axes_list, Masters, Instances)
@@ -688,7 +825,7 @@ class trFontProxy(object):
 		return TrFontIO.read(path)
 
 	# -- Mount --------------------------
-	def mount(self, font, include_features=True, include_groups=True, verbose=False):
+	def mount(self, font, include_features=True, include_groups=True, verbose=False, step=None):
 		'''Push a core Font back into the live FL session.
 
 		Mounts geometry + metadata for every glyph, and (optionally) features
@@ -705,6 +842,8 @@ class trFontProxy(object):
 			core_glyph = font[glyph_name]
 			if core_glyph is None:
 				continue
+			if step is not None:
+				step('  glyph {}'.format(glyph_name))
 
 			if self.has_glyph(glyph_name):
 				tr_glyph = self.glyph(glyph_name)
@@ -747,6 +886,63 @@ class trFontProxy(object):
 			except Exception as e:
 				if verbose:
 					print('  ERROR injecting groups: {}'.format(e))
+
+	@classmethod
+	def create_font(cls, font, include_features=True, include_groups=True, verbose=False, step_log=None):
+		'''Build a NEW FontLab font from a core Font and return its proxy.
+
+		A round trip must produce a fresh VFC, so this does not touch any open
+		font: new flPackage -> workspace -> UPM -> info -> axes / masters /
+		metrics / instances -> glyphs (mount) -> drop starter glyphs the core
+		font does not have. Save it with File > Save As (or the fontlab MCP
+		save_font).
+
+		step_log (str|None): file that gets one line per step, flushed and
+			fsync'd BEFORE the step runs. If FontLab crashes, the last line
+			names the step that took it down.
+
+		Returns:
+			trFontProxy, with .problems listing anything not written.
+		'''
+		def step(text):
+			if verbose:
+				print('  create_font: ' + text)
+			if step_log:
+				with open(step_log, 'a', encoding='utf-8') as fh:
+					fh.write(text + chr(10))
+					fh.flush()
+					os.fsync(fh.fileno())
+
+		step('new flPackage + addPackage')
+		package = fl6.flPackage()
+		fl6.flWorkspace.instance().addPackage(package)
+		proxy = cls(package)
+		problems = []
+
+		# UPM first: flPackage.upm is read-only, fg.info.unitsPerEm is not.
+		step('upm')
+		package.fgPackage.info.unitsPerEm = font.metrics.upm
+		step('info')
+		_info_into_fl(package.fgPackage, font.info, problems, step=step)
+		step('design space')
+		_design_space_into_fl(package, font, problems)
+
+		starters = [g.name for g in package.fgPackage.glyphs]
+		step('mount {} glyphs'.format(len(font)))
+		proxy.mount(font, include_features=include_features, include_groups=include_groups,
+		            verbose=verbose, step=step)
+
+		for name in starters:
+			if font.glyph(name) is None:
+				step('remove starter glyph {}'.format(name))
+				package.fgPackage.removeGlyph(name)
+		step('done')
+
+		proxy.problems = problems
+		if verbose:
+			for p in problems:
+				print('  PROBLEM: {}'.format(p))
+		return proxy
 
 	def load_and_mount(self, path, **kwargs):
 		'''Read a .trfont folder and immediately mount it into the live FL session.'''
