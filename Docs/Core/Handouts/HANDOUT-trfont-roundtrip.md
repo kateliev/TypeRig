@@ -1,6 +1,6 @@
 # HANDOUT — trFont round trip: VFC → .trfont → VFC
 
-**Status:** Stage 0 DONE. **Stage A DONE (2026-11-19): full-font gate met** — BasilMM (754 glyphs, 2 masters) → .trfont → new FontLab font → save .vfc → reopen: 4 diffs, all null contours in the source font. Stage B written, not yet run. See §7 for the next action.
+**Status:** Stage 0, **A and B DONE (2026-11-19)**. Full BasilMM round trip after save + reopen: 4 diffs (null contours in the source); FontLab compiles GDEF/GPOS/GSUB byte-identical to the source. Stage C next. See §7.
 **Owner:** Vassil Kateliev. **Repo:** TypeRig (master).
 **Goal:** a FontLab `.vfc` can be ejected to `.trfont` and mounted back into a new
 FontLab font with no loss on a declared field set — then the same for Glyphs.
@@ -557,23 +557,51 @@ Rounding and normalization rules live in the harness, in one place, commented.
   - FL audit dump (stage b) records kerning and classes per master in FL-native
     form (`@class`). `groups` (fg.groups) and `features` records are still
     `None` until `fg.features` / `fg.groups` are probed in FontLab.
-- [ ] B.3a Features read: switch `_fl_features` to
+- [x] B.3a Features read: switch `_fl_features` to
       `fontpr.get_font_info(...)['openTypeFeatures']` (§3.12), and add the
       write-side notify calls. Probe the record shape in FontLab first.
 - [ ] B.6 Carry `com.fontlab.kerningClassesInMainMaster`.
 - [ ] B.7 (optional, owner) fontport as an independent oracle for Stage B.
-- [~] B.1 FL → core kerning, per master: `pFont.kerning(master)` →
+- [x] B.1 FL → core kerning, per master: `pFont.kerning(master)` →
       `Font.kerning_for(master, create=True)`. Pick **one** canonical class
       naming in trFont — recommend UFO `public.kern1.` / `public.kern2.`, since
       `_fl_groups` already uses `KERN1_PREFIX` / `KERN2_PREFIX` — and map FL's
       `@`-prefixed names at the boundary only.
-- [~] B.2 core → FL kerning, per master, including class pairs; clear before set
+- [x] B.2 core → FL kerning, per master, including class pairs; clear before set
       so removals propagate.
-- [ ] B.3 Features: assert FEA text survives newline-normalized byte-equal
+- [x] B.3 Features: assert FEA text survives newline-normalized byte-equal
       through `features.fea`, and that FL **recompiles** it after mount. Watch
       the prefix / `languagesystem` / class-definition block ordering in
       `_split_fea_blocks`.
-- [ ] B.4 Groups: add to the audit field set; verify mode and per-side flags.
+- [x] B.4 Groups: add to the audit field set; verify mode and per-side flags.
+- **Gate result (2026-11-19): MET.** Full BasilMM, stage b, after save +
+  reopen: 4 diff lines (the same null contours as Stage A). Kerning: 2085
+  pairs per master and 105 classes per master with their sides; 32 OpenType
+  classes; all 13 feature records. `compile_features` (dry run) on source and
+  rebuilt font: **GDEF, GPOS, GSUB SHA-256 identical**; feature text identical
+  except CRLF (source) vs LF (rebuilt).
+- **FontLab calls that work (FL 9.0.9809)** — most taken from fontport's source:
+  - Kerning classes: read `flPackage.kerning(master).groups.asDict()`; write
+    `kerning(master).addGroup(name, members, kernMode='KernLeft'|'KernRight'|
+    'KernBothSide')`. `groups[name] = ...` raises; `addGroup` without
+    `kernMode` always makes KernBothSide.
+  - Pairs: `kerning(master).set(((name, mode), (name, mode)), value)`, mode
+    `'glyphMode'|'groupMode'`; zero-valued pairs are seeded as 1, then
+    `scale(0.0)`, then the others, then `scale(1.0)` (fontport's sequence).
+  - OpenType classes: read `fg.groups.getAsClassRecords()` →
+    `'name: g1 g2'` (fgGroup exposes no members); write
+    `fg.groups.fromDict({name: fgt.fgGroup(name, members,
+    'FeaClassGroupMode', members[0])})`. `fromClassRecords` was a silent no-op.
+  - Features: read `fontpr.get_font_info(font_id=fg.id)['openTypeFeatures']`
+    (`fgFont.id` is the fontpr font id); write `fg.features.clear()`,
+    `set_prefix`, `set_feature(tag, block)` per block, then
+    `notifyChangesApplied`. FontLab's feature records keep the comments that
+    FOLLOW a block inside that block, so the .fea is split at
+    `feature TAG {` headers, not at `} TAG;`. Every block must close with
+    `} TAG;` (fontport: unterminated blocks crash the native loader).
+  - GDEF: per-glyph `flGlyph.otGlyphClass` / `otMarkClass`, carried in
+    `Glyph.lib` as `com.fontlab.otGlyphClass` / `com.fontlab.otMarkClass`.
+    Without them the rebuilt font compiled no GDEF.
 - **Gate:** `diff` empty on the **stage b** field set on BasilMM. It has real
   per-master kerning (2085 entries on Bold, §3.7), 32 groups and a feature set.
 
@@ -682,3 +710,4 @@ Format: `YYYY-MM-DD | machine | what changed | next action`
 - `2026-11-19 | same | Stage B glue written (kern_map.py + tests 14/14, _fl_kerning/_kerning_into_fl, audit stage-b kerning in FL-native form); NOT run in FontLab. Stage C.1 proposal written: link elements by name per master layer, no format change. FontLab still on its crash-report window. | Same as previous line (crash dialog, step_log run), then Stage B probe of fg.groups / fg.features, then owner decision on C.1.`
 - `2026-11-19 | same | Read the FontLab Adam suite (fontport guides, python-docs, remopy, instamix): §3.12. Code: kerning now via documented fgKerning.set(); features write refuses a tagless trailing `feature` (documented native heap over-read). Plan: Stage A gate now requires save + reopen; features mount is the top crash suspect. Installed FL 9.0.9809, beta is 9813. | Crash dialog still open. Then: step-log run of create_font with include_features=False, then True.`
 - `2026-11-19 | same | STAGE A DONE. Full-font gate after save+reopen: 754 glyphs, 4 diffs = null contours in the source. Driver proxy/tr/roundtrip.py (build/compare as FontLab scripts, no MCP time limit). Fixed: create_font crash (glyph handles), live-node smooth/names + coordinate restore, package naming fields + info.dict + double info write after design space, starter glyph order, xmlio type-guessing of names (infinity -> inf), silent glyph drops in eject. | Stage B: run kerning/groups in FontLab; probe fg.features via fontpr.get_font_info; add groups/features to the FL dump; then the stage-b gate.`
+- `2026-11-19 | same | STAGE B DONE. Full-font stage-b gate after save+reopen: 4 diffs (null contours). compile_features dry run: GDEF/GPOS/GSUB SHA-256 identical to source. Kerning classes via addGroup(kernMode=), pairs via set((name,mode),(name,mode)), OT classes via fg.groups.fromDict(fgGroup), features via fontpr openTypeFeatures + header-based split, GDEF via otGlyphClass/otMarkClass in Glyph.lib. | Stage C: element links (C.1 proposal; FontLab's own "Clean Up" on open does the same merge).`

@@ -282,79 +282,31 @@ def _metrics_into_fl(fl_package, master_name, metrics):
 	fl_package.capsHeight_value = metrics.cap_height
 	fl_package.lineGap_value    = metrics.line_gap
 
+def _parse_class_record(record):
+	'''"name: g1 g2 g3" -> (name, [g1, g2, g3]).'''
+	name, _, members = str(record).partition(':')
+	return name.strip(), members.split()
+
 def _fl_groups(fg_font):
-	'''Extract fgGroups → UFO-style Groups.
+	'''FontLab OpenType classes (fg.groups) -> UFO-style Groups (plain names).
 
-	FL groups carry a `mode` and per-side flags that indicate whether the
-	group is a kerning class (and on which side) or a free user/OT group.
-	Side information is renamed onto the UFO reserved prefixes:
-	  - first/left  → public.kern1.<name>
-	  - second/right → public.kern2.<name>
-	  - both sides  → emit two entries, one for each prefix
-	  - none        → keep as a user group with the original name
-
-	FL's mode strings and side-attribute names vary across builds, so this
-	probes a handful of likely property names and degrades gracefully.
+	Verified FL 9.0.9809: fg.groups holds the font's OpenType classes as
+	fgGroup objects (mode FeaClassGroupMode) that expose NO member list and an
+	empty .name; members are only available through
+	fg.groups.getAsClassRecords() -> ['name: g1 g2 ...']. Kerning classes are
+	NOT here: they live per master on flPackage.kerning(master).groups (see
+	_fl_kerning).
 	'''
 	groups = Groups()
-
 	try:
-		fg_groups = fg_font.groups
+		records = list(fg_font.groups.getAsClassRecords())
 	except AttributeError:
 		return groups
-
-	# fgGroups exposes .asDict() {name: fgGroup}; fall back to iteration
-	try:
-		raw = fg_groups.asDict()
-		items = list(raw.items())
-	except Exception:
-		try:
-			items = [(g.name, g) for g in fg_groups]
-		except Exception:
-			return groups
-
-	def _side_flags(fg_group):
-		'''Return (is_first, is_second). Probes a few known attribute names.'''
-		mode = getattr(fg_group, 'mode', '') or ''
-		# Property variants observed across FL builds
-		first  = bool(getattr(fg_group, 'isKerningOnLeft',  False)
-		           or getattr(fg_group, 'kerning1',         False)
-		           or getattr(fg_group, 'firstSide',        False)
-		           or ('KernLeft' in mode))
-		second = bool(getattr(fg_group, 'isKerningOnRight', False)
-		           or getattr(fg_group, 'kerning2',         False)
-		           or getattr(fg_group, 'secondSide',       False)
-		           or ('KernRight' in mode))
-		if 'KernBothSide' in mode:
-			first = second = True
-		return first, second
-
-	def _members(fg_group):
-		for attr in ('names', 'glyphs', 'members'):
-			value = getattr(fg_group, attr, None)
-			if value is not None:
-				try:
-					return [str(g) for g in value]
-				except TypeError:
-					pass
-		return []
-
-	for name, fg_group in items:
-		members = _members(fg_group)
-		if not members:
-			continue
-		first, second = _side_flags(fg_group)
-
-		if first:
-			groups.set(KERN1_PREFIX + name, members)
-		if second:
-			groups.set(KERN2_PREFIX + name, members)
-		if not (first or second):
-			# Free user/OT group — keep original name
+	for record in records:
+		name, members = _parse_class_record(record)
+		if name:
 			groups.set(name, members)
-
 	return groups
-
 
 # - Kerning (Stage B) -------------------
 # FontLab keeps pairs AND kerning classes per master on
@@ -404,59 +356,67 @@ def _kerning_into_fl(fl_package, font, problems=None):
 
 	for master in [str(m) for m in fl_package.masters]:
 		fl_kern = fl_package.kerning(master)
-		fl_kern.clear()					# pairs (and classes, if FL ties them)
-		fl_kern.groups.clear()
-		for name, (members, mode) in fl_groups.items():
-			fl_kern.groups[name] = (list(members), mode)
+		fl_kern.clear()
 
+		# Classes: addGroup(name, members, kernMode=...) is the call fontport
+		# uses (FL 9.0.9809): `groups[name] = ...` is not supported, and
+		# addGroup without kernMode always makes KernBothSide.
+		for name, (members, mode) in fl_groups.items():
+			try:
+				if not fl_kern.addGroup(name, list(members), kernMode=mode):
+					problems.append('master {}: class {} not created'.format(master, name))
+			except Exception as e:
+				problems.append('master {}: class {}: {}'.format(master, name, e))
+
+		# Pairs: set(((name, mode), (name, mode)), value), fontport's form.
+		# Zero-valued pairs (exceptions) are seeded as 1 and scaled to 0
+		# before any other pair exists, as fontport does.
 		core_kern = font.kerning_for(master)
+		pairs = []
 		for p in (core_kern.data if core_kern is not None else []):
 			(l, lm), (r, rm) = ufo_pair_to_fl(p.first, p.second, rename)
-			# fgKerning.set(fgKerningObjectPair | (name1, name2), value) is the
-			# documented setter (fontlab-python-docs); __setitem__ is not
-			# documented. Explicit modes first: a glyph and a class may share a
-			# name. FontLab kerning is integer-only.
-			try:
-				fl_kern.set(fgt.fgKerningObjectPair(l, r, lm, rm), int(p.value))
-			except Exception:
-				fl_kern.set((l, r), int(p.value))
+			pairs.append((((l, lm), (r, rm)), int(p.value)))
+
+		zero = [key for key, value in pairs if value == 0]
+		for key in zero:
+			fl_kern.set(key, 1)
+		if zero:
+			fl_kern.scale(0.0)
+		for key, value in pairs:
+			if value != 0:
+				fl_kern.set(key, value)
+		fl_kern.scale(1.0)
 	return problems
 
+_FEA_HEADER = None
+
 def _split_fea_blocks(fea_text):
-	'''Split an opaque .fea blob into (prefix_text, [(tag, block_text), ...]).
+	'''Split FEA text into (prefix, [(tag, block_text), ...]).
 
-	The prefix is everything before the first `feature TAG { ... } TAG;` block.
-	Each block is matched non-greedily and kept intact (including the wrapper),
-	since FL's `fg.features.set_feature(tag, body)` accepts the full block.
-
-	Returns ('', []) on empty input.
+	A block runs from its `feature TAG {` header (at line start) to the next
+	header, so text after `} TAG;` (comments for the next feature, blank
+	lines) stays with the block it follows. That is how FontLab keeps its
+	feature records (fontpr openTypeFeatures), so a FontLab -> .fea ->
+	FontLab trip puts every record back unchanged. The prefix is everything
+	before the first header. Each part is stripped of leading/trailing
+	newlines (the .fea joins parts with one blank line).
 	'''
 	import re
+	global _FEA_HEADER
+	if _FEA_HEADER is None:
+		_FEA_HEADER = re.compile(r'^[ \t]*feature\s+([A-Za-z0-9_.]{1,4})\s*\{', re.M)
 	if not fea_text:
 		return '', []
 
-	# Match: `feature <tag> { ... } <tag>;`  with `tag` = 4 chars max + alnum/underscore.
-	# Non-greedy on the body so nested braces in lookups still terminate at the
-	# matching outer `}`. FL accepts the full block as the "body" argument.
-	pattern = re.compile(
-		r'feature\s+(\w{1,4})\s*\{.*?\}\s*\1\s*;',
-		re.DOTALL,
-	)
+	heads = list(_FEA_HEADER.finditer(fea_text))
+	if not heads:
+		return fea_text.strip('\n'), []
 
+	prefix = fea_text[:heads[0].start()].strip('\n')
 	blocks = []
-	last_end = 0
-	prefix_chunks = []
-	for m in pattern.finditer(fea_text):
-		if m.start() > last_end:
-			prefix_chunks.append(fea_text[last_end:m.start()])
-		blocks.append((m.group(1), m.group(0)))
-		last_end = m.end()
-	# Anything after the last feature block is treated as trailing prefix-like
-	# content (rare; concat onto prefix to avoid silent loss).
-	if last_end < len(fea_text):
-		prefix_chunks.append(fea_text[last_end:])
-
-	prefix = ''.join(prefix_chunks).strip()
+	for i, m in enumerate(heads):
+		end = heads[i + 1].start() if i + 1 < len(heads) else len(fea_text)
+		blocks.append((m.group(1), fea_text[m.start():end].strip('\n')))
 	return prefix, blocks
 
 
@@ -476,13 +436,14 @@ def _features_into_fl(fg_font, fea_text):
 	prefix, blocks = _split_fea_blocks(fea_text or '')
 
 	# fontport (NATIVE-FEATURES guide) documents a native heap over-read in
-	# FontLab's feature loader on a tagless trailing `feature` keyword, and
-	# refuses it before any native call. Do the same: anything the block
-	# splitter left over that still says `feature` is not sent.
+	# FontLab's feature loader on a tagless/unterminated trailing `feature`,
+	# and refuses it before any native call. Do the same: every block must
+	# close with `} TAG;`.
 	import re
-	if re.search(r'\bfeature\b', prefix or ''):
-		raise ValueError('features: text outside complete "feature TAG {...} TAG;" blocks '
-		                 'contains the keyword "feature"; not sent to FontLab (known native crash)')
+	for tag, block_text in blocks:
+		if not re.search(r'\}\s*' + re.escape(tag) + r'\s*;', block_text):
+			raise ValueError('features: block "{}" is not closed by "}} {};"; not sent to FontLab '
+			                 '(known native crash on unterminated feature blocks)'.format(tag, tag))
 
 	# Clear stale state first so feature removal is also captured on inject.
 	try:
@@ -504,96 +465,40 @@ def _features_into_fl(fg_font, fea_text):
 
 
 def _groups_into_fl(fg_font, groups, skip_kerning_classes=False):
-	'''Push core Groups into fg_font.groups.
-
-	UFO reserved-prefix names map back to FL kerning groups with the FL-side
-	"left"/"right" tag preserved; user/OT groups go in as plain feature-class
-	groups. FL's exact mode-string contract varies by build, so we use the
-	known `fgGroup(name, members, mode, leader)` constructor and let FL pick
-	its representation; if a build refuses a mode string, we fall back to
-	the default OT-class mode.
+	'''Plain (non-kerning) core groups -> FontLab OpenType classes, through
+	fg.groups.fromClassRecords(['name: g1 g2 ...']), the inverse of the
+	getAsClassRecords() read. Kerning classes (public.kern1./kern2.) are
+	written per master by _kerning_into_fl and are skipped here.
 	'''
-	from typerig.core.objects.groups import KERN1_PREFIX, KERN2_PREFIX
-
-	try:
-		fg_groups = fg_font.groups
-	except AttributeError:
-		return
-
-	try:
-		current = fg_groups.asDict()
-	except Exception:
-		current = {}
-
-	def _make_group(name, members, mode_hint):
-		try:
-			return fgt.fgGroup(name, list(members), mode_hint, 'mainglyphname')
-		except Exception:
-			# Fallback for builds that don't accept the mode hint
-			return fgt.fgGroup(name, list(members), 'FeaClassGroupMode', 'mainglyphname')
-
+	# fontport's write (native_groups.write_groups): one fgGroup per class,
+	# fgGroup(name, members, 'FeaClassGroupMode', first member), then
+	# fg.groups.fromDict(...). (fromClassRecords was a silent no-op.)
+	values = {}
 	for group in groups.data:
-		name = group.name
-		if skip_kerning_classes and (group.is_kern1 or group.is_kern2):
-			continue		# written per master by _kerning_into_fl
-		if group.is_kern1:
-			fl_name = name[len(KERN1_PREFIX):]
-			current[fl_name] = _make_group(fl_name, group.members, 'KernLeftMode')
-		elif group.is_kern2:
-			fl_name = name[len(KERN2_PREFIX):]
-			current[fl_name] = _make_group(fl_name, group.members, 'KernRightMode')
-		else:
-			current[name] = _make_group(name, group.members, 'FeaClassGroupMode')
+		if group.is_kern1 or group.is_kern2:
+			continue
+		members = list(group.members)
+		values[group.name] = fgt.fgGroup(group.name, members, 'FeaClassGroupMode', members[0] if members else '')
+	if values:
+		fg_font.groups.fromDict(values)
 
-	try:
-		fg_groups.fromDict(current)
-	except AttributeError:
-		pass
+def fl_feature_records(fg_font):
+	'''[(name or None, text)] in FontLab's order: optional prefix first
+	(name None), then one complete `feature TAG {...} TAG;` block per tag.
 
+	Read through fontpr.get_font_info(font_id)['openTypeFeatures'], the route
+	fontport uses: fgOTLayout.get_prefix() folds the class panel into the
+	prefix (classes would then be written twice) and keys()/get_feature() can
+	fall back to decompiled binary data. fgFont.id is the fontpr font id.
+	'''
+	import fontpr
+	info = fontpr.get_font_info(font_id=fg_font.id)
+	return [(entry.get('name'), entry.get('feature') or '') for entry in info.get('openTypeFeatures', ())]
 
 def _fl_features(fg_font):
-	'''Extract OpenType feature source from fgFont as a single opaque FEA string.
-
-	Concatenates the FEA prefix (classes, lookups, languagesystems declared at
-	top of feature file) with each named feature block. Result is suitable
-	for writing as `features.fea` in UFO style. The inject side (text → FL)
-	is not yet implemented; FL's API surface for re-ingesting a single FEA
-	blob needs review (similar to guideline API quirks — pending walkthrough).
-	'''
-	try:
-		feats = fg_font.features
-	except AttributeError:
-		return ''
-
-	parts = []
-	try:
-		prefix = feats.get_prefix() or ''
-		if prefix.strip():
-			parts.append(prefix.rstrip())
-	except Exception:
-		pass
-
-	try:
-		tags = list(feats.keys())
-	except Exception:
-		tags = []
-
-	for tag in tags:
-		try:
-			body = feats.get_feature(tag) or ''
-		except Exception:
-			continue
-		body = body.strip()
-		if not body:
-			continue
-		# If FL hands back a bare body, wrap it; if it already includes the
-		# feature header, pass through unchanged.
-		if body.startswith('feature '):
-			parts.append(body)
-		else:
-			parts.append('feature {} {{\n{}\n}} {};'.format(tag, body, tag))
-
-	return '\n\n'.join(parts)
+	'''FontLab feature source as one FEA text (prefix, then blocks in order).'''
+	parts = [text.replace('\r\n', '\n').replace('\r', '\n').strip('\n') for _, text in fl_feature_records(fg_font)]
+	return '\n\n'.join(p for p in parts if p.strip()) + '\n' if parts else ''
 
 def _axis_map(fl_axis):
 	'''flAxis.map -> [(user, design), ...]. Empty in BasilMM; the shape of
@@ -1082,12 +987,28 @@ class trFontProxy(object):
 				if verbose:
 					print('  ERROR mounting {}: {}'.format(glyph_name, e))
 
+		# OT classes before features: feature code references them.
+		if include_groups and getattr(font, 'groups', None) is not None and len(font.groups.data):
+			if step is not None:
+				step('classes')
+			try:
+				_groups_into_fl(self.fg, font.groups, skip_kerning_classes=True)
+			except Exception as e:
+				self.problems = list(getattr(self, 'problems', []) or []) + ['classes: {}'.format(e)]
+
 		if include_features and getattr(font, 'features', ''):
+			if step is not None:
+				step('features')
 			try:
 				_features_into_fl(self.fg, font.features)
+				try:
+					fl6.flItems.notifyChangesApplied('TypeRig: features', [self.host, self.host.featuresContainer()])
+				except Exception:
+					pass
 				if verbose:
 					print('  injected features ({} chars)'.format(len(font.features)))
 			except Exception as e:
+				self.problems = list(getattr(self, 'problems', []) or []) + ['features: {}: {}'.format(type(e).__name__, e)]
 				if verbose:
 					print('  ERROR injecting features: {}'.format(e))
 
@@ -1098,19 +1019,10 @@ class trFontProxy(object):
 				problems = _kerning_into_fl(self.host, font)
 				self.problems = list(getattr(self, 'problems', []) or []) + problems
 			except Exception as e:
+				self.problems = list(getattr(self, 'problems', []) or []) + ['kerning: {}: {}'.format(type(e).__name__, e)]
 				if verbose:
 					print('  ERROR injecting kerning: {}'.format(e))
 
-		if include_groups and getattr(font, 'groups', None) is not None and len(font.groups.data):
-			if step is not None:
-				step('groups')
-			try:
-				_groups_into_fl(self.fg, font.groups, skip_kerning_classes=include_kerning)
-				if verbose:
-					print('  injected {} groups'.format(len(font.groups.data)))
-			except Exception as e:
-				if verbose:
-					print('  ERROR injecting groups: {}'.format(e))
 
 	@classmethod
 	def create_font(cls, font, include_features=True, include_groups=True, include_kerning=True, verbose=False, step_log=None):

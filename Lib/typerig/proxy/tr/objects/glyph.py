@@ -26,6 +26,13 @@ from typerig.core.objects.glyph import Glyph
 # - Init --------------------------------
 __version__ = '0.1.2'
 
+# FontLab glyph attributes carried in Glyph.lib as com.fontlab.<attr>.
+# otGlyphClass / otMarkClass are what FontLab builds GDEF from (verified:
+# without them a rebuilt BasilMM compiled GSUB/GPOS identical to the source
+# but no GDEF, 2026-11-19).
+FL_GLYPH_LIB_PREFIX = 'com.fontlab.'
+FL_GLYPH_LIB_ATTRS = ('otGlyphClass', 'otMarkClass')
+
 # - Classes -----------------------------
 class trGlyph(Glyph):
 	'''Proxy to flLayer object
@@ -174,8 +181,17 @@ class trGlyph(Glyph):
 		# them itself and adds guides of its own on reopen (handout A.8).
 		core_layers = [trLayer(l).eject() for l in self.host.layers if not str(l.name).startswith('#')]
 
+		# FontLab per-glyph OpenType classes (they feed GDEF): carried in
+		# Glyph.lib under FontLab's own names, only when set.
+		lib = {}
+		for attr in FL_GLYPH_LIB_ATTRS:
+			value = getattr(self.host, attr, 0)
+			if value:
+				lib[FL_GLYPH_LIB_PREFIX + attr] = int(value)
+
 		return Glyph(
 			core_layers,
+			lib=lib,
 			name=self.name,
 			mark=self.mark,
 			unicodes=list(self.unicodes),
@@ -244,3 +260,8 @@ class trGlyph(Glyph):
 
 		# Always written: an unmarked core glyph (None) clears the FL mark.
 		self.mark = getattr(core_glyph, 'mark', None)
+
+		# OpenType glyph / mark class (GDEF); absent in lib = 0 (unset)
+		core_lib = getattr(core_glyph, 'lib', None) or {}
+		for attr in FL_GLYPH_LIB_ATTRS:
+			setattr(self.host, attr, int(core_lib.get(FL_GLYPH_LIB_PREFIX + attr, 0)))

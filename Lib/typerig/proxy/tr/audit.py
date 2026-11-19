@@ -296,6 +296,8 @@ def dump_fl(package=None, stage='a', glyph_names=None, problems=None):
 			'note':     _newlines(glyph.note),
 			'layers':   {_str(l.name): _dump_layer(l) for l in glyph.layers if not str(l.name).startswith('#')},
 		}
+		if _stage_at_least(stage, 'b'):
+			out['glyphs'][name]['ot_class'] = (int(glyph.otGlyphClass), int(glyph.otMarkClass))
 
 	if _stage_at_least(stage, 'b'):
 		# FL-native form (names '@class' for groupMode sides): this is the
@@ -311,8 +313,12 @@ def dump_fl(package=None, stage='a', glyph_names=None, problems=None):
 			classes[name] = {str(k): (list(v[0]), str(v[1])) for k, v in sorted(dict(fl_kern.groups.asDict()).items())}
 		out['kerning'] = kerning
 		out['kerning_classes'] = classes
-		out['groups'] = None		# fg.groups (OT classes): record pending an FL probe
-		out['features'] = None		# FEA text: record pending an FL probe of fg.features
+		# OpenType classes: fg.groups.getAsClassRecords() -> 'name: g1 g2'
+		out['groups'] = sorted(str(r) for r in fg.groups.getAsClassRecords())
+		# Feature source records (fontpr, as fontport reads them), newline-normalized
+		import fontpr
+		feats = fontpr.get_font_info(font_id=fg.id).get('openTypeFeatures', ())
+		out['features'] = [(_str(e.get('name')), _newlines(e.get('feature')).strip('\n')) for e in feats]
 
 	return out
 

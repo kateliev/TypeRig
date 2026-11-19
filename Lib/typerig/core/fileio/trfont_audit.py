@@ -192,6 +192,11 @@ def dump_font(font, stage='a'):
 		}
 
 	if _stage_at_least(stage, 'b'):
+		# per-glyph OpenType glyph/mark class (GDEF), FontLab names in Glyph.lib
+		for glyph in font.glyphs:
+			lib = getattr(glyph, 'lib', None) or {}
+			out['glyphs'][glyph.name]['ot_class'] = (int(lib.get('com.fontlab.otGlyphClass', 0)),
+			                                          int(lib.get('com.fontlab.otMarkClass', 0)))
 		kerning = {}
 		master_names = [ms.name for ms in font.masters.data] or [None]
 		for name in master_names:
