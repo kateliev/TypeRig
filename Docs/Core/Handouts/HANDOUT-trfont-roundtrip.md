@@ -1,6 +1,6 @@
 # HANDOUT — trFont round trip: VFC → .trfont → VFC
 
-**Status:** Stage 0, **A and B DONE (2026-11-19)**. Full BasilMM round trip after save + reopen: 4 diffs (null contours in the source); FontLab compiles GDEF/GPOS/GSUB byte-identical to the source. Stage C next. See §7.
+**Status:** Stage 0, **A, B DONE; C met on BasilMM via FontLab's own on-open Clean Up (2026-11-19)**: element links come back identical (119 linked elements per master). No pure-Python link route on FL 9.0.9809 yet. Stage D (Glyphs handout) next. See §7.
 **Owner:** Vassil Kateliev. **Repo:** TypeRig (master).
 **Goal:** a FontLab `.vfc` can be ejected to `.trfont` and mounted back into a new
 FontLab font with no loss on a declared field set — then the same for Glyphs.
@@ -607,6 +607,30 @@ Rounding and normalization rules live in the harness, in one place, commented.
 
 ### Stage C — components / element references
 
+- **Stage C result (2026-11-19).** The C.1 proposal (no format change: the
+  element name on every use is the link) is what was tested. Audit stage c =
+  per master layer, element name → groups of glyphs sharing one
+  `flShapeData` (`shapeData.id`).
+  - **Gate on BasilMM: met** when the rebuilt `.vfc` is reopened and FontLab's
+    *Duplicate Element Names* dialog is answered **Clean Up** ("merge them if
+    they are identical or rename them if they are not"): stage-c diff = the 4
+    source null contours only; 119 linked elements per master, e.g. `A`
+    shared by 11 glyphs, identical to the source.
+  - **Not possible from Python on FL 9.0.9809 (found so far):**
+    `fl6.flShape(<flShapeData>)` and the `flShape` copy constructor fail
+    ("Error creating object of type flShapeBuilder"); `flShape.shapeData` is
+    read-only; `clone()` / `cloneTopLevel()` copy the data;
+    `flPackage.replaceShapeWithReference(shape, process[, layer])` returns a
+    shape (or None) without linking. **The same constructor is what
+    TypeRig's Element panel *Link* uses** (`proxy/fl/actions/element.py`
+    `element_link`), so that tool very likely fails on this build too —
+    check it; re-test both on FL 9.1 (build 9813).
+  - Until a Python route exists, Stage C = rebuild → save → reopen with
+    **Clean Up** → save. Caveat of Clean Up: it renames same-named elements
+    whose outlines differ, which would change element names; BasilMM has
+    none (every same-named use is one shared element in the source).
+  - C.4 (FontLab's real components, `flLayer.components`) is still open: it
+    needs a test font that has them.
 - **C.1 proposal (2026-11-19, needs the owner's decision):**
   **Link by element name per master layer; no format change.**
   - What Stage A already writes is enough: every use of an element carries
@@ -711,3 +735,4 @@ Format: `YYYY-MM-DD | machine | what changed | next action`
 - `2026-11-19 | same | Read the FontLab Adam suite (fontport guides, python-docs, remopy, instamix): §3.12. Code: kerning now via documented fgKerning.set(); features write refuses a tagless trailing `feature` (documented native heap over-read). Plan: Stage A gate now requires save + reopen; features mount is the top crash suspect. Installed FL 9.0.9809, beta is 9813. | Crash dialog still open. Then: step-log run of create_font with include_features=False, then True.`
 - `2026-11-19 | same | STAGE A DONE. Full-font gate after save+reopen: 754 glyphs, 4 diffs = null contours in the source. Driver proxy/tr/roundtrip.py (build/compare as FontLab scripts, no MCP time limit). Fixed: create_font crash (glyph handles), live-node smooth/names + coordinate restore, package naming fields + info.dict + double info write after design space, starter glyph order, xmlio type-guessing of names (infinity -> inf), silent glyph drops in eject. | Stage B: run kerning/groups in FontLab; probe fg.features via fontpr.get_font_info; add groups/features to the FL dump; then the stage-b gate.`
 - `2026-11-19 | same | STAGE B DONE. Full-font stage-b gate after save+reopen: 4 diffs (null contours). compile_features dry run: GDEF/GPOS/GSUB SHA-256 identical to source. Kerning classes via addGroup(kernMode=), pairs via set((name,mode),(name,mode)), OT classes via fg.groups.fromDict(fgGroup), features via fontpr openTypeFeatures + header-based split, GDEF via otGlyphClass/otMarkClass in Glyph.lib. | Stage C: element links (C.1 proposal; FontLab's own "Clean Up" on open does the same merge).`
+- `2026-11-19 | same | STAGE C met on BasilMM via FontLab's on-open Clean Up: stage-c gate (element links per master) = 4 diffs (null contours), 119 linked elements per master identical to source. No Python linking route on FL 9.0.9809 (flShape(flShapeData) fails - TypeRig Element Link likely broken on this build). | Owner: confirm C.1 (no format change). Then Stage D handout; C.4 needs a font with FL components; re-test linking on FL 9.1 beta 9813.`

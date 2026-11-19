@@ -299,6 +299,28 @@ def dump_fl(package=None, stage='a', glyph_names=None, problems=None):
 		if _stage_at_least(stage, 'b'):
 			out['glyphs'][name]['ot_class'] = (int(glyph.otGlyphClass), int(glyph.otMarkClass))
 
+	if _stage_at_least(stage, 'c'):
+		# Element links: per master layer, element name -> the groups of glyphs
+		# whose shapes share ONE flShapeData (same shapeData.id). A name whose
+		# uses are unlinked shows up as several singleton groups.
+		links = {}
+		for fg_glyph in fg.glyphs:
+			glyph = package.findName(fg_glyph.name)
+			if glyph is None:
+				continue
+			for layer in glyph.layers:
+				if str(layer.name).startswith('#'):
+					continue
+				for shape in layer.shapes:
+					data = shape.shapeData
+					if data is None or not data.name:
+						continue
+					by_id = links.setdefault(str(layer.name), {}).setdefault(str(data.name), {})
+					by_id.setdefault(data.id, set()).add(fg_glyph.name)
+		out['element_links'] = {layer: {name: sorted(sorted(g) for g in ids.values())
+		                                for name, ids in sorted(names.items())}
+		                        for layer, names in sorted(links.items())}
+
 	if _stage_at_least(stage, 'b'):
 		# FL-native form (names '@class' for groupMode sides): this is the
 		# GATE form, compared FL vs FL. For FL vs core use kern_map.
