@@ -330,11 +330,14 @@ def _kerning_into_fl(fl_package, font, problems=None):
 		core_kern = font.kerning_for(master)
 		for p in (core_kern.data if core_kern is not None else []):
 			(l, lm), (r, rm) = ufo_pair_to_fl(p.first, p.second, rename)
+			# fgKerning.set(fgKerningObjectPair | (name1, name2), value) is the
+			# documented setter (fontlab-python-docs); __setitem__ is not
+			# documented. Explicit modes first: a glyph and a class may share a
+			# name. FontLab kerning is integer-only.
 			try:
-				# Explicit modes: a glyph and a class may share a name.
-				fl_kern[fgt.fgKerningObjectPair(l, r, lm, rm)] = p.value
+				fl_kern.set(fgt.fgKerningObjectPair(l, r, lm, rm), int(p.value))
 			except Exception:
-				fl_kern[l, r] = p.value		# pKerning.setPair form (mode inferred by FL)
+				fl_kern.set((l, r), int(p.value))
 	return problems
 
 def _split_fea_blocks(fea_text):
@@ -389,6 +392,15 @@ def _features_into_fl(fg_font, fea_text):
 		return
 
 	prefix, blocks = _split_fea_blocks(fea_text or '')
+
+	# fontport (NATIVE-FEATURES guide) documents a native heap over-read in
+	# FontLab's feature loader on a tagless trailing `feature` keyword, and
+	# refuses it before any native call. Do the same: anything the block
+	# splitter left over that still says `feature` is not sent.
+	import re
+	if re.search(r'\bfeature\b', prefix or ''):
+		raise ValueError('features: text outside complete "feature TAG {...} TAG;" blocks '
+		                 'contains the keyword "feature"; not sent to FontLab (known native crash)')
 
 	# Clear stale state first so feature removal is also captured on inject.
 	try:
