@@ -133,7 +133,7 @@ def _stage_at_least(stage, minimum):
 def _dump_contour(contour):
 	return {
 		'closed': bool(contour.closed),
-		'nodes': [(_num(n.x), _num(n.y), _str(n.type), bool(n.smooth)) for n in contour.nodes],
+		'nodes': [(_num(n.x), _num(n.y), _str(n.type), bool(n.smooth), _str(getattr(n, 'name', ''))) for n in contour.nodes],
 	}
 
 def _dump_layer(layer):

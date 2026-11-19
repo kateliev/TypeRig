@@ -127,6 +127,18 @@ class trLayer(Layer):
 			fl_shape = _build_fl_shape(core_shape)
 			self.host.addShape(fl_shape)
 
+		# - Node smooth flags and names on the LIVE nodes. Set on detached
+		#   flNodes before flContour() they read back True in memory but are
+		#   not stored on save (verified via .vfj, FL 9.0.9809, 2026-11-19).
+		for fl_shape, core_shape in zip(self.host.shapes, core_layer.shapes):
+			for fl_contour, core_contour in zip(fl_shape.contours, core_shape.contours):
+				for fl_node, core_node in zip(fl_contour.nodes(), core_contour.nodes):
+					if core_node.smooth:
+						fl_node.smooth = True
+					name = getattr(core_node, 'name', '')
+					if name:
+						fl_node.name = name
+
 		while len(self.host.anchors):
 			self.host.removeAnchor(self.host.anchors[0])
 

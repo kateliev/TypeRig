@@ -170,7 +170,9 @@ class trGlyph(Glyph):
 			>>> tr_g.layer('Regular').mount(layer)  # mount at layer level
 			>>> tr_g.update()
 		'''
-		core_layers = [trLayer(l).eject() for l in self.host.layers]
+		# FontLab-generated layers ('#instance', ...) are skipped: FL rebuilds
+		# them itself and adds guides of its own on reopen (handout A.8).
+		core_layers = [trLayer(l).eject() for l in self.host.layers if not str(l.name).startswith('#')]
 
 		return Glyph(
 			core_layers,
@@ -183,7 +185,7 @@ class trGlyph(Glyph):
 			guidelines=[],
 		)
 
-	def mount(self, core_glyph, layer_names=None):
+	def mount(self, core_glyph, layer_names=None, step=None):
 		'''Push core Glyph metadata + geometry back into the FL host.
 
 		Mounts each matching layer's shapes / anchors / guidelines via
@@ -222,12 +224,16 @@ class trGlyph(Glyph):
 			original = list(getattr(core_layer, 'guidelines', None) or [])
 			if extra_guides:
 				core_layer.guidelines = original + extra_guides
+			if step is not None:
+				step('  layer {}'.format(layer_name))
 			try:
 				trLayer(fl_layer).mount(core_layer)
 			finally:
 				core_layer.guidelines = original
 
 		# - Glyph-level metadata
+		if step is not None:
+			step('  metadata')
 		if getattr(core_glyph, 'note', None) is not None:
 			self.note = core_glyph.note
 

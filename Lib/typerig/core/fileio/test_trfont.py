@@ -84,7 +84,7 @@ def _box(x0, y0, x1, y1):
 def _bowl(dx=0):
 	'''Closed curve contour with smooth on-curves (exercises type + smooth).'''
 	return Contour([
-		Node(100+dx, 0,   type='on', smooth=True),
+		Node(100+dx, 0,   type='on', smooth=True, name='hr00'),
 		Node(155+dx, 0,   type='curve'), Node(200+dx, 45,  type='curve'),
 		Node(200+dx, 100, type='on', smooth=True),
 		Node(200+dx, 155, type='curve'), Node(155+dx, 200, type='curve'),

@@ -47,7 +47,10 @@ class Node(Member, XMLSerializable):
 	__slots__ = ('x', 'y', 'type', 'name', 'smooth', 'g2', 'selected', 'angle', 'transform', 'complex_math', 'weight')
 
 	XML_TAG = 'node'
-	XML_ATTRS = ['x', 'y', 'type', 'smooth']
+	XML_ATTRS = ['x', 'y', 'type', 'smooth', 'name']
+	# Node names are optional: written only when set (FontLab node names
+	# such as 'hr00' are used by hinting and by TypeRig tools).
+	XML_ATTR_DEFAULTS = {'name': lambda v: not v}
 	XML_LIB_ATTRS = [] #['g2', 'transform'] # Skip those for now
 
 	def __init__(self, *args, **kwargs):

@@ -93,6 +93,23 @@ FL_INFO_SKIP = {'versionMajor', 'versionMinor', 'unitsPerEm',
                 'ascender', 'descender', 'xHeight', 'capHeight',
                 'openTypeHeadModified', 'dict'}
 
+# Package-level naming/style fields. FontLab derives the stored fg.info
+# names (styleName, postscriptFontName, postscriptFullName, ...) and the
+# OS/2 weight/width class from these on save; writing only fg.info leaves a
+# new font as "Unnamed Regular" after save + reopen (verified FL 9.0.9809,
+# 2026-11-19). Carried in FontInfo.lib as com.fontlab.package.<attr>.
+FL_PACKAGE_FIELDS = ('tfn', 'tsn', 'psn', 'sgn', 'ffn', 'weight_value', 'width_value',
+                     'underlinePosition_value', 'underlineThickness_value')
+FL_PACKAGE_PREFIX = 'com.fontlab.package.'
+
+# FontLab-private font-info store, fg.info.dict.<group>[key]. The flags
+# matter: with hhea_use_custom / OS2UseTypoMetrics off at save time FontLab
+# recomputes hhea/OS2 values from the metrics. Item writes are safe; assigning
+# a whole group back (d.flags = f) crashed FL 9.0.9809. Carried in lib as
+# com.fontlab.info.<group>.<key>.
+FL_INFO_DICT_GROUPS = ('flags', 'names', 'values')
+FL_INFO_DICT_PREFIX = 'com.fontlab.info.'
+
 def fl_info_fields(info):
 	'''All plain fg.info fields: {ufo_name: value}. Idiom from spike 0.4:
 	dir(fg.info) minus private names, `dict` and callables.'''
@@ -106,9 +123,10 @@ def fl_info_fields(info):
 		out[name] = value
 	return out
 
-def _fl_info(fg_font):
+def _fl_info(fg_font, fl_package=None):
 	'''fg.info -> FontInfo. Mapped fields go to FontInfo attributes; every
-	other non-empty fg.info field goes to FontInfo.lib under its UFO name.'''
+	other non-empty fg.info field goes to FontInfo.lib under its UFO name;
+	the package naming fields go to lib as com.fontlab.package.<attr>.'''
 	fields = fl_info_fields(fg_font.info)
 	mapped = set(FL_INFO_MAP.values())
 
@@ -124,17 +142,40 @@ def _fl_info(fg_font):
 	info = FontInfo(**kwargs)
 	info.lib = {name: value for name, value in sorted(fields.items())
 	            if name not in mapped and name not in FL_INFO_SKIP and value is not None}
+	store = getattr(fg_font.info, 'dict', None)
+	for group in FL_INFO_DICT_GROUPS:
+		view = getattr(store, group, None) if store is not None else None
+		if view is None:
+			continue
+		for key in view.keys():
+			info.lib['{}{}.{}'.format(FL_INFO_DICT_PREFIX, group, key)] = view[key]
+
+	if fl_package is not None:
+		for attr in FL_PACKAGE_FIELDS:
+			value = getattr(fl_package, attr, None)
+			if value is not None:
+				info.lib[FL_PACKAGE_PREFIX + attr] = value
 	return info
 
-def _info_into_fl(fg_font, info, problems=None, step=None):
+def _info_into_fl(fg_font, info, problems=None, step=None, fl_package=None):
 	'''FontInfo -> fg.info (inverse of _fl_info). Problems are collected,
 	not raised: one unwritable field must not abort a font build.'''
 	problems = problems if problems is not None else []
 	target = fg_font.info
 
+	# flPackage.info ("the structured font info object", the route fontport
+	# uses) is written first, then fg.info. In the persistence probe only the
+	# two together kept hhea / OS2 values through save + reopen.
+	pkg_info = getattr(fl_package, 'info', None) if fl_package is not None else None
+
 	def put(name, value):
 		if step is not None:
 			step('  info.{}'.format(name))
+		if pkg_info is not None:
+			try:
+				setattr(pkg_info, name, value)
+			except Exception:
+				pass
 		try:
 			setattr(target, name, value)
 		except Exception as e:
@@ -156,9 +197,50 @@ def _info_into_fl(fg_font, info, problems=None, step=None):
 			problems.append('version {!r} is not "major.minor"'.format(version))
 
 	for name, value in (getattr(info, 'lib', None) or {}).items():
-		if name in FL_INFO_SKIP:
+		if name in FL_INFO_SKIP or name.startswith(FL_PACKAGE_PREFIX) or name.startswith(FL_INFO_DICT_PREFIX):
 			continue
+		if isinstance(value, list) and not value:
+			continue		# e.g. openTypeOS2FamilyClass: FL reads [] but refuses to write it
 		put(name, value)
+	return problems
+
+def _package_fields_into_fl(fl_package, info, problems=None, step=None):
+	'''com.fontlab.package.* lib entries -> flPackage attributes. Must run
+	BEFORE the fg.info writes: FontLab derives several fg.info fields from
+	these. (fg.info.dict flags such as hhea_use_custom are NOT written:
+	assigning them from Python crashed FL 9.0.9809.)'''
+	problems = problems if problems is not None else []
+	lib = getattr(info, 'lib', None) or {}
+	for attr in FL_PACKAGE_FIELDS:
+		key = FL_PACKAGE_PREFIX + attr
+		if key not in lib:
+			continue
+		if step is not None:
+			step('  package.{}'.format(attr))
+		try:
+			setattr(fl_package, attr, lib[key])
+		except Exception as e:
+			problems.append('flPackage.{} <- {!r}: {}'.format(attr, lib[key], e))
+	return problems
+
+def _info_dict_into_fl(fg_font, info, problems=None, step=None):
+	'''com.fontlab.info.<group>.<key> lib entries -> fg.info.dict, item by
+	item (never assign a group back: that crashed FontLab). Run before the
+	fg.info writes.'''
+	problems = problems if problems is not None else []
+	store = fg_font.info.dict
+	for name, value in sorted((getattr(info, 'lib', None) or {}).items()):
+		if not name.startswith(FL_INFO_DICT_PREFIX):
+			continue
+		group, _, key = name[len(FL_INFO_DICT_PREFIX):].partition('.')
+		if group not in FL_INFO_DICT_GROUPS or not key:
+			continue
+		if step is not None:
+			step('  info.dict.{}.{}'.format(group, key))
+		try:
+			getattr(store, group)[key] = value
+		except Exception as e:
+			problems.append('fg.info.dict.{}[{}] <- {!r}: {}'.format(group, key, value, e))
 	return problems
 
 class _FLMetricsReader(object):
@@ -717,11 +799,19 @@ class trFontProxy(object):
 
 	# -- Basics -------------------------
 	def glyph(self, glyph, extend=None):
-		'''Return TypeRig proxy glyph object (trGlyph) by index (int) or name (str).'''
-		if isinstance(glyph, int) or isinstance(glyph, str):
+		'''Return TypeRig proxy glyph object (trGlyph) by index (int) or name (str).
+
+		Names go through flPackage.findName, the documented lookup that returns
+		the package's own flGlyph (fontlab-python-docs).
+		'''
+		if isinstance(glyph, str):
+			fl_glyph = self.host.findName(glyph)
+			if fl_glyph is not None:
+				return trGlyph(fl_glyph)
 			return trGlyph(self.fg, self.fg[glyph])
-		else:
-			return trGlyph(self.fg, glyph)
+		if isinstance(glyph, int):
+			return trGlyph(self.fg, self.fg[glyph])
+		return trGlyph(self.fg, glyph)
 
 	def has_glyph(self, glyphName):
 		return self.fg.has_key(glyphName)
@@ -734,43 +824,51 @@ class trFontProxy(object):
 		self.fl.addGlyph(glyph)
 
 	def create_glyph(self, glyph_name, layers=[], unicode_int=None):
-		'''Creates new glyph and adds it to the font
+		'''Create a new glyph with the given layers, add it to the font, return trGlyph.
+
+		Follows FontLab's own recipe (fontlab-python-docs, flGlyph tutorial):
+		build the flGlyph WITH its layers first, then flPackage.addGlyph, then
+		look it up again with findName. Ownership on addGlyph is not
+		documented, so the Python handles are kept alive on the proxy
+		(self._keep_alive): an earlier version dropped them right after
+		addGlyph and FontLab 9 crashed a few glyphs later reading a string
+		attribute from a freed object (2026-11-19, crash report 3ae775fc).
+
 		Args:
 			glyph_name (str): New glyph name
-			layers (list(str) or list(flLayer)): List of layers to be added to the new glyph
-			unicode_int (int): Unicode int of the new glyph
+			layers (list(str) or list(flLayer)): layers to create
+			unicode_int (int): Unicode of the new glyph
 		Returns:
-			pGlyph
+			trGlyph
 		'''
+		keep = self.__dict__.setdefault('_keep_alive', [])
 
-		# - Build
-		base_glyph = fl6.flGlyph()
-		base_glyph.name = glyph_name
-		self.add_glyph(base_glyph)
+		new_glyph = fl6.flGlyph()
+		new_glyph.name = glyph_name
 
-		# - Get the newly added glyph (all sane methods exhausted)
-		new_glyph = self.glyph(glyph_name)
+		for layer in layers:
+			if isinstance(layer, str):
+				fl_layer = fl6.flLayer()
+				fl_layer.name = layer
+			else:
+				fl_layer = layer
+			new_glyph.addLayer(fl_layer)
+			keep.append(fl_layer)
 
-		# - Set Unicode
-		if unicode_int is not None: new_glyph.fg.setUnicode(unicode_int)
-		
-		# - Add layers
-		if len(layers):
-			for layer in layers:
-				if isinstance(layer, str):
-					new_layer = fl6.flLayer()
-					new_layer.name = layer
-					new_glyph.host.addLayer(new_layer)
-				
-				elif isinstance(layer, fl6.flLayer):
-					new_glyph.host.addLayer(layer)
+		self.host.addGlyph(new_glyph)
+		keep.append(new_glyph)
 
-		# - Add to font
-		return new_glyph
+		fl_glyph = self.host.findName(glyph_name)
+		tr_glyph = trGlyph(fl_glyph if fl_glyph is not None else new_glyph)
+
+		if unicode_int is not None:
+			tr_glyph.unicodes = [unicode_int]
+
+		return tr_glyph
 
 	# -- FL → core ----------------------
 	def _build_info(self):
-		return _fl_info(self.fg)
+		return _fl_info(self.fg, self.host)
 
 	def _build_metrics(self):
 		return _fl_metrics(self.host)
@@ -932,24 +1030,36 @@ class trFontProxy(object):
 			if step is not None:
 				step('  glyph {}'.format(glyph_name))
 
+			sub = (lambda text: step('    ' + text)) if step is not None else (lambda text: None)
+
 			if self.has_glyph(glyph_name):
+				sub('get')
 				tr_glyph = self.glyph(glyph_name)
 			else:
+				sub('create')
 				layer_names = [l.name for l in core_glyph.layers]
 				tr_glyph = self.create_glyph(glyph_name, layer_names)
 
 			# Font-level encoding wins over per-glyph unicodes
 			unicodes = font.encoding.unicodes(glyph_name) if font.encoding else []
 			if unicodes:
+				sub('unicodes')
 				tr_glyph.unicodes = unicodes
 
 			# Ensure every core layer has a matching FL layer
+			sub('layers')
 			for core_layer in core_glyph.layers:
 				if tr_glyph.find_layer(core_layer.name) is None:
 					tr_glyph.add_layer(core_layer.name)
 
+			sub('mount layers')
 			try:
-				tr_glyph.mount(core_glyph)
+				tr_glyph.mount(core_glyph, step=sub)
+				# Push the edited fl objects down to the stored glyph data.
+				# Without it, node smooth flags read back fine in memory but
+				# were lost on save + reopen (2026-11-19).
+				sub('update')
+				tr_glyph.update()
 				if verbose:
 					print('  mounted: {}'.format(glyph_name))
 			except Exception as e:
@@ -991,9 +1101,10 @@ class trFontProxy(object):
 		'''Build a NEW FontLab font from a core Font and return its proxy.
 
 		A round trip must produce a fresh VFC, so this does not touch any open
-		font: new flPackage -> workspace -> UPM -> info -> axes / masters /
-		metrics / instances -> glyphs (mount) -> drop starter glyphs the core
-		font does not have. Save it with File > Save As (or the fontlab MCP
+		font: new flPackage -> workspace -> UPM -> axes / masters / metrics /
+		instances -> package naming fields -> fg.info.dict items -> fg.info ->
+		glyphs (mount) -> drop starter glyphs the core font does not have ->
+		notify. The order matters for what survives save + reopen. Save it with File > Save As (or the fontlab MCP
 		save_font).
 
 		step_log (str|None): file that gets one line per step, flushed and
@@ -1021,10 +1132,18 @@ class trFontProxy(object):
 		# UPM first: flPackage.upm is read-only, fg.info.unitsPerEm is not.
 		step('upm')
 		package.fgPackage.info.unitsPerEm = font.metrics.upm
-		step('info')
-		_info_into_fl(package.fgPackage, font.info, problems, step=step)
+		# Design space BEFORE font info: setting masters and per-master
+		# metrics makes FontLab recalculate hhea / OS2 win / sub- and
+		# superscript / strikeout values, which otherwise overwrites the
+		# info written earlier (seen after save + reopen, 2026-11-19).
 		step('design space')
 		_design_space_into_fl(package, font, problems)
+		step('package fields')
+		_package_fields_into_fl(package, font.info, problems, step=step)
+		step('info dict')
+		_info_dict_into_fl(package.fgPackage, font.info, problems, step=step)
+		step('info')
+		_info_into_fl(package.fgPackage, font.info, problems, step=step, fl_package=package)
 
 		starters = [g.name for g in package.fgPackage.glyphs]
 		step('mount {} glyphs'.format(len(font)))
@@ -1035,6 +1154,13 @@ class trFontProxy(object):
 			if font.glyph(name) is None:
 				step('remove starter glyph {}'.format(name))
 				package.fgPackage.removeGlyph(name)
+
+		# Same notify bracket fontport uses after font-info writes.
+		step('notify')
+		try:
+			fl6.flItems.notifyChangesApplied('TypeRig: create_font', [package, package.mastersContainer()])
+		except Exception as e:
+			problems.append('notifyChangesApplied: {}'.format(e))
 		step('done')
 
 		proxy.problems = problems + list(getattr(proxy, 'problems', []) or [])

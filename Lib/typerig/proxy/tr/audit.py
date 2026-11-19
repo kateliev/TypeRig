@@ -85,9 +85,17 @@ INFO_MAP = {
 _INFO_EXTRA_SKIP = {'versionMajor', 'versionMinor', 'unitsPerEm', 'ascender', 'descender',
                     'xHeight', 'capHeight', 'openTypeHeadModified', 'dict'}
 
-def _dump_info_extra(info):
+_PACKAGE_FIELDS = ('tfn', 'tsn', 'psn', 'sgn', 'ffn', 'weight_value', 'width_value',
+                   'underlinePosition_value', 'underlineThickness_value')
+
+def _dump_info_extra(info, package=None):
 	mapped = set(INFO_MAP.values())
 	out = {}
+	if package is not None:
+		for attr in _PACKAGE_FIELDS:
+			value = getattr(package, attr, None)
+			if value is not None:
+				out['com.fontlab.package.' + attr] = dump_value(value)
 	for name in sorted(dir(info)):
 		if name.startswith('_') or name in mapped or name in _INFO_EXTRA_SKIP:
 			continue
@@ -180,7 +188,7 @@ def _dump_layer(layer):
 			'transform': _qtransform(shape.transform),
 			'contours':  [{
 				'closed': bool(contour.closed),
-				'nodes':  [(_num(n.x), _num(n.y), _str(n.type), bool(n.smooth)) for n in contour.nodes()],
+				'nodes':  [(_num(n.x), _num(n.y), _str(n.type), bool(n.smooth), _str(n.name)) for n in contour.nodes()],
 			} for contour in shape.contours],
 		})
 
@@ -255,7 +263,7 @@ def dump_fl(package=None, stage='a', glyph_names=None, problems=None):
 		'upm':     _num(package.upm),
 		'metrics': per_master.get(default_master, {}),
 		'info':    _dump_info(fg.info, problems),
-		'info_extra': _dump_info_extra(fg.info),
+		'info_extra': _dump_info_extra(fg.info, package),
 		'axes': [dump_axis(a.name, a.tag, a.shortName, a.minimal, a.default, a.maximum,
 		                   a.designMin, a.designDef, a.designMax, _axis_map(a))
 		         for a in axes],
@@ -284,7 +292,7 @@ def dump_fl(package=None, stage='a', glyph_names=None, problems=None):
 			'unicodes': [int(u) for u in (fg_glyph.unicodes or [])],
 			'mark':     _mark(glyph.mark),
 			'note':     _newlines(glyph.note),
-			'layers':   {_str(l.name): _dump_layer(l) for l in glyph.layers},
+			'layers':   {_str(l.name): _dump_layer(l) for l in glyph.layers if not str(l.name).startswith('#')},
 		}
 
 	if _stage_at_least(stage, 'b'):
