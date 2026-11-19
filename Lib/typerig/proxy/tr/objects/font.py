@@ -274,6 +274,69 @@ def _fl_groups(fg_font):
 	return groups
 
 
+# - Kerning (Stage B) -------------------
+# FontLab keeps pairs AND kerning classes per master on
+# flPackage.kerning(master) (the FL-tested pFont/pKerning API). The name
+# mapping to the UFO model is pure and unit-tested: proxy/tr/kern_map.py.
+
+def _fl_pair_sides(pair):
+	'''fgKerningObjectPair -> ((name, mode), (name, mode)).'''
+	left, right = pair.asTuple()
+	return tuple(left.asTuple()), tuple(right.asTuple())
+
+def _fl_kerning(fl_package, problems=None):
+	'''-> ({master name: Kerning}, {ufo group name: [members]}).
+
+	Classes are taken from the default master; a master whose classes
+	differ is reported (the UFO model has one Groups table per font).
+	'''
+	from typerig.proxy.tr.kern_map import fl_groups_to_ufo, fl_pair_to_ufo
+	problems = problems if problems is not None else []
+
+	names = [str(m) for m in fl_package.masters]
+	default = str(fl_package.defaultMaster) if names else None
+	kerning, groups_by_master = {}, {}
+
+	for name in names:
+		fl_kern = fl_package.kerning(name)
+		groups_by_master[name] = fl_groups_to_ufo(dict(fl_kern.groups.asDict()))
+		pairs = {}
+		for pair, value in fl_kern.items():
+			(l, lm), (r, rm) = _fl_pair_sides(pair)
+			pairs[fl_pair_to_ufo(l, lm, r, rm)] = value
+		kerning[name] = Kerning.from_pairs(pairs)
+
+	groups = groups_by_master.get(default, {})
+	for name, g in groups_by_master.items():
+		if g != groups:
+			problems.append('master {}: kerning classes differ from the default master; default kept'.format(name))
+	return kerning, groups
+
+def _kerning_into_fl(fl_package, font, problems=None):
+	'''Core kerning + kerning classes -> every master of an flPackage.'''
+	from typerig.proxy.tr.kern_map import ufo_groups_to_fl, ufo_pair_to_fl
+	problems = problems if problems is not None else []
+
+	ufo_groups = {g.name: list(g.members) for g in font.groups.data}
+	fl_groups, rename = ufo_groups_to_fl(ufo_groups, problems)
+
+	for master in [str(m) for m in fl_package.masters]:
+		fl_kern = fl_package.kerning(master)
+		fl_kern.clear()					# pairs (and classes, if FL ties them)
+		fl_kern.groups.clear()
+		for name, (members, mode) in fl_groups.items():
+			fl_kern.groups[name] = (list(members), mode)
+
+		core_kern = font.kerning_for(master)
+		for p in (core_kern.data if core_kern is not None else []):
+			(l, lm), (r, rm) = ufo_pair_to_fl(p.first, p.second, rename)
+			try:
+				# Explicit modes: a glyph and a class may share a name.
+				fl_kern[fgt.fgKerningObjectPair(l, r, lm, rm)] = p.value
+			except Exception:
+				fl_kern[l, r] = p.value		# pKerning.setPair form (mode inferred by FL)
+	return problems
+
 def _split_fea_blocks(fea_text):
 	'''Split an opaque .fea blob into (prefix_text, [(tag, block_text), ...]).
 
@@ -346,7 +409,7 @@ def _features_into_fl(fg_font, fea_text):
 			break
 
 
-def _groups_into_fl(fg_font, groups):
+def _groups_into_fl(fg_font, groups, skip_kerning_classes=False):
 	'''Push core Groups into fg_font.groups.
 
 	UFO reserved-prefix names map back to FL kerning groups with the FL-side
@@ -377,6 +440,8 @@ def _groups_into_fl(fg_font, groups):
 
 	for group in groups.data:
 		name = group.name
+		if skip_kerning_classes and (group.is_kern1 or group.is_kern2):
+			continue		# written per master by _kerning_into_fl
 		if group.is_kern1:
 			fl_name = name[len(KERN1_PREFIX):]
 			current[fl_name] = _make_group(fl_name, group.members, 'KernLeftMode')
@@ -715,7 +780,7 @@ class trFontProxy(object):
 		return tr_g.eject()
 
 	# -- Eject --------------------------
-	def eject(self, glyph_names=None, include_encoding=True, include_axes=True, include_features=True, include_groups=True, verbose=False):
+	def eject(self, glyph_names=None, include_encoding=True, include_axes=True, include_features=True, include_groups=True, include_kerning=True, verbose=False):
 		'''Eject FL font (or subset of glyphs) to a pure core Font.
 
 		Args:
@@ -752,6 +817,15 @@ class trFontProxy(object):
 			groups    = groups,
 		)
 
+		# Stage B: pairs + kerning classes, per master
+		self.problems = []
+		if include_kerning and masters.data:
+			kerning, kern_groups = _fl_kerning(self.host, self.problems)
+			for master_name, master_kerning in kerning.items():
+				font.set_kerning_for(master_name, master_kerning)
+			for group_name, members in kern_groups.items():
+				font.groups.set(group_name, members)
+
 		names = glyph_names if glyph_names is not None else self.all_glyph_names
 
 		for name in names:
@@ -775,7 +849,7 @@ class trFontProxy(object):
 		return font
 
 	# -- Save ---------------------------
-	def save(self, path, glyph_names=None, include_encoding=True, include_axes=True, include_features=True, include_groups=True, verbose=False):
+	def save(self, path, glyph_names=None, include_encoding=True, include_axes=True, include_features=True, include_groups=True, include_kerning=True, verbose=False):
 		'''Eject + write to .trfont folder in one call.
 
 		Args:
@@ -799,6 +873,7 @@ class trFontProxy(object):
 			include_axes     = include_axes,
 			include_features = include_features,
 			include_groups   = include_groups,
+			include_kerning  = include_kerning,
 			verbose          = verbose,
 		)
 
@@ -825,7 +900,7 @@ class trFontProxy(object):
 		return TrFontIO.read(path)
 
 	# -- Mount --------------------------
-	def mount(self, font, include_features=True, include_groups=True, verbose=False, step=None):
+	def mount(self, font, include_features=True, include_groups=True, include_kerning=True, verbose=False, step=None):
 		'''Push a core Font back into the live FL session.
 
 		Mounts geometry + metadata for every glyph, and (optionally) features
@@ -878,9 +953,21 @@ class trFontProxy(object):
 				if verbose:
 					print('  ERROR injecting features: {}'.format(e))
 
-		if include_groups and getattr(font, 'groups', None) is not None and len(font.groups.data):
+		if include_kerning and font.masters.data:
+			if step is not None:
+				step('kerning')
 			try:
-				_groups_into_fl(self.fg, font.groups)
+				problems = _kerning_into_fl(self.host, font)
+				self.problems = list(getattr(self, 'problems', []) or []) + problems
+			except Exception as e:
+				if verbose:
+					print('  ERROR injecting kerning: {}'.format(e))
+
+		if include_groups and getattr(font, 'groups', None) is not None and len(font.groups.data):
+			if step is not None:
+				step('groups')
+			try:
+				_groups_into_fl(self.fg, font.groups, skip_kerning_classes=include_kerning)
 				if verbose:
 					print('  injected {} groups'.format(len(font.groups.data)))
 			except Exception as e:
@@ -888,7 +975,7 @@ class trFontProxy(object):
 					print('  ERROR injecting groups: {}'.format(e))
 
 	@classmethod
-	def create_font(cls, font, include_features=True, include_groups=True, verbose=False, step_log=None):
+	def create_font(cls, font, include_features=True, include_groups=True, include_kerning=True, verbose=False, step_log=None):
 		'''Build a NEW FontLab font from a core Font and return its proxy.
 
 		A round trip must produce a fresh VFC, so this does not touch any open
@@ -930,7 +1017,7 @@ class trFontProxy(object):
 		starters = [g.name for g in package.fgPackage.glyphs]
 		step('mount {} glyphs'.format(len(font)))
 		proxy.mount(font, include_features=include_features, include_groups=include_groups,
-		            verbose=verbose, step=step)
+		            include_kerning=include_kerning, verbose=verbose, step=step)
 
 		for name in starters:
 			if font.glyph(name) is None:
@@ -938,7 +1025,7 @@ class trFontProxy(object):
 				package.fgPackage.removeGlyph(name)
 		step('done')
 
-		proxy.problems = problems
+		proxy.problems = problems + list(getattr(proxy, 'problems', []) or [])
 		if verbose:
 			for p in problems:
 				print('  PROBLEM: {}'.format(p))

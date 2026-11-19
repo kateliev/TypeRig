@@ -165,9 +165,10 @@ def _qline(line):
 	return ((float(line.p1().x()), float(line.p1().y())), (float(line.p2().x()), float(line.p2().y())))
 
 def _kern_side(obj):
-	'''fgKerningObject -> "glyph" or "@group" (FL's own naming, not UFO's).'''
-	name = _str(getattr(obj, 'id', obj))
-	return '@' + name if 'group' in _str(getattr(obj, 'mode', '')).lower() else name
+	'''fgKerningObject -> "glyph" or "@class" (FL's own naming, not UFO's).
+	obj.asTuple() -> (name, 'glyphMode' | 'groupMode'), as pFont uses it.'''
+	name, mode = obj.asTuple()
+	return '@' + _str(name) if mode == 'groupMode' else _str(name)
 
 def _dump_layer(layer):
 	shapes = []
@@ -287,16 +288,21 @@ def dump_fl(package=None, stage='a', glyph_names=None, problems=None):
 		}
 
 	if _stage_at_least(stage, 'b'):
-		kerning = {}
+		# FL-native form (names '@class' for groupMode sides): this is the
+		# GATE form, compared FL vs FL. For FL vs core use kern_map.
+		kerning, classes = {}, {}
 		for name in master_names:
+			fl_kern = package.kerning(name)
 			pairs = []
-			for key, value in package.kerning(name).items():
-				left, right = tuple(key)
+			for key, value in fl_kern.items():
+				left, right = key.asTuple()
 				pairs.append((_kern_side(left), _kern_side(right), int(value)))
 			kerning[name] = sorted(pairs)
+			classes[name] = {str(k): (list(v[0]), str(v[1])) for k, v in sorted(dict(fl_kern.groups.asDict()).items())}
 		out['kerning'] = kerning
-		out['groups'] = None		# filled in Stage B (FL group mode/side flags need their own record)
-		out['features'] = None		# filled in Stage B
+		out['kerning_classes'] = classes
+		out['groups'] = None		# fg.groups (OT classes): record pending an FL probe
+		out['features'] = None		# FEA text: record pending an FL probe of fg.features
 
 	return out
 

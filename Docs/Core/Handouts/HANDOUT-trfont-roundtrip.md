@@ -434,12 +434,31 @@ Rounding and normalization rules live in the harness, in one place, commented.
 
 ### Stage B — kerning and features
 
-- [ ] B.1 FL → core kerning, per master: `pFont.kerning(master)` →
+- **Status 2026-11-19:** B.1, B.2 written, not yet run in FontLab (it was down).
+  - Name mapping is pure and unit-tested: `proxy/tr/kern_map.py` +
+    `proxy/tr/test_kern_map.py` (14 checks, runs without FontLab). FL class
+    `X` KernLeft ↔ `public.kern1.X`, KernRight ↔ `public.kern2.X`,
+    KernBothSide ↔ both; pair side `('X', groupMode)` ↔ kern1/kern2 key. A UFO
+    font whose kern1.X and kern2.X differ gets the right one renamed `X.R`
+    in FontLab (one class namespace there), pairs follow, a problem is logged.
+  - **Kerning classes live on `flPackage.kerning(master).groups`, per master**
+    (the FL-tested pFont/pKerning API) — not on `fg.groups`. The old
+    `_fl_groups` guessed kerning sides from `fg.groups` attribute names that
+    "vary across builds"; kerning classes now come from the kerning object,
+    and `_groups_into_fl(..., skip_kerning_classes=True)` leaves them alone.
+    What `fg.groups` (32 groups in BasilMM) actually holds is unverified.
+  - Pairs are written with an explicit `fgKerningObjectPair(l, r, lmode,
+    rmode)` key (a glyph and a class may share a name), falling back to the
+    pKerning form `kern[l, r] = v`. The explicit form is unverified.
+  - FL audit dump (stage b) records kerning and classes per master in FL-native
+    form (`@class`). `groups` (fg.groups) and `features` records are still
+    `None` until `fg.features` / `fg.groups` are probed in FontLab.
+- [~] B.1 FL → core kerning, per master: `pFont.kerning(master)` →
       `Font.kerning_for(master, create=True)`. Pick **one** canonical class
       naming in trFont — recommend UFO `public.kern1.` / `public.kern2.`, since
       `_fl_groups` already uses `KERN1_PREFIX` / `KERN2_PREFIX` — and map FL's
       `@`-prefixed names at the boundary only.
-- [ ] B.2 core → FL kerning, per master, including class pairs; clear before set
+- [~] B.2 core → FL kerning, per master, including class pairs; clear before set
       so removals propagate.
 - [ ] B.3 Features: assert FEA text survives newline-normalized byte-equal
       through `features.fea`, and that FL **recompiles** it after mount. Watch
@@ -451,6 +470,28 @@ Rounding and normalization rules live in the harness, in one place, commented.
 
 ### Stage C — components / element references
 
+- **C.1 proposal (2026-11-19, needs the owner's decision):**
+  **Link by element name per master layer; no format change.**
+  - What Stage A already writes is enough: every use of an element carries
+    its name (`Shape.name`), its outline (element space) and its
+    transform. Two shapes in the same master layer with the same element
+    name are the same FontLab element.
+  - Mount: per master layer, the first shape with a given name creates the
+    `flShape`; every later shape with that name in the same master is built
+    on the same `shapeData` with its own transform. Before linking, compare
+    the outlines; if they differ, the shapes are NOT linked and a problem is
+    logged (FontLab lets two different elements share a name).
+  - Why not an element pool (`elements.xml` + contour-less references): it
+    breaks the core `.trfont` rule that a `.trglyph` is a self-contained asset
+    that belongs to no font (shared glyph pools, §Shared Glyph Pools in
+    `trfont.md`). A glyph that points into a font-level pool is no longer
+    portable. Duplicated outlines cost disk, not correctness.
+  - Audit (stage c): per master, element name → set of glyphs using it, and
+    "all uses have equal outlines". The gate compares that FL vs FL.
+  - Glyphs (Stage D/Z): Glyphs has components (glyph references), not shared
+    elements. An element whose outline equals a whole glyph layer (e.g. `A` in
+    `Aacute`) can become a `GSComponent`; others stay outlines. This is the
+    only place `Shape.component` (UFO base-glyph name) is needed.
 - [ ] C.1 **Design decision, write it down first:** add an element reference to
       `Shape` — `Shape.ref` (element name) — distinct from `Shape.component`
       (UFO base-glyph name, kept for the Glyphs/UFO path). Element definitions go
@@ -529,3 +570,4 @@ Format: `YYYY-MM-DD | machine | what changed | next action`
 - `2026-11-19 | same | Re-verification pass found and fixed three wrong claims: (1) shape transforms are dropped by trShape.eject/_build_fl_shape, so 345/754 glyphs eject misplaced (new §3.5, task A.0); (2) refCnt is not a sharing signal, use shapeData.name (§3.6, C.2); (3) BasilMM IS kerned via flPackage.kerning(master), so B.5 is gone. Added §3.8 (match layers by name). | Unchanged: Stage 0.1, then A.0 first in Stage A.`
 - `2026-11-19 | same | Stage 0 DONE. trfontfile_proxy.py deleted; test_trfont.py + trfont_audit.py + proxy/tr/audit.py added; trfont.py: fontTools dependency removed (FL could not import it), portable "/" manifest paths, features.fea single source. Baseline eject_report recorded under the Stage 0 gate. | Stage A, starting with A.0 (transform), A.7 (element name), A.9 (mark).`
 - `2026-11-19 | same | Stage A: eject side done (A.0-A.5, A.7, A.9, A.10). eject_report on 40 BasilMM glyphs: 829 -> 0 diff lines. create_font written (A.6); its first run crashed FontLab 9 and FL came back up only as a "FontLab Crash Report" window, left for the user to answer. | 1) Answer the FontLab crash dialog, reopen D:\Playground\Basil-Rev-2Wt.vfc. 2) In FL: audit.reload_typerig(); run create_font on ~5 glyphs with step_log=<file>; the last line of the log names the crashing step. 3) Fix, then the 40-glyph gate, then the full font.`
+- `2026-11-19 | same | Stage B glue written (kern_map.py + tests 14/14, _fl_kerning/_kerning_into_fl, audit stage-b kerning in FL-native form); NOT run in FontLab. Stage C.1 proposal written: link elements by name per master layer, no format change. FontLab still on its crash-report window. | Same as previous line (crash dialog, step_log run), then Stage B probe of fg.groups / fg.features, then owner decision on C.1.`
