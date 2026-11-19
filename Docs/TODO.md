@@ -9,5 +9,6 @@ One line per item; details live in the linked handout. Remove a line when done.
 
 ## To do
 
-- **trFont round trip** — Stage C.4 (FontLab components, needs a test font) and Stage Z (Glyphs, on the Mac). → `Docs/Core/Handouts/HANDOUT-trfont-roundtrip.md`
+- **trFont part two → format v1.0** — true components (UFO level; includes FontLab components, needs a test font), warnings for unmodelled FontLab features, spec + schema + validator, then tag v1.0. → `Docs/Core/Handouts/HANDOUT-trfont-v1.md`
+- **trFont ↔ Glyphs** (Stage Z, on the Mac). → `Typerig-Glyphs/Handouts/trfont_glyphs_roundtrip_handout.md`
 - **TR: Font IO** (`Scripts/TypeRig Tools/TR-ExportFont.py`) — rebuilt 1.0 on the round-trip bridge; Export / Inspect / Open as new font tested on BasilMM in FL 9.0.9809; *Update current* (mount into an existing font) not tested.
