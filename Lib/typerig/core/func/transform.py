@@ -187,8 +187,23 @@ def adaptive_scale(v, s, d, t, c, i, st):
 	#    then scale and translate. Y is solved first; X folds in the italic
 	#    shear (vty*i term de-slants, ry*i re-slants) so vertical stems stay
 	#    upright under a slanted design.
-	ry = sy*(qy*vty + (1 - qy)*v1[1]) + dy
-	rx = sx*(qx*(vtx - vty*i) + (1 - qx)*(v1[0] - v1[1]*i)) + ry*i + dx
+	by = qy*vty + (1 - qy)*v1[1]
+	bx = qx*(vtx - vty*i) + (1 - qx)*(v1[0] - v1[1]*i)
+
+	# 5) At the heavy master itself (cst == st1, t == 1) q is 0/0 and
+	#    compensator() returns 0: plain scaling of the heavy master, stems
+	#    NOT compensated. Use the limit instead. Since vt - v1 = (1-t)(v0-v1)
+	#    and cst - st1 = (1-t)(st0-st1), q*(vt - v1) -> (k - 1)*st1*(v0-v1)/(st0-st1)
+	#    with k = sf**(cf-1). Continuous with t -> 1 and == v1 at sf == 1.
+	#    (The italic de-slant term q*i*(vty - v1y) is dropped: 0 when ty == 1.)
+	if csty == sty1 and sty0 != sty1:
+		by = v1[1] + (sy**(cy - 1.) - 1.)*sty1*(v0[1] - v1[1])/(sty0 - sty1)
+
+	if cstx == stx1 and stx0 != stx1:
+		bx = (v1[0] - v1[1]*i) + (sx**(cx - 1.) - 1.)*stx1*(v0[0] - v1[0])/(stx0 - stx1)
+
+	ry = sy*by + dy
+	rx = sx*bx + ry*i + dx
 
 	return (rx, ry)
 

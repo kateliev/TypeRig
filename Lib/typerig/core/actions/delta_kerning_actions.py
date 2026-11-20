@@ -106,9 +106,11 @@ def side_factor(row, solved=None, scales=None, msx=None):
 	return f * f / (float(c) / 100.)
 
 
-def spot(row, axis, factor):
-	'''A baked side: {'axis': axis name, 'vstem', 'factor'}.'''
-	return {'axis': axis, 'vstem': float(row['vstem']), 'factor': float(factor)}
+def spot(row, axis, factor, vstem=None):
+	'''A baked side: {'axis': axis name, 'vstem', 'factor'}. vstem: where
+	the inputs' kerning is read (default the row's V stem; affine metrics
+	with base 'input': the nearest input's, delta_machine_actions.metrics_base_stem).'''
+	return {'axis': axis, 'vstem': float(row['vstem'] if vstem is None else vstem), 'factor': float(factor)}
 
 
 # - Interpolation ----------------------------------------------------------

@@ -116,6 +116,7 @@ ADVANCED = SimpleNamespace(
 	COL_MIN_W   = 440,  # a column is never narrower (the tab is ~1000 wide at the smallest window)
 	BUILD_H     = 1000, # provisional section height while building (rows are pinned to the top)
 	ITALIC_LABEL_W = 110,  # 'Italic angle:' and number captions
+	METRICS_LABEL_W = 180,  # Metrics: 'Scale sidebearings (Met. W):'
 	KERN_LABEL_W = 150,    # Kerning: 'Groups across rows:' / 'Unbaked sides:'
 	KERN_LIST_H  = 110,    # Kerning in the font lib: list height
 	KERN_CHECK_W = 24,     # list: check box column

@@ -242,8 +242,13 @@ class DeltaScale(Sequence):
 			sty0, sty1 = self.stems[sti][1]			# Y stem bounds of this segment
 			#if stx0 <= stx <= stx1 : tx = sti + utils.timer(stx, stx0, stx1, True)
 			#if sty0 <= sty <= sty1 : ty = sti + utils.timer(sty, sty0, sty1, True)
-			if stx0 <= stx: tx = sti + utils.timer(stx, stx0, stx1, True)
-			if sty0 <= sty: ty = sti + utils.timer(sty, sty0, sty1, True)
+			# Exact inverse-lerp (no fix_boundry): its +1 nudge on the upper
+			# stem moved a target ON the last input's stem to t = 80/81 etc.,
+			# so baking at that input did not reproduce it. t == 1 is safe:
+			# __timer clamps it to the last segment and adaptive_scale takes
+			# the compensation limit there.
+			if stx0 <= stx: tx = sti + utils.timer(stx, stx0, stx1)
+			if sty0 <= sty: ty = sti + utils.timer(sty, sty0, sty1)
 
 		# Below the lightest master: with extrapolate, run negative time off the
 		# first segment; otherwise tx/ty stay pinned at 0 (the light master).
@@ -251,8 +256,8 @@ class DeltaScale(Sequence):
 			stx0, stx1 = self.stems[0][0]
 			sty0, sty1 = self.stems[0][1]
 
-			if tx == 0 and stx < stx0 :	tx = utils.timer(stx, stx0, stx1, True)
-			if ty == 0 and sty < sty0 :	ty = utils.timer(sty, sty0, sty1, True)
+			if tx == 0 and stx < stx0 :	tx = utils.timer(stx, stx0, stx1)
+			if ty == 0 and sty < sty0 :	ty = utils.timer(sty, sty0, sty1)
 
 		return tx, ty
 
