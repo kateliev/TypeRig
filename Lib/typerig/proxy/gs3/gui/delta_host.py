@@ -181,6 +181,19 @@ class GlyphsDeltaHost(object):
 						return _num(master.italicAngle, 0.)
 		return 0.
 
+	def italic_pivots(self, glyph):
+		'''{layer name: half the x-height of the layer's master}: the y Glyphs
+		de-slants about when it shows italic sidebearings (core option
+		italic_pivots, delta_panel_actions._pivot_of).'''
+		font = self._font()
+		heights = dict((m.id, _num(m.xHeight, 0.)) for m in font.masters) if font is not None else {}
+		out = {}
+		for gs_layer in glyph.layers:
+			mid = gs_layer.associatedMasterId or gs_layer.layerId
+			if gs_layer.name and mid in heights:
+				out.setdefault(gs_layer.name, heights[mid] / 2.)
+		return out
+
 	def _nodes(self, layer):
 		# Path nodes in eject (point_array) order: paths -> nodes
 		return [node for path in layer.paths for node in path.nodes]

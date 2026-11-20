@@ -726,13 +726,14 @@ def fix_warning(report):
 	return 'italic fix fell back (lock only where it failed): %s%s' % (errors[0], more)
 
 
-def _place_in_metrics(layer, ghost, slope):
+def _place_in_metrics(layer, ghost, slope, pivot=0.):
 	'''Metrics scale (target 'msx'): shift layer (outline + anchors) so
 	its LSB is the ghost's, and set its advance so its RSB is the ghost's.
 	Both are measured the same way (italic_sidebearings, de-slanted by
-	slope); the pivot cancels out, so none is needed.'''
-	lsb_m, rsb_m = ghost.italic_sidebearings(slope)
-	_place_sidebearings(layer, lsb_m, rsb_m, slope)
+	slope about y = pivot); a copy cancels the pivot out, it is passed for
+	consistency.'''
+	lsb_m, rsb_m = ghost.italic_sidebearings(slope, pivot)
+	_place_sidebearings(layer, lsb_m, rsb_m, slope, pivot)
 
 
 def _affine_side(value, m, sx):
@@ -766,6 +767,15 @@ def _metrics_layer(input_layers, vstem, base):
 	return min(input_layers, key=lambda l: abs(float(l.stems[0]) - float(vstem)))
 
 
+def _pivot_of(opts, layer_name):
+	'''Italic sidebearing pivot (y) of a layer: options italic_pivots[name],
+	else italic_pivot (default 0, the baseline).'''
+	pivots = opts.get('italic_pivots') or {}
+	if layer_name in pivots:
+		return float(pivots[layer_name])
+	return float(opts.get('italic_pivot', DELTA_OPTION_DEFAULTS['italic_pivot']) or 0.)
+
+
 def _round_half_up(value):
 	return math.floor(value + 0.5)
 
@@ -777,25 +787,25 @@ def _round_outline(layer):
 		node.y = _round_half_up(node.y)
 
 
-def _place_sidebearings_rounded(layer, lsb, rsb, slope):
+def _place_sidebearings_rounded(layer, lsb, rsb, slope, pivot=0.):
 	'''_place_sidebearings in whole units: the outline is rounded first,
 	shifted by a whole number and the advance is a whole number, so each
 	sidebearing lands within 0.5 u of round(lsb) / round(rsb) and nothing
 	is rounded again by the host. Equal targets stay equal.'''
 	_round_outline(layer)
-	cur_lsb, _rsb = layer.italic_sidebearings(slope)
+	cur_lsb, _rsb = layer.italic_sidebearings(slope, pivot)
 	layer.shift(_round_half_up(_round_half_up(lsb) - cur_lsb), 0.)
-	cur_lsb, cur_rsb = layer.italic_sidebearings(slope)
+	cur_lsb, cur_rsb = layer.italic_sidebearings(slope, pivot)
 	layer.ADV = _round_half_up(layer.ADV + _round_half_up(rsb) - cur_rsb)
 
 
-def _place_sidebearings(layer, lsb, rsb, slope):
+def _place_sidebearings(layer, lsb, rsb, slope, pivot=0.):
 	'''Shift layer (outline + anchors) so its LSB is lsb, and set its
 	advance so its RSB is rsb. Measured as italic_sidebearings (de-slanted
-	by slope); the pivot cancels out.'''
-	cur_lsb, _rsb = layer.italic_sidebearings(slope)
+	by slope about y = pivot, the frame lsb / rsb are given in).'''
+	cur_lsb, _rsb = layer.italic_sidebearings(slope, pivot)
 	layer.shift(lsb - cur_lsb, 0.)
-	layer.ADV += rsb - layer.italic_sidebearings(slope)[1]
+	layer.ADV += rsb - layer.italic_sidebearings(slope, pivot)[1]
 
 
 def _bake_target_stems(base_layer, vaxis, target, italic_rad,
@@ -856,6 +866,7 @@ def _bake_target_stems(base_layer, vaxis, target, italic_rad,
 	metrics_on = msx is not None or ('metric_array' in vaxis and target.get('metrics') is True)
 	affine = metrics_on and target.get('metrics_model') == 'affine'
 	slope = italic_rad if measure_slope is None else measure_slope
+	pivot = float(target.get('italic_pivot', 0.) or 0.)	# y of the de-slant, the target's frame (host: x-height / 2)
 
 	new_layer = _scale_layer(base_layer, vaxis, stem, scale, italic_rad, extrapolate, lock, report)
 
@@ -875,19 +886,22 @@ def _bake_target_stems(base_layer, vaxis, target, italic_rad,
 
 	if affine:
 		source = target.get('metrics_layer')		# base 'input': the nearest input itself, no interpolation
+		src_pivot = pivot						# interpolation: measured in the target's frame
 		if source is not None:
+			src_pivot = float(target.get('metrics_layer_pivot', pivot))	# the input as its own master shows it
 			if scale[1] != 1. and slope:			# the de-slanted measure depends on y: same sy as the outline
 				source = source.clone()
 				for node in source.nodes:
 					node.y *= scale[1]
+				src_pivot = pivot
 		else:
 			m_stem = target.get('metrics_stem') or stem
 			source = _scale_layer(base_layer, vaxis, (float(m_stem[0]), float(m_stem[1])), (1., scale[1]),
 			                      italic_rad, extrapolate)
 		m = msx / 100. if msx is not None else scale[0]
-		lsb_s, rsb_s = source.italic_sidebearings(slope)
+		lsb_s, rsb_s = source.italic_sidebearings(slope, src_pivot)
 		place = _place_sidebearings_rounded if target.get('metrics_round') else _place_sidebearings
-		place(new_layer, _affine_side(lsb_s, m, scale[0]), _affine_side(rsb_s, m, scale[0]), slope)
+		place(new_layer, _affine_side(lsb_s, m, scale[0]), _affine_side(rsb_s, m, scale[0]), slope, pivot)
 	elif msx is not None:
 		ghost_report = {}
 		ghost = _scale_layer(base_layer, vaxis, stem, (msx / 100., scale[1]),
@@ -897,7 +911,7 @@ def _bake_target_stems(base_layer, vaxis, target, italic_rad,
 			report['fix_failed'] = report.get('fix_failed', 0) + ghost_report.get('fix_failed', 0)
 		if dy:
 			ghost.shift(0., dy)
-		_place_in_metrics(new_layer, ghost, slope)
+		_place_in_metrics(new_layer, ghost, slope, pivot)
 
 	return new_layer
 
@@ -1036,6 +1050,14 @@ DELTA_OPTION_DEFAULTS = {
 	# each sidebearing is within 0.5 u of base x Met. W (Glyphs rounds
 	# nodes and width anyway; rounding twice gave up to 1 u).
 	'metrics_round': False,
+	# Italic sidebearing pivot (2026-11-20): the de-slant is about y = pivot,
+	# as the host shows sidebearings (Glyphs: half the master's x-height).
+	# 'italic_pivots': {layer name: y}; 'italic_pivot': y for layers not in
+	# it. Default 0 (baseline): TR Panel / FL / Live unchanged. With pivot 0
+	# the affine Met. W scaled a frame ~ x-height/2 * tan(angle) off Glyphs'
+	# (TypeRig-Glyphs Handouts/delta_machine_italic_metrics.md).
+	'italic_pivot': 0.,
+	'italic_pivots': {},
 }
 METRICS_BASES = ('input', 'stems')
 
@@ -1476,7 +1498,10 @@ def npa_delta_bake(glyph, scope_layers, NodeActions, setup_json):
 			                                        opts.get('metrics_base', DELTA_OPTION_DEFAULTS['metrics_base'])),
 			              metrics_layer=_metrics_layer(input_layers, target.get('vstem', 0.),
 			                                           opts.get('metrics_base', DELTA_OPTION_DEFAULTS['metrics_base'])),
+			              italic_pivot=_pivot_of(opts, t_name),
 			              metrics_round=bool(opts.get('metrics_round', DELTA_OPTION_DEFAULTS['metrics_round'])))
+			if target['metrics_layer'] is not None:
+				target['metrics_layer_pivot'] = _pivot_of(opts, target['metrics_layer'].name)
 			try:
 				if mode == 'stems':
 					new_layer = _bake_target_stems(
